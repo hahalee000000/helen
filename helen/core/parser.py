@@ -225,7 +225,14 @@ class Parser:
         return VariableNode(name=prev.lexeme, span=prev.span)
 
     def _call_kw(self) -> ExpressionNode:
-        """解析 call 关键字为变量节点（与普通标识符相同）。"""
+        """解析 call 关键字：call AgentName(args) — 直接作为 CallNode。"""
+        if self._check(TokenType.IDENTIFIER):
+            self._advance()
+            callee = VariableNode(name=self._previous().lexeme, span=self._previous().span)
+            if self._check(TokenType.LEFT_PAREN):
+                self._advance()  # consume '('
+                return self._call(callee)
+            return callee
         prev = self._previous()
         return VariableNode(name=prev.lexeme, span=prev.span)
 
@@ -355,7 +362,12 @@ class Parser:
 
     def _declaration(self) -> StatementNode | None:
         """解析顶层声明。"""
-        if self._at_end() or self._check(TokenType.RIGHT_BRACE):
+        if self._at_end():
+            return None
+
+        # Skip stray closing braces at top level (e.g. from unmatched blocks)
+        if self._check(TokenType.RIGHT_BRACE):
+            self._advance()
             return None
 
         # async statement modifier detection (HLD 3.3.3)
@@ -444,11 +456,14 @@ class Parser:
                            initializer=init, mutable=mutable, span=span)
 
     def _if_stmt(self) -> IfStmtNode:
-        """解析 if 语句。"""
+        """解析 if 语句：if (cond) { ... } 或 if cond { ... }。"""
         start = self._previous()
-        self._consume(TokenType.LEFT_PAREN, "Expected '(' after 'if'.")
-        condition = self._expression()
-        self._consume(TokenType.RIGHT_PAREN, "Expected ')' after if condition.")
+        # Parentheses are optional for if condition
+        if self._match(TokenType.LEFT_PAREN):
+            condition = self._expression()
+            self._consume(TokenType.RIGHT_PAREN, "Expected ')' after if condition.")
+        else:
+            condition = self._expression()
         self._consume(TokenType.LEFT_BRACE, "Expected '{' before if body.")
         then_body = self._block_body()
         else_branch: StatementNode | None = None
@@ -545,6 +560,16 @@ class Parser:
                 logic = self._main_block()
             elif self._match(TokenType.FN):
                 self._function_decl()
+            elif self._match(TokenType.FUNCTIONS):
+                # Parse functions { fn ... } block — consume the block but skip contents
+                self._consume(TokenType.LEFT_BRACE, "Expected '{' after 'functions'.")
+                while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF):
+                    if self._match(TokenType.FN):
+                        self._function_decl()
+                    else:
+                        self._error(f"Expected 'fn' inside functions block, got {self._current().type.name}")
+                        self._synchronize()
+                self._consume(TokenType.RIGHT_BRACE, "Expected '}' after functions block.")
             elif self._check(
                 TokenType.DESCRIPTION, TokenType.MODEL, TokenType.TOOLS,
                 TokenType.SKILLS, TokenType.MEMORY, TokenType.TEMPERATURE,
@@ -694,7 +719,7 @@ class Parser:
                 params.append(self._agent_param())
         self._consume(TokenType.RIGHT_PAREN, "Expected ')' after parameters.")
         ret_type: TypeNode | None = None
-        if self._match(TokenType.ARROW):
+        if self._match(TokenType.ARROW) or self._match(TokenType.COLON):
             ret_type = self._parse_type()
         self._consume(TokenType.LEFT_BRACE, "Expected '{' before function body.")
         body_stmts: list[StatementNode] = []

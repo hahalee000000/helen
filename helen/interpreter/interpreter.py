@@ -119,7 +119,7 @@ class Interpreter(Visitor[object]):
                 self.environment.define(name, builtin.fn)
 
     def interpret(self, program: ProgramNode) -> object:
-        """Execute a full Helen program.
+        """Execute a Helen program.
 
         Args:
             program: The root ProgramNode.
@@ -127,11 +127,14 @@ class Interpreter(Visitor[object]):
         Returns:
             The result of the last statement executed, or None.
         """
-        result = None
-        for stmt in program.statements:
-            result = self._execute(stmt)
-            if isinstance(result, ReturnSentinel):
-                return result.value
+        print(f"[DEBUG] Starting interpretation of {type(program)}")
+        result = self.visit_program(program)
+        print("[DEBUG] Finished interpretation")
+        # Unwrap sentinels at the top level
+        if isinstance(result, ReturnSentinel):
+            return result.value
+        if isinstance(result, (BreakSentinel, ContinueSentinel)):
+            return None
         return result
 
     # ------------------------------------------------------------------
@@ -146,9 +149,13 @@ class Interpreter(Visitor[object]):
         """Execute a list of statements, returning the last result."""
         result = None
         for stmt in stmts:
-            result = self._execute(stmt)
-            if isinstance(result, (BreakSentinel, ContinueSentinel, ReturnSentinel)):
-                return result
+            step = self._execute(stmt)
+            if isinstance(step, ReturnSentinel):
+                return step
+            if isinstance(step, (BreakSentinel, ContinueSentinel)):
+                # Return sentinel so loop handlers can consume it
+                return step
+            result = step
         return result
 
     # ------------------------------------------------------------------
@@ -276,8 +283,8 @@ class Interpreter(Visitor[object]):
         """Evaluate a function or agent call (HLD 3.6.2, 3.5.2).
 
         Call resolution order:
-        1. Check if callee matches a registered function → call function
-        2. Check if callee matches a registered agent → call agent (isolated env)
+        1. Check if callee matches a registered function -> call function
+        2. Check if callee matches a registered agent -> call agent (isolated env)
         3. Otherwise evaluate callee as expression and try to call
         """
         callee_name = node.callee.name if isinstance(node.callee, VariableNode) else None
@@ -457,13 +464,14 @@ class Interpreter(Visitor[object]):
             condition = node.condition.accept(self)
             if not self._truthy(condition):
                 break
-            result = self._execute(node.body)
-            if isinstance(result, BreakSentinel):
+            step_result = self._execute(node.body)
+            if isinstance(step_result, BreakSentinel):
                 break
-            if isinstance(result, ContinueSentinel):
+            if isinstance(step_result, ContinueSentinel):
                 continue
-            if isinstance(result, ReturnSentinel):
-                return result
+            if isinstance(step_result, ReturnSentinel):
+                return step_result
+            result = step_result
         return result
 
     def visit_break_stmt(self, node: BreakStmtNode) -> object:
@@ -706,7 +714,7 @@ class Interpreter(Visitor[object]):
         1. Build route prompt from description + branches
         2. Call runtime.route() with function calling schema
         3. Match returned branch name to execute corresponding body
-        4. If no match or parsing fails → execute default branch
+        4. If no match or parsing fails -> execute default branch
         """
         branches = []
         for b in node.branches:
@@ -729,7 +737,7 @@ class Interpreter(Visitor[object]):
         try:
             selected = self.llm_runtime.route(node.description, branches, context)
         except HelenRuntimeError:
-            # LLM call failed → execute default
+            # LLM call failed -> execute default
             selected = None
 
         # Record assistant response to history
@@ -756,7 +764,7 @@ class Interpreter(Visitor[object]):
                     finally:
                         self.environment = old_env
 
-        # No match → execute default
+        # No match -> execute default
         for b in node.branches:
             if b.condition is None:
                 old_env = self.environment
@@ -778,7 +786,7 @@ class Interpreter(Visitor[object]):
         1. Build choose prompt from description + options
         2. Call runtime.choose() with function calling schema
         3. Return the selected option name
-        4. If parsing fails → return None (default)
+        4. If parsing fails -> return None (default)
         """
         options = [opt.label for opt in node.options]
         context = self._get_context()
@@ -858,12 +866,12 @@ class Interpreter(Visitor[object]):
         """Convert a Helen value to boolean.
 
         Rules:
-        - None/null → False
-        - False → False
-        - 0, 0.0 → False
-        - Empty string → False
-        - Empty list/dict → False
-        - Everything else → True
+        - None/null -> False
+        - False -> False
+        - 0, 0.0 -> False
+        - Empty string -> False
+        - Empty list/dict -> False
+        - Everything else -> True
         """
         if value is None:
             return False
@@ -986,7 +994,7 @@ class Interpreter(Visitor[object]):
                 default_val = param.default_value.accept(self)
                 call_env.define(param.name, default_val)
             else:
-                # No argument and no default → None
+                # No argument and no default -> None
                 call_env.define(param.name, None)
 
         # Track as current agent for llm act setting extraction

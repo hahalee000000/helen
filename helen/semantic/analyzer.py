@@ -262,11 +262,15 @@ class SemanticAnalyzer(Visitor[None]):
         )
         existing = self.symbols.define(node.name, symbol)
         if existing is not None:
-            self.errors.error(
-                ErrorCode.DUPLICATE_SYMBOL,
-                f"duplicate declaration of '{node.name}'",
-                node.span,
-            )
+            # Allow shadowing stdlib builtins (e.g. `let len = ...` shadows `len()`)
+            if existing.kind == "builtin":
+                pass  # shadowing allowed
+            else:
+                self.errors.error(
+                    ErrorCode.DUPLICATE_SYMBOL,
+                    f"duplicate declaration of '{node.name}'",
+                    node.span,
+                )
 
     def visit_variable(self, node: VariableNode) -> None:
         sym = self.symbols.resolve(node.name)
@@ -379,7 +383,13 @@ class SemanticAnalyzer(Visitor[None]):
         node.expression.accept(self)
 
     def visit_call(self, node: CallNode) -> None:
-        node.callee.accept(self)
+        # If callee is a known agent, skip variable resolution (agents are not in symbol table)
+        if isinstance(node.callee, VariableNode):
+            callee_name = node.callee.name
+            if callee_name not in self._agent_names:
+                node.callee.accept(self)
+        else:
+            node.callee.accept(self)
         for arg in node.arguments:
             arg.accept(self)
 

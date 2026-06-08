@@ -88,7 +88,6 @@ class TestForLoop:
     def test_break_in_for(self):
         """for x in [1, 2, 3, 4, 5] { if (x == 3) break; x }"""
         from helen.core.ast import BinaryOpNode, ExprStmtNode, IfStmtNode, ListLiteralNode, MainBlockNode
-        from helen.interpreter.exceptions import BreakSentinel
 
         lst = ListLiteralNode(elements=[_lit(1), _lit(2), _lit(3), _lit(4), _lit(5)], span=_span())
 
@@ -104,8 +103,8 @@ class TestForLoop:
         body = MainBlockNode(body=[if_stmt, expr], span=_span())
         stmt = ForStmtNode(iterator=_var("x"), iterable=lst, body=body, span=_span())
         result, errors = _run(stmt)
-        # Loop exits with BreakSentinel when x==3
-        assert isinstance(result, BreakSentinel)
+        # BreakSentinel is consumed by the loop; top-level returns None
+        assert result is None
         assert not errors.has_errors
 
     def test_continue_in_for(self):
