@@ -11,7 +11,7 @@ import os
 import tempfile
 import shutil
 
-from hellen.runtime.import_resolver import ImportResolver
+from helen.runtime.import_resolver import ImportResolver
 
 
 FIXTURES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "runtime", "fixtures")
@@ -20,13 +20,13 @@ FIXTURES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "r
 class TestImportDoesNotExecuteMain:
     """Test that import parses but doesn't execute main blocks."""
 
-    def test_import_hellen_registers_without_executing(self):
+    def test_import_helen_registers_without_executing(self):
         """Import registers agents/functions but doesn't execute main."""
         resolver = ImportResolver(base_dir=FIXTURES_DIR)
-        result = resolver.resolve("utils.hellen")
+        result = resolver.resolve("utils.helen")
 
         assert result is not None
-        assert result.format == "hellen"
+        assert result.format == "helen"
 
         # Agent and function are registered
         assert "HelperAgent" in resolver.agents
@@ -38,7 +38,7 @@ class TestImportDoesNotExecuteMain:
     def test_imported_agent_main_not_executed(self):
         """Imported agent's main block is parsed but not run."""
         resolver = ImportResolver(base_dir=FIXTURES_DIR)
-        resolver.resolve("utils.hellen")
+        resolver.resolve("utils.helen")
 
         # Get the registered agent
         agent = resolver.agents.get("HelperAgent")
@@ -55,7 +55,7 @@ class TestImportGlobalNamespace:
     def test_import_registers_to_global(self):
         """Import registers to global namespace."""
         resolver = ImportResolver(base_dir=FIXTURES_DIR)
-        resolver.resolve("utils.hellen")
+        resolver.resolve("utils.helen")
 
         # Both agent and function are in global registries
         assert len(resolver.agents) >= 1
@@ -64,7 +64,7 @@ class TestImportGlobalNamespace:
     def test_multiple_imports_merge_namespaces(self):
         """Multiple imports merge into global namespace."""
         resolver = ImportResolver(base_dir=FIXTURES_DIR)
-        resolver.resolve("utils.hellen")
+        resolver.resolve("utils.helen")
 
         # All imports share the same resolver instance
         assert "HelperAgent" in resolver.agents
@@ -77,12 +77,12 @@ class TestImportPathSafety:
     def test_relative_path_resolves_from_base(self):
         """Relative paths resolve from base_dir."""
         resolver = ImportResolver(base_dir=FIXTURES_DIR)
-        result = resolver.resolve("utils.hellen")
+        result = resolver.resolve("utils.helen")
         assert result is not None
 
     def test_absolute_path_within_base(self):
         """Absolute paths within base_dir are allowed."""
-        abs_path = os.path.abspath(os.path.join(FIXTURES_DIR, "utils.hellen"))
+        abs_path = os.path.abspath(os.path.join(FIXTURES_DIR, "utils.helen"))
         resolver = ImportResolver(base_dir=FIXTURES_DIR)
         result = resolver.resolve(abs_path)
         assert result is not None
@@ -95,8 +95,8 @@ class TestCircularImportDetection:
         """Importing same file twice is detected."""
         resolver = ImportResolver(base_dir=FIXTURES_DIR)
 
-        result1 = resolver.resolve("utils.hellen")
-        result2 = resolver.resolve("utils.hellen")
+        result1 = resolver.resolve("utils.helen")
+        result2 = resolver.resolve("utils.helen")
 
         # Second import should return cached or None
         # but not cause infinite recursion

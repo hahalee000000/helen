@@ -1,8 +1,8 @@
-"""Tests for hellen.interpreter — expression evaluation."""
+"""Tests for helen.interpreter — expression evaluation."""
 
 import pytest
 
-from hellen.core.ast import (
+from helen.core.ast import (
     AccessNode,
     BinaryOpNode,
     CallArgNode,
@@ -20,10 +20,10 @@ from hellen.core.ast import (
     UnaryOpNode,
     VariableNode,
 )
-from hellen.core.errors import ErrorReporter
-from hellen.core.source import SourceSpan
-from hellen.core.tokens import Token, TokenType
-from hellen.interpreter.interpreter import Interpreter
+from helen.core.errors import ErrorReporter
+from helen.core.source import SourceSpan
+from helen.core.tokens import Token, TokenType
+from helen.interpreter.interpreter import Interpreter
 
 
 def _span(line: int = 1) -> SourceSpan:
@@ -54,7 +54,7 @@ def _unary(op: TokenType, operand, line: int = 1) -> UnaryOpNode:
 
 def _run(expr) -> tuple:
     """Run an expression in a program and return (result, errors)."""
-    from hellen.core.ast import ExprStmtNode, ProgramNode
+    from helen.core.ast import ExprStmtNode, ProgramNode
 
     stmt = ExprStmtNode(expression=expr, span=_span())
     prog = ProgramNode(statements=[stmt], span=_span())
@@ -240,11 +240,11 @@ class TestCollections:
         assert result == 42
 
     def test_access_dict_property(self):
-        entry = MapEntryNode(key=_lit("name"), value=_lit("hellen"), span=_span())
+        entry = MapEntryNode(key=_lit("name"), value=_lit("helen"), span=_span())
         mp = MapLiteralNode(entries=[entry], span=_span())
         node = AccessNode(target=mp, property="name", span=_span())
         result, _ = _run(node)
-        assert result == "hellen"
+        assert result == "helen"
 
 
 # ---------------------------------------------------------------------------

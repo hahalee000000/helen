@@ -1,8 +1,8 @@
-"""Tests for hellen CLI — error formatter."""
+"""Tests for helen CLI — error formatter."""
 
-from hellen.core.errors import ErrorCode, HellenError, HellenWarning
-from hellen.core.source import SourceSpan
-from hellen.cli.formatter import format_error, format_warning
+from helen.core.errors import ErrorCode, HelenError, HelenWarning
+from helen.core.source import SourceSpan
+from helen.cli.formatter import format_error, format_warning
 
 
 class TestErrorFormatter:
@@ -10,8 +10,8 @@ class TestErrorFormatter:
 
     def test_error_with_span(self):
         """Error with SourceSpan shows location and source."""
-        span = SourceSpan("test.hellen", 5, 10, 5, 15)
-        error = HellenError(
+        span = SourceSpan("test.helen", 5, 10, 5, 15)
+        error = HelenError(
             code=ErrorCode.PARSER_ERROR,
             message="unexpected token",
             span=span,
@@ -29,13 +29,13 @@ class TestErrorFormatter:
         assert "Error:" in result
         assert "E0301" in result
         assert "unexpected token" in result
-        assert "test.hellen:5:10" in result
+        assert "test.helen:5:10" in result
         assert "let z = ;" in result
         assert "^" in result
 
     def test_error_without_span(self):
         """Error without SourceSpan shows generic location."""
-        error = HellenError(
+        error = HelenError(
             code=ErrorCode.SCANNER_ERROR,
             message="illegal character",
             span=None,
@@ -50,8 +50,8 @@ class TestErrorFormatter:
 
     def test_error_includes_detail_line(self):
         """Error includes detail (= ...) line."""
-        span = SourceSpan("test.hellen", 1, 1, 1, 5)
-        error = HellenError(
+        span = SourceSpan("test.helen", 1, 1, 1, 5)
+        error = HelenError(
             code=ErrorCode.UNEXPECTED_TOKEN,
             message="expected identifier",
             span=span,
@@ -67,8 +67,8 @@ class TestWarningFormatter:
 
     def test_warning_with_span(self):
         """Warning with SourceSpan shows location."""
-        span = SourceSpan("test.hellen", 3, 5, 3, 10)
-        warning = HellenWarning(
+        span = SourceSpan("test.helen", 3, 5, 3, 10)
+        warning = HelenWarning(
             code=ErrorCode.DEPRECATED_SYNTAX,
             message="deprecated syntax",
             span=span,
@@ -84,7 +84,7 @@ class TestWarningFormatter:
         assert "Warning:" in result
         assert "W0308" in result
         assert "deprecated syntax" in result
-        assert "test.hellen:3:5" in result
+        assert "test.helen:3:5" in result
         assert "let old = 1;" in result
 
 
@@ -93,8 +93,8 @@ class TestPositionIndicator:
 
     def test_caret_underlines_error_position(self):
         """Caret line should underline the error location."""
-        span = SourceSpan("test.hellen", 1, 5, 1, 10)
-        error = HellenError(
+        span = SourceSpan("test.helen", 1, 5, 1, 10)
+        error = HelenError(
             code=ErrorCode.PARSER_ERROR,
             message="bad syntax",
             span=span,

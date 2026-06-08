@@ -1,6 +1,6 @@
-"""Tests for hellen.runtime.structured — StructuredOutput schema generation and parsing."""
+"""Tests for helen.runtime.structured — StructuredOutput schema generation and parsing."""
 
-from hellen.runtime.structured import StructuredOutput
+from helen.runtime.structured import StructuredOutput
 
 
 class TestRouteSchema:

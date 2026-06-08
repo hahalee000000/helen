@@ -1,36 +1,36 @@
-"""Tests for hellen.runtime.import_resolver — ImportResolver (HLD 3.9 M8)."""
+"""Tests for helen.runtime.import_resolver — ImportResolver (HLD 3.9 M8)."""
 
 import os
 import tempfile
 
-from hellen.runtime.import_resolver import ImportResolver, ImportResult
+from helen.runtime.import_resolver import ImportResolver, ImportResult
 
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
-class TestImportResolverHellen:
-    """Test .hellen file import (HLD 3.9.1)."""
+class TestImportResolverHelen:
+    """Test .helen file import (HLD 3.9.1)."""
 
-    def test_import_hellen_registers_agent(self):
+    def test_import_helen_registers_agent(self):
         resolver = ImportResolver(base_dir=FIXTURES_DIR)
-        result = resolver.resolve("utils.hellen")
+        result = resolver.resolve("utils.helen")
         assert result is not None
-        assert result.format == "hellen"
+        assert result.format == "helen"
         assert "HelperAgent" in resolver.agents
         assert "greet" in resolver.functions
 
-    def test_import_hellen_does_not_execute_main(self):
+    def test_import_helen_does_not_execute_main(self):
         """Import should not execute the imported file's main block."""
         resolver = ImportResolver(base_dir=FIXTURES_DIR)
-        resolver.resolve("utils.hellen")
+        resolver.resolve("utils.helen")
         # If main was executed, we'd see side effects. Since it's just parsed,
         # the agents/functions are registered but nothing is executed.
         assert "HelperAgent" in resolver.agents
 
     def test_import_not_found(self):
         resolver = ImportResolver(base_dir=FIXTURES_DIR)
-        result = resolver.resolve("nonexistent.hellen")
+        result = resolver.resolve("nonexistent.helen")
         assert result is None
 
 
@@ -76,9 +76,9 @@ class TestImportResolverPathSafety:
     def test_relative_path_resolution(self):
         """Relative paths should resolve from base_dir."""
         resolver = ImportResolver(base_dir=FIXTURES_DIR)
-        result = resolver.resolve("utils.hellen")
+        result = resolver.resolve("utils.helen")
         assert result is not None
-        assert result.format == "hellen"
+        assert result.format == "helen"
 
 
 class TestImportResolverCircular:
@@ -86,8 +86,8 @@ class TestImportResolverCircular:
 
     def test_no_duplicate_registration(self):
         resolver = ImportResolver(base_dir=FIXTURES_DIR)
-        resolver.resolve("utils.hellen")
-        resolver.resolve("utils.hellen")  # Second import — should be detected
+        resolver.resolve("utils.helen")
+        resolver.resolve("utils.helen")  # Second import — should be detected
         # Agents should only be registered once
         assert len(resolver.agents) == 1
 
@@ -97,8 +97,8 @@ class TestImportResult:
 
     def test_import_result_fields(self):
         result = ImportResult(
-            path="/test/utils.hellen", content="data", format="hellen"
+            path="/test/utils.helen", content="data", format="helen"
         )
-        assert result.path == "/test/utils.hellen"
+        assert result.path == "/test/utils.helen"
         assert result.content == "data"
-        assert result.format == "hellen"
+        assert result.format == "helen"

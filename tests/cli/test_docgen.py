@@ -1,10 +1,10 @@
-"""Tests for Hellen CLI — doc command."""
+"""Tests for Helen CLI — doc command."""
 
 import os
 import tempfile
 import json
 
-from hellen.cli.docgen import (
+from helen.cli.docgen import (
     generate_docs, format_markdown, extract_agent_doc,
     extract_function_doc, parse_source,
 )
@@ -22,7 +22,7 @@ class TestDocgenBasics:
 
     def test_generate_docs_nonexistent_file(self):
         """Nonexistent file → silently skipped."""
-        docs = generate_docs(["/nonexistent/file.hellen"])
+        docs = generate_docs(["/nonexistent/file.helen"])
         assert docs["agents"] == []
         assert docs["functions"] == []
 
@@ -40,7 +40,7 @@ agent Greeter {
     }
 }
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".hellen", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".helen", delete=False) as f:
             f.write(code)
             f.flush()
             try:
@@ -59,7 +59,7 @@ fn greet(name: string) {
     let msg = "Hello, " + name
 }
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".hellen", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".helen", delete=False) as f:
             f.write(code)
             f.flush()
             try:
@@ -94,7 +94,7 @@ class TestMarkdownFormat:
         """Output starts with H1 header."""
         docs = generate_docs([])
         md = format_markdown(docs)
-        assert "# Hellen API Documentation" in md
+        assert "# Helen API Documentation" in md
 
     def test_markdown_agents_section(self):
         """Agents section rendered."""
@@ -107,7 +107,7 @@ agent TestAgent {
     }
 }
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".hellen", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".helen", delete=False) as f:
             f.write(code)
             f.flush()
             try:
@@ -138,7 +138,7 @@ agent TestAgent {
     main { let x = 1 }
 }
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".hellen", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".helen", delete=False) as f:
             f.write(code)
             f.flush()
             try:
@@ -155,8 +155,8 @@ class TestExtractDoc:
 
     def test_extract_agent_with_params(self):
         """Extract agent doc with parameters."""
-        from hellen.core.ast import AgentDeclNode, AgentParamNode, MainBlockNode, LiteralNode
-        from hellen.core.source import SourceSpan
+        from helen.core.ast import AgentDeclNode, AgentParamNode, MainBlockNode, LiteralNode
+        from helen.core.source import SourceSpan
 
         param = AgentParamNode(
             name="name", type_annotation=None, default_value=None,
@@ -168,7 +168,7 @@ class TestExtractDoc:
             span=SourceSpan("<test>", 1, 1, 1, 5),
         )
 
-        doc = extract_agent_doc(agent, "test.hellen")
+        doc = extract_agent_doc(agent, "test.helen")
         assert doc.name == "Greeter"
         assert len(doc.params) == 1
         assert doc.params[0]["name"] == "name"

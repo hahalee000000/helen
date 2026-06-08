@@ -1,4 +1,4 @@
-"""Tests for hellen.runtime.prompt_builder — PromptBuilder (HLD 3.7).
+"""Tests for helen.runtime.prompt_builder — PromptBuilder (HLD 3.7).
 
 Covers:
 - Template variable substitution ({{var}})
@@ -10,14 +10,14 @@ Covers:
 - Route/Choose prompt building
 """
 
-from hellen.runtime.prompt_builder import PromptBuilder
+from helen.runtime.prompt_builder import PromptBuilder
 
 
 class FakeRuntime:
     """Minimal Runtime mock for PromptBuilder tests."""
 
     def list_skills(self):
-        from hellen.runtime import SkillMeta
+        from helen.runtime import SkillMeta
         return [
             SkillMeta(name="test-skill", description="A test skill", category="test"),
             SkillMeta(name="another-skill", description="Another skill", category="dev"),

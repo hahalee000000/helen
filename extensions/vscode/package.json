@@ -1,9 +1,9 @@
 {
-    "name": "hellen",
-    "displayName": "Hellen Language Support",
-    "description": "Syntax highlighting and language support for the Hellen Agent Programming Language",
+    "name": "helen",
+    "displayName": "Helen Language Support",
+    "description": "Syntax highlighting and language support for the Helen Agent Programming Language",
     "version": "0.1.0",
-    "publisher": "hellen-lang",
+    "publisher": "helen-lang",
     "engines": {
         "vscode": "^1.75.0"
     },
@@ -13,28 +13,28 @@
     "contributes": {
         "languages": [
             {
-                "id": "hellen",
+                "id": "helen",
                 "aliases": [
-                    "Hellen",
-                    "hellen"
+                    "Helen",
+                    "helen"
                 ],
                 "extensions": [
-                    ".hellen"
+                    ".helen"
                 ],
                 "configuration": "./language-configuration.json"
             }
         ],
         "grammars": [
             {
-                "language": "hellen",
-                "scopeName": "source.hellen",
-                "path": "./syntaxes/hellen.tmLanguage.json"
+                "language": "helen",
+                "scopeName": "source.helen",
+                "path": "./syntaxes/helen.tmLanguage.json"
             }
         ],
         "configuration": {
-            "title": "Hellen",
+            "title": "Helen",
             "properties": {
-                "hellen.trace.server": {
+                "helen.trace.server": {
                     "type": "string",
                     "enum": [
                         "off",
@@ -42,14 +42,14 @@
                         "verbose"
                     ],
                     "default": "off",
-                    "description": "Traces the communication between VS Code and the Hellen language server."
+                    "description": "Traces the communication between VS Code and the Helen language server."
                 }
             }
         }
     },
     "repository": {
         "type": "git",
-        "url": "https://github.com/hellen-lang/hellen"
+        "url": "https://github.com/helen-lang/helen"
     },
     "license": "MIT"
 }

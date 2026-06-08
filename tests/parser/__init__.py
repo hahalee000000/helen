@@ -1,1 +1,1 @@
-"""Tests for the Hellen Pratt parser."""
+"""Tests for the Helen Pratt parser."""

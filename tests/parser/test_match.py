@@ -1,9 +1,9 @@
 """Tests for match statement parsing."""
 
 import pytest
-from hellen.core.lexer import Scanner
-from hellen.core.parser import Parser
-from hellen.core.ast import (
+from helen.core.lexer import Scanner
+from helen.core.parser import Parser
+from helen.core.ast import (
     MatchStmtNode, CaseNode, ProgramNode,
 )
 

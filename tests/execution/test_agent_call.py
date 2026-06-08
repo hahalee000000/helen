@@ -1,6 +1,6 @@
-"""Tests for hellen.interpreter — Agent call with environment isolation (HLD 3.5.2, 3.6.2)."""
+"""Tests for helen.interpreter — Agent call with environment isolation (HLD 3.5.2, 3.6.2)."""
 
-from hellen.core.ast import (
+from helen.core.ast import (
     AgentDeclNode,
     AgentParamNode,
     ExprStmtNode,
@@ -10,9 +10,9 @@ from hellen.core.ast import (
     ReturnStmtNode,
     VarDeclNode,
 )
-from hellen.core.errors import ErrorReporter
-from hellen.core.source import SourceSpan
-from hellen.interpreter.interpreter import Interpreter
+from helen.core.errors import ErrorReporter
+from helen.core.source import SourceSpan
+from helen.interpreter.interpreter import Interpreter
 
 
 def _span(line: int = 1) -> SourceSpan:
@@ -80,7 +80,7 @@ class TestAgentCallIsolation:
         interp.interpret(prog)
 
         # Call with parameter binding
-        from hellen.core.ast import CallArgNode, CallNode, VariableNode
+        from helen.core.ast import CallArgNode, CallNode, VariableNode
         call_node = CallNode(
             callee=VariableNode(name="Doubler", span=_span()),
             arguments=[
@@ -98,7 +98,7 @@ class TestAgentCallIsolation:
         # Sub-agent should NOT be able to access it
 
         # We'll test this by verifying that _call_agent creates a fresh env
-        from hellen.interpreter.environment import Environment
+        from helen.interpreter.environment import Environment
 
         interp = Interpreter()
         # Set a variable in the parent environment
@@ -125,7 +125,7 @@ class TestAgentCallIsolation:
     @staticmethod
     def _make_call(agent_name: str):
         """Create a CallNode for the given agent name."""
-        from hellen.core.ast import CallNode, VariableNode
+        from helen.core.ast import CallNode, VariableNode
 
         return CallNode(
             callee=VariableNode(name=agent_name, span=_span()),
@@ -139,7 +139,7 @@ class TestAgentDeclarations:
 
     def test_agent_stores_declarations(self):
         """AgentDeclNode should have declarations field."""
-        from hellen.core.ast import DeclarationNode
+        from helen.core.ast import DeclarationNode
 
         decl = DeclarationNode(
             description=None,

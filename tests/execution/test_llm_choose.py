@@ -1,16 +1,16 @@
-"""Tests for hellen.interpreter — llm choose statement execution."""
+"""Tests for helen.interpreter — llm choose statement execution."""
 
-from hellen.core.ast import (
+from helen.core.ast import (
     ExprStmtNode,
     LlmChooseStmtNode,
     LlmOptionNode,
     ProgramNode,
 )
-from hellen.core.errors import ErrorReporter
-from hellen.core.source import SourceSpan
-from hellen.interpreter.exceptions import ModelError
-from hellen.interpreter.interpreter import Interpreter
-from hellen.runtime.llm_runtime import MockLLMRuntime
+from helen.core.errors import ErrorReporter
+from helen.core.source import SourceSpan
+from helen.interpreter.exceptions import ModelError
+from helen.interpreter.interpreter import Interpreter
+from helen.runtime.llm_runtime import MockLLMRuntime
 
 
 def _span(line: int = 1) -> SourceSpan:
@@ -87,5 +87,5 @@ class TestLlmChooseExecution:
 
 
 def _lit(value, line: int = 1):
-    from hellen.core.ast import LiteralNode
+    from helen.core.ast import LiteralNode
     return LiteralNode(value=value, span=_span(line))

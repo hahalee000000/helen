@@ -1,20 +1,20 @@
-"""Tests for hellen.core.errors module.
+"""Tests for helen.core.errors module.
 
 Covers:
 - ErrorCode enum values
-- HellenError / HellenWarning creation and string representation
+- HelenError / HelenWarning creation and string representation
 - ErrorReporter: error/warning/has_errors/reset/errors/warnings
 """
 
 import pytest
 
-from hellen.core.errors import (
+from helen.core.errors import (
     ErrorCode,
     ErrorReporter,
-    HellenError,
-    HellenWarning,
+    HelenError,
+    HelenWarning,
 )
-from hellen.core.source import SourceSpan
+from helen.core.source import SourceSpan
 
 
 class TestErrorCode:
@@ -56,25 +56,25 @@ class TestErrorCode:
         assert len(values) == len(set(values))
 
 
-class TestHellenError:
-    """Tests for HellenError."""
+class TestHelenError:
+    """Tests for HelenError."""
 
     def test_creation_minimal(self) -> None:
-        """HellenError should be creatable with code and message only."""
-        err = HellenError(ErrorCode.SCANNER_ERROR, "bad token")
+        """HelenError should be creatable with code and message only."""
+        err = HelenError(ErrorCode.SCANNER_ERROR, "bad token")
         assert err.code == ErrorCode.SCANNER_ERROR
         assert err.message == "bad token"
         assert err.span is None
 
     def test_creation_with_span(self) -> None:
-        """HellenError should accept an optional span."""
+        """HelenError should accept an optional span."""
         span = SourceSpan("test.hl", 1, 1, 1, 5)
-        err = HellenError(ErrorCode.PARSER_ERROR, "expected ')'", span)
+        err = HelenError(ErrorCode.PARSER_ERROR, "expected ')'", span)
         assert err.span is span
 
     def test_str_without_span(self) -> None:
         """__str__ should use '<unknown>' when span is absent."""
-        err = HellenError(ErrorCode.SCANNER_ERROR, "oops")
+        err = HelenError(ErrorCode.SCANNER_ERROR, "oops")
         s = str(err)
         assert "E0300" in s
         assert "<unknown>" in s
@@ -83,31 +83,31 @@ class TestHellenError:
     def test_str_with_span(self) -> None:
         """__str__ should include span string when present."""
         span = SourceSpan("main.hl", 3, 5, 3, 10)
-        err = HellenError(ErrorCode.UNEXPECTED_TOKEN, "got 'foo'", span)
+        err = HelenError(ErrorCode.UNEXPECTED_TOKEN, "got 'foo'", span)
         s = str(err)
         assert "E0302" in s
         assert "main.hl:3:5-10" in s
         assert "got 'foo'" in s
 
     def test_is_exception(self) -> None:
-        """HellenError should be a subclass of Exception."""
-        err = HellenError(ErrorCode.SCANNER_ERROR, "x")
+        """HelenError should be a subclass of Exception."""
+        err = HelenError(ErrorCode.SCANNER_ERROR, "x")
         assert isinstance(err, Exception)
 
 
-class TestHellenWarning:
-    """Tests for HellenWarning."""
+class TestHelenWarning:
+    """Tests for HelenWarning."""
 
     def test_creation(self) -> None:
-        """HellenWarning should be creatable with code and message."""
-        w = HellenWarning(ErrorCode.DEPRECATED_SYNTAX, "old syntax")
+        """HelenWarning should be creatable with code and message."""
+        w = HelenWarning(ErrorCode.DEPRECATED_SYNTAX, "old syntax")
         assert w.code == ErrorCode.DEPRECATED_SYNTAX
         assert w.message == "old syntax"
         assert w.span is None
 
     def test_str_without_span(self) -> None:
         """__str__ should use '<unknown>' when span is absent."""
-        w = HellenWarning(ErrorCode.DEPRECATED_SYNTAX, "use new form")
+        w = HelenWarning(ErrorCode.DEPRECATED_SYNTAX, "use new form")
         s = str(w)
         assert "W0308" in s
         assert "<unknown>" in s
@@ -116,7 +116,7 @@ class TestHellenWarning:
     def test_str_with_span(self) -> None:
         """__str__ should include span string when present."""
         span = SourceSpan("old.hl", 10, 1, 10, 20)
-        w = HellenWarning(ErrorCode.DEPRECATED_SYNTAX, "deprecated", span)
+        w = HelenWarning(ErrorCode.DEPRECATED_SYNTAX, "deprecated", span)
         s = str(w)
         assert "W0308" in s
         assert "old.hl:10:1-20" in s
@@ -134,7 +134,7 @@ class TestErrorReporter:
         assert r.warnings == []
 
     def test_error_adds_to_list(self) -> None:
-        """error() should append a HellenError to errors."""
+        """error() should append a HelenError to errors."""
         r = ErrorReporter()
         r.error(ErrorCode.SCANNER_ERROR, "bad")
         assert len(r.errors) == 1
@@ -142,7 +142,7 @@ class TestErrorReporter:
         assert r.errors[0].message == "bad"
 
     def test_warning_adds_to_list(self) -> None:
-        """warning() should append a HellenWarning to warnings."""
+        """warning() should append a HelenWarning to warnings."""
         r = ErrorReporter()
         r.warning(ErrorCode.DEPRECATED_SYNTAX, "old")
         assert len(r.warnings) == 1

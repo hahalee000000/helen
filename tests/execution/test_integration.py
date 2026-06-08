@@ -1,6 +1,6 @@
-"""Integration tests for hellen.interpreter — full programs combining features."""
+"""Integration tests for helen.interpreter — full programs combining features."""
 
-from hellen.core.ast import (
+from helen.core.ast import (
     AgentParamNode,
     BinaryOpNode,
     CallArgNode,
@@ -18,10 +18,10 @@ from hellen.core.ast import (
     VariableNode,
     WhileStmtNode,
 )
-from hellen.core.errors import ErrorReporter
-from hellen.core.source import SourceSpan
-from hellen.core.tokens import Token, TokenType
-from hellen.interpreter.interpreter import Interpreter
+from helen.core.errors import ErrorReporter
+from helen.core.source import SourceSpan
+from helen.core.tokens import Token, TokenType
+from helen.interpreter.interpreter import Interpreter
 
 
 def _span(line: int = 1) -> SourceSpan:
@@ -117,7 +117,7 @@ class TestIntegration:
             span=_span(),
         )
         # Actually, let's use the CaseNode constructor directly
-        from hellen.core.ast import CaseNode
+        from helen.core.ast import CaseNode
 
         case1 = CaseNode(pattern=_lit(1, 3), body=[ReturnStmtNode(value=_lit("one"), span=_span())], span=_span())
         case2 = CaseNode(pattern=_lit(2, 4), body=[ReturnStmtNode(value=_lit("two"), span=_span())], span=_span())
@@ -144,7 +144,7 @@ class TestIntegration:
 
     def test_const_protection_in_loop(self):
         """let MAX = 10; MAX = 5 should raise ConstAssignmentError"""
-        from hellen.interpreter.exceptions import ConstAssignmentError
+        from helen.interpreter.exceptions import ConstAssignmentError
 
         decl = VarDeclNode(name="MAX", type_annotation=None, initializer=_lit(10), mutable=False, span=_span())
         op_tok = _make_tok(TokenType.ASSIGN, "=")

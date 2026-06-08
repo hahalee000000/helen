@@ -10,7 +10,7 @@ import os
 import tempfile
 import json
 
-from hellen.core.ast import (
+from helen.core.ast import (
     AgentDeclNode,
     DeclarationNode,
     LiteralNode,
@@ -18,9 +18,9 @@ from hellen.core.ast import (
     ProgramNode,
     ReturnStmtNode,
 )
-from hellen.core.errors import ErrorReporter
-from hellen.core.source import SourceSpan
-from hellen.runtime.memory import InMemoryProvider
+from helen.core.errors import ErrorReporter
+from helen.core.source import SourceSpan
+from helen.runtime.memory import InMemoryProvider
 
 
 def _span(line: int = 1) -> SourceSpan:
@@ -92,7 +92,7 @@ class TestFileMemoryProviderIntegration:
     """Test FileMemoryProvider with real files."""
 
     def setup_method(self):
-        from hellen.runtime.memory import FileMemoryProvider
+        from helen.runtime.memory import FileMemoryProvider
         self.tmpdir = tempfile.mkdtemp()
         self.path = os.path.join(self.tmpdir, "memory.json")
         self.provider = FileMemoryProvider()
@@ -103,7 +103,7 @@ class TestFileMemoryProviderIntegration:
 
     def test_full_lifecycle(self):
         """set -> save -> load -> get -> search cycle."""
-        from hellen.runtime.memory import FileMemoryProvider
+        from helen.runtime.memory import FileMemoryProvider
         # Set values
         self.provider.set(self.path, "key1", "value1")
         self.provider.set(self.path, "key2", "value2")

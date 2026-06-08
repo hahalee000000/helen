@@ -1,4 +1,4 @@
-"""Tests for hellen.core.tokens module.
+"""Tests for helen.core.tokens module.
 
 Covers:
 - TokenType enum completeness (≥50 types)
@@ -6,8 +6,8 @@ Covers:
 - Token creation, string representation, attribute access, span property
 """
 
-from hellen.core.tokens import Token, TokenType, keywords
-from hellen.core.source import SourceSpan
+from helen.core.tokens import Token, TokenType, keywords
+from helen.core.source import SourceSpan
 
 
 class TestTokenType:

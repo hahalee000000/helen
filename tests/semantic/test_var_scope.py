@@ -2,7 +2,7 @@
 
 import pytest
 
-from hellen.core.ast import (
+from helen.core.ast import (
     FnBlockNode,
     FunctionDeclNode,
     MainBlockNode,
@@ -10,9 +10,9 @@ from hellen.core.ast import (
     VarDeclNode,
     VariableNode,
 )
-from hellen.core.errors import ErrorCode, ErrorReporter
-from hellen.core.source import SourceSpan
-from hellen.semantic.analyzer import SemanticAnalyzer
+from helen.core.errors import ErrorCode, ErrorReporter
+from helen.core.source import SourceSpan
+from helen.semantic.analyzer import SemanticAnalyzer
 
 
 def _span(line: int = 1, col: int = 1) -> SourceSpan:
@@ -20,7 +20,7 @@ def _span(line: int = 1, col: int = 1) -> SourceSpan:
 
 
 def _literal(value, line: int = 1):
-    from hellen.core.ast import LiteralNode
+    from helen.core.ast import LiteralNode
     return LiteralNode(value=value, span=_span(line))
 
 
@@ -41,7 +41,7 @@ class TestBlockScope:
 
     def test_block_scope_isolation_via_if(self):
         """Variable declared inside if-then should not be visible outside."""
-        from hellen.core.ast import IfStmtNode
+        from helen.core.ast import IfStmtNode
 
         # let x = 1 inside the then-branch
         inner_decl = VarDeclNode(name="x", type_annotation=None, initializer=_literal(1), mutable=True, span=_span())
@@ -98,7 +98,7 @@ class TestConstProtection:
     """Const variables are marked in the symbol table."""
 
     def test_const_marked_immutable(self):
-        from hellen.semantic.symbols import Symbol, SymbolTable
+        from helen.semantic.symbols import Symbol, SymbolTable
 
         st = SymbolTable()
         sym = Symbol(name="MAX", kind="variable", is_const=True)
@@ -108,7 +108,7 @@ class TestConstProtection:
         assert resolved.is_const is True
 
     def test_let_not_const(self):
-        from hellen.semantic.symbols import Symbol, SymbolTable
+        from helen.semantic.symbols import Symbol, SymbolTable
 
         st = SymbolTable()
         sym = Symbol(name="x", kind="variable", is_const=False)
@@ -119,5 +119,5 @@ class TestConstProtection:
 
 
 def _make_param(name: str):
-    from hellen.core.ast import AgentParamNode
+    from helen.core.ast import AgentParamNode
     return AgentParamNode(name=name, type_annotation=None, default_value=None, span=_span())

@@ -1,1 +1,1 @@
-"""Tests for hellen CLI package."""
+"""Tests for helen CLI package."""

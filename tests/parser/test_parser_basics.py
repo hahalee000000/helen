@@ -1,10 +1,10 @@
 """tests/parser/test_parser_basics.py — Parser 基础测试。"""
 
 import pytest
-from hellen.core.lexer import Scanner
-from hellen.core.parser import Parser
-from hellen.core.errors import ErrorReporter
-from hellen.core.ast import (
+from helen.core.lexer import Scanner
+from helen.core.parser import Parser
+from helen.core.errors import ErrorReporter
+from helen.core.ast import (
     ProgramNode, AgentDeclNode, PromptDefNode, MainBlockNode,
     VarDeclNode, IfStmtNode, ForStmtNode, WhileStmtNode,
     BreakStmtNode, ContinueStmtNode, ReturnStmtNode,
@@ -250,8 +250,8 @@ class TestFunctions:
 
 class TestImport:
     def test_import_simple(self):
-        """import "utils.hellen" as utils"""
-        source = 'import "utils.hellen" as utils'
+        """import "utils.helen" as utils"""
+        source = 'import "utils.helen" as utils'
         program, errors = _parse_source(source)
         assert not errors.has_errors, errors.format_report()
         stmt = program.statements[0]

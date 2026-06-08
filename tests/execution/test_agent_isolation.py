@@ -7,7 +7,7 @@ Covers:
 - Nested agent calls maintain isolation chain
 """
 
-from hellen.core.ast import (
+from helen.core.ast import (
     AgentDeclNode,
     AgentParamNode,
     CallArgNode,
@@ -20,9 +20,9 @@ from hellen.core.ast import (
     VarDeclNode,
     VariableNode,
 )
-from hellen.core.errors import ErrorReporter
-from hellen.core.source import SourceSpan
-from hellen.interpreter.interpreter import Interpreter
+from helen.core.errors import ErrorReporter
+from helen.core.source import SourceSpan
+from helen.interpreter.interpreter import Interpreter
 
 
 def _span(line: int = 1) -> SourceSpan:
@@ -75,7 +75,7 @@ class TestAgentIsolationBasic:
         interp = Interpreter()
         interp.environment.define("parent_var", "visible_only_in_parent")
 
-        from hellen.interpreter.environment import Environment
+        from helen.interpreter.environment import Environment
         child_env = Environment()
 
         # Child env should not have parent_var

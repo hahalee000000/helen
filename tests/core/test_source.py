@@ -1,4 +1,4 @@
-"""Tests for hellen.core.source module.
+"""Tests for helen.core.source module.
 
 Covers:
 - SourceSpan creation, contains(), __str__, __repr__
@@ -7,7 +7,7 @@ Covers:
 
 import pytest
 
-from hellen.core.source import SourceFile, SourceSpan
+from helen.core.source import SourceFile, SourceSpan
 
 
 class TestSourceSpan:

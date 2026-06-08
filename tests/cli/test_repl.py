@@ -1,10 +1,10 @@
-"""Tests for hellen CLI — REPL."""
+"""Tests for helen CLI — REPL."""
 
 import pytest
-from hellen.cli.repl import _needs_continuation, _execute_input
-from hellen.interpreter.interpreter import Interpreter
-from hellen.core.errors import ErrorReporter
-from hellen.runtime.llm_runtime import MockLLMRuntime
+from helen.cli.repl import _needs_continuation, _execute_input
+from helen.interpreter.interpreter import Interpreter
+from helen.core.errors import ErrorReporter
+from helen.runtime.llm_runtime import MockLLMRuntime
 
 
 @pytest.fixture
@@ -69,7 +69,7 @@ class TestReplCommand:
 
     def test_repl_returns_zero(self):
         """repl_command returns 0 on exit."""
-        from hellen.cli.repl import repl_command
+        from helen.cli.repl import repl_command
         # Can't easily test interactive REPL without stdin mocking
         # Just verify the function exists and is callable
         assert callable(repl_command)

@@ -2,16 +2,16 @@
 
 import pytest
 
-from hellen.core.ast import (
+from helen.core.ast import (
     ForStmtNode,
     ProgramNode,
     VarDeclNode,
     VariableNode,
     WhileStmtNode,
 )
-from hellen.core.errors import ErrorCode, ErrorReporter
-from hellen.core.source import SourceSpan
-from hellen.semantic.analyzer import SemanticAnalyzer
+from helen.core.errors import ErrorCode, ErrorReporter
+from helen.core.source import SourceSpan
+from helen.semantic.analyzer import SemanticAnalyzer
 
 
 def _span(line: int = 1) -> SourceSpan:
@@ -19,7 +19,7 @@ def _span(line: int = 1) -> SourceSpan:
 
 
 def _literal(value, line: int = 1):
-    from hellen.core.ast import LiteralNode
+    from helen.core.ast import LiteralNode
     return LiteralNode(value=value, span=_span(line))
 
 
@@ -34,7 +34,7 @@ def _var(name: str, line: int = 1):
 
 class TestBreakContinueInsideLoop:
     def test_break_inside_for(self):
-        from hellen.core.ast import BreakStmtNode
+        from helen.core.ast import BreakStmtNode
         brk = BreakStmtNode(span=_span())
         # Declare 'items' first
         decl = VarDeclNode(name="items", type_annotation=None, initializer=_literal([]), mutable=True, span=_span())
@@ -50,7 +50,7 @@ class TestBreakContinueInsideLoop:
         assert not errors.has_errors
 
     def test_break_inside_while(self):
-        from hellen.core.ast import BreakStmtNode
+        from helen.core.ast import BreakStmtNode
         brk = BreakStmtNode(span=_span())
         while_stmt = WhileStmtNode(condition=_literal(True), body=brk, span=_span())
         prog = ProgramNode(statements=[while_stmt], span=_span())
@@ -59,7 +59,7 @@ class TestBreakContinueInsideLoop:
         assert not errors.has_errors
 
     def test_continue_inside_for(self):
-        from hellen.core.ast import ContinueStmtNode
+        from helen.core.ast import ContinueStmtNode
         cont = ContinueStmtNode(span=_span())
         decl = VarDeclNode(name="items", type_annotation=None, initializer=_literal([]), mutable=True, span=_span())
         for_stmt = ForStmtNode(
@@ -74,7 +74,7 @@ class TestBreakContinueInsideLoop:
         assert not errors.has_errors
 
     def test_nested_loops(self):
-        from hellen.core.ast import BreakStmtNode
+        from helen.core.ast import BreakStmtNode
         inner_break = BreakStmtNode(span=_span())
         inner_for = ForStmtNode(
             iterator=_var("j"),
@@ -105,7 +105,7 @@ class TestBreakContinueInsideLoop:
 class TestLlmUsage:
     def test_async_on_call_is_valid(self):
         """async call is parsed as AsyncCallStmtNode, semantic analyzer accepts it."""
-        from hellen.core.ast import AsyncCallStmtNode, CallArgNode, CallNode
+        from helen.core.ast import AsyncCallStmtNode, CallArgNode, CallNode
         call = CallNode(
             callee=_var("AgentA"),
             arguments=[CallArgNode(name="data", value=_var("d1"))],
@@ -126,7 +126,7 @@ class TestLlmUsage:
 
 class TestMatchDefault:
     def test_match_with_default_passes(self):
-        from hellen.core.ast import CaseNode, MatchStmtNode
+        from helen.core.ast import CaseNode, MatchStmtNode
         # Declare x first
         decl = VarDeclNode(name="x", type_annotation=None, initializer=_literal("a"), mutable=True, span=_span())
         case = CaseNode(pattern=_literal("a"), body=[], span=_span())

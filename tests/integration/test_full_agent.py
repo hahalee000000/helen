@@ -1,9 +1,9 @@
-"""Integration tests for complete Hellen Agent programs."""
+"""Integration tests for complete Helen Agent programs."""
 
 import os
 import tempfile
 
-from hellen.cli.__main__ import run_command, check_command
+from helen.cli.__main__ import run_command, check_command
 
 
 class TestFullAgentProgram:
@@ -20,7 +20,7 @@ agent Greeter {
     }
 }
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".hellen", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".helen", delete=False) as f:
             f.write(code)
             f.flush()
             try:
@@ -32,7 +32,7 @@ agent Greeter {
     def test_simple_run(self):
         """Simple program runs successfully."""
         code = "let x = 1 + 2"
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".hellen", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".helen", delete=False) as f:
             f.write(code)
             f.flush()
             try:
@@ -52,7 +52,7 @@ agent Greeter(name: string) {
     }
 }
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".hellen", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".helen", delete=False) as f:
             f.write(code)
             f.flush()
             try:
@@ -77,7 +77,7 @@ agent Analyzer {
     }
 }
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".hellen", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".helen", delete=False) as f:
             f.write(code)
             f.flush()
             try:
@@ -106,7 +106,7 @@ agent ConditionChecker {
     }
 }
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".hellen", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".helen", delete=False) as f:
             f.write(code)
             f.flush()
             try:
@@ -129,7 +129,7 @@ agent LoopAgent {
     }
 }
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".hellen", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".helen", delete=False) as f:
             f.write(code)
             f.flush()
             try:
@@ -143,10 +143,10 @@ class TestImportAndCall:
     """Test import + agent call workflow."""
 
     def test_import_and_check(self):
-        """Import a .hellen file and check."""
+        """Import a .helen file and check."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create a library file
-            lib_path = os.path.join(tmpdir, "lib.hellen")
+            lib_path = os.path.join(tmpdir, "lib.helen")
             with open(lib_path, "w") as f:
                 f.write("""
 agent LibAgent {
@@ -159,7 +159,7 @@ agent LibAgent {
 """)
 
             # Create main file that imports
-            main_path = os.path.join(tmpdir, "main.hellen")
+            main_path = os.path.join(tmpdir, "main.helen")
             with open(main_path, "w") as f:
                 f.write(f'import "{lib_path}"')
 
@@ -181,7 +181,7 @@ agent Assistant {
     }
 }
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".hellen", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".helen", delete=False) as f:
             f.write(code)
             f.flush()
             try:

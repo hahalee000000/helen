@@ -1,6 +1,6 @@
-"""Tests for hellen.interpreter — collections (list, map, index, access)."""
+"""Tests for helen.interpreter — collections (list, map, index, access)."""
 
-from hellen.core.ast import (
+from helen.core.ast import (
     AccessNode,
     ExprStmtNode,
     IndexNode,
@@ -12,9 +12,9 @@ from hellen.core.ast import (
     VarDeclNode,
     VariableNode,
 )
-from hellen.core.errors import ErrorReporter
-from hellen.core.source import SourceSpan
-from hellen.interpreter.interpreter import Interpreter
+from helen.core.errors import ErrorReporter
+from helen.core.source import SourceSpan
+from helen.interpreter.interpreter import Interpreter
 
 
 def _span(line: int = 1) -> SourceSpan:
@@ -61,11 +61,11 @@ class TestMapLiteral:
         assert result == {}
 
     def test_map_with_entries(self):
-        e1 = MapEntryNode(key=_lit("name"), value=_lit("hellen"), span=_span())
+        e1 = MapEntryNode(key=_lit("name"), value=_lit("helen"), span=_span())
         e2 = MapEntryNode(key=_lit("version"), value=_lit(1), span=_span())
         mp = MapLiteralNode(entries=[e1, e2], span=_span())
         result, _ = _run(ExprStmtNode(expression=mp, span=_span()))
-        assert result == {"name": "hellen", "version": 1}
+        assert result == {"name": "helen", "version": 1}
 
 
 class TestIndexAccess:

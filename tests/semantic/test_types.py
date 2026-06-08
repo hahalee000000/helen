@@ -1,8 +1,8 @@
-"""Tests for hellen.semantic.types — Type hierarchy and compatibility."""
+"""Tests for helen.semantic.types — Type hierarchy and compatibility."""
 
 import pytest
 
-from hellen.semantic.types import (
+from helen.semantic.types import (
     AnyType,
     BoolType,
     FloatType,

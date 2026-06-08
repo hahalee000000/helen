@@ -1,6 +1,6 @@
-"""Tests for hellen.runtime.llm_runtime — LLMRuntime interface and MockLLMRuntime."""
+"""Tests for helen.runtime.llm_runtime — LLMRuntime interface and MockLLMRuntime."""
 
-from hellen.runtime.llm_runtime import LLMResponse, MockLLMRuntime
+from helen.runtime.llm_runtime import LLMResponse, MockLLMRuntime
 
 
 class TestMockLLMRoute:
@@ -22,7 +22,7 @@ class TestMockLLMRoute:
         assert runtime.route_history[0]["branches"] == ["a", "b"]
 
     def test_route_raises_exception(self):
-        from hellen.interpreter.exceptions import TimeoutError
+        from helen.interpreter.exceptions import TimeoutError
 
         runtime = MockLLMRuntime(route_fail=TimeoutError("timeout"))
         try:
@@ -77,7 +77,7 @@ class TestMockLLMAct:
         assert runtime.act_history[0]["temperature"] == 0.5
 
     def test_act_raises_exception(self):
-        from hellen.interpreter.exceptions import ModelError
+        from helen.interpreter.exceptions import ModelError
 
         runtime = MockLLMRuntime(act_fail=ModelError("quota"))
         try:

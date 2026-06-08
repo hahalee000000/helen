@@ -1,8 +1,8 @@
-"""Tests for hellen.semantic.symbols — Symbol, Scope, SymbolTable."""
+"""Tests for helen.semantic.symbols — Symbol, Scope, SymbolTable."""
 
 import pytest
 
-from hellen.semantic.symbols import Scope, Symbol, SymbolTable
+from helen.semantic.symbols import Scope, Symbol, SymbolTable
 
 
 # ---------------------------------------------------------------------------
@@ -23,8 +23,8 @@ class TestSymbol:
         assert s.is_const is True
 
     def test_create_with_type(self):
-        from hellen.core.ast import TypeNode
-        from hellen.core.source import SourceSpan
+        from helen.core.ast import TypeNode
+        from helen.core.source import SourceSpan
 
         span = SourceSpan("<test>", 1, 1, 1, 5)
         tn = TypeNode(name="int", span=span)

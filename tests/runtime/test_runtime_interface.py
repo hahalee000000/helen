@@ -1,4 +1,4 @@
-"""Tests for hellen.runtime — Runtime ABC interface completeness (HLD 3.8.1).
+"""Tests for helen.runtime — Runtime ABC interface completeness (HLD 3.8.1).
 
 Covers:
 - Runtime ABC has all required abstract methods
@@ -7,7 +7,7 @@ Covers:
 """
 
 from abc import ABC
-from hellen.runtime import Runtime, Message, SkillMeta, ToolSchema
+from helen.runtime import Runtime, Message, SkillMeta, ToolSchema
 
 
 class TestRuntimeABC:
@@ -84,7 +84,7 @@ class TestMockRuntime:
 
     def test_mock_runtime_implements_all(self):
         """A mock implementation satisfies the ABC."""
-        from hellen.runtime import Runtime
+        from helen.runtime import Runtime
 
         class MockRuntime(Runtime):
             def load_tool(self, name): return None

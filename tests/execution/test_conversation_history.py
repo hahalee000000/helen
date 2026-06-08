@@ -1,4 +1,4 @@
-"""Tests for hellen.interpreter.interpreter — conversation history integration (HLD 3.6.6, 3.12).
+"""Tests for helen.interpreter.interpreter — conversation history integration (HLD 3.6.6, 3.12).
 
 Covers:
 - _get_context() returns conversation summary from history
@@ -9,9 +9,9 @@ Covers:
 - Summary is capped at 4096 tokens
 """
 
-from hellen.interpreter.interpreter import Interpreter
-from hellen.core.errors import ErrorReporter
-from hellen.runtime.llm_runtime import MockLLMRuntime, LLMResponse
+from helen.interpreter.interpreter import Interpreter
+from helen.core.errors import ErrorReporter
+from helen.runtime.llm_runtime import MockLLMRuntime, LLMResponse
 
 
 class TestGetContext:
@@ -158,8 +158,8 @@ class TestLlmStatementsRecordHistory:
 
     def test_llm_act_records_to_history(self):
         """llm act records prompt and response to history."""
-        from hellen.core.ast import LlmActStmtNode, SourceSpan
-        span = SourceSpan("test.hellen", 1, 1, 1, 20)
+        from helen.core.ast import LlmActStmtNode, SourceSpan
+        span = SourceSpan("test.helen", 1, 1, 1, 20)
         node = LlmActStmtNode(
             span=span,
             target="Translate",
@@ -177,11 +177,11 @@ class TestLlmStatementsRecordHistory:
 
     def test_llm_choose_records_to_history(self):
         """llm choose records description and selection to history."""
-        from hellen.core.ast import (
+        from helen.core.ast import (
             LlmChooseStmtNode, LlmOptionNode, SourceSpan,
         )
         self.runtime.choose_return = "Option A"
-        span = SourceSpan("test.hellen", 1, 1, 1, 30)
+        span = SourceSpan("test.helen", 1, 1, 1, 30)
         opt_a = LlmOptionNode(span=span, label="Option A", body=[])
         opt_b = LlmOptionNode(span=span, label="Option B", body=[])
         node = LlmChooseStmtNode(
@@ -198,11 +198,11 @@ class TestLlmStatementsRecordHistory:
 
     def test_llm_if_records_to_history(self):
         """llm if records description and routing to history."""
-        from hellen.core.ast import (
+        from helen.core.ast import (
             LlmIfStmtNode, LlmBranchNode, LiteralNode, SourceSpan,
         )
         self.runtime.route_return = "urgent"
-        span = SourceSpan("test.hellen", 1, 1, 1, 30)
+        span = SourceSpan("test.helen", 1, 1, 1, 30)
         branch_urgent = LlmBranchNode(
             span=span,
             condition=LiteralNode(span=span, value="urgent"),
@@ -226,8 +226,8 @@ class TestLlmStatementsRecordHistory:
 
     def test_history_accumulates_across_multiple_calls(self):
         """History grows across multiple LLM calls."""
-        from hellen.core.ast import LlmActStmtNode, SourceSpan
-        span = SourceSpan("test.hellen", 1, 1, 1, 20)
+        from helen.core.ast import LlmActStmtNode, SourceSpan
+        span = SourceSpan("test.helen", 1, 1, 1, 20)
         node = LlmActStmtNode(
             span=span,
             target="Translate",

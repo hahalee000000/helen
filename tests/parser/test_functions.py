@@ -1,9 +1,9 @@
 """Tests for function declaration: params, return type, async fn."""
 
 import pytest
-from hellen.core.lexer import Scanner
-from hellen.core.parser import Parser
-from hellen.core.ast import (
+from helen.core.lexer import Scanner
+from helen.core.parser import Parser
+from helen.core.ast import (
     FunctionDeclNode, FnBlockNode, AgentParamNode, ProgramNode,
     TypeNode, OptionalTypeNode,
 )

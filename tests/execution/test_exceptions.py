@@ -1,8 +1,8 @@
-"""Tests for hellen.interpreter — exception hierarchy and try/catch/finally."""
+"""Tests for helen.interpreter — exception hierarchy and try/catch/finally."""
 
 import pytest
 
-from hellen.core.ast import (
+from helen.core.ast import (
     CaseNode,
     CatchAllNode,
     CatchClauseNode,
@@ -16,20 +16,20 @@ from hellen.core.ast import (
     TypeNode,
     VarDeclNode,
 )
-from hellen.core.errors import ErrorReporter
-from hellen.core.source import SourceSpan
-from hellen.interpreter.exceptions import (
+from helen.core.errors import ErrorReporter
+from helen.core.source import SourceSpan
+from helen.interpreter.exceptions import (
     AnyError,
     ConstAssignmentError,
-    HellenRuntimeError,
+    HelenRuntimeError,
     LLMError,
     ModelError,
     TimeoutError,
     ToolError,
-    RuntimeError as HellenRuntimeExc,
+    RuntimeError as HelenRuntimeExc,
     error_matches,
 )
-from hellen.interpreter.interpreter import Interpreter
+from helen.interpreter.interpreter import Interpreter
 
 
 def _span(line: int = 1) -> SourceSpan:
@@ -57,26 +57,26 @@ class TestExceptionHierarchy:
     def test_timeout_error_is_llm_error(self):
         exc = TimeoutError("timeout")
         assert isinstance(exc, LLMError)
-        assert isinstance(exc, HellenRuntimeError)
+        assert isinstance(exc, HelenRuntimeError)
 
     def test_model_error_is_llm_error(self):
         exc = ModelError("quota")
         assert isinstance(exc, LLMError)
-        assert isinstance(exc, HellenRuntimeError)
+        assert isinstance(exc, HelenRuntimeError)
 
     def test_tool_error_is_not_llm_error(self):
         exc = ToolError("fail")
-        assert isinstance(exc, HellenRuntimeError)
+        assert isinstance(exc, HelenRuntimeError)
         assert not isinstance(exc, LLMError)
 
     def test_runtime_error_is_not_llm_error(self):
-        exc = HellenRuntimeExc("div zero")
-        assert isinstance(exc, HellenRuntimeError)
+        exc = HelenRuntimeExc("div zero")
+        assert isinstance(exc, HelenRuntimeError)
         assert not isinstance(exc, LLMError)
 
     def test_any_error_is_root(self):
         exc = AnyError("any")
-        assert isinstance(exc, HellenRuntimeError)
+        assert isinstance(exc, HelenRuntimeError)
 
 
 class TestErrorMatches:
@@ -98,7 +98,7 @@ class TestErrorMatches:
 
     def test_const_assignment_match(self):
         exc = ConstAssignmentError("x")
-        # ConstAssignmentError is HellenRuntimeError but not in predefined set
+        # ConstAssignmentError is HelenRuntimeError but not in predefined set
         assert error_matches(exc, "RuntimeError") is False
 
 
@@ -131,7 +131,7 @@ class TestTryCatch:
 
     def test_try_catch_type_match(self):
         """try { raise TimeoutError } catch TimeoutError e { return 'caught' }"""
-        from hellen.core.ast import ExprStmtNode
+        from helen.core.ast import ExprStmtNode
         interp = Interpreter(ErrorReporter())
 
         class RaiseExc:
@@ -316,5 +316,5 @@ class TestNestedTryCatch:
 
 
 def _var(name: str, line: int = 1):
-    from hellen.core.ast import VariableNode
+    from helen.core.ast import VariableNode
     return VariableNode(name=name, span=_span(line))

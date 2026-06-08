@@ -1,8 +1,8 @@
-"""Tests for hellen.semantic.analyzer — complete semantic analysis flow."""
+"""Tests for helen.semantic.analyzer — complete semantic analysis flow."""
 
 import pytest
 
-from hellen.core.ast import (
+from helen.core.ast import (
     CallArgNode,
     CallNode,
     CatchAllNode,
@@ -17,10 +17,10 @@ from hellen.core.ast import (
     VarDeclNode,
     VariableNode,
 )
-from hellen.core.errors import ErrorCode, ErrorReporter
-from hellen.core.source import SourceSpan
-from hellen.core.tokens import Token, TokenType
-from hellen.semantic.analyzer import SemanticAnalyzer
+from helen.core.errors import ErrorCode, ErrorReporter
+from helen.core.source import SourceSpan
+from helen.core.tokens import Token, TokenType
+from helen.semantic.analyzer import SemanticAnalyzer
 
 
 def _span(line: int = 1, col: int = 1) -> SourceSpan:
@@ -32,7 +32,7 @@ def _token(tt: TokenType = TokenType.IDENTIFIER, lexeme: str = "x") -> Token:
 
 
 def _literal(value, line: int = 1) -> "LiteralNode":
-    from hellen.core.ast import LiteralNode
+    from helen.core.ast import LiteralNode
     return LiteralNode(value=value, span=_span(line))
 
 
@@ -92,14 +92,14 @@ class TestVarDecl:
 
 class TestTypeCheck:
     def test_type_compatible(self):
-        from hellen.core.ast import TypeNode
+        from helen.core.ast import TypeNode
         tn = TypeNode(name="int", span=_span())
         stmt = VarDeclNode(name="x", type_annotation=tn, initializer=_literal(42), mutable=True, span=_span())
         errors, _ = _analyze(stmt)
         assert not errors.has_errors
 
     def test_type_incompatible(self):
-        from hellen.core.ast import TypeNode
+        from helen.core.ast import TypeNode
         tn = TypeNode(name="int", span=_span())
         stmt = VarDeclNode(name="x", type_annotation=tn, initializer=_literal("hello"), mutable=True, span=_span())
         errors, _ = _analyze(stmt)
@@ -125,14 +125,14 @@ class TestConstProtection:
 
     def test_const_assignment_detected(self):
         """x = 5 where x is const should trigger CONST_ASSIGNMENT."""
-        from hellen.core.ast import BinaryOpNode
-        from hellen.core.tokens import Token, TokenType
+        from helen.core.ast import BinaryOpNode
+        from helen.core.tokens import Token, TokenType
 
         const_decl = VarDeclNode(name="MAX", type_annotation=None, initializer=_literal(100), mutable=False, span=_span(1))
         # Build: MAX = 5 (binary op with ASSIGN)
         assign_tok = Token(TokenType.ASSIGN, "=", None, 2, 5, 2, 6)
         # For BinaryOpNode span, we need a SourceSpan
-        from hellen.core.source import SourceSpan
+        from helen.core.source import SourceSpan
         assign_span = SourceSpan("<test>", 2, 5, 2, 6)
         assignment = BinaryOpNode(
             left=_var("MAX", 2),
@@ -146,9 +146,9 @@ class TestConstProtection:
 
     def test_let_assignment_ok(self):
         """x = 5 where x is let should NOT error."""
-        from hellen.core.ast import BinaryOpNode
-        from hellen.core.tokens import Token, TokenType
-        from hellen.core.source import SourceSpan
+        from helen.core.ast import BinaryOpNode
+        from helen.core.tokens import Token, TokenType
+        from helen.core.source import SourceSpan
 
         let_decl = VarDeclNode(name="x", type_annotation=None, initializer=_literal(1), mutable=True, span=_span(1))
         assign_tok = Token(TokenType.ASSIGN, "=", None, 2, 3, 2, 4)
@@ -170,21 +170,21 @@ class TestConstProtection:
 
 class TestAgentSemantics:
     def test_agent_with_prompt(self):
-        from hellen.core.ast import AgentDeclNode
+        from helen.core.ast import AgentDeclNode
         prompt = PromptDefNode(content="Hello", span=_span())
         agent = AgentDeclNode(name="MyAgent", params=[], declarations=[], prompt=prompt, logic=None, span=_span())
         errors, _ = _analyze(agent)
         assert not errors.has_errors
 
     def test_agent_without_prompt(self):
-        from hellen.core.ast import AgentDeclNode
+        from helen.core.ast import AgentDeclNode
         agent = AgentDeclNode(name="BadAgent", params=[], declarations=[], prompt=None, logic=None, span=_span())
         errors, _ = _analyze(agent)
         assert errors.has_errors
         assert any(e.code == ErrorCode.MISSING_PROMPT for e in errors.errors)
 
     def test_duplicate_agent_name(self):
-        from hellen.core.ast import AgentDeclNode
+        from helen.core.ast import AgentDeclNode
         p1 = PromptDefNode(content="a", span=_span(1))
         p2 = PromptDefNode(content="b", span=_span(2))
         a1 = AgentDeclNode(name="MyAgent", params=[], declarations=[], prompt=p1, logic=None, span=_span(1))
@@ -194,7 +194,7 @@ class TestAgentSemantics:
         assert any(e.code == ErrorCode.DUPLICATE_AGENT_NAME for e in errors.errors)
 
     def test_agent_name_lowercase_warning(self):
-        from hellen.core.ast import AgentDeclNode
+        from helen.core.ast import AgentDeclNode
         prompt = PromptDefNode(content="hi", span=_span())
         agent = AgentDeclNode(name="myagent", params=[], declarations=[], prompt=prompt, logic=None, span=_span())
         errors, _ = _analyze(agent)
@@ -208,14 +208,14 @@ class TestAgentSemantics:
 
 class TestControlFlowSemantics:
     def test_break_outside_loop(self):
-        from hellen.core.ast import BreakStmtNode
+        from helen.core.ast import BreakStmtNode
         stmt = BreakStmtNode(span=_span())
         errors, _ = _analyze(stmt)
         assert errors.has_errors
         assert any(e.code == ErrorCode.BREAK_OUTSIDE_LOOP for e in errors.errors)
 
     def test_continue_outside_loop(self):
-        from hellen.core.ast import ContinueStmtNode
+        from helen.core.ast import ContinueStmtNode
         stmt = ContinueStmtNode(span=_span())
         errors, _ = _analyze(stmt)
         assert errors.has_errors
@@ -229,7 +229,7 @@ class TestControlFlowSemantics:
 
 class TestReturnSemantics:
     def test_return_outside_function(self):
-        from hellen.core.ast import ReturnStmtNode
+        from helen.core.ast import ReturnStmtNode
         stmt = ReturnStmtNode(value=None, span=_span())
         errors, _ = _analyze(stmt)
         assert errors.has_errors
@@ -243,8 +243,8 @@ class TestReturnSemantics:
 
 class TestImportSemantics:
     def test_import_nonexistent_file(self):
-        from hellen.core.ast import ImportStmtNode
-        stmt = ImportStmtNode(module_path="nonexistent.hellen", alias=None, span=_span())
+        from helen.core.ast import ImportStmtNode
+        stmt = ImportStmtNode(module_path="nonexistent.helen", alias=None, span=_span())
         errors, _ = _analyze(stmt)
         assert errors.has_errors
         assert any(e.code == ErrorCode.IMPORT_NOT_FOUND for e in errors.errors)
@@ -257,7 +257,7 @@ class TestImportSemantics:
 
 class TestCatchSemantics:
     def test_valid_catch_type(self):
-        from hellen.core.ast import CatchClauseNode, TypeNode
+        from helen.core.ast import CatchClauseNode, TypeNode
         et = TypeNode(name="TimeoutError", span=_span())
         clause = CatchClauseNode(error_type=et, error_name="e", body=[], span=_span())
         ts = TryStmtNode(body=[], catch_clauses=[clause], catch_all=None, finally_block=None, span=_span())
@@ -265,7 +265,7 @@ class TestCatchSemantics:
         assert not errors.has_errors
 
     def test_invalid_catch_type(self):
-        from hellen.core.ast import CatchClauseNode, TypeNode
+        from helen.core.ast import CatchClauseNode, TypeNode
         et = TypeNode(name="CustomError", span=_span())
         clause = CatchClauseNode(error_type=et, error_name="e", body=[], span=_span())
         ts = TryStmtNode(body=[], catch_clauses=[clause], catch_all=None, finally_block=None, span=_span())
@@ -281,7 +281,7 @@ class TestCatchSemantics:
 
 class TestMatchSemantics:
     def test_match_with_default(self):
-        from hellen.core.ast import CaseNode, MatchStmtNode
+        from helen.core.ast import CaseNode, MatchStmtNode
         # Declare x first so it's not "undeclared"
         decl = VarDeclNode(name="x", type_annotation=None, initializer=_literal("a"), mutable=True, span=_span())
         case = CaseNode(pattern=_literal("a"), body=[], span=_span())
@@ -290,7 +290,7 @@ class TestMatchSemantics:
         assert not errors.has_errors
 
     def test_match_without_default(self):
-        from hellen.core.ast import CaseNode, MatchStmtNode
+        from helen.core.ast import CaseNode, MatchStmtNode
         case = CaseNode(pattern=_literal("a"), body=[], span=_span())
         stmt = MatchStmtNode(subject=_var("x"), cases=[case], default=[], span=_span())
         # Remove default by passing empty list — the analyzer checks bool(node.default)
@@ -307,7 +307,7 @@ class TestMatchSemantics:
 
 class TestLlmIfSemantics:
     def test_llm_if_with_default(self):
-        from hellen.core.ast import LlmBranchNode, LlmIfStmtNode
+        from helen.core.ast import LlmBranchNode, LlmIfStmtNode
         # branch default has condition=None
         default_branch = LlmBranchNode(condition=None, body=[], span=_span())
         stmt = LlmIfStmtNode(description="test", branches=[default_branch], span=_span())
@@ -315,7 +315,7 @@ class TestLlmIfSemantics:
         assert not errors.has_errors
 
     def test_llm_if_without_default(self):
-        from hellen.core.ast import LlmBranchNode, LlmIfStmtNode
+        from helen.core.ast import LlmBranchNode, LlmIfStmtNode
         branch = LlmBranchNode(condition=_var("x"), body=[], span=_span())
         stmt = LlmIfStmtNode(description="test", branches=[branch], span=_span())
         errors, _ = _analyze(stmt)

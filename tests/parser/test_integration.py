@@ -1,9 +1,9 @@
 """Integration test: complete Agent program with all Phase 1 features."""
 
 import pytest
-from hellen.core.lexer import Scanner
-from hellen.core.parser import Parser
-from hellen.core.ast import (
+from helen.core.lexer import Scanner
+from helen.core.parser import Parser
+from helen.core.ast import (
     ProgramNode, AgentDeclNode, MainBlockNode,
     TryStmtNode, LlmIfStmtNode, MatchStmtNode,
     FunctionDeclNode, CallNode, AsyncCallStmtNode,

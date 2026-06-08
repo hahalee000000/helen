@@ -1,8 +1,8 @@
-"""Tests for hellen.interpreter — control flow execution."""
+"""Tests for helen.interpreter — control flow execution."""
 
 import pytest
 
-from hellen.core.ast import (
+from helen.core.ast import (
     BreakStmtNode,
     CaseNode,
     ContinueStmtNode,
@@ -17,9 +17,9 @@ from hellen.core.ast import (
     VariableNode,
     WhileStmtNode,
 )
-from hellen.core.errors import ErrorReporter
-from hellen.core.source import SourceSpan
-from hellen.interpreter.interpreter import Interpreter
+from helen.core.errors import ErrorReporter
+from helen.core.source import SourceSpan
+from helen.interpreter.interpreter import Interpreter
 
 
 def _span(line: int = 1) -> SourceSpan:
@@ -44,7 +44,7 @@ def _run(*stmts) -> tuple:
 
 class TestIfStatement:
     def test_if_true_branch(self):
-        from hellen.core.ast import ExprStmtNode
+        from helen.core.ast import ExprStmtNode
 
         then_block = MainBlockNode(body=[ExprStmtNode(expression=_lit(1), span=_span())], span=_span())
         stmt = IfStmtNode(condition=_lit(True), then_branch=then_block, else_branch=None, span=_span())
@@ -53,7 +53,7 @@ class TestIfStatement:
         assert not errors.has_errors
 
     def test_if_false_then_else(self):
-        from hellen.core.ast import ExprStmtNode
+        from helen.core.ast import ExprStmtNode
 
         then_block = MainBlockNode(body=[ExprStmtNode(expression=_lit(1), span=_span())], span=_span())
         else_block = MainBlockNode(body=[ExprStmtNode(expression=_lit(2), span=_span())], span=_span())
@@ -75,7 +75,7 @@ class TestForLoop:
         """for x in [1, 2, 3] { x }"""
         # We need to build the AST manually since we don't have a list variable
         # Use a list literal directly
-        from hellen.core.ast import ExprStmtNode, ListLiteralNode
+        from helen.core.ast import ExprStmtNode, ListLiteralNode
 
         lst = ListLiteralNode(elements=[_lit(1), _lit(2), _lit(3)], span=_span())
         body = ExprStmtNode(expression=_var("x"), span=_span())
@@ -87,8 +87,8 @@ class TestForLoop:
 
     def test_break_in_for(self):
         """for x in [1, 2, 3, 4, 5] { if (x == 3) break; x }"""
-        from hellen.core.ast import BinaryOpNode, ExprStmtNode, IfStmtNode, ListLiteralNode, MainBlockNode
-        from hellen.interpreter.exceptions import BreakSentinel
+        from helen.core.ast import BinaryOpNode, ExprStmtNode, IfStmtNode, ListLiteralNode, MainBlockNode
+        from helen.interpreter.exceptions import BreakSentinel
 
         lst = ListLiteralNode(elements=[_lit(1), _lit(2), _lit(3), _lit(4), _lit(5)], span=_span())
 
@@ -110,7 +110,7 @@ class TestForLoop:
 
     def test_continue_in_for(self):
         """for x in [1, 2, 3] { if (x == 2) continue; x }"""
-        from hellen.core.ast import BinaryOpNode, ExprStmtNode, IfStmtNode, ListLiteralNode, MainBlockNode
+        from helen.core.ast import BinaryOpNode, ExprStmtNode, IfStmtNode, ListLiteralNode, MainBlockNode
 
         lst = ListLiteralNode(elements=[_lit(1), _lit(2), _lit(3)], span=_span())
 
@@ -130,7 +130,7 @@ class TestForLoop:
 class TestWhileLoop:
     def test_while_iteration(self):
         """let i = 0; while (i < 3) { i = i + 1 }"""
-        from hellen.core.ast import BinaryOpNode, ExprStmtNode, MainBlockNode
+        from helen.core.ast import BinaryOpNode, ExprStmtNode, MainBlockNode
 
         i_decl = VarDeclNode(name="i", type_annotation=None, initializer=_lit(0), mutable=True, span=_span())
 
@@ -150,7 +150,7 @@ class TestWhileLoop:
 
     def test_while_break(self):
         """let i = 0; while (true) { i = i + 1; if (i == 2) break }"""
-        from hellen.core.ast import BinaryOpNode, ExprStmtNode, IfStmtNode, MainBlockNode
+        from helen.core.ast import BinaryOpNode, ExprStmtNode, IfStmtNode, MainBlockNode
 
         i_decl = VarDeclNode(name="i", type_annotation=None, initializer=_lit(0), mutable=True, span=_span())
 
@@ -221,7 +221,7 @@ class TestMatchStatement:
 
 
 def _make_tok(name: str = "EQUAL_EQUAL", lexeme: str = "==") -> "Token":
-    from hellen.core.tokens import Token, TokenType
+    from helen.core.tokens import Token, TokenType
 
     tt = getattr(TokenType, name, TokenType.EQUAL_EQUAL)
     return Token(tt, lexeme, None, 1, 1, 1, len(lexeme) + 1)

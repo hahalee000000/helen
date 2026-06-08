@@ -1,4 +1,4 @@
-"""Tests for hellen.core.lexer module.
+"""Tests for helen.core.lexer module.
 
 Covers:
 - Empty input, whitespace-only input
@@ -15,9 +15,9 @@ Covers:
 - scan_one streaming mode
 """
 
-from hellen.core.lexer import Scanner
-from hellen.core.tokens import Token, TokenType
-from hellen.core.errors import ErrorCode
+from helen.core.lexer import Scanner
+from helen.core.tokens import Token, TokenType
+from helen.core.errors import ErrorCode
 
 
 def _scan(source: str, file: str = "<test>") -> list[Token]:

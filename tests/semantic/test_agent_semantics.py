@@ -5,7 +5,7 @@ import tempfile
 
 import pytest
 
-from hellen.core.ast import (
+from helen.core.ast import (
     AgentDeclNode,
     AgentParamNode,
     CallArgNode,
@@ -14,9 +14,9 @@ from hellen.core.ast import (
     PromptDefNode,
     VariableNode,
 )
-from hellen.core.errors import ErrorCode, ErrorReporter
-from hellen.core.source import SourceSpan
-from hellen.semantic.analyzer import SemanticAnalyzer
+from helen.core.errors import ErrorCode, ErrorReporter
+from helen.core.source import SourceSpan
+from helen.semantic.analyzer import SemanticAnalyzer
 
 
 def _span(line: int = 1) -> SourceSpan:
@@ -28,12 +28,12 @@ def _var(name: str, line: int = 1):
 
 
 def _literal(value, line: int = 1):
-    from hellen.core.ast import LiteralNode
+    from helen.core.ast import LiteralNode
     return LiteralNode(value=value, span=_span(line))
 
 
 def _make_param(name: str, type_name: str | None = None):
-    from hellen.core.ast import TypeNode
+    from helen.core.ast import TypeNode
     tn = TypeNode(name=type_name, span=_span()) if type_name else None
     return AgentParamNode(name=name, type_annotation=tn, default_value=None, span=_span())
 
@@ -49,7 +49,7 @@ class TestAgentParamDecl:
         assert not errors.has_errors
 
     def test_duplicate_param_names(self):
-        from hellen.core.ast import FnBlockNode, FunctionDeclNode
+        from helen.core.ast import FnBlockNode, FunctionDeclNode
 
         p1 = _make_param("x")
         p2 = _make_param("x")
@@ -114,10 +114,10 @@ class TestAgentParamMismatch:
 class TestImportPathValidation:
     def test_import_existing_file(self):
         """Import of a file that exists should not error."""
-        from hellen.core.ast import ImportStmtNode
+        from helen.core.ast import ImportStmtNode
 
         # Create a temp file
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".hellen", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".helen", delete=False) as f:
             f.write("// empty")
             tmp_path = f.name
 
@@ -133,8 +133,8 @@ class TestImportPathValidation:
             os.unlink(tmp_path)
 
     def test_import_nonexistent_relative(self):
-        from hellen.core.ast import ImportStmtNode
-        stmt = ImportStmtNode(module_path="./missing.hellen", alias=None, span=_span())
+        from helen.core.ast import ImportStmtNode
+        stmt = ImportStmtNode(module_path="./missing.helen", alias=None, span=_span())
         prog = ProgramNode(statements=[stmt], span=_span())
         errors = ErrorReporter()
         SemanticAnalyzer(errors, base_dir="/tmp").analyze(prog)

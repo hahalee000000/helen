@@ -1,13 +1,13 @@
 """Tests for LLM statement parsing: llm if, llm choose, llm act, and disambiguation."""
 
 import pytest
-from hellen.core.lexer import Scanner
-from hellen.core.parser import Parser
-from hellen.core.ast import (
+from helen.core.lexer import Scanner
+from helen.core.parser import Parser
+from helen.core.ast import (
     LlmIfStmtNode, LlmBranchNode, LlmChooseStmtNode, LlmOptionNode,
     LlmActStmtNode, ProgramNode, MainBlockNode,
 )
-from hellen.core.tokens import TokenType
+from helen.core.tokens import TokenType
 
 
 def _parse(source: str) -> Parser:

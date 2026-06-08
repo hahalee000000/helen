@@ -1,9 +1,9 @@
-"""Tests for hellen.interpreter.environment."""
+"""Tests for helen.interpreter.environment."""
 
 import pytest
 
-from hellen.interpreter.environment import Environment
-from hellen.interpreter.exceptions import ConstAssignmentError
+from helen.interpreter.environment import Environment
+from helen.interpreter.exceptions import ConstAssignmentError
 
 
 class TestEnvironmentDefine:

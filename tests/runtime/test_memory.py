@@ -1,4 +1,4 @@
-"""Tests for hellen.runtime.memory — MemoryProvider (HLD 3.8.2).
+"""Tests for helen.runtime.memory — MemoryProvider (HLD 3.8.2).
 
 Covers:
 - FileMemoryProvider: JSON persistence, directory creation, get/set
@@ -11,7 +11,7 @@ import os
 import tempfile
 import json
 
-from hellen.runtime.memory import FileMemoryProvider, InMemoryProvider
+from helen.runtime.memory import FileMemoryProvider, InMemoryProvider
 
 
 class TestFileMemoryProvider:

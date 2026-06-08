@@ -1,4 +1,4 @@
-"""Tests for hellen.runtime.history — HistoryManager (HLD 3.12).
+"""Tests for helen.runtime.history — HistoryManager (HLD 3.12).
 
 Covers:
 - Token budget calculation
@@ -8,7 +8,7 @@ Covers:
 - Truncation logging
 """
 
-from hellen.runtime.history import HistoryManager, Message
+from helen.runtime.history import HistoryManager, Message
 
 
 def _make_messages(n: int) -> list[Message]:

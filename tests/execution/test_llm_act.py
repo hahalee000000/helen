@@ -1,15 +1,15 @@
-"""Tests for hellen.interpreter — llm act statement execution."""
+"""Tests for helen.interpreter — llm act statement execution."""
 
-from hellen.core.ast import (
+from helen.core.ast import (
     LlmActStmtNode,
     LiteralNode,
     ProgramNode,
 )
-from hellen.core.errors import ErrorReporter
-from hellen.core.source import SourceSpan
-from hellen.interpreter.exceptions import TimeoutError
-from hellen.interpreter.interpreter import Interpreter
-from hellen.runtime.llm_runtime import LLMResponse, MockLLMRuntime
+from helen.core.errors import ErrorReporter
+from helen.core.source import SourceSpan
+from helen.interpreter.exceptions import TimeoutError
+from helen.interpreter.interpreter import Interpreter
+from helen.runtime.llm_runtime import LLMResponse, MockLLMRuntime
 
 
 def _span(line: int = 1) -> SourceSpan:
@@ -40,7 +40,7 @@ class TestLlmActExecution:
 
     def test_act_with_arguments(self):
         """llm act greet(name="Alice") "personalized greeting" → returns response."""
-        from hellen.core.ast import LiteralNode
+        from helen.core.ast import LiteralNode
 
         runtime = MockLLMRuntime(act_return="Hi Alice!")
         stmt = LlmActStmtNode(
@@ -131,7 +131,7 @@ class TestLlmActExecution:
 
     def test_get_agent_setting_defaults_without_agent(self):
         """_get_agent_setting returns defaults when _current_agent is None."""
-        from hellen.interpreter.interpreter import Interpreter
+        from helen.interpreter.interpreter import Interpreter
         interp = Interpreter()
         assert interp._get_agent_setting("model") is None
         assert interp._get_agent_setting("temperature", 1.0) == 1.0

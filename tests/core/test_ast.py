@@ -1,4 +1,4 @@
-"""Tests for hellen.core.ast module.
+"""Tests for helen.core.ast module.
 
 Covers:
 - AST node creation and attribute access
@@ -14,7 +14,7 @@ import dataclasses
 
 import pytest
 
-from hellen.core.ast import (
+from helen.core.ast import (
     ASTNode,
     ASTPrinter,
     AgentDeclNode,
@@ -34,8 +34,8 @@ from hellen.core.ast import (
     VarDeclNode,
     Visitor,
 )
-from hellen.core.source import SourceSpan
-from hellen.core.tokens import Token, TokenType
+from helen.core.source import SourceSpan
+from helen.core.tokens import Token, TokenType
 
 # ---------------------------------------------------------------------------
 # Helpers

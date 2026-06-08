@@ -1,8 +1,8 @@
-"""Tests for hellen.interpreter — variable declaration, const protection."""
+"""Tests for helen.interpreter — variable declaration, const protection."""
 
 import pytest
 
-from hellen.core.ast import (
+from helen.core.ast import (
     BinaryOpNode,
     ExprStmtNode,
     LiteralNode,
@@ -10,11 +10,11 @@ from hellen.core.ast import (
     VarDeclNode,
     VariableNode,
 )
-from hellen.core.errors import ErrorReporter
-from hellen.core.source import SourceSpan
-from hellen.core.tokens import Token, TokenType
-from hellen.interpreter.exceptions import ConstAssignmentError
-from hellen.interpreter.interpreter import Interpreter
+from helen.core.errors import ErrorReporter
+from helen.core.source import SourceSpan
+from helen.core.tokens import Token, TokenType
+from helen.interpreter.exceptions import ConstAssignmentError
+from helen.interpreter.interpreter import Interpreter
 
 
 def _span(line: int = 1) -> SourceSpan:
@@ -82,7 +82,7 @@ class TestConstDeclaration:
 class TestVariableScope:
     def test_shadow_in_nested_scope(self):
         """Variable in inner scope shadows outer, but outer is unchanged."""
-        from hellen.core.ast import IfStmtNode, MainBlockNode
+        from helen.core.ast import IfStmtNode, MainBlockNode
 
         # let x = 1
         outer_decl = VarDeclNode(name="x", type_annotation=None, initializer=_lit(1), mutable=True, span=_span())

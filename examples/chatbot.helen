@@ -1,0 +1,35 @@
+// Simple Chat Bot - Helen Language Demo
+// 最简聊天机器人设计
+
+agent ChatBot {
+    description "A friendly chat assistant"
+    prompt """
+    You are a helpful and friendly assistant.
+    Keep responses concise (2-3 sentences max).
+    Be conversational and engaging.
+    """
+    
+    main {
+        print("========================================")
+        print("  ChatBot - Helen Language Demo")
+        print("========================================")
+        print("")
+        print("ChatBot: Hello! I'm your AI assistant.")
+        print("Type 'exit' to end the conversation.")
+        print("")
+        
+        while (true) {
+            let user_input = input("You: ")
+            
+            if (user_input == "exit") {
+                print("")
+                print("ChatBot: Goodbye!")
+                break
+            }
+            
+            // 调用 LLM 获取回复
+            // llm act 会自动将结果打印到标准输出
+            llm act ChatBot(text=user_input) "Respond conversationally"
+        }
+    }
+}

@@ -8,8 +8,8 @@ Covers:
 - Error aggregation in await [list]
 """
 
-from hellen.interpreter.task import Task, AggregateError, AwaitExpression
-from hellen.core.ast import (
+from helen.interpreter.task import Task, AggregateError, AwaitExpression
+from helen.core.ast import (
     AgentDeclNode,
     AsyncCallStmtNode,
     CallNode,
@@ -19,7 +19,7 @@ from hellen.core.ast import (
     ReturnStmtNode,
     VariableNode,
 )
-from hellen.core.source import SourceSpan
+from helen.core.source import SourceSpan
 
 
 def _span(line: int = 1) -> SourceSpan:
@@ -151,7 +151,7 @@ class TestInterpreterAsyncCall:
 
     def test_async_call_returns_task(self):
         """async call Agent() returns a Task object."""
-        from hellen.interpreter.interpreter import Interpreter
+        from helen.interpreter.interpreter import Interpreter
 
         agent = AgentDeclNode(
             name="AsyncAgent",
@@ -184,7 +184,7 @@ class TestInterpreterAsyncCall:
 
     def test_async_call_task_not_done_immediately(self):
         """async call returns Task that completes after execution."""
-        from hellen.interpreter.interpreter import Interpreter
+        from helen.interpreter.interpreter import Interpreter
 
         agent = AgentDeclNode(
             name="SlowAgent",
@@ -220,7 +220,7 @@ class TestInterpreterAwaitList:
 
     def test_await_list_returns_results(self):
         """await [task1, task2] returns list of results."""
-        from hellen.interpreter.interpreter import Interpreter
+        from helen.interpreter.interpreter import Interpreter
 
         # Simulate await [list] with completed tasks
         tasks = [
@@ -234,7 +234,7 @@ class TestInterpreterAwaitList:
 
     def test_await_list_with_failure_raises_aggregate(self):
         """await [list] with any failure raises AggregateError."""
-        from hellen.interpreter.interpreter import Interpreter
+        from helen.interpreter.interpreter import Interpreter
 
         tasks = [
             Task.completed("ok"),
@@ -251,7 +251,7 @@ class TestInterpreterAwaitList:
 
     def test_await_single_task(self):
         """await single task returns its result."""
-        from hellen.interpreter.interpreter import Interpreter
+        from helen.interpreter.interpreter import Interpreter
 
         task = Task.completed("single_result")
         interp = Interpreter()

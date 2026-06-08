@@ -1,17 +1,17 @@
-"""Tests for hellen.interpreter — llm if statement execution with MockLLMRuntime."""
+"""Tests for helen.interpreter — llm if statement execution with MockLLMRuntime."""
 
-from hellen.core.ast import (
+from helen.core.ast import (
     ExprStmtNode,
     LlmBranchNode,
     LlmIfStmtNode,
     LiteralNode,
     ProgramNode,
 )
-from hellen.core.errors import ErrorReporter
-from hellen.core.source import SourceSpan
-from hellen.interpreter.exceptions import TimeoutError
-from hellen.interpreter.interpreter import Interpreter
-from hellen.runtime.llm_runtime import MockLLMRuntime
+from helen.core.errors import ErrorReporter
+from helen.core.source import SourceSpan
+from helen.interpreter.exceptions import TimeoutError
+from helen.interpreter.interpreter import Interpreter
+from helen.runtime.llm_runtime import MockLLMRuntime
 
 
 def _span(line: int = 1) -> SourceSpan:

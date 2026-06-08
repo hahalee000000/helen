@@ -1,6 +1,6 @@
-"""Tests for hellen.interpreter — function definition and call."""
+"""Tests for helen.interpreter — function definition and call."""
 
-from hellen.core.ast import (
+from helen.core.ast import (
     ExprStmtNode,
     FnBlockNode,
     FunctionDeclNode,
@@ -10,9 +10,9 @@ from hellen.core.ast import (
     VarDeclNode,
     VariableNode,
 )
-from hellen.core.errors import ErrorReporter
-from hellen.core.source import SourceSpan
-from hellen.interpreter.interpreter import Interpreter
+from helen.core.errors import ErrorReporter
+from helen.core.source import SourceSpan
+from helen.interpreter.interpreter import Interpreter
 
 
 def _span(line: int = 1) -> SourceSpan:
@@ -60,7 +60,7 @@ class TestFunctionCall:
             body=FnBlockNode(body=[ReturnStmtNode(value=_lit(42), span=_span())], span=_span()),
             span=_span(),
         )
-        from hellen.core.ast import CallNode
+        from helen.core.ast import CallNode
 
         call = CallNode(callee=_var("hello"), arguments=[], span=_span(2))
         result, errors = _run(fn, ExprStmtNode(expression=call, span=_span(2)))
@@ -69,8 +69,8 @@ class TestFunctionCall:
 
     def test_call_with_params(self):
         """fn add(a, b) { return a + b }"""
-        from hellen.core.ast import AgentParamNode, BinaryOpNode, CallArgNode, CallNode
-        from hellen.core.tokens import Token, TokenType
+        from helen.core.ast import AgentParamNode, BinaryOpNode, CallArgNode, CallNode
+        from helen.core.tokens import Token, TokenType
 
         pa = AgentParamNode(name="a", type_annotation=None, default_value=None, span=_span())
         pb = AgentParamNode(name="b", type_annotation=None, default_value=None, span=_span())
@@ -100,7 +100,7 @@ class TestFunctionCall:
 
     def test_call_with_defaults(self):
         """fn greet(name="world") { return name }"""
-        from hellen.core.ast import AgentParamNode, CallNode
+        from helen.core.ast import AgentParamNode, CallNode
 
         pa = AgentParamNode(name="name", type_annotation=None, default_value=_lit("world"), span=_span())
         fn = FunctionDeclNode(
@@ -121,8 +121,8 @@ class TestFunctionCall:
 class TestRecursion:
     def test_factorial(self):
         """fn fact(n) { if (n <= 1) return 1; return n * fact(n-1) }"""
-        from hellen.core.ast import AgentParamNode, BinaryOpNode, CallArgNode, CallNode, IfStmtNode, MainBlockNode
-        from hellen.core.tokens import Token, TokenType
+        from helen.core.ast import AgentParamNode, BinaryOpNode, CallArgNode, CallNode, IfStmtNode, MainBlockNode
+        from helen.core.tokens import Token, TokenType
 
         pn = AgentParamNode(name="n", type_annotation=None, default_value=None, span=_span())
 

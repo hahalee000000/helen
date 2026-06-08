@@ -1,8 +1,8 @@
-"""Tests for hellen VS Code extension — TextMate grammar & manifest (HLD M13).
+"""Tests for helen VS Code extension — TextMate grammar & manifest (HLD M13).
 
 Covers:
 - TextMate grammar is valid JSON
-- All Hellen keywords are covered by the grammar
+- All Helen keywords are covered by the grammar
 - package.json is valid VS Code extension manifest
 - language-configuration.json is valid
 - Grammar scopes are correctly defined
@@ -19,10 +19,10 @@ EXT_DIR = PROJECT_ROOT / "extensions" / "vscode"
 
 
 class TestTextMateGrammar:
-    """Test hellen.tmLanguage.json validity and completeness."""
+    """Test helen.tmLanguage.json validity and completeness."""
 
     def setup_method(self):
-        with open(EXT_DIR / "syntaxes" / "hellen.tmLanguage.json") as f:
+        with open(EXT_DIR / "syntaxes" / "helen.tmLanguage.json") as f:
             self.grammar = json.load(f)
 
     def test_valid_json(self):
@@ -30,12 +30,12 @@ class TestTextMateGrammar:
         assert self.grammar is not None
 
     def test_has_scope_name(self):
-        """Grammar defines source.hellen scope."""
-        assert self.grammar["scopeName"] == "source.hellen"
+        """Grammar defines source.helen scope."""
+        assert self.grammar["scopeName"] == "source.helen"
 
     def test_has_file_types(self):
-        """Grammar associates with .hellen files."""
-        assert ".hellen" in self.grammar["fileTypes"]
+        """Grammar associates with .helen files."""
+        assert ".helen" in self.grammar["fileTypes"]
 
     def test_has_repository(self):
         """Grammar defines a repository of patterns."""
@@ -78,9 +78,9 @@ class TestTextMateGrammar:
 
 
 class TestKeywordCoverage:
-    """Test that all Hellen keywords are covered by the TextMate grammar."""
+    """Test that all Helen keywords are covered by the TextMate grammar."""
 
-    # All keywords from hellen.core.tokens._KEYWORD_MAP
+    # All keywords from helen.core.tokens._KEYWORD_MAP
     HELLEN_KEYWORDS = {
         "agent", "description", "model", "tools", "skills", "sub-agents",
         "memory", "temperature", "max-turns", "prompt", "llm", "import",
@@ -91,7 +91,7 @@ class TestKeywordCoverage:
     }
 
     def setup_method(self):
-        with open(EXT_DIR / "syntaxes" / "hellen.tmLanguage.json") as f:
+        with open(EXT_DIR / "syntaxes" / "helen.tmLanguage.json") as f:
             self.grammar = json.load(f)
 
     def _extract_all_keyword_patterns(self) -> list[str]:
@@ -119,7 +119,7 @@ class TestKeywordCoverage:
             return False
 
     def test_all_keywords_covered(self):
-        """Every Hellen keyword is matched by at least one grammar pattern."""
+        """Every Helen keyword is matched by at least one grammar pattern."""
         patterns = self._extract_all_keyword_patterns()
         uncovered = []
         for kw in self.HELLEN_KEYWORDS:
@@ -148,14 +148,14 @@ class TestPackageJson:
         assert "engines" in self.pkg
 
     def test_contributes_languages(self):
-        """Contributes hellen language."""
+        """Contributes helen language."""
         contributes = self.pkg["contributes"]
         assert "languages" in contributes
         langs = contributes["languages"]
-        hellen_lang = [lang for lang in langs if lang.get("id") == "hellen"]
-        assert len(hellen_lang) == 1
-        lang = hellen_lang[0]
-        assert ".hellen" in lang.get("extensions", [])
+        helen_lang = [lang for lang in langs if lang.get("id") == "helen"]
+        assert len(helen_lang) == 1
+        lang = helen_lang[0]
+        assert ".helen" in lang.get("extensions", [])
 
     def test_contributes_grammar(self):
         """Contributes TextMate grammar."""
@@ -164,9 +164,9 @@ class TestPackageJson:
         grammars = contributes["grammars"]
         assert len(grammars) >= 1
         grammar = grammars[0]
-        assert grammar["language"] == "hellen"
-        assert grammar["scopeName"] == "source.hellen"
-        assert grammar["path"] == "./syntaxes/hellen.tmLanguage.json"
+        assert grammar["language"] == "helen"
+        assert grammar["scopeName"] == "source.helen"
+        assert grammar["path"] == "./syntaxes/helen.tmLanguage.json"
 
     def test_vscode_engine_version(self):
         """Specifies VS Code engine version."""
