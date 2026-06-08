@@ -533,6 +533,16 @@ class SemanticAnalyzer(Visitor[None]):
         if node.return_type is not None:
             node.return_type.accept(self)
 
+        # Register function in current scope
+        sym = Symbol(name=node.name, kind="function", type_node=node.return_type)
+        existing = self.symbols.define(node.name, sym)
+        if existing is not None:
+            self.errors.error(
+                ErrorCode.DUPLICATE_SYMBOL,
+                f"duplicate declaration of '{node.name}'",
+                node.span,
+            )
+
         # Function body gets its own scope
         self._in_function += 1
         self.symbols.enter_scope(f"fn:{node.name}", "function")
