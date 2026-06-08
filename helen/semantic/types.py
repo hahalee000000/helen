@@ -262,9 +262,17 @@ def type_compatible(actual: Type, expected: Type) -> bool:
     if type(actual) is type(expected):
         return True
 
-    # IntType/FloatType → NumberType (subtype)
-    if isinstance(expected, NumberType) and isinstance(actual, (IntType, FloatType, NumberType)):
-        return True
+    # Number subtype rules
+    if isinstance(actual, (IntType, FloatType, NumberType)):
+        if isinstance(expected, NumberType):
+            # IntType accepts IntType and NumberType (literals are NumberType)
+            if isinstance(expected, IntType):
+                return isinstance(actual, (IntType, NumberType))
+            # FloatType accepts FloatType, IntType, NumberType
+            if isinstance(expected, FloatType):
+                return True
+            # Base NumberType accepts all numbers
+            return True
 
     # LiteralType → underlying type
     if isinstance(actual, LiteralType):
