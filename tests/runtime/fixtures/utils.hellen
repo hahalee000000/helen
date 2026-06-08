@@ -1,0 +1,8 @@
+agent HelperAgent {
+    description "A helper agent"
+    model "gpt-4"
+    
+    main { return "helper_result" }
+}
+
+fn greet(name: string) { return "Hello " + name }

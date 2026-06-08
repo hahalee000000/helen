@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hellen"
+version = "0.1.0"
+description = "Hellen — A Prompt-first Agent Programming Language"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "pytest-cov>=4.0", "flake8>=6.0"]
+
+[project.scripts]
+hellen = "hellen.cli.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["hellen*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["hellen"]
+
+[tool.flake8]
+max-line-length = 120
+extend-ignore = ["E501"]

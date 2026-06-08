@@ -1,0 +1,55 @@
+{
+    "name": "hellen",
+    "displayName": "Hellen Language Support",
+    "description": "Syntax highlighting and language support for the Hellen Agent Programming Language",
+    "version": "0.1.0",
+    "publisher": "hellen-lang",
+    "engines": {
+        "vscode": "^1.75.0"
+    },
+    "categories": [
+        "Programming Languages"
+    ],
+    "contributes": {
+        "languages": [
+            {
+                "id": "hellen",
+                "aliases": [
+                    "Hellen",
+                    "hellen"
+                ],
+                "extensions": [
+                    ".hellen"
+                ],
+                "configuration": "./language-configuration.json"
+            }
+        ],
+        "grammars": [
+            {
+                "language": "hellen",
+                "scopeName": "source.hellen",
+                "path": "./syntaxes/hellen.tmLanguage.json"
+            }
+        ],
+        "configuration": {
+            "title": "Hellen",
+            "properties": {
+                "hellen.trace.server": {
+                    "type": "string",
+                    "enum": [
+                        "off",
+                        "messages",
+                        "verbose"
+                    ],
+                    "default": "off",
+                    "description": "Traces the communication between VS Code and the Hellen language server."
+                }
+            }
+        }
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/hellen-lang/hellen"
+    },
+    "license": "MIT"
+}
