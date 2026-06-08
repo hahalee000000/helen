@@ -1,8 +1,9 @@
-"""Memory Provider interface and implementations (HLD 3.8.2).
+"""Memory providers for the Helen runtime (HLD §3.8.2).
 
-Memory is a language-level declaration + Runtime interface abstraction.
-Language only provides the `memory "path"` reference syntax; the actual
-persistence and retrieval is handled by pluggable MemoryProvider implementations.
+Three implementations:
+- MemoryProvider: Abstract base class (contract)
+- InMemoryProvider: Pure in-memory store (for testing)
+- FileMemoryProvider: JSON file persistence (for production)
 """
 
 from __future__ import annotations
@@ -10,152 +11,135 @@ from __future__ import annotations
 import json
 import os
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Any
 
 
 class MemoryProvider(ABC):
-    """Abstract interface for memory storage (HLD 3.8.2).
+    """Abstract interface for Helen memory backends (HLD §3.8.2).
 
-    Language-layer declaration: `memory "path"` references a memory store.
-    Concrete implementations handle persistence:
-    - FileMemoryProvider: JSON file storage (default)
-    - InMemoryProvider: Python dict (testing)
-    - User-defined: vector DB, Redis, etc.
+    All memory providers must implement these four methods.
+    The Helen runtime delegates get_memory/set_memory calls to the
+    registered provider for the matching URI protocol.
     """
 
     @abstractmethod
-    def load(self, path: str) -> dict[str, Any]:
-        """Load all memory data from the given path.
-
-        Returns a KV dict for injection into {{_memory_content}} template.
-        """
+    def get(self, key: str) -> str | None:
+        """Get a value by key. Returns None if not found."""
         ...
 
     @abstractmethod
-    def save(self, path: str, data: dict[str, Any]) -> None:
-        """Save memory data to the given path.
-
-        Called after agent execution completes for persistence.
-        """
+    def set(self, key: str, value: str) -> None:
+        """Set a key-value pair."""
         ...
 
     @abstractmethod
-    def get(self, path: str, key: str) -> str | None:
-        """Exact key-value lookup.
-
-        Args:
-            path: Memory store path.
-            key: Exact key to look up.
-
-        Returns:
-            Value as string, or None if key not found.
-        """
+    def delete(self, key: str) -> None:
+        """Delete a key. No-op if key doesn't exist."""
         ...
 
     @abstractmethod
-    def set(self, path: str, key: str, value: str) -> None:
-        """Exact key-value write.
-
-        Args:
-            path: Memory store path.
-            key: Key to set.
-            value: Value string.
-        """
+    def list_keys(self) -> list[str]:
+        """List all keys in this memory store."""
         ...
-
-    def search(self, path: str, query: str, top_k: int = 5) -> list[dict[str, Any]]:
-        """Semantic/fuzzy search for memory entries.
-
-        Default fallback: iterate all keys, do text containment match.
-        Override in subclasses for embedding-based similarity search.
-
-        Args:
-            path: Memory store path.
-            query: Search query string.
-            top_k: Maximum number of results.
-
-        Returns:
-            List of {"key": ..., "value": ..., "score": ...} dicts.
-        """
-        data = self.load(path)
-        results = []
-        for k, v in data.items():
-            if query.lower() in str(v).lower():
-                results.append({"key": k, "value": str(v), "score": 1.0})
-        return results[:top_k]
-
-
-class FileMemoryProvider(MemoryProvider):
-    """JSON file-based memory storage (HLD 3.8.2 default).
-
-    Stores memory as a JSON file. Creates parent directories automatically.
-    """
-
-    def __init__(self) -> None:
-        self._cache: dict[str, dict[str, Any]] = {}
-
-    def load(self, path: str) -> dict[str, Any]:
-        if path in self._cache:
-            return self._cache[path]
-        if not os.path.exists(path):
-            self._cache[path] = {}
-            return {}
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            self._cache[path] = data
-            return data
-        except (json.JSONDecodeError, OSError):
-            self._cache[path] = {}
-            return {}
-
-    def save(self, path: str, data: dict[str, Any]) -> None:
-        # Create parent directories if needed
-        parent = os.path.dirname(path)
-        if parent:
-            os.makedirs(parent, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        self._cache[path] = data
-
-    def get(self, path: str, key: str) -> str | None:
-        data = self.load(path)
-        value = data.get(key)
-        if value is not None:
-            return str(value)
-        return None
-
-    def set(self, path: str, key: str, value: str) -> None:
-        data = self.load(path)
-        data[key] = value
-        self._cache[path] = data
 
 
 class InMemoryProvider(MemoryProvider):
-    """In-memory dict storage for testing.
+    """Pure in-memory memory provider (HLD §3.8.2).
 
-    Does not persist to disk. Supports all operations including
-    search fallback.
+    Used for testing and ephemeral agents.
+    Data is lost when the process exits.
     """
 
     def __init__(self) -> None:
-        self._stores: dict[str, dict[str, Any]] = {}
+        self._data: dict[str, str] = {}
 
-    def load(self, path: str) -> dict[str, Any]:
-        return dict(self._stores.get(path, {}))
+    def get(self, key: str) -> str | None:
+        """Get a value by key."""
+        return self._data.get(key)
 
-    def save(self, path: str, data: dict[str, Any]) -> None:
-        # Store in-memory only — no disk persistence
-        self._stores[path] = dict(data)
+    def set(self, key: str, value: str) -> None:
+        """Set a key-value pair."""
+        self._data[key] = value
 
-    def get(self, path: str, key: str) -> str | None:
-        store = self._stores.get(path, {})
-        value = store.get(key)
-        if value is not None:
-            return str(value)
-        return None
+    def delete(self, key: str) -> None:
+        """Delete a key."""
+        self._data.pop(key, None)
 
-    def set(self, path: str, key: str, value: str) -> None:
-        if path not in self._stores:
-            self._stores[path] = {}
-        self._stores[path][key] = value
+    def list_keys(self) -> list[str]:
+        """List all keys."""
+        return list(self._data.keys())
+
+
+class FileMemoryProvider(MemoryProvider):
+    """JSON file-backed memory provider (HLD §3.8.2).
+
+    Persists all key-value pairs to a JSON file on every write.
+    Loads existing data on construction.
+
+    Args:
+        path: Path to the JSON file. Parent directories are created
+            automatically if they don't exist.
+    """
+
+    def __init__(self, path: str) -> None:
+        self._path = path
+        self._data: dict[str, str] = self._load()
+
+    # ── Internal ───────────────────────────────────────────────
+
+    def _load(self) -> dict[str, str]:
+        """Load data from the JSON file. Returns empty dict on corruption."""
+        if os.path.exists(self._path):
+            try:
+                with open(self._path, encoding="utf-8") as f:
+                    data = json.load(f)
+                    return {k: str(v) for k, v in data.items()}
+            except (json.JSONDecodeError, OSError):
+                return {}
+        return {}
+
+    def _save(self) -> None:
+        """Persist data to the JSON file."""
+        parent = Path(self._path).parent
+        if not parent.exists():
+            parent.mkdir(parents=True, exist_ok=True)
+        with open(self._path, "w", encoding="utf-8") as f:
+            json.dump(self._data, f, indent=2, ensure_ascii=False)
+
+    # ── MemoryProvider interface ───────────────────────────────
+
+    def get(self, key: str) -> str | None:
+        """Get a value by key."""
+        return self._data.get(key)
+
+    def set(self, key: str, value: str) -> None:
+        """Set a key-value pair and persist."""
+        self._data[key] = value
+        self._save()
+
+    def delete(self, key: str) -> None:
+        """Delete a key and persist."""
+        if key in self._data:
+            del self._data[key]
+            self._save()
+
+    def list_keys(self) -> list[str]:
+        """List all keys."""
+        return list(self._data.keys())
+
+    # ── Utilities ──────────────────────────────────────────────
+
+    def clear(self) -> None:
+        """Clear all data and persist empty state."""
+        self._data.clear()
+        self._save()
+
+    @property
+    def path(self) -> str:
+        """The file path used for persistence."""
+        return self._path
+
+    def size(self) -> int:
+        """Number of key-value pairs stored."""
+        return len(self._data)

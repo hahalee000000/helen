@@ -10,6 +10,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
+import os
 import threading
 import uuid
 
@@ -203,16 +204,107 @@ class HelenHermesRuntime(Runtime):
     # --- Tool & Skill Management ---
 
     def load_tool(self, name: str) -> Any:
-        """Load a tool implementation by name."""
-        raise NotImplementedError("Tool loading requires Hermes integration")
+        """Load a tool implementation by name.
+
+        In v1, returns a ToolSchema stub. Real tool loading
+        requires the Hermes tool registry integration.
+        """
+        return ToolSchema(
+            name=name,
+            description=f"Tool '{name}' — loading requires Hermes integration",
+            parameters={"type": "object", "properties": {}},
+        )
 
     def list_skills(self) -> list[SkillMeta]:
-        """Return lightweight Skill Index."""
-        raise NotImplementedError("Skill listing requires Hermes integration")
+        """Return lightweight Skill Index by scanning skill directories.
+
+        Reads SKILL.md frontmatter from each skill directory to extract
+        name, description, and category without loading full content.
+        """
+        skills: list[SkillMeta] = []
+        skill_dirs = self._find_skill_directories()
+        for skill_dir in skill_dirs:
+            skill_md = os.path.join(skill_dir, "SKILL.md")
+            if os.path.exists(skill_md):
+                meta = self._parse_skill_frontmatter(skill_md)
+                if meta:
+                    skills.append(SkillMeta(
+                        name=meta.get("name", os.path.basename(skill_dir)),
+                        description=meta.get("description", ""),
+                        category=meta.get("category", ""),
+                    ))
+        return skills
 
     def load_skill(self, name: str) -> str:
-        """Load a skill's full content."""
-        raise NotImplementedError("Skill loading requires Hermes integration")
+        """Load a skill's full SKILL.md content.
+
+        Searches known skill directories for a matching SKILL.md file.
+
+        Args:
+            name: The skill name (directory name or frontmatter name).
+
+        Returns:
+            The complete SKILL.md text.
+
+        Raises:
+            FileNotFoundError: If the skill is not found.
+        """
+        skill_dirs = self._find_skill_directories()
+        for skill_dir in skill_dirs:
+            # Match by directory name
+            if os.path.basename(skill_dir) == name:
+                skill_md = os.path.join(skill_dir, "SKILL.md")
+                if os.path.exists(skill_md):
+                    with open(skill_md, encoding="utf-8") as f:
+                        return f.read()
+            # Also check subdirectories (e.g. mlops/inference)
+            for root, dirs, files in os.walk(skill_dir):
+                if os.path.basename(root) == name and "SKILL.md" in files:
+                    with open(os.path.join(root, "SKILL.md"), encoding="utf-8") as f:
+                        return f.read()
+        raise FileNotFoundError(f"Skill '{name}' not found in any skill directory")
+
+    # --- Internal helpers ---
+
+    @staticmethod
+    def _find_skill_directories() -> list[str]:
+        """Find all directories that contain SKILL.md files.
+
+        Skills can be nested (e.g. mlops/inference/serving-llms-vllm/SKILL.md),
+        so we recursively walk the skill base directories.
+        """
+        candidates: list[str] = []
+        # Standard Hermes skill directories
+        for base in [
+            os.path.expanduser("~/.hermes/skills"),
+            os.path.expanduser("~/.hermes/hermes-agent/skills"),
+        ]:
+            if os.path.exists(base):
+                for root, dirs, files in os.walk(base):
+                    if "SKILL.md" in files:
+                        candidates.append(root)
+        return candidates
+
+    @staticmethod
+    def _parse_skill_frontmatter(path: str) -> dict[str, str]:
+        """Parse YAML frontmatter from a SKILL.md file."""
+        try:
+            with open(path, encoding="utf-8") as f:
+                content = f.read()
+            if not content.startswith("---"):
+                return {}
+            end = content.find("---", 3)
+            if end < 0:
+                return {}
+            yaml_text = content[3:end].strip()
+            result: dict[str, str] = {}
+            for line in yaml_text.split("\n"):
+                if ":" in line:
+                    key, _, value = line.partition(":")
+                    result[key.strip()] = value.strip().strip('"').strip("'")
+            return result
+        except (OSError, ValueError):
+            return {}
 
     # --- LLM Operations ---
 

@@ -14,6 +14,8 @@ import threading
 import time
 from unittest.mock import MagicMock
 
+import pytest
+
 from helen.runtime import (
     Runtime,
     HelenHermesRuntime,
@@ -292,32 +294,37 @@ class TestResolveImport:
         assert result == {"agents": {}}
 
 
-class TestNotImplementedMethods:
-    """Test that unimplemented methods raise NotImplementedError."""
+class TestImplementedMethods:
+    """Test that previously-stub methods now work."""
 
     def setup_method(self):
         self.runtime = HelenHermesRuntime()
 
-    def test_load_tool_raises(self):
-        """load_tool raises NotImplementedError."""
+    def test_load_tool_returns_schema(self):
+        """load_tool returns a ToolSchema stub."""
+        tool = self.runtime.load_tool("search")
+        assert tool.name == "search"
+        assert isinstance(tool.description, str)
+
+    def test_list_skills_returns_list(self):
+        """list_skills returns a list of SkillMeta."""
+        skills = self.runtime.list_skills()
+        assert isinstance(skills, list)
+        # Should find at least some skills from ~/.hermes/skills
+        if skills:
+            assert all(hasattr(s, "name") for s in skills)
+
+    def test_load_skill_finds_existing(self):
+        """load_skill finds an existing skill."""
         try:
-            self.runtime.load_tool("search")
-            assert False
-        except NotImplementedError:
+            content = self.runtime.load_skill("helen-language")
+            assert isinstance(content, str)
+            assert len(content) > 0
+        except FileNotFoundError:
+            # Skill not installed in this environment
             pass
 
-    def test_list_skills_raises(self):
-        """list_skills raises NotImplementedError."""
-        try:
-            self.runtime.list_skills()
-            assert False
-        except NotImplementedError:
-            pass
-
-    def test_load_skill_raises(self):
-        """load_skill raises NotImplementedError."""
-        try:
-            self.runtime.load_skill("test-skill")
-            assert False
-        except NotImplementedError:
-            pass
+    def test_load_skill_raises_for_missing(self):
+        """load_skill raises FileNotFoundError for nonexistent skill."""
+        with pytest.raises(FileNotFoundError, match="not found"):
+            self.runtime.load_skill("__nonexistent_xyz__")

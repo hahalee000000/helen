@@ -20,7 +20,7 @@ from helen.core.ast import (
 )
 from helen.core.errors import ErrorReporter
 from helen.core.source import SourceSpan
-from helen.runtime.memory import InMemoryProvider
+from helen.runtime.memory import FileMemoryProvider, InMemoryProvider
 
 
 def _span(line: int = 1) -> SourceSpan:
@@ -36,20 +36,20 @@ class TestMemoryContentInjection:
 
     def setup_method(self):
         self.provider = InMemoryProvider()
-        self.provider.set("test", "last_note", "Remember to test memory")
-        self.provider.set("test", "context", "Agent is in debug mode")
+        self.provider.set("last_note", "Remember to test memory")
+        self.provider.set("context", "Agent is in debug mode")
 
     def test_memory_load_returns_all_data(self):
-        """load() returns all key-value pairs."""
-        data = self.provider.load("test")
-        assert "last_note" in data
-        assert "context" in data
-        assert data["last_note"] == "Remember to test memory"
+        """list_keys() returns all keys, get() retrieves values."""
+        keys = self.provider.list_keys()
+        assert "last_note" in keys
+        assert "context" in keys
+        assert self.provider.get("last_note") == "Remember to test memory"
 
     def test_memory_content_formatted_for_prompt(self):
         """Memory content can be formatted as string for prompt injection."""
-        data = self.provider.load("test")
-        formatted = "\n".join(f"{k}: {v}" for k, v in data.items())
+        keys = self.provider.list_keys()
+        formatted = "\n".join(f"{k}: {self.provider.get(k)}" for k in keys)
         assert "last_note: Remember to test memory" in formatted
         assert "context: Agent is in debug mode" in formatted
 
@@ -92,33 +92,48 @@ class TestFileMemoryProviderIntegration:
     """Test FileMemoryProvider with real files."""
 
     def setup_method(self):
-        from helen.runtime.memory import FileMemoryProvider
         self.tmpdir = tempfile.mkdtemp()
         self.path = os.path.join(self.tmpdir, "memory.json")
-        self.provider = FileMemoryProvider()
+        self.provider = FileMemoryProvider(self.path)
 
     def teardown_method(self):
         import shutil
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def test_full_lifecycle(self):
-        """set -> save -> load -> get -> search cycle."""
-        from helen.runtime.memory import FileMemoryProvider
+        """set -> get -> persist -> reload cycle."""
         # Set values
-        self.provider.set(self.path, "key1", "value1")
-        self.provider.set(self.path, "key2", "value2")
+        self.provider.set("key1", "value1")
+        self.provider.set("key2", "value2")
 
-        # Get works before save (in-memory cache)
-        assert self.provider.get(self.path, "key1") == "value1"
+        # Get works (in-memory cache)
+        assert self.provider.get("key1") == "value1"
+        assert self.provider.get("key2") == "value2"
 
-        # Save persists
-        self.provider.save(self.path, {"key1": "value1", "key2": "value2"})
-
-        # New instance loads from file
-        new_provider = FileMemoryProvider()
-        data = new_provider.load(self.path)
+        # File was persisted
+        assert os.path.exists(self.path)
+        with open(self.path, encoding="utf-8") as f:
+            data = json.load(f)
         assert data == {"key1": "value1", "key2": "value2"}
 
-        # Search works
-        results = new_provider.search(self.path, "value", top_k=5)
-        assert len(results) == 2
+        # New instance loads from file
+        new_provider = FileMemoryProvider(self.path)
+        assert new_provider.get("key1") == "value1"
+        assert new_provider.get("key2") == "value2"
+
+    def test_delete_and_persist(self):
+        """Delete should persist to file."""
+        self.provider.set("key", "value")
+        self.provider.delete("key")
+        assert self.provider.get("key") is None
+
+        new_provider = FileMemoryProvider(self.path)
+        assert new_provider.get("key") is None
+
+    def test_list_keys(self):
+        """list_keys() returns all stored keys."""
+        self.provider.set("a", "1")
+        self.provider.set("b", "2")
+        self.provider.set("c", "3")
+        keys = self.provider.list_keys()
+        assert set(keys) == {"a", "b", "c"}
