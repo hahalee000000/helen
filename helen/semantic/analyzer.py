@@ -126,6 +126,9 @@ class SemanticAnalyzer(Visitor[None]):
 
     def analyze(self, program: "ProgramNode") -> None:
         """Run semantic analysis on a full program."""
+        # Reset transient state for REPL safety
+        self._in_loop = 0
+        self._in_function = 0
         program.accept(self)
 
     # ------------------------------------------------------------------

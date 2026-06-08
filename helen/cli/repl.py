@@ -14,6 +14,7 @@ from helen.core.lexer import Scanner
 from helen.core.parser import Parser
 from helen.interpreter.interpreter import Interpreter
 from helen.runtime.llm_runtime import MockLLMRuntime
+from helen.semantic.analyzer import SemanticAnalyzer
 from helen.cli.formatter import format_error
 
 
@@ -53,7 +54,7 @@ def _needs_continuation(buffer: str) -> bool:
     return brace_count > 0 or paren_count > 0 or bracket_count > 0
 
 
-def _execute_input(source: str, interp: Interpreter) -> tuple[bool, Any]:
+def _execute_input(source: str, interp: Interpreter, analyzer: SemanticAnalyzer) -> tuple[bool, Any]:
     """Lex, parse, analyze, and interpret a single input.
 
     Returns:
@@ -74,6 +75,16 @@ def _execute_input(source: str, interp: Interpreter) -> tuple[bool, Any]:
     try:
         parser = Parser(tokens, errors=errors)
         program = parser.parse()
+    except Exception as e:
+        return False, str(e)
+
+    if errors.has_errors:
+        msgs = [format_error(err) for err in errors.errors]
+        return False, "\n".join(msgs)
+
+    # Analyze (semantic checks: types, scope, etc.)
+    try:
+        analyzer.analyze(program)
     except Exception as e:
         return False, str(e)
 
@@ -108,6 +119,7 @@ def repl_command() -> int:
     errors = ErrorReporter()
     llm_runtime = MockLLMRuntime()
     interp = Interpreter(errors=errors, llm_runtime=llm_runtime)
+    analyzer = SemanticAnalyzer(errors, base_dir=".")
 
     buffer_lines: list[str] = []
 
@@ -137,7 +149,7 @@ def repl_command() -> int:
             # Try to execute
             if buffer.strip():
                 try:
-                    success, result = _execute_input(buffer, interp)
+                    success, result = _execute_input(buffer, interp, analyzer)
                     if success:
                         if result is not None:
                             print(repr(result))

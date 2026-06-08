@@ -5,6 +5,7 @@ from helen.cli.repl import _needs_continuation, _execute_input
 from helen.interpreter.interpreter import Interpreter
 from helen.core.errors import ErrorReporter
 from helen.runtime.llm_runtime import MockLLMRuntime
+from helen.semantic.analyzer import SemanticAnalyzer
 
 
 @pytest.fixture
@@ -12,6 +13,12 @@ def interp():
     """Provide a fresh Interpreter for REPL tests."""
     errors = ErrorReporter()
     return Interpreter(errors=errors, llm_runtime=MockLLMRuntime())
+
+
+@pytest.fixture
+def analyzer(interp):
+    """Provide a fresh SemanticAnalyzer for REPL tests."""
+    return SemanticAnalyzer(interp.errors, base_dir=".")
 
 
 class TestNeedsContinuation:
@@ -48,19 +55,19 @@ class TestNeedsContinuation:
 class TestExecuteInput:
     """Test REPL input execution."""
 
-    def test_simple_expression(self, interp):
+    def test_simple_expression(self, interp, analyzer):
         """Simple valid input executes successfully."""
-        success, result = _execute_input("let x = 1", interp)
+        success, result = _execute_input("let x = 1", interp, analyzer)
         assert success
 
-    def test_syntax_error(self, interp):
+    def test_syntax_error(self, interp, analyzer):
         """Syntax error returns failure."""
-        success, result = _execute_input("agent {", interp)
+        success, result = _execute_input("agent {", interp, analyzer)
         assert not success
 
-    def test_arithmetic(self, interp):
+    def test_arithmetic(self, interp, analyzer):
         """Arithmetic expressions work in REPL."""
-        success, result = _execute_input("let x = 1 + 2\nlet y = x * 3", interp)
+        success, result = _execute_input("let x = 1 + 2\nlet y = x * 3", interp, analyzer)
         assert success
 
 
