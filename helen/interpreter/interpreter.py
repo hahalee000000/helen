@@ -671,7 +671,7 @@ class Interpreter(Visitor[object]):
         # Track the current file for relative path resolution
         current_file = node.source_file if hasattr(node, 'source_file') else None
 
-        result = self.import_resolver.resolve(node.path, current_file)
+        result = self.import_resolver.resolve(node.module_path, current_file)
         if result is None:
             # Error already reported by ImportResolver
             return None

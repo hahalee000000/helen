@@ -55,25 +55,19 @@ def run_source(source: str, filename: str = "<test>") -> tuple[bool, str]:
     # Skip features not fully implemented or requiring external runtime
     if "while (true)" in source or "while (1)" in source:
         return False, "Skipped (infinite loop)"
-    if "while (" in source:
-        # Check if it has a break
-        if "break" not in source:
-            return False, "Skipped (while without break)"
-            
+    # While loops without break are dangerous in tutorial tests
+    if "while (" in source and "break" not in source:
+        return False, "Skipped (while without break)"
+        
     if "async " in source or "await " in source:
         return False, "Skipped (async)"
     if "llm " in source:
         return False, "Skipped (LLM)"
     if "import " in source:
-        return False, "Skipped (import)"
-        
-    # Skip complex syntax we know might fail
-    if source.startswith("if ") and "(" not in source:
-        return False, "Skipped (if without parens)"
-    if "for i in range(" in source:
-        return False, "Skipped (for range loop)"
+        return False, "Skipped (import - requires file fixtures)"
+    # try/catch blocks reference undeclared agents/functions as examples
     if "try {" in source:
-        return False, "Skipped (try/catch)"
+        return False, "Skipped (try/catch - uses undeclared examples)"
         
     errors = ErrorReporter()
     llm_runtime = MockLLMRuntime()
