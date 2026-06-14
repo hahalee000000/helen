@@ -333,8 +333,22 @@ class Interpreter(Visitor[object]):
         # Check if callee matches a registered agent (HLD 3.5.2: isolated env)
         if callee_name is not None and callee_name in self._agents:
             agent = self._agents[callee_name]
-            args = {arg.name: arg.value.accept(self) for arg in node.arguments}
-            return self._call_agent(agent, args)
+            # Build args dict: support both named and positional arguments
+            agent_args: dict[str, object] = {}
+            for i, arg in enumerate(node.arguments):
+                if arg.name is not None:
+                    # Named argument: text="hello"
+                    agent_args[arg.name] = arg.value.accept(self)
+                elif i < len(agent.params):
+                    # Positional argument: bind to i-th parameter
+                    agent_args[agent.params[i].name] = arg.value.accept(self)
+                else:
+                    self._runtime_error(
+                        node.span,
+                        f"too many positional arguments for agent '{callee_name}' "
+                        f"(expected at most {len(agent.params)})"
+                    )
+            return self._call_agent(agent, agent_args)
 
         # Otherwise evaluate the callee as an expression
         callee = node.callee.accept(self)
