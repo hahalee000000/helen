@@ -177,11 +177,11 @@ class TestAgentSemantics:
         assert not errors.has_errors
 
     def test_agent_without_prompt(self):
+        """Agent without prompt is allowed (prompt is optional)."""
         from helen.core.ast import AgentDeclNode
-        agent = AgentDeclNode(name="BadAgent", params=[], declarations=[], prompt=None, logic=None, span=_span())
+        agent = AgentDeclNode(name="NoPromptAgent", params=[], declarations=[], prompt=None, logic=None, span=_span())
         errors, _ = _analyze(agent)
-        assert errors.has_errors
-        assert any(e.code == ErrorCode.MISSING_PROMPT for e in errors.errors)
+        assert not errors.has_errors
 
     def test_duplicate_agent_name(self):
         from helen.core.ast import AgentDeclNode

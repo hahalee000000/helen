@@ -558,14 +558,8 @@ class SemanticAnalyzer(Visitor[None]):
         else:
             self._agent_names[node.name] = node
 
-        # Validate prompt exists
-        if node.prompt is None:
-            self.errors.error(
-                ErrorCode.MISSING_PROMPT,
-                f"agent '{node.name}' must have a prompt",
-                node.span,
-            )
-        else:
+        # Validate prompt if present (prompt is optional)
+        if node.prompt is not None:
             node.prompt.accept(self)
 
     def visit_prompt_def(self, node: PromptDefNode) -> None:
