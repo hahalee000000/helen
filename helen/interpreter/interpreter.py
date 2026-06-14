@@ -77,6 +77,10 @@ from helen.runtime.llm_runtime import LLMRuntime, MockLLMRuntime
 from helen.runtime.import_resolver import ImportResolver
 from helen.runtime.history import HistoryManager, Message as HistoryMessage
 from helen.interpreter.task import Task, AggregateError
+from helen.semantic.types import (
+    AnyType, IntType, FloatType, StringType, BoolType, NullType,
+    NumberType, Type, type_compatible, type_of_literal,
+)
 
 if TYPE_CHECKING:
     pass
@@ -966,12 +970,65 @@ class Interpreter(Visitor[object]):
             return f"{{{items}}}"
         return str(value)
 
+    def _type_from_typenode(self, type_node: TypeNode | None) -> "Type":
+        """Convert an AST TypeNode to a semantic Type."""
+        if type_node is None:
+            return AnyType()
+
+        # Handle composite type nodes (OptionalTypeNode, UnionTypeNode, LiteralTypeNode)
+        from helen.core.ast import OptionalTypeNode, UnionTypeNode, LiteralTypeNode
+        if isinstance(type_node, OptionalTypeNode):
+            from helen.semantic.types import OptionalType
+            return OptionalType(self._type_from_typenode(type_node.inner))
+        if isinstance(type_node, UnionTypeNode):
+            from helen.semantic.types import UnionType
+            return UnionType([self._type_from_typenode(m) for m in type_node.members])
+        if isinstance(type_node, LiteralTypeNode):
+            from helen.semantic.types import LiteralType
+            return LiteralType(type_node.values)
+
+        name = type_node.name.lower()
+        if name == "int" or name == "integer":
+            return IntType()
+        if name == "float" or name == "double":
+            return FloatType()
+        if name == "str" or name == "string":
+            return StringType()
+        if name == "bool" or name == "boolean":
+            return BoolType()
+        if name == "null":
+            return NullType()
+        if name == "any":
+            return AnyType()
+        if name == "list":
+            from helen.semantic.types import ListType
+            return ListType(AnyType())
+        if name == "map":
+            from helen.semantic.types import MapType
+            return MapType(AnyType(), AnyType())
+        # Unknown type names → AnyType (v1 lenient)
+        return AnyType()
+
     def _call_function(self, func: FunctionDeclNode, args: list[object]) -> object:
         """Call a function with the given arguments.
 
         Creates a new environment scope, binds parameters, and executes
         the function body.
         """
+        # Runtime parameter type checking
+        for i, param in enumerate(func.params):
+            if i < len(args) and param.type_annotation is not None:
+                expected_type = self._type_from_typenode(param.type_annotation)
+                actual_value = args[i]
+                # Only check if we can infer the type (not None or unknown)
+                if actual_value is not None:
+                    actual_type = type_of_literal(actual_value)
+                    if not isinstance(actual_type, AnyType):
+                        if not type_compatible(actual_type, expected_type):
+                            raise HelenRuntimeError(
+                                f"argument {i+1} type '{actual_type.name}' is not compatible with parameter type '{expected_type.name}'"
+                            )
+
         call_env = self.environment.enter_scope()
 
         # Bind parameters

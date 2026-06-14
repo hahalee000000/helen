@@ -114,6 +114,7 @@ class SemanticAnalyzer(Visitor[None]):
         self._current_return_type = None  # expected return type for current function
         self._agent_names: dict[str, ASTNode] = {}  # global agent registry
         self._imported_paths: set[str] = set()  # validated import paths
+        self._function_param_types: dict[str, list] = {}  # function name -> list of TypeNode
         # Register stdlib builtins in global scope (HLD M15)
         self._register_stdlib()
 
@@ -140,6 +141,7 @@ class SemanticAnalyzer(Visitor[None]):
         self._current_return_type = None
         self._agent_names.clear()
         self._imported_paths.clear()
+        self._function_param_types.clear()
         self._register_stdlib()
 
     def undefine(self, name: str) -> bool:
@@ -420,6 +422,25 @@ class SemanticAnalyzer(Visitor[None]):
         for arg in node.arguments:
             arg.accept(self)
 
+        # Check parameter types for function calls (compile-time check for literals)
+        if isinstance(node.callee, VariableNode):
+            callee_name = node.callee.name
+            # Check if it's a known function with parameter type info
+            if callee_name in self._function_param_types:
+                param_types = self._function_param_types[callee_name]
+                for i, arg in enumerate(node.arguments):
+                    if i < len(param_types) and param_types[i] is not None:
+                        expected_type = self._type_from_typenode(param_types[i])
+                        # Only check if argument is a literal
+                        if isinstance(arg.value, LiteralNode):
+                            actual_type = type_of_literal(arg.value.value)
+                            if not type_compatible(actual_type, expected_type):
+                                self.errors.error(
+                                    ErrorCode.TYPE_MISMATCH,
+                                    f"argument {i+1} type '{actual_type.name}' is not compatible with parameter type '{expected_type.name}'",
+                                    arg.value.span,
+                                )
+
         # AGENT_PARAM_MISMATCH: if callee is a known agent, validate args
         if isinstance(node.callee, VariableNode):
             callee_name = node.callee.name
@@ -579,6 +600,9 @@ class SemanticAnalyzer(Visitor[None]):
                 f"duplicate declaration of '{node.name}'",
                 node.span,
             )
+
+        # Store parameter types for compile-time call checking
+        self._function_param_types[node.name] = [p.type_annotation for p in node.params]
 
         # Record error count before body analysis to detect body-specific errors
         errors_before_body = len(self.errors.errors)

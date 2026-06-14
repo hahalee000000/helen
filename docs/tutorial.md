@@ -386,6 +386,61 @@ fn greet(name: str): str {
 }
 ```
 
+## 参数类型检查
+
+当函数参数有类型注解时，Helen 会在调用时进行类型检查：
+
+### 编译时检查（字面量）
+
+如果调用时传递的是字面量，类型错误会在编译时被捕获：
+
+```helen
+fn add(a: int, b: int): int {
+    return a + b
+}
+
+add(1.5, 2.7)    // ❌ 编译错误：argument 1 type 'FloatType' is not compatible with parameter type 'IntType'
+add(1, 2)        // ✅ 正确
+```
+
+### 运行时检查（变量）
+
+如果调用时传递的是变量，类型检查会在运行时进行：
+
+```helen
+fn add(a: int, b: int): int {
+    return a + b
+}
+
+let x = 1.5
+add(x, 2)        // ❌ 运行时错误：argument 1 type 'FloatType' is not compatible with parameter type 'IntType'
+
+let y = 10
+add(y, 2)        // ✅ 正确
+```
+
+### 类型兼容性规则
+
+- `int` 可以传递给 `float` 参数（int 是 float 的子类型）
+- `float` **不能**传递给 `int` 参数
+- 任何类型可以传递给 `any` 参数
+
+```helen
+fn processFloat(x: float): float {
+    return x * 2
+}
+
+processFloat(10)     // ✅ int 可以转换为 float
+processFloat(10.5)   // ✅ float 直接匹配
+
+fn processInt(x: int): int {
+    return x + 1
+}
+
+processInt(10)       // ✅ int 直接匹配
+processInt(10.5)     // ❌ float 不能转换为 int
+```
+
 ## 递归
 
 ```helen
