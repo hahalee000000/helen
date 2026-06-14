@@ -13,7 +13,7 @@ from helen.core.errors import ErrorReporter
 from helen.core.lexer import Scanner
 from helen.core.parser import Parser
 from helen.interpreter.interpreter import Interpreter
-from helen.runtime.llm_runtime import MockLLMRuntime
+from helen.runtime.hermes_cli_llm import HermesCLILLMRuntime
 from helen.semantic.analyzer import SemanticAnalyzer
 from helen.cli.formatter import format_error
 
@@ -181,7 +181,7 @@ def repl_command() -> int:
 
     # Persistent interpreter state across REPL iterations
     errors = ErrorReporter()
-    llm_runtime = MockLLMRuntime()
+    llm_runtime = HermesCLILLMRuntime()
     interp = Interpreter(errors=errors, llm_runtime=llm_runtime)
     analyzer = SemanticAnalyzer(errors, base_dir=".")
 
