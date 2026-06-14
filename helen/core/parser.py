@@ -19,6 +19,7 @@ from .ast import (
     CatchClauseNode,
     ContinueStmtNode,
     DeclarationNode,
+    ExprStmtNode,
     ExpressionNode,
     FinallyBlockNode,
     FnBlockNode,
@@ -872,29 +873,63 @@ class Parser:
         return LlmOptionNode(label=label_tok.literal or label_tok.lexeme, body=body,
                              span=self._make_span(start, self._previous()))
 
-    def _llm_act_stmt(self) -> LlmActStmtNode:
-        """解析 llm act 语句：llm act target(arg1=val1, ...) "desc"。"""
+    def _llm_act_stmt(self) -> StatementNode:
+        """解析 llm act 语句：支持两种形式。
+        
+        1. 语句形式: llm act target(arg1=val1, ...) "desc"
+        2. 表达式形式: llm act <expr>  (直接调用 LLM)
+        """
         start = self._previous()  # LLM token
         self._consume(TokenType.ACT, "Expected 'act' after 'llm'.")
-        target_tok = self._consume(TokenType.IDENTIFIER, "Expected target after 'llm act'.")
-        args: dict[str, ExpressionNode] = {}
-        if self._check(TokenType.LEFT_PAREN):
-            self._advance()
-            if not self._check(TokenType.RIGHT_PAREN):
-                arg_name = self._consume(TokenType.IDENTIFIER, "Expected argument name.")
-                self._consume(TokenType.ASSIGN, "Expected '=' after argument name.")
-                args[arg_name.lexeme] = self._expression()
-                while self._match(TokenType.COMMA):
-                    if self._check(TokenType.RIGHT_PAREN):
-                        break
+        
+        # 检查是否是表达式形式：llm act <expr>
+        # 如果不是 IDENTIFIER，或者是 IDENTIFIER 但后面不是 ( 或 STRING，则是表达式形式
+        if not self._check(TokenType.IDENTIFIER):
+            # 表达式形式：llm act "prompt" 或 llm act expr
+            prompt_expr = self._expression()
+            return ExprStmtNode(expression=LlmActExprNode(prompt=prompt_expr,
+                                                     span=self._make_span(start, self._previous())),
+                                span=self._make_span(start, self._previous()))
+        
+        # 是 IDENTIFIER，需要判断是语句形式还是表达式形式
+        # 保存当前位置，尝试解析为语句形式
+        # 语句形式: IDENTIFIER 后面跟着 ( 或 STRING
+        # 表达式形式: IDENTIFIER 是变量名，后面是运算符或其他
+        
+        # 前瞻：检查 IDENTIFIER 后面的 token
+        # 我们需要 peek 两个 token  ahead
+        saved_pos = self._pos
+        ident_tok = self._advance()  # consume IDENTIFIER
+        
+        # 如果后面是 ( 或 STRING，则是语句形式
+        if self._check(TokenType.LEFT_PAREN) or self._check(TokenType.STRING):
+            # 语句形式：继续解析
+            args: dict[str, ExpressionNode] = {}
+            if self._check(TokenType.LEFT_PAREN):
+                self._advance()
+                if not self._check(TokenType.RIGHT_PAREN):
                     arg_name = self._consume(TokenType.IDENTIFIER, "Expected argument name.")
                     self._consume(TokenType.ASSIGN, "Expected '=' after argument name.")
                     args[arg_name.lexeme] = self._expression()
-            self._consume(TokenType.RIGHT_PAREN, "Expected ')' after arguments.")
-        desc_tok = self._consume(TokenType.STRING, "Expected description after 'llm act' args.")
-        return LlmActStmtNode(target=target_tok.lexeme, arguments=args,
-                              description=desc_tok.literal or desc_tok.lexeme,
-                              span=self._make_span(start, self._previous()))
+                    while self._match(TokenType.COMMA):
+                        if self._check(TokenType.RIGHT_PAREN):
+                            break
+                        arg_name = self._consume(TokenType.IDENTIFIER, "Expected argument name.")
+                        self._consume(TokenType.ASSIGN, "Expected '=' after argument name.")
+                        args[arg_name.lexeme] = self._expression()
+                self._consume(TokenType.RIGHT_PAREN, "Expected ')' after arguments.")
+            desc_tok = self._consume(TokenType.STRING, "Expected description after 'llm act' args.")
+            return LlmActStmtNode(target=ident_tok.lexeme, arguments=args,
+                                  description=desc_tok.literal or desc_tok.lexeme,
+                                  span=self._make_span(start, self._previous()))
+        else:
+            # 表达式形式：IDENTIFIER 是表达式的一部分
+            # 回退到 IDENTIFIER 之前，重新解析为表达式
+            self._pos = saved_pos
+            prompt_expr = self._expression()
+            return ExprStmtNode(expression=LlmActExprNode(prompt=prompt_expr,
+                                                     span=self._make_span(start, self._previous())),
+                                span=self._make_span(start, self._previous()))
 
     def _match_stmt(self) -> MatchStmtNode:
         """解析 match 语句：match expr { case pattern { ... } default { ... } }。"""
