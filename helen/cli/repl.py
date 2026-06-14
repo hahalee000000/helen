@@ -165,6 +165,16 @@ def repl_command() -> int:
     Returns:
         0 on normal exit.
     """
+    # Ensure stdin uses UTF-8 with error replacement for robust CJK input
+    import io
+    if hasattr(sys.stdin, 'buffer'):
+        sys.stdin = io.TextIOWrapper(
+            sys.stdin.buffer,
+            encoding='utf-8',
+            errors='replace',
+            line_buffering=True,
+        )
+
     print("Helen REPL v1.2")
     print("Type 'exit' or Ctrl+D to quit, ':help' for commands")
     print()
@@ -189,6 +199,11 @@ def repl_command() -> int:
             except EOFError:
                 print()
                 break
+            except UnicodeDecodeError as e:
+                # Handle terminal encoding issues (e.g., with CJK characters)
+                print(f"Input encoding error: {e}. Please try again.", file=sys.stderr)
+                buffer_lines.clear()
+                continue
 
             if line.strip() == "exit":
                 break
