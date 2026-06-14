@@ -37,6 +37,7 @@ from helen.core.ast import (
     ListLiteralNode,
     LiteralNode,
     LiteralTypeNode,
+    LlmActExprNode,
     LlmActStmtNode,
     LlmBranchNode,
     LlmChooseStmtNode,
@@ -895,9 +896,9 @@ class Interpreter(Visitor[object]):
         return self._execute_stmts(node.body)
 
     def visit_llm_act_stmt(self, node: LlmActStmtNode) -> object:
-        """Execute llm act statement (HLD 3.6.5).
+        """Execute an llm act statement (HLD 3.6.5).
 
-        Flow:
+        Execution flow:
         1. Build full prompt from target + arguments + description
         2. Extract agent settings (model, temperature, max-turns)
         3. Build tools list (always includes load_skill per HLD 3.6.5)
@@ -922,6 +923,40 @@ class Interpreter(Visitor[object]):
         max_turns = int(self._get_agent_setting("max-turns", 1))
 
         # Build tools list: always include load_skill (HLD 3.6.5)
+        tools = [self._load_skill_tool_schema()]
+
+        # Record user message to history
+        self._add_to_history("user", prompt)
+
+        try:
+            response = self.llm_runtime.act(
+                prompt, tools=tools, model=model,
+                temperature=temperature, max_turns=max_turns,
+            )
+            # Record assistant response to history
+            if response and response.text:
+                self._add_to_history("assistant", response.text)
+            return response.text if response else None
+        except HelenRuntimeError:
+            return None
+
+    def visit_llm_act_expr(self, node: LlmActExprNode) -> object:
+        """Execute llm act as an expression: llm act <prompt_expr>.
+
+        Evaluates the prompt expression and calls the LLM runtime.
+        Returns the LLM response text.
+        """
+        # Evaluate the prompt expression
+        prompt = node.prompt.accept(self)
+        if not isinstance(prompt, str):
+            prompt = self._stringify(prompt)
+
+        # Extract agent settings if inside an agent context
+        model = self._get_agent_setting("model")
+        temperature = float(self._get_agent_setting("temperature", 1.0))
+        max_turns = int(self._get_agent_setting("max-turns", 1))
+
+        # Build tools list
         tools = [self._load_skill_tool_schema()]
 
         # Record user message to history

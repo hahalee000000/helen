@@ -28,6 +28,7 @@ from .ast import (
     IfStmtNode,
     ImportStmtNode,
     ListLiteralNode,
+    LlmActExprNode,
     LlmActStmtNode,
     LlmBranchNode,
     LlmChooseStmtNode,
@@ -144,6 +145,9 @@ class Parser:
         # CALL keyword as expression prefix (like identifier)
         self._rules[TokenType.CALL].prefix = self._call_kw
 
+        # llm act as expression: llm act <prompt_expr>
+        self._rules[TokenType.LLM].prefix = self._llm_act_expr
+
         # Precedence for prefix operators
         self._rules[TokenType.BANG].precedence = Precedence.UNARY
         self._rules[TokenType.MINUS].precedence = Precedence.UNARY
@@ -236,6 +240,16 @@ class Parser:
             return callee
         prev = self._previous()
         return VariableNode(name=prev.lexeme, span=prev.span)
+
+    def _llm_act_expr(self) -> ExpressionNode:
+        """解析 llm act 表达式：llm act <expression>。"""
+        start = self._previous()  # LLM token
+        self._consume(TokenType.ACT, "Expected 'act' after 'llm'.")
+        prompt_expr = self._expression()
+        return LlmActExprNode(
+            prompt=prompt_expr,
+            span=self._make_span(start, self._previous())
+        )
 
     def _grouping(self) -> ExpressionNode:
         """解析分组表达式 (expr)。"""

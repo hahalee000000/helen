@@ -228,6 +228,10 @@ class MockVisitor(Visitor[str]):
         self.calls.append("visit_llm_act_stmt")
         return "<llm_act>"
 
+    def visit_llm_act_expr(self, node) -> str:
+        self.calls.append("visit_llm_act_expr")
+        return "<llm_act_expr>"
+
     def visit_match_stmt(self, node) -> str:
         self.calls.append("visit_match_stmt")
         return "<match>"

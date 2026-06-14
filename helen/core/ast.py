@@ -175,6 +175,10 @@ class Visitor(ABC, Generic[R]):
         """Visit a LlmActStmtNode."""
 
     @abstractmethod
+    def visit_llm_act_expr(self, node: LlmActExprNode) -> R:
+        """Visit a LlmActExprNode."""
+
+    @abstractmethod
     def visit_match_stmt(self, node: MatchStmtNode) -> R:
         """Visit a MatchStmtNode."""
 
@@ -784,6 +788,17 @@ class LlmActStmtNode(StatementNode):
 
 
 @dataclass(frozen=True)
+class LlmActExprNode(ExpressionNode):
+    """LLM act as an expression: llm act <prompt_expr>. Returns the LLM response text."""
+    prompt: ExpressionNode
+    span: SourceSpan
+
+    def accept(self, visitor: Visitor[R]) -> R:
+        """Dispatch to the visitor."""
+        return visitor.visit_llm_act_expr(self)
+
+
+@dataclass(frozen=True)
 class MatchStmtNode(StatementNode):
     """Match statement."""
     subject: ExpressionNode
@@ -1018,6 +1033,10 @@ class ASTPrinter(Visitor[str]):
     def visit_llm_act_stmt(self, node: LlmActStmtNode) -> str:
         """Visit a LlmActStmtNode."""
         return self._parenthesize("llm-act", node.target, node.description)
+
+    def visit_llm_act_expr(self, node: LlmActExprNode) -> str:
+        """Visit a LlmActExprNode."""
+        return self._parenthesize("llm-act-expr", node.prompt)
 
     def visit_match_stmt(self, node: MatchStmtNode) -> str:
         """Visit a MatchStmtNode."""

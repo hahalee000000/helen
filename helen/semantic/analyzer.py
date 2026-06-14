@@ -46,6 +46,7 @@ from helen.core.ast import (
     ListLiteralNode,
     LiteralNode,
     LiteralTypeNode,
+    LlmActExprNode,
     LlmActStmtNode,
     LlmBranchNode,
     LlmChooseStmtNode,
@@ -794,6 +795,10 @@ class SemanticAnalyzer(Visitor[None]):
 
     def visit_llm_act_stmt(self, node: LlmActStmtNode) -> None:
         pass  # act has no nested statements
+
+    def visit_llm_act_expr(self, node: LlmActExprNode) -> None:
+        """Visit llm act expression: analyze the prompt expression."""
+        node.prompt.accept(self)
 
     # ------------------------------------------------------------------
     # Match
