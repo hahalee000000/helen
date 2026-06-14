@@ -70,6 +70,7 @@ class ErrorCode(Enum):
     INVALID_AGENT_NAME = 348
     MISSING_DEFAULT_BRANCH = 349
     SCOPE_VIOLATION = 350
+    RUNTIME_ERROR = 351
 
 
 @dataclass

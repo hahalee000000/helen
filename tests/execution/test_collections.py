@@ -30,10 +30,14 @@ def _var(name: str, line: int = 1) -> VariableNode:
 
 
 def _run(*stmts) -> tuple:
+    from helen.interpreter.exceptions import RuntimeError as HelenRuntimeError
     prog = ProgramNode(statements=list(stmts), span=_span())
     errors = ErrorReporter()
     interp = Interpreter(errors)
-    result = interp.interpret(prog)
+    try:
+        result = interp.interpret(prog)
+    except HelenRuntimeError:
+        result = None
     return result, errors
 
 

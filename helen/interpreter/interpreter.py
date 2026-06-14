@@ -71,6 +71,7 @@ from helen.interpreter.exceptions import (
     ContinueSentinel,
     HelenRuntimeError,
     ReturnSentinel,
+    RuntimeError,
     error_matches,
 )
 from helen.runtime.llm_runtime import LLMRuntime, MockLLMRuntime
@@ -1226,5 +1227,6 @@ class Interpreter(Visitor[object]):
         return error_matches(exc, type_name)
 
     def _runtime_error(self, span: SourceSpan | None, message: str) -> None:
-        """Report a runtime error."""
-        self.errors.error(ErrorCode.PARSER_ERROR, message, span)
+        """Report a runtime error and raise an exception."""
+        self.errors.error(ErrorCode.RUNTIME_ERROR, message, span)
+        raise RuntimeError(message, span)

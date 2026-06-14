@@ -315,6 +315,41 @@ class TestNestedTryCatch:
         assert result == "inner_caught"
 
 
+class TestRuntimeErrorCatch:
+    def test_division_by_zero_caught(self):
+        """try { x / 0 } catch RuntimeError e { ... } should catch division by zero."""
+        from helen.core.ast import BinaryOpNode, ExprStmtNode
+        from helen.core.tokens import Token, TokenType
+
+        interp = Interpreter(ErrorReporter())
+
+        # Create a SLASH token
+        slash_tok = Token(TokenType.SLASH, "/", None, 2, 5, 2, 6)
+
+        # x / 0 where x = 1
+        div_expr = BinaryOpNode(
+            left=_lit(1),
+            operator=slash_tok,
+            right=_lit(0),
+            span=_span(2),
+        )
+        clause = CatchClauseNode(
+            error_type=TypeNode(name="RuntimeError", span=_span()),
+            error_name="e",
+            body=[ReturnStmtNode(value=_lit("caught_div_zero"), span=_span())],
+            span=_span(),
+        )
+        ts = TryStmtNode(
+            body=[ExprStmtNode(expression=div_expr, span=_span(2))],
+            catch_clauses=[clause],
+            catch_all=None,
+            finally_block=None,
+            span=_span(),
+        )
+        result = interp._execute(ts)
+        assert result == "caught_div_zero"
+
+
 def _var(name: str, line: int = 1):
     from helen.core.ast import VariableNode
     return VariableNode(name=name, span=_span(line))

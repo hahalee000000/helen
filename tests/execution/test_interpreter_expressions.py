@@ -55,12 +55,16 @@ def _unary(op: TokenType, operand, line: int = 1) -> UnaryOpNode:
 def _run(expr) -> tuple:
     """Run an expression in a program and return (result, errors)."""
     from helen.core.ast import ExprStmtNode, ProgramNode
+    from helen.interpreter.exceptions import RuntimeError as HelenRuntimeError
 
     stmt = ExprStmtNode(expression=expr, span=_span())
     prog = ProgramNode(statements=[stmt], span=_span())
     errors = ErrorReporter()
     interp = Interpreter(errors)
-    result = interp.interpret(prog)
+    try:
+        result = interp.interpret(prog)
+    except HelenRuntimeError:
+        result = None
     return result, errors
 
 
