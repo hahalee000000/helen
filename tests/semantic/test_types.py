@@ -108,10 +108,10 @@ class TestTypeEquality:
 
 class TestTypeOfLiteral:
     def test_int(self):
-        assert type_of_literal(42) == NumberType()
+        assert type_of_literal(42) == IntType()
 
     def test_float(self):
-        assert type_of_literal(3.14) == NumberType()
+        assert type_of_literal(3.14) == FloatType()
 
     def test_string(self):
         assert type_of_literal("hello") == StringType()

@@ -111,6 +111,7 @@ class SemanticAnalyzer(Visitor[None]):
         self.base_dir = base_dir
         self._in_loop = 0  # nesting depth of for/while loops
         self._in_function = 0  # nesting depth of fn blocks
+        self._current_return_type = None  # expected return type for current function
         self._agent_names: dict[str, ASTNode] = {}  # global agent registry
         self._imported_paths: set[str] = set()  # validated import paths
         # Register stdlib builtins in global scope (HLD M15)
@@ -136,6 +137,7 @@ class SemanticAnalyzer(Visitor[None]):
         self.symbols = SymbolTable()
         self._in_loop = 0
         self._in_function = 0
+        self._current_return_type = None
         self._agent_names.clear()
         self._imported_paths.clear()
         self._register_stdlib()
@@ -360,6 +362,18 @@ class SemanticAnalyzer(Visitor[None]):
             )
         if node.value is not None:
             node.value.accept(self)
+            # Check return type compatibility if function has a declared return type
+            if self._current_return_type is not None:
+                from helen.semantic.types import AnyType
+                actual_type = self._infer_type(node.value)
+                # Only check if we can infer a concrete type (not AnyType)
+                if not isinstance(actual_type, AnyType):
+                    if not type_compatible(actual_type, self._current_return_type):
+                        self.errors.error(
+                            ErrorCode.TYPE_MISMATCH,
+                            f"return type '{actual_type.name}' is not compatible with declared return type '{self._current_return_type.name}'",
+                            node.span,
+                        )
 
     # ------------------------------------------------------------------
     # Expressions
@@ -569,6 +583,10 @@ class SemanticAnalyzer(Visitor[None]):
         # Record error count before body analysis to detect body-specific errors
         errors_before_body = len(self.errors.errors)
 
+        # Save previous return type (for nested functions) and set current
+        prev_return_type = self._current_return_type
+        self._current_return_type = self._type_from_typenode(node.return_type)
+
         # Function body gets its own scope
         self._in_function += 1
         self.symbols.enter_scope(f"fn:{node.name}", "function")
@@ -582,6 +600,7 @@ class SemanticAnalyzer(Visitor[None]):
         finally:
             self.symbols.exit_scope()
             self._in_function -= 1
+            self._current_return_type = prev_return_type
 
         # If body analysis produced new errors, remove the symbol
         # so the function can be redefined after fixing the error

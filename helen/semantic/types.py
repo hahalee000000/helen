@@ -265,9 +265,9 @@ def type_compatible(actual: Type, expected: Type) -> bool:
     # Number subtype rules
     if isinstance(actual, (IntType, FloatType, NumberType)):
         if isinstance(expected, NumberType):
-            # IntType accepts IntType and NumberType (literals are NumberType)
+            # IntType accepts only IntType (not FloatType)
             if isinstance(expected, IntType):
-                return isinstance(actual, (IntType, NumberType))
+                return isinstance(actual, (IntType, NumberType)) and not isinstance(actual, FloatType)
             # FloatType accepts FloatType, IntType, NumberType
             if isinstance(expected, FloatType):
                 return True
@@ -305,8 +305,8 @@ def type_of_literal(value: Any) -> Type:
 
     Mapping:
     - bool → BoolType
-    - int → NumberType (v1: no IntType distinction)
-    - float → NumberType
+    - int → IntType
+    - float → FloatType
     - str → StringType
     - None → NullType
     - list → AnyType (v1: no container inference)
@@ -323,9 +323,9 @@ def type_of_literal(value: Any) -> Type:
     if isinstance(value, bool):
         return BOOL_TYPE
     if isinstance(value, int):
-        return NUMBER_TYPE
+        return INT_TYPE
     if isinstance(value, float):
-        return NUMBER_TYPE
+        return FLOAT_TYPE
     if isinstance(value, str):
         return STRING_TYPE
     return ANY_TYPE
