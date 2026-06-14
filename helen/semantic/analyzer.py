@@ -147,7 +147,16 @@ class SemanticAnalyzer(Visitor[None]):
 
     def undefine(self, name: str) -> bool:
         """Remove a symbol from the global scope. Returns True if it existed."""
-        return self.symbols.global_scope.undefine(name) is not None
+        removed = self.symbols.global_scope.undefine(name) is not None
+        # Also remove from agent registry if it was an agent
+        if name in self._agent_names:
+            del self._agent_names[name]
+            removed = True
+        # Also remove from function param types if it was a function
+        if name in self._function_param_types:
+            del self._function_param_types[name]
+            removed = True
+        return removed
 
     # ------------------------------------------------------------------
     # Helpers
