@@ -520,6 +520,7 @@ class Parser:
         value: ExpressionNode | None = None
         if not self._check(TokenType.SEMICOLON, TokenType.RIGHT_BRACE, TokenType.EOF):
             value = self._expression()
+        self._match(TokenType.SEMICOLON)
         return ReturnStmtNode(value=value, span=start.span)
 
     def _expr_stmt(self) -> StatementNode:

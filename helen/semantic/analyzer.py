@@ -131,6 +131,19 @@ class SemanticAnalyzer(Visitor[None]):
         self._in_function = 0
         program.accept(self)
 
+    def reset(self) -> None:
+        """Reset all state for REPL :reset command."""
+        self.symbols = SymbolTable()
+        self._in_loop = 0
+        self._in_function = 0
+        self._agent_names.clear()
+        self._imported_paths.clear()
+        self._register_stdlib()
+
+    def undefine(self, name: str) -> bool:
+        """Remove a symbol from the global scope. Returns True if it existed."""
+        return self.symbols.global_scope.undefine(name) is not None
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
@@ -553,6 +566,9 @@ class SemanticAnalyzer(Visitor[None]):
                 node.span,
             )
 
+        # Record error count before body analysis to detect body-specific errors
+        errors_before_body = len(self.errors.errors)
+
         # Function body gets its own scope
         self._in_function += 1
         self.symbols.enter_scope(f"fn:{node.name}", "function")
@@ -566,6 +582,11 @@ class SemanticAnalyzer(Visitor[None]):
         finally:
             self.symbols.exit_scope()
             self._in_function -= 1
+
+        # If body analysis produced new errors, remove the symbol
+        # so the function can be redefined after fixing the error
+        if len(self.errors.errors) > errors_before_body:
+            self.symbols.undefine(node.name)
 
     def visit_fn_block(self, node: FnBlockNode) -> None:
         self._visit_stmts(node.body)

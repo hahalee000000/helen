@@ -105,6 +105,60 @@ def _execute_input(source: str, interp: Interpreter, analyzer: SemanticAnalyzer)
     return True, result
 
 
+def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnalyzer) -> bool:
+    """Handle REPL colon-commands. Returns True if the line was a command."""
+    stripped = line.strip()
+    if not stripped.startswith(":"):
+        return False
+
+    parts = stripped.split(maxsplit=1)
+    cmd = parts[0].lower()
+    arg = parts[1].strip() if len(parts) > 1 else ""
+
+    if cmd == ":help":
+        print("REPL commands:")
+        print("  :help             Show this help message")
+        print("  :reset            Clear all definitions (functions, agents)")
+        print("  :list             List all defined functions and agents")
+        print("  :undefine <name>  Remove a function or agent definition")
+        print("  exit              Exit the REPL")
+        return True
+
+    if cmd == ":reset":
+        analyzer.reset()
+        interp.reset_definitions()
+        print("All definitions cleared.")
+        return True
+
+    if cmd == ":list":
+        defs = interp.list_definitions()
+        if defs["functions"]:
+            print(f"Functions: {', '.join(defs['functions'])}")
+        else:
+            print("Functions: (none)")
+        if defs["agents"]:
+            print(f"Agents:    {', '.join(defs['agents'])}")
+        else:
+            print("Agents:    (none)")
+        return True
+
+    if cmd == ":undefine":
+        if not arg:
+            print("Usage: :undefine <name>")
+            return True
+        removed_fn = interp.undefine_function(arg)
+        removed_agent = interp.undefine_agent(arg)
+        removed_sym = analyzer.undefine(arg)
+        if removed_fn or removed_agent or removed_sym:
+            print(f"Removed '{arg}'.")
+        else:
+            print(f"'{arg}' not found.")
+        return True
+
+    print(f"Unknown command: {cmd}. Type :help for available commands.")
+    return True
+
+
 def repl_command() -> int:
     """Run the REPL interactive loop.
 
@@ -112,7 +166,7 @@ def repl_command() -> int:
         0 on normal exit.
     """
     print("Helen REPL v1.2")
-    print("Type 'exit' or Ctrl+D to quit")
+    print("Type 'exit' or Ctrl+D to quit, ':help' for commands")
     print()
 
     # Persistent interpreter state across REPL iterations
@@ -138,6 +192,10 @@ def repl_command() -> int:
 
             if line.strip() == "exit":
                 break
+
+            # Handle REPL commands (:help, :reset, :list, :undefine)
+            if not buffer_lines and _handle_repl_command(line, interp, analyzer):
+                continue
 
             buffer_lines.append(line)
 

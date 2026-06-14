@@ -113,6 +113,54 @@ helen> for i in [1, 2, 3] {
 
 按 `Ctrl+D` 或输入 `exit`。
 
+### REPL 命令
+
+REPL 支持以下管理命令（以 `:` 开头）：
+
+| 命令 | 说明 |
+|------|------|
+| `:help` | 显示可用命令 |
+| `:list` | 列出已定义的函数和 agent |
+| `:undefine <name>` | 删除指定的函数或 agent |
+| `:reset` | 清除所有定义（函数、agent），保留标准库 |
+
+```bash
+helen> fn add(a, b) { return a + b; }
+helen> :list
+Functions: add
+Agents:    (none)
+helen> add(1, 2)
+3
+helen> :undefine add
+Removed 'add'.
+helen> :list
+Functions: (none)
+Agents:    (none)
+```
+
+### 函数重定义
+
+如果函数定义时出现语义错误（如引用未定义变量），符号表会自动清理，允许修复后重新定义：
+
+```bash
+helen> fn greet(name) { return x; }
+Error: undeclared variable 'x'
+helen> fn greet(name) { return "Hello, " + name; }   // ✅ 可以直接重新定义
+helen> greet("Helen")
+"Hello, Helen"
+```
+
+如果函数已正确定义，再次定义会报重复错误，需先用 `:undefine` 删除：
+
+```bash
+helen> fn add(a, b) { return a + b; }
+helen> fn add(a, b) { return a + b + 1; }
+Error: duplicate declaration of 'add'
+helen> :undefine add
+Removed 'add'.
+helen> fn add(a, b) { return a + b + 1; }   // ✅ 现在可以重新定义
+```
+
 ## 生成文档
 
 ```bash

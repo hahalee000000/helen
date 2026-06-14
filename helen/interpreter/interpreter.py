@@ -118,6 +118,33 @@ class Interpreter(Visitor[object]):
             if builtin is not None:
                 self.environment.define(name, builtin.fn)
 
+    # ------------------------------------------------------------------
+    # REPL management helpers
+    # ------------------------------------------------------------------
+
+    def undefine_function(self, name: str) -> bool:
+        """Remove a function from the registry. Returns True if it existed."""
+        return self._functions.pop(name, None) is not None
+
+    def undefine_agent(self, name: str) -> bool:
+        """Remove an agent from the registry. Returns True if it existed."""
+        return self._agents.pop(name, None) is not None
+
+    def list_definitions(self) -> dict[str, list[str]]:
+        """Return names of all user-defined functions and agents."""
+        return {
+            "functions": sorted(self._functions.keys()),
+            "agents": sorted(self._agents.keys()),
+        }
+
+    def reset_definitions(self) -> None:
+        """Clear all user-defined functions and agents (keep stdlib)."""
+        self._functions.clear()
+        self._agents.clear()
+        self._current_agent = None
+        # Re-register stdlib builtins
+        self._register_stdlib()
+
     def interpret(self, program: ProgramNode) -> object:
         """Execute a Helen program.
 

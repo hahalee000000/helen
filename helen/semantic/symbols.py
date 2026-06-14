@@ -76,6 +76,13 @@ class Scope:
         """Resolve a name only in this scope (no upward search)."""
         return self.symbols.get(name)
 
+    def undefine(self, name: str) -> Symbol | None:
+        """Remove a symbol from this scope.
+
+        Returns the removed symbol, or None if not found.
+        """
+        return self.symbols.pop(name, None)
+
 
 @dataclass
 class SymbolTable:
@@ -137,6 +144,13 @@ class SymbolTable:
     def resolve_local(self, name: str) -> Symbol | None:
         """Resolve a name only in the current scope."""
         return self.current_scope.resolve_local(name)
+
+    def undefine(self, name: str) -> Symbol | None:
+        """Remove a symbol from the current scope.
+
+        Returns the removed symbol, or None if not found.
+        """
+        return self.current_scope.undefine(name)
 
     @property
     def depth(self) -> int:
