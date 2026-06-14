@@ -13,9 +13,17 @@ from helen.core.errors import ErrorReporter
 from helen.core.lexer import Scanner
 from helen.core.parser import Parser
 from helen.interpreter.interpreter import Interpreter
-from helen.runtime.hermes_cli_llm import HermesCLILLMRuntime
+from helen.runtime.http_llm import HttpLLMRuntime
 from helen.semantic.analyzer import SemanticAnalyzer
 from helen.cli.formatter import format_error
+
+
+def _create_llm_runtime():
+    """Create the best available LLM runtime.
+    
+    Uses HTTP-based runtime (fast, direct API calls) instead of CLI-based (slow).
+    """
+    return HttpLLMRuntime()
 
 
 def _needs_continuation(buffer: str) -> bool:
@@ -179,7 +187,7 @@ def repl_command() -> int:
 
     # Persistent interpreter state across REPL iterations
     errors = ErrorReporter()
-    llm_runtime = HermesCLILLMRuntime()
+    llm_runtime = _create_llm_runtime()
     interp = Interpreter(errors=errors, llm_runtime=llm_runtime)
     analyzer = SemanticAnalyzer(errors, base_dir=".")
 
