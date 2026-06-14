@@ -204,6 +204,10 @@ class MockVisitor(Visitor[str]):
         self.calls.append("visit_try_stmt")
         return "<try>"
 
+    def visit_throw_stmt(self, node) -> str:
+        self.calls.append("visit_throw_stmt")
+        return "<throw>"
+
     def visit_llm_branch(self, node) -> str:
         self.calls.append("visit_llm_branch")
         return "<llm_branch>"

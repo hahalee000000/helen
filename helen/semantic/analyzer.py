@@ -61,6 +61,7 @@ from helen.core.ast import (
     ReturnStmtNode,
     StatementNode,
     TemplateRefNode,
+    ThrowStmtNode,
     TryStmtNode,
     TypeNode,
     UnaryOpNode,
@@ -689,6 +690,24 @@ class SemanticAnalyzer(Visitor[None]):
         # Finally block
         if node.finally_block is not None:
             node.finally_block.accept(self)
+
+    def visit_throw_stmt(self, node: ThrowStmtNode) -> None:
+        """Validate throw statement: exception type must be predefined."""
+        # Validate exception type is a predefined exception
+        type_name = node.exception_type.name
+        if type_name not in _PREDEFINED_EXCEPTIONS:
+            # Try case-insensitive match
+            matched = any(t.lower() == type_name.lower() for t in _PREDEFINED_EXCEPTIONS)
+            if not matched:
+                self.errors.error(
+                    ErrorCode.INVALID_CATCH_TYPE,
+                    f"'{type_name}' is not a predefined exception type",
+                    node.exception_type.span,
+                )
+        
+        # Visit message expression if present
+        if node.message is not None:
+            node.message.accept(self)
 
     def visit_catch_clause(self, node: CatchClauseNode) -> None:
         # Validate error type is a predefined exception

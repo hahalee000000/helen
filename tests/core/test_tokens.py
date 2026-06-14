@@ -139,9 +139,9 @@ class TestKeywords:
         assert isinstance(kw, dict)
 
     def test_keyword_count(self) -> None:
-        """keywords() should cover all 42 reserved words."""
+        """keywords() should cover all 43 reserved words."""
         kw = keywords()
-        assert len(kw) == 42
+        assert len(kw) == 43
 
     def test_all_keywords_map_to_token_types(self) -> None:
         """Every keyword value should be a TokenType member."""

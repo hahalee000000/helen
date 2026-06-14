@@ -44,6 +44,7 @@ from .ast import (
     ReturnStmtNode,
     StatementNode,
     TemplateRefNode,
+    ThrowStmtNode,
     TryStmtNode,
     TypeNode,
     UnaryOpNode,
@@ -398,6 +399,8 @@ class Parser:
             return self._agent_decl()
         if self._match(TokenType.TRY):
             return self._try_stmt()
+        if self._match(TokenType.THROW):
+            return self._throw_stmt()
         if self._match(TokenType.MATCH):
             return self._match_stmt()
 
@@ -937,6 +940,21 @@ class Parser:
         return TryStmtNode(body=body, catch_clauses=catch_clauses,
                            catch_all=catch_all, finally_block=finally_block,
                            span=self._make_span(start, end))
+
+    def _throw_stmt(self) -> ThrowStmtNode:
+        """解析 throw 语句：throw ExceptionType 或 throw ExceptionType(message)。"""
+        start = self._previous()  # THROW token
+        exception_type = self._parse_type()
+        message: ExpressionNode | None = None
+        # Optional message in parentheses: throw RuntimeError("message")
+        if self._match(TokenType.LEFT_PAREN):
+            if not self._check(TokenType.RIGHT_PAREN):
+                message = self._expression()
+            self._consume(TokenType.RIGHT_PAREN, "Expected ')' after exception message.")
+        self._match(TokenType.SEMICOLON)  # Optional semicolon
+        end = self._previous()
+        return ThrowStmtNode(exception_type=exception_type, message=message,
+                            span=self._make_span(start, end))
 
     def _catch_clause(self) -> CatchClauseNode:
         """解析类型 catch：catch Type name { ... }。"""

@@ -655,16 +655,68 @@ match code {
 
 ## 异常处理
 
+### throw 抛出异常
+
+使用 `throw` 语句主动抛出预定义类型的异常：
+
+```helen
+// 带消息 - 用 try-catch 捕获
+try {
+    throw RuntimeError("something went wrong")
+} catch RuntimeError err {
+    print("Caught: " + err.message)
+}
+
+// 无消息（使用默认消息）
+try {
+    throw LLMError
+} catch LLMError err {
+    print("Caught LLM error")
+}
+```
+
+在函数中使用 throw 进行参数验证：
+
+```helen
+fn validate_age(age: int) {
+    if (age < 0) {
+        throw RuntimeError("age cannot be negative")
+    }
+    if (age > 150) {
+        throw RuntimeError("age seems unrealistic")
+    }
+    return age
+}
+
+try {
+    let result = validate_age(-5)
+} catch RuntimeError err {
+    print("Validation failed: " + err.message)
+}
+```
+
+**预定义异常类型**：
+
+| 类型 | 说明 |
+|------|------|
+| `RuntimeError` | 运行时错误 |
+| `LLMError` | LLM 相关错误（基类） |
+| `TimeoutError` | LLM 调用超时（继承 LLMError） |
+| `ModelError` | 模型不可用或配额耗尽（继承 LLMError） |
+| `ToolError` | 工具调用失败 |
+
+**异常继承**：`catch LLMError` 也会捕获 `TimeoutError` 和 `ModelError`。
+
 ### try / catch
 
 ```helen
 try {
-    let result = call RiskyAgent()
+    let result = validate_age(-5)
     print(result)
 } catch RuntimeError err {
-    print("Runtime error: " + str(err))
+    print("Runtime error: " + err.message)
 } catch TimeoutError err {
-    print("Timeout: " + str(err))
+    print("Timeout: " + err.message)
 }
 ```
 
@@ -688,7 +740,7 @@ try {
     open_file()
     process_data()
 } catch RuntimeError err {
-    print("Error: " + str(err))
+    print("Error: " + err.message)
 } finally {
     close_file()    // 始终执行
 }
@@ -700,7 +752,9 @@ try {
 // ✅ 具体类型在前，catch-all 在后
 try {
     ...
-} catch TypeError err {
+} catch TimeoutError err {
+    ...
+} catch LLMError err {
     ...
 } catch RuntimeError err {
     ...
@@ -713,9 +767,28 @@ try {
     ...
 } catch {
     ...
-} catch TypeError err {    // E0343
+} catch TimeoutError err {    // E0343
     ...
 }
+```
+
+### 完整示例：自定义验证
+
+```helen
+fn divide(a: int, b: int): int {
+    if (b == 0) {
+        throw RuntimeError("division by zero")
+    }
+    return a / b
+}
+
+try {
+    let result = divide(10, 0)
+    print("Result: " + str(result))
+} catch RuntimeError err {
+    print("Cannot divide: " + err.message)
+}
+// 输出: Cannot divide: division by zero
 ```
 
 ## 综合示例：FizzBuzz

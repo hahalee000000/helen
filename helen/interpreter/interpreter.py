@@ -52,6 +52,7 @@ from helen.core.ast import (
     ReturnStmtNode,
     StatementNode,
     TemplateRefNode,
+    ThrowStmtNode,
     TryStmtNode,
     TypeNode,
     UnaryOpNode,
@@ -73,6 +74,8 @@ from helen.interpreter.exceptions import (
     ReturnSentinel,
     RuntimeError,
     error_matches,
+    resolve_exception,
+    _PREDEFINED_EXCEPTIONS,
 )
 from helen.runtime.llm_runtime import LLMRuntime, MockLLMRuntime
 from helen.runtime.import_resolver import ImportResolver
@@ -684,6 +687,39 @@ class Interpreter(Visitor[object]):
 
     def visit_finally_block(self, node: FinallyBlockNode) -> object:
         return None
+
+    def visit_throw_stmt(self, node: ThrowStmtNode) -> object:
+        """Execute a throw statement: raise the specified exception."""
+        # Resolve exception type
+        type_name = node.exception_type.name
+        exc_class = resolve_exception(type_name)
+        if exc_class is None:
+            # Try case-insensitive match
+            for name, cls in _PREDEFINED_EXCEPTIONS.items():
+                if name.lower() == type_name.lower():
+                    exc_class = cls
+                    break
+        
+        if exc_class is None:
+            # Should not happen if semantic analysis passed, but handle gracefully
+            self._runtime_error(
+                node.span,
+                f"'{type_name}' is not a valid exception type"
+            )
+            return None
+        
+        # Evaluate message if present
+        message = None
+        if node.message is not None:
+            message = node.message.accept(self)
+            if not isinstance(message, str):
+                message = str(message)
+        else:
+            # Use default message from exception class
+            message = exc_class.__init__.__defaults__[0] if exc_class.__init__.__defaults__ else f"{type_name} thrown"
+        
+        # Raise the exception
+        raise exc_class(message, node.span)
 
     # ------------------------------------------------------------------
     # Import & LLM (stubs for Phase 3)

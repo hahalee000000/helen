@@ -151,6 +151,10 @@ class Visitor(ABC, Generic[R]):
         """Visit a TryStmtNode."""
 
     @abstractmethod
+    def visit_throw_stmt(self, node: ThrowStmtNode) -> R:
+        """Visit a ThrowStmtNode."""
+
+    @abstractmethod
     def visit_llm_branch(self, node: LlmBranchNode) -> R:
         """Visit a LlmBranchNode."""
 
@@ -706,6 +710,18 @@ class TryStmtNode(StatementNode):
 
 
 @dataclass(frozen=True)
+class ThrowStmtNode(StatementNode):
+    """Throw statement: throw ExceptionType or throw ExceptionType(message)."""
+    exception_type: TypeNode
+    message: ExpressionNode | None
+    span: SourceSpan
+
+    def accept(self, visitor: Visitor[R]) -> R:
+        """Dispatch to the visitor."""
+        return visitor.visit_throw_stmt(self)
+
+
+@dataclass(frozen=True)
 class LlmBranchNode(StatementNode):
     """LLM if branch."""
     condition: ExpressionNode | None
@@ -975,6 +991,13 @@ class ASTPrinter(Visitor[str]):
     def visit_try_stmt(self, node: TryStmtNode) -> str:
         """Visit a TryStmtNode."""
         return self._parenthesize("try", *node.body)
+
+    def visit_throw_stmt(self, node: ThrowStmtNode) -> str:
+        """Visit a ThrowStmtNode."""
+        parts: list[Any] = [node.exception_type]
+        if node.message:
+            parts.append(node.message)
+        return self._parenthesize("throw", *parts)
 
     def visit_llm_branch(self, node: LlmBranchNode) -> str:
         """Visit a LlmBranchNode."""
