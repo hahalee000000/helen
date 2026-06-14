@@ -165,18 +165,16 @@ def repl_command() -> int:
     Returns:
         0 on normal exit.
     """
-    # Ensure stdin uses UTF-8 with error replacement for robust CJK input
-    import io
-    if hasattr(sys.stdin, 'buffer'):
-        sys.stdin = io.TextIOWrapper(
-            sys.stdin.buffer,
-            encoding='utf-8',
-            errors='replace',
-            line_buffering=True,
-        )
+    # Enable readline for cursor movement and history
+    try:
+        import readline
+        readline.parse_and_bind("tab: complete")
+    except ImportError:
+        pass  # readline not available on all platforms
 
     print("Helen REPL v1.2")
     print("Type 'exit' or Ctrl+D to quit, ':help' for commands")
+    print("In multi-line mode (...), press Enter on empty line or Ctrl+C to cancel")
     print()
 
     # Persistent interpreter state across REPL iterations
@@ -204,12 +202,38 @@ def repl_command() -> int:
                 print(f"Input encoding error: {e}. Please try again.", file=sys.stderr)
                 buffer_lines.clear()
                 continue
+            except KeyboardInterrupt:
+                # Ctrl+C in multi-line mode: cancel current input
+                if buffer_lines:
+                    print("\n(multi-line input cancelled)")
+                    buffer_lines.clear()
+                    continue
+                # Ctrl+C at top level: exit REPL
+                print("\nInterrupted")
+                break
 
             if line.strip() == "exit":
                 break
 
             # Handle REPL commands (:help, :reset, :list, :undefine)
             if not buffer_lines and _handle_repl_command(line, interp, analyzer):
+                continue
+
+            # In multi-line mode, empty line means "execute what we have"
+            if buffer_lines and not line.strip():
+                buffer = "\n".join(buffer_lines)
+                # Force execution even if braces are unbalanced
+                if buffer.strip():
+                    try:
+                        success, result = _execute_input(buffer, interp, analyzer)
+                        if success:
+                            if result is not None:
+                                print(repr(result))
+                        else:
+                            print(f"Error: {result}", file=sys.stderr)
+                    except Exception as e:
+                        print(f"Internal Error: {e}", file=sys.stderr)
+                buffer_lines = []
                 continue
 
             buffer_lines.append(line)
