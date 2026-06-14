@@ -166,9 +166,9 @@ class HermesCLILLMRuntime(LLMRuntime):
         Returns:
             The response text, or None on failure.
         """
-        cmd = [self.hermes_path, "ask", "--json", prompt]
+        cmd = [self.hermes_path, "-z", prompt]
         if model:
-            cmd.extend(["--model", model])
+            cmd.extend(["-m", model])
 
         try:
             result = subprocess.run(
@@ -181,13 +181,8 @@ class HermesCLILLMRuntime(LLMRuntime):
                 self._last_error = result.stderr.strip()
                 return None
 
-            # Parse JSON response
-            try:
-                data = json.loads(result.stdout)
-                return data.get("response", data.get("text", result.stdout))
-            except json.JSONDecodeError:
-                # Fallback: return raw stdout
-                return result.stdout.strip()
+            # hermes -z outputs plain text response directly
+            return result.stdout.strip()
 
         except subprocess.TimeoutExpired:
             self._last_error = f"LLM call timed out after {self.timeout}s"

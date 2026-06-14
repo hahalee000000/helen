@@ -169,7 +169,7 @@ class TestHermesCLILLMRuntimeAsk:
         runtime = HermesCLILLMRuntime(hermes_path="hermes")
         mock_result = MagicMock()
         mock_result.returncode = 0
-        mock_result.stdout = json.dumps({"response": "Hello"})
+        mock_result.stdout = "Hello"
         mock_result.stderr = ""
 
         with patch("subprocess.run", return_value=mock_result) as mock_run:
@@ -179,8 +179,8 @@ class TestHermesCLILLMRuntimeAsk:
         mock_run.assert_called_once()
         cmd = mock_run.call_args[0][0]
         assert "hermes" in cmd[0]
-        assert "ask" in cmd
-        assert "--json" in cmd
+        assert "-z" in cmd
+        assert "Say hello" in cmd
 
     def test_ask_returns_none_on_cli_error(self) -> None:
         runtime = HermesCLILLMRuntime(hermes_path="hermes")
@@ -217,17 +217,17 @@ class TestHermesCLILLMRuntimeAsk:
         runtime = HermesCLILLMRuntime(hermes_path="hermes")
         mock_result = MagicMock()
         mock_result.returncode = 0
-        mock_result.stdout = json.dumps({"response": "OK"})
+        mock_result.stdout = "OK"
 
         with patch("subprocess.run", return_value=mock_result) as mock_run:
             runtime._ask("test", model="gpt-4")
 
         cmd = mock_run.call_args[0][0]
-        assert "--model" in cmd
+        assert "-m" in cmd
         assert "gpt-4" in cmd
 
-    def test_ask_fallback_to_raw_stdout(self) -> None:
-        """If stdout is not JSON, return raw text."""
+    def test_ask_returns_plain_text(self) -> None:
+        """hermes -z returns plain text, not JSON."""
         runtime = HermesCLILLMRuntime(hermes_path="hermes")
         mock_result = MagicMock()
         mock_result.returncode = 0
