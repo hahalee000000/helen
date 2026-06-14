@@ -153,6 +153,22 @@ class TestControlFlow:
         stmt = program.statements[0]
         assert isinstance(stmt, WhileStmtNode)
 
+    def test_while_statement_no_parens(self):
+        """while true { } — parentheses optional"""
+        source = 'while true { }'
+        program, errors = _parse_source(source)
+        assert not errors.has_errors
+        stmt = program.statements[0]
+        assert isinstance(stmt, WhileStmtNode)
+
+    def test_while_statement_complex_no_parens(self):
+        """while x < 10 { } — complex condition without parens"""
+        source = 'while x < 10 { }'
+        program, errors = _parse_source(source)
+        assert not errors.has_errors
+        stmt = program.statements[0]
+        assert isinstance(stmt, WhileStmtNode)
+
     def test_break_statement(self):
         """break"""
         program, _ = _parse_source('break')

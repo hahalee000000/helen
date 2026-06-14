@@ -493,11 +493,14 @@ class Parser:
                            span=self._make_span(start, end))
 
     def _while_stmt(self) -> WhileStmtNode:
-        """解析 while 语句：while (expr) { ... }。"""
+        """解析 while 语句：while (cond) { ... } 或 while cond { ... }。"""
         start = self._previous()
-        self._consume(TokenType.LEFT_PAREN, "Expected '(' after 'while'.")
-        condition = self._expression()
-        self._consume(TokenType.RIGHT_PAREN, "Expected ')' after while condition.")
+        # Parentheses are optional for while condition
+        if self._match(TokenType.LEFT_PAREN):
+            condition = self._expression()
+            self._consume(TokenType.RIGHT_PAREN, "Expected ')' after while condition.")
+        else:
+            condition = self._expression()
         self._consume(TokenType.LEFT_BRACE, "Expected '{' before while body.")
         body = self._block_body()
         end = self._previous()
