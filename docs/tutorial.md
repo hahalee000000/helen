@@ -1,7 +1,7 @@
 # Helen 语言完整教程
 
 > **Helen** — A Prompt-first Agent Programming Language
-> 版本: v1.2 | 状态: Phase 0-7 全部实现 | 测试: 886 passed
+> 版本: v1.2 | 状态: Phase 0-8 全部实现 | 测试: 904 passed
 
 ---
 
@@ -9,7 +9,7 @@
 
 | 章节 | 主题 |
 |------|------|
-| [01](#教程-01-入门指南) | 安装、Hello World、REPL、代码验证、文档生成 |
+| [01](#教程-01-入门指南) | 安装、配置、Hello World、REPL、代码验证、文档生成 |
 | [02](#教程-02-变量与类型) | let/const、数据类型、类型注解、运算、集合操作 |
 | [03](#教程-03-函数) | fn 声明、参数、返回值、递归、Agent 内部函数、作用域 |
 | [04](#教程-04-控制流) | if/for/while/match、break/continue、try-catch |
@@ -24,7 +24,7 @@
 
 # 教程 01: 入门指南
 
-> 安装 Helen、编写第一个程序、使用 REPL
+> 安装 Helen、配置环境、编写第一个程序、使用 REPL
 
 ## 安装
 
@@ -38,8 +38,74 @@ pip install -e .
 
 # 验证
 $ helen --help
-Usage: helen {run, check, repl, doc}
+Usage: helen {run, check, repl, doc, init}
 ```
+
+## 初始化配置
+
+Helen 使用独立的配置目录 `~/.helen/`，不依赖 Hermes 安装：
+
+```bash
+$ helen init
+Helen home: /home/user/.helen
+Skills directory: /home/user/.helen/skills
+Config created: /home/user/.helen/config.yaml
+
+Next steps:
+  1. Edit /home/user/.helen/config.yaml
+  2. Set your API key
+  3. Run a Helen program: helen <file.helen>
+```
+
+### 目录结构
+
+```
+~/.helen/
+├── config.yaml    # LLM API 配置
+└── skills/        # Helen 原生 skill 目录
+```
+
+### 配置文件
+
+编辑 `~/.helen/config.yaml`：
+
+```yaml
+# Helen configuration
+
+llm:
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  api_key: "your-api-key-here"
+  model: "qwen3.7-plus"
+  temperature: 0.7
+  timeout: 60
+```
+
+也支持 `.env` 格式 (`~/.helen/.env`)：
+
+```bash
+HELEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+HELEN_API_KEY=your-api-key-here
+HELEN_MODEL=qwen3.7-plus
+```
+
+### 配置加载优先级
+
+配置从多个源加载，后面的覆盖前面的：
+
+| 优先级 | 文件 | 说明 |
+|--------|------|------|
+| 1（最低） | `~/.hermes/.env` | Hermes 兼容回退 |
+| 2 | `~/.helen/.env` | Helen .env 格式 |
+| 3 | `~/.helen/config.yml` | Helen YAML |
+| 4（最高） | `~/.helen/config.yaml` | Helen YAML |
+
+### Skill 目录优先级
+
+| 优先级 | 目录 | 说明 |
+|--------|------|------|
+| 1（最高） | `~/.helen/skills/` | Helen 原生 skill |
+| 2 | `~/.hermes/skills/` | Hermes 回退 |
+| 3 | `~/.hermes/hermes-agent/skills/` | Hermes agent skill |
 
 ## Hello, World!
 

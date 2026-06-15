@@ -10,6 +10,8 @@ Helen is an AI-native DSL for building Agent workflows. It combines deterministi
 git clone https://github.com/hahalee000000/helen.git
 cd helen
 pip install -e .
+helen init          # Initialize ~/.helen/ config directory
+# Edit ~/.helen/config.yaml to set your API key
 ```
 
 ### Hello, World!
@@ -29,21 +31,40 @@ Hello, World!
 
 | Command | Description |
 |---------|-------------|
+| `helen init` | Initialize `~/.helen/` config directory |
 | `helen run <file>` | Execute a Helen program |
 | `helen check <file>` | Validate syntax and semantics without executing |
 | `helen repl` | Start the interactive REPL |
 | `helen doc <file>` | Generate documentation |
 
+## Configuration
+
+Helen uses its own config directory `~/.helen/` (independent of Hermes):
+
+```yaml
+# ~/.helen/config.yaml
+llm:
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  api_key: "your-api-key-here"
+  model: "qwen3.7-plus"
+  temperature: 0.7
+  timeout: 60
+```
+
+Also supports `.env` format and falls back to `~/.hermes/.env` for backward compatibility.
+
 ## Language Features
 
 - **Agent as first-class citizen** — `agent` declarations with description, prompt, model config
 - **LLM primitives** — `llm act`, `llm if` (routing with branches), `llm choose` (selection)
+- **Built-in tools** — 6 tools (web_search, web_fetch, read_file, write_file, shell_exec, calculate) via function calling
 - **Async/await** — `async call` for concurrent Agent execution, `await [list]` for Promise.all semantics
 - **Type system** — Optional types (`str?`), union types (`int | str`), gradual type checking
 - **Import system** — Multi-format imports (`.helen`, `.json`, `.md`), path safety, circular import detection
 - **Exception handling** — `try/catch/catch-all/finally` with typed exception matching
 - **Standard library** — 24+ built-in functions (core, string, math)
 - **Toolchain** — LSP server, VS Code extension, formatter, doc generator
+- **Independent config** — `~/.helen/` directory with YAML/.env support, backward-compatible with Hermes
 
 ## Project Structure
 
@@ -53,11 +74,11 @@ helen/
 │   ├── core/          # Lexer, Parser, AST, SourceSpan, Errors
 │   ├── semantic/      # SemanticAnalyzer, SymbolTable, TypeSystem
 │   ├── interpreter/   # AST Interpreter, Environment, Sentinels
-│   ├── runtime/       # Runtime API, Memory, ImportResolver, LLM, History
+│   ├── runtime/       # Runtime API, Config, Memory, ImportResolver, LLM, Tools, History
 │   ├── stdlib/        # Built-in functions
 │   ├── cli/           # CLI entry point, REPL, Formatter, DocGen
 │   └── lsp/           # Language Server Protocol
-├── tests/             # 886 unit + integration tests
+├── tests/             # 904 unit + integration tests
 ├── docs/              # Documentation & tutorials
 └── extensions/        # VS Code extension
 ```
@@ -98,10 +119,10 @@ helen/
 | 5 | CLI/REPL | ✅ Complete |
 | 6 | Stdlib | ✅ Complete (24+ builtins) |
 | 7 | LSP/VS Code | ⚠️ Partial (syntax highlight + diagnostics) |
-| - | Real LLM API | ❌ Missing (Mock only) |
+| 8 | Independent Runtime | ✅ Complete (config, tools, function calling) |
 | - | Memory (HLD v1.2.1) | ⚠️ Partial (interface mismatch) |
 
-**Tests:** 886 passed | **Coverage:** 86%
+**Tests:** 904 passed | **flake8:** 0 errors
 
 ## License
 
