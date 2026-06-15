@@ -283,26 +283,8 @@ def _patch_file(path: str, old_string: str, new_string: str, replace_all: bool =
         if content.startswith('\ufeff'):
             content = content[1:]
 
-        # Try to import Hermes fuzzy matching
-        try:
-            import sys
-            hermes_tools_path = Path.home() / ".hermes" / "hermes-agent" / "tools"
-            if str(hermes_tools_path) not in sys.path:
-                sys.path.insert(0, str(hermes_tools_path))
-            from fuzzy_match import fuzzy_find_and_replace, format_no_match_hint
-        except ImportError:
-            # Fallback to simple string replacement if Hermes not available
-            if old_string not in content:
-                return json.dumps({"error": "old_string not found in file (fuzzy matching unavailable)"})
-            count = content.count(old_string)
-            if count > 1 and not replace_all:
-                return json.dumps({"error": f"old_string found {count} times, must be unique or use replace_all=true"})
-            if replace_all:
-                new_content = content.replace(old_string, new_string)
-            else:
-                new_content = content.replace(old_string, new_string, 1)
-            file_path.write_text(new_content, encoding="utf-8")
-            return json.dumps({"path": path, "status": "patched (simple)", "matches": count})
+        # Use Helen's built-in fuzzy matching (copied from Hermes)
+        from helen.runtime.fuzzy_match import fuzzy_find_and_replace, format_no_match_hint
 
         # Use Hermes fuzzy matching
         new_content, match_count, strategy, error = fuzzy_find_and_replace(
