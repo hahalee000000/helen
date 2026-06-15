@@ -923,8 +923,12 @@ class Interpreter(Visitor[object]):
         temperature = float(self._get_agent_setting("temperature", 1.0))
         max_turns = int(self._get_agent_setting("max-turns", 1))
 
-        # Build tools list: always include load_skill (HLD 3.6.5)
-        tools = [self._load_skill_tool_schema()]
+        # Build tools list: always include load_skill + agent-declared tools
+        tools = self._build_tools_list()
+
+        # When tools are available, ensure at least 3 turns (tool call + tool result + response)
+        if tools and max_turns < 3:
+            max_turns = 3
 
         # Get rendered agent prompt as system_prompt
         system_prompt = self._get_rendered_agent_prompt()
@@ -962,8 +966,12 @@ class Interpreter(Visitor[object]):
         temperature = float(self._get_agent_setting("temperature", 1.0))
         max_turns = int(self._get_agent_setting("max-turns", 1))
 
-        # Build tools list
-        tools = [self._load_skill_tool_schema()]
+        # Build tools list: always include load_skill + agent-declared tools
+        tools = self._build_tools_list()
+
+        # When tools are available, ensure at least 3 turns (tool call + tool result + response)
+        if tools and max_turns < 3:
+            max_turns = 3
 
         # Get rendered agent prompt as system_prompt
         system_prompt = self._get_rendered_agent_prompt()
@@ -1257,6 +1265,40 @@ class Interpreter(Visitor[object]):
                 if value is not None and isinstance(value, LiteralNode):
                     return value.value
         return default
+
+    def _build_tools_list(self) -> list[dict[str, Any]]:
+        """Build the tools list for llm act from agent declarations.
+
+        Always includes load_skill (HLD 3.6.5).
+        If the agent declares `tools ["web_search", ...]`, includes those
+        built-in tool schemas from the Helen tool registry.
+        If no tools are declared, includes a default set of useful tools.
+        """
+        from helen.runtime.tools import get_tool_schemas
+
+        tools: list[dict[str, Any]] = [self._load_skill_tool_schema()]
+
+        # Check if agent declared specific tools
+        declared_tools: list[str] | None = None
+        if self._current_agent is not None:
+            for decl in self._current_agent.declarations:
+                if decl.tools is not None:
+                    # decl.tools is a LiteralNode wrapping a list[str]
+                    tools_node = decl.tools
+                    if isinstance(tools_node, LiteralNode) and isinstance(tools_node.value, list):
+                        declared_tools = tools_node.value
+                    break
+
+        if declared_tools is not None:
+            # Agent explicitly declared tools — use only those
+            tools.extend(get_tool_schemas(declared_tools))
+        else:
+            # No explicit tools declaration — include default useful tools
+            default_tools = ["web_search", "web_fetch", "read_file",
+                             "write_file", "calculate"]
+            tools.extend(get_tool_schemas(default_tools))
+
+        return tools
 
     def _render_prompt_template(self, template: str) -> str:
         """Render a prompt template by replacing {{var}} with environment values.

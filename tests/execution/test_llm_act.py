@@ -115,7 +115,7 @@ class TestLlmActExecution:
         assert tools[0]["function"]["parameters"]["required"] == ["name"]
 
     def test_act_passes_default_settings(self):
-        """act() uses default temperature=1.0, max_turns=1 when no agent context."""
+        """act() uses default temperature=1.0, max_turns=2 when tools are present."""
         runtime = MockLLMRuntime(act_return="ok")
         stmt = LlmActStmtNode(
             target="test",
@@ -126,7 +126,7 @@ class TestLlmActExecution:
         _run(stmt, llm_runtime=runtime)
         history = runtime.act_history[0]
         assert history["temperature"] == 1.0
-        assert history["max_turns"] == 1
+        assert history["max_turns"] == 3  # Bumped from 1 to 3 when tools are present
         assert history["model"] is None  # No agent context
 
     def test_get_agent_setting_defaults_without_agent(self):

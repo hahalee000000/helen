@@ -206,12 +206,20 @@ class HelenHermesRuntime(Runtime):
     def load_tool(self, name: str) -> Any:
         """Load a tool implementation by name.
 
-        In v1, returns a ToolSchema stub. Real tool loading
-        requires the Hermes tool registry integration.
+        Delegates to the Helen built tool registry. Returns a ToolSchema
+        with the tool's name, description, and parameter schema.
         """
+        from helen.runtime.tools import get_tool
+        tool = get_tool(name)
+        if tool is not None:
+            return ToolSchema(
+                name=tool.name,
+                description=tool.description,
+                parameters=tool.parameters,
+            )
         return ToolSchema(
             name=name,
-            description=f"Tool '{name}' — loading requires Hermes integration",
+            description=f"Tool '{name}' not found in Helen built-in registry",
             parameters={"type": "object", "properties": {}},
         )
 

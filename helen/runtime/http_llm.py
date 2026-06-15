@@ -3,10 +3,15 @@
 Connects to OpenAI-compatible endpoints (e.g., DashScope, OpenAI, etc.) for fast
 LLM calls without spawning subprocess each time.
 
+Supports function calling: when tools are provided, the runtime enters a
+loop where the LLM can request tool calls, which are executed and their
+results fed back to the LLM until it produces a final text response.
+
 Usage:
     from helen.runtime.http_llm import HttpLLMRuntime
     runtime = HttpLLMRuntime()  # Auto-loads from ~/.hermes/.env
     response = runtime.act("Translate: hello")
+    response = runtime.act("Search for Python docs", tools=[...])
 """
 
 from __future__ import annotations
@@ -138,12 +143,63 @@ class HttpLLMRuntime(LLMRuntime):
         history: list[dict[str, Any]] | None = None,
         system_prompt: str | None = None,
     ) -> LLMResponse:
-        """Execute an autonomous LLM action."""
-        response = self._chat(prompt, model=model, temperature=temperature,
-                              system_prompt=system_prompt)
+        """Execute an autonomous LLM action with optional function calling.
+
+        When tools are provided, enters a loop: LLM may request tool calls,
+        which are executed and fed back until the LLM produces a final text
+        response or max_turns is reached.
+        """
+        from helen.runtime.tools import dispatch_tool
+
+        messages: list[dict[str, Any]] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
+        use_model = model or self.default_model or "default"
+        final_text = ""
+
+        for turn in range(max_turns + 1):  # +1 for final nudge response
+            response_msg = self._chat_with_messages(
+                messages, model=use_model, temperature=temperature, tools=tools,
+            )
+            if response_msg is None:
+                break
+
+            # Check if LLM wants tool calls
+            tool_calls = response_msg.get("tool_calls")
+            if tool_calls and turn < max_turns:
+                # Append assistant message with tool_calls
+                messages.append(response_msg)
+                # Execute each tool call and append results
+                for tc in tool_calls:
+                    fn_name = tc["function"]["name"]
+                    try:
+                        fn_args = json.loads(tc["function"].get("arguments", "{}"))
+                    except json.JSONDecodeError:
+                        fn_args = {}
+                    result = dispatch_tool(fn_name, fn_args)
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc["id"],
+                        "content": result,
+                    })
+                # If this is the last tool turn, nudge LLM to produce final answer
+                if turn >= max_turns - 1:
+                    messages.append({
+                        "role": "user",
+                        "content": "Based on the tool results above, please provide your final answer now. Do not make more tool calls.",
+                    })
+                # Continue loop — LLM will see tool results
+                continue
+            else:
+                # No tool calls (or exhausted turns) — this is the final text response
+                final_text = response_msg.get("content", "")
+                break
+
         return LLMResponse(
-            text=response or "",
-            model=model or self.default_model or "http-api",
+            text=final_text,
+            model=use_model,
         )
 
     def _chat(
@@ -153,7 +209,7 @@ class HttpLLMRuntime(LLMRuntime):
         temperature: float = 1.0,
         system_prompt: str | None = None,
     ) -> str | None:
-        """Send a chat completion request to the API.
+        """Send a chat completion request to the API (simple, no tools).
 
         Args:
             prompt: The prompt text.
@@ -164,21 +220,47 @@ class HttpLLMRuntime(LLMRuntime):
         Returns:
             The response text, or None on failure.
         """
-        url = f"{self.base_url}/chat/completions"
-        
         messages: list[dict[str, str]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
-        payload = {
+        response_msg = self._chat_with_messages(messages, model=model, temperature=temperature)
+        if response_msg is None:
+            return None
+        return response_msg.get("content", "")
+
+    def _chat_with_messages(
+        self,
+        messages: list[dict[str, Any]],
+        model: str | None = None,
+        temperature: float = 1.0,
+        tools: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any] | None:
+        """Send a chat completion request and return the full message dict.
+
+        Args:
+            messages: List of message dicts (system/user/assistant/tool).
+            model: Optional model override.
+            temperature: Sampling temperature.
+            tools: Optional list of tool schemas for function calling.
+
+        Returns:
+            The assistant message dict (may contain 'content' and/or 'tool_calls'),
+            or None on failure.
+        """
+        url = f"{self.base_url}/chat/completions"
+
+        payload: dict[str, Any] = {
             "model": model or self.default_model or "default",
             "messages": messages,
             "temperature": temperature,
         }
+        if tools:
+            payload["tools"] = tools
 
         data = json.dumps(payload).encode("utf-8")
-        
+
         req = urllib.request.Request(
             url,
             data=data,
@@ -192,12 +274,10 @@ class HttpLLMRuntime(LLMRuntime):
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as response:
                 result = json.loads(response.read().decode("utf-8"))
-                # OpenAI format: {"choices": [{"message": {"content": "..."}}]}
                 choices = result.get("choices", [])
                 if choices:
-                    message = choices[0].get("message", {})
-                    return message.get("content", "")
-                return ""
+                    return choices[0].get("message", {})
+                return {"content": ""}
 
         except urllib.error.HTTPError as e:
             self._last_error = f"HTTP error {e.code}: {e.reason}"
