@@ -132,6 +132,7 @@ class HermesCLILLMRuntime(LLMRuntime):
         temperature: float = 1.0,
         max_turns: int = 1,
         history: list[dict[str, Any]] | None = None,
+        system_prompt: str | None = None,
     ) -> LLMResponse:
         """Execute an autonomous LLM action.
 
@@ -144,11 +145,16 @@ class HermesCLILLMRuntime(LLMRuntime):
             temperature: Sampling temperature.
             max_turns: Maximum interaction turns.
             history: Conversation history (not yet supported via CLI).
+            system_prompt: System prompt (prepended to prompt if provided).
 
         Returns:
             An LLMResponse with the text content.
         """
-        response = self._ask(prompt, model=model)
+        # Hermes CLI doesn't support separate system prompt, so prepend it
+        full_prompt = prompt
+        if system_prompt:
+            full_prompt = f"{system_prompt}\n\n{prompt}"
+        response = self._ask(full_prompt, model=model)
         return LLMResponse(
             text=response or "",
             model=model or self.default_model or "hermes-cli",

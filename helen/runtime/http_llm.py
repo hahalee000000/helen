@@ -136,9 +136,11 @@ class HttpLLMRuntime(LLMRuntime):
         temperature: float = 1.0,
         max_turns: int = 1,
         history: list[dict[str, Any]] | None = None,
+        system_prompt: str | None = None,
     ) -> LLMResponse:
         """Execute an autonomous LLM action."""
-        response = self._chat(prompt, model=model, temperature=temperature)
+        response = self._chat(prompt, model=model, temperature=temperature,
+                              system_prompt=system_prompt)
         return LLMResponse(
             text=response or "",
             model=model or self.default_model or "http-api",
@@ -149,6 +151,7 @@ class HttpLLMRuntime(LLMRuntime):
         prompt: str,
         model: str | None = None,
         temperature: float = 1.0,
+        system_prompt: str | None = None,
     ) -> str | None:
         """Send a chat completion request to the API.
 
@@ -156,15 +159,21 @@ class HttpLLMRuntime(LLMRuntime):
             prompt: The prompt text.
             model: Optional model override.
             temperature: Sampling temperature.
+            system_prompt: Optional system prompt (injected as first message).
 
         Returns:
             The response text, or None on failure.
         """
         url = f"{self.base_url}/chat/completions"
         
+        messages: list[dict[str, str]] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
         payload = {
             "model": model or self.default_model or "default",
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": messages,
             "temperature": temperature,
         }
 

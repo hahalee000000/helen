@@ -76,7 +76,8 @@ class LLMRuntime(ABC):
     @abstractmethod
     def act(self, prompt: str, tools: list[dict[str, Any]] | None = None,
             model: str | None = None, temperature: float = 1.0,
-            max_turns: int = 1, history: list[dict[str, Any]] | None = None) -> LLMResponse:
+            max_turns: int = 1, history: list[dict[str, Any]] | None = None,
+            system_prompt: str | None = None) -> LLMResponse:
         """LLM autonomous action.
 
         Args:
@@ -86,6 +87,7 @@ class LLMRuntime(ABC):
             temperature: Sampling temperature.
             max_turns: Maximum interaction turns.
             history: Optional conversation history.
+            system_prompt: Optional system prompt (e.g. from agent's prompt field).
 
         Returns:
             An LLMResponse with text and/or tool calls.
@@ -148,7 +150,8 @@ class MockLLMRuntime(LLMRuntime):
 
     def act(self, prompt: str, tools: list[dict[str, Any]] | None = None,
             model: str | None = None, temperature: float = 1.0,
-            max_turns: int = 1, history: list[dict[str, Any]] | None = None) -> LLMResponse:
+            max_turns: int = 1, history: list[dict[str, Any]] | None = None,
+            system_prompt: str | None = None) -> LLMResponse:
         """Return the preset act_return value."""
         self.act_history.append({
             "prompt": prompt,
@@ -157,6 +160,7 @@ class MockLLMRuntime(LLMRuntime):
             "temperature": temperature,
             "max_turns": max_turns,
             "history": history,
+            "system_prompt": system_prompt,
         })
         if self.act_fail is not None:
             raise self.act_fail

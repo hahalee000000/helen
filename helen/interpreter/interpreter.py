@@ -902,8 +902,9 @@ class Interpreter(Visitor[object]):
         1. Build full prompt from target + arguments + description
         2. Extract agent settings (model, temperature, max-turns)
         3. Build tools list (always includes load_skill per HLD 3.6.5)
-        4. Call runtime.act() with full parameters
-        5. Return the LLM response text
+        4. Get rendered agent prompt as system_prompt
+        5. Call runtime.act() with full parameters
+        6. Return the LLM response text
         """
         # Build arguments dict
         args_dict = {}
@@ -925,6 +926,9 @@ class Interpreter(Visitor[object]):
         # Build tools list: always include load_skill (HLD 3.6.5)
         tools = [self._load_skill_tool_schema()]
 
+        # Get rendered agent prompt as system_prompt
+        system_prompt = self._get_rendered_agent_prompt()
+
         # Record user message to history
         self._add_to_history("user", prompt)
 
@@ -932,6 +936,7 @@ class Interpreter(Visitor[object]):
             response = self.llm_runtime.act(
                 prompt, tools=tools, model=model,
                 temperature=temperature, max_turns=max_turns,
+                system_prompt=system_prompt,
             )
             # Record assistant response to history
             if response and response.text:
@@ -945,6 +950,7 @@ class Interpreter(Visitor[object]):
 
         Evaluates the prompt expression and calls the LLM runtime.
         Returns the LLM response text.
+        If inside an agent with a prompt field, uses it as system_prompt.
         """
         # Evaluate the prompt expression
         prompt = node.prompt.accept(self)
@@ -959,6 +965,9 @@ class Interpreter(Visitor[object]):
         # Build tools list
         tools = [self._load_skill_tool_schema()]
 
+        # Get rendered agent prompt as system_prompt
+        system_prompt = self._get_rendered_agent_prompt()
+
         # Record user message to history
         self._add_to_history("user", prompt)
 
@@ -966,6 +975,7 @@ class Interpreter(Visitor[object]):
             response = self.llm_runtime.act(
                 prompt, tools=tools, model=model,
                 temperature=temperature, max_turns=max_turns,
+                system_prompt=system_prompt,
             )
             # Record assistant response to history
             if response and response.text:
@@ -1247,6 +1257,43 @@ class Interpreter(Visitor[object]):
                 if value is not None and isinstance(value, LiteralNode):
                     return value.value
         return default
+
+    def _render_prompt_template(self, template: str) -> str:
+        """Render a prompt template by replacing {{var}} with environment values.
+
+        Supports nested attribute access like {{settings.model}}.
+        Single-pass rendering: rendered results are not re-rendered.
+        """
+        import re
+        def replace_var(match):
+            var_path = match.group(1).strip()
+            parts = var_path.split(".")
+            try:
+                value = self.environment.lookup(parts[0]) if parts else None
+            except NameError:
+                return match.group(0)  # Keep original if not found
+            for part in parts[1:]:
+                if isinstance(value, dict):
+                    value = value.get(part)
+                else:
+                    value = None
+                    break
+            if value is None:
+                return match.group(0)  # Keep original if not found
+            return str(value)
+        return re.sub(r"\{\{(.+?)\}\}", replace_var, template)
+
+    def _get_rendered_agent_prompt(self) -> str | None:
+        """Get the current agent's prompt field, rendered with environment variables.
+
+        Returns None if no agent context or no prompt field defined.
+        """
+        if self._current_agent is None:
+            return None
+        prompt_def = self._current_agent.prompt
+        if prompt_def is None:
+            return None
+        return self._render_prompt_template(prompt_def.content)
 
     @staticmethod
     def _load_skill_tool_schema() -> dict[str, Any]:

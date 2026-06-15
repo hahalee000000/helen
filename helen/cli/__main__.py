@@ -15,6 +15,7 @@ from typing import Sequence
 from helen.cli.repl import repl_command
 from helen.cli.formatter import format_error, format_warning
 from helen.cli.docgen import generate_cli as docgen_cli
+from helen.runtime.http_llm import HttpLLMRuntime
 
 
 def run_command(file: str) -> int:
@@ -37,7 +38,6 @@ def run_command(file: str) -> int:
     from helen.core.parser import Parser  # noqa: PLC0415
     from helen.semantic.analyzer import SemanticAnalyzer  # noqa: PLC0415
     from helen.interpreter.interpreter import Interpreter  # noqa: PLC0415
-    from helen.runtime.llm_runtime import MockLLMRuntime  # noqa: PLC0415
 
     errors = ErrorReporter()
 
@@ -67,7 +67,7 @@ def run_command(file: str) -> int:
         return 2
 
     # Interpret
-    llm_runtime = MockLLMRuntime()
+    llm_runtime = HttpLLMRuntime()
     interp = Interpreter(errors=errors, llm_runtime=llm_runtime)
     try:
         interp.interpret(program)
