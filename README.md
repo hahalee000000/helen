@@ -57,7 +57,8 @@ Also supports `.env` format and falls back to `~/.hermes/.env` for backward comp
 
 - **Agent as first-class citizen** — `agent` declarations with description, prompt, model config
 - **LLM primitives** — `llm act`, `llm if` (routing with branches), `llm choose` (selection)
-- **Built-in tools** — 6 tools (web_search, web_fetch, read_file, write_file, shell_exec, calculate) via function calling
+- **Built-in tools** — 7 tools (web_search, web_fetch, read_file, write_file, patch_file, shell_exec, calculate) via function calling
+- **Fuzzy matching** — 9 strategies for reliable file patching (from Hermes, independent)
 - **Async/await** — `async call` for concurrent Agent execution, `await [list]` for Promise.all semantics
 - **Type system** — Optional types (`str?`), union types (`int | str`), gradual type checking
 - **Import system** — Multi-format imports (`.helen`, `.json`, `.md`), path safety, circular import detection

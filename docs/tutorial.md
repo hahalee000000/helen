@@ -1343,9 +1343,30 @@ agent Researcher(topic) {
 | `web_search` | Wikipedia 搜索 |
 | `web_fetch` | 获取网页内容 |
 | `read_file` | 读取文件 |
-| `write_file` | 写入文件 |
+| `write_file` | 写入文件（覆盖） |
+| `patch_file` | 精确修改文件（9 种模糊匹配策略） |
 | `shell_exec` | 执行 shell 命令 |
 | `calculate` | 数学计算 |
+
+### patch_file 模糊匹配
+
+`patch_file` 使用 `old_string` → `new_string` 模式精确修改文件，内置 9 种匹配策略处理 LLM 生成代码的常见差异：
+
+```helen
+// 修改文件中的特定函数
+llm act "Read /tmp/main.py and change the function name from 'foo' to 'bar'"
+```
+
+匹配策略（按优先级）：
+1. **Exact** — 精确字符串匹配
+2. **Line-trimmed** — 行首尾空格差异
+3. **Whitespace-normalized** — 多个空格/tab 归一化
+4. **Indentation-flexible** — 缩进完全忽略
+5. **Escape-normalized** — `\n` `\t` 转义差异
+6. **Trimmed-boundary** — 首尾行空白修剪
+7. **Unicode-normalized** — 智能引号、破折号等
+8. **Block-anchor** — SequenceMatcher 相似度 (50%/70%)
+9. **Context-aware** — 逐行相似度 (80% 阈值，50% 行匹配)
 
 ## Agent prompt 与 system_prompt
 
