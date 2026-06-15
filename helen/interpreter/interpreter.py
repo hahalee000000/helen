@@ -1269,14 +1269,14 @@ class Interpreter(Visitor[object]):
     def _build_tools_list(self) -> list[dict[str, Any]]:
         """Build the tools list for llm act from agent declarations.
 
-        Always includes load_skill (HLD 3.6.5).
+        Always includes load_skill (HLD 3.6.5) for Tier 2 skill disclosure.
         If the agent declares `tools ["web_search", ...]`, includes those
         built-in tool schemas from the Helen tool registry.
         If no tools are declared, includes a default set of useful tools.
         """
         from helen.runtime.tools import get_tool_schemas
 
-        tools: list[dict[str, Any]] = [self._load_skill_tool_schema()]
+        tools: list[dict[str, Any]] = []
 
         # Check if agent declared specific tools
         declared_tools: list[str] | None = None
@@ -1290,13 +1290,19 @@ class Interpreter(Visitor[object]):
                     break
 
         if declared_tools is not None:
-            # Agent explicitly declared tools — use only those
+            # Agent explicitly declared tools — use those
             tools.extend(get_tool_schemas(declared_tools))
         else:
             # No explicit tools declaration — include default useful tools
             default_tools = ["web_search", "web_fetch", "read_file",
                              "write_file", "calculate"]
             tools.extend(get_tool_schemas(default_tools))
+
+        # Always include load_skill for Tier 2 skill disclosure (HLD 3.6.5)
+        # Check if it's already included
+        tool_names = [t["function"]["name"] for t in tools]
+        if "load_skill" not in tool_names:
+            tools.extend(get_tool_schemas(["load_skill"]))
 
         return tools
 

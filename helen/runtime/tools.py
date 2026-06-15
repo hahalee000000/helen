@@ -9,6 +9,7 @@ Tools are registered at module level and discovered by name.
 from __future__ import annotations
 
 import json
+import os
 import urllib.request
 import urllib.error
 import urllib.parse
@@ -327,6 +328,47 @@ def _patch_file(path: str, old_string: str, new_string: str, replace_all: bool =
         return json.dumps({"error": f"Patch failed: {e}"})
 
 
+def _load_skill(name: str) -> str:
+    """Load a skill's full SKILL.md content by name.
+
+    Searches skill directories in priority order:
+    1. ~/.helen/skills/ (Helen native)
+    2. ~/.hermes/skills/ (Hermes fallback)
+    3. ~/.hermes/hermes-agent/skills/ (Hermes agent skills)
+
+    This is the Tier 2 of the two-phase skill disclosure:
+    - Tier 1: Skill Index (lightweight) injected in System Prompt
+    - Tier 2: Full SKILL.md loaded on-demand via this tool
+    """
+    from pathlib import Path
+    from helen.runtime.config import get_skill_dirs
+
+    try:
+        # Search all skill directories
+        for base in get_skill_dirs():
+            base_str = str(base)
+            if not Path(base_str).exists():
+                continue
+
+            # Walk the skill directory tree
+            for root, dirs, files in os.walk(base_str):
+                # Match by directory name
+                if os.path.basename(root) == name and "SKILL.md" in files:
+                    skill_path = os.path.join(root, "SKILL.md")
+                    with open(skill_path, encoding="utf-8") as f:
+                        content = f.read()
+                    return json.dumps({
+                        "name": name,
+                        "path": skill_path,
+                        "content": content,
+                    })
+
+        return json.dumps({"error": f"Skill '{name}' not found in any skill directory"})
+
+    except Exception as e:
+        return json.dumps({"error": f"Load skill failed: {e}"})
+
+
 # ── Register all built-in tools ────────────────────────────────
 
 
@@ -427,6 +469,19 @@ def _register_builtin_tools() -> None:
             "required": ["path", "old_string", "new_string"],
         },
         handler=_patch_file,
+    )
+
+    register_tool(
+        name="load_skill",
+        description="Load a skill's full SKILL.md content by name. Use this to get detailed instructions for a skill listed in <available_skills>.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Skill name to load (from <available_skills> list)"},
+            },
+            "required": ["name"],
+        },
+        handler=_load_skill,
     )
 
 

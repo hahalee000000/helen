@@ -111,8 +111,10 @@ class TestLlmActExecution:
         _run(stmt, llm_runtime=runtime)
         tools = runtime.act_history[0]["tools"]
         assert len(tools) >= 1
-        assert tools[0]["function"]["name"] == "load_skill"
-        assert tools[0]["function"]["parameters"]["required"] == ["name"]
+        # Find load_skill in tools list (it may not be first)
+        load_skill_tool = next((t for t in tools if t["function"]["name"] == "load_skill"), None)
+        assert load_skill_tool is not None, "load_skill tool not found in tools list"
+        assert load_skill_tool["function"]["parameters"]["required"] == ["name"]
 
     def test_act_passes_default_settings(self):
         """act() uses default temperature=1.0, max_turns=2 when tools are present."""
