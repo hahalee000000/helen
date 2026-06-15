@@ -277,18 +277,22 @@ class HelenHermesRuntime(Runtime):
     @staticmethod
     def _find_skill_directories() -> list[str]:
         """Find all directories that contain SKILL.md files.
-
+        
+        Uses Helen config module to get skill directories in priority order:
+        1. ~/.helen/skills/ (Helen native)
+        2. ~/.hermes/skills/ (Hermes fallback)
+        3. ~/.hermes/hermes-agent/skills/ (Hermes agent skills)
+        
         Skills can be nested (e.g. mlops/inference/serving-llms-vllm/SKILL.md),
         so we recursively walk the skill base directories.
         """
+        from helen.runtime.config import get_skill_dirs
+        
         candidates: list[str] = []
-        # Standard Hermes skill directories
-        for base in [
-            os.path.expanduser("~/.hermes/skills"),
-            os.path.expanduser("~/.hermes/hermes-agent/skills"),
-        ]:
-            if os.path.exists(base):
-                for root, dirs, files in os.walk(base):
+        for base in get_skill_dirs():
+            base_str = str(base)
+            if os.path.exists(base_str):
+                for root, dirs, files in os.walk(base_str):
                     if "SKILL.md" in files:
                         candidates.append(root)
         return candidates

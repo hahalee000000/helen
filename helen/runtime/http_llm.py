@@ -9,7 +9,7 @@ results fed back to the LLM until it produces a final text response.
 
 Usage:
     from helen.runtime.http_llm import HttpLLMRuntime
-    runtime = HttpLLMRuntime()  # Auto-loads from ~/.hermes/.env
+    runtime = HttpLLMRuntime()  # Auto-loads from ~/.helen/config.yaml or ~/.hermes/.env
     response = runtime.act("Translate: hello")
     response = runtime.act("Search for Python docs", tools=[...])
 """
@@ -28,22 +28,25 @@ from helen.runtime.llm_runtime import LLMResponse, LLMRuntime
 
 
 def _load_hermes_env() -> dict[str, str]:
-    """Load environment variables from ~/.hermes/.env file."""
-    env_file = Path.home() / ".hermes" / ".env"
-    if not env_file.exists():
-        return {}
+    """Load environment variables from Helen or Hermes config.
     
-    env_vars = {}
-    with open(env_file, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if "=" in line:
-                key, _, value = line.partition("=")
-                env_vars[key.strip()] = value.strip()
+    Priority:
+    1. ~/.helen/config.yaml
+    2. ~/.helen/.env
+    3. ~/.hermes/.env (fallback)
     
-    return env_vars
+    Returns dict with keys like DASHSCOPE_API_KEY, DASHSCOPE_BASE_URL for
+    backward compatibility.
+    """
+    from helen.runtime.config import load_config
+    config = load_config()
+    # Convert config to env-style dict for compatibility
+    env = {}
+    if "api_key" in config:
+        env["DASHSCOPE_API_KEY"] = config["api_key"]
+    if "base_url" in config:
+        env["DASHSCOPE_BASE_URL"] = config["base_url"]
+    return env
 
 
 @dataclass
@@ -67,7 +70,7 @@ class HttpLLMRuntime(LLMRuntime):
     _last_error: str | None = field(default=None, repr=False)
 
     def __post_init__(self):
-        """Auto-load configuration from ~/.hermes/.env if not provided."""
+        """Auto-load configuration from Helen or Hermes config."""
         if not self.base_url or not self.api_key:
             hermes_env = _load_hermes_env()
             if not self.base_url:
