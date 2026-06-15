@@ -258,6 +258,93 @@ def _calculate(expression: str) -> str:
         return json.dumps({"error": f"Calculation failed: {e}"})
 
 
+def _patch_file(path: str, old_string: str, new_string: str, replace_all: bool = False) -> str:
+    """Patch a file using fuzzy matching (Hermes fuzzy_match engine).
+
+    Uses 9 matching strategies to handle whitespace/indentation differences:
+    1. Exact match
+    2. Line-trimmed match
+    3. Whitespace-normalized match
+    4. Indentation-flexible match
+    5. Escape-normalized match
+    6. Trimmed-boundary match
+    7. Unicode-normalized match
+    8. Block-anchor match (SequenceMatcher)
+    9. Context-aware match (line-by-line similarity)
+    """
+    from pathlib import Path
+    try:
+        file_path = Path(path)
+        if not file_path.exists():
+            return json.dumps({"error": f"File not found: {path}"})
+
+        content = file_path.read_text(encoding="utf-8")
+        # Strip UTF-8 BOM if present
+        if content.startswith('\ufeff'):
+            content = content[1:]
+
+        # Try to import Hermes fuzzy matching
+        try:
+            import sys
+            hermes_tools_path = Path.home() / ".hermes" / "hermes-agent" / "tools"
+            if str(hermes_tools_path) not in sys.path:
+                sys.path.insert(0, str(hermes_tools_path))
+            from fuzzy_match import fuzzy_find_and_replace, format_no_match_hint
+        except ImportError:
+            # Fallback to simple string replacement if Hermes not available
+            if old_string not in content:
+                return json.dumps({"error": "old_string not found in file (fuzzy matching unavailable)"})
+            count = content.count(old_string)
+            if count > 1 and not replace_all:
+                return json.dumps({"error": f"old_string found {count} times, must be unique or use replace_all=true"})
+            if replace_all:
+                new_content = content.replace(old_string, new_string)
+            else:
+                new_content = content.replace(old_string, new_string, 1)
+            file_path.write_text(new_content, encoding="utf-8")
+            return json.dumps({"path": path, "status": "patched (simple)", "matches": count})
+
+        # Use Hermes fuzzy matching
+        new_content, match_count, strategy, error = fuzzy_find_and_replace(
+            content, old_string, new_string, replace_all=replace_all
+        )
+
+        if error:
+            # Generate helpful hint
+            hint = format_no_match_hint(error, match_count, old_string, content)
+            return json.dumps({"error": error, "hint": hint})
+
+        if match_count == 0:
+            return json.dumps({"error": "No matches found"})
+
+        # Write the patched content
+        file_path.write_text(new_content, encoding="utf-8")
+
+        # Generate unified diff for feedback
+        import difflib
+        diff_lines = difflib.unified_diff(
+            content.splitlines(keepends=True),
+            new_content.splitlines(keepends=True),
+            fromfile=f"a/{path}",
+            tofile=f"b/{path}",
+            lineterm=""
+        )
+        diff = "".join(diff_lines)
+        if len(diff) > 4000:
+            diff = diff[:4000] + "\n... [diff truncated]"
+
+        return json.dumps({
+            "path": path,
+            "status": "patched",
+            "matches": match_count,
+            "strategy": strategy,
+            "diff": diff,
+        })
+
+    except Exception as e:
+        return json.dumps({"error": f"Patch failed: {e}"})
+
+
 # ── Register all built-in tools ────────────────────────────────
 
 
@@ -342,6 +429,22 @@ def _register_builtin_tools() -> None:
             "required": ["expression"],
         },
         handler=_calculate,
+    )
+
+    register_tool(
+        name="patch_file",
+        description="Patch a file by replacing old_string with new_string. Uses fuzzy matching (9 strategies) to handle whitespace/indentation differences. More reliable than write_file for targeted edits.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "File path to patch"},
+                "old_string": {"type": "string", "description": "Text to find and replace (should be unique in file)"},
+                "new_string": {"type": "string", "description": "Replacement text"},
+                "replace_all": {"type": "boolean", "description": "Replace all occurrences (default: false, requires unique match)", "default": False},
+            },
+            "required": ["path", "old_string", "new_string"],
+        },
+        handler=_patch_file,
     )
 
 
