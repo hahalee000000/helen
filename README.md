@@ -9,8 +9,8 @@ Helen is an AI-native DSL for building Agent workflows. It combines deterministi
 ```bash
 git clone https://github.com/hahalee000000/helen.git
 cd helen
-pip install -e .
-helen init          # Initialize ~/.helen/ config directory
+pip install -e .          # Requires Python 3.8+
+helen init                # Initialize ~/.helen/ config directory
 # Edit ~/.helen/config.yaml to set your API key
 ```
 
