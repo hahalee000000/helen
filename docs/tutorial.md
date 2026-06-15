@@ -964,6 +964,78 @@ agent Interviewer {
 }
 ```
 
+### tools — 内置工具
+
+Agent 可以声明使用哪些内置工具，LLM 会在 `llm act` 时通过 function calling 调用：
+
+```helen
+agent Researcher {
+    description "Research assistant"
+    tools ["web_search", "web_fetch", "read_file"]
+    prompt "Research the given topic thoroughly."
+}
+
+agent Coder {
+    description "Code writer"
+    tools ["write_file", "shell_exec", "calculate"]
+    prompt "Write and execute code."
+}
+```
+
+**可用工具：**
+
+| 工具 | 功能 | 参数 |
+|------|------|------|
+| `web_search` | 搜索 Wikipedia | `query: str` |
+| `web_fetch` | 获取网页内容 | `url: str` |
+| `read_file` | 读取文件 | `path: str` |
+| `write_file` | 写入文件 | `path: str, content: str` |
+| `shell_exec` | 执行 shell 命令 | `command: str` |
+| `calculate` | 数学计算 | `expression: str` |
+
+## Agent main 块
+
+Agent 可以包含 `main` 块作为执行入口，使用 `call` 调用：
+
+```helen
+agent Translator(text: str, target: str) {
+    description "Translate text"
+    model "gpt-4"
+    temperature 0.3
+    prompt """
+    Translate to {{target}}:
+    {{text}}
+    """
+    
+    functions {
+        fn validate_input(s: str): bool {
+            return len(s) > 0
+        }
+    }
+    
+    main {
+        if validate_input(text) {
+            let result = llm act    // 调用 LLM
+            return result
+        }
+        return "输入为空"
+    }
+}
+
+// 调用方式：
+let translated = call Translator(text="Hello", target="French")
+```
+
+**执行流程：**
+1. `call Translator(text="Hello", target="French")` 创建隔离 Environment
+2. 绑定参数：`text="Hello"`, `target="French"`
+3. 执行 `main` 块
+4. `main` 中的 `llm act` 触发 LLM 调用：
+   - `prompt` 模板渲染 → `system_prompt`
+   - `llm act` 表达式值 → `user` 消息
+   - 工具调用循环（如果有 `tools`）
+5. 返回结果
+
 ## Agent 参数
 
 ```helen
@@ -1242,6 +1314,65 @@ main {
 ```
 
 历史上限 **4096 tokens**，自动截断最旧消息。
+
+## Function Calling（工具调用）
+
+当 Agent 配置了 `tools` 时，`llm act` 会自动进入 function calling 循环：
+
+```helen
+agent Researcher(topic) {
+    description "Research assistant"
+    tools ["web_search", "read_file"]
+    main {
+        return llm act "Research about: " + topic
+    }
+}
+```
+
+**执行流程：**
+
+1. LLM 收到 prompt + 工具 schema
+2. LLM 返回工具调用请求 → Helen 执行工具 → 结果返回 LLM
+3. 循环直到 LLM 输出最终文本响应
+4. 达到 `max_turns - 1` 时自动注入 nudge 提示，强制 LLM 输出最终答案
+
+**内置工具列表：**
+
+| 工具 | 功能 |
+|------|------|
+| `web_search` | Wikipedia 搜索 |
+| `web_fetch` | 获取网页内容 |
+| `read_file` | 读取文件 |
+| `write_file` | 写入文件 |
+| `shell_exec` | 执行 shell 命令 |
+| `calculate` | 数学计算 |
+
+## Agent prompt 与 system_prompt
+
+Agent 的 `prompt` 字段在 `llm act` 时作为 **system_prompt** 注入 LLM 调用：
+
+```helen
+agent Translator(text) {
+    description "Professional translator"
+    prompt """
+    Translate the following text to {{target}}:
+    {{text}}
+    """
+    main {
+        // prompt 渲染后 → system_prompt ({"role": "system"})
+        return llm act "Please translate accurately"
+        // → user 消息 ({"role": "user"})
+    }
+}
+```
+
+**消息结构：**
+```json
+[
+  {"role": "system", "content": "<description>\n<skills>\n<rendered prompt>"},
+  {"role": "user", "content": "llm act 的表达式值"}
+]
+```
 
 ## 练习
 
