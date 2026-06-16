@@ -1015,7 +1015,7 @@ agent Translator(text: str, target: str) {
     
     main {
         if validate_input(text) {
-            let result = llm act text    // text 作为 user 消息触发 LLM
+            let result = llm act    // bare form：自动使用渲染后的 prompt
             return result
         }
         return "输入为空"
@@ -1030,9 +1030,8 @@ let translated = call Translator(text="Hello", target="French")
 1. `call Translator(text="Hello", target="French")` 创建隔离 Environment
 2. 绑定参数：`text="Hello"`, `target="French"`
 3. 执行 `main` 块
-4. `main` 中的 `llm act` 触发 LLM 调用：
-   - `prompt` 模板渲染 → `system_prompt`
-   - `llm act` 表达式值 → `user` 消息
+4. `main` 中的 `llm act`（bare form）触发 LLM 调用：
+   - `prompt` 模板渲染 → `system_prompt` + `user` 消息
    - 工具调用循环（如果有 `tools`）
 5. 返回结果
 
@@ -1189,6 +1188,38 @@ main {
     print("Summary: " + summary)
 }
 ```
+
+### Bare form（在 agent 内无参数调用）
+
+当 `llm act` 在 agent 的 `main` 块中使用时，可以省略参数。此时会自动使用 agent 的 `prompt` 模板渲染后的内容作为 user 消息：
+
+```helen
+agent Translator(text: str, target: str) {
+    description "Translate text"
+    temperature 0.3
+    prompt """
+    Translate to {{target}}:
+    {{text}}
+    """
+
+    main {
+        // bare form：自动使用渲染后的 prompt
+        let result = llm act
+        return result
+    }
+}
+
+main {
+    let translated = call Translator(text="Hello", target="French")
+    print(translated)
+    // Bonjour
+}
+```
+
+**Bare form 检测规则：**
+- 语句结束符：`}`、`;`、EOF
+- 语句关键字：`return`、`let`、`if`、`for` 等
+- 换行边界：下一个 token 在不同行
 
 ## llm if
 
