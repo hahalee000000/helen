@@ -129,10 +129,13 @@ def _run_helen_assistant(question: str) -> str:
     from helen.interpreter.interpreter import Interpreter
     from helen.runtime.http_llm import HttpLLMRuntime
     
-    # Load the Helen assistant program
-    assistant_path = Path("helen/agent/helen_assistant.helen")
+    # Load the Helen assistant program (use absolute path based on module location)
+    import helen.cli.repl as repl_module
+    module_dir = Path(repl_module.__file__).parent.parent  # helen/cli -> helen/
+    assistant_path = module_dir / "agent" / "helen_assistant.helen"
+    
     if not assistant_path.exists():
-        return "Error: Helen assistant program not found at helen/agent/helen_assistant.helen"
+        return f"Error: Helen assistant program not found at {assistant_path}"
     
     source = assistant_path.read_text(encoding="utf-8")
     
