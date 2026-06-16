@@ -330,10 +330,10 @@ agent ResearchBot {
         let results = search(query)
         if (results != null) {
             for r in results {
-                call Display(result=r)
-            }
-        } else {
-            call Display(result="No results")
+                    Display(result=r)
+                }
+            } else {
+                Display(result="No results")
         }
     }
 }

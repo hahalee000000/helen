@@ -142,8 +142,6 @@ class Parser:
         self._rules[TokenType.LEFT_BRACKET].prefix = self._list_literal
         self._rules[TokenType.LEFT_BRACE].prefix = self._map_literal
         self._rules[TokenType.TEMPLATE_OPEN].prefix = self._template_ref
-        # CALL keyword as expression prefix (like identifier)
-        self._rules[TokenType.CALL].prefix = self._call_kw
 
         # llm act as expression: llm act <prompt_expr>
         self._rules[TokenType.LLM].prefix = self._llm_act_expr
@@ -229,18 +227,6 @@ class Parser:
         prev = self._previous()
         return VariableNode(name=prev.lexeme, span=prev.span)
 
-    def _call_kw(self) -> ExpressionNode:
-        """解析 call 关键字：call AgentName(args) — 直接作为 CallNode。"""
-        if self._check(TokenType.IDENTIFIER):
-            self._advance()
-            callee = VariableNode(name=self._previous().lexeme, span=self._previous().span)
-            if self._check(TokenType.LEFT_PAREN):
-                self._advance()  # consume '('
-                return self._call(callee)
-            return callee
-        prev = self._previous()
-        return VariableNode(name=prev.lexeme, span=prev.span)
-
     def _llm_act_expr(self) -> ExpressionNode:
         """解析 llm act 表达式：llm act <expression>?
 
@@ -265,7 +251,7 @@ class Parser:
             TokenType.IF, TokenType.FOR, TokenType.WHILE,
             TokenType.BREAK, TokenType.CONTINUE, TokenType.MATCH,
             TokenType.TRY, TokenType.THROW,
-            TokenType.LLM, TokenType.CALL, TokenType.ASYNC,
+            TokenType.LLM, TokenType.ASYNC,
         )
         if self._check(*bare_form_tokens):
             prompt_expr = None
@@ -470,11 +456,9 @@ class Parser:
             return None
 
     def _async_call_stmt(self) -> AsyncCallStmtNode:
-        """解析 async 语句修饰符：async call(...) (HLD 3.3.3)。"""
+        """解析 async 语句修饰符：async AgentName(...) (HLD 3.3.3)。"""
         start = self._advance()  # consume ASYNC
-        # Optionally consume 'call' keyword
-        self._match(TokenType.CALL)
-        # Parse as a call expression
+        # Parse as a call expression (no 'call' keyword needed)
         call_expr = self._expression(Precedence.NONE)
         if not isinstance(call_expr, CallNode):
             self._error("'async' must be followed by a function call.")
@@ -935,7 +919,7 @@ class Parser:
             TokenType.IF, TokenType.FOR, TokenType.WHILE,
             TokenType.BREAK, TokenType.CONTINUE, TokenType.MATCH,
             TokenType.TRY, TokenType.THROW,
-            TokenType.LLM, TokenType.CALL, TokenType.ASYNC,
+            TokenType.LLM, TokenType.ASYNC,
         )
         if self._check(*bare_form_tokens):
             prompt_expr = None

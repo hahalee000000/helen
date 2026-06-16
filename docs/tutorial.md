@@ -1024,7 +1024,7 @@ agent Translator(text: str, target: str) {
 
 // 调用方式（推荐函数式调用）：
 let translated = Translator(text="Hello", target="French")
-// 也可以使用 call 关键字：let translated = call Translator(text="Hello", target="French")
+// 函数式调用：let translated = Translator(text="Hello", target="French")
 ```
 
 **执行流程：**
@@ -1102,7 +1102,7 @@ agent EmailClassifier {
         llm if "Classify this email" {
             branch "urgent" {
                 print("🚨 URGENT email detected!")
-                call UrgentResponder(email)
+                UrgentResponder(email)
             }
             branch "meeting" {
                 print("📅 Meeting request")
@@ -1263,13 +1263,13 @@ llm if "Classify query type" {
     branch "question" {
         llm if "Identify question category" {
             branch "technical" {
-                call TechSupport(query)
+                TechSupport(query)
             }
             branch "billing" {
-                call BillingSupport(query)
+                BillingSupport(query)
             }
             default {
-                call GeneralSupport(query)
+                GeneralSupport(query)
             }
         }
     }
@@ -1458,8 +1458,8 @@ agent Researcher {
     prompt "Research and summarize:"
     main {
         let topic = "AI in healthcare"
-        let research_task = async call Researcher(topic)
-        let data_task = async call Analyst(topic)
+        let research_task = async Researcher(topic)
+        let data_task = async Analyst(topic)
         let results = await [research_task, data_task]
         let research = results[0]
         let analysis = results[1]
@@ -1479,7 +1479,7 @@ agent Analyst {
 `async call` 返回 `Task` 对象：
 
 ```helen
-let task = async call MyAgent(input)
+let task = async MyAgent(input)
 
 // Task 方法 (未来版本支持)
 // task.is_success() → bool
@@ -1536,16 +1536,16 @@ main {
     let topic = "quantum computing breakthroughs"
 
     // 并发搜索三个源
-    let news_task = async call NewsSearcher(topic)
-    let academic_task = async call AcademicSearcher(topic)
-    let social_task = async call SocialSearcher(topic)
+    let news_task = async NewsSearcher(topic)
+    let academic_task = async AcademicSearcher(topic)
+    let social_task = async SocialSearcher(topic)
 
     // 等待全部结果
     try {
         let sources = await [news_task, academic_task, social_task]
 
         // 综合所有结果
-        let report = call Synthesizer(sources[0] + "\n" + sources[1] + "\n" + sources[2])
+        let report = Synthesizer(sources[0] + "\n" + sources[1] + "\n" + sources[2])
         print(report)
     } catch AggregateError(err) {
         print("Some sources failed to load")
@@ -1558,7 +1558,7 @@ main {
 
 | 规则 | 说明 |
 |---|---|
-| `async` 仅修饰 `call` | `async call Agent()` ✅，`async fn x()` ❌ |
+| `async` 仅修饰函数调用 | `async Agent()` ✅，`async fn x()` ❌ |
 | `await` 参数必须是列表 | `await [task]` ✅，`await task` ❌ |
 | v1 同步执行 | 当前版本立即执行，未来版本改为真正异步 |
 | 错误聚合 | 多个失败 → `AggregateError` |
@@ -1593,7 +1593,7 @@ import "./utils.helen"
 
 main {
     let result = double(21)    // 42
-    call Helper()              // 使用导入的 Agent
+    Helper()              // 使用导入的 Agent
 }
 ```
 
@@ -1983,19 +1983,19 @@ main {
     llm if "Classify customer question" {
         branch "product" {
             print("📦 Product question")
-            let answer = call ProductExpert(customer_question)
+            let answer = ProductExpert(customer_question)
         }
         branch "billing" {
             print("💰 Billing question")
-            let answer = call BillingExpert(customer_question)
+            let answer = BillingExpert(customer_question)
         }
         branch "technical" {
             print("🔧 Technical question")
-            let answer = call TechSupport(customer_question)
+            let answer = TechSupport(customer_question)
         }
         branch "account" {
             print("👤 Account question")
-            let answer = call TechSupport(customer_question)
+            let answer = TechSupport(customer_question)
         }
         default {
             print("📋 General question")
@@ -2004,7 +2004,7 @@ main {
     }
 
     // 第三步：润色回复
-    let polished = call ResponsePolisher(answer)
+    let polished = ResponsePolisher(answer)
 
     // 第四步：输出
     print("\n--- Response to Customer ---")
@@ -2020,8 +2020,8 @@ main {
     let question = "How do I reset my password?"
 
     // 并发获取上下文
-    let kb_task = async call KnowledgeBase(question)
-    let history_task = async call HistoryLookup("password reset")
+    let kb_task = async KnowledgeBase(question)
+    let history_task = async HistoryLookup("password reset")
 
     // 先分类（串行，需要结果路由）
     llm if "Classify customer question" {
@@ -2029,14 +2029,14 @@ main {
             // 等待上下文
             let context = await [kb_task, history_task]
             let full_context = context[0] + "\n" + context[1]
-            let answer = call TechSupport(question + "\nContext: " + full_context)
+            let answer = TechSupport(question + "\nContext: " + full_context)
         }
         default {
             let answer = "I'll help you with that."
         }
     }
 
-    let polished = call ResponsePolisher(answer)
+    let polished = ResponsePolisher(answer)
     print(polished)
 }
 ```
@@ -2050,8 +2050,8 @@ main {
     try {
         llm if "Classify customer question" {
             branch "technical" {
-                let answer = call TechSupport(question)
-                let polished = call ResponsePolisher(answer)
+                let answer = TechSupport(question)
+                let polished = ResponsePolisher(answer)
                 print(polished)
             }
             default {
