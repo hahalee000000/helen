@@ -1022,12 +1022,13 @@ agent Translator(text: str, target: str) {
     }
 }
 
-// 调用方式：
-let translated = call Translator(text="Hello", target="French")
+// 调用方式（推荐函数式调用）：
+let translated = Translator(text="Hello", target="French")
+// 也可以使用 call 关键字：let translated = call Translator(text="Hello", target="French")
 ```
 
 **执行流程：**
-1. `call Translator(text="Hello", target="French")` 创建隔离 Environment
+1. `Translator(text="Hello", target="French")` 创建隔离 Environment
 2. 绑定参数：`text="Hello"`, `target="French"`
 3. 执行 `main` 块
 4. `main` 中的 `llm act`（bare form）触发 LLM 调用：
@@ -1052,7 +1053,7 @@ agent Translator {
 }
 
 main {
-    let result = call Translator("Hello", "French")
+    let result = Translator("Hello", "French")
 }
 ```
 
@@ -1066,7 +1067,7 @@ agent Summarizer {
 
 main {
     let text = "Long article content here..."
-    let summary = call Summarizer(text)
+    let summary = Summarizer(text)
     print(summary)
 }
 ```
@@ -1178,7 +1179,7 @@ agent Translator(text: str, target: str) {
 }
 
 main {
-    let translated = call Translator(text="Hello", target="French")
+    let translated = Translator(text="Hello", target="French")
     print(translated)
 }
 ```
@@ -1216,7 +1217,7 @@ agent Translator(text: str, target: str) {
 }
 
 main {
-    let translated = call Translator(text="Hello", target="French")
+    let translated = Translator(text="Hello", target="French")
     print(translated)
     // Bonjour
 }
