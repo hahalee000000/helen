@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from helen.core.source import SourceSpan
@@ -580,13 +580,19 @@ class AgentParamNode(StatementNode):
 
 @dataclass(frozen=True)
 class AgentDeclNode(StatementNode):
-    """Agent declaration: agent Name(params?) { declarations, prompt, logic }."""
+    """Agent declaration: agent Name(params?) { declarations, prompt, logic }.
+
+    Attributes:
+        functions: Functions declared inside ``functions { }`` block (HLD 3.5.3).
+            Registered in the agent's call scope when invoked, so ``main`` can call them.
+    """
     name: str
     params: list[AgentParamNode]
     declarations: list["DeclarationNode"]
     prompt: PromptDefNode | None
     logic: StatementNode | None  # MainBlockNode or other statement
     span: SourceSpan
+    functions: list["FunctionDeclNode"] = field(default_factory=list)
 
     def accept(self, visitor: Visitor[R]) -> R:
         """Dispatch to the visitor."""

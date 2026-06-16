@@ -1170,8 +1170,14 @@ class Interpreter(Visitor[object]):
             args: Keyword arguments from the call statement.
         """
         # Create a completely isolated environment (HLD 3.5.2)
-        # Start from a fresh root, not inheriting parent's variables
+        # Start from a fresh root, not inheriting parent agent's variables.
+        # But stdlib must still be available — inject it into the fresh env.
         call_env = Environment()
+        from helen.stdlib import stdlib as _stdlib  # noqa: PLC0415
+        for _name in _stdlib.names:
+            _builtin = _stdlib.lookup(_name)
+            if _builtin is not None:
+                call_env.define(_name, _builtin.fn)
 
         # Bind parameters from agent's param declarations
         for param in agent.params:
@@ -1189,6 +1195,14 @@ class Interpreter(Visitor[object]):
         old_agent = self._current_agent
         self._current_agent = agent
 
+        # Register agent's functions { } block functions into scope (HLD 3.5.3)
+        # Save and restore to avoid leaking into caller's scope
+        registered_names: list[str] = []
+        for func_node in agent.functions:
+            old_val = self._functions.get(func_node.name)
+            self._functions[func_node.name] = func_node
+            registered_names.append(func_node.name)
+
         # Execute the agent's logic (main block)
         old_env = self.environment
         self.environment = call_env
@@ -1202,6 +1216,9 @@ class Interpreter(Visitor[object]):
         finally:
             self.environment = old_env
             self._current_agent = old_agent
+            # Unregister agent functions to avoid leaking
+            for fname in registered_names:
+                self._functions.pop(fname, None)
 
     def _await_tasks(self, tasks: list[Task] | Task) -> object:
         """Await one or more tasks with Promise.all semantics (HLD 3.6.7).

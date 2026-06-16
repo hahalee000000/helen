@@ -1015,7 +1015,7 @@ agent Translator(text: str, target: str) {
     
     main {
         if validate_input(text) {
-            let result = llm act    // 调用 LLM
+            let result = llm act text    // text 作为 user 消息触发 LLM
             return result
         }
         return "输入为空"

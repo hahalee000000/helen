@@ -570,6 +570,7 @@ class Parser:
         declarations: list[DeclarationNode] = []
         prompt: PromptDefNode | None = None
         logic: StatementNode | None = None
+        agent_functions: list = []
         while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF):
             if self._match(TokenType.PROMPT):
                 if self._match(TokenType.STRING, TokenType.TRIPLE_QUOTE_STRING):
@@ -583,11 +584,11 @@ class Parser:
             elif self._match(TokenType.FN):
                 self._function_decl()
             elif self._match(TokenType.FUNCTIONS):
-                # Parse functions { fn ... } block — consume the block but skip contents
+                # Parse functions { fn ... } block — collect functions for agent scope
                 self._consume(TokenType.LEFT_BRACE, "Expected '{' after 'functions'.")
                 while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF):
                     if self._match(TokenType.FN):
-                        self._function_decl()
+                        agent_functions.append(self._function_decl())
                     else:
                         self._error(f"Expected 'fn' inside functions block, got {self._current().type.name}")
                         self._synchronize()
@@ -604,7 +605,8 @@ class Parser:
         end = self._consume(TokenType.RIGHT_BRACE, "Expected '}' after agent body.")
         return AgentDeclNode(name=name_tok.lexeme, params=params,
                              declarations=declarations, prompt=prompt, logic=logic,
-                             span=self._make_span(name_tok, end))
+                             span=self._make_span(name_tok, end),
+                             functions=agent_functions)
 
     def _agent_param(self) -> AgentParamNode:
         """解析 Agent 参数: name: Type? = expr?。"""
