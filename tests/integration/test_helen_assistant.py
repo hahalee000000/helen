@@ -26,12 +26,12 @@ class TestHelenAssistantProgram:
     def test_helen_assistant_loads_documentation(self):
         """Helen assistant can load Helen documentation."""
         source = """
-agent HelenAssistant {
+agent HelenAssistant(question: str, docs_path: str) {
     prompt "You are a Helen language assistant."
     
     functions {
         fn load_docs() -> str {
-            return read_file("docs/tutorial.md")
+            return read_file(docs_path)
         }
     }
     
@@ -42,7 +42,7 @@ agent HelenAssistant {
 }
 
 main {
-    let result = HelenAssistant()
+    let result = HelenAssistant("test", "docs/tutorial.md")
     return result
 }
 """
@@ -66,24 +66,24 @@ main {
     def test_helen_assistant_builds_context(self):
         """Helen assistant builds context with question."""
         source = """
-agent HelenAssistant {
+agent HelenAssistant(question: str, docs_path: str) {
     prompt "You are a Helen language assistant."
     
     functions {
-        fn build_context(question: str) -> str {
-            let docs = read_file("docs/tutorial.md")
+        fn build_context() -> str {
+            let docs = read_file(docs_path)
             return "Documentation:\\n" + docs + "\\n\\nQuestion: " + question
         }
     }
     
     main {
-        let context = build_context("How to define an agent?")
+        let context = build_context()
         return context
     }
 }
 
 main {
-    let result = HelenAssistant()
+    let result = HelenAssistant("How to define an agent?", "docs/tutorial.md")
     return result
 }
 """
@@ -107,12 +107,12 @@ main {
     def test_helen_assistant_answers_question(self):
         """Helen assistant uses LLM to answer questions."""
         source = """
-agent HelenAssistant(question: str) {
+agent HelenAssistant(question: str, docs_path: str) {
     prompt "You are a Helen language assistant. Answer questions about Helen."
     
     functions {
         fn build_context() -> str {
-            let docs = read_file("docs/tutorial.md")
+            let docs = read_file(docs_path)
             return "Helen Documentation:\\n" + docs + "\\n\\nUser question: " + question
         }
     }
@@ -125,7 +125,7 @@ agent HelenAssistant(question: str) {
 }
 
 main {
-    let result = HelenAssistant("What is an agent?")
+    let result = HelenAssistant("What is an agent?", "docs/tutorial.md")
     return result
 }
 """

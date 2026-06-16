@@ -133,9 +133,13 @@ def _run_helen_assistant(question: str) -> str:
     import helen.cli.repl as repl_module
     module_dir = Path(repl_module.__file__).parent.parent  # helen/cli -> helen/
     assistant_path = module_dir / "agent" / "helen_assistant.helen"
+    docs_path = module_dir.parent / "docs" / "tutorial.md"  # helen/ -> repo root -> docs/
     
     if not assistant_path.exists():
         return f"Error: Helen assistant program not found at {assistant_path}"
+    
+    if not docs_path.exists():
+        return f"Error: Helen documentation not found at {docs_path}"
     
     source = assistant_path.read_text(encoding="utf-8")
     
@@ -153,11 +157,14 @@ def _run_helen_assistant(question: str) -> str:
     llm_runtime = HttpLLMRuntime()
     interp = Interpreter(errors=errors, llm_runtime=llm_runtime)
     
-    # Modify the program to pass the question to HelenAssistant
-    # We'll create a wrapper that injects the question
+    # Modify the program to pass the question and docs path to HelenAssistant
+    # We'll create a wrapper that injects the parameters
     modified_source = source.replace(
         'let question = "How do I define an agent in Helen?"',
         f'let question = "{question}"'
+    ).replace(
+        'let docs_path = "docs/tutorial.md"  // Relative path for development',
+        f'let docs_path = "{docs_path}"  // Absolute path from REPL'
     )
     
     # Re-parse with modified source

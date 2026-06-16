@@ -3,10 +3,10 @@
 // write Helen code, and debug Helen programs.
 //
 // Usage:
-//   let answer = HelenAssistant("How do I define an agent?")
+//   let answer = HelenAssistant("How do I define an agent?", "/path/to/docs/tutorial.md")
 //   print(answer)
 
-agent HelenAssistant(question: str) {
+agent HelenAssistant(question: str, docs_path: str) {
     prompt """You are an expert Helen language assistant. You help users:
 1. Understand Helen syntax and semantics
 2. Write Helen code (agents, functions, LLM integration)
@@ -17,8 +17,8 @@ Reference specific parts of the documentation when answering."""
     
     functions {
         fn load_documentation() -> str {
-            // Load Helen tutorial documentation
-            let tutorial = read_file("docs/tutorial.md")
+            // Load Helen tutorial documentation from absolute path
+            let tutorial = read_file(docs_path)
             return tutorial
         }
         
@@ -43,8 +43,9 @@ Reference specific parts of the documentation when answering."""
 
 // Main entry point for standalone execution
 main {
-    // Example usage
+    // Example usage (adjust path as needed)
     let question = "How do I define an agent in Helen?"
-    let answer = HelenAssistant(question)
+    let docs_path = "docs/tutorial.md"  // Relative path for development
+    let answer = HelenAssistant(question, docs_path)
     print(answer)
 }
