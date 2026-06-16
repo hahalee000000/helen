@@ -247,9 +247,16 @@ class Parser:
 
         Supports bare ``llm act`` (no expression) inside an agent context,
         where the agent's rendered prompt template is used automatically.
+        
+        Bare form detection:
+        - Statement terminators: }, ;, EOF
+        - Statement keywords: return, let, if, for, etc.
+        - Newline: if the next token is on a different line than 'act'
         """
         start = self._previous()  # LLM token
         self._consume(TokenType.ACT, "Expected 'act' after 'llm'.")
+        act_token = self._previous()
+        
         # Check if there's an expression following 'llm act'.
         # If we hit a statement terminator or a new statement keyword, treat as bare form.
         bare_form_tokens = (
@@ -262,6 +269,10 @@ class Parser:
             TokenType.LLM, TokenType.CALL, TokenType.ASYNC,
         )
         if self._check(*bare_form_tokens):
+            prompt_expr = None
+        # Newline check: if next token is on a different line, treat as bare form
+        # This handles: let result = llm act\nprint(...)
+        elif self._current().line > act_token.line:
             prompt_expr = None
         else:
             prompt_expr = self._expression()
