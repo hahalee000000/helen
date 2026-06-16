@@ -243,10 +243,28 @@ class Parser:
         return VariableNode(name=prev.lexeme, span=prev.span)
 
     def _llm_act_expr(self) -> ExpressionNode:
-        """解析 llm act 表达式：llm act <expression>。"""
+        """解析 llm act 表达式：llm act <expression>?
+
+        Supports bare ``llm act`` (no expression) inside an agent context,
+        where the agent's rendered prompt template is used automatically.
+        """
         start = self._previous()  # LLM token
         self._consume(TokenType.ACT, "Expected 'act' after 'llm'.")
-        prompt_expr = self._expression()
+        # Check if there's an expression following 'llm act'.
+        # If we hit a statement terminator or a new statement keyword, treat as bare form.
+        bare_form_tokens = (
+            TokenType.RIGHT_BRACE, TokenType.SEMICOLON, TokenType.EOF,
+            # Statement keywords that indicate the current statement has ended
+            TokenType.RETURN, TokenType.LET, TokenType.CONST,
+            TokenType.IF, TokenType.FOR, TokenType.WHILE,
+            TokenType.BREAK, TokenType.CONTINUE, TokenType.MATCH,
+            TokenType.TRY, TokenType.THROW,
+            TokenType.LLM, TokenType.CALL, TokenType.ASYNC,
+        )
+        if self._check(*bare_form_tokens):
+            prompt_expr = None
+        else:
+            prompt_expr = self._expression()
         return LlmActExprNode(
             prompt=prompt_expr,
             span=self._make_span(start, self._previous())

@@ -795,8 +795,12 @@ class LlmActStmtNode(StatementNode):
 
 @dataclass(frozen=True)
 class LlmActExprNode(ExpressionNode):
-    """LLM act as an expression: llm act <prompt_expr>. Returns the LLM response text."""
-    prompt: ExpressionNode
+    """LLM act as an expression: llm act <prompt_expr>? Returns the LLM response text.
+
+    When prompt is None (bare ``llm act``), the agent's rendered prompt template
+    is used as the user message automatically (HLD 3.6.5).
+    """
+    prompt: ExpressionNode | None
     span: SourceSpan
 
     def accept(self, visitor: Visitor[R]) -> R:

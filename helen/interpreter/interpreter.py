@@ -950,16 +950,32 @@ class Interpreter(Visitor[object]):
             return None
 
     def visit_llm_act_expr(self, node: LlmActExprNode) -> object:
-        """Execute llm act as an expression: llm act <prompt_expr>.
+        """Execute llm act as an expression: llm act <prompt_expr>?
 
         Evaluates the prompt expression and calls the LLM runtime.
         Returns the LLM response text.
         If inside an agent with a prompt field, uses it as system_prompt.
+
+        Bare form (``llm act`` with no expression, or ``llm act ""``):
+        When inside an agent context, the agent's rendered prompt template
+        is used as the user message automatically. This avoids redundant
+        repetition when the agent's prompt already contains all necessary
+        information (HLD 3.6.5).
         """
         # Evaluate the prompt expression
-        prompt = node.prompt.accept(self)
-        if not isinstance(prompt, str):
-            prompt = self._stringify(prompt)
+        if node.prompt is not None:
+            prompt = node.prompt.accept(self)
+            if not isinstance(prompt, str):
+                prompt = self._stringify(prompt)
+        else:
+            prompt = ""
+
+        # Bare form: if prompt is empty and we're inside an agent,
+        # use the rendered agent prompt as the user message
+        if not prompt and self._current_agent is not None:
+            rendered = self._get_rendered_agent_prompt()
+            if rendered:
+                prompt = rendered
 
         # Extract agent settings if inside an agent context
         model = self._get_agent_setting("model")
