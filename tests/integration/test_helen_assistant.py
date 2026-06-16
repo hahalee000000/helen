@@ -26,7 +26,7 @@ class TestHelenAssistantProgram:
     def test_helen_assistant_loads_documentation(self):
         """Helen assistant can load Helen documentation."""
         source = """
-agent HelenAssistant(question: str, docs_path: str) {
+agent HelenAssistant(question: str, docs_path: str, source_dir: str) {
     prompt "You are a Helen language assistant."
     
     functions {
@@ -42,7 +42,7 @@ agent HelenAssistant(question: str, docs_path: str) {
 }
 
 main {
-    let result = HelenAssistant("test", "docs/tutorial.md")
+    let result = HelenAssistant("test", "docs/tutorial.md", "helen/")
     return result
 }
 """
@@ -66,7 +66,7 @@ main {
     def test_helen_assistant_builds_context(self):
         """Helen assistant builds context with question."""
         source = """
-agent HelenAssistant(question: str, docs_path: str) {
+agent HelenAssistant(question: str, docs_path: str, source_dir: str) {
     prompt "You are a Helen language assistant."
     
     functions {
@@ -83,7 +83,7 @@ agent HelenAssistant(question: str, docs_path: str) {
 }
 
 main {
-    let result = HelenAssistant("How to define an agent?", "docs/tutorial.md")
+    let result = HelenAssistant("How to define an agent?", "docs/tutorial.md", "helen/")
     return result
 }
 """
@@ -107,7 +107,7 @@ main {
     def test_helen_assistant_answers_question(self):
         """Helen assistant uses LLM to answer questions."""
         source = """
-agent HelenAssistant(question: str, docs_path: str) {
+agent HelenAssistant(question: str, docs_path: str, source_dir: str) {
     prompt "You are a Helen language assistant. Answer questions about Helen."
     
     functions {
@@ -125,7 +125,7 @@ agent HelenAssistant(question: str, docs_path: str) {
 }
 
 main {
-    let result = HelenAssistant("What is an agent?", "docs/tutorial.md")
+    let result = HelenAssistant("What is an agent?", "docs/tutorial.md", "helen/")
     return result
 }
 """
@@ -146,3 +146,44 @@ main {
         assert len(result) > 50, "LLM should provide substantial answer"
         # Response should be relevant to the question
         assert "agent" in result.lower() or "helen" in result.lower()
+
+    def test_helen_assistant_loads_source_code(self):
+        """Helen assistant can load source code files."""
+        source = """
+agent HelenAssistant(question: str, docs_path: str, source_dir: str) {
+    prompt "You are a Helen language assistant."
+    
+    functions {
+        fn load_sources() -> str {
+            let parser = read_file(source_dir + "core/parser.py")
+            return "Parser source loaded: " + str(len(parser)) + " chars"
+        }
+    }
+    
+    main {
+        let result = load_sources()
+        return result
+    }
+}
+
+main {
+    let result = HelenAssistant("test", "docs/tutorial.md", "helen/")
+    return result
+}
+"""
+        errors = ErrorReporter()
+        scanner = Scanner(source=source, file="<test>")
+        tokens = scanner.scan_all()
+        parser = Parser(tokens, errors=errors)
+        program = parser.parse()
+        
+        assert not errors.has_errors, f"Parse errors: {errors.format_report()}"
+        
+        llm_runtime = HttpLLMRuntime()
+        interp = Interpreter(errors=errors, llm_runtime=llm_runtime)
+        result = interp.interpret(program)
+        
+        # Should load source code
+        assert result is not None
+        assert "Parser source loaded" in result
+        assert "chars" in result

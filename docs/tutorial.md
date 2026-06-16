@@ -209,6 +209,12 @@ Agents:    (none)
 
 REPL 内置了 AI 语言助手（位于 `helen/agent/helen_assistant.helen`），可以回答关于 Helen 语言的问题、帮助编写代码、调试程序。
 
+助手会加载：
+- **Helen 文档**（`docs/tutorial.md`）— 语法、语义、示例
+- **Helen 源码**（`helen/` 目录）— parser、interpreter、AST、lexer
+
+这意味着助手不仅能回答语法问题，还能解释实现细节和内部机制。
+
 使用 `:ask` 命令向助手提问：
 
 ```bash

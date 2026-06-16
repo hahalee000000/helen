@@ -3,17 +3,22 @@
 // write Helen code, and debug Helen programs.
 //
 // Usage:
-//   let answer = HelenAssistant("How do I define an agent?", "/path/to/docs/tutorial.md")
+//   let answer = HelenAssistant("How do I define an agent?", "/path/to/docs/tutorial.md", "/path/to/helen/")
 //   print(answer)
 
-agent HelenAssistant(question: str, docs_path: str) {
+agent HelenAssistant(question: str, docs_path: str, source_dir: str) {
     prompt """You are an expert Helen language assistant. You help users:
 1. Understand Helen syntax and semantics
 2. Write Helen code (agents, functions, LLM integration)
 3. Debug Helen programs (syntax errors, semantic errors, runtime errors)
 
-Be concise, practical, and provide code examples when relevant.
-Reference specific parts of the documentation when answering."""
+You have access to:
+- Helen documentation (tutorial.md)
+- Helen source code (parser, interpreter, AST, etc.)
+
+When answering questions about implementation details, internals, or advanced features,
+reference the source code. Be concise, practical, and provide code examples when relevant.
+Cite specific files and functions from the source code when appropriate."""
     
     functions {
         fn load_documentation() -> str {
@@ -22,16 +27,36 @@ Reference specific parts of the documentation when answering."""
             return tutorial
         }
         
+        fn load_source_code() -> str {
+            // Load key source files for implementation-level questions
+            let parser = read_file(source_dir + "core/parser.py")
+            let interpreter = read_file(source_dir + "interpreter/interpreter.py")
+            let ast = read_file(source_dir + "core/ast.py")
+            let lexer = read_file(source_dir + "core/lexer.py")
+            
+            let sources = "# Helen Source Code\n\n"
+            sources = sources + "## Parser (helen/core/parser.py)\n```\n" + parser + "\n```\n\n"
+            sources = sources + "## Interpreter (helen/interpreter/interpreter.py)\n```\n" + interpreter + "\n```\n\n"
+            sources = sources + "## AST (helen/core/ast.py)\n```\n" + ast + "\n```\n\n"
+            sources = sources + "## Lexer (helen/core/lexer.py)\n```\n" + lexer + "\n```\n"
+            
+            return sources
+        }
+        
         fn build_context() -> str {
             // Build comprehensive context for LLM
             let docs = load_documentation()
-            let context = "Helen Language Documentation:\n\n" + docs + "\n\n---\n\nUser question: " + question
+            let sources = load_source_code()
+            
+            let context = "# Helen Language Documentation\n\n" + docs + "\n\n---\n\n"
+            context = context + sources + "\n---\n\n"
+            context = context + "# User Question\n\n" + question
             return context
         }
     }
     
     main {
-        // Build context with documentation and question
+        // Build context with documentation, source code, and question
         let context = build_context()
         
         // Use LLM to generate answer
@@ -43,9 +68,10 @@ Reference specific parts of the documentation when answering."""
 
 // Main entry point for standalone execution
 main {
-    // Example usage (adjust path as needed)
+    // Example usage (adjust paths as needed)
     let question = "How do I define an agent in Helen?"
     let docs_path = "docs/tutorial.md"  // Relative path for development
-    let answer = HelenAssistant(question, docs_path)
+    let source_dir = "helen/"  // Relative path for development
+    let answer = HelenAssistant(question, docs_path, source_dir)
     print(answer)
 }
