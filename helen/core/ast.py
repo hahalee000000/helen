@@ -171,10 +171,6 @@ class Visitor(ABC, Generic[R]):
         """Visit a LlmChooseStmtNode."""
 
     @abstractmethod
-    def visit_llm_act_stmt(self, node: LlmActStmtNode) -> R:
-        """Visit a LlmActStmtNode."""
-
-    @abstractmethod
     def visit_llm_act_expr(self, node: LlmActExprNode) -> R:
         """Visit a LlmActExprNode."""
 
@@ -781,19 +777,6 @@ class LlmChooseStmtNode(StatementNode):
 
 
 @dataclass(frozen=True)
-class LlmActStmtNode(StatementNode):
-    """LLM act statement."""
-    target: str
-    arguments: dict[str, ExpressionNode]
-    description: str
-    span: SourceSpan
-
-    def accept(self, visitor: Visitor[R]) -> R:
-        """Dispatch to the visitor."""
-        return visitor.visit_llm_act_stmt(self)
-
-
-@dataclass(frozen=True)
 class LlmActExprNode(ExpressionNode):
     """LLM act as an expression: llm act <prompt_expr>? Returns the LLM response text.
 
@@ -1039,10 +1022,6 @@ class ASTPrinter(Visitor[str]):
     def visit_llm_choose_stmt(self, node: LlmChooseStmtNode) -> str:
         """Visit a LlmChooseStmtNode."""
         return self._parenthesize("llm-choose", node.description)
-
-    def visit_llm_act_stmt(self, node: LlmActStmtNode) -> str:
-        """Visit a LlmActStmtNode."""
-        return self._parenthesize("llm-act", node.target, node.description)
 
     def visit_llm_act_expr(self, node: LlmActExprNode) -> str:
         """Visit a LlmActExprNode."""

@@ -5,7 +5,7 @@ from helen.core.lexer import Scanner
 from helen.core.parser import Parser
 from helen.core.ast import (
     LlmIfStmtNode, LlmBranchNode, LlmChooseStmtNode, LlmOptionNode,
-    LlmActStmtNode, ProgramNode, MainBlockNode,
+    ProgramNode, MainBlockNode,
 )
 from helen.core.tokens import TokenType
 
@@ -73,23 +73,6 @@ class TestLlmChooseStmt:
         stmt = _first_stmt(p)
         assert isinstance(stmt, LlmChooseStmtNode)
         assert len(stmt.options) == 2
-
-
-class TestLlmActStmt:
-    def test_llm_act_simple(self):
-        p = _parse('llm act search(query="hello") "desc"')
-        stmt = _first_stmt(p)
-        assert isinstance(stmt, LlmActStmtNode)
-        assert stmt.target == "search"
-        assert "query" in stmt.arguments
-        assert stmt.description == "desc"
-
-    def test_llm_act_no_args(self):
-        p = _parse('llm act search "desc"')
-        stmt = _first_stmt(p)
-        assert isinstance(stmt, LlmActStmtNode)
-        assert stmt.target == "search"
-        assert len(stmt.arguments) == 0
 
 
 class TestLlmDisambiguation:

@@ -156,25 +156,6 @@ class TestLlmStatementsRecordHistory:
             llm_runtime=self.runtime,
         )
 
-    def test_llm_act_records_to_history(self):
-        """llm act records prompt and response to history."""
-        from helen.core.ast import LlmActStmtNode, SourceSpan
-        span = SourceSpan("test.helen", 1, 1, 1, 20)
-        node = LlmActStmtNode(
-            span=span,
-            target="Translate",
-            arguments={},
-            description="Translate to French",
-        )
-        result = self.interp.visit_llm_act_stmt(node)
-        assert result == "result"
-        # Should have user prompt + assistant response
-        assert len(self.interp.history) == 2
-        assert self.interp.history[0].role == "user"
-        assert "Translate" in self.interp.history[0].content
-        assert self.interp.history[1].role == "assistant"
-        assert self.interp.history[1].content == "result"
-
     def test_llm_choose_records_to_history(self):
         """llm choose records description and selection to history."""
         from helen.core.ast import (
@@ -223,20 +204,3 @@ class TestLlmStatementsRecordHistory:
         assert len(self.interp.history) == 2
         assert "[route]" in self.interp.history[0].content
         assert "[routed to: urgent]" in self.interp.history[1].content
-
-    def test_history_accumulates_across_multiple_calls(self):
-        """History grows across multiple LLM calls."""
-        from helen.core.ast import LlmActStmtNode, SourceSpan
-        span = SourceSpan("test.helen", 1, 1, 1, 20)
-        node = LlmActStmtNode(
-            span=span,
-            target="Translate",
-            arguments={},
-            description="Translate to French",
-        )
-        # First call: 2 messages
-        self.interp.visit_llm_act_stmt(node)
-        assert len(self.interp.history) == 2
-        # Second call: 4 messages
-        self.interp.visit_llm_act_stmt(node)
-        assert len(self.interp.history) == 4

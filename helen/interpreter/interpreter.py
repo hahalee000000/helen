@@ -38,7 +38,6 @@ from helen.core.ast import (
     LiteralNode,
     LiteralTypeNode,
     LlmActExprNode,
-    LlmActStmtNode,
     LlmBranchNode,
     LlmChooseStmtNode,
     LlmIfStmtNode,
@@ -894,60 +893,6 @@ class Interpreter(Visitor[object]):
     def visit_llm_option(self, node: LlmOptionNode) -> object:
         """Execute an llm choose option body."""
         return self._execute_stmts(node.body)
-
-    def visit_llm_act_stmt(self, node: LlmActStmtNode) -> object:
-        """Execute an llm act statement (HLD 3.6.5).
-
-        Execution flow:
-        1. Build full prompt from target + arguments + description
-        2. Extract agent settings (model, temperature, max-turns)
-        3. Build tools list (always includes load_skill per HLD 3.6.5)
-        4. Get rendered agent prompt as system_prompt
-        5. Call runtime.act() with full parameters
-        6. Return the LLM response text
-        """
-        # Build arguments dict
-        args_dict = {}
-        for name, expr in node.arguments.items():
-            args_dict[name] = expr.accept(self)
-
-        # Build prompt
-        prompt = f"{node.target}"
-        if args_dict:
-            args_str = ", ".join(f"{k}={Interpreter._stringify(v)}" for k, v in args_dict.items())
-            prompt += f"({args_str})"
-        prompt += f"\n{node.description}"
-
-        # Extract agent settings (HLD 3.6.5)
-        model = self._get_agent_setting("model")
-        temperature = float(self._get_agent_setting("temperature", 1.0))
-        max_turns = int(self._get_agent_setting("max-turns", 1))
-
-        # Build tools list: always include load_skill + agent-declared tools
-        tools = self._build_tools_list()
-
-        # When tools are available, ensure at least 3 turns (tool call + tool result + response)
-        if tools and max_turns < 3:
-            max_turns = 3
-
-        # Get rendered agent prompt as system_prompt
-        system_prompt = self._get_rendered_agent_prompt()
-
-        # Record user message to history
-        self._add_to_history("user", prompt)
-
-        try:
-            response = self.llm_runtime.act(
-                prompt, tools=tools, model=model,
-                temperature=temperature, max_turns=max_turns,
-                system_prompt=system_prompt,
-            )
-            # Record assistant response to history
-            if response and response.text:
-                self._add_to_history("assistant", response.text)
-            return response.text if response else None
-        except HelenRuntimeError:
-            return None
 
     def visit_llm_act_expr(self, node: LlmActExprNode) -> object:
         """Execute llm act as an expression: llm act <prompt_expr>?

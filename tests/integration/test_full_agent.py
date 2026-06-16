@@ -177,7 +177,7 @@ agent Assistant {
     prompt "You are a helpful assistant"
 
     main {
-        llm act Assistant "hello"
+        llm act "hello"
     }
 }
 """

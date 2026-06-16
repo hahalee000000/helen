@@ -1146,46 +1146,52 @@ Helen 有三个关键字级 LLM 语句：
 
 ### 基本用法
 
-```helen
-agent Translator {
-    description "Translate text"
-    prompt "Translate to French:"
-}
+`llm act` 用于直接调用 LLM，传入 prompt 字符串：
 
+```helen
 main {
-    let text = "Hello, world!"
-    let result = llm act Translator(text) "Translate to French"
+    let result = llm act "Translate 'Hello, world!' to French"
     print(result)
     // Bonjour, le monde!
 }
 ```
 
-### 带参数
+### 在 agent 中使用
+
+在 agent 的 `main` 块中，`llm act` 会自动使用 agent 的配置（model、temperature 等）：
 
 ```helen
-agent Analyzer {
-    description "Analyze text sentiment"
-    prompt "Analyze sentiment of: {{text}}"
+agent Translator(text: str, target: str) {
+    description "Translate text"
+    model "qwen-plus"
+    temperature 0.3
+    prompt """
+    Translate to {{target}}:
+    {{text}}
+    """
+
+    main {
+        // bare form：自动使用渲染后的 prompt
+        let result = llm act
+        return result
+    }
 }
 
 main {
-    let review = "This product is amazing!"
-    llm act Analyzer(text=review) "Analyze sentiment"
+    let translated = call Translator(text="Hello", target="French")
+    print(translated)
 }
 ```
 
-### 返回处理
+### 带动态 prompt
+
+可以在 `llm act` 后传入表达式，动态构建 prompt：
 
 ```helen
-agent Summarizer {
-    description "Summarize text"
-    prompt "Summarize in one sentence:"
-}
-
 main {
-    let article = "Long article content..."
-    let summary = llm act Summarizer(article) "Summarize"
-    print("Summary: " + summary)
+    let review = "This product is amazing!"
+    let result = llm act "Analyze sentiment of: " + review
+    print(result)
 }
 ```
 
@@ -1340,7 +1346,7 @@ main {
     // 自动记录: [assistant] "[routed to: urgent]"
 
     // 下次 LLM 调用会包含上面的历史作为上下文
-    llm act Responder(email) "Draft response"
+    llm act "Draft response for the email"
 }
 ```
 
