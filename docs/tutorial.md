@@ -207,7 +207,7 @@ Agents:    (none)
 
 ### Helen 语言助手
 
-REPL 内置了 AI 语言助手，可以回答关于 Helen 语言的问题、帮助编写代码、调试程序。
+REPL 内置了 AI 语言助手（位于 `helen/agent/helen_assistant.helen`），可以回答关于 Helen 语言的问题、帮助编写代码、调试程序。
 
 使用 `:ask` 命令向助手提问：
 

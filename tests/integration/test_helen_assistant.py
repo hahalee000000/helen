@@ -20,8 +20,8 @@ class TestHelenAssistantProgram:
 
     def test_helen_assistant_program_exists(self):
         """Helen assistant program file exists."""
-        assistant_path = Path("helenlab/helen_assistant.helen")
-        assert assistant_path.exists(), "helenlab/helen_assistant.helen should exist"
+        assistant_path = Path("helen/agent/helen_assistant.helen")
+        assert assistant_path.exists(), "helen/agent/helen_assistant.helen should exist"
 
     def test_helen_assistant_loads_documentation(self):
         """Helen assistant can load Helen documentation."""

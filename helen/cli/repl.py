@@ -130,9 +130,9 @@ def _run_helen_assistant(question: str) -> str:
     from helen.runtime.http_llm import HttpLLMRuntime
     
     # Load the Helen assistant program
-    assistant_path = Path("helenlab/helen_assistant.helen")
+    assistant_path = Path("helen/agent/helen_assistant.helen")
     if not assistant_path.exists():
-        return "Error: Helen assistant program not found at helenlab/helen_assistant.helen"
+        return "Error: Helen assistant program not found at helen/agent/helen_assistant.helen"
     
     source = assistant_path.read_text(encoding="utf-8")
     
