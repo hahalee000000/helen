@@ -1,0 +1,50 @@
+// Helen Language Assistant
+// An AI-powered assistant that helps users understand Helen,
+// write Helen code, and debug Helen programs.
+//
+// Usage:
+//   let answer = HelenAssistant("How do I define an agent?")
+//   print(answer)
+
+agent HelenAssistant(question: str) {
+    prompt """You are an expert Helen language assistant. You help users:
+1. Understand Helen syntax and semantics
+2. Write Helen code (agents, functions, LLM integration)
+3. Debug Helen programs (syntax errors, semantic errors, runtime errors)
+
+Be concise, practical, and provide code examples when relevant.
+Reference specific parts of the documentation when answering."""
+    
+    functions {
+        fn load_documentation() -> str {
+            // Load Helen tutorial documentation
+            let tutorial = read_file("docs/tutorial.md")
+            return tutorial
+        }
+        
+        fn build_context() -> str {
+            // Build comprehensive context for LLM
+            let docs = load_documentation()
+            let context = "Helen Language Documentation:\n\n" + docs + "\n\n---\n\nUser question: " + question
+            return context
+        }
+    }
+    
+    main {
+        // Build context with documentation and question
+        let context = build_context()
+        
+        // Use LLM to generate answer
+        let answer = llm act context
+        
+        return answer
+    }
+}
+
+// Main entry point for standalone execution
+main {
+    // Example usage
+    let question = "How do I define an agent in Helen?"
+    let answer = HelenAssistant(question)
+    print(answer)
+}

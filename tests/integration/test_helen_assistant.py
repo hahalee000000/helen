@@ -1,0 +1,148 @@
+"""Tests for Helen language assistant (TDD).
+
+The Helen assistant is a Helen program that:
+1. Loads Helen documentation
+2. Builds context with the documentation
+3. Uses LLM to answer questions about Helen
+"""
+
+import pytest
+from pathlib import Path
+from helen.core.lexer import Scanner
+from helen.core.parser import Parser
+from helen.core.errors import ErrorReporter
+from helen.interpreter.interpreter import Interpreter
+from helen.runtime.http_llm import HttpLLMRuntime
+
+
+class TestHelenAssistantProgram:
+    """Test the Helen assistant Helen program."""
+
+    def test_helen_assistant_program_exists(self):
+        """Helen assistant program file exists."""
+        assistant_path = Path("helenlab/helen_assistant.helen")
+        assert assistant_path.exists(), "helenlab/helen_assistant.helen should exist"
+
+    def test_helen_assistant_loads_documentation(self):
+        """Helen assistant can load Helen documentation."""
+        source = """
+agent HelenAssistant {
+    prompt "You are a Helen language assistant."
+    
+    functions {
+        fn load_docs() -> str {
+            return read_file("docs/tutorial.md")
+        }
+    }
+    
+    main {
+        let docs = load_docs()
+        return docs
+    }
+}
+
+main {
+    let result = HelenAssistant()
+    return result
+}
+"""
+        errors = ErrorReporter()
+        scanner = Scanner(source=source, file="<test>")
+        tokens = scanner.scan_all()
+        parser = Parser(tokens, errors=errors)
+        program = parser.parse()
+        
+        assert not errors.has_errors, f"Parse errors: {errors.format_report()}"
+        
+        llm_runtime = HttpLLMRuntime()
+        interp = Interpreter(errors=errors, llm_runtime=llm_runtime)
+        result = interp.interpret(program)
+        
+        # Should load documentation content
+        assert result is not None
+        assert len(result) > 100, "Should load substantial documentation"
+        assert "agent" in result.lower(), "Documentation should mention 'agent'"
+
+    def test_helen_assistant_builds_context(self):
+        """Helen assistant builds context with question."""
+        source = """
+agent HelenAssistant {
+    prompt "You are a Helen language assistant."
+    
+    functions {
+        fn build_context(question: str) -> str {
+            let docs = read_file("docs/tutorial.md")
+            return "Documentation:\\n" + docs + "\\n\\nQuestion: " + question
+        }
+    }
+    
+    main {
+        let context = build_context("How to define an agent?")
+        return context
+    }
+}
+
+main {
+    let result = HelenAssistant()
+    return result
+}
+"""
+        errors = ErrorReporter()
+        scanner = Scanner(source=source, file="<test>")
+        tokens = scanner.scan_all()
+        parser = Parser(tokens, errors=errors)
+        program = parser.parse()
+        
+        assert not errors.has_errors
+        
+        llm_runtime = HttpLLMRuntime()
+        interp = Interpreter(errors=errors, llm_runtime=llm_runtime)
+        result = interp.interpret(program)
+        
+        # Should build context with question
+        assert "Question:" in result
+        assert "How to define an agent?" in result
+        assert "Documentation:" in result
+
+    def test_helen_assistant_answers_question(self):
+        """Helen assistant uses LLM to answer questions."""
+        source = """
+agent HelenAssistant(question: str) {
+    prompt "You are a Helen language assistant. Answer questions about Helen."
+    
+    functions {
+        fn build_context() -> str {
+            let docs = read_file("docs/tutorial.md")
+            return "Helen Documentation:\\n" + docs + "\\n\\nUser question: " + question
+        }
+    }
+    
+    main {
+        let context = build_context()
+        let answer = llm act context
+        return answer
+    }
+}
+
+main {
+    let result = HelenAssistant("What is an agent?")
+    return result
+}
+"""
+        errors = ErrorReporter()
+        scanner = Scanner(source=source, file="<test>")
+        tokens = scanner.scan_all()
+        parser = Parser(tokens, errors=errors)
+        program = parser.parse()
+        
+        assert not errors.has_errors
+        
+        llm_runtime = HttpLLMRuntime()
+        interp = Interpreter(errors=errors, llm_runtime=llm_runtime)
+        result = interp.interpret(program)
+        
+        # Should get LLM response
+        assert result is not None
+        assert len(result) > 50, "LLM should provide substantial answer"
+        # Response should be relevant to the question
+        assert "agent" in result.lower() or "helen" in result.lower()

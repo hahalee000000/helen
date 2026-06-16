@@ -189,6 +189,7 @@ REPL 支持以下管理命令（以 `:` 开头）：
 | `:list` | 列出已定义的函数和 agent |
 | `:undefine <name>` | 删除指定的函数或 agent |
 | `:reset` | 清除所有定义（函数、agent），保留标准库 |
+| `:ask <question>` | 向 Helen 语言助手提问 |
 
 ```bash
 helen> fn add(a, b) { return a + b; }
@@ -203,6 +204,59 @@ helen> :list
 Functions: (none)
 Agents:    (none)
 ```
+
+### Helen 语言助手
+
+REPL 内置了 AI 语言助手，可以回答关于 Helen 语言的问题、帮助编写代码、调试程序。
+
+使用 `:ask` 命令向助手提问：
+
+```bash
+helen> :ask How do I define an agent in Helen?
+
+🤔 Thinking...
+
+# Defining an Agent in Helen
+
+An `agent` is a first-class language construct in Helen. Here's the basic structure:
+
+## Basic Syntax
+
+```helen
+agent AgentName {
+    description "What this agent does"
+    prompt "Your system prompt here..."
+}
+```
+
+## With Parameters
+
+```helen
+agent Translator(text: str, target: str) {
+    description "Translate text"
+    prompt "Translate to {{target}}: {{text}}"
+}
+```
+
+## Calling an Agent
+
+Agents are called like functions:
+
+```helen
+main {
+    let result = Translator("Hello", "French")
+    print(result)
+}
+```
+```
+
+助手会加载 Helen 文档并生成详细的回答，包括代码示例和语法说明。
+
+**助手能力：**
+- ✅ 解释 Helen 语法和语义
+- ✅ 提供代码示例
+- ✅ 帮助调试错误
+- ✅ 回答关于 agent、function、LLM 集成的问题
 
 ### 函数重定义
 

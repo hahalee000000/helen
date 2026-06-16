@@ -113,6 +113,66 @@ def _execute_input(source: str, interp: Interpreter, analyzer: SemanticAnalyzer)
     return True, result
 
 
+def _run_helen_assistant(question: str) -> str:
+    """Run the Helen assistant program to answer a question.
+    
+    Args:
+        question: User's question about Helen.
+    
+    Returns:
+        Assistant's response.
+    """
+    from pathlib import Path
+    from helen.core.lexer import Scanner
+    from helen.core.parser import Parser
+    from helen.core.errors import ErrorReporter
+    from helen.interpreter.interpreter import Interpreter
+    from helen.runtime.http_llm import HttpLLMRuntime
+    
+    # Load the Helen assistant program
+    assistant_path = Path("helenlab/helen_assistant.helen")
+    if not assistant_path.exists():
+        return "Error: Helen assistant program not found at helenlab/helen_assistant.helen"
+    
+    source = assistant_path.read_text(encoding="utf-8")
+    
+    # Parse and execute
+    errors = ErrorReporter()
+    scanner = Scanner(source=source, file=str(assistant_path))
+    tokens = scanner.scan_all()
+    parser = Parser(tokens, errors=errors)
+    program = parser.parse()
+    
+    if errors.has_errors:
+        return f"Parse error: {errors.format_report()}"
+    
+    # Create interpreter with modified main block that uses the question
+    llm_runtime = HttpLLMRuntime()
+    interp = Interpreter(errors=errors, llm_runtime=llm_runtime)
+    
+    # Modify the program to pass the question to HelenAssistant
+    # We'll create a wrapper that injects the question
+    modified_source = source.replace(
+        'let question = "How do I define an agent in Helen?"',
+        f'let question = "{question}"'
+    )
+    
+    # Re-parse with modified source
+    scanner = Scanner(source=modified_source, file=str(assistant_path))
+    tokens = scanner.scan_all()
+    parser = Parser(tokens, errors=errors)
+    program = parser.parse()
+    
+    if errors.has_errors:
+        return f"Parse error: {errors.format_report()}"
+    
+    try:
+        result = interp.interpret(program)
+        return result if result else "No response generated."
+    except Exception as e:
+        return f"Runtime error: {e}"
+
+
 def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnalyzer) -> bool:
     """Handle REPL colon-commands. Returns True if the line was a command."""
     stripped = line.strip()
@@ -129,6 +189,7 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
         print("  :reset            Clear all definitions (functions, agents)")
         print("  :list             List all defined functions and agents")
         print("  :undefine <name>  Remove a function or agent definition")
+        print("  :ask <question>   Ask the Helen language assistant")
         print("  exit              Exit the REPL")
         return True
 
@@ -161,6 +222,16 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
             print(f"Removed '{arg}'.")
         else:
             print(f"'{arg}' not found.")
+        return True
+
+    if cmd == ":ask":
+        if not arg:
+            print("Usage: :ask <question>")
+            return True
+        
+        print("\n🤔 Thinking...\n")
+        response = _run_helen_assistant(arg)
+        print(f"\n{response}\n")
         return True
 
     print(f"Unknown command: {cmd}. Type :help for available commands.")
