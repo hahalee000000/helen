@@ -807,15 +807,22 @@ class Interpreter(Visitor[object]):
             else:
                 branches.append("default")
 
+        # Evaluate description expression to string
+        if isinstance(node.description, str):
+            desc_str = node.description
+        else:
+            desc_val = node.description.accept(self)
+            desc_str = str(desc_val) if desc_val is not None else ""
+
         # Get context from environment (conversation summary)
         context = self._get_context()
 
         # Record user message to history
-        self._add_to_history("user", f"[route] {node.description}")
+        self._add_to_history("user", f"[route] {desc_str}")
 
         # Call LLM routing
         try:
-            selected = self.llm_runtime.route(node.description, branches, context)
+            selected = self.llm_runtime.route(desc_str, branches, context)
         except HelenRuntimeError:
             # LLM call failed -> execute default
             selected = None
@@ -871,11 +878,18 @@ class Interpreter(Visitor[object]):
         options = [opt.label for opt in node.options]
         context = self._get_context()
 
+        # Evaluate description expression to string
+        if isinstance(node.description, str):
+            desc_str = node.description
+        else:
+            desc_val = node.description.accept(self)
+            desc_str = str(desc_val) if desc_val is not None else ""
+
         # Record user message to history
-        self._add_to_history("user", f"[choose] {node.description}")
+        self._add_to_history("user", f"[choose] {desc_str}")
 
         try:
-            selected = self.llm_runtime.choose(node.description, options, context)
+            selected = self.llm_runtime.choose(desc_str, options, context)
         except HelenRuntimeError:
             return None
 

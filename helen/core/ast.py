@@ -742,7 +742,7 @@ class LlmBranchNode(StatementNode):
 @dataclass(frozen=True)
 class LlmIfStmtNode(StatementNode):
     """LLM if statement."""
-    description: str
+    description: object  # ExpressionNode (evaluated at runtime) or str (legacy)
     branches: list[LlmBranchNode]
     span: SourceSpan
 
@@ -766,7 +766,7 @@ class LlmOptionNode(StatementNode):
 @dataclass(frozen=True)
 class LlmChooseStmtNode(StatementNode):
     """LLM choose statement."""
-    description: str
+    description: object  # ExpressionNode (evaluated at runtime) or str (legacy)
     options: list[LlmOptionNode]
     default: list[StatementNode]
     span: SourceSpan

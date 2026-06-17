@@ -29,7 +29,10 @@ class TestLlmIfStmt:
         p = _parse('llm if "classify" { branch true { x = 1 } }')
         stmt = _first_stmt(p)
         assert isinstance(stmt, LlmIfStmtNode)
-        assert stmt.description == "classify"
+        # description is now an expression node (LiteralNode for string literals)
+        from helen.core.ast import LiteralNode
+        assert isinstance(stmt.description, LiteralNode)
+        assert stmt.description.value == "classify"
         assert len(stmt.branches) == 1
         assert isinstance(stmt.branches[0], LlmBranchNode)
 
@@ -63,7 +66,10 @@ class TestLlmChooseStmt:
         p = _parse('llm choose "pick one" { option "a" { x = 1 } default { x = 0 } }')
         stmt = _first_stmt(p)
         assert isinstance(stmt, LlmChooseStmtNode)
-        assert stmt.description == "pick one"
+        # description is now an expression node (LiteralNode for string literals)
+        from helen.core.ast import LiteralNode
+        assert isinstance(stmt.description, LiteralNode)
+        assert stmt.description.value == "pick one"
         assert len(stmt.options) == 1
         assert isinstance(stmt.options[0], LlmOptionNode)
         assert stmt.options[0].label == "a"

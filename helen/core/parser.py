@@ -820,7 +820,7 @@ class Parser:
         """解析 llm if 语句：llm if "desc" { branch "cond" { ... } default { ... } }。"""
         start = self._previous()  # LLM token
         self._consume(TokenType.IF, "Expected 'if' after 'llm'.")
-        desc_tok = self._consume(TokenType.STRING, "Expected description after 'llm if'.")
+        desc_expr = self._expression()  # Parse expression instead of just STRING
         self._consume(TokenType.LEFT_BRACE, "Expected '{' after llm if description.")
         branches: list[LlmBranchNode] = []
         while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF):
@@ -839,7 +839,7 @@ class Parser:
                 self._synchronize()
         self._consume(TokenType.RIGHT_BRACE, "Expected '}' after llm if body.")
         end = self._previous()
-        return LlmIfStmtNode(description=desc_tok.literal or desc_tok.lexeme, branches=branches,
+        return LlmIfStmtNode(description=desc_expr, branches=branches,
                              span=self._make_span(start, end))
 
     def _llm_branch(self) -> LlmBranchNode:
@@ -856,7 +856,7 @@ class Parser:
         """解析 llm choose 语句：llm choose "desc" { option "label" { ... } default { ... } }。"""
         start = self._previous()  # LLM token
         self._consume(TokenType.CHOOSE, "Expected 'choose' after 'llm'.")
-        desc_tok = self._consume(TokenType.STRING, "Expected description after 'llm choose'.")
+        desc_expr = self._expression()  # Parse expression instead of just STRING
         self._consume(TokenType.LEFT_BRACE, "Expected '{' after llm choose description.")
         options: list[LlmOptionNode] = []
         default: list[StatementNode] = []
@@ -873,7 +873,7 @@ class Parser:
                 self._synchronize()
         self._consume(TokenType.RIGHT_BRACE, "Expected '}' after llm choose body.")
         end = self._previous()
-        return LlmChooseStmtNode(description=desc_tok.literal or desc_tok.lexeme,
+        return LlmChooseStmtNode(description=desc_expr,
                                  options=options, default=default,
                                  span=self._make_span(start, end))
 

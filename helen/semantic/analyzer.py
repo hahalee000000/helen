@@ -753,6 +753,9 @@ class SemanticAnalyzer(Visitor[None]):
     # ------------------------------------------------------------------
 
     def visit_llm_if_stmt(self, node: LlmIfStmtNode) -> None:
+        # Analyze description expression if it's not a plain string
+        if not isinstance(node.description, str):
+            node.description.accept(self)
         has_default = False
         for branch in node.branches:
             branch.accept(self)
@@ -770,6 +773,9 @@ class SemanticAnalyzer(Visitor[None]):
             self.symbols.exit_scope()
 
     def visit_llm_choose_stmt(self, node: LlmChooseStmtNode) -> None:
+        # Analyze description expression if it's not a plain string
+        if not isinstance(node.description, str):
+            node.description.accept(self)
         for option in node.options:
             option.accept(self)
         if node.default:
