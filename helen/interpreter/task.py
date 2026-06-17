@@ -62,23 +62,56 @@ class Task:
         """Whether the task completed with an exception."""
         return self.exception is not None
 
-    def execute(self) -> None:
-        """Execute the pending task (called by await)."""
+    async def execute_async(self) -> None:
+        """Async version of execute() for true concurrent execution.
+        
+        Phase 1b: Uses asyncio.to_thread() to run sync interpreter code
+        in the global thread pool. This allows concurrent LLM calls
+        without creating a thread per task.
+        
+        Memory: Uses fixed-size global thread pool (min(32, cpu_count + 4)),
+        not one thread per task. Suitable for memory-constrained environments.
+        """
+        import asyncio
+        
         if not self._pending:
             return
         
         try:
-            # Restore environment snapshot for isolation
-            old_env = self._interpreter.environment
-            self._interpreter.environment = self._env_snapshot
-            
-            # Execute the call
-            result = self._call_node.accept(self._interpreter)
+            # Run sync interpreter code in thread pool
+            # asyncio.to_thread uses a global thread pool, not per-task threads
+            result = await asyncio.to_thread(self._execute_sync)
             self.result_value = result
             self._done = True
-            
+        except Exception as e:
+            self.exception = e
+            self._done = True
+        finally:
+            self._pending = False
+    
+    def _execute_sync(self) -> Any:
+        """Synchronous execution helper for execute_async()."""
+        # Restore environment snapshot for isolation
+        old_env = self._interpreter.environment
+        self._interpreter.environment = self._env_snapshot
+        
+        try:
+            # Execute the call
+            result = self._call_node.accept(self._interpreter)
+            return result
+        finally:
             # Restore original environment
             self._interpreter.environment = old_env
+
+    def execute(self) -> None:
+        """Execute the pending task (sync version, for backward compatibility)."""
+        if not self._pending:
+            return
+        
+        try:
+            result = self._execute_sync()
+            self.result_value = result
+            self._done = True
         except Exception as e:
             self.exception = e
             self._done = True

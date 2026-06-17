@@ -42,20 +42,13 @@ class LLMRuntime(ABC):
     Two core methods map to Helen's llm statements:
     - route()  → llm if
     - act()    → llm act
+    
+    Phase 1b: Also provides async versions for concurrent execution.
     """
 
     @abstractmethod
     def route(self, description: str, branches: list[str], context: str | None = None) -> str | None:
-        """LLM routing: classify input into one of the given branches.
-
-        Args:
-            description: The routing description (from llm if "desc").
-            branches: List of available branch names.
-            context: Optional context string (conversation summary).
-
-        Returns:
-            The selected branch name, or None if classification failed.
-        """
+        """Route input to one of the given branches via LLM (sync version)."""
         ...
 
     @abstractmethod
@@ -63,21 +56,27 @@ class LLMRuntime(ABC):
             model: str | None = None, temperature: float = 1.0,
             max_turns: int = 1, history: list[dict[str, Any]] | None = None,
             system_prompt: str | None = None) -> LLMResponse:
-        """LLM autonomous action.
-
-        Args:
-            prompt: The prompt text (from llm act target ... "desc").
-            tools: Optional tool schemas for function calling.
-            model: Optional model override.
-            temperature: Sampling temperature.
-            max_turns: Maximum interaction turns.
-            history: Optional conversation history.
-            system_prompt: Optional system prompt (e.g. from agent's prompt field).
-
-        Returns:
-            An LLMResponse with text and/or tool calls.
-        """
+        """Execute an autonomous LLM action (sync version)."""
         ...
+
+    # Phase 1b: Async versions for concurrent execution
+    async def route_async(self, description: str, branches: list[str], 
+                          context: str | None = None) -> str | None:
+        """Async version of route() for concurrent execution.
+        
+        Default implementation calls sync version. Override for true async.
+        """
+        return self.route(description, branches, context)
+
+    async def act_async(self, prompt: str, tools: list[dict[str, Any]] | None = None,
+                        model: str | None = None, temperature: float = 1.0,
+                        max_turns: int = 1, history: list[dict[str, Any]] | None = None,
+                        system_prompt: str | None = None) -> LLMResponse:
+        """Async version of act() for concurrent execution.
+        
+        Default implementation calls sync version. Override for true async.
+        """
+        return self.act(prompt, tools, model, temperature, max_turns, history, system_prompt)
 
 
 # ---------------------------------------------------------------------------

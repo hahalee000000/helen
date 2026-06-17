@@ -167,3 +167,91 @@ class HermesCLILLMRuntime(LLMRuntime):
     def last_error(self) -> str | None:
         """The error message from the last failed LLM call."""
         return self._last_error
+
+    # ── Phase 1b: Async versions ───────────────────────────────
+
+    async def route_async(
+        self,
+        description: str,
+        branches: list[str],
+        context: str | None = None,
+    ) -> str | None:
+        """Async version of route() using asyncio subprocess."""
+        branch_list = ", ".join(branches)
+        prompt = (
+            f"{description}\n"
+            f"Available branches: {branch_list}\n"
+            f"Reply with ONLY the branch name that best matches.\n"
+        )
+        if context:
+            prompt += f"\nContext: {context}\n"
+
+        response = await self._ask_async(prompt)
+        if response is None:
+            return None
+
+        cleaned = response.strip().strip('"').strip("'").lower()
+        for branch in branches:
+            if cleaned == branch.lower() or cleaned.startswith(branch.lower()):
+                return branch
+
+        return branches[0] if branches else None
+
+    async def act_async(
+        self,
+        prompt: str,
+        tools: list[dict[str, Any]] | None = None,
+        model: str | None = None,
+        temperature: float = 1.0,
+        max_turns: int = 1,
+        history: list[dict[str, Any]] | None = None,
+        system_prompt: str | None = None,
+    ) -> LLMResponse:
+        """Async version of act() using asyncio subprocess."""
+        full_prompt = prompt
+        if system_prompt:
+            full_prompt = f"{system_prompt}\n\n{prompt}"
+        response = await self._ask_async(full_prompt, model=model)
+        return LLMResponse(
+            text=response or "",
+            model=model or self.default_model or "hermes-cli",
+        )
+
+    async def _ask_async(self, prompt: str, model: str | None = None) -> str | None:
+        """Async version of _ask() using asyncio.create_subprocess_exec().
+        
+        This is the key to Phase 1b: non-blocking subprocess execution
+        that allows concurrent LLM calls in a single thread.
+        """
+        import asyncio
+        
+        cmd = [self.hermes_path, "-z", prompt]
+        if model:
+            cmd.extend(["-m", model])
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(),
+                timeout=self.timeout
+            )
+            
+            if proc.returncode != 0:
+                self._last_error = stderr.decode().strip()
+                return None
+
+            return stdout.decode().strip()
+
+        except asyncio.TimeoutError:
+            self._last_error = f"LLM call timed out after {self.timeout}s"
+            return None
+        except FileNotFoundError:
+            self._last_error = f"Hermes CLI not found at '{self.hermes_path}'"
+            return None
+        except OSError as e:
+            self._last_error = f"Hermes CLI error: {e}"
+            return None

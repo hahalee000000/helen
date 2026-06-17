@@ -1172,8 +1172,9 @@ class Interpreter(Visitor[object]):
     def _await_tasks(self, tasks: list[Task] | Task) -> object:
         """Await one or more tasks with Promise.all semantics (HLD 3.6.7).
 
-        Phase 1b: Executes pending tasks concurrently using asyncio + ThreadPoolExecutor.
-        This enables true parallelism for I/O-bound operations (e.g., LLM API calls).
+        Phase 1b: Executes pending tasks concurrently using asyncio.
+        Uses asyncio.to_thread() for sync interpreter code, which uses
+        a global thread pool (fixed memory, not per-task threads).
 
         For a single task: returns its result or raises its exception.
         For a list of tasks: returns list of results if all succeed,
@@ -1192,30 +1193,26 @@ class Interpreter(Visitor[object]):
         if isinstance(tasks, Task):
             # Single task: execute if pending, then return result or raise exception
             if tasks.is_pending:
-                tasks.execute()
+                # Use asyncio for single task too
+                import asyncio
+                asyncio.run(tasks.execute_async())
             return tasks.result()
 
-        # List of tasks: execute pending tasks concurrently
+        # List of tasks: execute pending tasks concurrently using asyncio
         pending_tasks = [t for t in tasks if t.is_pending]
         
         if pending_tasks:
-            # Use asyncio + ThreadPoolExecutor for concurrent execution
+            # Phase 1b: Pure asyncio concurrent execution
+            # Uses asyncio.to_thread() internally (global thread pool, fixed memory)
             import asyncio
-            from concurrent.futures import ThreadPoolExecutor
             
-            async def execute_concurrently():
-                loop = asyncio.get_event_loop()
-                with ThreadPoolExecutor(max_workers=len(pending_tasks)) as executor:
-                    # Submit all pending tasks to thread pool
-                    futures = [
-                        loop.run_in_executor(executor, task.execute)
-                        for task in pending_tasks
-                    ]
-                    # Wait for all to complete
-                    await asyncio.gather(*futures)
+            async def execute_all():
+                # Create coroutines for all pending tasks
+                coros = [task.execute_async() for task in pending_tasks]
+                # Execute concurrently
+                await asyncio.gather(*coros)
             
-            # Run the async execution
-            asyncio.run(execute_concurrently())
+            asyncio.run(execute_all())
 
         # Collect results from all tasks (both pending and already completed)
         results = []
