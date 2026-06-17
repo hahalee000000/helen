@@ -155,9 +155,15 @@ class ImportResolver:
         """Check that resolved path is within base_dir (HLD 3.9.2 path safety).
 
         Prevents ../ escape outside the project directory.
+        Absolute paths are allowed (for REPL and external imports).
         """
         abs_resolved = os.path.abspath(resolved)
         abs_base = os.path.abspath(self.base_dir)
+        
+        # Allow absolute paths (for REPL and external imports)
+        if os.path.isabs(resolved):
+            return True
+        
         return abs_resolved.startswith(abs_base + os.sep) or abs_resolved == abs_base
 
     @staticmethod
