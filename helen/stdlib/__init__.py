@@ -7,6 +7,7 @@ Registered in the global scope before any user code executes.
 from __future__ import annotations
 
 import math as _math
+import sys
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -214,6 +215,61 @@ def _read_file(path: str) -> str:
     return pathlib.Path(path).read_text(encoding="utf-8")
 
 
+# ── Stream output builtins ────────────────────────────────────
+
+
+def _stream_print(text: str) -> str:
+    """Print text without newline (for streaming output)."""
+    sys.stdout.write(text)
+    sys.stdout.flush()
+    return text
+
+
+def _stream_clear() -> str:
+    """Clear current line using ANSI escape codes."""
+    sys.stdout.write("\r\x1b[2K")
+    sys.stdout.flush()
+    return ""
+
+
+def _progress_bar(current: int, total: int, width: int = 40) -> str:
+    """Display a progress bar with percentage.
+    
+    Args:
+        current: Current progress value
+        total: Total value (100% = total)
+        width: Width of progress bar in characters (default 40)
+    
+    Returns:
+        The progress bar string
+    """
+    if total == 0:
+        percentage = 0.0
+    else:
+        percentage = min(100.0, (current / total) * 100)
+    
+    filled = int(width * percentage / 100)
+    bar = "█" * filled + "░" * (width - filled)
+    result = f"\r[{bar}] {percentage:.0f}%"
+    sys.stdout.write(result)
+    sys.stdout.flush()
+    return result
+
+
+def _stream_cursor_up(n: int = 1) -> str:
+    """Move cursor up n lines using ANSI escape codes."""
+    sys.stdout.write(f"\x1b[{n}A")
+    sys.stdout.flush()
+    return ""
+
+
+def _stream_cursor_down(n: int = 1) -> str:
+    """Move cursor down n lines using ANSI escape codes."""
+    sys.stdout.write(f"\x1b[{n}B")
+    sys.stdout.flush()
+    return ""
+
+
 # ── Registration ───────────────────────────────────────────────
 
 def _register_builtins() -> None:
@@ -250,6 +306,13 @@ def _register_builtins() -> None:
         BuiltinFunction("ceil", "Ceiling value", "ceil(value)", _ceil, "math"),
         BuiltinFunction("input", "Read line from stdin", "input(prompt?)", _input, "core"),
         BuiltinFunction("read_file", "Read file content", "read_file(path)", _read_file, "core"),
+
+        # Stream output
+        BuiltinFunction("stream_print", "Print without newline", "stream_print(text)", _stream_print, "io"),
+        BuiltinFunction("stream_clear", "Clear current line", "stream_clear()", _stream_clear, "io"),
+        BuiltinFunction("progress_bar", "Display progress bar", "progress_bar(current, total, width?)", _progress_bar, "io"),
+        BuiltinFunction("stream_cursor_up", "Move cursor up", "stream_cursor_up(n?)", _stream_cursor_up, "io"),
+        BuiltinFunction("stream_cursor_down", "Move cursor down", "stream_cursor_down(n?)", _stream_cursor_down, "io"),
     ]
 
     for func in builtins:
