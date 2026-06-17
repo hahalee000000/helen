@@ -1190,29 +1190,54 @@ class Interpreter(Visitor[object]):
             The task's exception for single failed task.
             AggregateError if any task in a list fails.
         """
+        import asyncio
+        
+        # Check if we're already in a running event loop (e.g., in REPL)
+        # Use a safer approach that works in all contexts
+        in_event_loop = False
+        try:
+            _loop = asyncio.get_event_loop()
+            if _loop.is_running():
+                in_event_loop = True
+        except Exception:
+            # No event loop or can't determine
+            in_event_loop = False
+        
         if isinstance(tasks, Task):
             # Single task: execute if pending, then return result or raise exception
             if tasks.is_pending:
-                # Use asyncio for single task too
-                import asyncio
-                asyncio.run(tasks.execute_async())
+                if in_event_loop:
+                    # Already in event loop - use thread pool directly
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(tasks.execute)
+                        future.result()  # Wait for completion
+                else:
+                    # No event loop - use asyncio.run()
+                    asyncio.run(tasks.execute_async())
             return tasks.result()
 
         # List of tasks: execute pending tasks concurrently using asyncio
         pending_tasks = [t for t in tasks if t.is_pending]
         
         if pending_tasks:
-            # Phase 1b: Pure asyncio concurrent execution
-            # Uses asyncio.to_thread() internally (global thread pool, fixed memory)
-            import asyncio
-            
-            async def execute_all():
-                # Create coroutines for all pending tasks
-                coros = [task.execute_async() for task in pending_tasks]
-                # Execute concurrently
-                await asyncio.gather(*coros)
-            
-            asyncio.run(execute_all())
+            if in_event_loop:
+                # Already in event loop - use thread pool for concurrency
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    futures = [executor.submit(task.execute) for task in pending_tasks]
+                    # Wait for all to complete
+                    for future in concurrent.futures.as_completed(futures):
+                        future.result()  # Raise any exceptions
+            else:
+                # No event loop - use asyncio.run()
+                async def execute_all():
+                    # Create coroutines for all pending tasks
+                    coros = [task.execute_async() for task in pending_tasks]
+                    # Execute concurrently
+                    await asyncio.gather(*coros)
+                
+                asyncio.run(execute_all())
 
         # Collect results from all tasks (both pending and already completed)
         results = []
