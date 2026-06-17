@@ -131,6 +131,10 @@ class Visitor(ABC, Generic[R]):
         """Visit an AsyncCallStmtNode."""
 
     @abstractmethod
+    def visit_async_call_expr(self, node: AsyncCallExprNode) -> R:
+        """Visit an AsyncCallExprNode."""
+
+    @abstractmethod
     def visit_case(self, node: CaseNode) -> R:
         """Visit a CaseNode."""
 
@@ -647,6 +651,21 @@ class AsyncCallStmtNode(StatementNode):
 
 
 @dataclass(frozen=True)
+class AsyncCallExprNode(ExpressionNode):
+    """Async call expression: async Agent(...) used in expression position.
+
+    Returns a Task object that can be stored in a variable and awaited.
+    Example: let task = async Worker("input")
+    """
+    call: CallNode
+    span: SourceSpan
+
+    def accept(self, visitor: Visitor[R]) -> R:
+        """Dispatch to the visitor."""
+        return visitor.visit_async_call_expr(self)
+
+
+@dataclass(frozen=True)
 class CaseNode(StatementNode):
     """Match case: case pattern { ... }."""
     pattern: ExpressionNode
@@ -946,6 +965,10 @@ class ASTPrinter(Visitor[str]):
     def visit_async_call_stmt(self, node: AsyncCallStmtNode) -> str:
         """Visit an AsyncCallStmtNode."""
         return self._parenthesize("async-call", node.call)
+
+    def visit_async_call_expr(self, node: AsyncCallExprNode) -> str:
+        """Visit an AsyncCallExprNode."""
+        return self._parenthesize("async-call-expr", node.call)
 
     def visit_case(self, node: CaseNode) -> str:
         """Visit a CaseNode."""

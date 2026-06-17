@@ -184,6 +184,10 @@ class MockVisitor(Visitor[str]):
         self.calls.append("visit_async_call_stmt")
         return "<async_call>"
 
+    def visit_async_call_expr(self, node) -> str:
+        self.calls.append("visit_async_call_expr")
+        return "<async_call_expr>"
+
     def visit_case(self, node) -> str:
         self.calls.append("visit_case")
         return "<case>"

@@ -135,6 +135,29 @@ class RuntimeError(HelenRuntimeError):
         super().__init__(message, span)
 
 
+@dataclass
+class AggregateError(HelenRuntimeError):
+    """Collects multiple exceptions from await [list] (HLD 3.6.7).
+
+    When await [task1, task2, ...] has multiple failures, this error
+    contains all failed task exceptions in the `errors` attribute.
+    """
+
+    errors: list[Exception] | None = None
+
+    def __init__(self, message: str = "aggregate error",
+                 errors: list[Exception] | None = None,
+                 span: SourceSpan | None = None) -> None:
+        super().__init__(message, span)
+        self.errors = errors or []
+
+    def __str__(self) -> str:
+        if self.errors:
+            parts = [str(e) for e in self.errors]
+            return f"AggregateError({len(self.errors)} task(s) failed): {', '.join(parts)}"
+        return f"AggregateError: {self.message}"
+
+
 # Mapping from Helen exception type names to classes (HLD 3.6.4)
 _PREDEFINED_EXCEPTIONS: dict[str, type[HelenRuntimeError]] = {
     "AnyError": AnyError,
@@ -143,6 +166,7 @@ _PREDEFINED_EXCEPTIONS: dict[str, type[HelenRuntimeError]] = {
     "ModelError": ModelError,
     "ToolError": ToolError,
     "RuntimeError": RuntimeError,
+    "AggregateError": AggregateError,
 }
 
 

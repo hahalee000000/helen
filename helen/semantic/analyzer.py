@@ -93,6 +93,7 @@ _PREDEFINED_EXCEPTIONS = frozenset({
     "ModelError",
     "ToolError",
     "RuntimeError",
+    "AggregateError",
 })
 
 
@@ -660,6 +661,10 @@ class SemanticAnalyzer(Visitor[None]):
     # ------------------------------------------------------------------
 
     def visit_async_call_stmt(self, node: AsyncCallStmtNode) -> None:
+        node.call.accept(self)
+
+    def visit_async_call_expr(self, node) -> None:
+        """Validate async expression: async Agent(...) -> Task."""
         node.call.accept(self)
 
     # ------------------------------------------------------------------

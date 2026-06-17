@@ -1,7 +1,8 @@
 """Task and AggregateError for async/await semantics (HLD 3.6.7).
 
 Task wraps an async agent call and provides Promise-like semantics.
-AggregateError collects multiple exceptions from await [list].
+AggregateError is defined in helen.interpreter.exceptions and imported here
+for convenience.
 """
 
 from __future__ import annotations
@@ -9,24 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-
-class AggregateError(Exception):
-    """Collects multiple exceptions from await [list] (HLD 3.6.7).
-
-    Per HLD 3.6.7: If any Task fails, await [list] throws an
-    AggregateError containing all failed Task exception info.
-    """
-
-    def __init__(self, message: str = "aggregate error",
-                 errors: list[Exception] | None = None) -> None:
-        super().__init__(message)
-        self.errors: list[Exception] = errors or []
-
-    def __str__(self) -> str:
-        if not self.errors:
-            return self.args[0] if self.args else "AggregateError"
-        parts = [str(e) for e in self.errors]
-        return f"AggregateError: {', '.join(parts)}"
+from helen.interpreter.exceptions import AggregateError  # noqa: F401 — re-exported
 
 
 @dataclass

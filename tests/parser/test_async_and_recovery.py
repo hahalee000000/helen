@@ -1,10 +1,11 @@
-"""Tests for async statement modifier and error recovery."""
+"""Tests for async statement modifier, async expression, and error recovery."""
 
 import pytest
 from helen.core.lexer import Scanner
 from helen.core.parser import Parser
 from helen.core.ast import (
-    AsyncCallStmtNode, CallNode, ProgramNode, ExprStmtNode,
+    AsyncCallStmtNode, AsyncCallExprNode, CallNode, ProgramNode, ExprStmtNode,
+    VarDeclNode,
 )
 
 
@@ -46,6 +47,41 @@ class TestAsyncCall:
         parser.parse()
         # Should report error about async on non-call
         assert parser.errors.has_errors
+
+
+class TestAsyncExpression:
+    """Test async as expression (let task = async Agent(...))."""
+
+    def test_async_expr_in_let(self):
+        """let task = async Worker() parses as VarDeclNode with AsyncCallExprNode initializer."""
+        p = _parse('let task = async Worker()')
+        prog = p.parse()
+        stmt = prog.statements[0]
+        assert isinstance(stmt, VarDeclNode)
+        assert isinstance(stmt.initializer, AsyncCallExprNode)
+        assert isinstance(stmt.initializer.call, CallNode)
+
+    def test_async_expr_with_args(self):
+        """let task = async Worker("input") parses correctly."""
+        p = _parse('let task = async Worker("input")')
+        prog = p.parse()
+        stmt = prog.statements[0]
+        assert isinstance(stmt, VarDeclNode)
+        assert isinstance(stmt.initializer, AsyncCallExprNode)
+        assert len(stmt.initializer.call.arguments) == 1
+
+    def test_async_expr_in_main_block(self):
+        """async expression works inside main block."""
+        p = _parse('agent Test { main { let t = async load() } }')
+        prog = p.parse()
+        assert not p.errors.has_errors
+
+    def test_async_stmt_still_works(self):
+        """Bare async Agent() still parses as statement."""
+        p = _parse('async fetchData()')
+        stmt = _first_stmt(p)
+        assert isinstance(stmt, AsyncCallStmtNode)
+        assert isinstance(stmt.call, CallNode)
 
 
 class TestErrorRecovery:

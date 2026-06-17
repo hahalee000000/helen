@@ -15,6 +15,7 @@ from helen.core.ast import (
     AccessNode,
     AgentDeclNode,
     AgentParamNode,
+    AsyncCallExprNode,
     AsyncCallStmtNode,
     BinaryOpNode,
     BreakStmtNode,
@@ -775,6 +776,23 @@ class Interpreter(Visitor[object]):
 
         In v1 synchronous mode, executes the call immediately but wraps
         the result in a Task object for await semantics.
+
+        Returns:
+            A Task object wrapping the call result or exception.
+        """
+        try:
+            result = node.call.accept(self)
+            return Task.completed(result)
+        except Exception as exc:
+            return Task.failed(exc)
+
+    def visit_async_call_expr(self, node: AsyncCallExprNode) -> object:
+        """Execute async call expression (HLD 3.6.7).
+
+        Same as visit_async_call_stmt but used in expression position.
+        Returns a Task object that can be stored in a variable.
+
+        Example: let task = async Worker("input")
 
         Returns:
             A Task object wrapping the call result or exception.

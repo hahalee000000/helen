@@ -144,10 +144,14 @@ class Parser:
         # llm act as expression: llm act <prompt_expr>
         self._rules[TokenType.LLM].prefix = self._llm_act_expr
 
+        # async as expression: async Agent(...)
+        self._rules[TokenType.ASYNC].prefix = self._async_call_expr
+
         # Precedence for prefix operators
         self._rules[TokenType.BANG].precedence = Precedence.UNARY
         self._rules[TokenType.MINUS].precedence = Precedence.UNARY
         self._rules[TokenType.AWAIT].precedence = Precedence.AWAIT
+        self._rules[TokenType.ASYNC].precedence = Precedence.UNARY
 
         # Infix rules with precedence
         infix_map = {
@@ -460,6 +464,17 @@ class Parser:
             self._error("'async' must be followed by a function call.")
             return AsyncCallStmtNode(call=CallNode(callee=VariableNode(name="", span=start.span), arguments=[], span=start.span), span=start.span)
         return AsyncCallStmtNode(call=call_expr,
+                                 span=self._make_span(start, self._previous()))
+
+    def _async_call_expr(self) -> "AsyncCallExprNode":
+        """Parse async as expression prefix: async Agent(...) -> Task."""
+        from helen.core.ast import AsyncCallExprNode
+        start = self._previous()  # ASYNC already consumed by Pratt framework
+        call_expr = self._expression(Precedence.NONE)
+        if not isinstance(call_expr, CallNode):
+            self._error("'async' must be followed by a function call.")
+            return AsyncCallExprNode(call=CallNode(callee=VariableNode(name="", span=start.span), arguments=[], span=start.span), span=start.span)
+        return AsyncCallExprNode(call=call_expr,
                                  span=self._make_span(start, self._previous()))
 
     def _statement(self) -> StatementNode | None:

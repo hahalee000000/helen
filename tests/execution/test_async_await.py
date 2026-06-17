@@ -258,3 +258,33 @@ class TestInterpreterAwaitList:
 
         result = interp._await_tasks(task)
         assert result == "single_result"
+
+
+class TestAggregateErrorCatchable:
+    """Test that AggregateError can be caught by try-catch."""
+
+    def test_aggregate_error_is_helen_runtime_error(self):
+        """AggregateError inherits from HelenRuntimeError."""
+        from helen.interpreter.exceptions import AggregateError, HelenRuntimeError
+        err = AggregateError("test")
+        assert isinstance(err, HelenRuntimeError)
+
+    def test_aggregate_error_in_predefined(self):
+        """AggregateError is in the predefined exceptions map."""
+        from helen.interpreter.exceptions import _PREDEFINED_EXCEPTIONS, AggregateError
+        assert "AggregateError" in _PREDEFINED_EXCEPTIONS
+        assert _PREDEFINED_EXCEPTIONS["AggregateError"] is AggregateError
+
+    def test_error_matches_aggregate(self):
+        """error_matches recognizes AggregateError."""
+        from helen.interpreter.exceptions import AggregateError, error_matches
+        err = AggregateError("test")
+        assert error_matches(err, "AggregateError")
+
+    def test_aggregate_error_has_errors_list(self):
+        """AggregateError stores errors list."""
+        from helen.interpreter.exceptions import AggregateError
+        inner = [ValueError("a"), RuntimeError("b")]
+        err = AggregateError("multi", errors=inner)
+        assert len(err.errors) == 2
+        assert err.errors[0] is inner[0]

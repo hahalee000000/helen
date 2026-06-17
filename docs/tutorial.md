@@ -15,7 +15,7 @@
 | [04](#教程-04-控制流) | if/for/while/match、break/continue、try-catch |
 | [05](#教程-05-agent-编程) | agent 声明、配置、参数、调用 |
 | [06](#教程-06-llm-语句) | llm act/if/choose、对话历史 |
-| [07](#教程-07-异步编程) | async call、await、并发 Agent 调用 |
+| [07](#教程-07-异步编程) | async、await、并发 Agent 调用 |
 | [08](#教程-08-模块与导入) | import、多格式、跨文件复用、路径安全 |
 | [09](#教程-09-标准库使用) | 24 内置函数 core/string/math |
 | [10](#教程-10-构建多-agent-系统) | 完整案例：智能客服系统 |
@@ -830,6 +830,7 @@ try {
 | `TimeoutError` | LLM 调用超时（继承 LLMError） |
 | `ModelError` | 模型不可用或配额耗尽（继承 LLMError） |
 | `ToolError` | 工具调用失败 |
+| `AggregateError` | 多个异步任务失败（await [list]） |
 
 **异常继承**：`catch LLMError` 也会捕获 `TimeoutError` 和 `ModelError`。
 
@@ -1476,47 +1477,66 @@ agent Translator(text) {
 
 # 教程 07: 异步编程
 
-> async call / await / AggregateError / 并发 Agent 调用
+> async / await / AggregateError / 并发 Agent 调用
 
 ## 概述
 
-Helen 支持 `async call` 实现并发 Agent 调用，通过 `await [list]` 等待全部完成。
+Helen 支持 `async` 启动并发 Agent 调用，通过 `await [list]` 等待全部完成。
+`async Agent(...)` 是表达式，返回 `Task` 对象，可存入变量。
 
 ## 基本用法
 
 ```helen
-agent Researcher {
+agent Researcher(topic: str) {
     description "Research a topic"
     prompt "Research and summarize:"
     main {
-        let topic = "AI in healthcare"
-        let research_task = async Researcher(topic)
-        let data_task = async Analyst(topic)
-        let results = await [research_task, data_task]
-        let research = results[0]
-        let analysis = results[1]
-        print("Research: " + research)
-        print("Analysis: " + analysis)
+        return "Research result for: " + topic
     }
 }
 
-agent Analyst {
+agent Analyst(topic: str) {
     description "Analyze data"
     prompt "Analyze the following data:"
+    main {
+        return "Analysis result for: " + topic
+    }
+}
+
+main {
+    let topic = "AI in healthcare"
+
+    // 启动两个并发任务
+    let research_task = async Researcher(topic)
+    let data_task = async Analyst(topic)
+
+    // 等待全部完成
+    let results = await [research_task, data_task]
+    let research = results[0]
+    let analysis = results[1]
+    print("Research: " + research)
+    print("Analysis: " + analysis)
 }
 ```
 
 ## Task 对象
 
-`async call` 返回 `Task` 对象：
+`async Agent(...)` 返回 `Task` 对象，可存入变量：
 
 ```helen
 let task = async MyAgent(input)
+// task 是 Task 对象，包含结果或异常
+```
 
-// Task 方法 (未来版本支持)
-// task.is_success() → bool
-// task.get_result() → Any
-// task.get_error() → Exception
+`await` 支持列表和单个 Task：
+
+```helen
+// 列表形式：返回结果列表
+let results = await [task1, task2, task3]
+
+// 单个 Task 放在列表中
+let result = await [task]
+let value = result[0]
 ```
 
 ## await 行为
@@ -1530,38 +1550,43 @@ let results = await [task1, task2, task3]
 
 ### 部分失败
 
+当多个任务失败时，`await` 抛出 `AggregateError`：
+
 ```helen
 try {
     let results = await [task1, task2, task3]
-} catch AggregateError(err) {
-    // err.errors = [(index, exception), ...]
-    for error_info in err.errors {
-        print("Task " + str(error_info[0]) + " failed: " + str(error_info[1]))
-    }
+} catch AggregateError err {
+    print("Multiple tasks failed: " + err.message)
+    // err.errors 包含所有失败的异常列表
+    print(err.errors)
 }
 ```
 
 ## 实际示例：多源信息聚合
 
 ```helen
-agent NewsSearcher {
+agent NewsSearcher(topic: str) {
     description "Search latest news"
     prompt "Search for news about:"
+    main {
+        return "News about " + topic
+    }
 }
 
-agent AcademicSearcher {
+agent AcademicSearcher(topic: str) {
     description "Search academic papers"
     prompt "Find papers about:"
+    main {
+        return "Papers about " + topic
+    }
 }
 
-agent SocialSearcher {
+agent SocialSearcher(topic: str) {
     description "Search social media"
     prompt "Find social media posts about:"
-}
-
-agent Synthesizer {
-    description "Synthesize information from multiple sources"
-    prompt "Synthesize the following sources into a coherent report:"
+    main {
+        return "Social posts about " + topic
+    }
 }
 
 main {
@@ -1575,13 +1600,11 @@ main {
     // 等待全部结果
     try {
         let sources = await [news_task, academic_task, social_task]
-
-        // 综合所有结果
-        let report = Synthesizer(sources[0] + "\n" + sources[1] + "\n" + sources[2])
-        print(report)
-    } catch AggregateError(err) {
-        print("Some sources failed to load")
-        // 仍然可以使用成功的结果
+        print("News: " + sources[0])
+        print("Academic: " + sources[1])
+        print("Social: " + sources[2])
+    } catch AggregateError err {
+        print("Some sources failed: " + err.message)
     }
 }
 ```
@@ -1590,10 +1613,11 @@ main {
 
 | 规则 | 说明 |
 |---|---|
-| `async` 仅修饰函数调用 | `async Agent()` ✅，`async fn x()` ❌ |
+| `async` 可用于表达式 | `let task = async Agent()` ✅ |
+| `async` 也可作为语句 | `async Agent()` ✅（返回值丢弃） |
 | `await` 参数必须是列表 | `await [task]` ✅，`await task` ❌ |
 | v1 同步执行 | 当前版本立即执行，未来版本改为真正异步 |
-| 错误聚合 | 多个失败 → `AggregateError` |
+| 错误聚合 | 多个失败 → `AggregateError`（可被 try-catch 捕获） |
 
 ## 练习
 
@@ -2142,7 +2166,7 @@ $ helen doc customer-service/main.helen --format markdown
 通过这个案例，你学会了：
 1. ✅ 声明多个 Agent 及其配置
 2. ✅ 使用 `llm if` 进行智能路由
-3. ✅ 使用 `async call` + `await` 并发获取上下文
+3. ✅ 使用 `async` + `await` 并发获取上下文
 4. ✅ 使用 `try-catch` 处理 LLM 异常
 5. ✅ 组织多文件项目结构
 
