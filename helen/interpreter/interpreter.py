@@ -1243,7 +1243,7 @@ class Interpreter(Visitor[object]):
         else:
             # No explicit tools declaration — include default useful tools
             default_tools = ["web_search", "web_fetch", "read_file",
-                             "write_file", "calculate"]
+                             "write_file", "patch_file", "calculate"]
             tools.extend(get_tool_schemas(default_tools))
 
         # Always include load_skill for Tier 2 skill disclosure (HLD 3.6.5)
