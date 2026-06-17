@@ -1,7 +1,7 @@
 # Helen 语言完整教程
 
 > **Helen** — A Prompt-first Agent Programming Language
-> 版本: v1.2 | 状态: Phase 0-8 全部实现 | 测试: 904 passed
+> 版本: v1.3 | 状态: Phase 0-8 全部实现 + 流式输出 | 测试: 966 passed
 
 ---
 
@@ -14,10 +14,10 @@
 | [03](#教程-03-函数) | fn 声明、参数、返回值、递归、Agent 内部函数、作用域 |
 | [04](#教程-04-控制流) | if/for/while/match、break/continue、try-catch |
 | [05](#教程-05-agent-编程) | agent 声明、配置、参数、调用 |
-| [06](#教程-06-llm-语句) | llm act/if/choose、对话历史 |
+| [06](#教程-06-llm-语句) | llm act/if/stream、对话历史、流式输出 |
 | [07](#教程-07-异步编程) | async、await、并发 Agent 调用 |
 | [08](#教程-08-模块与导入) | import、多格式、跨文件复用、路径安全 |
-| [09](#教程-09-标准库使用) | 24 内置函数 core/string/math |
+| [09](#教程-09-标准库使用) | 29 内置函数 core/string/math/io |
 | [10](#教程-10-构建多-agent-系统) | 完整案例：智能客服系统 |
 
 ---
@@ -1361,6 +1361,69 @@ let mood = llm if text + "反映的情绪" {
 print("Mood: " + mood)
 ```
 
+## llm stream — 流式输出
+
+### 基本用法
+
+`llm stream` 逐 chunk 流式输出 LLM 响应，适用于长文本生成场景：
+
+```helen
+main {
+    llm stream "Write a short poem about programming"
+}
+```
+
+默认行为：每个 chunk 到达时立即打印到终端（使用 `stream_print`），无需等待完整响应。
+
+### 带回调函数
+
+使用 `on_chunk` 指定回调函数，自定义处理每个 chunk：
+
+```helen
+fn handle_chunk(chunk) {
+    stream_print("[" + chunk + "]")
+}
+
+main {
+    llm stream "Explain recursion in one paragraph" on_chunk handle_chunk
+}
+```
+
+### 在 agent 中使用
+
+`llm stream` 在 agent 内自动使用 agent 的配置（model、temperature、prompt）：
+
+```helen
+agent Poet(topic: str) {
+    description "Write poetry"
+    temperature 0.9
+    prompt """
+    Write a poem about: {{topic}}
+    """
+
+    main {
+        llm stream    // bare form：使用渲染后的 prompt
+    }
+}
+```
+
+### 动态 prompt
+
+```helen
+main {
+    let topic = "the beauty of recursion"
+    llm stream "Write a haiku about " + topic
+}
+```
+
+### 与其他 LLM 语句对比
+
+| 语句 | 用途 | 输出方式 |
+|------|------|----------|
+| `llm act` | 获取完整响应文本 | 等待完成后返回 |
+| `llm if` | LLM 分类路由 | 等待完成后执行分支 |
+| `llm stream` | 流式输出生成内容 | 逐 chunk 实时输出 |
+
 ## 对比：何时使用哪个？
 
 | 场景 | 使用 |
@@ -1368,6 +1431,7 @@ print("Mood: " + mood)
 | 需要 LLM 返回文本 | `llm act` |
 | 需要 LLM 做分类决策 | `llm if` |
 | 需要 LLM 从选项中选择并执行代码 | `llm if` + `branch` |
+| 需要实时输出生成过程 | `llm stream` |
 | 多步骤决策 | 嵌套 `llm if` |
 | 需要结果变量 | `llm if` 或 `llm act` |
 
@@ -1668,7 +1732,7 @@ main {
 
 **真正的异步并发**：使用纯 `asyncio` 单线程并发
 
-- **LLM 调用**：通过 `asyncio.create_subprocess_exec()` 非阻塞执行
+- **LLM 调用**：通过 `asyncio` 非阻塞执行
 - **内存开销**：接近零（无额外线程）
 - **并发效率**：3 个 1 秒的 LLM 调用 → ~1 秒完成（并发）
 
@@ -1676,6 +1740,31 @@ main {
 - 线程池：3 个线程 × 8MB = 24MB
 - asyncio：0 个线程 = ~0MB
 - **内存节省**：100%
+
+## 流式迭代（for await）
+
+Helen 支持 `for await` 语法异步迭代流式响应：
+
+```helen
+agent Streamer(topic: str) {
+    description "Stream a long response"
+    prompt "Write a detailed essay about: {{topic}}"
+}
+
+main {
+    let response = async Streamer("the history of computing")
+    for await chunk in response {
+        stream_print(chunk)
+    }
+}
+```
+
+`for await` 逐 chunk 处理异步可迭代对象，适用于：
+- 流式 LLM 响应
+- 异步数据源
+- 大文件逐行处理
+
+**注意**：`for await` 只能在 `async` 上下文中使用。
 
 ## 注意事项
 
@@ -1874,7 +1963,7 @@ main {
 
 # 教程 09: 标准库使用
 
-> 24 内置函数 / core / string / math
+> 29 内置函数 / core / string / math / io
 
 ## Core 函数 (11)
 
@@ -1971,6 +2060,61 @@ sqrt(2)                       // 1.4142...
 
 floor(3.9)                    // 3
 ceil(3.1)                     // 4
+```
+
+## IO 流式输出函数 (5)
+
+用于实时输出控制，常与 `llm stream` 配合使用。
+
+### stream_print — 无换行打印
+
+```helen
+stream_print("Hello ")
+stream_print("World")
+// 输出: Hello World（同一行，无换行）
+```
+
+### stream_clear — 清除当前行
+
+```helen
+stream_print("Loading...")
+stream_clear()    // 清除当前行
+stream_print("Done!")
+// 输出: Done!（Loading... 被清除）
+```
+
+### progress_bar — 进度条
+
+```helen
+progress_bar(0, 100)       // [░░░░░░░░░░░░░░░░░░░░] 0%
+progress_bar(50, 100)      // [██████████░░░░░░░░░░] 50%
+progress_bar(100, 100)     // [████████████████████] 100%
+
+// 自定义宽度
+progress_bar(75, 100, 20)  // [███████████████░░░░░] 75%
+```
+
+### stream_cursor_up / stream_cursor_down — 光标移动
+
+```helen
+stream_print("Line 1\nLine 2\nLine 3")
+stream_cursor_up(2)        // 光标上移 2 行
+stream_print("REPLACED")   // 覆盖 Line 2
+```
+
+### 综合示例：流式 LLM 输出
+
+```helen
+main {
+    // 使用 llm stream 自动流式输出
+    llm stream "Write a story about a robot"
+
+    // 或手动控制进度显示
+    for i in range(0, 101, 10) {
+        progress_bar(i, 100, 30)
+    }
+    print()    // 进度完成后换行
+}
 ```
 
 ## 综合示例：文本处理管道
