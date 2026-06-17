@@ -146,20 +146,6 @@ class PromptBuilder:
         prompt += "Return your classification using the classify function."
         return prompt
 
-    def build_choose_prompt(
-        self, description: str, options: list[str], context: str | None = None
-    ) -> str:
-        """Build prompt for llm choose (HLD 3.6.6)."""
-        prompt = (
-            f"Given the following context and options, select exactly ONE:\n\n"
-            f"Description: {description}\n"
-        )
-        if context:
-            prompt += f"Context: {context}\n"
-        prompt += f"Available options: {', '.join(options)}\n\n"
-        prompt += "Return your selection using the select function."
-        return prompt
-
     def build_skill_index(self) -> str:
         """Build the Tier 1 Skill Index for System Prompt injection.
 

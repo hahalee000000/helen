@@ -1,7 +1,7 @@
 """Structured output for LLM function calling in the Helen language.
 
-Generates and parses function calling schemas for llm if (route) and
-llm choose (choose) statements, following HLD 3.6.6 and 3.13.
+Generates and parses function calling schemas for llm if (route) statements,
+following HLD 3.6.6 and 3.13.
 """
 
 from __future__ import annotations
@@ -12,8 +12,8 @@ from typing import Any
 class StructuredOutput:
     """LLM structured output generation and parsing.
 
-    Generates function calling schemas for route/choose operations
-    and parses LLM responses to extract validated branch/option names.
+    Generates function calling schemas for route operations
+    and parses LLM responses to extract validated branch names.
     """
 
     @staticmethod
@@ -85,68 +85,6 @@ class StructuredOutput:
         return None
 
     @staticmethod
-    def build_choose_schema(options: list[str]) -> dict[str, Any]:
-        """Generate function calling schema for llm choose.
-
-        Args:
-            options: List of available option names.
-
-        Returns:
-            A function calling schema dict with enum constraint on the
-            'option' parameter.
-        """
-        return {
-            "type": "function",
-            "function": {
-                "name": "select",
-                "description": "Select the most appropriate option",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "option": {
-                            "type": "string",
-                            "enum": list(options),
-                            "description": "The selected option name",
-                        },
-                        "confidence": {
-                            "type": "number",
-                            "description": "Selection confidence 0.0-1.0",
-                        },
-                    },
-                    "required": ["option"],
-                },
-            },
-        }
-
-    @staticmethod
-    def parse_choose_response(response: dict[str, Any] | None, options: list[str]) -> str | None:
-        """Parse an LLM choose response and validate against available options.
-
-        Args:
-            response: The parsed JSON response from the LLM.
-            options: List of valid option names.
-
-        Returns:
-            The validated option name, or None if parsing/validation failed.
-        """
-        if response is None:
-            return None
-
-        # Extract option from function calling response
-        option = None
-        if isinstance(response, dict):
-            option = response.get("option")
-            if option is None and "arguments" in response:
-                args = response["arguments"]
-                if isinstance(args, dict):
-                    option = args.get("option")
-
-        # Validate: option must be in the enum
-        if option is not None and option in options:
-            return option
-        return None
-
-    @staticmethod
     def build_route_prompt(description: str, branches: list[str],
                            context: str | None = None) -> str:
         """Build the routing prompt for llm if (HLD 3.6.6).
@@ -167,27 +105,4 @@ class StructuredOutput:
             prompt += f"Context: {context}\n"
         prompt += f"Available branches: {', '.join(branches)}\n\n"
         prompt += "Return your classification using the classify function."
-        return prompt
-
-    @staticmethod
-    def build_choose_prompt(description: str, options: list[str],
-                            context: str | None = None) -> str:
-        """Build the choice prompt for llm choose.
-
-        Args:
-            description: The choice description.
-            options: List of option names.
-            context: Optional context string.
-
-        Returns:
-            The full prompt string.
-        """
-        prompt = (
-            f"Given the following context and options, select exactly ONE:\n\n"
-            f"Description: {description}\n"
-        )
-        if context:
-            prompt += f"Context: {context}\n"
-        prompt += f"Available options: {', '.join(options)}\n\n"
-        prompt += "Return your selection using the select function."
         return prompt

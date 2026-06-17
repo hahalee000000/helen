@@ -1,10 +1,10 @@
-"""Tests for LLM statement parsing: llm if, llm choose, llm act, and disambiguation."""
+"""Tests for LLM statement parsing: llm if, llm act, and disambiguation."""
 
 import pytest
 from helen.core.lexer import Scanner
 from helen.core.parser import Parser
 from helen.core.ast import (
-    LlmIfStmtNode, LlmBranchNode, LlmChooseStmtNode, LlmOptionNode,
+    LlmIfStmtNode, LlmBranchNode,
     ProgramNode, MainBlockNode,
 )
 from helen.core.tokens import TokenType
@@ -59,26 +59,6 @@ class TestLlmIfStmt:
             pass
         # Just verify it parses without error
         assert len(prog.statements) == 1
-
-
-class TestLlmChooseStmt:
-    def test_llm_choose_simple(self):
-        p = _parse('llm choose "pick one" { option "a" { x = 1 } default { x = 0 } }')
-        stmt = _first_stmt(p)
-        assert isinstance(stmt, LlmChooseStmtNode)
-        # description is now an expression node (LiteralNode for string literals)
-        from helen.core.ast import LiteralNode
-        assert isinstance(stmt.description, LiteralNode)
-        assert stmt.description.value == "pick one"
-        assert len(stmt.options) == 1
-        assert isinstance(stmt.options[0], LlmOptionNode)
-        assert stmt.options[0].label == "a"
-
-    def test_llm_choose_multiple_options(self):
-        p = _parse('llm choose "pick" { option "a" { x = 1 } option "b" { x = 2 } default { } }')
-        stmt = _first_stmt(p)
-        assert isinstance(stmt, LlmChooseStmtNode)
-        assert len(stmt.options) == 2
 
 
 class TestLlmDisambiguation:

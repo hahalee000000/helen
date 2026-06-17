@@ -39,9 +39,8 @@ class LLMResponse:
 class LLMRuntime(ABC):
     """Abstract interface for LLM operations in Helen.
 
-    Three core methods map to Helen's llm statements:
+    Two core methods map to Helen's llm statements:
     - route()  → llm if
-    - choose() → llm choose
     - act()    → llm act
     """
 
@@ -56,20 +55,6 @@ class LLMRuntime(ABC):
 
         Returns:
             The selected branch name, or None if classification failed.
-        """
-        ...
-
-    @abstractmethod
-    def choose(self, description: str, options: list[str], context: str | None = None) -> str | None:
-        """LLM choice: select one option from the given list.
-
-        Args:
-            description: The choice description (from llm choose "desc").
-            options: List of available option names.
-            context: Optional context string.
-
-        Returns:
-            The selected option name, or None if selection failed.
         """
         ...
 
@@ -109,21 +94,16 @@ class MockLLMRuntime(LLMRuntime):
 
     Attributes:
         route_return: Preset branch name for route() calls.
-        choose_return: Preset option name for choose() calls.
         act_return: Preset text for act() calls.
         route_fail: If set, route() raises this exception instead.
-        choose_fail: If set, choose() raises this exception instead.
         act_fail: If set, act() raises this exception instead.
     """
 
     route_return: str | None = None
-    choose_return: str | None = None
     act_return: LLMResponse | str | None = None
     route_fail: Exception | None = None
-    choose_fail: Exception | None = None
     act_fail: Exception | None = None
     route_history: list[dict[str, Any]] = field(default_factory=list)
-    choose_history: list[dict[str, Any]] = field(default_factory=list)
     act_history: list[dict[str, Any]] = field(default_factory=list)
 
     def route(self, description: str, branches: list[str], context: str | None = None) -> str | None:
@@ -136,17 +116,6 @@ class MockLLMRuntime(LLMRuntime):
         if self.route_fail is not None:
             raise self.route_fail
         return self.route_return
-
-    def choose(self, description: str, options: list[str], context: str | None = None) -> str | None:
-        """Return the preset choose_return value."""
-        self.choose_history.append({
-            "description": description,
-            "options": options,
-            "context": context,
-        })
-        if self.choose_fail is not None:
-            raise self.choose_fail
-        return self.choose_return
 
     def act(self, prompt: str, tools: list[dict[str, Any]] | None = None,
             model: str | None = None, temperature: float = 1.0,
@@ -173,5 +142,4 @@ class MockLLMRuntime(LLMRuntime):
     def reset(self) -> None:
         """Clear history and reset to defaults."""
         self.route_history.clear()
-        self.choose_history.clear()
         self.act_history.clear()

@@ -87,43 +87,6 @@ class HermesCLILLMRuntime(LLMRuntime):
         # Return the first branch as fallback
         return branches[0] if branches else None
 
-    def choose(
-        self,
-        description: str,
-        options: list[str],
-        context: str | None = None,
-    ) -> str | None:
-        """Choose one option from the list via LLM.
-
-        Args:
-            description: The choice description.
-            options: Available option names.
-            context: Optional additional context.
-
-        Returns:
-            The selected option name, or None if selection failed.
-        """
-        option_list = ", ".join(options)
-        prompt = (
-            f"{description}\n"
-            f"Available options: {option_list}\n"
-            f"Reply with ONLY the option name you choose.\n"
-        )
-        if context:
-            prompt += f"\nContext: {context}\n"
-
-        response = self._ask(prompt)
-        if response is None:
-            return None
-
-        # Try to match the response to a valid option
-        cleaned = response.strip().strip('"').strip("'").lower()
-        for option in options:
-            if cleaned == option.lower() or cleaned.startswith(option.lower()):
-                return option
-
-        return options[0] if options else None
-
     def act(
         self,
         prompt: str,

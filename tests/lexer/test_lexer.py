@@ -75,8 +75,8 @@ class TestKeywords:
             "sub-agents", "memory", "temperature", "max-turns",
             "prompt", "llm", "import", "let", "const", "if", "else",
             "for", "while", "break", "continue", "return", "call",
-            "await", "async", "match", "case", "branch", "option",
-            "default", "choose", "act", "try", "catch", "finally",
+            "await", "async", "match", "case", "branch",
+            "default", "act", "try", "catch", "finally",
             "fn", "as", "in", "functions", "main", "true", "false",
             "null",
         ]

@@ -105,9 +105,7 @@ class TestTokenType:
             "MATCH",
             "CASE",
             "BRANCH",
-            "OPTION",
             "DEFAULT",
-            "CHOOSE",
             "ACT",
             "TRY",
             "CATCH",
@@ -139,9 +137,9 @@ class TestKeywords:
         assert isinstance(kw, dict)
 
     def test_keyword_count(self) -> None:
-        """keywords() should cover all 43 reserved words."""
+        """keywords() should cover all 41 reserved words."""
         kw = keywords()
-        assert len(kw) == 43
+        assert len(kw) == 41
 
     def test_all_keywords_map_to_token_types(self) -> None:
         """Every keyword value should be a TokenType member."""

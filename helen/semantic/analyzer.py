@@ -48,9 +48,7 @@ from helen.core.ast import (
     LiteralTypeNode,
     LlmActExprNode,
     LlmBranchNode,
-    LlmChooseStmtNode,
     LlmIfStmtNode,
-    LlmOptionNode,
     MainBlockNode,
     MapEntryNode,
     MapLiteralNode,
@@ -767,26 +765,6 @@ class SemanticAnalyzer(Visitor[None]):
         if node.condition is not None:
             node.condition.accept(self)
         self.symbols.enter_scope("llm-branch", "block")
-        try:
-            self._visit_stmts(node.body)
-        finally:
-            self.symbols.exit_scope()
-
-    def visit_llm_choose_stmt(self, node: LlmChooseStmtNode) -> None:
-        # Analyze description expression if it's not a plain string
-        if not isinstance(node.description, str):
-            node.description.accept(self)
-        for option in node.options:
-            option.accept(self)
-        if node.default:
-            self.symbols.enter_scope("llm-choose-default", "block")
-            try:
-                self._visit_stmts(node.default)
-            finally:
-                self.symbols.exit_scope()
-
-    def visit_llm_option(self, node: LlmOptionNode) -> None:
-        self.symbols.enter_scope("llm-option", "block")
         try:
             self._visit_stmts(node.body)
         finally:

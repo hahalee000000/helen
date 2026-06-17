@@ -100,9 +100,7 @@ class TokenType(Enum):
     MATCH = auto()
     CASE = auto()
     BRANCH = auto()
-    OPTION = auto()
     DEFAULT = auto()
-    CHOOSE = auto()
     ACT = auto()
     TRY = auto()
     CATCH = auto()
@@ -150,9 +148,7 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "match": TokenType.MATCH,
     "case": TokenType.CASE,
     "branch": TokenType.BRANCH,
-    "option": TokenType.OPTION,
     "default": TokenType.DEFAULT,
-    "choose": TokenType.CHOOSE,
     "act": TokenType.ACT,
     "try": TokenType.TRY,
     "catch": TokenType.CATCH,

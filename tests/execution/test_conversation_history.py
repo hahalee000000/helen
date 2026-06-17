@@ -156,27 +156,6 @@ class TestLlmStatementsRecordHistory:
             llm_runtime=self.runtime,
         )
 
-    def test_llm_choose_records_to_history(self):
-        """llm choose records description and selection to history."""
-        from helen.core.ast import (
-            LlmChooseStmtNode, LlmOptionNode, SourceSpan,
-        )
-        self.runtime.choose_return = "Option A"
-        span = SourceSpan("test.helen", 1, 1, 1, 30)
-        opt_a = LlmOptionNode(span=span, label="Option A", body=[])
-        opt_b = LlmOptionNode(span=span, label="Option B", body=[])
-        node = LlmChooseStmtNode(
-            span=span,
-            description="Pick one",
-            options=[opt_a, opt_b],
-            default=opt_b,
-        )
-        result = self.interp.visit_llm_choose_stmt(node)
-        assert result == "Option A"
-        assert len(self.interp.history) == 2
-        assert "[choose]" in self.interp.history[0].content
-        assert "[chose: Option A]" in self.interp.history[1].content
-
     def test_llm_if_records_to_history(self):
         """llm if records description and routing to history."""
         from helen.core.ast import (

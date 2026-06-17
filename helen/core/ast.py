@@ -163,14 +163,6 @@ class Visitor(ABC, Generic[R]):
         """Visit a LlmIfStmtNode."""
 
     @abstractmethod
-    def visit_llm_option(self, node: LlmOptionNode) -> R:
-        """Visit a LlmOptionNode."""
-
-    @abstractmethod
-    def visit_llm_choose_stmt(self, node: LlmChooseStmtNode) -> R:
-        """Visit a LlmChooseStmtNode."""
-
-    @abstractmethod
     def visit_llm_act_expr(self, node: LlmActExprNode) -> R:
         """Visit a LlmActExprNode."""
 
@@ -752,31 +744,6 @@ class LlmIfStmtNode(StatementNode):
 
 
 @dataclass(frozen=True)
-class LlmOptionNode(StatementNode):
-    """LLM choose option."""
-    label: str
-    body: list[StatementNode]
-    span: SourceSpan
-
-    def accept(self, visitor: Visitor[R]) -> R:
-        """Dispatch to the visitor."""
-        return visitor.visit_llm_option(self)
-
-
-@dataclass(frozen=True)
-class LlmChooseStmtNode(StatementNode):
-    """LLM choose statement."""
-    description: object  # ExpressionNode (evaluated at runtime) or str (legacy)
-    options: list[LlmOptionNode]
-    default: list[StatementNode]
-    span: SourceSpan
-
-    def accept(self, visitor: Visitor[R]) -> R:
-        """Dispatch to the visitor."""
-        return visitor.visit_llm_choose_stmt(self)
-
-
-@dataclass(frozen=True)
 class LlmActExprNode(ExpressionNode):
     """LLM act as an expression: llm act <prompt_expr>? Returns the LLM response text.
 
@@ -1014,14 +981,6 @@ class ASTPrinter(Visitor[str]):
     def visit_llm_if_stmt(self, node: LlmIfStmtNode) -> str:
         """Visit a LlmIfStmtNode."""
         return self._parenthesize("llm-if", node.description, *node.branches)
-
-    def visit_llm_option(self, node: LlmOptionNode) -> str:
-        """Visit a LlmOptionNode."""
-        return self._parenthesize("option", node.label)
-
-    def visit_llm_choose_stmt(self, node: LlmChooseStmtNode) -> str:
-        """Visit a LlmChooseStmtNode."""
-        return self._parenthesize("llm-choose", node.description)
 
     def visit_llm_act_expr(self, node: LlmActExprNode) -> str:
         """Visit a LlmActExprNode."""

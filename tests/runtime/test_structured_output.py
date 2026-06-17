@@ -44,42 +44,6 @@ class TestRouteParsing:
         assert result is None
 
 
-class TestChooseSchema:
-    def test_build_choose_schema_has_enum(self):
-        schema = StructuredOutput.build_choose_schema(["opt_a", "opt_b"])
-        option_enum = schema["function"]["parameters"]["properties"]["option"]["enum"]
-        assert option_enum == ["opt_a", "opt_b"]
-
-    def test_build_choose_schema_required_option(self):
-        schema = StructuredOutput.build_choose_schema(["a"])
-        assert schema["function"]["parameters"]["required"] == ["option"]
-
-    def test_build_choose_schema_function_name(self):
-        schema = StructuredOutput.build_choose_schema(["a"])
-        assert schema["function"]["name"] == "select"
-
-
-class TestChooseParsing:
-    def test_parse_valid_option(self):
-        response = {"option": "opt_a"}
-        result = StructuredOutput.parse_choose_response(response, ["opt_a", "opt_b"])
-        assert result == "opt_a"
-
-    def test_parse_invalid_option(self):
-        response = {"option": "opt_c"}
-        result = StructuredOutput.parse_choose_response(response, ["opt_a", "opt_b"])
-        assert result is None
-
-    def test_parse_none_response(self):
-        result = StructuredOutput.parse_choose_response(None, ["a"])
-        assert result is None
-
-    def test_parse_nested_arguments(self):
-        response = {"arguments": {"option": "opt_b"}}
-        result = StructuredOutput.parse_choose_response(response, ["opt_a", "opt_b"])
-        assert result == "opt_b"
-
-
 class TestPromptBuilding:
     def test_build_route_prompt(self):
         prompt = StructuredOutput.build_route_prompt("classify this", ["a", "b"])
@@ -91,10 +55,3 @@ class TestPromptBuilding:
     def test_build_route_prompt_with_context(self):
         prompt = StructuredOutput.build_route_prompt("desc", ["a"], context="user asked X")
         assert "user asked X" in prompt
-
-    def test_build_choose_prompt(self):
-        prompt = StructuredOutput.build_choose_prompt("pick one", ["x", "y"])
-        assert "pick one" in prompt
-        assert "x" in prompt
-        assert "y" in prompt
-        assert "select" in prompt.lower()

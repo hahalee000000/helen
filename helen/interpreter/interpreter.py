@@ -39,9 +39,7 @@ from helen.core.ast import (
     LiteralTypeNode,
     LlmActExprNode,
     LlmBranchNode,
-    LlmChooseStmtNode,
     LlmIfStmtNode,
-    LlmOptionNode,
     MainBlockNode,
     MapEntryNode,
     MapLiteralNode,
@@ -864,46 +862,6 @@ class Interpreter(Visitor[object]):
 
     def visit_llm_branch(self, node: LlmBranchNode) -> object:
         """Execute an llm if branch body."""
-        return self._execute_stmts(node.body)
-
-    def visit_llm_choose_stmt(self, node: LlmChooseStmtNode) -> object:
-        """Execute llm choose statement.
-
-        Flow:
-        1. Build choose prompt from description + options
-        2. Call runtime.choose() with function calling schema
-        3. Return the selected option name
-        4. If parsing fails -> return None (default)
-        """
-        options = [opt.label for opt in node.options]
-        context = self._get_context()
-
-        # Evaluate description expression to string
-        if isinstance(node.description, str):
-            desc_str = node.description
-        else:
-            desc_val = node.description.accept(self)
-            desc_str = str(desc_val) if desc_val is not None else ""
-
-        # Record user message to history
-        self._add_to_history("user", f"[choose] {desc_str}")
-
-        try:
-            selected = self.llm_runtime.choose(desc_str, options, context)
-        except HelenRuntimeError:
-            return None
-
-        # Record assistant response to history
-        if selected is not None:
-            self._add_to_history("assistant", f"[chose: {selected}]")
-
-        # Validate selected option
-        if selected is not None and selected in options:
-            return selected
-        return None
-
-    def visit_llm_option(self, node: LlmOptionNode) -> object:
-        """Execute an llm choose option body."""
         return self._execute_stmts(node.body)
 
     def visit_llm_act_expr(self, node: LlmActExprNode) -> object:

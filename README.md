@@ -2,7 +2,7 @@
 
 > A Prompt-first Agent Programming Language
 
-Helen is an AI-native DSL for building Agent workflows. It combines deterministic programming constructs (variables, functions, control flow) with first-class LLM primitives (`llm act`, `llm if`, `llm choose`) to make Agent development intuitive and type-safe.
+Helen is an AI-native DSL for building Agent workflows. It combines deterministic programming constructs (variables, functions, control flow) with first-class LLM primitives (`llm act`, `llm if`) to make Agent development intuitive and type-safe.
 
 ## Quick Start
 
@@ -56,7 +56,7 @@ Also supports `.env` format and falls back to `~/.hermes/.env` for backward comp
 ## Language Features
 
 - **Agent as first-class citizen** — `agent` declarations with description, prompt, model config
-- **LLM primitives** — `llm act`, `llm if` (routing with branches), `llm choose` (selection)
+- **LLM primitives** — `llm act`, `llm if` (routing with branches and return values)
 - **Built-in tools** — 7 tools (web_search, web_fetch, read_file, write_file, patch_file, shell_exec, calculate) via function calling
 - **Fuzzy matching** — 9 strategies for reliable file patching (from Hermes, independent)
 - **Async/await** — `async call` for concurrent Agent execution, `await [list]` for Promise.all semantics

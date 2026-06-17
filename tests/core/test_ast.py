@@ -216,14 +216,6 @@ class MockVisitor(Visitor[str]):
         self.calls.append("visit_llm_if_stmt")
         return "<llm_if>"
 
-    def visit_llm_option(self, node) -> str:
-        self.calls.append("visit_llm_option")
-        return "<llm_option>"
-
-    def visit_llm_choose_stmt(self, node) -> str:
-        self.calls.append("visit_llm_choose_stmt")
-        return "<llm_choose>"
-
     def visit_llm_act_stmt(self, node) -> str:
         self.calls.append("visit_llm_act_stmt")
         return "<llm_act>"

@@ -1191,17 +1191,16 @@ agent EmailClassifier {
 
 # 教程 06: LLM 语句
 
-> llm act / llm if / llm choose 实战
+> llm act / llm if 实战
 
 ## LLM 语句概述
 
-Helen 有三个关键字级 LLM 语句：
+Helen 有两个关键字级 LLM 语句：
 
 | 语句 | 用途 | 返回值 |
 |---|---|---|
 | `llm act` | 让 LLM 执行任务 | 响应文本 |
-| `llm if` | 让 LLM 分类路由 | 执行匹配分支 |
-| `llm choose` | 让 LLM 选择选项 | 选项名称 |
+| `llm if` | 让 LLM 分类路由 | 执行匹配分支或返回值 |
 
 ## llm act
 
@@ -1342,45 +1341,18 @@ llm if "Classify query type" {
 }
 ```
 
-## llm choose
+### 支持表达式作为描述
 
-### 基本用法
-
-```helen
-llm choose "Select the best response style" {
-    option "formal" {
-        let style = "professional"
-        print("Using formal tone")
-    }
-    option "casual" {
-        let style = "friendly"
-        print("Using casual tone")
-    }
-    option "humorous" {
-        let style = "witty"
-        print("Using humorous tone")
-    }
-}
-```
-
-### 与变量结合
+`llm if` 的描述支持表达式，可以动态构建：
 
 ```helen
-let topic = "climate change"
-
-llm choose "Select analysis approach" {
-    option "statistical" {
-        let approach = "data-driven"
-    }
-    option "narrative" {
-        let approach = "story-based"
-    }
-    option "comparative" {
-        let approach = "before-after"
-    }
+let text = "今天天气真好！"
+let mood = llm if text + "反映的情绪" {
+    branch "正面" { "happy" }
+    branch "负面" { "sad" }
+    default { "neutral" }
 }
-
-print("Analyzing " + topic + " with " + approach + " approach")
+print("Mood: " + mood)
 ```
 
 ## 对比：何时使用哪个？
@@ -1389,9 +1361,9 @@ print("Analyzing " + topic + " with " + approach + " approach")
 |---|---|
 | 需要 LLM 返回文本 | `llm act` |
 | 需要 LLM 做分类决策 | `llm if` |
-| 需要 LLM 从选项中选择 | `llm choose` |
+| 需要 LLM 从选项中选择并执行代码 | `llm if` + `branch` |
 | 多步骤决策 | 嵌套 `llm if` |
-| 需要结果变量 | `llm act` |
+| 需要结果变量 | `llm if` 或 `llm act` |
 
 ## 对话历史自动记录
 
@@ -1496,7 +1468,7 @@ agent Translator(text) {
 ## 练习
 
 1. 创建一个 llm if 三层嵌套的分类系统
-2. 使用 llm choose 让 LLM 选择算法策略
+2. 使用 llm if 让 LLM 选择算法策略并返回结果
 3. 使用 llm act 实现一个翻译管道
 4. 观察多次 LLM 调用后的对话历史
 

@@ -32,24 +32,6 @@ class TestMockLLMRoute:
             pass
 
 
-class TestMockLLMChoose:
-    def test_choose_returns_preset(self):
-        runtime = MockLLMRuntime(choose_return="option_a")
-        result = runtime.choose("pick one", ["option_a", "option_b"])
-        assert result == "option_a"
-
-    def test_choose_returns_none(self):
-        runtime = MockLLMRuntime(choose_return=None)
-        result = runtime.choose("pick", ["a", "b"])
-        assert result is None
-
-    def test_choose_records_history(self):
-        runtime = MockLLMRuntime(choose_return="a")
-        runtime.choose("select", ["a", "b"], context="ctx")
-        assert len(runtime.choose_history) == 1
-        assert runtime.choose_history[0]["options"] == ["a", "b"]
-
-
 class TestMockLLMAct:
     def test_act_returns_preset_string(self):
         runtime = MockLLMRuntime(act_return="Hello world")

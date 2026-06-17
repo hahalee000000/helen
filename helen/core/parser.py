@@ -31,9 +31,7 @@ from .ast import (
     ListLiteralNode,
     LlmActExprNode,
     LlmBranchNode,
-    LlmChooseStmtNode,
     LlmIfStmtNode,
-    LlmOptionNode,
     LiteralNode,
     MainBlockNode,
     MapEntryNode,
@@ -442,16 +440,14 @@ class Parser:
         return self._expr_stmt()
 
     def _llm_stmt(self) -> StatementNode:
-        """解析 llm 语句：根据下一个 Token 决定分支 (llm if / llm choose / llm act)。"""
+        """解析 llm 语句：根据下一个 Token 决定分支 (llm if / llm act)。"""
         self._advance()  # consume LLM
         if self._check(TokenType.IF):
             return self._llm_if_stmt()
-        elif self._check(TokenType.CHOOSE):
-            return self._llm_choose_stmt()
         elif self._check(TokenType.ACT):
             return self._llm_act_stmt()
         else:
-            self._error("Expected 'if', 'choose', or 'act' after 'llm'.")
+            self._error("Expected 'if' or 'act' after 'llm'.")
             self._synchronize()
             return None
 
@@ -730,7 +726,7 @@ class Parser:
         while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF,
                               TokenType.CATCH, TokenType.FINALLY,
                               TokenType.CASE, TokenType.DEFAULT,
-                              TokenType.BRANCH, TokenType.OPTION):
+                              TokenType.BRANCH):
             prev_pos = self._pos
             stmt = self._statement()
             if stmt is not None:
@@ -850,41 +846,6 @@ class Parser:
         body = self._block_body_list()
         self._consume(TokenType.RIGHT_BRACE, "Expected '}' after branch body.")
         return LlmBranchNode(condition=cond, body=body,
-                             span=self._make_span(start, self._previous()))
-
-    def _llm_choose_stmt(self) -> LlmChooseStmtNode:
-        """解析 llm choose 语句：llm choose "desc" { option "label" { ... } default { ... } }。"""
-        start = self._previous()  # LLM token
-        self._consume(TokenType.CHOOSE, "Expected 'choose' after 'llm'.")
-        desc_expr = self._expression()  # Parse expression instead of just STRING
-        self._consume(TokenType.LEFT_BRACE, "Expected '{' after llm choose description.")
-        options: list[LlmOptionNode] = []
-        default: list[StatementNode] = []
-        while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF):
-            if self._check(TokenType.OPTION):
-                options.append(self._llm_option())
-            elif self._check(TokenType.DEFAULT):
-                self._advance()
-                self._consume(TokenType.LEFT_BRACE, "Expected '{' after default.")
-                default = self._block_body_list()
-                self._consume(TokenType.RIGHT_BRACE, "Expected '}' after default body.")
-            else:
-                self._error(f"Expected 'option' or 'default', got {self._current().type.name}")
-                self._synchronize()
-        self._consume(TokenType.RIGHT_BRACE, "Expected '}' after llm choose body.")
-        end = self._previous()
-        return LlmChooseStmtNode(description=desc_expr,
-                                 options=options, default=default,
-                                 span=self._make_span(start, end))
-
-    def _llm_option(self) -> LlmOptionNode:
-        """解析 option 子句：option "label" { ... }。"""
-        start = self._advance()  # consume OPTION
-        label_tok = self._consume(TokenType.STRING, "Expected label after 'option'.")
-        self._consume(TokenType.LEFT_BRACE, "Expected '{' after option label.")
-        body = self._block_body_list()
-        self._consume(TokenType.RIGHT_BRACE, "Expected '}' after option body.")
-        return LlmOptionNode(label=label_tok.literal or label_tok.lexeme, body=body,
                              span=self._make_span(start, self._previous()))
 
     def _llm_act_stmt(self) -> StatementNode:
@@ -1042,7 +1003,7 @@ class Parser:
         while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF,
                               TokenType.CATCH, TokenType.FINALLY,
                               TokenType.CASE, TokenType.DEFAULT,
-                              TokenType.BRANCH, TokenType.OPTION):
+                              TokenType.BRANCH):
             prev_pos = self._pos
             stmt = self._statement()
             if stmt is not None:

@@ -120,13 +120,3 @@ class TestPromptBuilderRouteAndChoose:
             "Classify", ["a"], context="User said hello"
         )
         assert "User said hello" in prompt
-
-    def test_build_choose_prompt(self):
-        """Choose prompt contains description, options, and select instruction."""
-        prompt = self.builder.build_choose_prompt(
-            "Pick the best option", ["opt_a", "opt_b"]
-        )
-        assert "Pick the best option" in prompt
-        assert "opt_a" in prompt
-        assert "opt_b" in prompt
-        assert "select" in prompt.lower()

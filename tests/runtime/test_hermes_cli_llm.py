@@ -86,44 +86,6 @@ class TestHermesCLILLMRuntimeRoute:
         assert "docs" in captured["prompt"]
 
 
-class TestHermesCLILLMRuntimeChoose:
-    """Test choose() method - LLM option selection."""
-
-    def setup_method(self) -> None:
-        self.runtime = HermesCLILLMRuntime(hermes_path="hermes")
-
-    def test_choose_returns_matching_option(self) -> None:
-        with patch.object(self.runtime, "_ask", return_value="option_b"):
-            result = self.runtime.choose(
-                "Pick the best response style",
-                ["option_a", "option_b", "option_c"],
-            )
-        assert result == "option_b"
-
-    def test_choose_case_insensitive(self) -> None:
-        with patch.object(self.runtime, "_ask", return_value="OPTION_B"):
-            result = self.runtime.choose(
-                "Pick style",
-                ["option_a", "option_b"],
-            )
-        assert result == "option_b"
-
-    def test_choose_returns_first_on_no_match(self) -> None:
-        with patch.object(self.runtime, "_ask", return_value="unknown"):
-            result = self.runtime.choose("Pick", ["x", "y"])
-        assert result == "x"
-
-    def test_choose_returns_none_on_failure(self) -> None:
-        with patch.object(self.runtime, "_ask", return_value=None):
-            result = self.runtime.choose("Test", ["a", "b"])
-        assert result is None
-
-    def test_choose_returns_none_for_empty_options(self) -> None:
-        with patch.object(self.runtime, "_ask", return_value="x"):
-            result = self.runtime.choose("Test", [])
-        assert result is None
-
-
 class TestHermesCLILLMRuntimeAct:
     """Test act() method - LLM autonomous action."""
 
@@ -260,5 +222,4 @@ class TestHermesCLILLMRuntimeInterface:
     def test_has_required_methods(self) -> None:
         runtime = HermesCLILLMRuntime()
         assert hasattr(runtime, "route")
-        assert hasattr(runtime, "choose")
         assert hasattr(runtime, "act")
