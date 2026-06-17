@@ -288,3 +288,72 @@ class TestAggregateErrorCatchable:
         err = AggregateError("multi", errors=inner)
         assert len(err.errors) == 2
         assert err.errors[0] is inner[0]
+
+
+class TestConcurrentExecution:
+    """Test that async tasks execute concurrently on await."""
+
+    def test_pending_task_not_executed_immediately(self):
+        """async creates pending task, doesn't execute yet."""
+        from helen.interpreter.task import Task
+        task = Task.pending(call_node=None, interpreter=None, env_snapshot=None)
+        assert task.is_pending
+        assert not task.is_done
+        assert not task.has_error
+
+    def test_pending_task_executes_on_await(self):
+        """Pending task executes when awaited."""
+        from helen.interpreter.interpreter import Interpreter
+        from helen.interpreter.task import Task
+        from helen.core.ast import CallNode, VariableNode
+        
+        interp = Interpreter()
+        
+        # Create a simple call node that returns 42
+        from helen.core.ast import LiteralNode
+        from helen.core.source import SourceSpan
+        span = SourceSpan(file="<test>", start_line=1, start_col=1, end_line=1, end_col=1)
+        
+        # Use a mock object instead of frozen CallNode
+        class MockCall:
+            def accept(self, visitor):
+                return 42
+        
+        task = Task.pending(MockCall(), interp, interp.environment.snapshot())
+        assert task.is_pending
+        
+        # Execute via await
+        result = interp._await_tasks(task)
+        assert result == 42
+        assert task.is_done
+        assert not task.is_pending
+
+    def test_multiple_pending_tasks_execute_concurrently(self):
+        """Multiple pending tasks execute concurrently on await."""
+        from helen.interpreter.interpreter import Interpreter
+        from helen.interpreter.task import Task
+        import time
+        
+        interp = Interpreter()
+        
+        # Create mock calls that simulate slow execution
+        def make_mock_call(value, delay=0.1):
+            class MockCall:
+                def accept(self, visitor):
+                    time.sleep(delay)  # Simulate I/O
+                    return value
+            return MockCall()
+        
+        # Create 3 pending tasks
+        task1 = Task.pending(make_mock_call(1, 0.1), interp, interp.environment.snapshot())
+        task2 = Task.pending(make_mock_call(2, 0.1), interp, interp.environment.snapshot())
+        task3 = Task.pending(make_mock_call(3, 0.1), interp, interp.environment.snapshot())
+        
+        # Execute concurrently
+        start = time.time()
+        results = interp._await_tasks([task1, task2, task3])
+        elapsed = time.time() - start
+        
+        # Should complete in ~0.1s (concurrent), not ~0.3s (sequential)
+        assert results == [1, 2, 3]
+        assert elapsed < 0.25, f"Expected concurrent execution (<0.25s), got {elapsed:.2f}s"

@@ -789,19 +789,19 @@ class Interpreter(Visitor[object]):
     def visit_async_call_expr(self, node: AsyncCallExprNode) -> object:
         """Execute async call expression (HLD 3.6.7).
 
-        Same as visit_async_call_stmt but used in expression position.
-        Returns a Task object that can be stored in a variable.
+        Phase 1b: Creates a pending Task that will execute on await.
+        This enables true concurrency when multiple async calls are awaited together.
 
         Example: let task = async Worker("input")
 
         Returns:
-            A Task object wrapping the call result or exception.
+            A pending Task object that executes on await.
         """
-        try:
-            result = node.call.accept(self)
-            return Task.completed(result)
-        except Exception as exc:
-            return Task.failed(exc)
+        # Create environment snapshot for isolation
+        env_snapshot = self.environment.snapshot()
+        
+        # Create pending task (will execute on await)
+        return Task.pending(node.call, self, env_snapshot)
 
     def visit_llm_if_stmt(self, node: LlmIfStmtNode) -> object:
         """Execute llm if statement (HLD 3.6.5, 3.6.6).
@@ -1172,6 +1172,9 @@ class Interpreter(Visitor[object]):
     def _await_tasks(self, tasks: list[Task] | Task) -> object:
         """Await one or more tasks with Promise.all semantics (HLD 3.6.7).
 
+        Phase 1b: Executes pending tasks concurrently using asyncio + ThreadPoolExecutor.
+        This enables true parallelism for I/O-bound operations (e.g., LLM API calls).
+
         For a single task: returns its result or raises its exception.
         For a list of tasks: returns list of results if all succeed,
         or raises AggregateError containing all failed task exceptions.
@@ -1187,10 +1190,34 @@ class Interpreter(Visitor[object]):
             AggregateError if any task in a list fails.
         """
         if isinstance(tasks, Task):
-            # Single task: return result or raise exception
+            # Single task: execute if pending, then return result or raise exception
+            if tasks.is_pending:
+                tasks.execute()
             return tasks.result()
 
-        # List of tasks: Promise.all semantics
+        # List of tasks: execute pending tasks concurrently
+        pending_tasks = [t for t in tasks if t.is_pending]
+        
+        if pending_tasks:
+            # Use asyncio + ThreadPoolExecutor for concurrent execution
+            import asyncio
+            from concurrent.futures import ThreadPoolExecutor
+            
+            async def execute_concurrently():
+                loop = asyncio.get_event_loop()
+                with ThreadPoolExecutor(max_workers=len(pending_tasks)) as executor:
+                    # Submit all pending tasks to thread pool
+                    futures = [
+                        loop.run_in_executor(executor, task.execute)
+                        for task in pending_tasks
+                    ]
+                    # Wait for all to complete
+                    await asyncio.gather(*futures)
+            
+            # Run the async execution
+            asyncio.run(execute_concurrently())
+
+        # Collect results from all tasks (both pending and already completed)
         results = []
         errors = []
 
