@@ -72,7 +72,7 @@ class TokenType(Enum):
     TEMPLATE_OPEN = auto()  # {{
     TEMPLATE_CLOSE = auto()  # }}
 
-    # === Keywords (41 total) ===
+    # === Keywords (42 total) ===
     AGENT = auto()
     DESCRIPTION = auto()
     MODEL = auto()
@@ -102,6 +102,7 @@ class TokenType(Enum):
     BRANCH = auto()
     DEFAULT = auto()
     ACT = auto()
+    STREAM = auto()
     TRY = auto()
     CATCH = auto()
     FINALLY = auto()
@@ -119,7 +120,7 @@ class TokenType(Enum):
 # Type alias for literal values a token can carry
 LiteralValue = Union[str, int, float, bool, None]
 
-# Keyword → TokenType mapping (41 entries)
+# Keyword → TokenType mapping (42 entries)
 _KEYWORD_MAP: dict[str, TokenType] = {
     "agent": TokenType.AGENT,
     "description": TokenType.DESCRIPTION,
@@ -150,6 +151,7 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "branch": TokenType.BRANCH,
     "default": TokenType.DEFAULT,
     "act": TokenType.ACT,
+    "stream": TokenType.STREAM,
     "try": TokenType.TRY,
     "catch": TokenType.CATCH,
     "finally": TokenType.FINALLY,

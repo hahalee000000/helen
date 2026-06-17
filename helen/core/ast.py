@@ -171,6 +171,10 @@ class Visitor(ABC, Generic[R]):
         """Visit a LlmActExprNode."""
 
     @abstractmethod
+    def visit_llm_stream_stmt(self, node: LlmStreamStmtNode) -> R:
+        """Visit a LlmStreamStmtNode."""
+
+    @abstractmethod
     def visit_match_stmt(self, node: MatchStmtNode) -> R:
         """Visit a MatchStmtNode."""
 
@@ -778,6 +782,26 @@ class LlmActExprNode(ExpressionNode):
 
 
 @dataclass(frozen=True)
+class LlmStreamStmtNode(StatementNode):
+    """LLM stream statement: llm stream <prompt_expr> [on_chunk <callback>].
+    
+    Streams LLM response chunk by chunk, optionally calling a callback for each chunk.
+    If no callback is provided, chunks are printed to stdout using stream_print.
+    
+    Syntax:
+        llm stream "prompt"                    # Auto-print chunks
+        llm stream "prompt" on_chunk callback  # Call callback(chunk) for each chunk
+    """
+    prompt: ExpressionNode
+    on_chunk: ExpressionNode | None  # Optional callback function
+    span: SourceSpan
+
+    def accept(self, visitor: Visitor[R]) -> R:
+        """Dispatch to the visitor."""
+        return visitor.visit_llm_stream_stmt(self)
+
+
+@dataclass(frozen=True)
 class MatchStmtNode(StatementNode):
     """Match statement."""
     subject: ExpressionNode
@@ -1008,6 +1032,10 @@ class ASTPrinter(Visitor[str]):
     def visit_llm_act_expr(self, node: LlmActExprNode) -> str:
         """Visit a LlmActExprNode."""
         return self._parenthesize("llm-act-expr", node.prompt)
+
+    def visit_llm_stream_stmt(self, node: LlmStreamStmtNode) -> str:
+        """Visit a LlmStreamStmtNode."""
+        return self._parenthesize("llm-stream", node.prompt, node.on_chunk)
 
     def visit_match_stmt(self, node: MatchStmtNode) -> str:
         """Visit a MatchStmtNode."""

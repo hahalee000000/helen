@@ -32,6 +32,7 @@ from .ast import (
     LlmActExprNode,
     LlmBranchNode,
     LlmIfStmtNode,
+    LlmStreamStmtNode,
     LiteralNode,
     MainBlockNode,
     MapEntryNode,
@@ -444,14 +445,16 @@ class Parser:
         return self._expr_stmt()
 
     def _llm_stmt(self) -> StatementNode:
-        """解析 llm 语句：根据下一个 Token 决定分支 (llm if / llm act)。"""
+        """解析 llm 语句：根据下一个 Token 决定分支 (llm if / llm act / llm stream)。"""
         self._advance()  # consume LLM
         if self._check(TokenType.IF):
             return self._llm_if_stmt()
         elif self._check(TokenType.ACT):
             return self._llm_act_stmt()
+        elif self._check(TokenType.STREAM):
+            return self._llm_stream_stmt()
         else:
-            self._error("Expected 'if' or 'act' after 'llm'.")
+            self._error("Expected 'if', 'act', or 'stream' after 'llm'.")
             self._synchronize()
             return None
 
@@ -908,6 +911,31 @@ class Parser:
         return ExprStmtNode(
             expression=LlmActExprNode(prompt=prompt_expr,
                                       span=self._make_span(start, self._previous())),
+            span=self._make_span(start, self._previous())
+        )
+
+    def _llm_stream_stmt(self) -> LlmStreamStmtNode:
+        """解析 llm stream 语句：流式 LLM 调用。
+
+        语法：
+        - llm stream "prompt"                    # 自动输出到 stdout
+        - llm stream "prompt" on_chunk callback  # 调用 callback(chunk)
+        """
+        start = self._previous()  # LLM token
+        self._consume(TokenType.STREAM, "Expected 'stream' after 'llm'.")
+        
+        # 解析 prompt 表达式（必需）
+        prompt_expr = self._expression()
+        
+        # 检查是否有 on_chunk 回调
+        on_chunk_expr = None
+        if self._check(TokenType.IDENTIFIER) and self._current().lexeme == "on_chunk":
+            self._advance()  # consume 'on_chunk'
+            on_chunk_expr = self._expression()
+        
+        return LlmStreamStmtNode(
+            prompt=prompt_expr,
+            on_chunk=on_chunk_expr,
             span=self._make_span(start, self._previous())
         )
 

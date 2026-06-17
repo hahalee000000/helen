@@ -41,6 +41,7 @@ from helen.core.ast import (
     LlmActExprNode,
     LlmBranchNode,
     LlmIfStmtNode,
+    LlmStreamStmtNode,
     MainBlockNode,
     MapEntryNode,
     MapLiteralNode,
@@ -939,6 +940,99 @@ class Interpreter(Visitor[object]):
                 self._add_to_history("assistant", response.text)
             return response.text if response else None
         except HelenRuntimeError:
+            return None
+
+    def visit_llm_stream_stmt(self, node: LlmStreamStmtNode) -> object:
+        """Execute llm stream statement: stream LLM response chunk by chunk.
+        
+        If on_chunk callback is provided, call it for each chunk.
+        Otherwise, use stream_print to output chunks to stdout.
+        """
+        # Evaluate the prompt expression
+        prompt = node.prompt.accept(self)
+        if not isinstance(prompt, str):
+            prompt = self._stringify(prompt)
+        
+        # Extract agent settings if inside an agent context
+        model = self._get_agent_setting("model")
+        temperature = float(self._get_agent_setting("temperature", 1.0))
+        
+        # Get rendered agent prompt as system_prompt
+        system_prompt = self._get_rendered_agent_prompt()
+        
+        # Record user message to history
+        self._add_to_history("user", prompt)
+        
+        # Check if LLM runtime supports streaming
+        from helen.runtime.llm_runtime import LLMRuntime
+        if not hasattr(self.llm_runtime, 'act_stream'):
+            # Fallback to non-streaming if not supported
+            self.errors.error(
+                ErrorCode.RUNTIME_ERROR,
+                "LLM runtime does not support streaming. Using fallback.",
+                node.span,
+            )
+            response = self.llm_runtime.act(
+                prompt, model=model, temperature=temperature,
+                system_prompt=system_prompt,
+            )
+            if response and response.text:
+                # Use stream_print for output
+                from helen.stdlib import stdlib
+                stream_print_fn = stdlib.lookup("stream_print")
+                if stream_print_fn:
+                    stream_print_fn.fn(response.text)
+                    print()  # Add newline at end
+                self._add_to_history("assistant", response.text)
+            return None
+        
+        # Evaluate on_chunk callback if provided
+        on_chunk_fn = None
+        if node.on_chunk is not None:
+            on_chunk_fn = node.on_chunk.accept(self)
+            if not callable(on_chunk_fn):
+                self.errors.error(
+                    ErrorCode.SEMANTIC_TYPE_ERROR,
+                    f"on_chunk callback must be callable, got {type(on_chunk_fn).__name__}",
+                    node.span,
+                )
+                return None
+        
+        try:
+            # Stream response chunk by chunk
+            full_response = []
+            for chunk in self.llm_runtime.act_stream(
+                prompt, model=model, temperature=temperature,
+                system_prompt=system_prompt,
+            ):
+                if chunk.content:
+                    full_response.append(chunk.content)
+                    if on_chunk_fn is not None:
+                        # Call user-provided callback
+                        on_chunk_fn(chunk.content)
+                    else:
+                        # Use stream_print for auto-output
+                        from helen.stdlib import stdlib
+                        stream_print_fn = stdlib.lookup("stream_print")
+                        if stream_print_fn:
+                            stream_print_fn.fn(chunk.content)
+            
+            # Add newline at end if using auto-output
+            if on_chunk_fn is None:
+                print()
+            
+            # Record assistant response to history
+            full_text = "".join(full_response)
+            if full_text:
+                self._add_to_history("assistant", full_text)
+            
+            return None
+        except Exception as e:
+            self.errors.error(
+                ErrorCode.RUNTIME_ERROR,
+                f"Streaming LLM call failed: {e}",
+                node.span,
+            )
             return None
 
     # ------------------------------------------------------------------

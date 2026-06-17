@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Iterator
 
 
 # ---------------------------------------------------------------------------
@@ -77,6 +77,20 @@ class LLMRuntime(ABC):
         Default implementation calls sync version. Override for true async.
         """
         return self.act(prompt, tools, model, temperature, max_turns, history, system_prompt)
+    
+    def act_stream(self, prompt: str, model: str | None = None,
+                   temperature: float = 1.0, system_prompt: str | None = None) -> Iterator[dict[str, Any]]:
+        """Stream LLM response chunk by chunk.
+        
+        Default implementation calls act() and yields the full response as a single chunk.
+        Override for true streaming support.
+        
+        Yields:
+            Dict with 'content' key containing chunk text.
+        """
+        response = self.act(prompt, model=model, temperature=temperature, system_prompt=system_prompt)
+        if response and response.text:
+            yield {"content": response.text}
 
 
 # ---------------------------------------------------------------------------
