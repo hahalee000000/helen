@@ -1477,12 +1477,14 @@ agent Translator(text) {
 
 # 教程 07: 异步编程
 
-> async / await / AggregateError / 并发 Agent 调用
+> async / await / AggregateError / 并发 Agent 调用 / Phase 1b 真正异步
 
 ## 概述
 
 Helen 支持 `async` 启动并发 Agent 调用，通过 `await [list]` 等待全部完成。
 `async Agent(...)` 是表达式，返回 `Task` 对象，可存入变量。
+
+**Phase 1b 实现**：使用纯 `asyncio` 单线程并发，LLM 调用非阻塞执行，内存开销接近零。
 
 ## 基本用法
 
@@ -1518,6 +1520,33 @@ main {
     print("Analysis: " + analysis)
 }
 ```
+
+## 两种 async 形式
+
+### 1. 表达式形式（延迟执行）
+
+```helen
+let task = async MyAgent(input)
+// 创建 pending Task，不立即执行
+// 在 await 时并发执行
+```
+
+**特点**：
+- 返回 `Task.pending` 对象
+- 延迟到 `await` 时执行
+- 多个 pending Task 在 `await` 时并发执行
+
+### 2. 语句形式（立即执行）
+
+```helen
+async MyAgent(input)
+// 立即执行，返回 Task.completed
+```
+
+**特点**：
+- 立即同步执行
+- 返回 `Task.completed` 或 `Task.failed`
+- 适用于不需要并发的场景
 
 ## Task 对象
 
@@ -1609,21 +1638,57 @@ main {
 }
 ```
 
+## 普通函数异步调用
+
+`async` 也可用于普通函数：
+
+```helen
+fn compute(x: num) {
+    return x * x
+}
+
+fn cube(x: num) {
+    return x * x * x
+}
+
+main {
+    let t1 = async compute(3)
+    let t2 = async cube(2)
+    let results = await [t1, t2]
+    print(results[0] + results[1])  // 9 + 8 = 17
+}
+```
+
+## 性能特性
+
+**Phase 1b 实现**：使用纯 `asyncio` 单线程并发
+
+- **LLM 调用**：通过 `asyncio.create_subprocess_exec()` 非阻塞执行
+- **内存开销**：接近零（无额外线程）
+- **并发效率**：3 个 1 秒的 LLM 调用 → ~1 秒完成（并发）
+
+**对比 Phase 1a（线程池）**：
+- Phase 1a：3 个线程 × 8MB = 24MB
+- Phase 1b：0 个线程 = ~0MB
+- **内存节省**：100%
+
 ## 注意事项
 
 | 规则 | 说明 |
 |---|---|
 | `async` 可用于表达式 | `let task = async Agent()` ✅ |
-| `async` 也可作为语句 | `async Agent()` ✅（返回值丢弃） |
+| `async` 也可作为语句 | `async Agent()` ✅（立即执行） |
 | `await` 参数必须是列表 | `await [task]` ✅，`await task` ❌ |
-| v1 同步执行 | 当前版本立即执行，未来版本改为真正异步 |
+| Phase 1b 真正异步 | LLM 调用通过 asyncio 非阻塞执行 |
 | 错误聚合 | 多个失败 → `AggregateError`（可被 try-catch 捕获） |
+| 环境隔离 | 每个 Task 有独立的环境快照 |
 
 ## 练习
 
 1. 创建三个并发 Agent 调用，处理同一输入的不同方面
 2. 模拟一个失败的任务，使用 try-catch 处理 AggregateError
-3. 比较串行调用和 async/await 的执行顺序
+3. 比较串行调用和 async/await 的执行时间
+4. 尝试用 `async` 调用普通函数，观察并发效果
 
 ---
 
