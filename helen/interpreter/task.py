@@ -65,12 +65,11 @@ class Task:
     async def execute_async(self) -> None:
         """Async version of execute() for true concurrent execution.
         
-        Phase 1b: Uses asyncio.to_thread() to run sync interpreter code
-        in the global thread pool. This allows concurrent LLM calls
-        without creating a thread per task.
+        Phase 1b: If interpreter is AsyncLLMInterpreter, uses async execution
+        directly (no thread pool). Otherwise, falls back to asyncio.to_thread().
         
-        Memory: Uses fixed-size global thread pool (min(32, cpu_count + 4)),
-        not one thread per task. Suitable for memory-constrained environments.
+        Memory: When using AsyncLLMInterpreter, no threads are created.
+        All async tasks run in a single thread with asyncio event loop.
         """
         import asyncio
         
@@ -78,9 +77,15 @@ class Task:
             return
         
         try:
-            # Run sync interpreter code in thread pool
-            # asyncio.to_thread uses a global thread pool, not per-task threads
-            result = await asyncio.to_thread(self._execute_sync)
+            # Check if interpreter supports async execution
+            from helen.interpreter.async_interpreter import AsyncLLMInterpreter
+            if isinstance(self._interpreter, AsyncLLMInterpreter):
+                # True async execution - no thread pool
+                result = await self._execute_async()
+            else:
+                # Fallback to thread pool for sync interpreters
+                result = await asyncio.to_thread(self._execute_sync)
+            
             self.result_value = result
             self._done = True
         except Exception as e:
@@ -88,6 +93,27 @@ class Task:
             self._done = True
         finally:
             self._pending = False
+    
+    async def _execute_async(self) -> Any:
+        """Async execution helper for AsyncLLMInterpreter."""
+        # Restore environment snapshot for isolation
+        old_env = self._interpreter.environment
+        self._interpreter.environment = self._env_snapshot
+        
+        try:
+            # Check if the call node is an LLM expression
+            from helen.core.ast import LlmActExprNode, LlmIfStmtNode
+            if isinstance(self._call_node, LlmActExprNode):
+                result = await self._interpreter.visit_llm_act_expr_async(self._call_node)
+            elif isinstance(self._call_node, LlmIfStmtNode):
+                result = await self._interpreter.visit_llm_if_stmt_async(self._call_node)
+            else:
+                # Non-LLM nodes execute synchronously
+                result = self._call_node.accept(self._interpreter)
+            return result
+        finally:
+            # Restore original environment
+            self._interpreter.environment = old_env
     
     def _execute_sync(self) -> Any:
         """Synchronous execution helper for execute_async()."""
