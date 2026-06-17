@@ -162,9 +162,7 @@ class Interpreter(Visitor[object]):
         Returns:
             The result of the last statement executed, or None.
         """
-        print(f"[DEBUG] Starting interpretation of {type(program)}")
         result = self.visit_program(program)
-        print("[DEBUG] Finished interpretation")
         # Unwrap sentinels at the top level
         if isinstance(result, ReturnSentinel):
             return result.value
