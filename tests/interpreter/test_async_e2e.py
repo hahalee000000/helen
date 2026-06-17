@@ -6,6 +6,7 @@ concurrent execution without thread pools.
 
 import asyncio
 import time
+import pytest
 from helen.interpreter.async_interpreter import AsyncLLMInterpreter
 from helen.interpreter.task import Task
 from helen.runtime.llm_runtime import LLMRuntime, LLMResponse
@@ -54,6 +55,7 @@ def _lit(value):
     return LiteralNode(value=value, span=_span())
 
 
+@pytest.mark.asyncio
 async def test_concurrent_llm_calls():
     """Test that 3 LLM calls run concurrently in ~1s, not ~3s."""
     print("\n=== Testing True Async Execution (Phase 1b) ===\n")
