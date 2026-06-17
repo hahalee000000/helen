@@ -26,6 +26,11 @@
 
 > 安装 Helen、配置环境、编写第一个程序、使用 REPL
 
+## 系统要求
+
+- **Python 3.7+**（推荐 3.9+）
+- 操作系统：Linux、macOS、Windows
+
 ## 安装
 
 ```bash
@@ -1477,14 +1482,14 @@ agent Translator(text) {
 
 # 教程 07: 异步编程
 
-> async / await / AggregateError / 并发 Agent 调用 / Phase 1b 真正异步
+> async / await / AggregateError / 并发 Agent 调用
 
 ## 概述
 
 Helen 支持 `async` 启动并发 Agent 调用，通过 `await [list]` 等待全部完成。
 `async Agent(...)` 是表达式，返回 `Task` 对象，可存入变量。
 
-**Phase 1b 实现**：使用纯 `asyncio` 单线程并发，LLM 调用非阻塞执行，内存开销接近零。
+**真正的异步并发**：使用纯 `asyncio` 单线程并发，LLM 调用非阻塞执行，内存开销接近零。
 
 ## 基本用法
 
@@ -1661,15 +1666,15 @@ main {
 
 ## 性能特性
 
-**Phase 1b 实现**：使用纯 `asyncio` 单线程并发
+**真正的异步并发**：使用纯 `asyncio` 单线程并发
 
 - **LLM 调用**：通过 `asyncio.create_subprocess_exec()` 非阻塞执行
 - **内存开销**：接近零（无额外线程）
 - **并发效率**：3 个 1 秒的 LLM 调用 → ~1 秒完成（并发）
 
-**对比 Phase 1a（线程池）**：
-- Phase 1a：3 个线程 × 8MB = 24MB
-- Phase 1b：0 个线程 = ~0MB
+**对比传统线程池**：
+- 线程池：3 个线程 × 8MB = 24MB
+- asyncio：0 个线程 = ~0MB
 - **内存节省**：100%
 
 ## 注意事项
@@ -1679,7 +1684,7 @@ main {
 | `async` 可用于表达式 | `let task = async Agent()` ✅ |
 | `async` 也可作为语句 | `async Agent()` ✅（立即执行） |
 | `await` 参数必须是列表 | `await [task]` ✅，`await task` ❌ |
-| Phase 1b 真正异步 | LLM 调用通过 asyncio 非阻塞执行 |
+| 真正异步并发 | LLM 调用通过 asyncio 非阻塞执行 |
 | 错误聚合 | 多个失败 → `AggregateError`（可被 try-catch 捕获） |
 | 环境隔离 | 每个 Task 有独立的环境快照 |
 
