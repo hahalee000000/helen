@@ -643,10 +643,7 @@ class SemanticAnalyzer(Visitor[None]):
 
     def visit_import_stmt(self, node: ImportStmtNode) -> None:
         path = node.module_path
-        if path in self._imported_paths:
-            return  # Already validated
-        self._imported_paths.add(path)
-
+        
         # Resolve relative to base_dir
         target = os.path.join(self.base_dir, path)
         if not os.path.exists(target):
@@ -655,6 +652,24 @@ class SemanticAnalyzer(Visitor[None]):
                 f"import file not found: '{path}'",
                 node.span,
             )
+            return
+        
+        # Register the alias as a variable in the current scope
+        # For .helen files, agents/functions are registered separately
+        # For .json/.md/.txt/.yaml files, the data is registered under the alias
+        # If no alias specified, use the filename (without extension) as the alias
+        if path.endswith(('.json', '.md', '.txt', '.yaml', '.yml')):
+            alias = node.alias if node.alias else os.path.splitext(os.path.basename(path))[0]
+            from helen.semantic.symbols import Symbol
+            sym = Symbol(alias, kind="import", is_const=False)
+            self.symbols.define(alias, sym)
+        
+        # Track imported paths to avoid duplicate processing for .helen files
+        # But still allow multiple aliases for data files
+        if path.endswith('.helen'):
+            if path in self._imported_paths:
+                return
+            self._imported_paths.add(path)
 
     # ------------------------------------------------------------------
     # Async call

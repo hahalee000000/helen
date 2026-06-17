@@ -764,10 +764,10 @@ class Interpreter(Visitor[object]):
                 if name not in self._functions:
                     self._functions[name] = func
         else:
-            # Register data by alias for template/data access
-            alias = os.path.splitext(os.path.basename(result.path))[0]
-            if alias not in self.environment.symbols:
-                self.environment.define(alias, result.content)
+            # Register data by user-specified alias (or filename if no alias)
+            alias = node.alias if node.alias else os.path.splitext(os.path.basename(result.path))[0]
+            # Define the variable in the environment
+            self.environment.define(alias, result.content)
 
         return None
 

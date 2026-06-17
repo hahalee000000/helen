@@ -96,10 +96,11 @@ class ImportResolver:
         abs_resolved = os.path.abspath(resolved)
         if abs_resolved in self._loaded:
             # Circular import — return cached result if available
-            alias = os.path.splitext(os.path.basename(resolved))[0]
-            if alias in self._data:
+            # Try both filename-based alias and check if data exists
+            filename_alias = os.path.splitext(os.path.basename(resolved))[0]
+            if filename_alias in self._data:
                 return ImportResult(
-                    path=abs_resolved, content=self._data[alias], format="helen"
+                    path=abs_resolved, content=self._data[filename_alias], format=self._detect_format(resolved)
                 )
             return None
 
