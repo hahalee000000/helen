@@ -360,6 +360,11 @@ class Interpreter(Visitor[object]):
         if isinstance(callee, FunctionDeclNode):
             return self._call_function(callee, args)
 
+        # Check if callee is a Python FFI object
+        from helen.ffi.python_object import WrappedPythonObject
+        if isinstance(callee, WrappedPythonObject):
+            return callee.call(*args)
+
         # Check if callee is a stdlib builtin function (HLD M15)
         if callable(callee):
             return callee(*args)
@@ -747,7 +752,21 @@ class Interpreter(Visitor[object]):
         - .helen: Parse and register agents/functions to global namespace
         - .md/.txt: Load as text, register to import_resolver.data
         - .json/.yaml: Parse as data, register to import_resolver.data
+        - Python modules (no extension or .py): Import via Python FFI
         """
+        # Check if this is a Python module import
+        # Python modules: no extension, or .py extension, or dotted names like "os.path"
+        # Helen/data files: .helen, .json, .md, .txt, .yaml, .yml
+        path = node.module_path
+        is_python_module = (
+            path.endswith('.py') or  # Explicit .py extension
+            not any(path.endswith(ext) for ext in ('.helen', '.json', '.md', '.txt', '.yaml', '.yml'))
+        )
+        
+        if is_python_module:
+            # Python module import via FFI
+            return self._import_python_module(node)
+        
         # Track the current file for relative path resolution
         current_file = node.source_file if hasattr(node, 'source_file') else None
 
@@ -770,6 +789,39 @@ class Interpreter(Visitor[object]):
             # Define the variable in the environment
             self.environment.define(alias, result.content)
 
+        return None
+    
+    def _import_python_module(self, node: ImportStmtNode) -> object:
+        """Import a Python module via FFI.
+        
+        Args:
+            node: The import statement node
+            
+        Returns:
+            None
+        """
+        from helen.ffi.python_runtime import DefaultPythonRuntime
+        
+        # Get or create Python runtime
+        if not hasattr(self, '_python_runtime'):
+            self._python_runtime = DefaultPythonRuntime()
+        
+        # Import the module
+        module_name = node.module_path
+        if module_name.endswith('.py'):
+            module_name = module_name[:-3]  # Remove .py extension
+        
+        try:
+            module = self._python_runtime.import_module(module_name)
+            
+            # Register the module under the alias (or module name if no alias)
+            alias = node.alias if node.alias else module_name.split('.')[-1]
+            self.environment.define(alias, module)
+            
+        except ImportError as e:
+            self._runtime_error(node.span, f"Cannot import Python module '{module_name}': {e}")
+            return None
+        
         return None
 
     def visit_async_call_stmt(self, node: AsyncCallStmtNode) -> object:

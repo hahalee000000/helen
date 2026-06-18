@@ -645,7 +645,23 @@ class SemanticAnalyzer(Visitor[None]):
     def visit_import_stmt(self, node: ImportStmtNode) -> None:
         path = node.module_path
         
-        # Resolve relative to base_dir
+        # Check if this is a Python module import
+        # Python modules: no extension, or .py extension, or dotted names like "os.path"
+        # Helen/data files: .helen, .json, .md, .txt, .yaml, .yml
+        is_python_module = (
+            path.endswith('.py') or  # Explicit .py extension
+            not any(path.endswith(ext) for ext in ('.helen', '.json', '.md', '.txt', '.yaml', '.yml'))
+        )
+        
+        if is_python_module:
+            # Python module import - register the alias as a variable
+            alias = node.alias if node.alias else path.split('.')[-1]
+            from helen.semantic.symbols import Symbol
+            sym = Symbol(alias, kind="import", is_const=False)
+            self.symbols.define(alias, sym)
+            return
+        
+        # Resolve relative to base_dir for Helen/data files
         target = os.path.join(self.base_dir, path)
         if not os.path.exists(target):
             self.errors.error(
