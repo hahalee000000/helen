@@ -215,6 +215,102 @@ def _read_file(path: str) -> str:
     return pathlib.Path(path).read_text(encoding="utf-8")
 
 
+def _write_file(path: str, content: str) -> str:
+    """Write content to a file. Creates parent directories if needed."""
+    import pathlib  # noqa: PLC0415
+    p = pathlib.Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(content, encoding="utf-8")
+    return f"Wrote {len(content)} bytes to {path}"
+
+
+def _append_file(path: str, content: str) -> str:
+    """Append content to a file. Creates file and parent dirs if needed."""
+    import pathlib  # noqa: PLC0415
+    p = pathlib.Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, "a", encoding="utf-8") as f:
+        f.write(content)
+    return f"Appended {len(content)} bytes to {path}"
+
+
+def _mkdir(path: str) -> str:
+    """Create a directory. Parent directories must exist."""
+    import pathlib  # noqa: PLC0415
+    pathlib.Path(path).mkdir(parents=False, exist_ok=True)
+    return f"Created directory: {path}"
+
+
+def _mkdir_p(path: str) -> str:
+    """Create a directory and all parent directories."""
+    import pathlib  # noqa: PLC0415
+    pathlib.Path(path).mkdir(parents=True, exist_ok=True)
+    return f"Created directory tree: {path}"
+
+
+# ── Path operations ───────────────────────────────────────────
+
+
+def _path_join(*parts: str) -> str:
+    """Join path components."""
+    import os.path  # noqa: PLC0415
+    return os.path.join(*parts)
+
+
+def _path_dirname(path: str) -> str:
+    """Return directory name."""
+    import os.path  # noqa: PLC0415
+    return os.path.dirname(path)
+
+
+def _path_basename(path: str) -> str:
+    """Return base name."""
+    import os.path  # noqa: PLC0415
+    return os.path.basename(path)
+
+
+def _path_exists(path: str) -> bool:
+    """Check if path exists."""
+    import os.path  # noqa: PLC0415
+    return os.path.exists(path)
+
+
+def _path_is_file(path: str) -> bool:
+    """Check if path is a file."""
+    import os.path  # noqa: PLC0415
+    return os.path.isfile(path)
+
+
+def _path_is_dir(path: str) -> bool:
+    """Check if path is a directory."""
+    import os.path  # noqa: PLC0415
+    return os.path.isdir(path)
+
+
+# ── String operations ─────────────────────────────────────────
+
+
+def _substring(s: str, start: int, end: int | None = None) -> str:
+    """Extract substring. If end is None, extracts from start to end of string."""
+    if end is None:
+        return s[start:]
+    return s[start:end]
+
+
+def _trim_prefix(s: str, prefix: str) -> str:
+    """Remove prefix from string if it exists."""
+    if s.startswith(prefix):
+        return s[len(prefix):]
+    return s
+
+
+def _trim_suffix(s: str, suffix: str) -> str:
+    """Remove suffix from string if it exists."""
+    if s.endswith(suffix):
+        return s[:-len(suffix)]
+    return s
+
+
 # ── Stream output builtins ────────────────────────────────────
 
 
@@ -298,6 +394,9 @@ def _register_builtins() -> None:
         BuiltinFunction("endswith", "Check suffix", "endswith(s, suffix)", _endswith, "string"),
         BuiltinFunction("replace", "Replace substring", "replace(s, old, new)", _replace, "string"),
         BuiltinFunction("find", "Find substring index", "find(s, sub)", _find, "string"),
+        BuiltinFunction("substring", "Extract substring", "substring(s, start, end?)", _substring, "string"),
+        BuiltinFunction("trim_prefix", "Remove prefix", "trim_prefix(s, prefix)", _trim_prefix, "string"),
+        BuiltinFunction("trim_suffix", "Remove suffix", "trim_suffix(s, suffix)", _trim_suffix, "string"),
 
         # Math
         BuiltinFunction("round", "Round number", "round(value, ndigits?)", _round, "math"),
@@ -306,6 +405,18 @@ def _register_builtins() -> None:
         BuiltinFunction("ceil", "Ceiling value", "ceil(value)", _ceil, "math"),
         BuiltinFunction("input", "Read line from stdin", "input(prompt?)", _input, "core"),
         BuiltinFunction("read_file", "Read file content", "read_file(path)", _read_file, "core"),
+        BuiltinFunction("write_file", "Write to file", "write_file(path, content)", _write_file, "io"),
+        BuiltinFunction("append_file", "Append to file", "append_file(path, content)", _append_file, "io"),
+        BuiltinFunction("mkdir", "Create directory", "mkdir(path)", _mkdir, "io"),
+        BuiltinFunction("mkdir_p", "Create directory tree", "mkdir_p(path)", _mkdir_p, "io"),
+
+        # Path operations
+        BuiltinFunction("path_join", "Join path components", "path_join(*parts)", _path_join, "path"),
+        BuiltinFunction("path_dirname", "Directory name", "path_dirname(path)", _path_dirname, "path"),
+        BuiltinFunction("path_basename", "Base name", "path_basename(path)", _path_basename, "path"),
+        BuiltinFunction("path_exists", "Check if path exists", "path_exists(path)", _path_exists, "path"),
+        BuiltinFunction("path_is_file", "Check if path is file", "path_is_file(path)", _path_is_file, "path"),
+        BuiltinFunction("path_is_dir", "Check if path is directory", "path_is_dir(path)", _path_is_dir, "path"),
 
         # Stream output
         BuiltinFunction("stream_print", "Print without newline", "stream_print(text)", _stream_print, "io"),

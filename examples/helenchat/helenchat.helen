@@ -12,59 +12,6 @@
 //   - Skill loading: load_skill for detailed workflows
 //   - Memory: reads/writes memory/*.md files for persistent knowledge
 
-import "os" as os
-import "io" as io
-
-// ─── Helper Functions ────────────────────────────────────────────
-
-fn file_exists(file_path) {
-    return os.path.exists(file_path)
-}
-
-fn write_text(file_path, content) {
-    // Ensure parent directory exists
-    let dir = os.path.dirname(file_path)
-    if (dir != "" && !os.path.exists(dir)) {
-        os.makedirs(dir)
-    }
-    // Use io.open for file writing
-    let f = io.open(file_path, "w")
-    f.write(content)
-    f.close()
-}
-
-fn append_text(file_path, content) {
-    // Ensure parent directory exists
-    let dir = os.path.dirname(file_path)
-    if (dir != "" && !os.path.exists(dir)) {
-        os.makedirs(dir)
-    }
-    let current = ""
-    if (os.path.exists(file_path)) {
-        let f = io.open(file_path, "r")
-        let current = f.read()
-        f.close()
-    }
-    let f = io.open(file_path, "a")
-    f.write(content)
-    f.close()
-}
-
-fn read_text(file_path) {
-    if (os.path.exists(file_path)) {
-        let f = io.open(file_path, "r")
-        let content = f.read()
-        f.close()
-        return content
-    }
-    return ""
-}
-
-fn after_prefix(s, prefix) {
-    // Return the part of s after the prefix using replace
-    return replace(s, prefix, "")
-}
-
 // ─── HelenChat Agent ─────────────────────────────────────────────
 
 agent HelenChat(user_input: str) {
@@ -154,10 +101,10 @@ main {
     print("")
 
     // Initialize memory directory and default files
-    // (write_text will create directories automatically)
+    mkdir_p("memory")
 
-    if (!file_exists("memory/MEMORY.md")) {
-        write_text("memory/MEMORY.md", "# HelenChat Memory\n\n*No memories yet. Memories will be saved as the conversation progresses.*\n")
+    if (!path_exists("memory/MEMORY.md")) {
+        write_file("memory/MEMORY.md", "# HelenChat Memory\n\n*No memories yet. Memories will be saved as the conversation progresses.*\n")
     }
 
     let conversation_count = 0
@@ -181,32 +128,34 @@ main {
         if (user_input == "/memory") {
             print("")
             print("--- Memory Contents ---")
-            let mem = read_text("memory/MEMORY.md")
+            let mem = read_file("memory/MEMORY.md")
             if (mem != "") {
                 print(mem)
             } else {
                 print("(empty)")
             }
-            let todo = read_text("memory/TODO.md")
-            if (todo != "") {
-                print("")
-                print("--- TODO ---")
-                print(todo)
+            if (path_exists("memory/TODO.md")) {
+                let todo = read_file("memory/TODO.md")
+                if (todo != "") {
+                    print("")
+                    print("--- TODO ---")
+                    print(todo)
+                }
             }
             continue
         }
 
         // Handle /remember command
         if (startswith(user_input, "/remember ")) {
-            let fact = replace(user_input, "/remember ", "")
-            append_text("memory/MEMORY.md", "\n- " + fact)
+            let fact = trim_prefix(user_input, "/remember ")
+            append_file("memory/MEMORY.md", "\n- " + fact)
             print("Saved to memory: " + fact)
             continue
         }
 
         // Handle /plan command — ask LLM to plan without executing
         if (startswith(user_input, "/plan ")) {
-            let task = replace(user_input, "/plan ", "")
+            let task = trim_prefix(user_input, "/plan ")
             let plan_prompt = "Create a detailed step-by-step plan for the following task. Do NOT execute anything, just output the plan:\n\nTask: " + task
             print("")
             print("--- Plan ---")
