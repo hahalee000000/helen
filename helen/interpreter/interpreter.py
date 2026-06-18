@@ -1005,17 +1005,24 @@ class Interpreter(Visitor[object]):
                 prompt, model=model, temperature=temperature,
                 system_prompt=system_prompt,
             ):
-                if chunk.content:
-                    full_response.append(chunk.content)
+                # Handle both dict and object chunk formats
+                if isinstance(chunk, dict):
+                    content = chunk.get("content", "")
+                elif hasattr(chunk, "content"):
+                    content = chunk.content
+                else:
+                    content = str(chunk)
+                if content:
+                    full_response.append(content)
                     if on_chunk_fn is not None:
                         # Call user-provided callback
-                        on_chunk_fn(chunk.content)
+                        on_chunk_fn(content)
                     else:
                         # Use stream_print for auto-output
                         from helen.stdlib import stdlib
                         stream_print_fn = stdlib.lookup("stream_print")
                         if stream_print_fn:
-                            stream_print_fn.fn(chunk.content)
+                            stream_print_fn.fn(content)
             
             # Add newline at end if using auto-output
             if on_chunk_fn is None:
