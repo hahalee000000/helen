@@ -18,7 +18,7 @@
 | [07](#教程-07-异步编程) | async、await、并发 Agent 调用 |
 | [08](#教程-08-模块与导入) | import、多格式、跨文件复用、路径安全 |
 | [09](#教程-09-python-ffi) | Python 库导入、类型转换、调用 Python 函数 |
-| [10](#教程-10-标准库使用) | 29 内置函数 core/string/math/io |
+| [10](#教程-10-标准库参考) | 185 个内置函数，覆盖 AI 应用开发所有核心需求 |
 | [11](#教程-11-构建多-agent-系统) | 完整案例：智能客服系统 |
 
 ---
@@ -2277,71 +2277,62 @@ main {
 
 ---
 
-# 教程 10: 标准库使用
+# 教程 10: 标准库参考
 
-> 29 内置函数 / core / string / math / io
+> 185 个内置函数，覆盖 AI 应用开发的所有核心需求
+
+## 概览
+
+Helen 标准库提供 185 个内置函数，分为 9 大类别：
+
+| 类别 | 函数数 | 功能 |
+|------|--------|------|
+| **Core** | 11 | 类型转换、通用操作 |
+| **String** | 36 | 字符串处理、正则、文本分析 |
+| **Data** | 25 | JSON、HTML、CSV、Markdown、YAML、TOML、XML |
+| **Collection** | 22 | 列表、字典、集合操作 |
+| **Network** | 9 | HTTP 请求、URL 处理 |
+| **Time** | 13 | 日期时间、格式化、运算 |
+| **Math** | 15 | 数学运算、统计分析 |
+| **File** | 16 | 文件读写、目录操作、临时文件 |
+| **System** | 16 | 环境变量、进程管理、日志 |
+| **Crypto** | 11 | 哈希、随机数 |
+| **IO** | 5 | 流式输出控制 |
 
 ## Core 函数 (11)
-
-### print — 打印
-
-```helen
-print("Hello")                // Hello
-print(42)                     // 42
-print("Score:", 42)           // Score: 42
-```
-
-### len — 长度
-
-```helen
-len("hello")                  // 5
-len([1, 2, 3])               // 3
-```
 
 ### 类型转换
 
 ```helen
 str(42)                       // "42"
-str(3.14)                     // "3.14"
 int("42")                     // 42
-int(3.14)                     // 3
 float("3.14")                 // 3.14
-float(42)                     // 42.0
 ```
 
-### 数学函数
+### 通用操作
 
 ```helen
+len("hello")                  // 5
+len([1, 2, 3])               // 3
+
 abs(-42)                      // 42
-abs(3.14)                     // 3.14
-min(3, 1, 4, 1, 5)           // 1
-max(3, 1, 4, 1, 5)           // 5
-```
+min(3, 1, 4)                 // 1
+max(3, 1, 4)                 // 4
 
-### range — 生成列表
-
-```helen
 range(5)                      // [0, 1, 2, 3, 4]
 range(1, 6)                   // [1, 2, 3, 4, 5]
-range(0, 10, 2)               // [0, 2, 4, 6, 8]
 ```
 
 ### 类型检查
 
 ```helen
 type(42)                      // "int"
-type("hello")                 // "str"
-type(3.14)                    // "float"
-type(true)                    // "bool"
-type(null)                    // "null"
-type([1, 2])                  // "list"
-
 isinstance(42, "int")         // true
-isinstance("hi", "str")       // true
-isinstance(42, "str")         // false
 ```
 
-## String 函数 (9)
+## String 函数 (36)
+
+### 基础操作 (12)
 
 ```helen
 // 大小写
@@ -2350,6 +2341,8 @@ lower("HELLO")                // "hello"
 
 // 修剪
 strip("  hello  ")            // "hello"
+trim_prefix("hello", "he")    // "llo"
+trim_suffix("hello", "lo")    // "hel"
 
 // 分割与连接
 split("a,b,c", ",")           // ["a", "b", "c"]
@@ -2362,124 +2355,700 @@ endswith("hello", "lo")       // true
 // 查找与替换
 find("hello", "ell")          // 1
 replace("hello", "l", "L")    // "heLLo"
+substring("hello", 1, 3)      // "el"
 ```
 
-## Math 函数 (4)
+### 正则表达式 (5)
 
 ```helen
-round(3.14159)                // 3
+// 匹配
+let m = regex_match(r"\d+", "123abc")
+print(m.match)                // "123"
+
+// 搜索
+let s = regex_search(r"\d+", "abc123def")
+print(s.match)                // "123"
+
+// 替换
+regex_replace(r"\d+", "abc123def", "NUM")
+// "abcNUMdef"
+
+// 分割
+regex_split(r"\s+", "a  b  c")
+// ["a", "b", "c"]
+
+// 查找所有
+regex_findall(r"\d+", "a1b2c3")
+// ["1", "2", "3"]
+```
+
+### 文本分析 (8)
+
+```helen
+// 分词
+tokenize("Hello, world!")     // ["Hello", "world"]
+
+// 词频统计
+word_count("hello world hello")
+// {"hello": 2, "world": 1}
+
+// 编辑距离
+levenshtein("hello", "hallo") // 1
+
+// 相似度
+similarity("hello", "hallo")  // 0.8
+
+// 去除标点
+remove_punctuation("Hello!")  // "Hello"
+
+// 标准化空白
+normalize_whitespace("a  b  c")  // "a b c"
+
+// 提取 URL
+extract_urls("Visit https://example.com")
+// ["https://example.com"]
+
+// 提取邮箱
+extract_emails("Contact user@example.com")
+// ["user@example.com"]
+```
+
+### 编码转换 (4)
+
+```helen
+// Base64
+base64_encode("Hello")        // "SGVsbG8="
+base64_decode("SGVsbG8=")     // "Hello"
+
+// HTML 转义
+html_escape("<script>")       // "&lt;script&gt;"
+html_unescape("&lt;")         // "<"
+```
+
+### 字符串操作 (7)
+
+```helen
+repeat("ab", 3)               // "ababab"
+reverse("hello")              // "olleh"
+
+pad_left("42", 5, "0")        // "00042"
+pad_right("hi", 5)            // "hi   "
+center("hi", 6)               // "  hi  "
+
+count("hello", "l")           // 2
+index("hello", "ll")          // 2
+```
+
+## Data 函数 (25)
+
+### JSON (4)
+
+```helen
+// 解析
+let data = json_parse('{"name": "Alice", "age": 30}')
+print(data.name)              // "Alice"
+
+// 生成
+let json_str = json_stringify({"name": "Alice"})
+// '{"name": "Alice"}'
+
+// 文件操作
+json_save("data.json", data)
+let loaded = json_load("data.json")
+```
+
+### HTML (3)
+
+```helen
+// 提取文本
+html_text("<p>Hello <b>World</b></p>")
+// "Hello World"
+
+// 提取链接
+html_links('<a href="http://example.com">Link</a>')
+// ["http://example.com"]
+
+// 解析
+let dom = html_parse("<div>content</div>")
+```
+
+### Markdown (2)
+
+```helen
+// 转 HTML
+markdown_to_html("# Title\n\nParagraph")
+// "<h1>Title</h1><p>Paragraph</p>"
+
+// 提取标题
+markdown_extract_headings("# H1\n## H2")
+// [{"level": 1, "text": "H1"}, {"level": 2, "text": "H2"}]
+```
+
+### CSV (4)
+
+```helen
+// 解析
+let rows = csv_parse("name,age\nAlice,30")
+// [["name", "age"], ["Alice", "30"]]
+
+// 生成
+csv_stringify([["a", "b"], ["1", "2"]])
+// "a,b\n1,2\n"
+
+// 文件操作
+csv_save("data.csv", rows)
+let loaded = csv_load("data.csv")
+```
+
+### YAML (4)
+
+```helen
+// 解析
+let data = yaml_parse("name: Alice\nage: 30")
+// {"name": "Alice", "age": 30}
+
+// 生成
+yaml_stringify({"name": "Alice"})
+// "name: Alice\n"
+
+// 文件操作
+yaml_save("config.yaml", data)
+let loaded = yaml_load("config.yaml")
+```
+
+### TOML (4)
+
+```helen
+// 解析
+let data = toml_parse("name = \"Alice\"\nage = 30")
+// {"name": "Alice", "age": 30}
+
+// 生成
+toml_stringify({"name": "Alice"})
+// "name = \"Alice\"\n"
+
+// 文件操作
+toml_save("config.toml", data)
+let loaded = toml_load("config.toml")
+```
+
+### XML (4)
+
+```helen
+// 解析
+let data = xml_parse("<root><name>Alice</name></root>")
+// {"root": {"name": "Alice"}}
+
+// 生成
+xml_stringify({"name": "Alice"}, root="user")
+// "<user><name>Alice</name></user>"
+
+// 文件操作
+xml_save("data.xml", data)
+let loaded = xml_load("data.xml")
+```
+
+## Collection 函数 (22)
+
+### 列表操作 (12)
+
+```helen
+// 函数式编程
+map([1, 2, 3], x => x * 2)
+// [2, 4, 6]
+
+filter([1, 2, 3, 4], x => x > 2)
+// [3, 4]
+
+reduce([1, 2, 3], (acc, x) => acc + x, 0)
+// 6
+
+// 查找
+find_if([1, 2, 3], x => x > 1)
+// 2
+
+every([2, 4, 6], x => x % 2 == 0)
+// true
+
+some([1, 2, 3], x => x > 2)
+// true
+
+// 排序与去重
+sort([3, 1, 4, 1, 5])
+// [1, 1, 3, 4, 5]
+
+unique([1, 2, 2, 3])
+// [1, 2, 3]
+
+// 列表变换
+flatten([[1, 2], [3, 4]])
+// [1, 2, 3, 4]
+
+chunk([1, 2, 3, 4, 5], 2)
+// [[1, 2], [3, 4], [5]]
+
+zip([1, 2], ["a", "b"])
+// [(1, "a"), (2, "b")]
+```
+
+### 字典操作 (6)
+
+```helen
+let user = {"name": "Alice", "age": 30}
+
+keys(user)                    // ["name", "age"]
+values(user)                  // ["Alice", 30]
+entries(user)                 // [("name", "Alice"), ("age", 30)]
+
+// 合并
+merge({"a": 1}, {"b": 2})
+// {"a": 1, "b": 2}
+
+// 选择与排除
+pick(user, ["name"])
+// {"name": "Alice"}
+
+omit(user, ["age"])
+// {"name": "Alice"}
+```
+
+### 集合操作 (5)
+
+```helen
+let s1 = make_set([1, 2, 3])
+let s2 = make_set([2, 3, 4])
+
+set_union(s1, s2)             // {1, 2, 3, 4}
+set_intersection(s1, s2)      // {2, 3}
+set_difference(s1, s2)        // {1}
+set_has(s1, 2)                // true
+```
+
+## Network 函数 (9)
+
+### HTTP 请求 (5)
+
+```helen
+// GET
+let response = http_get("https://api.example.com/data")
+print(response.status)        // 200
+print(response.body)          // JSON string
+
+// POST
+let post_data = http_post(
+    "https://api.example.com/users",
+    {"name": "Alice"}
+)
+
+// PUT
+http_put("https://api.example.com/users/1", {"name": "Bob"})
+
+// DELETE
+http_delete("https://api.example.com/users/1")
+
+// 下载文件
+http_download("https://example.com/image.png", "image.png")
+```
+
+### URL 处理 (4)
+
+```helen
+// 解析
+let parsed = url_parse("https://example.com:8080/path?q=1")
+print(parsed.scheme)          // "https"
+print(parsed.host)            // "example.com"
+print(parsed.port)            // 8080
+print(parsed.path)            // "/path"
+print(parsed.query)           // "q=1"
+
+// 构建
+url_build("https", "example.com", "/path", "q=1")
+// "https://example.com/path?q=1"
+
+// 编码/解码
+url_encode("hello world")     // "hello%20world"
+url_decode("hello%20world")   // "hello world"
+```
+
+## Time 函数 (13)
+
+### 时间获取 (3)
+
+```helen
+// 当前日期时间
+now()                         // "2026-06-18T14:30:45"
+
+// Unix 时间戳
+time()                        // 1750345845.123
+
+// 暂停执行
+sleep(2)                      // 暂停 2 秒
+```
+
+### 日期操作 (10)
+
+```helen
+// 创建日期
+date()                        // "2026-06-18"
+date(2024, 6, 18)             // "2024-06-18"
+
+// 创建日期时间
+datetime(2024, 6, 18, 10, 30, 0)
+// "2024-06-18T10:30:00"
+
+// 格式化
+date_format("2024-06-18", "%d/%m/%Y")
+// "18/06/2024"
+
+// 解析
+date_parse("18/06/2024", "%d/%m/%Y")
+// "2024-06-18"
+
+// 日期运算
+date_add("2024-06-18", days=7)
+// "2024-06-25"
+
+date_add("2024-06-18T10:00:00", hours=2)
+// "2024-06-18T12:00:00"
+
+// 日期差值
+date_diff("2024-06-18", "2024-06-25", "days")
+// 7.0
+
+// 提取组件
+date_year("2024-06-18")       // 2024
+date_month("2024-06-18")      // 6
+date_day("2024-06-18")        // 18
+date_weekday("2024-06-18")    // 1 (Tuesday)
+```
+
+## Math 函数 (15)
+
+### 基础数学 (4)
+
+```helen
 round(3.14159, 2)             // 3.14
-round(3.5)                    // 4
-
 sqrt(16)                      // 4.0
-sqrt(2)                       // 1.4142...
-
 floor(3.9)                    // 3
 ceil(3.1)                     // 4
 ```
 
+### 统计分析 (11)
+
+```helen
+let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+// 基本统计
+mean(data)                    // 5.5
+median(data)                  // 5.5
+mode([1, 2, 2, 3, 3])         // [2, 3]
+
+// 方差与标准差
+variance(data)                // 8.25
+stddev(data)                  // 2.87
+
+// 相关性
+let x = [1, 2, 3, 4, 5]
+let y = [2, 4, 6, 8, 10]
+correlation(x, y)             // 1.0
+
+// 百分位数
+percentile(data, 25)          // 3.25
+percentile(data, 75)          // 7.75
+
+// 聚合
+sum(data)                     // 55
+product([1, 2, 3, 4])         // 24
+stats_min(data)               // 1
+stats_max(data)               // 10
+```
+
+## File 函数 (16)
+
+### 基础文件操作 (5)
+
+```helen
+// 读写文件
+let content = read_file("data.txt")
+write_file("output.txt", "Hello, Helen!")
+append_file("log.txt", "New line\n")
+
+// 目录创建
+mkdir("new_dir")
+mkdir_p("a/b/c")              // 递归创建
+```
+
+### 路径操作 (6)
+
+```helen
+path_join("a", "b", "c")      // "a/b/c"
+path_dirname("/a/b/c.txt")    // "/a/b"
+path_basename("/a/b/c.txt")   // "c.txt"
+
+path_exists("file.txt")       // true
+path_is_file("file.txt")      // true
+path_is_dir("dir")            // true
+```
+
+### 高级文件操作 (10)
+
+```helen
+// 文件信息
+file_size("document.txt")     // 1024 (bytes)
+file_modified("doc.txt")      // "2026-06-18T14:30:45"
+
+// 目录操作
+list_dir("/path/to/dir")
+// ["file1.txt", "file2.txt", "subdir"]
+
+list_dir("/path", pattern="*.txt")
+// ["file1.txt", "file2.txt"]
+
+walk_dir("/path")
+// [("/path", ["subdir"], ["file.txt"]), ...]
+
+// 文件操作
+copy_file("source.txt", "backup.txt")
+move_file("old.txt", "new.txt")
+delete_file("temp.txt")
+delete_dir("empty_dir")
+delete_dir("full_dir", recursive=true)
+
+// 临时文件
+let tmp = temp_file(suffix=".txt")
+let tmpdir = temp_dir(prefix="workspace")
+```
+
+## System 函数 (16)
+
+### 环境变量 (4)
+
+```helen
+// 获取
+let path = env_get("PATH")
+let value = env_get("MY_VAR", "default")
+
+// 设置
+env_set("MY_VAR", "my_value")
+
+// 列出所有
+let all = env_list()
+
+// 删除
+env_delete("MY_VAR")
+```
+
+### 进程管理 (5)
+
+```helen
+// 执行命令
+let result = exec("ls -la")
+print(result.stdout)
+print(result.returncode)
+
+// 异步执行
+let pid = exec_async("sleep 10")
+
+// 当前进程
+let my_pid = pid()
+
+// 退出
+exit(0)
+
+// 发送信号
+kill(pid, 15)                 // SIGTERM
+```
+
+### 日志系统 (7)
+
+```helen
+// 日志级别
+log_debug("Debug message")
+log_info("Info message")
+log_warn("Warning message")
+log_error("Error message")
+log_critical("Critical message")
+
+// 设置级别
+log_set_level("INFO")
+
+// 输出到文件
+log_to_file("/var/log/helen.log")
+```
+
+## Crypto 函数 (11)
+
+### 哈希函数 (6)
+
+```helen
+// 文本哈希
+md5("hello")
+// "5d41402abc4b2a76b9719d911017c592"
+
+sha1("hello")
+// "aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d"
+
+sha256("hello")
+// "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+
+sha512("hello")
+// 128 字符的哈希
+
+// HMAC
+hmac_sha256("secret_key", "message")
+
+// 文件哈希
+hash_file("document.txt", "sha256")
+```
+
+### 随机函数 (5)
+
+```helen
+// 随机浮点数 (0-1)
+random()                      // 0.123456789
+
+// 随机整数
+randint(1, 100)               // 42
+
+// 随机选择
+choice([1, 2, 3, 4, 5])       // 3
+
+// 随机打乱
+shuffle([1, 2, 3, 4, 5])
+// [3, 1, 5, 2, 4]
+
+// 随机采样
+sample([1, 2, 3, 4, 5], 3)
+// [2, 5, 1]
+```
+
 ## IO 流式输出函数 (5)
 
-用于实时输出控制，常与 `llm stream` 配合使用。
-
-### stream_print — 无换行打印
-
 ```helen
-stream_print("Hello ")
-stream_print("World")
-// 输出: Hello World（同一行，无换行）
+// 无换行打印
+stream_print("Loading")
+stream_print("...")
+stream_print(" Done!")
+
+// 清除当前行
+stream_clear()
+
+// 进度条
+progress_bar(50, 100)
+// [██████████░░░░░░░░░░] 50%
+
+// 光标移动
+stream_cursor_up(2)
+stream_cursor_down(1)
 ```
 
-### stream_clear — 清除当前行
+## 综合示例
 
-```helen
-stream_print("Loading...")
-stream_clear()    // 清除当前行
-stream_print("Done!")
-// 输出: Done!（Loading... 被清除）
-```
-
-### progress_bar — 进度条
-
-```helen
-progress_bar(0, 100)       // [░░░░░░░░░░░░░░░░░░░░] 0%
-progress_bar(50, 100)      // [██████████░░░░░░░░░░] 50%
-progress_bar(100, 100)     // [████████████████████] 100%
-
-// 自定义宽度
-progress_bar(75, 100, 20)  // [███████████████░░░░░] 75%
-```
-
-### stream_cursor_up / stream_cursor_down — 光标移动
-
-```helen
-stream_print("Line 1\nLine 2\nLine 3")
-stream_cursor_up(2)        // 光标上移 2 行
-stream_print("REPLACED")   // 覆盖 Line 2
-```
-
-### 综合示例：流式 LLM 输出
+### 1. 网络爬虫
 
 ```helen
 main {
-    // 使用 llm stream 自动流式输出
-    llm stream "Write a story about a robot"
-
-    // 或手动控制进度显示
-    for i in range(0, 101, 10) {
-        progress_bar(i, 100, 30)
-    }
-    print()    // 进度完成后换行
+    // 获取网页
+    let response = http_get("https://example.com")
+    
+    // 提取链接
+    let links = html_links(response.body)
+    
+    // 提取文本
+    let text = html_text(response.body)
+    
+    // 分析词频
+    let words = word_count(text)
+    
+    // 保存结果
+    json_save("links.json", links)
+    json_save("words.json", words)
+    
+    print("Crawled " + str(len(links)) + " links")
 }
 ```
 
-## 综合示例：文本处理管道
+### 2. 数据处理管道
 
 ```helen
 main {
-    let text = "  Hello, World!  "
-
-    // 清理
-    let cleaned = strip(text)
-    print(cleaned)                    // "Hello, World!"
-
-    // 转换
-    let upper = upper(cleaned)
-    print(upper)                      // "HELLO, WORLD!"
-
-    // 分析
-    let words = split(cleaned, " ")
-    print(len(words))                 // 2
-    print(type(words))                // "list"
-
-    // 检查
-    if startswith(cleaned, "Hello") {
-        print("Starts with Hello!")
-    }
-
-    // 替换
-    let replaced = replace(cleaned, "World", "Helen")
-    print(replaced)                   // "Hello, Helen!"
+    // 读取 CSV
+    let data = csv_load("data.csv")
+    
+    // 提取列
+    let names = map(data, row => row[0])
+    
+    // 过滤
+    let filtered = filter(names, name => len(name) > 3)
+    
+    // 排序
+    let sorted = sort(filtered)
+    
+    // 去重
+    let unique_names = unique(sorted)
+    
+    // 保存结果
+    csv_save("output.csv", unique_names)
+    
+    print("Processed " + str(len(unique_names)) + " names")
 }
 ```
 
-## LSP 补全
+### 3. 配置文件管理
 
-在 VS Code 中，输入标准库函数名时会自动补全：
+```helen
+main {
+    // 读取配置
+    let config = yaml_load("config.yaml")
+    
+    // 修改配置
+    let new_config = merge(config, {
+        "version": "2.0",
+        "updated": now()
+    })
+    
+    // 保存配置
+    yaml_save("config.yaml", new_config)
+    
+    // 备份
+    let backup_path = "config_" + date() + ".yaml"
+    copy_file("config.yaml", backup_path)
+    
+    log_info("Config updated and backed up")
+}
+```
 
+## 依赖说明
+
+### 核心功能（零依赖）
+
+所有核心功能使用 Python 标准库，无需额外安装：
+- Core、String、Collection、Network、Time、Math、File、System、Crypto、IO
+
+### 可选依赖
+
+以下功能需要额外安装：
+
+```bash
+# YAML 支持
+pip install pyyaml
+
+# TOML 支持（Python 3.11+ 已内置）
+pip install toml
 ```
-pri...  → print
-len...  → len
-upp...  → upper
-rou...  → round
-```
+
+XML 使用 Python 标准库 `xml.etree.ElementTree`，无需额外安装。
 
 ## 练习
 
-1. 使用 `range` 和 `join` 生成 "0-1-2-3-4"
-2. 使用 `split` 和 `len` 统计一段文本的单词数
-3. 使用 `isinstance` 编写一个类型安全的加法函数
-4. 使用 `sqrt` 和 `round` 计算并四舍五入平方根
+1. 使用 `regex_findall` 提取文本中的所有数字
+2. 使用 `http_get` 和 `json_parse` 获取 API 数据
+3. 使用 `map` 和 `filter` 处理列表数据
+4. 使用 `date_add` 计算一周后的日期
+5. 使用 `mean` 和 `stddev` 计算统计数据
+6. 使用 `walk_dir` 遍历目录并统计文件数量
+7. 使用 `sha256` 计算文件校验和
+8. 使用 `yaml_load` 和 `yaml_save` 管理配置文件
 
 ---
 
