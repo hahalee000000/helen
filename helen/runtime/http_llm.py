@@ -270,6 +270,81 @@ class HttpLLMRuntime(LLMRuntime):
             self._last_error = f"Unexpected error: {e}"
             return None
 
+    def act_stream(
+        self,
+        prompt: str,
+        model: str | None = None,
+        temperature: float = 1.0,
+        system_prompt: str | None = None,
+    ):
+        """Stream LLM response chunk by chunk using OpenAI streaming API.
+        
+        Yields:
+            Dict with 'content' key containing chunk text.
+        """
+        from typing import Iterator
+        
+        messages: list[dict[str, str]] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+        
+        url = f"{self.base_url}/chat/completions"
+        
+        payload: dict[str, Any] = {
+            "model": model or self.default_model or "default",
+            "messages": messages,
+            "temperature": temperature,
+            "stream": True,  # Enable streaming
+        }
+        
+        data = json.dumps(payload).encode("utf-8")
+        
+        req = urllib.request.Request(
+            url,
+            data=data,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.api_key}",
+            },
+            method="POST",
+        )
+        
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                # Parse Server-Sent Events (SSE)
+                buffer = ""
+                for line_bytes in response:
+                    line = line_bytes.decode("utf-8").strip()
+                    if not line:
+                        continue
+                    
+                    # SSE format: "data: {...}"
+                    if line.startswith("data: "):
+                        data_str = line[6:]  # Remove "data: " prefix
+                        if data_str == "[DONE]":
+                            break
+                        
+                        try:
+                            chunk_data = json.loads(data_str)
+                            choices = chunk_data.get("choices", [])
+                            if choices:
+                                delta = choices[0].get("delta", {})
+                                content = delta.get("content", "")
+                                if content:
+                                    yield {"content": content}
+                        except json.JSONDecodeError:
+                            continue
+        
+        except urllib.error.HTTPError as e:
+            self._last_error = f"HTTP error {e.code}: {e.reason}"
+        except urllib.error.URLError as e:
+            self._last_error = f"HTTP request failed: {e}"
+        except TimeoutError:
+            self._last_error = f"Request timed out after {self.timeout}s"
+        except Exception as e:
+            self._last_error = f"Unexpected error: {e}"
+
     @property
     def last_error(self) -> str | None:
         """The error message from the last failed LLM call."""
