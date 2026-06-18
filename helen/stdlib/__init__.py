@@ -49,6 +49,32 @@ from helen.stdlib.collection import (
     _make_set, _set_union, _set_intersection, _set_difference, _set_has,
 )
 
+# Import time functions
+from helen.stdlib.time import (
+    # Time
+    _now, _time_func, _sleep,
+    # Date
+    _date, _datetime, _date_format, _date_parse,
+    _date_add, _date_diff, _date_year, _date_month, _date_day, _date_weekday,
+)
+
+# Import math stats functions
+from helen.stdlib.math_stats import (
+    _mean, _median, _mode, _variance, _stddev,
+    _correlation, _percentile, _sum, _product, 
+    _min as _stats_min, _max as _stats_max,
+)
+
+# Import file advanced functions
+from helen.stdlib.file_advanced import (
+    # File info
+    _file_size, _file_modified, _list_dir, _walk_dir,
+    # File ops
+    _copy_file, _move_file, _delete_file, _delete_dir,
+    # Temp files
+    _temp_file, _temp_dir,
+)
+
 
 @dataclass
 class BuiltinFunction:
@@ -547,6 +573,46 @@ def _register_builtins() -> None:
         BuiltinFunction("set_intersection", "Set intersection", "set_intersection(s1, s2)", _set_intersection, "collection"),
         BuiltinFunction("set_difference", "Set difference", "set_difference(s1, s2)", _set_difference, "collection"),
         BuiltinFunction("set_has", "Check set membership", "set_has(set, item)", _set_has, "collection"),
+
+        # Time operations
+        BuiltinFunction("now", "Current datetime", "now()", _now, "time"),
+        BuiltinFunction("time", "Unix timestamp", "time()", _time_func, "time"),
+        BuiltinFunction("sleep", "Pause execution", "sleep(seconds)", _sleep, "time"),
+        BuiltinFunction("date", "Create/get date", "date(year?, month?, day?)", _date, "time"),
+        BuiltinFunction("datetime", "Create/get datetime", "datetime(year?, month?, day?, hour?, minute?, second?)", _datetime, "time"),
+        BuiltinFunction("date_format", "Format date", "date_format(date_str, format_str)", _date_format, "time"),
+        BuiltinFunction("date_parse", "Parse date", "date_parse(date_str, format_str)", _date_parse, "time"),
+        BuiltinFunction("date_add", "Add to date", "date_add(date_str, days?, hours?, minutes?, seconds?)", _date_add, "time"),
+        BuiltinFunction("date_diff", "Date difference", "date_diff(date1, date2, unit?)", _date_diff, "time"),
+        BuiltinFunction("date_year", "Extract year", "date_year(date_str)", _date_year, "time"),
+        BuiltinFunction("date_month", "Extract month", "date_month(date_str)", _date_month, "time"),
+        BuiltinFunction("date_day", "Extract day", "date_day(date_str)", _date_day, "time"),
+        BuiltinFunction("date_weekday", "Day of week", "date_weekday(date_str)", _date_weekday, "time"),
+
+        # Math statistics operations
+        BuiltinFunction("mean", "Arithmetic mean", "mean(numbers)", _mean, "math"),
+        BuiltinFunction("median", "Median value", "median(numbers)", _median, "math"),
+        BuiltinFunction("mode", "Most frequent values", "mode(numbers)", _mode, "math"),
+        BuiltinFunction("variance", "Variance", "variance(numbers, population?)", _variance, "math"),
+        BuiltinFunction("stddev", "Standard deviation", "stddev(numbers, population?)", _stddev, "math"),
+        BuiltinFunction("correlation", "Pearson correlation", "correlation(x, y)", _correlation, "math"),
+        BuiltinFunction("percentile", "Percentile value", "percentile(numbers, p)", _percentile, "math"),
+        BuiltinFunction("sum", "Sum of numbers", "sum(numbers)", _sum, "math"),
+        BuiltinFunction("product", "Product of numbers", "product(numbers)", _product, "math"),
+        BuiltinFunction("stats_min", "Minimum value (stats)", "stats_min(numbers)", _stats_min, "math"),
+        BuiltinFunction("stats_max", "Maximum value (stats)", "stats_max(numbers)", _stats_max, "math"),
+
+        # File advanced operations
+        BuiltinFunction("file_size", "File size in bytes", "file_size(path)", _file_size, "file"),
+        BuiltinFunction("file_modified", "File modification time", "file_modified(path)", _file_modified, "file"),
+        BuiltinFunction("list_dir", "List directory", "list_dir(path, pattern?)", _list_dir, "file"),
+        BuiltinFunction("walk_dir", "Walk directory tree", "walk_dir(path)", _walk_dir, "file"),
+        BuiltinFunction("copy_file", "Copy file", "copy_file(src, dst)", _copy_file, "file"),
+        BuiltinFunction("move_file", "Move file", "move_file(src, dst)", _move_file, "file"),
+        BuiltinFunction("delete_file", "Delete file", "delete_file(path)", _delete_file, "file"),
+        BuiltinFunction("delete_dir", "Delete directory", "delete_dir(path, recursive?)", _delete_dir, "file"),
+        BuiltinFunction("temp_file", "Create temp file", "temp_file(suffix?, prefix?, dir?)", _temp_file, "file"),
+        BuiltinFunction("temp_dir", "Create temp directory", "temp_dir(suffix?, prefix?, dir?)", _temp_dir, "file"),
 
         # Stream output
         BuiltinFunction("stream_print", "Print without newline", "stream_print(text)", _stream_print, "io"),
