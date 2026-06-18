@@ -8,7 +8,7 @@
 
 agent HelenAssistant(question: str, docs_path: str, source_dir: str) {
     prompt """You are an expert Helen language assistant. You help users:
-1. Understand Helen syntax and semantics
+1. Understand Helen syntax and semantics base on Helen documentation and source code
 2. Write Helen code (agents, functions, LLM integration)
 3. Debug Helen programs (syntax errors, semantic errors, runtime errors)
 
