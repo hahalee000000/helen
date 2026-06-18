@@ -918,18 +918,33 @@ class Parser:
         """解析 llm stream 语句：流式 LLM 调用。
 
         语法：
+        - llm stream                             # bare form，在 agent 内自动使用渲染后的 prompt
         - llm stream "prompt"                    # 自动输出到 stdout
         - llm stream "prompt" on_chunk callback  # 调用 callback(chunk)
         """
         start = self._previous()  # LLM token
         self._consume(TokenType.STREAM, "Expected 'stream' after 'llm'.")
         
-        # 解析 prompt 表达式（必需）
-        prompt_expr = self._expression()
+        # 检查是否有表达式（支持 bare form）
+        bare_form_tokens = (
+            TokenType.RIGHT_BRACE, TokenType.SEMICOLON, TokenType.EOF,
+            TokenType.RETURN, TokenType.LET, TokenType.CONST,
+            TokenType.IF, TokenType.FOR, TokenType.WHILE,
+            TokenType.BREAK, TokenType.CONTINUE, TokenType.MATCH,
+            TokenType.TRY, TokenType.THROW,
+            TokenType.LLM, TokenType.ASYNC,
+        )
+        if self._check(*bare_form_tokens):
+            prompt_expr = None
+        elif self._current().line > start.line:
+            # 换行边界
+            prompt_expr = None
+        else:
+            prompt_expr = self._expression()
         
         # 检查是否有 on_chunk 回调
         on_chunk_expr = None
-        if self._check(TokenType.IDENTIFIER) and self._current().lexeme == "on_chunk":
+        if prompt_expr is not None and self._check(TokenType.IDENTIFIER) and self._current().lexeme == "on_chunk":
             self._advance()  # consume 'on_chunk'
             on_chunk_expr = self._expression()
         

@@ -783,16 +783,17 @@ class LlmActExprNode(ExpressionNode):
 
 @dataclass(frozen=True)
 class LlmStreamStmtNode(StatementNode):
-    """LLM stream statement: llm stream <prompt_expr> [on_chunk <callback>].
+    """LLM stream statement: llm stream <prompt_expr>? [on_chunk <callback>].
     
     Streams LLM response chunk by chunk, optionally calling a callback for each chunk.
     If no callback is provided, chunks are printed to stdout using stream_print.
     
     Syntax:
+        llm stream                             # Bare form (in agent main, uses rendered prompt)
         llm stream "prompt"                    # Auto-print chunks
         llm stream "prompt" on_chunk callback  # Call callback(chunk) for each chunk
     """
-    prompt: ExpressionNode
+    prompt: ExpressionNode | None  # None = bare form (use agent's rendered prompt)
     on_chunk: ExpressionNode | None  # Optional callback function
     span: SourceSpan
 

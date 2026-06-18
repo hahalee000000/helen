@@ -947,18 +947,35 @@ class Interpreter(Visitor[object]):
         
         If on_chunk callback is provided, call it for each chunk.
         Otherwise, use stream_print to output chunks to stdout.
+        
+        Supports bare form (no prompt) inside agent main blocks.
         """
-        # Evaluate the prompt expression
-        prompt = node.prompt.accept(self)
-        if not isinstance(prompt, str):
-            prompt = self._stringify(prompt)
+        # Evaluate the prompt expression (or use rendered agent prompt for bare form)
+        if node.prompt is not None:
+            prompt = node.prompt.accept(self)
+            if not isinstance(prompt, str):
+                prompt = self._stringify(prompt)
+        else:
+            # Bare form: use rendered agent prompt as user message
+            prompt = self._get_rendered_agent_prompt()
+            if not prompt:
+                self.errors.error(
+                    ErrorCode.RUNTIME_ERROR,
+                    "llm stream (bare form) requires an agent context with a prompt",
+                    node.span,
+                )
+                return None
         
         # Extract agent settings if inside an agent context
         model = self._get_agent_setting("model")
         temperature = float(self._get_agent_setting("temperature", 1.0))
         
-        # Get rendered agent prompt as system_prompt
-        system_prompt = self._get_rendered_agent_prompt()
+        # Get rendered agent prompt as system_prompt (only if prompt was explicit)
+        if node.prompt is not None:
+            system_prompt = self._get_rendered_agent_prompt()
+        else:
+            # Bare form: system_prompt is the agent description
+            system_prompt = self._get_agent_setting("description")
         
         # Record user message to history
         self._add_to_history("user", prompt)

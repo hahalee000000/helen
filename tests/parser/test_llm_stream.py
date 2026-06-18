@@ -59,8 +59,8 @@ class TestLlmStreamParsing:
         stmt = program.statements[0]
         assert isinstance(stmt, LlmStreamStmtNode)
     
-    def test_llm_stream_missing_prompt(self):
-        """llm stream without prompt should report error."""
+    def test_llm_stream_bare_form(self):
+        """llm stream without prompt should parse as bare form (for agent context)."""
         source = 'llm stream'
         errors = ErrorReporter()
         scanner = Scanner(source=source, file="<test>")
@@ -68,7 +68,13 @@ class TestLlmStreamParsing:
         parser = Parser(tokens, errors=errors)
         program = parser.parse()
         
-        assert errors.has_errors, "Should report error for missing prompt"
+        assert not errors.has_errors, f"Bare form should parse OK: {errors.format_report()}"
+        assert len(program.statements) == 1
+        
+        stmt = program.statements[0]
+        assert isinstance(stmt, LlmStreamStmtNode)
+        assert stmt.prompt is None  # Bare form has no prompt
+        assert stmt.on_chunk is None
     
     def test_llm_if_still_works(self):
         """llm if should still work after adding stream."""
