@@ -79,18 +79,25 @@ class LLMRuntime(ABC):
         return self.act(prompt, tools, model, temperature, max_turns, history, system_prompt)
     
     def act_stream(self, prompt: str, model: str | None = None,
-                   temperature: float = 1.0, system_prompt: str | None = None) -> Iterator[dict[str, Any]]:
-        """Stream LLM response chunk by chunk.
+                   temperature: float = 1.0, system_prompt: str | None = None,
+                   tools: list[dict[str, Any]] | None = None,
+                   max_turns: int = 5,
+                   history: list[dict[str, Any]] | None = None) -> Iterator[dict[str, Any]]:
+        """Stream LLM response with tool-calling support.
         
-        Default implementation calls act() and yields the full response as a single chunk.
+        Default implementation calls act() and yields the full response as a single content event.
         Override for true streaming support.
         
-        Yields:
-            Dict with 'content' key containing chunk text.
+        Yields event dicts:
+            {"type": "content", "content": "..."}     — text chunk
+            {"type": "tool_call", "name": "...", "args": {...}}  — tool invocation
+            {"type": "tool_result", "name": "...", "result": "..."}  — tool result
+            {"type": "error", "message": "..."}       — error
         """
-        response = self.act(prompt, model=model, temperature=temperature, system_prompt=system_prompt)
+        response = self.act(prompt, tools=tools, model=model, temperature=temperature,
+                           max_turns=max_turns, system_prompt=system_prompt)
         if response and response.text:
-            yield {"content": response.text}
+            yield {"type": "content", "content": response.text}
 
 
 # ---------------------------------------------------------------------------

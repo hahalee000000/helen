@@ -276,74 +276,171 @@ class HttpLLMRuntime(LLMRuntime):
         model: str | None = None,
         temperature: float = 1.0,
         system_prompt: str | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        max_turns: int = 5,
+        history: list[dict[str, Any]] | None = None,
     ):
-        """Stream LLM response chunk by chunk using OpenAI streaming API.
+        """Stream LLM response with full tool-calling loop.
         
-        Yields:
-            Dict with 'content' key containing chunk text.
+        Yields event dicts:
+            {"type": "content", "content": "..."}     — text chunk
+            {"type": "tool_call", "name": "...", "args": {...}}  — tool invocation
+            {"type": "tool_result", "name": "...", "result": "..."}  — tool result
+            {"type": "error", "message": "..."}       — error
         """
-        from typing import Iterator
+        from helen.runtime.tools import dispatch_tool
         
-        messages: list[dict[str, str]] = []
+        use_model = model or self.default_model or "default"
+        
+        messages: list[dict[str, Any]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
+        if history:
+            messages.extend(history)
         messages.append({"role": "user", "content": prompt})
         
         url = f"{self.base_url}/chat/completions"
         
-        payload: dict[str, Any] = {
-            "model": model or self.default_model or "default",
-            "messages": messages,
-            "temperature": temperature,
-            "stream": True,  # Enable streaming
-        }
-        
-        data = json.dumps(payload).encode("utf-8")
-        
-        req = urllib.request.Request(
-            url,
-            data=data,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.api_key}",
-            },
-            method="POST",
-        )
-        
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                # Parse Server-Sent Events (SSE)
-                buffer = ""
-                for line_bytes in response:
-                    line = line_bytes.decode("utf-8").strip()
-                    if not line:
-                        continue
-                    
-                    # SSE format: "data: {...}"
-                    if line.startswith("data: "):
-                        data_str = line[6:]  # Remove "data: " prefix
-                        if data_str == "[DONE]":
-                            break
+        for turn in range(max_turns + 1):
+            # Build streaming request
+            payload: dict[str, Any] = {
+                "model": use_model,
+                "messages": messages,
+                "temperature": temperature,
+                "stream": True,
+            }
+            if tools:
+                payload["tools"] = tools
+            
+            data = json.dumps(payload).encode("utf-8")
+            
+            req = urllib.request.Request(
+                url,
+                data=data,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.api_key}",
+                },
+                method="POST",
+            )
+            
+            try:
+                # Collect streamed chunks
+                full_content = ""
+                tool_calls_acc: dict[int, dict] = {}  # index -> {name, args_str, id}
+                
+                with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                    for line_bytes in response:
+                        line = line_bytes.decode("utf-8").strip()
+                        if not line:
+                            continue
                         
-                        try:
-                            chunk_data = json.loads(data_str)
-                            choices = chunk_data.get("choices", [])
-                            if choices:
+                        if line.startswith("data: "):
+                            data_str = line[6:]
+                            if data_str == "[DONE]":
+                                break
+                            
+                            try:
+                                chunk_data = json.loads(data_str)
+                                choices = chunk_data.get("choices", [])
+                                if not choices:
+                                    continue
+                                
                                 delta = choices[0].get("delta", {})
+                                
+                                # Text content chunk
                                 content = delta.get("content", "")
                                 if content:
-                                    yield {"content": content}
+                                    full_content += content
+                                    yield {"type": "content", "content": content}
+                                
+                                # Tool call deltas (streaming accumulation)
+                                tc_deltas = delta.get("tool_calls")
+                                if tc_deltas:
+                                    for tc_delta in tc_deltas:
+                                        idx = tc_delta.get("index", 0)
+                                        if idx not in tool_calls_acc:
+                                            tool_calls_acc[idx] = {
+                                                "id": tc_delta.get("id", ""),
+                                                "name": "",
+                                                "args_str": "",
+                                            }
+                                        acc = tool_calls_acc[idx]
+                                        
+                                        fn_delta = tc_delta.get("function", {})
+                                        if fn_delta.get("name"):
+                                            acc["name"] = fn_delta["name"]
+                                        if fn_delta.get("arguments"):
+                                            acc["args_str"] += fn_delta["arguments"]
+                                        if tc_delta.get("id"):
+                                            acc["id"] = tc_delta["id"]
+                            
+                            except json.JSONDecodeError:
+                                continue
+                
+                # After stream completes: check if we got tool calls
+                if tool_calls_acc:
+                    # Build assistant message with tool calls
+                    assistant_msg: dict[str, Any] = {"role": "assistant", "content": full_content or None}
+                    assistant_msg["tool_calls"] = [
+                        {
+                            "id": tool_calls_acc[i]["id"],
+                            "type": "function",
+                            "function": {
+                                "name": tool_calls_acc[i]["name"],
+                                "arguments": tool_calls_acc[i]["args_str"],
+                            },
+                        }
+                        for i in sorted(tool_calls_acc.keys())
+                    ]
+                    messages.append(assistant_msg)
+                    
+                    # Execute each tool and yield events
+                    for i in sorted(tool_calls_acc.keys()):
+                        tc = tool_calls_acc[i]
+                        fn_name = tc["name"]
+                        try:
+                            fn_args = json.loads(tc["args_str"]) if tc["args_str"] else {}
                         except json.JSONDecodeError:
-                            continue
-        
-        except urllib.error.HTTPError as e:
-            self._last_error = f"HTTP error {e.code}: {e.reason}"
-        except urllib.error.URLError as e:
-            self._last_error = f"HTTP request failed: {e}"
-        except TimeoutError:
-            self._last_error = f"Request timed out after {self.timeout}s"
-        except Exception as e:
-            self._last_error = f"Unexpected error: {e}"
+                            fn_args = {}
+                        
+                        yield {"type": "tool_call", "name": fn_name, "args": fn_args}
+                        
+                        result = dispatch_tool(fn_name, fn_args)
+                        
+                        yield {"type": "tool_result", "name": fn_name, "result": result}
+                        
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc["id"],
+                            "content": result,
+                        })
+                    
+                    # Nudge on last turn
+                    if turn >= max_turns - 1:
+                        messages.append({
+                            "role": "user",
+                            "content": "Based on the tool results above, please provide your final answer now.",
+                        })
+                    
+                    continue  # Next turn: stream again with tool results
+                
+                else:
+                    # No tool calls — final text response, already streamed
+                    break
+            
+            except urllib.error.HTTPError as e:
+                yield {"type": "error", "message": f"HTTP error {e.code}: {e.reason}"}
+                break
+            except urllib.error.URLError as e:
+                yield {"type": "error", "message": f"HTTP request failed: {e}"}
+                break
+            except TimeoutError:
+                yield {"type": "error", "message": f"Request timed out after {self.timeout}s"}
+                break
+            except Exception as e:
+                yield {"type": "error", "message": f"Unexpected error: {e}"}
+                break
 
     @property
     def last_error(self) -> str | None:

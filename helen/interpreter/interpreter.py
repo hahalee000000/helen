@@ -1003,6 +1003,12 @@ class Interpreter(Visitor[object]):
                 self._add_to_history("assistant", response.text)
             return None
         
+        # Build tools list from agent declarations
+        tools = self._build_tools_list()
+        max_turns = int(self._get_agent_setting("max-turns", 1))
+        if tools and max_turns < 3:
+            max_turns = 3
+        
         # Evaluate on_chunk callback if provided
         on_chunk_fn = None
         if node.on_chunk is not None:
@@ -1016,30 +1022,57 @@ class Interpreter(Visitor[object]):
                 return None
         
         try:
-            # Stream response chunk by chunk
+            # Stream response with full tool-calling loop
             full_response = []
-            for chunk in self.llm_runtime.act_stream(
+            for event in self.llm_runtime.act_stream(
                 prompt, model=model, temperature=temperature,
-                system_prompt=system_prompt,
+                system_prompt=system_prompt, tools=tools,
+                max_turns=max_turns,
             ):
-                # Handle both dict and object chunk formats
-                if isinstance(chunk, dict):
-                    content = chunk.get("content", "")
-                elif hasattr(chunk, "content"):
-                    content = chunk.content
-                else:
-                    content = str(chunk)
-                if content:
-                    full_response.append(content)
-                    if on_chunk_fn is not None:
-                        # Call user-provided callback
-                        on_chunk_fn(content)
+                event_type = event.get("type", "content")
+                
+                if event_type == "content":
+                    content = event.get("content", "")
+                    if content:
+                        full_response.append(content)
+                        if on_chunk_fn is not None:
+                            on_chunk_fn(content)
+                        else:
+                            from helen.stdlib import stdlib
+                            stream_print_fn = stdlib.lookup("stream_print")
+                            if stream_print_fn:
+                                stream_print_fn.fn(content)
+                
+                elif event_type == "tool_call":
+                    fn_name = event.get("name", "")
+                    fn_args = event.get("args", {})
+                    # Display tool call progress
+                    args_str = ", ".join(f"{k}={v!r}" for k, v in fn_args.items())
+                    progress = f"\n🔧 Calling {fn_name}({args_str})...\n"
+                    if on_chunk_fn is None:
+                        print(progress, end="", flush=True)
                     else:
-                        # Use stream_print for auto-output
-                        from helen.stdlib import stdlib
-                        stream_print_fn = stdlib.lookup("stream_print")
-                        if stream_print_fn:
-                            stream_print_fn.fn(content)
+                        on_chunk_fn(progress)
+                
+                elif event_type == "tool_result":
+                    fn_name = event.get("name", "")
+                    result = event.get("result", "")
+                    # Truncate long results for display
+                    display_result = result if len(result) <= 200 else result[:200] + "..."
+                    result_msg = f"✅ {fn_name} returned: {display_result}\n"
+                    if on_chunk_fn is None:
+                        print(result_msg, end="", flush=True)
+                    else:
+                        on_chunk_fn(result_msg)
+                
+                elif event_type == "error":
+                    error_msg = event.get("message", "Unknown error")
+                    self.errors.error(
+                        ErrorCode.RUNTIME_ERROR,
+                        f"Streaming error: {error_msg}",
+                        node.span,
+                    )
+                    break
             
             # Add newline at end if using auto-output
             if on_chunk_fn is None:
