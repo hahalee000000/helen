@@ -11,6 +11,44 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+# Import network functions
+from helen.stdlib.network import (
+    _http_get, _http_post, _http_put, _http_delete, _http_download,
+    _url_parse, _url_build, _url_encode, _url_decode
+)
+
+# Import string functions
+from helen.stdlib.string import (
+    # Regex
+    _regex_match, _regex_search, _regex_replace, _regex_split, _regex_findall,
+    # Text analysis
+    _tokenize, _word_count, _levenshtein, _similarity,
+    _remove_punctuation, _normalize_whitespace, _extract_urls, _extract_emails,
+    # Encoding
+    _base64_encode, _base64_decode, _html_escape, _html_unescape,
+    # String ops
+    _repeat, _reverse, _pad_left, _pad_right, _center, _count, _index,
+)
+
+# Import data functions
+from helen.stdlib.data import (
+    _json_parse, _json_stringify, _json_load, _json_save,
+    _html_parse, _html_text, _html_links,
+    _markdown_to_html, _markdown_extract_headings,
+    _csv_parse, _csv_stringify, _csv_load, _csv_save,
+)
+
+# Import collection functions
+from helen.stdlib.collection import (
+    # List ops
+    _map, _filter, _reduce, _find as _find_if, _every, _some,
+    _sort, _reverse, _unique, _flatten, _chunk, _zip,
+    # Dict ops
+    _keys, _values, _entries, _merge, _pick, _omit,
+    # Set ops
+    _make_set, _set_union, _set_intersection, _set_difference, _set_has,
+)
+
 
 @dataclass
 class BuiltinFunction:
@@ -417,6 +455,98 @@ def _register_builtins() -> None:
         BuiltinFunction("path_exists", "Check if path exists", "path_exists(path)", _path_exists, "path"),
         BuiltinFunction("path_is_file", "Check if path is file", "path_is_file(path)", _path_is_file, "path"),
         BuiltinFunction("path_is_dir", "Check if path is directory", "path_is_dir(path)", _path_is_dir, "path"),
+
+        # Network operations (imported from network module)
+        BuiltinFunction("http_get", "HTTP GET request", "http_get(url, headers?)", _http_get, "network"),
+        BuiltinFunction("http_post", "HTTP POST request", "http_post(url, data?, headers?)", _http_post, "network"),
+        BuiltinFunction("http_put", "HTTP PUT request", "http_put(url, data?, headers?)", _http_put, "network"),
+        BuiltinFunction("http_delete", "HTTP DELETE request", "http_delete(url, headers?)", _http_delete, "network"),
+        BuiltinFunction("http_download", "Download file from URL", "http_download(url, path)", _http_download, "network"),
+        BuiltinFunction("url_parse", "Parse URL", "url_parse(url)", _url_parse, "network"),
+        BuiltinFunction("url_build", "Build URL", "url_build(scheme, host, path?, query?)", _url_build, "network"),
+        BuiltinFunction("url_encode", "URL encode", "url_encode(s)", _url_encode, "network"),
+        BuiltinFunction("url_decode", "URL decode", "url_decode(s)", _url_decode, "network"),
+
+        # String regex operations
+        BuiltinFunction("regex_match", "Regex match at start", "regex_match(pattern, s)", _regex_match, "string"),
+        BuiltinFunction("regex_search", "Regex search anywhere", "regex_search(pattern, s)", _regex_search, "string"),
+        BuiltinFunction("regex_replace", "Regex replace", "regex_replace(pattern, s, replacement)", _regex_replace, "string"),
+        BuiltinFunction("regex_split", "Regex split", "regex_split(pattern, s)", _regex_split, "string"),
+        BuiltinFunction("regex_findall", "Regex find all", "regex_findall(pattern, s)", _regex_findall, "string"),
+
+        # String text analysis
+        BuiltinFunction("tokenize", "Tokenize text", "tokenize(text)", _tokenize, "string"),
+        BuiltinFunction("word_count", "Count word frequencies", "word_count(text)", _word_count, "string"),
+        BuiltinFunction("levenshtein", "Edit distance", "levenshtein(s1, s2)", _levenshtein, "string"),
+        BuiltinFunction("similarity", "String similarity", "similarity(s1, s2)", _similarity, "string"),
+        BuiltinFunction("remove_punctuation", "Remove punctuation", "remove_punctuation(text)", _remove_punctuation, "string"),
+        BuiltinFunction("normalize_whitespace", "Normalize whitespace", "normalize_whitespace(text)", _normalize_whitespace, "string"),
+        BuiltinFunction("extract_urls", "Extract URLs", "extract_urls(text)", _extract_urls, "string"),
+        BuiltinFunction("extract_emails", "Extract emails", "extract_emails(text)", _extract_emails, "string"),
+
+        # String encoding
+        BuiltinFunction("base64_encode", "Base64 encode", "base64_encode(s)", _base64_encode, "string"),
+        BuiltinFunction("base64_decode", "Base64 decode", "base64_decode(s)", _base64_decode, "string"),
+        BuiltinFunction("html_escape", "HTML escape", "html_escape(s)", _html_escape, "string"),
+        BuiltinFunction("html_unescape", "HTML unescape", "html_unescape(s)", _html_unescape, "string"),
+
+        # String operations
+        BuiltinFunction("repeat", "Repeat string", "repeat(s, n)", _repeat, "string"),
+        BuiltinFunction("reverse", "Reverse string", "reverse(s)", _reverse, "string"),
+        BuiltinFunction("pad_left", "Pad left", "pad_left(s, width, char?)", _pad_left, "string"),
+        BuiltinFunction("pad_right", "Pad right", "pad_right(s, width, char?)", _pad_right, "string"),
+        BuiltinFunction("center", "Center string", "center(s, width, char?)", _center, "string"),
+        BuiltinFunction("count", "Count substring", "count(s, sub)", _count, "string"),
+        BuiltinFunction("index", "Find substring index", "index(s, sub)", _index, "string"),
+
+        # Data JSON operations
+        BuiltinFunction("json_parse", "Parse JSON", "json_parse(text)", _json_parse, "data"),
+        BuiltinFunction("json_stringify", "Stringify to JSON", "json_stringify(value, indent?)", _json_stringify, "data"),
+        BuiltinFunction("json_load", "Load JSON from file", "json_load(path)", _json_load, "data"),
+        BuiltinFunction("json_save", "Save JSON to file", "json_save(path, value, indent?)", _json_save, "data"),
+
+        # Data HTML operations
+        BuiltinFunction("html_parse", "Parse HTML", "html_parse(text)", _html_parse, "data"),
+        BuiltinFunction("html_text", "Extract HTML text", "html_text(html)", _html_text, "data"),
+        BuiltinFunction("html_links", "Extract HTML links", "html_links(html)", _html_links, "data"),
+
+        # Data Markdown operations
+        BuiltinFunction("markdown_to_html", "Convert Markdown to HTML", "markdown_to_html(text)", _markdown_to_html, "data"),
+        BuiltinFunction("markdown_extract_headings", "Extract Markdown headings", "markdown_extract_headings(text)", _markdown_extract_headings, "data"),
+
+        # Data CSV operations
+        BuiltinFunction("csv_parse", "Parse CSV", "csv_parse(text, delimiter?)", _csv_parse, "data"),
+        BuiltinFunction("csv_stringify", "Stringify to CSV", "csv_stringify(rows, delimiter?)", _csv_stringify, "data"),
+        BuiltinFunction("csv_load", "Load CSV from file", "csv_load(path, delimiter?)", _csv_load, "data"),
+        BuiltinFunction("csv_save", "Save CSV to file", "csv_save(path, rows, delimiter?)", _csv_save, "data"),
+
+        # Collection list operations
+        BuiltinFunction("map", "Map function over list", "map(lst, fn)", _map, "collection"),
+        BuiltinFunction("filter", "Filter list by predicate", "filter(lst, fn)", _filter, "collection"),
+        BuiltinFunction("reduce", "Reduce list to value", "reduce(lst, fn, initial?)", _reduce, "collection"),
+        BuiltinFunction("find_if", "Find element by predicate", "find_if(lst, fn)", _find_if, "collection"),
+        BuiltinFunction("every", "Check all elements", "every(lst, fn)", _every, "collection"),
+        BuiltinFunction("some", "Check any element", "some(lst, fn)", _some, "collection"),
+        BuiltinFunction("sort", "Sort list", "sort(lst, compare?)", _sort, "collection"),
+        BuiltinFunction("unique", "Remove duplicates", "unique(lst)", _unique, "collection"),
+        BuiltinFunction("flatten", "Flatten nested lists", "flatten(lst)", _flatten, "collection"),
+        BuiltinFunction("chunk", "Split into chunks", "chunk(lst, size)", _chunk, "collection"),
+        BuiltinFunction("zip", "Zip lists", "zip(*lists)", _zip, "collection"),
+
+        # Collection dict operations
+        BuiltinFunction("keys", "Get dict keys", "keys(dict)", _keys, "collection"),
+        BuiltinFunction("values", "Get dict values", "values(dict)", _values, "collection"),
+        BuiltinFunction("entries", "Get dict entries", "entries(dict)", _entries, "collection"),
+        BuiltinFunction("merge", "Merge dicts", "merge(*dicts)", _merge, "collection"),
+        BuiltinFunction("pick", "Pick dict keys", "pick(dict, keys)", _pick, "collection"),
+        BuiltinFunction("omit", "Omit dict keys", "omit(dict, keys)", _omit, "collection"),
+
+        # Collection set operations
+        BuiltinFunction("make_set", "Create set", "make_set(items)", _make_set, "collection"),
+        BuiltinFunction("set_union", "Set union", "set_union(s1, s2)", _set_union, "collection"),
+        BuiltinFunction("set_intersection", "Set intersection", "set_intersection(s1, s2)", _set_intersection, "collection"),
+        BuiltinFunction("set_difference", "Set difference", "set_difference(s1, s2)", _set_difference, "collection"),
+        BuiltinFunction("set_has", "Check set membership", "set_has(set, item)", _set_has, "collection"),
 
         # Stream output
         BuiltinFunction("stream_print", "Print without newline", "stream_print(text)", _stream_print, "io"),
