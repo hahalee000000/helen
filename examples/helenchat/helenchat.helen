@@ -137,8 +137,8 @@ When given a complex task:
             let full_prompt = memory_context + "\n## User Request\n" + user_input
         }
 
-        // Execute with LLM (tools are auto-included from agent declaration)
-        llm act full_prompt
+        // Execute with LLM using streaming (tools are auto-included from agent declaration)
+        llm stream full_prompt
     }
 }
 
