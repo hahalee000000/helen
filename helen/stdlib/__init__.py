@@ -75,6 +75,35 @@ from helen.stdlib.file_advanced import (
     _temp_file, _temp_dir,
 )
 
+# Import system functions
+from helen.stdlib.system import (
+    # Env
+    _env_get, _env_set, _env_list, _env_delete,
+    # Process
+    _exec, _exec_async, _pid, _exit, _kill,
+    # Log
+    _log_debug, _log_info, _log_warn, _log_error, _log_critical,
+    _log_set_level, _log_to_file,
+)
+
+# Import crypto functions
+from helen.stdlib.crypto import (
+    # Hash
+    _md5, _sha1, _sha256, _sha512, _hmac_sha256, _hash_file,
+    # Random
+    _random, _randint, _choice, _shuffle, _sample,
+)
+
+# Import data formats functions
+from helen.stdlib.data_formats import (
+    # YAML
+    _yaml_parse, _yaml_stringify, _yaml_load, _yaml_save,
+    # TOML
+    _toml_parse, _toml_stringify, _toml_load, _toml_save,
+    # XML
+    _xml_parse, _xml_stringify, _xml_load, _xml_save,
+)
+
 
 @dataclass
 class BuiltinFunction:
@@ -613,6 +642,61 @@ def _register_builtins() -> None:
         BuiltinFunction("delete_dir", "Delete directory", "delete_dir(path, recursive?)", _delete_dir, "file"),
         BuiltinFunction("temp_file", "Create temp file", "temp_file(suffix?, prefix?, dir?)", _temp_file, "file"),
         BuiltinFunction("temp_dir", "Create temp directory", "temp_dir(suffix?, prefix?, dir?)", _temp_dir, "file"),
+
+        # System environment operations
+        BuiltinFunction("env_get", "Get environment variable", "env_get(key, default?)", _env_get, "system"),
+        BuiltinFunction("env_set", "Set environment variable", "env_set(key, value)", _env_set, "system"),
+        BuiltinFunction("env_list", "List all environment variables", "env_list()", _env_list, "system"),
+        BuiltinFunction("env_delete", "Delete environment variable", "env_delete(key)", _env_delete, "system"),
+
+        # System process operations
+        BuiltinFunction("exec", "Execute command", "exec(command, shell?, timeout?)", _exec, "system"),
+        BuiltinFunction("exec_async", "Execute command asynchronously", "exec_async(command, shell?)", _exec_async, "system"),
+        BuiltinFunction("pid", "Get current process ID", "pid()", _pid, "system"),
+        BuiltinFunction("exit", "Exit program", "exit(code?)", _exit, "system"),
+        BuiltinFunction("kill", "Send signal to process", "kill(pid, signal?)", _kill, "system"),
+
+        # System logging operations
+        BuiltinFunction("log_debug", "Log debug message", "log_debug(message)", _log_debug, "system"),
+        BuiltinFunction("log_info", "Log info message", "log_info(message)", _log_info, "system"),
+        BuiltinFunction("log_warn", "Log warning message", "log_warn(message)", _log_warn, "system"),
+        BuiltinFunction("log_error", "Log error message", "log_error(message)", _log_error, "system"),
+        BuiltinFunction("log_critical", "Log critical message", "log_critical(message)", _log_critical, "system"),
+        BuiltinFunction("log_set_level", "Set logging level", "log_set_level(level)", _log_set_level, "system"),
+        BuiltinFunction("log_to_file", "Set log output to file", "log_to_file(path)", _log_to_file, "system"),
+
+        # Crypto hash operations
+        BuiltinFunction("md5", "Calculate MD5 hash", "md5(text)", _md5, "crypto"),
+        BuiltinFunction("sha1", "Calculate SHA1 hash", "sha1(text)", _sha1, "crypto"),
+        BuiltinFunction("sha256", "Calculate SHA256 hash", "sha256(text)", _sha256, "crypto"),
+        BuiltinFunction("sha512", "Calculate SHA512 hash", "sha512(text)", _sha512, "crypto"),
+        BuiltinFunction("hmac_sha256", "Calculate HMAC-SHA256", "hmac_sha256(key, message)", _hmac_sha256, "crypto"),
+        BuiltinFunction("hash_file", "Calculate hash of file", "hash_file(path, algorithm?)", _hash_file, "crypto"),
+
+        # Crypto random operations
+        BuiltinFunction("random", "Generate random float", "random()", _random, "crypto"),
+        BuiltinFunction("randint", "Generate random integer", "randint(min, max)", _randint, "crypto"),
+        BuiltinFunction("choice", "Choose random item", "choice(items)", _choice, "crypto"),
+        BuiltinFunction("shuffle", "Shuffle list randomly", "shuffle(items)", _shuffle, "crypto"),
+        BuiltinFunction("sample", "Sample items randomly", "sample(items, k)", _sample, "crypto"),
+
+        # Data formats YAML operations
+        BuiltinFunction("yaml_parse", "Parse YAML", "yaml_parse(text)", _yaml_parse, "data"),
+        BuiltinFunction("yaml_stringify", "Stringify to YAML", "yaml_stringify(value)", _yaml_stringify, "data"),
+        BuiltinFunction("yaml_load", "Load YAML from file", "yaml_load(path)", _yaml_load, "data"),
+        BuiltinFunction("yaml_save", "Save YAML to file", "yaml_save(path, value)", _yaml_save, "data"),
+
+        # Data formats TOML operations
+        BuiltinFunction("toml_parse", "Parse TOML", "toml_parse(text)", _toml_parse, "data"),
+        BuiltinFunction("toml_stringify", "Stringify to TOML", "toml_stringify(value)", _toml_stringify, "data"),
+        BuiltinFunction("toml_load", "Load TOML from file", "toml_load(path)", _toml_load, "data"),
+        BuiltinFunction("toml_save", "Save TOML to file", "toml_save(path, value)", _toml_save, "data"),
+
+        # Data formats XML operations
+        BuiltinFunction("xml_parse", "Parse XML", "xml_parse(text)", _xml_parse, "data"),
+        BuiltinFunction("xml_stringify", "Stringify to XML", "xml_stringify(value, root?)", _xml_stringify, "data"),
+        BuiltinFunction("xml_load", "Load XML from file", "xml_load(path)", _xml_load, "data"),
+        BuiltinFunction("xml_save", "Save XML to file", "xml_save(path, value, root?)", _xml_save, "data"),
 
         # Stream output
         BuiltinFunction("stream_print", "Print without newline", "stream_print(text)", _stream_print, "io"),
