@@ -19,7 +19,7 @@ class TestREPLAskCommand:
         
         # Mock the assistant runner to avoid actual LLM call
         with patch('helen.cli.repl._run_helen_assistant') as mock_run:
-            mock_run.return_value = "Mock response"
+            mock_run.return_value = True  # Streaming success
             
             with patch('builtins.print'):
                 # :ask should be handled (return True) and not print "Unknown command"
@@ -50,34 +50,31 @@ class TestREPLAskCommand:
         
         # Mock the Helen assistant execution
         with patch('helen.cli.repl._run_helen_assistant') as mock_run:
-            mock_run.return_value = "Helen agents are defined with 'agent' keyword..."
+            mock_run.return_value = True  # Streaming success
             
             with patch('builtins.print') as mock_print:
                 result = _handle_repl_command(":ask How to define agent?", interp, analyzer)
                 assert result is True
                 mock_run.assert_called_once_with("How to define agent?")
-                # Should print the response
+                # Should print (streaming output + final newline)
                 mock_print.assert_called()
 
-    def test_ask_command_prints_response(self):
-        """:ask should print assistant response."""
+    def test_ask_command_streams_response(self):
+        """:ask should stream response via llm stream (output during execution)."""
         errors = ErrorReporter()
         interp = Interpreter(errors=errors)
         analyzer = SemanticAnalyzer(errors)
         
         with patch('helen.cli.repl._run_helen_assistant') as mock_run:
-            mock_run.return_value = "Test response from Helen assistant"
+            mock_run.return_value = True  # Streaming success
             
             with patch('builtins.print') as mock_print:
                 _handle_repl_command(":ask test question", interp, analyzer)
                 
-                # Should print the response
-                printed = False
-                for call in mock_print.call_args_list:
-                    if "Test response" in str(call):
-                        printed = True
-                        break
-                assert printed, "Should print assistant response"
+                # Should call the assistant (output is streamed during execution)
+                mock_run.assert_called_once_with("test question")
+                # Should print a final newline after streaming
+                mock_print.assert_called()
 
     def test_help_command_includes_ask(self):
         """:help should mention :ask command."""

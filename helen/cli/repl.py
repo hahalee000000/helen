@@ -113,14 +113,15 @@ def _execute_input(source: str, interp: Interpreter, analyzer: SemanticAnalyzer)
     return True, result
 
 
-def _run_helen_assistant(question: str) -> str:
+def _run_helen_assistant(question: str) -> bool:
     """Run the Helen assistant program to answer a question.
     
     Args:
         question: User's question about Helen.
     
     Returns:
-        Assistant's response.
+        True if execution succeeded, False on error.
+        Output is streamed directly to stdout.
     """
     from pathlib import Path
     from helen.core.lexer import Scanner
@@ -137,13 +138,16 @@ def _run_helen_assistant(question: str) -> str:
     source_dir = module_dir  # helen/ directory containing source code
     
     if not assistant_path.exists():
-        return f"Error: Helen assistant program not found at {assistant_path}"
+        print(f"Error: Helen assistant program not found at {assistant_path}", file=sys.stderr)
+        return False
     
     if not docs_path.exists():
-        return f"Error: Helen documentation not found at {docs_path}"
+        print(f"Error: Helen documentation not found at {docs_path}", file=sys.stderr)
+        return False
     
     if not source_dir.exists():
-        return f"Error: Helen source directory not found at {source_dir}"
+        print(f"Error: Helen source directory not found at {source_dir}", file=sys.stderr)
+        return False
     
     source = assistant_path.read_text(encoding="utf-8")
     
@@ -155,7 +159,8 @@ def _run_helen_assistant(question: str) -> str:
     program = parser.parse()
     
     if errors.has_errors:
-        return f"Parse error: {errors.format_report()}"
+        print(f"Parse error: {errors.format_report()}", file=sys.stderr)
+        return False
     
     # Create interpreter with modified main block that uses the question
     llm_runtime = HttpLLMRuntime()
@@ -181,13 +186,19 @@ def _run_helen_assistant(question: str) -> str:
     program = parser.parse()
     
     if errors.has_errors:
-        return f"Parse error: {errors.format_report()}"
+        print(f"Parse error: {errors.format_report()}", file=sys.stderr)
+        return False
     
     try:
         result = interp.interpret(program)
-        return result if result else "No response generated."
+        # With llm stream, output is already printed to stdout.
+        # If there were errors during execution, report them.
+        if errors.has_errors:
+            print(f"\nError: {errors.format_report()}", file=sys.stderr)
+        return True
     except Exception as e:
-        return f"Runtime error: {e}"
+        print(f"Runtime error: {e}", file=sys.stderr)
+        return False
 
 
 def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnalyzer) -> bool:
@@ -247,8 +258,9 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
             return True
         
         print("\n🤔 Thinking...\n")
-        response = _run_helen_assistant(arg)
-        print(f"\n{response}\n")
+        _run_helen_assistant(arg)
+        # Output is streamed directly to stdout by llm stream
+        print()  # Final newline after streaming completes
         return True
 
     print(f"Unknown command: {cmd}. Type :help for available commands.")

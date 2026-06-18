@@ -59,10 +59,8 @@ Cite specific files and functions from the source code when appropriate."""
         // Build context with documentation, source code, and question
         let context = build_context()
         
-        // Use LLM to generate answer
-        let answer = llm act context
-        
-        return answer
+        // Stream LLM response chunk by chunk for real-time output
+        llm stream context
     }
 }
 
@@ -72,6 +70,6 @@ main {
     let question = "How do I define an agent in Helen?"
     let docs_path = "docs/tutorial.md"  // Relative path for development
     let source_dir = "helen/"  // Relative path for development
-    let answer = HelenAssistant(question, docs_path, source_dir)
-    print(answer)
+    HelenAssistant(question, docs_path, source_dir)
+    // Output is streamed directly to stdout
 }
