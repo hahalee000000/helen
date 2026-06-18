@@ -1,0 +1,227 @@
+// HelenChat - An autonomous AI agent built with Helen
+// Similar to Hermes agent: accepts user instructions, plans, uses tools & skills,
+// and persists memory via markdown files.
+//
+// Usage:
+//   helen examples/helenchat/helenchat.helen
+//
+// Features:
+//   - Interactive loop: accepts user instructions
+//   - Auto-planning: LLM decomposes tasks into steps
+//   - Tool execution: web_search, read_file, write_file, shell_exec, calculate, patch_file
+//   - Skill loading: load_skill for detailed workflows
+//   - Memory: reads/writes memory/*.md files for persistent knowledge
+
+import "os" as os
+import "io" as io
+
+// ─── Helper Functions ────────────────────────────────────────────
+
+fn file_exists(file_path) {
+    return os.path.exists(file_path)
+}
+
+fn write_text(file_path, content) {
+    // Ensure parent directory exists
+    let dir = os.path.dirname(file_path)
+    if (dir != "" && !os.path.exists(dir)) {
+        os.makedirs(dir)
+    }
+    // Use io.open for file writing
+    let f = io.open(file_path, "w")
+    f.write(content)
+    f.close()
+}
+
+fn append_text(file_path, content) {
+    // Ensure parent directory exists
+    let dir = os.path.dirname(file_path)
+    if (dir != "" && !os.path.exists(dir)) {
+        os.makedirs(dir)
+    }
+    let current = ""
+    if (os.path.exists(file_path)) {
+        let f = io.open(file_path, "r")
+        let current = f.read()
+        f.close()
+    }
+    let f = io.open(file_path, "a")
+    f.write(content)
+    f.close()
+}
+
+fn read_text(file_path) {
+    if (os.path.exists(file_path)) {
+        let f = io.open(file_path, "r")
+        let content = f.read()
+        f.close()
+        return content
+    }
+    return ""
+}
+
+fn after_prefix(s, prefix) {
+    // Return the part of s after the prefix using replace
+    return replace(s, prefix, "")
+}
+
+// ─── HelenChat Agent ─────────────────────────────────────────────
+
+agent HelenChat(user_input: str) {
+    description "HelenChat - an autonomous AI agent powered by Helen"
+    prompt """
+You are HelenChat, a powerful autonomous AI agent built with the Helen language.
+You operate in a loop: receive user instructions, plan a strategy, execute tools, and return results.
+
+## Core Behavior
+
+1. **Plan First**: Before acting, think step by step. Break complex tasks into sub-steps.
+2. **Use Tools**: When you need information or need to take action, call the appropriate tool.
+3. **Be Concise**: Give clear, direct answers. Use markdown formatting.
+4. **Persist Memory**: When you learn something important about the user or the task, save it to memory.
+
+## Memory System
+
+You have persistent memory stored as markdown files in the `memory/` directory:
+- `memory/MEMORY.md` — Long-term facts, user preferences, environment details
+- `memory/TODO.md` — Active tasks and their status
+- `memory/KNOWLEDGE.md` — Domain knowledge accumulated during sessions
+
+### Reading Memory
+At the start of each task, if relevant, read memory files to recall context:
+  - Use `read_file` tool with path like "memory/MEMORY.md"
+
+### Writing Memory
+When you discover important facts, update memory files:
+  - Use `write_file` tool to save new content
+  - Keep memory entries concise and factual
+  - Use declarative format: "User prefers X", "Project uses Y"
+
+## Available Tools
+
+- `web_search(query)` — Search the web for information
+- `web_fetch(url)` — Fetch content from a URL
+- `read_file(path)` — Read a local file
+- `write_file(path, content)` — Write content to a file
+- `shell_exec(command)` — Execute a shell command
+- `calculate(expression)` — Evaluate a math expression
+- `patch_file(path, old_string, new_string)` — Edit a file with fuzzy matching
+- `load_skill(name)` — Load a detailed skill/workflow by name
+
+## Planning Protocol
+
+When given a complex task:
+1. State your understanding of the goal
+2. List the steps you'll take
+3. Execute each step, using tools as needed
+4. Summarize the results
+5. Save any important findings to memory
+"""
+
+    tools ["web_search", "web_fetch", "read_file", "write_file", "shell_exec", "calculate", "patch_file", "load_skill"]
+    model "qwen3.7-plus"
+    max-turns 10
+    temperature 0.7
+
+    main {
+        // Load memory context before responding
+        let memory_context = ""
+        let memory_file = read_file("memory/MEMORY.md")
+        if (memory_file != "") {
+            let memory_context = "\n## Your Memory\n" + memory_file + "\n"
+        }
+
+        // Compose the full prompt with memory context
+        let full_prompt = user_input
+        if (memory_context != "") {
+            let full_prompt = memory_context + "\n## User Request\n" + user_input
+        }
+
+        // Execute with LLM (tools are auto-included from agent declaration)
+        llm act full_prompt
+    }
+}
+
+// ─── Main Entry Point ────────────────────────────────────────────
+
+main {
+    print("╔══════════════════════════════════════════════╗")
+    print("║          HelenChat v1.0                      ║")
+    print("║   Autonomous AI Agent — Powered by Helen     ║")
+    print("╚══════════════════════════════════════════════╝")
+    print("")
+    print("Commands: /memory  /plan <task>  /remember <fact>  /clear  /quit")
+    print("")
+
+    // Initialize memory directory and default files
+    // (write_text will create directories automatically)
+
+    if (!file_exists("memory/MEMORY.md")) {
+        write_text("memory/MEMORY.md", "# HelenChat Memory\n\n*No memories yet. Memories will be saved as the conversation progresses.*\n")
+    }
+
+    let conversation_count = 0
+
+    while (true) {
+        print("")
+        let user_input = input("You > ")
+
+        // Handle special commands
+        if (user_input == "/quit" || user_input == "exit" || user_input == "/exit") {
+            print("")
+            print("HelenChat: Goodbye!")
+            break
+        }
+
+        if (user_input == "/clear") {
+            print("[Conversation context cleared]")
+            continue
+        }
+
+        if (user_input == "/memory") {
+            print("")
+            print("--- Memory Contents ---")
+            let mem = read_text("memory/MEMORY.md")
+            if (mem != "") {
+                print(mem)
+            } else {
+                print("(empty)")
+            }
+            let todo = read_text("memory/TODO.md")
+            if (todo != "") {
+                print("")
+                print("--- TODO ---")
+                print(todo)
+            }
+            continue
+        }
+
+        // Handle /remember command
+        if (startswith(user_input, "/remember ")) {
+            let fact = replace(user_input, "/remember ", "")
+            append_text("memory/MEMORY.md", "\n- " + fact)
+            print("Saved to memory: " + fact)
+            continue
+        }
+
+        // Handle /plan command — ask LLM to plan without executing
+        if (startswith(user_input, "/plan ")) {
+            let task = replace(user_input, "/plan ", "")
+            let plan_prompt = "Create a detailed step-by-step plan for the following task. Do NOT execute anything, just output the plan:\n\nTask: " + task
+            print("")
+            print("--- Plan ---")
+            HelenChat(plan_prompt)
+            continue
+        }
+
+        // Skip empty input
+        if (user_input == "") {
+            continue
+        }
+
+        // Normal conversation — call the agent
+        conversation_count = conversation_count + 1
+        print("")
+        HelenChat(user_input)
+    }
+}
