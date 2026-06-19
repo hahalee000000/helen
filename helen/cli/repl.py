@@ -221,6 +221,10 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
         print("  :list             List all defined functions and agents")
         print("  :undefine <name>  Remove a function or agent definition")
         print("  :ask <question>   Ask the Helen language assistant")
+        print("  :trace on|off     Enable/disable execution tracing")
+        print("  :trace show [n]   Show last n trace entries (default 50)")
+        print("  :last_error       Show structured context of last error")
+        print("  :llm_log [n]      Show last n LLM call audit entries")
         print("  exit              Exit the REPL")
         return True
 
@@ -264,6 +268,52 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
         _run_helen_assistant(arg)
         # Output is streamed directly to stdout by llm stream
         print()  # Final newline after streaming completes
+        return True
+
+    if cmd == ":trace":
+        if arg == "on":
+            interp.observability.tracer.enabled = True
+            interp.observability.call_stack.enabled = True
+            print("Execution tracing enabled.")
+        elif arg == "off":
+            interp.observability.tracer.enabled = False
+            print("Execution tracing disabled.")
+        elif arg == "show":
+            n = 50
+            if len(parts) > 2:
+                try:
+                    n = int(parts[2])
+                except ValueError:
+                    pass
+            print(interp.observability.tracer.format_trace(last_n=n))
+        else:
+            print("Usage: :trace on|off|show [n]")
+        return True
+
+    if cmd == ":last_error":
+        last_err = interp.observability.last_error
+        if last_err is None:
+            print("No error captured yet.")
+        else:
+            print(last_err.format_text())
+        return True
+
+    if cmd == ":llm_log":
+        n = 10
+        if arg:
+            try:
+                n = int(arg)
+            except ValueError:
+                pass
+        entries = interp.observability.llm_audit.entries[-n:]
+        if not entries:
+            print("No LLM calls recorded yet.")
+        else:
+            print(f"Last {len(entries)} LLM calls:")
+            for entry in entries:
+                status = "❌" if entry.error else "✅"
+                print(f"  {status} [{entry.call_type}] {entry.agent_name or 'anonymous'} "
+                      f"({entry.tokens_in}+{entry.tokens_out} tokens, {entry.duration_ms:.0f}ms)")
         return True
 
     print(f"Unknown command: {cmd}. Type :help for available commands.")

@@ -22,6 +22,7 @@ from helen.core.ast import (
     AccessNode,
     AgentDeclNode,
     AgentParamNode,
+    AssertStmtNode,
     AsyncCallStmtNode,
     BinaryOpNode,
     BreakStmtNode,
@@ -701,6 +702,15 @@ class SemanticAnalyzer(Visitor[None]):
                     f"'{type_name}' is not a predefined exception type",
                     node.exception_type.span,
                 )
+
+        # Visit message expression if present
+        if node.message is not None:
+            node.message.accept(self)
+
+    def visit_assert_stmt(self, node: AssertStmtNode) -> None:
+        """Validate assert statement: condition must be boolean expression."""
+        # Visit condition expression
+        node.condition.accept(self)
 
         # Visit message expression if present
         if node.message is not None:

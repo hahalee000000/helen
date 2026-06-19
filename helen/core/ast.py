@@ -156,6 +156,10 @@ class Visitor(ABC, Generic[R]):
         """Visit a ThrowStmtNode."""
 
     @abstractmethod
+    def visit_assert_stmt(self, node: AssertStmtNode) -> R:
+        """Visit an AssertStmtNode."""
+
+    @abstractmethod
     def visit_llm_branch(self, node: LlmBranchNode) -> R:
         """Visit a LlmBranchNode."""
 
@@ -740,6 +744,22 @@ class ThrowStmtNode(StatementNode):
 
 
 @dataclass(frozen=True)
+class AssertStmtNode(StatementNode):
+    """Assert statement: assert condition or assert condition, message.
+
+    AI-native observability (P3): Raises AssertionError if condition is false,
+    capturing structured error context for AI debugging.
+    """
+    condition: ExpressionNode
+    message: ExpressionNode | None
+    span: SourceSpan
+
+    def accept(self, visitor: Visitor[R]) -> R:
+        """Dispatch to the visitor."""
+        return visitor.visit_assert_stmt(self)
+
+
+@dataclass(frozen=True)
 class LlmBranchNode(StatementNode):
     """LLM if branch."""
     condition: ExpressionNode | None
@@ -1018,6 +1038,13 @@ class ASTPrinter(Visitor[str]):
         if node.message:
             parts.append(node.message)
         return self._parenthesize("throw", *parts)
+
+    def visit_assert_stmt(self, node: AssertStmtNode) -> str:
+        """Visit an AssertStmtNode."""
+        parts: list[Any] = [node.condition]
+        if node.message:
+            parts.append(node.message)
+        return self._parenthesize("assert", *parts)
 
     def visit_llm_branch(self, node: LlmBranchNode) -> str:
         """Visit a LlmBranchNode."""

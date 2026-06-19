@@ -10,6 +10,7 @@ from .ast import (
     ASTNode,
     AgentDeclNode,
     AgentParamNode,
+    AssertStmtNode,
     AsyncCallStmtNode,
     BreakStmtNode,
     CallArgNode,
@@ -437,6 +438,8 @@ class Parser:
             return self._try_stmt()
         if self._match(TokenType.THROW):
             return self._throw_stmt()
+        if self._match(TokenType.ASSERT):
+            return self._assert_stmt()
         if self._match(TokenType.MATCH):
             return self._match_stmt()
 
@@ -1014,6 +1017,23 @@ class Parser:
         end = self._previous()
         return ThrowStmtNode(exception_type=exception_type, message=message,
                              span=self._make_span(start, end))
+
+    def _assert_stmt(self) -> AssertStmtNode:
+        """Parse an assert statement: assert condition or assert condition, message.
+
+        AI-native observability (P3): Asserts that a condition is true.
+        If false, raises AssertionError with structured context for AI debugging.
+        """
+        start = self._previous()  # ASSERT token
+        condition = self._expression()
+        message: ExpressionNode | None = None
+        # Optional message after comma: assert x > 0, "x must be positive"
+        if self._match(TokenType.COMMA):
+            message = self._expression()
+        self._match(TokenType.SEMICOLON)  # Optional semicolon
+        end = self._previous()
+        return AssertStmtNode(condition=condition, message=message,
+                              span=self._make_span(start, end))
 
     def _catch_clause(self) -> CatchClauseNode:
         """Parse a typed catch: catch Type name { ... }."""

@@ -14,6 +14,7 @@ from helen.core.ast import (
     AccessNode,
     AgentDeclNode,
     AgentParamNode,
+    AssertStmtNode,
     AsyncCallExprNode,
     AsyncCallStmtNode,
     BinaryOpNode,
@@ -62,20 +63,24 @@ from helen.core.source import SourceSpan
 from helen.core.tokens import TokenType
 from helen.interpreter.environment import Environment
 from helen.interpreter.exceptions import (
+    AggregateError,
+    AssertionError as HelenAssertionError,
     BreakSentinel,
     ConstAssignmentError,
     ContinueSentinel,
     HelenRuntimeError,
     ReturnSentinel,
-    RuntimeError,
+    RuntimeError as HelenRuntimeErrorClass,
     error_matches,
     resolve_exception,
     _PREDEFINED_EXCEPTIONS,
 )
+from helen.interpreter.task import Task
 from helen.interpreter.llm_mixin import LlmMixin
 from helen.runtime.llm_runtime import LLMRuntime, MockLLMRuntime
 from helen.runtime.import_resolver import ImportResolver
 from helen.runtime.history import HistoryManager, Message as HistoryMessage
+from helen.runtime.observability import ObservabilityManager
 from helen.interpreter.task import Task, AggregateError
 from helen.semantic.types import (
     AnyType,
@@ -104,6 +109,8 @@ class Interpreter(LlmMixin, Visitor[object]):
         self.llm_runtime = llm_runtime or MockLLMRuntime()
         self._current_agent: AgentDeclNode | None = None
         self.import_resolver = import_resolver or ImportResolver()
+        # AI-native observability (P0-P3)
+        self.observability = ObservabilityManager()
         # Merge imported agents/functions into local registries
         for name, agent in self.import_resolver.agents.items():
             self._agents[name] = agent
@@ -118,6 +125,9 @@ class Interpreter(LlmMixin, Visitor[object]):
     def _register_stdlib(self) -> None:
         """Inject all stdlib functions into the global environment."""
         from helen.stdlib import stdlib  # noqa: PLC0415
+        from helen.stdlib import _set_interpreter_observability  # noqa: PLC0415
+        # Connect observability manager to stdlib debug functions
+        _set_interpreter_observability(self.observability)
         for name in stdlib.names:
             builtin = stdlib.lookup(name)
             if builtin is not None:
@@ -722,6 +732,36 @@ class Interpreter(LlmMixin, Visitor[object]):
         # Raise the exception
         raise exc_class(message, node.span)
 
+    def visit_assert_stmt(self, node: AssertStmtNode) -> object:
+        """Execute an assert statement: assert condition or assert condition, message.
+
+        AI-native observability (P3): If the condition is false, raises AssertionError
+        with structured error context for AI debugging.
+        """
+        # Evaluate the condition
+        condition_value = node.condition.accept(self)
+
+        # Check if condition is truthy
+        if not self._truthy(condition_value):
+            # Evaluate optional message
+            if node.message is not None:
+                message = node.message.accept(self)
+                if not isinstance(message, str):
+                    message = str(message)
+            else:
+                message = "Assertion failed"
+
+            # Capture structured error context
+            self.observability.capture_error(
+                "AssertionError", message, node.span,
+                scope={}  # Could capture local vars here if needed
+            )
+
+            # Raise AssertionError
+            raise HelenAssertionError(message, node.span)
+
+        return None
+
     # ------------------------------------------------------------------
     # Import & LLM
     # ------------------------------------------------------------------
@@ -950,6 +990,14 @@ class Interpreter(LlmMixin, Visitor[object]):
                                 f"argument {i+1} type '{actual_type.name}' is not compatible with parameter type '{expected_type.name}'"
                             )
 
+        # Push call stack frame (AI observability)
+        call_args = {}
+        for i, param in enumerate(func.params):
+            if i < len(args):
+                call_args[param.name] = args[i]
+        self.observability.call_stack.push(func.name, func.span, call_args)
+        self.observability.tracer.trace("call", func.span, {"function": func.name, "args": call_args})
+
         call_env = self.environment.enter_scope()
 
         # Bind parameters
@@ -970,10 +1018,26 @@ class Interpreter(LlmMixin, Visitor[object]):
         try:
             result = self._execute_stmts(func.body.body)
             if isinstance(result, ReturnSentinel):
+                self.observability.tracer.trace("return", func.span, {"function": func.name, "value": result.value})
                 return result.value
+            self.observability.tracer.trace("return", func.span, {"function": func.name})
             return result
+        except Exception as e:
+            # Capture error snapshot with call stack
+            scope_vars = {}
+            for k in call_args.keys():
+                try:
+                    scope_vars[k] = call_env.lookup(k)
+                except NameError:
+                    pass
+            self.observability.capture_error(
+                type(e).__name__, str(e), func.span,
+                scope=scope_vars
+            )
+            raise
         finally:
             self.environment = old_env
+            self.observability.call_stack.pop()
 
     def _call_agent(self, agent: AgentDeclNode, args: dict[str, object]) -> object:
         """Call an agent with the given arguments (HLD 3.5.2, 3.6.2).
@@ -986,6 +1050,10 @@ class Interpreter(LlmMixin, Visitor[object]):
             agent: The AgentDeclNode to execute.
             args: Keyword arguments from the call statement.
         """
+        # Push call stack frame (AI observability)
+        self.observability.call_stack.push(agent.name, agent.span, args)
+        self.observability.tracer.trace("call", agent.span, {"agent": agent.name, "args": args})
+
         # Create a completely isolated environment (HLD 3.5.2)
         # Start from a fresh root, not inheriting parent agent's variables.
         # But stdlib must still be available — inject it into the fresh env.
@@ -1027,12 +1095,28 @@ class Interpreter(LlmMixin, Visitor[object]):
             if agent.logic is not None:
                 result = agent.logic.accept(self)
                 if isinstance(result, ReturnSentinel):
+                    self.observability.tracer.trace("return", agent.span, {"agent": agent.name, "value": result.value})
                     return result.value
+                self.observability.tracer.trace("return", agent.span, {"agent": agent.name})
                 return result
             return None
+        except Exception as e:
+            # Capture error snapshot with call stack
+            scope_vars = {}
+            for k in args.keys():
+                try:
+                    scope_vars[k] = call_env.lookup(k)
+                except NameError:
+                    pass
+            self.observability.capture_error(
+                type(e).__name__, str(e), agent.span,
+                scope=scope_vars
+            )
+            raise
         finally:
             self.environment = old_env
             self._current_agent = old_agent
+            self.observability.call_stack.pop()
             # Unregister agent functions to avoid leaking
             for fname in registered_names:
                 self._functions.pop(fname, None)
@@ -1137,4 +1221,4 @@ class Interpreter(LlmMixin, Visitor[object]):
     def _runtime_error(self, span: SourceSpan | None, message: str) -> None:
         """Report a runtime error and raise an exception."""
         self.errors.error(ErrorCode.RUNTIME_ERROR, message, span)
-        raise RuntimeError(message, span)
+        raise HelenRuntimeErrorClass(message, span)

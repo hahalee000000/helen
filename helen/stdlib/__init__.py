@@ -227,6 +227,83 @@ def _isinstance(value: Any, type_name: str) -> bool:
     return isinstance(value, py_type)
 
 
+# ── Debug/Observability builtins (AI-native) ──────────────────
+
+# Global reference to interpreter's observability manager (set by interpreter)
+_interpreter_observability = None
+
+
+def _set_interpreter_observability(obs):
+    """Set the interpreter's observability manager for debug builtins."""
+    global _interpreter_observability
+    _interpreter_observability = obs
+
+
+def _debug(message: str, data: Any = None) -> str:
+    """Output structured debug information for AI consumption.
+
+    Args:
+        message: Debug message describing what's being logged.
+        data: Optional data to include (any value).
+
+    Returns:
+        The formatted debug string.
+    """
+    import json
+    import sys
+
+    if data is not None:
+        try:
+            data_str = json.dumps(data, ensure_ascii=False, default=str)
+        except (TypeError, ValueError):
+            data_str = repr(data)
+        output = f"[DEBUG] {message} {data_str}"
+    else:
+        output = f"[DEBUG] {message}"
+
+    print(output, file=sys.stderr)
+    return output
+
+
+def _trace_on() -> str:
+    """Enable execution tracing.
+
+    Returns:
+        Confirmation message.
+    """
+    if _interpreter_observability is not None:
+        _interpreter_observability.tracer.enabled = True
+        _interpreter_observability.call_stack.enabled = True
+        return "Execution tracing enabled"
+    return "Warning: No interpreter context available"
+
+
+def _trace_off() -> str:
+    """Disable execution tracing.
+
+    Returns:
+        Confirmation message.
+    """
+    if _interpreter_observability is not None:
+        _interpreter_observability.tracer.enabled = False
+        return "Execution tracing disabled"
+    return "Warning: No interpreter context available"
+
+
+def _get_trace(n: int = 50) -> str:
+    """Get recent execution trace entries.
+
+    Args:
+        n: Number of recent entries to return (default 50).
+
+    Returns:
+        Formatted trace string.
+    """
+    if _interpreter_observability is not None:
+        return _interpreter_observability.tracer.format_trace(last_n=n)
+    return "(no interpreter context)"
+
+
 # ── String builtins ────────────────────────────────────────────
 
 def _upper(s: str) -> str:
@@ -704,6 +781,12 @@ def _register_builtins() -> None:
         BuiltinFunction("progress_bar", "Display progress bar", "progress_bar(current, total, width?)", _progress_bar, "io"),
         BuiltinFunction("stream_cursor_up", "Move cursor up", "stream_cursor_up(n?)", _stream_cursor_up, "io"),
         BuiltinFunction("stream_cursor_down", "Move cursor down", "stream_cursor_down(n?)", _stream_cursor_down, "io"),
+
+        # Debug/observability (AI-native)
+        BuiltinFunction("debug", "Output structured debug info", "debug(message, data?)", _debug, "debug"),
+        BuiltinFunction("trace_on", "Enable execution tracing", "trace_on()", _trace_on, "debug"),
+        BuiltinFunction("trace_off", "Disable execution tracing", "trace_off()", _trace_off, "debug"),
+        BuiltinFunction("get_trace", "Get recent execution trace", "get_trace(n?)", _get_trace, "debug"),
     ]
 
     for func in builtins:

@@ -107,6 +107,7 @@ class TokenType(Enum):
     CATCH = auto()
     FINALLY = auto()
     THROW = auto()
+    ASSERT = auto()
     FN = auto()
     AS = auto()
     IN = auto()
@@ -156,6 +157,7 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "catch": TokenType.CATCH,
     "finally": TokenType.FINALLY,
     "throw": TokenType.THROW,
+    "assert": TokenType.ASSERT,
     "fn": TokenType.FN,
     "as": TokenType.AS,
     "in": TokenType.IN,

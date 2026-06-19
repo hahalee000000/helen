@@ -29,6 +29,7 @@ from helen.core.ast import (
 from helen.core.errors import ErrorCode
 from helen.interpreter.exceptions import HelenRuntimeError
 from helen.runtime.history import Message as HistoryMessage
+from helen.runtime.observability import LLMAuditEntry
 
 
 class LlmMixin:
@@ -184,17 +185,49 @@ class LlmMixin:
         # Record user message to history
         self._add_to_history("user", prompt)
 
+        # Audit log entry (P2: LLM call audit)
+        import time
+        audit_start = time.time()
+        agent_name = self._current_agent.name if self._current_agent else None
+
         try:
             response = self.llm_runtime.act(
                 prompt, tools=tools, model=model,
                 temperature=temperature, max_turns=max_turns,
                 system_prompt=system_prompt,
             )
+            audit_duration = (time.time() - audit_start) * 1000
+
+            # Log to audit trail
+            audit_entry = LLMAuditEntry(
+                timestamp=audit_start,
+                call_type="act",
+                agent_name=agent_name,
+                model=model,
+                prompt=prompt,
+                response=response.text if response else None,
+                tokens_in=getattr(response, 'usage', {}).get('prompt_tokens', 0) if response else 0,
+                tokens_out=getattr(response, 'usage', {}).get('completion_tokens', 0) if response else 0,
+                duration_ms=audit_duration,
+            )
+            self.observability.llm_audit.log(audit_entry)
+
             # Record assistant response to history
             if response and response.text:
                 self._add_to_history("assistant", response.text)
             return response.text if response else None
-        except HelenRuntimeError:
+        except HelenRuntimeError as e:
+            audit_duration = (time.time() - audit_start) * 1000
+            audit_entry = LLMAuditEntry(
+                timestamp=audit_start,
+                call_type="act",
+                agent_name=agent_name,
+                model=model,
+                prompt=prompt,
+                duration_ms=audit_duration,
+                error=str(e),
+            )
+            self.observability.llm_audit.log(audit_entry)
             return None
 
     def visit_llm_stream_stmt(self: Any, node: LlmStreamStmtNode) -> object:
@@ -280,9 +313,15 @@ class LlmMixin:
                 )
                 return None
 
+        # Audit log entry (P2: LLM call audit)
+        import time
+        audit_start = time.time()
+        agent_name = self._current_agent.name if self._current_agent else None
+
         try:
             # Stream response with full tool-calling loop
             full_response = []
+            tool_calls_log = []
             for event in self.llm_runtime.act_stream(
                 prompt, model=model, temperature=temperature,
                 system_prompt=system_prompt, tools=tools,
@@ -305,6 +344,7 @@ class LlmMixin:
                 elif event_type == "tool_call":
                     fn_name = event.get("name", "")
                     fn_args = event.get("args", {})
+                    tool_calls_log.append({"name": fn_name, "args": fn_args})
                     # Display tool call progress
                     args_str = ", ".join(f"{k}={v!r}" for k, v in fn_args.items())
                     progress = f"\n🔧 Calling {fn_name}({args_str})...\n"
@@ -342,8 +382,35 @@ class LlmMixin:
             if full_text:
                 self._add_to_history("assistant", full_text)
 
+            # Log to audit trail (P2)
+            audit_duration = (time.time() - audit_start) * 1000
+            audit_entry = LLMAuditEntry(
+                timestamp=audit_start,
+                call_type="stream",
+                agent_name=agent_name,
+                model=model,
+                prompt=prompt,
+                response=full_text,
+                duration_ms=audit_duration,
+                tool_calls=tool_calls_log,
+            )
+            self.observability.llm_audit.log(audit_entry)
+
             return None
         except Exception as e:
+            # Log error to audit trail (P2)
+            audit_duration = (time.time() - audit_start) * 1000
+            audit_entry = LLMAuditEntry(
+                timestamp=audit_start,
+                call_type="stream",
+                agent_name=agent_name,
+                model=model,
+                prompt=prompt,
+                duration_ms=audit_duration,
+                error=str(e),
+            )
+            self.observability.llm_audit.log(audit_entry)
+
             self.errors.error(
                 ErrorCode.RUNTIME_ERROR,
                 f"Streaming LLM call failed: {e}",

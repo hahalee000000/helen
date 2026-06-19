@@ -136,6 +136,18 @@ class RuntimeError(HelenRuntimeError):
 
 
 @dataclass
+class AssertionError(HelenRuntimeError):
+    """Assertion failed (P3: AI-native observability).
+
+    Raised when an assert statement's condition evaluates to false.
+    Captures structured error context for AI debugging.
+    """
+
+    def __init__(self, message: str = "assertion failed", span: SourceSpan | None = None) -> None:
+        super().__init__(message, span)
+
+
+@dataclass
 class AggregateError(HelenRuntimeError):
     """Collects multiple exceptions from await [list] (HLD 3.6.7).
 
@@ -166,6 +178,7 @@ _PREDEFINED_EXCEPTIONS: dict[str, type[HelenRuntimeError]] = {
     "ModelError": ModelError,
     "ToolError": ToolError,
     "RuntimeError": RuntimeError,
+    "AssertionError": AssertionError,
     "AggregateError": AggregateError,
 }
 
