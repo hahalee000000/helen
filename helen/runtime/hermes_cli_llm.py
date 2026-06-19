@@ -12,7 +12,6 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import subprocess
 from dataclasses import dataclass, field
 from typing import Any
@@ -219,12 +218,12 @@ class HermesCLILLMRuntime(LLMRuntime):
 
     async def _ask_async(self, prompt: str, model: str | None = None) -> str | None:
         """Async version of _ask() using asyncio.create_subprocess_exec().
-        
+
         This is the key to Phase 1b: non-blocking subprocess execution
         that allows concurrent LLM calls in a single thread.
         """
         import asyncio
-        
+
         cmd = [self.hermes_path, "-z", prompt]
         if model:
             cmd.extend(["-m", model])
@@ -239,7 +238,7 @@ class HermesCLILLMRuntime(LLMRuntime):
                 proc.communicate(),
                 timeout=self.timeout
             )
-            
+
             if proc.returncode != 0:
                 self._last_error = stderr.decode().strip()
                 return None

@@ -42,7 +42,7 @@ from helen.stdlib.data import (
 from helen.stdlib.collection import (
     # List ops
     _map, _filter, _reduce, _find as _find_if, _every, _some,
-    _sort, _reverse, _unique, _flatten, _chunk, _zip,
+    _sort, _unique, _flatten, _chunk, _zip,
     # Dict ops
     _keys, _values, _entries, _merge, _pick, _omit,
     # Set ops
@@ -61,7 +61,7 @@ from helen.stdlib.time import (
 # Import math stats functions
 from helen.stdlib.math_stats import (
     _mean, _median, _mode, _variance, _stddev,
-    _correlation, _percentile, _sum, _product, 
+    _correlation, _percentile, _sum, _product,
     _min as _stats_min, _max as _stats_max,
 )
 
@@ -423,12 +423,12 @@ def _stream_clear() -> str:
 
 def _progress_bar(current: int, total: int, width: int = 40) -> str:
     """Display a progress bar with percentage.
-    
+
     Args:
         current: Current progress value
         total: Total value (100% = total)
         width: Width of progress bar in characters (default 40)
-    
+
     Returns:
         The progress bar string
     """
@@ -436,7 +436,7 @@ def _progress_bar(current: int, total: int, width: int = 40) -> str:
         percentage = 0.0
     else:
         percentage = min(100.0, (current / total) * 100)
-    
+
     filled = int(width * percentage / 100)
     bar = "█" * filled + "░" * (width - filled)
     result = f"\r[{bar}] {percentage:.0f}%"

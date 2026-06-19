@@ -179,32 +179,32 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def init_command() -> int:
     """Initialize Helen configuration directory.
-    
+
     Creates ~/.helen/ with:
     - config.yaml (LLM API configuration)
     - skills/ directory
-    
+
     Returns:
         0 on success, 1 on error.
     """
-    from helen.runtime.config import get_helen_home, save_config, HELEN_HOME
-    
+    from helen.runtime.config import get_helen_home, save_config
+
     # Create Helen home directory
     helen_home = get_helen_home()
     print(f"Helen home: {helen_home}")
-    
+
     # Create skills directory
     skills_dir = helen_home / "skills"
     skills_dir.mkdir(exist_ok=True)
     print(f"Skills directory: {skills_dir}")
-    
+
     # Check if config already exists
     config_path = helen_home / "config.yaml"
     if config_path.exists():
         print(f"Config already exists: {config_path}")
         print("Edit it directly to update settings.")
         return 0
-    
+
     # Create default config
     default_config = {
         "base_url": "https://api.openai.com/v1",
@@ -213,7 +213,7 @@ def init_command() -> int:
         "temperature": 0.7,
         "timeout": 60,
     }
-    
+
     config_path = save_config(default_config)
     print(f"Config created: {config_path}")
     print()
@@ -221,7 +221,7 @@ def init_command() -> int:
     print(f"  1. Edit {config_path}")
     print("  2. Set your API key")
     print("  3. Run a Helen program: helen <file.helen>")
-    
+
     return 0
 
 

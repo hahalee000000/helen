@@ -17,11 +17,9 @@ Usage:
 from __future__ import annotations
 
 import json
-import os
 import urllib.request
 import urllib.error
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 from helen.runtime.llm_runtime import LLMResponse, LLMRuntime
@@ -29,12 +27,12 @@ from helen.runtime.llm_runtime import LLMResponse, LLMRuntime
 
 def _load_hermes_env() -> dict[str, str]:
     """Load environment variables from Helen or Hermes config.
-    
+
     Priority:
     1. ~/.helen/config.yaml
     2. ~/.helen/.env
     3. ~/.hermes/.env (fallback)
-    
+
     Returns dict with keys like DASHSCOPE_API_KEY, DASHSCOPE_BASE_URL for
     backward compatibility.
     """
@@ -281,7 +279,7 @@ class HttpLLMRuntime(LLMRuntime):
         history: list[dict[str, Any]] | None = None,
     ):
         """Stream LLM response with full tool-calling loop.
-        
+
         Yields event dicts:
             {"type": "content", "content": "..."}     — text chunk
             {"type": "tool_call", "name": "...", "args": {...}}  — tool invocation
@@ -289,18 +287,18 @@ class HttpLLMRuntime(LLMRuntime):
             {"type": "error", "message": "..."}       — error
         """
         from helen.runtime.tools import dispatch_tool
-        
+
         use_model = model or self.default_model or "default"
-        
+
         messages: list[dict[str, Any]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         if history:
             messages.extend(history)
         messages.append({"role": "user", "content": prompt})
-        
+
         url = f"{self.base_url}/chat/completions"
-        
+
         for turn in range(max_turns + 1):
             # Build streaming request
             payload: dict[str, Any] = {
@@ -311,9 +309,9 @@ class HttpLLMRuntime(LLMRuntime):
             }
             if tools:
                 payload["tools"] = tools
-            
+
             data = json.dumps(payload).encode("utf-8")
-            
+
             req = urllib.request.Request(
                 url,
                 data=data,
@@ -323,37 +321,37 @@ class HttpLLMRuntime(LLMRuntime):
                 },
                 method="POST",
             )
-            
+
             try:
                 # Collect streamed chunks
                 full_content = ""
                 tool_calls_acc: dict[int, dict] = {}  # index -> {name, args_str, id}
-                
+
                 with urllib.request.urlopen(req, timeout=self.timeout) as response:
                     for line_bytes in response:
                         line = line_bytes.decode("utf-8").strip()
                         if not line:
                             continue
-                        
+
                         if line.startswith("data: "):
                             data_str = line[6:]
                             if data_str == "[DONE]":
                                 break
-                            
+
                             try:
                                 chunk_data = json.loads(data_str)
                                 choices = chunk_data.get("choices", [])
                                 if not choices:
                                     continue
-                                
+
                                 delta = choices[0].get("delta", {})
-                                
+
                                 # Text content chunk
                                 content = delta.get("content", "")
                                 if content:
                                     full_content += content
                                     yield {"type": "content", "content": content}
-                                
+
                                 # Tool call deltas (streaming accumulation)
                                 tc_deltas = delta.get("tool_calls")
                                 if tc_deltas:
@@ -366,7 +364,7 @@ class HttpLLMRuntime(LLMRuntime):
                                                 "args_str": "",
                                             }
                                         acc = tool_calls_acc[idx]
-                                        
+
                                         fn_delta = tc_delta.get("function", {})
                                         if fn_delta.get("name"):
                                             acc["name"] = fn_delta["name"]
@@ -374,10 +372,10 @@ class HttpLLMRuntime(LLMRuntime):
                                             acc["args_str"] += fn_delta["arguments"]
                                         if tc_delta.get("id"):
                                             acc["id"] = tc_delta["id"]
-                            
+
                             except json.JSONDecodeError:
                                 continue
-                
+
                 # After stream completes: check if we got tool calls
                 if tool_calls_acc:
                     # Build assistant message with tool calls
@@ -394,7 +392,7 @@ class HttpLLMRuntime(LLMRuntime):
                         for i in sorted(tool_calls_acc.keys())
                     ]
                     messages.append(assistant_msg)
-                    
+
                     # Execute each tool and yield events
                     for i in sorted(tool_calls_acc.keys()):
                         tc = tool_calls_acc[i]
@@ -403,32 +401,32 @@ class HttpLLMRuntime(LLMRuntime):
                             fn_args = json.loads(tc["args_str"]) if tc["args_str"] else {}
                         except json.JSONDecodeError:
                             fn_args = {}
-                        
+
                         yield {"type": "tool_call", "name": fn_name, "args": fn_args}
-                        
+
                         result = dispatch_tool(fn_name, fn_args)
-                        
+
                         yield {"type": "tool_result", "name": fn_name, "result": result}
-                        
+
                         messages.append({
                             "role": "tool",
                             "tool_call_id": tc["id"],
                             "content": result,
                         })
-                    
+
                     # Nudge on last turn
                     if turn >= max_turns - 1:
                         messages.append({
                             "role": "user",
                             "content": "Based on the tool results above, please provide your final answer now.",
                         })
-                    
+
                     continue  # Next turn: stream again with tool results
-                
+
                 else:
                     # No tool calls — final text response, already streamed
                     break
-            
+
             except urllib.error.HTTPError as e:
                 yield {"type": "error", "message": f"HTTP error {e.code}: {e.reason}"}
                 break

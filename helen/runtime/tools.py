@@ -13,8 +13,13 @@ import os
 import urllib.request
 import urllib.error
 import urllib.parse
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable
+
+from helen.runtime.security import (
+    validate_path, validate_url, validate_command,
+    SecurityError,
+)
 
 
 @dataclass
@@ -97,7 +102,6 @@ def _web_search(query: str, num_results: int = 3) -> str:
     Uses Wikipedia API as primary source (reliable, no API key needed).
     Falls back to DuckDuckGo lite if Wikipedia has no results.
     """
-    import re
 
     results = []
 
@@ -154,6 +158,10 @@ def _web_search(query: str, num_results: int = 3) -> str:
 
 def _web_fetch(url: str) -> str:
     """Fetch the text content of a URL."""
+    try:
+        validate_url(url)
+    except SecurityError as e:
+        return json.dumps({"error": f"URL blocked: {e}"})
     req = urllib.request.Request(url, headers={
         "User-Agent": "Mozilla/5.0 (compatible; Helen/1.0)"
     })
@@ -177,11 +185,14 @@ def _web_fetch(url: str) -> str:
 def _read_file(path: str) -> str:
     """Read the content of a local file."""
     try:
+        safe_path = validate_path(path)
         from pathlib import Path
-        content = Path(path).read_text(encoding="utf-8")
+        content = Path(safe_path).read_text(encoding="utf-8")
         if len(content) > 16000:
             content = content[:16000] + "\n... [truncated]"
         return json.dumps({"path": path, "content": content})
+    except SecurityError as e:
+        return json.dumps({"error": f"Path blocked: {e}"})
     except Exception as e:
         return json.dumps({"error": f"Read failed: {e}"})
 
@@ -189,20 +200,33 @@ def _read_file(path: str) -> str:
 def _write_file(path: str, content: str) -> str:
     """Write content to a local file."""
     try:
+        safe_path = validate_path(path)
         from pathlib import Path
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
-        Path(path).write_text(content, encoding="utf-8")
+        Path(safe_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(safe_path).write_text(content, encoding="utf-8")
         return json.dumps({"path": path, "bytes_written": len(content), "status": "ok"})
+    except SecurityError as e:
+        return json.dumps({"error": f"Path blocked: {e}"})
     except Exception as e:
         return json.dumps({"error": f"Write failed: {e}"})
 
 
-def _shell_exec(command: str, timeout: int = 30) -> str:
-    """Execute a shell command and return output."""
+def _shell_exec(command: str, timeout: int = 30, shell: bool = False) -> str:
+    """Execute a shell command and return output.
+
+    Args:
+        command: Command to execute. When shell=False (default), the command
+                 is split into args for safety. When shell=True, passed as string.
+        timeout: Timeout in seconds (default 30).
+        shell: Whether to use shell execution (default False for safety).
+    """
+    import shlex
     import subprocess
     try:
+        validate_command(command)
+        cmd = command if shell else shlex.split(command)
         result = subprocess.run(
-            command, shell=True, capture_output=True, text=True,
+            cmd, shell=shell, capture_output=True, text=True,
             timeout=timeout,
         )
         output = result.stdout
@@ -247,12 +271,12 @@ def _calculate(expression: str) -> str:
                 return json.dumps({"error": f"Unsafe name: {node.id}"})
         # Provide safe math namespace
         safe_ns = {"__builtins__": {}, "math": math,
-                    "sqrt": math.sqrt, "abs": abs, "round": round,
-                    "sin": math.sin, "cos": math.cos, "tan": math.tan,
-                    "log": math.log, "log10": math.log10, "pi": math.pi, "e": math.e,
-                    "pow": pow, "ceil": math.ceil, "floor": math.floor,
-                    "exp": math.exp, "asin": math.asin, "acos": math.acos,
-                    "atan": math.atan, "degrees": math.degrees, "radians": math.radians}
+                   "sqrt": math.sqrt, "abs": abs, "round": round,
+                   "sin": math.sin, "cos": math.cos, "tan": math.tan,
+                   "log": math.log, "log10": math.log10, "pi": math.pi, "e": math.e,
+                   "pow": pow, "ceil": math.ceil, "floor": math.floor,
+                   "exp": math.exp, "asin": math.asin, "acos": math.acos,
+                   "atan": math.atan, "degrees": math.degrees, "radians": math.radians}
         result = eval(compile(tree, '<expr>', 'eval'), safe_ns)
         return json.dumps({"expression": expression, "result": result})
     except Exception as e:
@@ -275,7 +299,8 @@ def _patch_file(path: str, old_string: str, new_string: str, replace_all: bool =
     """
     from pathlib import Path
     try:
-        file_path = Path(path)
+        safe_path = validate_path(path)
+        file_path = Path(safe_path)
         if not file_path.exists():
             return json.dumps({"error": f"File not found: {path}"})
 
@@ -430,12 +455,13 @@ def _register_builtin_tools() -> None:
 
     register_tool(
         name="shell_exec",
-        description="Execute a shell command and return stdout/stderr output.",
+        description="Execute a command and return stdout/stderr output. Uses safe mode (shell=False) by default.",
         parameters={
             "type": "object",
             "properties": {
-                "command": {"type": "string", "description": "Shell command to execute"},
+                "command": {"type": "string", "description": "Command to execute"},
                 "timeout": {"type": "integer", "description": "Timeout in seconds (default 30)", "default": 30},
+                "shell": {"type": "boolean", "description": "Use shell execution (default: false for safety)", "default": False},
             },
             "required": ["command"],
         },

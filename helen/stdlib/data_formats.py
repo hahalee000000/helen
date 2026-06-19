@@ -5,7 +5,6 @@ Provides YAML, TOML, and XML parsing and generation.
 
 from __future__ import annotations
 
-import json
 import xml.etree.ElementTree as ET
 from typing import Any
 from pathlib import Path
@@ -29,7 +28,7 @@ except ImportError:
         HAS_TOML_READ = False
 
 try:
-    import toml
+    import toml  # noqa: F811
     HAS_TOML_WRITE = True
 except ImportError:
     HAS_TOML_WRITE = False
@@ -52,7 +51,7 @@ def _yaml_parse(text: str) -> Any:
     """
     if not HAS_YAML:
         raise ImportError("PyYAML is required for YAML support. Install with: pip install pyyaml")
-    
+
     try:
         return yaml.safe_load(text)
     except yaml.YAMLError as e:
@@ -70,7 +69,7 @@ def _yaml_stringify(value: Any) -> str:
     """
     if not HAS_YAML:
         raise ImportError("PyYAML is required for YAML support. Install with: pip install pyyaml")
-    
+
     return yaml.dump(value, default_flow_style=False, allow_unicode=True)
 
 
@@ -89,7 +88,7 @@ def _yaml_load(path: str) -> Any:
     """
     if not HAS_YAML:
         raise ImportError("PyYAML is required for YAML support. Install with: pip install pyyaml")
-    
+
     try:
         with open(path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f)
@@ -111,13 +110,13 @@ def _yaml_save(path: str, value: Any) -> str:
     """
     if not HAS_YAML:
         raise ImportError("PyYAML is required for YAML support. Install with: pip install pyyaml")
-    
+
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    
+
     with open(p, "w", encoding="utf-8") as f:
         yaml.dump(value, f, default_flow_style=False, allow_unicode=True)
-    
+
     return f"Saved YAML to {path}"
 
 
@@ -138,7 +137,7 @@ def _toml_parse(text: str) -> dict[str, Any]:
     """
     if not HAS_TOML_READ:
         raise ImportError("TOML support requires Python 3.11+ or 'toml' package. Install with: pip install toml")
-    
+
     try:
         # Python 3.11+ tomllib
         if "tomllib" in globals():
@@ -161,7 +160,7 @@ def _toml_stringify(value: dict[str, Any]) -> str:
     """
     if not HAS_TOML_WRITE:
         raise ImportError("TOML write support requires 'toml' package. Install with: pip install toml")
-    
+
     return toml.dumps(value)
 
 
@@ -180,7 +179,7 @@ def _toml_load(path: str) -> dict[str, Any]:
     """
     if not HAS_TOML_READ:
         raise ImportError("TOML support requires Python 3.11+ or 'toml' package. Install with: pip install toml")
-    
+
     try:
         # Python 3.11+ tomllib
         if "tomllib" in globals():
@@ -207,13 +206,13 @@ def _toml_save(path: str, value: dict[str, Any]) -> str:
     """
     if not HAS_TOML_WRITE:
         raise ImportError("TOML write support requires 'toml' package. Install with: pip install toml")
-    
+
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    
+
     with open(p, "w", encoding="utf-8") as f:
         toml.dump(value, f)
-    
+
     return f"Saved TOML to {path}"
 
 
@@ -230,12 +229,12 @@ def _xml_to_dict(element: ET.Element) -> dict[str, Any]:
         Dict representation
     """
     result: dict[str, Any] = {}
-    
+
     # Handle attributes
     if element.attrib:
         for key, value in element.attrib.items():
             result[f"@{key}"] = value
-    
+
     # Handle children
     children = list(element)
     if children:
@@ -256,7 +255,7 @@ def _xml_to_dict(element: ET.Element) -> dict[str, Any]:
             result["#text"] = element.text.strip()
         else:
             result = element.text.strip()
-    
+
     return {element.tag: result}
 
 
@@ -275,7 +274,7 @@ def _dict_to_xml(data: Any, parent: ET.Element | None = None, tag: str = "root")
         element = ET.Element(tag)
     else:
         element = ET.SubElement(parent, tag)
-    
+
     if isinstance(data, dict):
         for key, value in data.items():
             if key.startswith("@"):
@@ -293,7 +292,7 @@ def _dict_to_xml(data: Any, parent: ET.Element | None = None, tag: str = "root")
                     _dict_to_xml(value, element, key)
     else:
         element.text = str(data)
-    
+
     return element
 
 
@@ -366,9 +365,9 @@ def _xml_save(path: str, value: dict[str, Any], root: str = "root") -> str:
     """
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    
+
     element = _dict_to_xml(value, tag=root)
     tree = ET.ElementTree(element)
     tree.write(path, encoding="utf-8", xml_declaration=True)
-    
+
     return f"Saved XML to {path}"

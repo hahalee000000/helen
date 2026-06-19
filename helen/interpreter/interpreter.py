@@ -82,8 +82,10 @@ from helen.runtime.import_resolver import ImportResolver
 from helen.runtime.history import HistoryManager, Message as HistoryMessage
 from helen.interpreter.task import Task, AggregateError
 from helen.semantic.types import (
-    AnyType, IntType, FloatType, StringType, BoolType, NullType,
-    NumberType, Type, type_compatible, type_of_literal,
+    AnyType,
+    Type,
+    type_compatible,
+    type_of_literal,
 )
 
 if TYPE_CHECKING:
@@ -273,19 +275,6 @@ class Interpreter(Visitor[object]):
             return self._truthy(left) and self._truthy(right)
         if op == TokenType.OR:
             return self._truthy(left) or self._truthy(right)
-        if op == TokenType.ASSIGN:
-            # Runtime const protection
-            if isinstance(node.left, VariableNode):
-                if self.environment.is_const(node.left.name):
-                    raise ConstAssignmentError(node.left.name, node.span)
-                try:
-                    self.environment.assign(node.left.name, right)
-                except NameError:
-                    self._runtime_error(node.span, f"Undefined variable '{node.left.name}'")
-                    return None
-                return right
-            self._runtime_error(node.span, "Invalid assignment target")
-            return None
 
         self._runtime_error(node.span, f"Unknown operator '{node.operator.lexeme}'")
         return None
@@ -716,7 +705,7 @@ class Interpreter(Visitor[object]):
                 if name.lower() == type_name.lower():
                     exc_class = cls
                     break
-        
+
         if exc_class is None:
             # Should not happen if semantic analysis passed, but handle gracefully
             self._runtime_error(
@@ -724,7 +713,7 @@ class Interpreter(Visitor[object]):
                 f"'{type_name}' is not a valid exception type"
             )
             return None
-        
+
         # Evaluate message if present
         message = None
         if node.message is not None:
@@ -734,7 +723,7 @@ class Interpreter(Visitor[object]):
         else:
             # Use default message from exception class
             message = exc_class.__init__.__defaults__[0] if exc_class.__init__.__defaults__ else f"{type_name} thrown"
-        
+
         # Raise the exception
         raise exc_class(message, node.span)
 
@@ -762,11 +751,11 @@ class Interpreter(Visitor[object]):
             path.endswith('.py') or  # Explicit .py extension
             not any(path.endswith(ext) for ext in ('.helen', '.json', '.md', '.txt', '.yaml', '.yml'))
         )
-        
+
         if is_python_module:
             # Python module import via FFI
             return self._import_python_module(node)
-        
+
         # Track the current file for relative path resolution
         current_file = node.source_file if hasattr(node, 'source_file') else None
 
@@ -790,38 +779,38 @@ class Interpreter(Visitor[object]):
             self.environment.define(alias, result.content)
 
         return None
-    
+
     def _import_python_module(self, node: ImportStmtNode) -> object:
         """Import a Python module via FFI.
-        
+
         Args:
             node: The import statement node
-            
+
         Returns:
             None
         """
         from helen.ffi.python_runtime import DefaultPythonRuntime
-        
+
         # Get or create Python runtime
         if not hasattr(self, '_python_runtime'):
             self._python_runtime = DefaultPythonRuntime()
-        
+
         # Import the module
         module_name = node.module_path
         if module_name.endswith('.py'):
             module_name = module_name[:-3]  # Remove .py extension
-        
+
         try:
             module = self._python_runtime.import_module(module_name)
-            
+
             # Register the module under the alias (or module name if no alias)
             alias = node.alias if node.alias else module_name.split('.')[-1]
             self.environment.define(alias, module)
-            
+
         except ImportError as e:
             self._runtime_error(node.span, f"Cannot import Python module '{module_name}': {e}")
             return None
-        
+
         return None
 
     def visit_async_call_stmt(self, node: AsyncCallStmtNode) -> object:
@@ -852,7 +841,7 @@ class Interpreter(Visitor[object]):
         """
         # Create environment snapshot for isolation
         env_snapshot = self.environment.snapshot()
-        
+
         # Create pending task (will execute on await)
         return Task.pending(node.call, self, env_snapshot)
 
@@ -996,10 +985,10 @@ class Interpreter(Visitor[object]):
 
     def visit_llm_stream_stmt(self, node: LlmStreamStmtNode) -> object:
         """Execute llm stream statement: stream LLM response chunk by chunk.
-        
+
         If on_chunk callback is provided, call it for each chunk.
         Otherwise, use stream_print to output chunks to stdout.
-        
+
         Supports bare form (no prompt) inside agent main blocks.
         """
         # Evaluate the prompt expression (or use rendered agent prompt for bare form)
@@ -1017,23 +1006,22 @@ class Interpreter(Visitor[object]):
                     node.span,
                 )
                 return None
-        
+
         # Extract agent settings if inside an agent context
         model = self._get_agent_setting("model")
         temperature = float(self._get_agent_setting("temperature", 1.0))
-        
+
         # Get rendered agent prompt as system_prompt (only if prompt was explicit)
         if node.prompt is not None:
             system_prompt = self._get_rendered_agent_prompt()
         else:
             # Bare form: system_prompt is the agent description
             system_prompt = self._get_agent_setting("description")
-        
+
         # Record user message to history
         self._add_to_history("user", prompt)
-        
+
         # Check if LLM runtime supports streaming
-        from helen.runtime.llm_runtime import LLMRuntime
         if not hasattr(self.llm_runtime, 'act_stream'):
             # Fallback to non-streaming if not supported
             self.errors.error(
@@ -1054,13 +1042,13 @@ class Interpreter(Visitor[object]):
                     print()  # Add newline at end
                 self._add_to_history("assistant", response.text)
             return None
-        
+
         # Build tools list from agent declarations
         tools = self._build_tools_list()
         max_turns = int(self._get_agent_setting("max-turns", 1))
         if tools and max_turns < 3:
             max_turns = 3
-        
+
         # Evaluate on_chunk callback if provided
         on_chunk_fn = None
         if node.on_chunk is not None:
@@ -1072,7 +1060,7 @@ class Interpreter(Visitor[object]):
                     node.span,
                 )
                 return None
-        
+
         try:
             # Stream response with full tool-calling loop
             full_response = []
@@ -1082,7 +1070,7 @@ class Interpreter(Visitor[object]):
                 max_turns=max_turns,
             ):
                 event_type = event.get("type", "content")
-                
+
                 if event_type == "content":
                     content = event.get("content", "")
                     if content:
@@ -1094,7 +1082,7 @@ class Interpreter(Visitor[object]):
                             stream_print_fn = stdlib.lookup("stream_print")
                             if stream_print_fn:
                                 stream_print_fn.fn(content)
-                
+
                 elif event_type == "tool_call":
                     fn_name = event.get("name", "")
                     fn_args = event.get("args", {})
@@ -1105,7 +1093,7 @@ class Interpreter(Visitor[object]):
                         print(progress, end="", flush=True)
                     else:
                         on_chunk_fn(progress)
-                
+
                 elif event_type == "tool_result":
                     fn_name = event.get("name", "")
                     result = event.get("result", "")
@@ -1116,7 +1104,7 @@ class Interpreter(Visitor[object]):
                         print(result_msg, end="", flush=True)
                     else:
                         on_chunk_fn(result_msg)
-                
+
                 elif event_type == "error":
                     error_msg = event.get("message", "Unknown error")
                     self.errors.error(
@@ -1125,16 +1113,16 @@ class Interpreter(Visitor[object]):
                         node.span,
                     )
                     break
-            
+
             # Add newline at end if using auto-output
             if on_chunk_fn is None:
                 print()
-            
+
             # Record assistant response to history
             full_text = "".join(full_response)
             if full_text:
                 self._add_to_history("assistant", full_text)
-            
+
             return None
         except Exception as e:
             self.errors.error(
@@ -1227,43 +1215,12 @@ class Interpreter(Visitor[object]):
         return str(value)
 
     def _type_from_typenode(self, type_node: TypeNode | None) -> "Type":
-        """Convert an AST TypeNode to a semantic Type."""
-        if type_node is None:
-            return AnyType()
+        """Convert an AST TypeNode to a semantic Type.
 
-        # Handle composite type nodes (OptionalTypeNode, UnionTypeNode, LiteralTypeNode)
-        from helen.core.ast import OptionalTypeNode, UnionTypeNode, LiteralTypeNode
-        if isinstance(type_node, OptionalTypeNode):
-            from helen.semantic.types import OptionalType
-            return OptionalType(self._type_from_typenode(type_node.inner))
-        if isinstance(type_node, UnionTypeNode):
-            from helen.semantic.types import UnionType
-            return UnionType([self._type_from_typenode(m) for m in type_node.members])
-        if isinstance(type_node, LiteralTypeNode):
-            from helen.semantic.types import LiteralType
-            return LiteralType(type_node.values)
-
-        name = type_node.name.lower()
-        if name == "int" or name == "integer":
-            return IntType()
-        if name == "float" or name == "double":
-            return FloatType()
-        if name == "str" or name == "string":
-            return StringType()
-        if name == "bool" or name == "boolean":
-            return BoolType()
-        if name == "null":
-            return NullType()
-        if name == "any":
-            return AnyType()
-        if name == "list":
-            from helen.semantic.types import ListType
-            return ListType(AnyType())
-        if name == "map":
-            from helen.semantic.types import MapType
-            return MapType(AnyType(), AnyType())
-        # Unknown type names → AnyType (v1 lenient)
-        return AnyType()
+        Delegates to the shared utility in type_utils module.
+        """
+        from helen.semantic.type_utils import type_from_typenode
+        return type_from_typenode(type_node)
 
     def _call_function(self, func: FunctionDeclNode, args: list[object]) -> object:
         """Call a function with the given arguments.
@@ -1351,7 +1308,7 @@ class Interpreter(Visitor[object]):
         # Save and restore to avoid leaking into caller's scope
         registered_names: list[str] = []
         for func_node in agent.functions:
-            old_val = self._functions.get(func_node.name)
+            self._functions.get(func_node.name)
             self._functions[func_node.name] = func_node
             registered_names.append(func_node.name)
 
@@ -1394,7 +1351,7 @@ class Interpreter(Visitor[object]):
             AggregateError if any task in a list fails.
         """
         import asyncio
-        
+
         # Check if we're already in a running event loop (e.g., in REPL)
         # Use a safer approach that works in all contexts
         in_event_loop = False
@@ -1405,7 +1362,7 @@ class Interpreter(Visitor[object]):
         except Exception:
             # No event loop or can't determine
             in_event_loop = False
-        
+
         if isinstance(tasks, Task):
             # Single task: execute if pending, then return result or raise exception
             if tasks.is_pending:
@@ -1422,7 +1379,7 @@ class Interpreter(Visitor[object]):
 
         # List of tasks: execute pending tasks concurrently using asyncio
         pending_tasks = [t for t in tasks if t.is_pending]
-        
+
         if pending_tasks:
             if in_event_loop:
                 # Already in event loop - use thread pool for concurrency
@@ -1439,7 +1396,7 @@ class Interpreter(Visitor[object]):
                     coros = [task.execute_async() for task in pending_tasks]
                     # Execute concurrently
                     await asyncio.gather(*coros)
-                
+
                 asyncio.run(execute_all())
 
         # Collect results from all tasks (both pending and already completed)
@@ -1531,6 +1488,7 @@ class Interpreter(Visitor[object]):
         Single-pass rendering: rendered results are not re-rendered.
         """
         import re
+
         def replace_var(match):
             var_path = match.group(1).strip()
             parts = var_path.split(".")

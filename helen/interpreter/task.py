@@ -19,7 +19,7 @@ class Task:
 
     Wraps the result or exception of an async operation.
     Supports Promise.all semantics via await [list].
-    
+
     Phase 1b: Tasks can be pending (deferred execution) or completed.
     """
 
@@ -44,7 +44,7 @@ class Task:
     @classmethod
     def pending(cls, call_node: Any, interpreter: Any, env_snapshot: Any) -> "Task":
         """Create a pending task that will execute on await."""
-        return cls(_pending=True, _call_node=call_node, 
+        return cls(_pending=True, _call_node=call_node,
                    _interpreter=interpreter, _env_snapshot=env_snapshot)
 
     @property
@@ -64,18 +64,18 @@ class Task:
 
     async def execute_async(self) -> None:
         """Async version of execute() for true concurrent execution.
-        
+
         Phase 1b: If interpreter is AsyncLLMInterpreter, uses async execution
         directly (no thread pool). Otherwise, falls back to asyncio.to_thread().
-        
+
         Memory: When using AsyncLLMInterpreter, no threads are created.
         All async tasks run in a single thread with asyncio event loop.
         """
         import asyncio
-        
+
         if not self._pending:
             return
-        
+
         try:
             # Check if interpreter supports async execution
             from helen.interpreter.async_interpreter import AsyncLLMInterpreter
@@ -87,7 +87,7 @@ class Task:
                 # Use run_in_executor for Python 3.7+ compatibility
                 loop = asyncio.get_event_loop()
                 result = await loop.run_in_executor(None, self._execute_sync)
-            
+
             self.result_value = result
             self._done = True
         except Exception as e:
@@ -95,13 +95,13 @@ class Task:
             self._done = True
         finally:
             self._pending = False
-    
+
     async def _execute_async(self) -> Any:
         """Async execution helper for AsyncLLMInterpreter."""
         # Restore environment snapshot for isolation
         old_env = self._interpreter.environment
         self._interpreter.environment = self._env_snapshot
-        
+
         try:
             # Check if the call node is an LLM expression
             from helen.core.ast import LlmActExprNode, LlmIfStmtNode
@@ -116,13 +116,13 @@ class Task:
         finally:
             # Restore original environment
             self._interpreter.environment = old_env
-    
+
     def _execute_sync(self) -> Any:
         """Synchronous execution helper for execute_async()."""
         # Restore environment snapshot for isolation
         old_env = self._interpreter.environment
         self._interpreter.environment = self._env_snapshot
-        
+
         try:
             # Execute the call
             result = self._call_node.accept(self._interpreter)
@@ -135,7 +135,7 @@ class Task:
         """Execute the pending task (sync version, for backward compatibility)."""
         if not self._pending:
             return
-        
+
         try:
             result = self._execute_sync()
             self.result_value = result

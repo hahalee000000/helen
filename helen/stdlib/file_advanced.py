@@ -10,7 +10,6 @@ import shutil
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 
 # ── File information operations ────────────────────────────────
@@ -47,7 +46,7 @@ def _file_modified(path: str) -> str:
     """
     if not os.path.exists(path):
         raise FileNotFoundError(f"File not found: {path}")
-    
+
     mtime = os.path.getmtime(path)
     dt = datetime.fromtimestamp(mtime)
     return dt.isoformat(timespec="seconds")
@@ -69,10 +68,10 @@ def _list_dir(path: str, pattern: str | None = None) -> list[str]:
     """
     if not os.path.exists(path):
         raise FileNotFoundError(f"Directory not found: {path}")
-    
+
     if not os.path.isdir(path):
         raise NotADirectoryError(f"Not a directory: {path}")
-    
+
     if pattern:
         return [p.name for p in Path(path).glob(pattern)]
     else:
@@ -93,7 +92,7 @@ def _walk_dir(path: str) -> list[tuple[str, list[str], list[str]]]:
     """
     if not os.path.exists(path):
         raise FileNotFoundError(f"Directory not found: {path}")
-    
+
     result = []
     for dirpath, dirnames, filenames in os.walk(path):
         result.append((dirpath, dirnames, filenames))
@@ -118,7 +117,7 @@ def _copy_file(src: str, dst: str) -> str:
     """
     if not os.path.exists(src):
         raise FileNotFoundError(f"Source file not found: {src}")
-    
+
     shutil.copy2(src, dst)
     return f"Copied {src} to {dst}"
 
@@ -138,7 +137,7 @@ def _move_file(src: str, dst: str) -> str:
     """
     if not os.path.exists(src):
         raise FileNotFoundError(f"Source file not found: {src}")
-    
+
     shutil.move(src, dst)
     return f"Moved {src} to {dst}"
 
@@ -157,7 +156,7 @@ def _delete_file(path: str) -> str:
     """
     if not os.path.exists(path):
         raise FileNotFoundError(f"File not found: {path}")
-    
+
     os.remove(path)
     return f"Deleted file: {path}"
 
@@ -178,12 +177,12 @@ def _delete_dir(path: str, recursive: bool = False) -> str:
     """
     if not os.path.exists(path):
         raise FileNotFoundError(f"Directory not found: {path}")
-    
+
     if recursive:
         shutil.rmtree(path)
     else:
         os.rmdir(path)
-    
+
     return f"Deleted directory: {path}"
 
 

@@ -42,7 +42,7 @@ class LLMRuntime(ABC):
     Two core methods map to Helen's llm statements:
     - route()  → llm if
     - act()    → llm act
-    
+
     Phase 1b: Also provides async versions for concurrent execution.
     """
 
@@ -60,10 +60,10 @@ class LLMRuntime(ABC):
         ...
 
     # Phase 1b: Async versions for concurrent execution
-    async def route_async(self, description: str, branches: list[str], 
+    async def route_async(self, description: str, branches: list[str],
                           context: str | None = None) -> str | None:
         """Async version of route() for concurrent execution.
-        
+
         Default implementation calls sync version. Override for true async.
         """
         return self.route(description, branches, context)
@@ -73,21 +73,21 @@ class LLMRuntime(ABC):
                         max_turns: int = 1, history: list[dict[str, Any]] | None = None,
                         system_prompt: str | None = None) -> LLMResponse:
         """Async version of act() for concurrent execution.
-        
+
         Default implementation calls sync version. Override for true async.
         """
         return self.act(prompt, tools, model, temperature, max_turns, history, system_prompt)
-    
+
     def act_stream(self, prompt: str, model: str | None = None,
                    temperature: float = 1.0, system_prompt: str | None = None,
                    tools: list[dict[str, Any]] | None = None,
                    max_turns: int = 5,
                    history: list[dict[str, Any]] | None = None) -> Iterator[dict[str, Any]]:
         """Stream LLM response with tool-calling support.
-        
+
         Default implementation calls act() and yields the full response as a single content event.
         Override for true streaming support.
-        
+
         Yields event dicts:
             {"type": "content", "content": "..."}     — text chunk
             {"type": "tool_call", "name": "...", "args": {...}}  — tool invocation
@@ -95,7 +95,7 @@ class LLMRuntime(ABC):
             {"type": "error", "message": "..."}       — error
         """
         response = self.act(prompt, tools=tools, model=model, temperature=temperature,
-                           max_turns=max_turns, system_prompt=system_prompt)
+                            max_turns=max_turns, system_prompt=system_prompt)
         if response and response.text:
             yield {"type": "content", "content": response.text}
 

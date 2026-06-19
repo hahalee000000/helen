@@ -3,8 +3,6 @@
 Defines interfaces for advanced file operations.
 """
 
-from typing import Any
-
 
 class FileInfoContract:
     """Contract for file information operations."""

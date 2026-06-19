@@ -74,10 +74,7 @@ from helen.core.errors import ErrorCode, ErrorReporter
 from helen.semantic.symbols import Symbol, SymbolTable
 from helen.semantic.types import (
     AnyType,
-    LiteralType,
-    NullType,
-    OptionalType,
-    UnionType,
+    Type,
     type_compatible,
     type_of_literal,
 )
@@ -183,15 +180,15 @@ class SemanticAnalyzer(Visitor[None]):
                 span,
             )
 
-    def _check_llm_usage(self) -> None:
-        """Validate llm statement usage (handled in specific visit methods)."""
-
     def _check_async_usage(self, node: AsyncCallStmtNode) -> None:
-        """Validate async is only used on call statements."""
-        # AsyncCallStmtNode is only created for 'async call', so this is
-        # already validated by the parser. Semantic check: the callee
-        # must be a valid agent or function.
-        pass
+        """Validate async is only used on call statements.
+
+        AsyncCallStmtNode is only created for 'async call', so this is
+        already validated by the parser. Semantic check: the callee
+        must be a valid agent or function.
+        """
+        # Parser ensures 'async' is followed by a call expression.
+        # The callee is validated during visit_call.
 
     def _check_branch_completeness(self, has_default: bool, span, stmt_type: str) -> None:
         """Report error if llm-if or match has no default branch."""
@@ -203,47 +200,13 @@ class SemanticAnalyzer(Visitor[None]):
         """Validate that match has a default branch."""
         self._check_branch_completeness(bool(node.default), node.span, "match")
 
-    def _type_from_typenode(self, type_node: TypeNode | None) -> AnyType | LiteralType | UnionType | OptionalType | NullType:
-        """Convert an AST TypeNode to a semantic Type."""
-        if type_node is None:
-            return AnyType()
+    def _type_from_typenode(self, type_node: TypeNode | None) -> "Type":
+        """Convert an AST TypeNode to a semantic Type.
 
-        # Handle composite type nodes (OptionalTypeNode, UnionTypeNode, LiteralTypeNode)
-        if isinstance(type_node, OptionalTypeNode):
-            from helen.semantic.types import OptionalType
-            return OptionalType(self._type_from_typenode(type_node.inner))
-        if isinstance(type_node, UnionTypeNode):
-            from helen.semantic.types import UnionType
-            return UnionType([self._type_from_typenode(m) for m in type_node.members])
-        if isinstance(type_node, LiteralTypeNode):
-            from helen.semantic.types import LiteralType
-            return LiteralType(type_node.values)
-
-        name = type_node.name.lower()
-        if name == "int" or name == "integer":
-            from helen.semantic.types import IntType
-            return IntType()
-        if name == "float" or name == "double":
-            from helen.semantic.types import FloatType
-            return FloatType()
-        if name == "str" or name == "string":
-            from helen.semantic.types import StringType
-            return StringType()
-        if name == "bool" or name == "boolean":
-            from helen.semantic.types import BoolType
-            return BoolType()
-        if name == "null":
-            return NullType()
-        if name == "any":
-            return AnyType()
-        if name == "list":
-            from helen.semantic.types import ListType
-            return ListType(AnyType())
-        if name == "map":
-            from helen.semantic.types import MapType
-            return MapType(AnyType(), AnyType())
-        # Unknown type names → AnyType (v1 lenient)
-        return AnyType()
+        Delegates to the shared utility in type_utils module.
+        """
+        from helen.semantic.type_utils import type_from_typenode
+        return type_from_typenode(type_node)
 
     # ------------------------------------------------------------------
     # Program & blocks
@@ -644,7 +607,7 @@ class SemanticAnalyzer(Visitor[None]):
 
     def visit_import_stmt(self, node: ImportStmtNode) -> None:
         path = node.module_path
-        
+
         # Check if this is a Python module import
         # Python modules: no extension, or .py extension, or dotted names like "os.path"
         # Helen/data files: .helen, .json, .md, .txt, .yaml, .yml
@@ -652,7 +615,7 @@ class SemanticAnalyzer(Visitor[None]):
             path.endswith('.py') or  # Explicit .py extension
             not any(path.endswith(ext) for ext in ('.helen', '.json', '.md', '.txt', '.yaml', '.yml'))
         )
-        
+
         if is_python_module:
             # Python module import - register the alias as a variable
             alias = node.alias if node.alias else path.split('.')[-1]
@@ -660,7 +623,7 @@ class SemanticAnalyzer(Visitor[None]):
             sym = Symbol(alias, kind="import", is_const=False)
             self.symbols.define(alias, sym)
             return
-        
+
         # Resolve relative to base_dir for Helen/data files
         target = os.path.join(self.base_dir, path)
         if not os.path.exists(target):
@@ -670,7 +633,7 @@ class SemanticAnalyzer(Visitor[None]):
                 node.span,
             )
             return
-        
+
         # Register the alias as a variable in the current scope
         # For .helen files, agents/functions are registered separately
         # For .json/.md/.txt/.yaml files, the data is registered under the alias
@@ -680,7 +643,7 @@ class SemanticAnalyzer(Visitor[None]):
             from helen.semantic.symbols import Symbol
             sym = Symbol(alias, kind="import", is_const=False)
             self.symbols.define(alias, sym)
-        
+
         # Track imported paths to avoid duplicate processing for .helen files
         # But still allow multiple aliases for data files
         if path.endswith('.helen'):
@@ -742,7 +705,7 @@ class SemanticAnalyzer(Visitor[None]):
                     f"'{type_name}' is not a predefined exception type",
                     node.exception_type.span,
                 )
-        
+
         # Visit message expression if present
         if node.message is not None:
             node.message.accept(self)

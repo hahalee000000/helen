@@ -129,23 +129,23 @@ class Environment:
 
     def snapshot(self) -> "Environment":
         """Create a deep copy of the entire environment chain.
-        
+
         Used for async task isolation: each task gets its own copy
         of the environment to avoid race conditions.
-        
+
         Returns:
             A new Environment chain with copied stores.
         """
         import copy
-        
+
         # First, snapshot the parent chain (if any)
         parent_snapshot = None
         if self.parent is not None:
             parent_snapshot = self.parent.snapshot()
-        
+
         # Create a new environment with copied store and consts
         new_env = Environment(parent=parent_snapshot)
         new_env._store = copy.copy(self._store)  # Shallow copy of variables
         new_env._consts = copy.copy(self._consts)  # Copy of const set
-        
+
         return new_env

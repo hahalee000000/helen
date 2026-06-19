@@ -14,15 +14,8 @@ import os
 import threading
 import uuid
 
-
-@dataclass
-class Message:
-    """A single message in a conversation (HLD 3.8.1)."""
-
-    role: str  # "system" | "user" | "assistant" | "tool"
-    content: str
-    tool_calls: list[dict[str, Any]] = field(default_factory=list)
-    tool_call_id: str | None = None
+# Import Message from history module to avoid duplication
+from helen.runtime.history import Message
 
 
 @dataclass
@@ -277,17 +270,17 @@ class HelenHermesRuntime(Runtime):
     @staticmethod
     def _find_skill_directories() -> list[str]:
         """Find all directories that contain SKILL.md files.
-        
+
         Uses Helen config module to get skill directories in priority order:
         1. ~/.helen/skills/ (Helen native)
         2. ~/.hermes/skills/ (Hermes fallback)
         3. ~/.hermes/hermes-agent/skills/ (Hermes agent skills)
-        
+
         Skills can be nested (e.g. mlops/inference/serving-llms-vllm/SKILL.md),
         so we recursively walk the skill base directories.
         """
         from helen.runtime.config import get_skill_dirs
-        
+
         candidates: list[str] = []
         for base in get_skill_dirs():
             base_str = str(base)

@@ -3,8 +3,6 @@
 Defines interfaces for time, date, and datetime operations.
 """
 
-from typing import Any
-
 
 class TimeContract:
     """Contract for time operations."""
@@ -58,7 +56,7 @@ class DateContract:
         ...
 
     @staticmethod
-    def datetime(year: int | None = None, month: int | None = None, 
+    def datetime(year: int | None = None, month: int | None = None,
                  day: int | None = None, hour: int | None = None,
                  minute: int | None = None, second: int | None = None) -> str:
         """Create or get datetime.
@@ -109,7 +107,7 @@ class DateContract:
         ...
 
     @staticmethod
-    def date_add(date_str: str, days: int = 0, hours: int = 0, 
+    def date_add(date_str: str, days: int = 0, hours: int = 0,
                  minutes: int = 0, seconds: int = 0) -> str:
         """Add time to date.
 

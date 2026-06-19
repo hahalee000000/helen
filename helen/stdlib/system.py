@@ -7,10 +7,14 @@ from __future__ import annotations
 
 import logging
 import os
-import signal
 import subprocess
 import sys
 from typing import Any
+
+from helen.runtime.security import (
+    validate_command, validate_pid, validate_kill_signal,
+    safe_env_list,
+)
 
 
 # ── Environment operations ─────────────────────────────────────
@@ -44,12 +48,12 @@ def _env_set(key: str, value: str) -> str:
 
 
 def _env_list() -> dict[str, str]:
-    """List all environment variables.
+    """List all environment variables (sensitive values masked).
 
     Returns:
-        Dict of environment variables
+        Dict of environment variables with sensitive values masked.
     """
-    return dict(os.environ)
+    return safe_env_list()
 
 
 def _env_delete(key: str) -> str:
@@ -70,12 +74,12 @@ def _env_delete(key: str) -> str:
 # ── Process operations ─────────────────────────────────────────
 
 
-def _exec(command: str, shell: bool = True, timeout: int | None = None) -> dict[str, Any]:
+def _exec(command: str, shell: bool = False, timeout: int | None = None) -> dict[str, Any]:
     """Execute command and wait for result.
 
     Args:
         command: Command to execute
-        shell: Whether to use shell
+        shell: Whether to use shell (default: False for safety)
         timeout: Timeout in seconds
 
     Returns:
@@ -83,10 +87,14 @@ def _exec(command: str, shell: bool = True, timeout: int | None = None) -> dict[
 
     Raises:
         TimeoutError: If command times out
+        SecurityError: If command is blocked
     """
+    import shlex
+    validate_command(command)
+    cmd = command if shell else shlex.split(command)
     try:
         result = subprocess.run(
-            command,
+            cmd,
             shell=shell,
             capture_output=True,
             text=True,
@@ -101,18 +109,21 @@ def _exec(command: str, shell: bool = True, timeout: int | None = None) -> dict[
         raise TimeoutError(f"Command timed out after {timeout}s") from e
 
 
-def _exec_async(command: str, shell: bool = True) -> int:
+def _exec_async(command: str, shell: bool = False) -> int:
     """Execute command asynchronously.
 
     Args:
         command: Command to execute
-        shell: Whether to use shell
+        shell: Whether to use shell (default: False for safety)
 
     Returns:
         Process ID
     """
+    import shlex
+    validate_command(command)
+    cmd = command if shell else shlex.split(command)
     process = subprocess.Popen(
-        command,
+        cmd,
         shell=shell,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -150,7 +161,10 @@ def _kill(pid: int, signal_num: int = 15) -> str:
 
     Raises:
         ProcessLookupError: If process doesn't exist
+        SecurityError: If pid or signal is not allowed
     """
+    validate_pid(pid)
+    validate_kill_signal(signal_num)
     try:
         os.kill(pid, signal_num)
         return f"Sent signal {signal_num} to process {pid}"
@@ -266,11 +280,11 @@ def _log_set_level(level: str) -> str:
         "ERROR": logging.ERROR,
         "CRITICAL": logging.CRITICAL,
     }
-    
+
     level_upper = level.upper()
     if level_upper not in level_map:
         raise ValueError(f"Invalid log level: {level}. Must be one of {list(level_map.keys())}")
-    
+
     _logger.setLevel(level_map[level_upper])
     _console_handler.setLevel(level_map[level_upper])
     return f"Log level set to {level_upper}"

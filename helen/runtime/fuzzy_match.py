@@ -24,7 +24,7 @@ Multi-occurrence matching is handled via the replace_all flag.
 
 Usage:
     from helen.runtime.fuzzy_match import fuzzy_find_and_replace
-    
+
     new_content, match_count, strategy, error = fuzzy_find_and_replace(
         content="def foo():\\n    pass",
         old_string="def foo():",
@@ -42,9 +42,10 @@ from difflib import SequenceMatcher
 UNICODE_MAP = {
     "\u201c": '"', "\u201d": '"',  # smart double quotes
     "\u2018": "'", "\u2019": "'",  # smart single quotes
-    "\u2014": "--", "\u2013": "-", # em/en dashes
-    "\u2026": "...", "\u00a0": " ", # ellipsis and non-breaking space
+    "\u2014": "--", "\u2013": "-",  # em/en dashes
+    "\u2026": "...", "\u00a0": " ",  # ellipsis and non-breaking space
 }
+
 
 def _unicode_normalize(text: str) -> str:
     """Normalizes Unicode characters to their standard ASCII equivalents."""
@@ -54,7 +55,7 @@ def _unicode_normalize(text: str) -> str:
 
 
 def fuzzy_find_and_replace(content: str, old_string: str, new_string: str,
-                            replace_all: bool = False) -> Tuple[str, int, Optional[str], Optional[str]]:
+                           replace_all: bool = False) -> Tuple[str, int, Optional[str], Optional[str]]:
     """
     Find and replace text using a chain of increasingly fuzzy matching strategies.
 
@@ -242,10 +243,10 @@ def _strategy_line_trimmed(content: str, pattern: str) -> List[Tuple[int, int]]:
     """Strategy 2: Match with line-by-line whitespace trimming."""
     pattern_lines = [line.strip() for line in pattern.split('\n')]
     pattern_normalized = '\n'.join(pattern_lines)
-    
+
     content_lines = content.split('\n')
     content_normalized_lines = [line.strip() for line in content_lines]
-    
+
     return _find_normalized_matches(
         content, content_lines, content_normalized_lines,
         pattern, pattern_normalized
@@ -256,15 +257,15 @@ def _strategy_whitespace_normalized(content: str, pattern: str) -> List[Tuple[in
     """Strategy 3: Collapse multiple whitespace to single space."""
     def normalize(s):
         return re.sub(r'[ \t]+', ' ', s)
-    
+
     pattern_normalized = normalize(pattern)
     content_normalized = normalize(content)
-    
+
     matches_in_normalized = _strategy_exact(content_normalized, pattern_normalized)
-    
+
     if not matches_in_normalized:
         return []
-    
+
     return _map_normalized_positions(content, content_normalized, matches_in_normalized)
 
 
@@ -273,7 +274,7 @@ def _strategy_indentation_flexible(content: str, pattern: str) -> List[Tuple[int
     content_lines = content.split('\n')
     content_stripped_lines = [line.lstrip() for line in content_lines]
     pattern_lines = [line.lstrip() for line in pattern.split('\n')]
-    
+
     return _find_normalized_matches(
         content, content_lines, content_stripped_lines,
         pattern, '\n'.join(pattern_lines)
@@ -284,12 +285,12 @@ def _strategy_escape_normalized(content: str, pattern: str) -> List[Tuple[int, i
     """Strategy 5: Convert escape sequences to actual characters."""
     def unescape(s):
         return s.replace('\\n', '\n').replace('\\t', '\t').replace('\\r', '\r')
-    
+
     pattern_unescaped = unescape(pattern)
-    
+
     if pattern_unescaped == pattern:
         return []
-    
+
     return _strategy_exact(content, pattern_unescaped)
 
 
@@ -298,32 +299,32 @@ def _strategy_trimmed_boundary(content: str, pattern: str) -> List[Tuple[int, in
     pattern_lines = pattern.split('\n')
     if not pattern_lines:
         return []
-    
+
     pattern_lines[0] = pattern_lines[0].strip()
     if len(pattern_lines) > 1:
         pattern_lines[-1] = pattern_lines[-1].strip()
-    
+
     modified_pattern = '\n'.join(pattern_lines)
-    
+
     content_lines = content.split('\n')
-    
+
     matches = []
     pattern_line_count = len(pattern_lines)
-    
+
     for i in range(len(content_lines) - pattern_line_count + 1):
         block_lines = content_lines[i:i + pattern_line_count]
-        
+
         check_lines = block_lines.copy()
         check_lines[0] = check_lines[0].strip()
         if len(check_lines) > 1:
             check_lines[-1] = check_lines[-1].strip()
-        
+
         if '\n'.join(check_lines) == modified_pattern:
             start_pos, end_pos = _calculate_line_positions(
                 content_lines, i, i + pattern_line_count, len(content)
             )
             matches.append((start_pos, end_pos))
-    
+
     return matches
 
 
@@ -388,28 +389,28 @@ def _strategy_block_anchor(content: str, pattern: str) -> List[Tuple[int, int]]:
     """Strategy 8: Match by anchoring on first and last lines."""
     norm_pattern = _unicode_normalize(pattern)
     norm_content = _unicode_normalize(content)
-    
+
     pattern_lines = norm_pattern.split('\n')
     if len(pattern_lines) < 2:
         return []
-    
+
     first_line = pattern_lines[0].strip()
     last_line = pattern_lines[-1].strip()
-    
+
     norm_content_lines = norm_content.split('\n')
     orig_content_lines = content.split('\n')
-    
+
     pattern_line_count = len(pattern_lines)
-    
+
     potential_matches = []
     for i in range(len(norm_content_lines) - pattern_line_count + 1):
-        if (norm_content_lines[i].strip() == first_line and 
-            norm_content_lines[i + pattern_line_count - 1].strip() == last_line):
+        if (norm_content_lines[i].strip() == first_line and
+                norm_content_lines[i + pattern_line_count - 1].strip() == last_line):
             potential_matches.append(i)
-            
+
     matches = []
     candidate_count = len(potential_matches)
-    
+
     threshold = 0.50 if candidate_count == 1 else 0.70
 
     for i in potential_matches:
@@ -419,13 +420,13 @@ def _strategy_block_anchor(content: str, pattern: str) -> List[Tuple[int, int]]:
             content_middle = '\n'.join(norm_content_lines[i+1:i+pattern_line_count-1])
             pattern_middle = '\n'.join(pattern_lines[1:-1])
             similarity = SequenceMatcher(None, content_middle, pattern_middle).ratio()
-        
+
         if similarity >= threshold:
             start_pos, end_pos = _calculate_line_positions(
                 orig_content_lines, i, i + pattern_line_count, len(content)
             )
             matches.append((start_pos, end_pos))
-    
+
     return matches
 
 
@@ -433,28 +434,28 @@ def _strategy_context_aware(content: str, pattern: str) -> List[Tuple[int, int]]
     """Strategy 9: Line-by-line similarity with 50% threshold."""
     pattern_lines = pattern.split('\n')
     content_lines = content.split('\n')
-    
+
     if not pattern_lines:
         return []
-    
+
     matches = []
     pattern_line_count = len(pattern_lines)
-    
+
     for i in range(len(content_lines) - pattern_line_count + 1):
         block_lines = content_lines[i:i + pattern_line_count]
-        
+
         high_similarity_count = 0
         for p_line, c_line in zip(pattern_lines, block_lines):
             sim = SequenceMatcher(None, p_line.strip(), c_line.strip()).ratio()
             if sim >= 0.80:
                 high_similarity_count += 1
-        
+
         if high_similarity_count >= len(pattern_lines) * 0.5:
             start_pos, end_pos = _calculate_line_positions(
                 content_lines, i, i + pattern_line_count, len(content)
             )
             matches.append((start_pos, end_pos))
-    
+
     return matches
 
 
@@ -472,37 +473,37 @@ def _calculate_line_positions(content_lines: List[str], start_line: int,
 
 
 def _find_normalized_matches(content: str, content_lines: List[str],
-                              content_normalized_lines: List[str],
-                              pattern: str, pattern_normalized: str) -> List[Tuple[int, int]]:
+                             content_normalized_lines: List[str],
+                             pattern: str, pattern_normalized: str) -> List[Tuple[int, int]]:
     """Find matches in normalized content and map back to original positions."""
     pattern_norm_lines = pattern_normalized.split('\n')
     num_pattern_lines = len(pattern_norm_lines)
-    
+
     matches = []
-    
+
     for i in range(len(content_normalized_lines) - num_pattern_lines + 1):
         block = '\n'.join(content_normalized_lines[i:i + num_pattern_lines])
-        
+
         if block == pattern_normalized:
             start_pos, end_pos = _calculate_line_positions(
                 content_lines, i, i + num_pattern_lines, len(content)
             )
             matches.append((start_pos, end_pos))
-    
+
     return matches
 
 
 def _map_normalized_positions(original: str, normalized: str,
-                               normalized_matches: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
+                              normalized_matches: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
     """Map positions from normalized string back to original."""
     if not normalized_matches:
         return []
-    
+
     orig_to_norm = []
-    
+
     orig_idx = 0
     norm_idx = 0
-    
+
     while orig_idx < len(original) and norm_idx < len(normalized):
         if original[orig_idx] == normalized[norm_idx]:
             orig_to_norm.append(norm_idx)
@@ -519,36 +520,36 @@ def _map_normalized_positions(original: str, normalized: str,
         else:
             orig_to_norm.append(norm_idx)
             orig_idx += 1
-    
+
     while orig_idx < len(original):
         orig_to_norm.append(len(normalized))
         orig_idx += 1
-    
+
     norm_to_orig_start = {}
     norm_to_orig_end = {}
-    
+
     for orig_pos, norm_pos in enumerate(orig_to_norm):
         if norm_pos not in norm_to_orig_start:
             norm_to_orig_start[norm_pos] = orig_pos
         norm_to_orig_end[norm_pos] = orig_pos
-    
+
     original_matches = []
     for norm_start, norm_end in normalized_matches:
         if norm_start in norm_to_orig_start:
             orig_start = norm_to_orig_start[norm_start]
         else:
             orig_start = min(i for i, n in enumerate(orig_to_norm) if n >= norm_start)
-        
+
         if norm_end - 1 in norm_to_orig_end:
             orig_end = norm_to_orig_end[norm_end - 1] + 1
         else:
             orig_end = orig_start + (norm_end - norm_start)
-        
+
         while orig_end < len(original) and original[orig_end] in ' \t':
             orig_end += 1
-        
+
         original_matches.append((orig_start, min(orig_end, len(original))))
-    
+
     return original_matches
 
 
@@ -565,7 +566,7 @@ def find_closest_lines(old_string: str, content: str, context_lines: int = 2, ma
 
     anchor = old_lines[0].strip()
     if not anchor:
-        candidates = [l.strip() for l in old_lines if l.strip()]
+        candidates = [line.strip() for line in old_lines if line.strip()]
         if not candidates:
             return ""
         anchor = candidates[0]

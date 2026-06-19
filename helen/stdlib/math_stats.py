@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import math
 from collections import Counter
-from typing import Any
 
 
 # ── Statistical operations ─────────────────────────────────────
@@ -44,11 +43,11 @@ def _median(numbers: list[float]) -> float:
     """
     if not numbers:
         raise ValueError("Cannot calculate median of empty list")
-    
+
     sorted_nums = sorted(numbers)
     n = len(sorted_nums)
     mid = n // 2
-    
+
     if n % 2 == 0:
         return (sorted_nums[mid - 1] + sorted_nums[mid]) / 2
     else:
@@ -69,7 +68,7 @@ def _mode(numbers: list[float]) -> list[float]:
     """
     if not numbers:
         raise ValueError("Cannot calculate mode of empty list")
-    
+
     counts = Counter(numbers)
     max_count = max(counts.values())
     return [num for num, count in counts.items() if count == max_count]
@@ -90,13 +89,13 @@ def _variance(numbers: list[float], population: bool = True) -> float:
     """
     if not numbers:
         raise ValueError("Cannot calculate variance of empty list")
-    
+
     if not population and len(numbers) < 2:
         raise ValueError("Sample variance requires at least 2 values")
-    
+
     mean = _mean(numbers)
     squared_diffs = [(x - mean) ** 2 for x in numbers]
-    
+
     if population:
         return sum(squared_diffs) / len(numbers)
     else:
@@ -134,22 +133,22 @@ def _correlation(x: list[float], y: list[float]) -> float:
     """
     if not x or not y:
         raise ValueError("Cannot calculate correlation of empty lists")
-    
+
     if len(x) != len(y):
         raise ValueError("Lists must have the same length")
-    
+
     n = len(x)
     mean_x = _mean(x)
     mean_y = _mean(y)
-    
+
     # Calculate covariance and standard deviations
     covariance = sum((x[i] - mean_x) * (y[i] - mean_y) for i in range(n)) / n
     std_x = _stddev(x, population=True)
     std_y = _stddev(y, population=True)
-    
+
     if std_x == 0 or std_y == 0:
         return 0.0
-    
+
     return covariance / (std_x * std_y)
 
 
@@ -168,26 +167,26 @@ def _percentile(numbers: list[float], p: float) -> float:
     """
     if not numbers:
         raise ValueError("Cannot calculate percentile of empty list")
-    
+
     if p < 0 or p > 100:
         raise ValueError(f"Percentile must be between 0 and 100, got {p}")
-    
+
     sorted_nums = sorted(numbers)
     n = len(sorted_nums)
-    
+
     if p == 0:
         return sorted_nums[0]
     if p == 100:
         return sorted_nums[-1]
-    
+
     # Linear interpolation
     k = (n - 1) * (p / 100)
     f = math.floor(k)
     c = math.ceil(k)
-    
+
     if f == c:
         return sorted_nums[int(k)]
-    
+
     return sorted_nums[f] * (c - k) + sorted_nums[c] * (k - f)
 
 
@@ -214,7 +213,7 @@ def _product(numbers: list[float]) -> float:
     """
     if not numbers:
         return 1.0
-    
+
     result = 1.0
     for num in numbers:
         result *= num

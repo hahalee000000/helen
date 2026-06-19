@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import time as _time_module
 from datetime import datetime, timedelta
-from typing import Any
 
 
 # ── Time operations ────────────────────────────────────────────
@@ -47,7 +46,7 @@ def _sleep(seconds: float) -> str:
 # ── Date operations ────────────────────────────────────────────
 
 
-def _date(year: int | None = None, month: int | None = None, 
+def _date(year: int | None = None, month: int | None = None,
           day: int | None = None) -> str:
     """Create or get date.
 
@@ -62,7 +61,7 @@ def _date(year: int | None = None, month: int | None = None,
     if year is None or month is None or day is None:
         # Return today's date
         return datetime.now().strftime("%Y-%m-%d")
-    
+
     # Create specific date
     dt = datetime(year, month, day)
     return dt.strftime("%Y-%m-%d")
@@ -87,7 +86,7 @@ def _datetime(year: int | None = None, month: int | None = None,
     if any(v is None for v in [year, month, day, hour, minute, second]):
         # Return current datetime
         return datetime.now().isoformat(timespec="seconds")
-    
+
     # Create specific datetime (all values are guaranteed to be int here)
     dt = datetime(year, month, day, hour, minute, second)  # type: ignore[arg-type]
     return dt.isoformat(timespec="seconds")
@@ -112,7 +111,7 @@ def _date_format(date_str: str, format_str: str) -> str:
             dt = datetime.fromisoformat(date_str)
         else:
             dt = datetime.strptime(date_str, "%Y-%m-%d")
-        
+
         return dt.strftime(format_str)
     except (ValueError, TypeError) as e:
         raise ValueError(f"Invalid date format: {e}") from e
@@ -165,11 +164,11 @@ def _date_add(date_str: str, days: int = 0, hours: int = 0,
             dt = datetime.strptime(date_str, "%Y-%m-%d")
         else:
             dt = datetime.fromisoformat(date_str)
-        
+
         # Add timedelta
         delta = timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
         result = dt + delta
-        
+
         # Return date only if input was date only and no time was added
         if is_date_only and hours == 0 and minutes == 0 and seconds == 0:
             return result.strftime("%Y-%m-%d")
@@ -198,15 +197,15 @@ def _date_diff(date1: str, date2: str, unit: str = "days") -> float:
             dt1 = datetime.fromisoformat(date1)
         else:
             dt1 = datetime.strptime(date1, "%Y-%m-%d")
-        
+
         if "T" in date2:
             dt2 = datetime.fromisoformat(date2)
         else:
             dt2 = datetime.strptime(date2, "%Y-%m-%d")
-        
+
         # Calculate difference
         delta = dt2 - dt1
-        
+
         # Convert to requested unit
         if unit == "seconds":
             return delta.total_seconds()

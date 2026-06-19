@@ -10,7 +10,6 @@ Falls back to Hermes configuration (~/.hermes/) for backward compatibility.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 
@@ -46,7 +45,7 @@ def get_helen_home() -> Path:
 
 def get_skill_dirs() -> list[Path]:
     """Get list of skill directories in priority order.
-    
+
     Returns:
         List of paths to scan for skills:
         1. ~/.helen/skills/ (Helen native)
@@ -54,35 +53,35 @@ def get_skill_dirs() -> list[Path]:
         3. ~/.hermes/hermes-agent/skills/ (Hermes agent skills)
     """
     dirs = []
-    
+
     # Helen native skills
     helen_skills = HELEN_HOME / "skills"
     if helen_skills.exists():
         dirs.append(helen_skills)
-    
+
     # Hermes fallback
     hermes_skills = HERMES_HOME / "skills"
     if hermes_skills.exists():
         dirs.append(hermes_skills)
-    
+
     hermes_agent_skills = HERMES_HOME / "hermes-agent" / "skills"
     if hermes_agent_skills.exists():
         dirs.append(hermes_agent_skills)
-    
+
     return dirs
 
 
 def load_config() -> dict[str, Any]:
     """Load Helen configuration.
-    
+
     Loads from multiple sources and merges them:
     1. ~/.hermes/.env (base fallback)
     2. ~/.helen/.env (Helen .env)
     3. ~/.helen/config.yml (Helen YAML)
     4. ~/.helen/config.yaml (Helen YAML, highest priority)
-    
+
     Later sources override earlier ones.
-    
+
     Returns:
         Configuration dictionary with keys:
         - base_url: LLM API endpoint
@@ -92,7 +91,7 @@ def load_config() -> dict[str, Any]:
         - timeout: Request timeout
     """
     config = DEFAULT_LLM_CONFIG.copy()
-    
+
     # Load from all sources in order (later overrides earlier)
     sources = [
         (HERMES_ENV, _load_env_config),
@@ -100,7 +99,7 @@ def load_config() -> dict[str, Any]:
         (HELEN_HOME / "config.yml", _load_yaml_config),
         (HELEN_HOME / "config.yaml", _load_yaml_config),
     ]
-    
+
     for path, loader in sources:
         if path.exists():
             source_config = loader(path)
@@ -108,7 +107,7 @@ def load_config() -> dict[str, Any]:
             for key, value in source_config.items():
                 if value is not None and value != "":
                     config[key] = value
-    
+
     return config
 
 
@@ -119,7 +118,7 @@ def _load_yaml_config(path: Path) -> dict[str, Any]:
         import yaml
         with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
-        
+
         # Map YAML keys to config keys
         if "llm" in data:
             llm = data["llm"]
@@ -138,7 +137,7 @@ def _load_yaml_config(path: Path) -> dict[str, Any]:
         config.update(_parse_yaml_simple(path))
     except Exception:
         pass
-    
+
     return config
 
 
@@ -148,7 +147,7 @@ def _parse_yaml_simple(path: Path) -> dict[str, Any]:
     try:
         with open(path, encoding="utf-8") as f:
             content = f.read()
-        
+
         # Simple parser for llm: section
         in_llm_section = False
         for line in content.split("\n"):
@@ -178,7 +177,7 @@ def _parse_yaml_simple(path: Path) -> dict[str, Any]:
                             config["timeout"] = int(value)
     except Exception:
         pass
-    
+
     return config
 
 
@@ -195,7 +194,7 @@ def _load_env_config(path: Path) -> dict[str, Any]:
                     key, _, value = line.partition("=")
                     key = key.strip()
                     value = value.strip().strip('"').strip("'")
-                    
+
                     # Map env vars to config keys
                     if key in ("HELEN_BASE_URL", "DASHSCOPE_BASE_URL", "OPENAI_BASE_URL"):
                         config["base_url"] = value
@@ -209,26 +208,26 @@ def _load_env_config(path: Path) -> dict[str, Any]:
                         config["timeout"] = int(value)
     except Exception:
         pass
-    
+
     return config
 
 
 def save_config(config: dict[str, Any]) -> Path:
     """Save configuration to ~/.helen/config.yaml.
-    
+
     Args:
         config: Configuration dictionary
-        
+
     Returns:
         Path to saved config file
     """
     get_helen_home()  # Ensure directory exists
-    
+
     config_path = HELEN_HOME / "config.yaml"
-    
+
     # Build YAML content
     lines = ["# Helen configuration", ""]
-    
+
     if "base_url" in config or "api_key" in config or "model" in config:
         lines.append("llm:")
         if "base_url" in config:
@@ -241,8 +240,8 @@ def save_config(config: dict[str, Any]) -> Path:
             lines.append(f"  temperature: {config['temperature']}")
         if "timeout" in config:
             lines.append(f"  timeout: {config['timeout']}")
-    
+
     with open(config_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
-    
+
     return config_path

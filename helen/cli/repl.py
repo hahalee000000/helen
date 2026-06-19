@@ -20,7 +20,7 @@ from helen.cli.formatter import format_error
 
 def _create_llm_runtime():
     """Create the best available LLM runtime.
-    
+
     Uses HTTP-based runtime (fast, direct API calls) instead of CLI-based (slow).
     """
     return HttpLLMRuntime()
@@ -115,10 +115,10 @@ def _execute_input(source: str, interp: Interpreter, analyzer: SemanticAnalyzer)
 
 def _run_helen_assistant(question: str) -> bool:
     """Run the Helen assistant program to answer a question.
-    
+
     Args:
         question: User's question about Helen.
-    
+
     Returns:
         True if execution succeeded, False on error.
         Output is streamed directly to stdout.
@@ -129,43 +129,43 @@ def _run_helen_assistant(question: str) -> bool:
     from helen.core.errors import ErrorReporter
     from helen.interpreter.interpreter import Interpreter
     from helen.runtime.http_llm import HttpLLMRuntime
-    
+
     # Load the Helen assistant program (use absolute path based on module location)
     import helen.cli.repl as repl_module
     module_dir = Path(repl_module.__file__).parent.parent  # helen/cli -> helen/
     assistant_path = module_dir / "agent" / "helen_assistant.helen"
     docs_path = module_dir.parent / "docs" / "tutorial.md"  # helen/ -> repo root -> docs/
     source_dir = module_dir  # helen/ directory containing source code
-    
+
     if not assistant_path.exists():
         print(f"Error: Helen assistant program not found at {assistant_path}", file=sys.stderr)
         return False
-    
+
     if not docs_path.exists():
         print(f"Error: Helen documentation not found at {docs_path}", file=sys.stderr)
         return False
-    
+
     if not source_dir.exists():
         print(f"Error: Helen source directory not found at {source_dir}", file=sys.stderr)
         return False
-    
+
     source = assistant_path.read_text(encoding="utf-8")
-    
+
     # Parse and execute
     errors = ErrorReporter()
     scanner = Scanner(source=source, file=str(assistant_path))
     tokens = scanner.scan_all()
     parser = Parser(tokens, errors=errors)
     program = parser.parse()
-    
+
     if errors.has_errors:
         print(f"Parse error: {errors.format_report()}", file=sys.stderr)
         return False
-    
+
     # Create interpreter with modified main block that uses the question
     llm_runtime = HttpLLMRuntime()
     interp = Interpreter(errors=errors, llm_runtime=llm_runtime)
-    
+
     # Modify the program to pass the question, docs path, and source dir to HelenAssistant
     # We'll create a wrapper that injects the parameters
     modified_source = source.replace(
@@ -178,19 +178,19 @@ def _run_helen_assistant(question: str) -> bool:
         'let source_dir = "helen/"  // Relative path for development',
         f'let source_dir = "{source_dir}/"  // Absolute path from REPL'
     )
-    
+
     # Re-parse with modified source
     scanner = Scanner(source=modified_source, file=str(assistant_path))
     tokens = scanner.scan_all()
     parser = Parser(tokens, errors=errors)
     program = parser.parse()
-    
+
     if errors.has_errors:
         print(f"Parse error: {errors.format_report()}", file=sys.stderr)
         return False
-    
+
     try:
-        result = interp.interpret(program)
+        interp.interpret(program)
         # With llm stream, output is already printed to stdout.
         # If there were errors during execution, report them.
         if errors.has_errors:
@@ -256,7 +256,7 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
         if not arg:
             print("Usage: :ask <question>")
             return True
-        
+
         print("\n🤔 Thinking...\n")
         _run_helen_assistant(arg)
         # Output is streamed directly to stdout by llm stream

@@ -99,10 +99,10 @@ def _hash_file(path: str, algorithm: str = "sha256") -> str:
         "sha256": hashlib.sha256,
         "sha512": hashlib.sha512,
     }
-    
+
     if algorithm not in algorithm_map:
         raise ValueError(f"Unsupported algorithm: {algorithm}. Must be one of {list(algorithm_map.keys())}")
-    
+
     try:
         hasher = algorithm_map[algorithm]()
         with open(path, "rb") as f:

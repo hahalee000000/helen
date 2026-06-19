@@ -3,8 +3,6 @@
 Defines interfaces for statistical operations.
 """
 
-from typing import Any
-
 
 class MathStatsContract:
     """Contract for statistical operations."""

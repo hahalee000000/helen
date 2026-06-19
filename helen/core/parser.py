@@ -1,4 +1,4 @@
-"""helen/core/parser.py — Helen Pratt 优先级解析器 + 递归下降。"""
+"""helen/core/parser.py — Helen Pratt precedence parser + recursive descent."""
 
 from __future__ import annotations
 
@@ -55,16 +55,29 @@ from .ast import (
     IndexNode,
     AccessNode,
     BinaryOpNode,
+    AsyncCallExprNode,
 )
 from .errors import ErrorCode, ErrorReporter
 from .tokens import Token, TokenType
+
+# Tokens that indicate the end of an expression (for bare form detection)
+# Used in llm act/llm if/llm stream to detect when no prompt expression follows
+BARE_FORM_TOKENS = (
+    TokenType.RIGHT_BRACE, TokenType.SEMICOLON, TokenType.EOF,
+    # Statement keywords that indicate the current statement has ended
+    TokenType.RETURN, TokenType.LET, TokenType.CONST,
+    TokenType.IF, TokenType.FOR, TokenType.WHILE,
+    TokenType.BREAK, TokenType.CONTINUE, TokenType.MATCH,
+    TokenType.TRY, TokenType.THROW,
+    TokenType.LLM, TokenType.ASYNC,
+)
 
 PrefixParseFn = Callable[["Parser"], ExpressionNode]
 InfixParseFn = Callable[["Parser", ExpressionNode], ExpressionNode]
 
 
 class Precedence:
-    """Pratt 解析优先级（数值越大绑定越紧）。"""
+    """Pratt parsing precedence levels (higher value = tighter binding)."""
     NONE = 0
     ASSIGNMENT = 1
     OR = 2
@@ -80,20 +93,20 @@ class Precedence:
 
 @dataclass
 class ParseFn:
-    """单个 TokenType 的 Pratt 解析规则。"""
+    """Pratt parsing rule for a single TokenType."""
     prefix: Optional[PrefixParseFn] = None
     infix: Optional[InfixParseFn] = None
     precedence: int = Precedence.NONE
 
 
 class Parser:
-    """Helen Pratt 优先级解析器 + 递归下降。"""
+    """Helen Pratt precedence parser + recursive descent."""
 
     def __init__(self, tokens: list[Token], errors: ErrorReporter | None = None):
-        """初始化 Parser。
+        """Initialize the Parser.
         Args:
-            tokens: 词法分析产出的 Token 列表
-            errors: 错误报告器（可选）
+            tokens: Token list produced by the lexer
+            errors: Error reporter (optional)
         """
         self.tokens = tokens
         self.errors = errors or ErrorReporter()
@@ -102,7 +115,7 @@ class Parser:
         self._register_pratt_rules()
 
     def parse(self) -> ProgramNode:
-        """解析 Token 流，返回 ProgramNode。"""
+        """Parse the token stream and return a ProgramNode."""
         statements: list[ASTNode] = []
         while not self._at_end():
             stmt = self._declaration()
@@ -121,7 +134,7 @@ class Parser:
         return ProgramNode(statements=statements, span=span)
 
     def _register_pratt_rules(self) -> None:
-        """注册 Pratt 解析规则。"""
+        """Register Pratt parsing rules."""
         # Initialize all token types with empty rules
         for tt in TokenType:
             self._rules[tt] = ParseFn()
@@ -179,7 +192,7 @@ class Parser:
             self._rules[tt].precedence = prec
 
     def _expression(self, precedence: int = Precedence.NONE) -> ExpressionNode:
-        """Pratt 核心：解析表达式。"""
+        """Pratt core: parse an expression."""
         if self._at_end():
             self._error("Expected expression.")
             return LiteralNode(value=None, span=self._make_span(self._peek(), self._peek()))
@@ -206,36 +219,36 @@ class Parser:
         return left
 
     def _literal_number(self) -> ExpressionNode:
-        """解析数字字面量。"""
+        """Parse a number literal."""
         prev = self._previous()
         return LiteralNode(value=prev.literal, span=prev.span)
 
     def _literal_string(self) -> ExpressionNode:
-        """解析字符串字面量。"""
+        """Parse a string literal."""
         prev = self._previous()
         return LiteralNode(value=prev.literal, span=prev.span)
 
     def _literal_bool(self) -> ExpressionNode:
-        """解析布尔字面量。"""
+        """Parse a boolean literal."""
         prev = self._previous()
         return LiteralNode(value=prev.literal, span=prev.span)
 
     def _literal_null(self) -> ExpressionNode:
-        """解析 null 字面量。"""
+        """Parse a null literal."""
         prev = self._previous()
         return LiteralNode(value=None, span=prev.span)
 
     def _identifier(self) -> ExpressionNode:
-        """解析标识符为变量节点。"""
+        """Parse an identifier as a variable node."""
         prev = self._previous()
         return VariableNode(name=prev.lexeme, span=prev.span)
 
     def _llm_act_expr(self) -> ExpressionNode:
-        """解析 llm act 表达式：llm act <expression>?
+        """Parse an llm act expression: llm act <expression>?
 
         Supports bare ``llm act`` (no expression) inside an agent context,
         where the agent's rendered prompt template is used automatically.
-        
+
         Bare form detection:
         - Statement terminators: }, ;, EOF
         - Statement keywords: return, let, if, for, etc.
@@ -244,19 +257,10 @@ class Parser:
         start = self._previous()  # LLM token
         self._consume(TokenType.ACT, "Expected 'act' after 'llm'.")
         act_token = self._previous()
-        
+
         # Check if there's an expression following 'llm act'.
         # If we hit a statement terminator or a new statement keyword, treat as bare form.
-        bare_form_tokens = (
-            TokenType.RIGHT_BRACE, TokenType.SEMICOLON, TokenType.EOF,
-            # Statement keywords that indicate the current statement has ended
-            TokenType.RETURN, TokenType.LET, TokenType.CONST,
-            TokenType.IF, TokenType.FOR, TokenType.WHILE,
-            TokenType.BREAK, TokenType.CONTINUE, TokenType.MATCH,
-            TokenType.TRY, TokenType.THROW,
-            TokenType.LLM, TokenType.ASYNC,
-        )
-        if self._check(*bare_form_tokens):
+        if self._check(*BARE_FORM_TOKENS):
             prompt_expr = None
         # Newline check: if next token is on a different line, treat as bare form
         # This handles: let result = llm act\nprint(...)
@@ -270,20 +274,20 @@ class Parser:
         )
 
     def _grouping(self) -> ExpressionNode:
-        """解析分组表达式 (expr)。"""
+        """Parse a grouping expression (expr)."""
         expr = self._expression()
         end = self._consume(TokenType.RIGHT_PAREN, "Expected ')' after expression.")
         return GroupingNode(expression=expr, span=self._make_span(expr.span if hasattr(expr, 'span') else self._previous(), end))
 
     def _unary(self) -> ExpressionNode:
-        """解析一元表达式。"""
+        """Parse a unary expression."""
         operator = self._previous()
         right = self._expression(Precedence.UNARY)
         return UnaryOpNode(operator=operator, operand=right,
                            span=self._make_span(operator, self._previous()))
 
     def _binary(self, left: ExpressionNode) -> ExpressionNode:
-        """解析二元表达式。"""
+        """Parse a binary expression."""
         operator = self._previous()
         rule = self._rules.get(operator.type, ParseFn())
         right = self._expression(rule.precedence + 1)
@@ -291,7 +295,7 @@ class Parser:
                             span=self._make_span(operator, self._previous()))
 
     def _call(self, callee: ExpressionNode) -> ExpressionNode:
-        """解析函数调用 callee(args)。"""
+        """Parse a function call callee(args)."""
         args: list[CallArgNode] = []
         if not self._check(TokenType.RIGHT_PAREN):
             # Check for named arg: name = expr or just expr
@@ -332,20 +336,20 @@ class Parser:
                         span=self._make_span(callee.span if hasattr(callee, 'span') else self._previous(), paren))
 
     def _index(self, target: ExpressionNode) -> ExpressionNode:
-        """解析索引访问 target[index]。"""
+        """Parse an index access target[index]."""
         index = self._expression()
         bracket = self._consume(TokenType.RIGHT_BRACKET, "Expected ']' after index.")
         return IndexNode(target=target, index=index,
                          span=self._make_span(target.span if hasattr(target, 'span') else self._previous(), bracket))
 
     def _access(self, target: ExpressionNode) -> ExpressionNode:
-        """解析成员访问 target.property。"""
+        """Parse a member access target.property."""
         prop = self._consume(TokenType.IDENTIFIER, "Expected property name after '.'.")
         return AccessNode(target=target, property=prop.lexeme,
                           span=self._make_span(target.span if hasattr(target, 'span') else self._previous(), prop))
 
     def _list_literal(self) -> ExpressionNode:
-        """解析列表字面量: [expr, ...]。"""
+        """Parse a list literal: [expr, ...]."""
         start = self._previous()
         elements: list[ExpressionNode] = []
         if not self._check(TokenType.RIGHT_BRACKET):
@@ -359,7 +363,7 @@ class Parser:
                                span=self._make_span(start, end))
 
     def _map_literal(self) -> ExpressionNode:
-        """解析 Map 字面量: {key: value, ...}。"""
+        """Parse a map literal: {key: value, ...}."""
         start = self._previous()
         entries: list[MapEntryNode] = []
         if not self._check(TokenType.RIGHT_BRACE):
@@ -378,7 +382,7 @@ class Parser:
                               span=self._make_span(start, end))
 
     def _map_entry(self) -> MapEntryNode | None:
-        """解析单个 Map 条目: key: value。"""
+        """Parse a single map entry: key: value."""
         key = self._expression()
         self._consume(TokenType.COLON, "Expected ':' after map key.")
         value = self._expression()
@@ -386,7 +390,7 @@ class Parser:
                             span=self._make_span(key.span if hasattr(key, 'span') else self._previous(), self._previous()))
 
     def _template_ref(self) -> ExpressionNode:
-        """解析模板引用: {{expr}}。"""
+        """Parse a template reference: {{expr}}."""
         start = self._previous()
         expr = self._expression()
         end = self._consume(TokenType.TEMPLATE_CLOSE, "Expected '}}' to close template.")
@@ -394,7 +398,7 @@ class Parser:
                                span=self._make_span(start, end))
 
     def _declaration(self) -> StatementNode | None:
-        """解析顶层声明。"""
+        """Parse a top-level declaration."""
         if self._at_end():
             return None
 
@@ -445,7 +449,7 @@ class Parser:
         return self._expr_stmt()
 
     def _llm_stmt(self) -> StatementNode:
-        """解析 llm 语句：根据下一个 Token 决定分支 (llm if / llm act / llm stream)。"""
+        """Parse an llm statement: dispatch based on the next token (llm if / llm act / llm stream)."""
         self._advance()  # consume LLM
         if self._check(TokenType.IF):
             return self._llm_if_stmt()
@@ -459,7 +463,7 @@ class Parser:
             return None
 
     def _async_call_stmt(self) -> AsyncCallStmtNode:
-        """解析 async 语句修饰符：async AgentName(...) (HLD 3.3.3)。"""
+        """Parse an async statement modifier: async AgentName(...) (HLD 3.3.3)."""
         start = self._advance()  # consume ASYNC
         # Parse as a call expression (no 'call' keyword needed)
         call_expr = self._expression(Precedence.NONE)
@@ -471,7 +475,6 @@ class Parser:
 
     def _async_call_expr(self) -> "AsyncCallExprNode":
         """Parse async as expression prefix: async Agent(...) -> Task."""
-        from helen.core.ast import AsyncCallExprNode
         start = self._previous()  # ASYNC already consumed by Pratt framework
         call_expr = self._expression(Precedence.NONE)
         if not isinstance(call_expr, CallNode):
@@ -481,11 +484,11 @@ class Parser:
                                  span=self._make_span(start, self._previous()))
 
     def _statement(self) -> StatementNode | None:
-        """解析单个语句。"""
+        """Parse a single statement."""
         return self._declaration()
 
     def _var_decl(self) -> VarDeclNode:
-        """解析变量声明：let/const name = expr。"""
+        """Parse a variable declaration: let/const name = expr."""
         mutable = self._previous().type == TokenType.LET
         name_tok = self._consume(TokenType.IDENTIFIER, "Expected variable name after 'let'/'const'.")
         type_annotation: TypeNode | None = None
@@ -500,7 +503,7 @@ class Parser:
                            initializer=init, mutable=mutable, span=span)
 
     def _if_stmt(self) -> IfStmtNode:
-        """解析 if 语句：if (cond) { ... } 或 if cond { ... }。"""
+        """Parse an if statement: if (cond) { ... } or if cond { ... }."""
         start = self._previous()
         # Parentheses are optional for if condition
         if self._match(TokenType.LEFT_PAREN):
@@ -524,7 +527,7 @@ class Parser:
                           span=self._make_span(start, end))
 
     def _for_stmt(self) -> ForStmtNode:
-        """解析 for 语句：for x in expr { ... }。"""
+        """Parse a for statement: for x in expr { ... }."""
         start = self._previous()
         iter_tok = self._consume(TokenType.IDENTIFIER, "Expected iterator after 'for'.")
         self._consume(TokenType.IN, "Expected 'in' after iterator.")
@@ -537,7 +540,7 @@ class Parser:
                            span=self._make_span(start, end))
 
     def _while_stmt(self) -> WhileStmtNode:
-        """解析 while 语句：while (cond) { ... } 或 while cond { ... }。"""
+        """Parse a while statement: while (cond) { ... } or while cond { ... }."""
         start = self._previous()
         # Parentheses are optional for while condition
         if self._match(TokenType.LEFT_PAREN):
@@ -552,17 +555,17 @@ class Parser:
                              span=self._make_span(start, end))
 
     def _break_stmt(self) -> BreakStmtNode:
-        """解析 break 语句。"""
+        """Parse a break statement."""
         prev = self._previous()
         return BreakStmtNode(span=prev.span)
 
     def _continue_stmt(self) -> ContinueStmtNode:
-        """解析 continue 语句。"""
+        """Parse a continue statement."""
         prev = self._previous()
         return ContinueStmtNode(span=prev.span)
 
     def _return_stmt(self) -> ReturnStmtNode:
-        """解析 return 语句。"""
+        """Parse a return statement."""
         start = self._previous()
         value: ExpressionNode | None = None
         if not self._check(TokenType.SEMICOLON, TokenType.RIGHT_BRACE, TokenType.EOF):
@@ -571,7 +574,7 @@ class Parser:
         return ReturnStmtNode(value=value, span=start.span)
 
     def _expr_stmt(self) -> StatementNode:
-        """解析表达式语句。"""
+        """Parse an expression statement."""
         expr = self._expression()
         self._match(TokenType.SEMICOLON)
         # Wrap expression in a statement-compatible node for Phase 0
@@ -579,7 +582,7 @@ class Parser:
         return ExprStmtNode(expression=expr, span=expr.span)  # type: ignore[return-value]
 
     def _agent_decl(self) -> AgentDeclNode:
-        """解析 Agent 声明：agent Name(params?) { decl* prompt? main? }。"""
+        """Parse an agent declaration: agent Name(params?) { decl* prompt? main? }."""
         name_tok = self._consume(TokenType.IDENTIFIER, "Expected agent name after 'agent'.")
         # Optional parameter list (HLD 3.3.6)
         params: list[AgentParamNode] = []
@@ -635,7 +638,7 @@ class Parser:
                              functions=agent_functions)
 
     def _agent_param(self) -> AgentParamNode:
-        """解析 Agent 参数: name: Type? = expr?。"""
+        """Parse an agent parameter: name: Type? = expr?."""
         name_tok = self._consume(TokenType.IDENTIFIER, "Expected parameter name.")
         type_annotation: TypeNode | None = None
         default_value: ExpressionNode | None = None
@@ -713,7 +716,7 @@ class Parser:
         )
 
     def _prompt_def(self) -> PromptDefNode:
-        """解析 prompt 定义。"""
+        """Parse a prompt definition."""
         self._advance()  # consume PROMPT
         if self._match(TokenType.STRING, TokenType.TRIPLE_QUOTE_STRING):
             content = self._previous().literal or ""
@@ -723,7 +726,7 @@ class Parser:
         return PromptDefNode(content=content, span=self._previous().span)
 
     def _main_block(self) -> MainBlockNode:
-        """解析 main 块：main { stmt* }。"""
+        """Parse a main block: main { stmt* }."""
         start = self._previous()  # _match already consumed MAIN
         self._consume(TokenType.LEFT_BRACE, "Expected '{' after 'main'.")
         body: list[StatementNode] = []
@@ -738,7 +741,7 @@ class Parser:
         return MainBlockNode(body=body, span=self._make_span(start, end))
 
     def _block_body(self) -> StatementNode:
-        """解析块体：{ stmt* }，返回 MainBlockNode。"""
+        """Parse a block body: { stmt* }, returns a MainBlockNode."""
         start = self._previous()
         body: list[StatementNode] = []
         while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF,
@@ -756,7 +759,7 @@ class Parser:
         return MainBlockNode(body=body, span=self._make_span(start, end))  # type: ignore[return-value]
 
     def _function_decl(self) -> FunctionDeclNode:
-        """解析函数声明：fn name(params) -> type { stmt* }。"""
+        """Parse a function declaration: fn name(params) -> type { stmt* }."""
         start = self._previous()
         name_tok = self._consume(TokenType.IDENTIFIER, "Expected function name.")
         self._consume(TokenType.LEFT_PAREN, "Expected '(' after function name.")
@@ -791,7 +794,7 @@ class Parser:
                                 span=self._make_span(start, end))
 
     def _import_stmt(self) -> ImportStmtNode:
-        """解析 import 语句：import "path" as alias。"""
+        """Parse an import statement: import "path" as alias."""
         start = self._previous()
         path_tok = self._consume(TokenType.STRING, "Expected string path after 'import'.")
         alias: str | None = None
@@ -803,7 +806,7 @@ class Parser:
                               span=self._make_span(start, end))
 
     def _parse_type(self) -> TypeNode:
-        """解析类型：T?, A|B, Literal[...]。"""
+        """Parse a type: T?, A|B, Literal[...]."""
         start = self._current()
         # Check for union type first: parse first type, then look for |
         first = self._simple_type()
@@ -821,7 +824,7 @@ class Parser:
         return first
 
     def _simple_type(self) -> TypeNode:
-        """解析简单类型或可选类型: IDENTIFIER 或 IDENTIFIER?。"""
+        """Parse a simple type or optional type: IDENTIFIER or IDENTIFIER?."""
         name_tok = self._consume(TokenType.IDENTIFIER, "Expected type name.")
         base = TypeNode(name=name_tok.lexeme, span=name_tok.span)
         # Check for optional: T?
@@ -831,7 +834,7 @@ class Parser:
         return base
 
     def _llm_if_stmt(self) -> LlmIfStmtNode:
-        """解析 llm if 语句：llm if "desc" { branch "cond" { ... } default { ... } }。"""
+        """Parse an llm if statement: llm if "desc" { branch "cond" { ... } default { ... } }."""
         start = self._previous()  # LLM token
         self._consume(TokenType.IF, "Expected 'if' after 'llm'.")
         desc_expr = self._expression()  # Parse expression instead of just STRING
@@ -857,7 +860,7 @@ class Parser:
                              span=self._make_span(start, end))
 
     def _llm_branch(self) -> LlmBranchNode:
-        """解析 branch 子句：branch "condition" { ... }。"""
+        """Parse a branch clause: branch "condition" { ... }."""
         start = self._advance()  # consume BRANCH
         cond = self._expression()
         self._consume(TokenType.LEFT_BRACE, "Expected '{' after branch condition.")
@@ -867,13 +870,13 @@ class Parser:
                              span=self._make_span(start, self._previous()))
 
     def _llm_act_stmt(self) -> StatementNode:
-        """解析 llm act 语句：只支持表达式形式。
+        """Parse an llm act statement: only supports expression form.
 
-        语法：llm act <expr>?
-        - llm act "prompt" — 直接调用 LLM
-        - llm act — bare form，在 agent 内自动使用渲染后的 prompt
+        Syntax: llm act <expr>?
+        - llm act "prompt" — direct LLM invocation
+        - llm act — bare form, automatically uses the rendered prompt inside an agent
 
-        注意：语句形式 `llm act Agent(args) "desc"` 已废弃，请使用 `call Agent(args)`。
+        Note: The statement form `llm act Agent(args) "desc"` is deprecated; use `call Agent(args)` instead.
         """
         start = self._previous()  # LLM token
         self._consume(TokenType.ACT, "Expected 'act' after 'llm'.")
@@ -892,15 +895,7 @@ class Parser:
 
         # 解析表达式形式：llm act <expr>?
         # 检查是否有表达式
-        bare_form_tokens = (
-            TokenType.RIGHT_BRACE, TokenType.SEMICOLON, TokenType.EOF,
-            TokenType.RETURN, TokenType.LET, TokenType.CONST,
-            TokenType.IF, TokenType.FOR, TokenType.WHILE,
-            TokenType.BREAK, TokenType.CONTINUE, TokenType.MATCH,
-            TokenType.TRY, TokenType.THROW,
-            TokenType.LLM, TokenType.ASYNC,
-        )
-        if self._check(*bare_form_tokens):
+        if self._check(*BARE_FORM_TOKENS):
             prompt_expr = None
         elif self._current().line > start.line:
             # 换行边界
@@ -915,39 +910,31 @@ class Parser:
         )
 
     def _llm_stream_stmt(self) -> LlmStreamStmtNode:
-        """解析 llm stream 语句：流式 LLM 调用。
+        """Parse an llm stream statement: streaming LLM call.
 
-        语法：
-        - llm stream                             # bare form，在 agent 内自动使用渲染后的 prompt
-        - llm stream "prompt"                    # 自动输出到 stdout
-        - llm stream "prompt" on_chunk callback  # 调用 callback(chunk)
+        Syntax:
+        - llm stream                             # bare form, automatically uses the rendered prompt inside an agent
+        - llm stream "prompt"                    # automatically outputs to stdout
+        - llm stream "prompt" on_chunk callback  # invokes callback(chunk)
         """
         start = self._previous()  # LLM token
         self._consume(TokenType.STREAM, "Expected 'stream' after 'llm'.")
-        
+
         # 检查是否有表达式（支持 bare form）
-        bare_form_tokens = (
-            TokenType.RIGHT_BRACE, TokenType.SEMICOLON, TokenType.EOF,
-            TokenType.RETURN, TokenType.LET, TokenType.CONST,
-            TokenType.IF, TokenType.FOR, TokenType.WHILE,
-            TokenType.BREAK, TokenType.CONTINUE, TokenType.MATCH,
-            TokenType.TRY, TokenType.THROW,
-            TokenType.LLM, TokenType.ASYNC,
-        )
-        if self._check(*bare_form_tokens):
+        if self._check(*BARE_FORM_TOKENS):
             prompt_expr = None
         elif self._current().line > start.line:
             # 换行边界
             prompt_expr = None
         else:
             prompt_expr = self._expression()
-        
+
         # 检查是否有 on_chunk 回调
         on_chunk_expr = None
         if prompt_expr is not None and self._check(TokenType.IDENTIFIER) and self._current().lexeme == "on_chunk":
             self._advance()  # consume 'on_chunk'
             on_chunk_expr = self._expression()
-        
+
         return LlmStreamStmtNode(
             prompt=prompt_expr,
             on_chunk=on_chunk_expr,
@@ -955,7 +942,7 @@ class Parser:
         )
 
     def _match_stmt(self) -> MatchStmtNode:
-        """解析 match 语句：match expr { case pattern { ... } default { ... } }。"""
+        """Parse a match statement: match expr { case pattern { ... } default { ... } }."""
         start = self._previous()
         subject = self._expression()
         self._consume(TokenType.LEFT_BRACE, "Expected '{' after match subject.")
@@ -978,7 +965,7 @@ class Parser:
                              span=self._make_span(start, end))
 
     def _case(self) -> CaseNode:
-        """解析 case 子句：case pattern { ... }。"""
+        """Parse a case clause: case pattern { ... }."""
         start = self._advance()  # consume CASE
         pattern = self._expression()
         self._consume(TokenType.LEFT_BRACE, "Expected '{' after case pattern.")
@@ -988,7 +975,7 @@ class Parser:
                         span=self._make_span(start, self._previous()))
 
     def _try_stmt(self) -> TryStmtNode:
-        """解析 try 语句：try { ... } catch Type name { ... } catch { ... } finally { ... }。"""
+        """Parse a try statement: try { ... } catch Type name { ... } catch { ... } finally { ... }."""
         start = self._previous()
         self._consume(TokenType.LEFT_BRACE, "Expected '{' after 'try'.")
         body = self._block_body_list()
@@ -1014,7 +1001,7 @@ class Parser:
                            span=self._make_span(start, end))
 
     def _throw_stmt(self) -> ThrowStmtNode:
-        """解析 throw 语句：throw ExceptionType 或 throw ExceptionType(message)。"""
+        """Parse a throw statement: throw ExceptionType or throw ExceptionType(message)."""
         start = self._previous()  # THROW token
         exception_type = self._parse_type()
         message: ExpressionNode | None = None
@@ -1026,10 +1013,10 @@ class Parser:
         self._match(TokenType.SEMICOLON)  # Optional semicolon
         end = self._previous()
         return ThrowStmtNode(exception_type=exception_type, message=message,
-                            span=self._make_span(start, end))
+                             span=self._make_span(start, end))
 
     def _catch_clause(self) -> CatchClauseNode:
-        """解析类型 catch：catch Type name { ... }。"""
+        """Parse a typed catch: catch Type name { ... }."""
         start = self._previous()  # CATCH token
         error_type = self._parse_type()
         error_name = self._consume(TokenType.IDENTIFIER, "Expected error variable name.")
@@ -1040,7 +1027,7 @@ class Parser:
                                body=body, span=self._make_span(start, self._previous()))
 
     def _catch_all(self) -> CatchAllNode:
-        """解析 catch-all：catch { ... }。"""
+        """Parse a catch-all: catch { ... }."""
         start = self._previous()  # CATCH token
         self._consume(TokenType.LEFT_BRACE, "Expected '{' after catch.")
         body = self._block_body_list()
@@ -1048,7 +1035,7 @@ class Parser:
         return CatchAllNode(body=body, span=self._make_span(start, self._previous()))
 
     def _finally_block(self) -> FinallyBlockNode:
-        """解析 finally：finally { ... }。（FINALLY 已由 _match 消费）"""
+        """Parse a finally block: finally { ... }. (FINALLY already consumed by _match)"""
         start = self._previous()  # FINALLY token (already consumed)
         self._consume(TokenType.LEFT_BRACE, "Expected '{' after finally.")
         body = self._block_body_list()
@@ -1056,7 +1043,7 @@ class Parser:
         return FinallyBlockNode(body=body, span=self._make_span(start, self._previous()))
 
     def _block_body_list(self) -> list[StatementNode]:
-        """解析块体内的语句列表（不带外层的 { }）。"""
+        """Parse a list of statements inside a block body (without the outer { })."""
         body: list[StatementNode] = []
         while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF,
                               TokenType.CATCH, TokenType.FINALLY,
@@ -1073,7 +1060,7 @@ class Parser:
 
     # Token 消费辅助
     def _consume(self, tt: TokenType, message: str) -> Token:
-        """消费指定类型的 Token，否则报错。"""
+        """Consume a token of the specified type, or report an error."""
         if self._check(tt):
             return self._advance()
         self._error(message)
@@ -1083,27 +1070,27 @@ class Parser:
                      end_line=peek.line, end_col=peek.col, file=peek.file)
 
     def _check(self, *types: TokenType) -> bool:
-        """检查当前 Token 类型是否匹配任一。"""
+        """Check whether the current token type matches any of the given types."""
         if self._at_end():
             return TokenType.EOF in types
         return self._current().type in types
 
     def _peek(self) -> Token:
-        """查看当前 Token（不消费）。"""
+        """Peek at the current token (without consuming it)."""
         return self._current()
 
     def _previous(self) -> Token:
-        """返回上一个消费的 Token。"""
+        """Return the previously consumed token."""
         return self.tokens[self._pos - 1]
 
     def _advance(self) -> Token:
-        """前进到下一个 Token，返回之前消费的。"""
+        """Advance to the next token and return the previously consumed one."""
         if not self._at_end():
             self._pos += 1
         return self._previous()
 
     def _match(self, *types: TokenType) -> bool:
-        """如果当前 Token 匹配，则消费并返回 True。"""
+        """If the current token matches, consume it and return True."""
         for t in types:
             if self._check(t):
                 self._advance()
@@ -1111,13 +1098,13 @@ class Parser:
         return False
 
     def _error(self, message: str) -> None:
-        """报告解析错误。"""
+        """Report a parse error."""
         tok = self._peek()
         span = SourceSpan(tok.file, tok.line, tok.col, tok.end_line, tok.end_col)
         self.errors.error(ErrorCode.PARSER_ERROR, message, span)
 
     def _synchronize(self) -> None:
-        """Panic mode 错误恢复：跳过到同步点。"""
+        """Panic-mode error recovery: skip tokens until a synchronization point."""
         self._advance()
         while not self._at_end():
             if self._previous().type == TokenType.SEMICOLON:
@@ -1130,15 +1117,15 @@ class Parser:
             self._advance()
 
     def _at_end(self) -> bool:
-        """是否到达 Token 流末尾。"""
+        """Check whether the end of the token stream has been reached."""
         return self._current().type == TokenType.EOF
 
     def _current(self) -> Token:
-        """返回当前 Token。"""
+        """Return the current token."""
         return self.tokens[self._pos]
 
     def _make_span(self, start: Token | SourceSpan, end: Token) -> SourceSpan:
-        """从起始和结束 Token 构建 SourceSpan。"""
+        """Build a SourceSpan from a start token/span and an end token."""
         if isinstance(start, SourceSpan):
             return SourceSpan(start.file, start.start_line, start.start_col, end.end_line, end.end_col)
         return SourceSpan(start.file, start.line, start.col, end.end_line, end.end_col)
