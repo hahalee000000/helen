@@ -1,7 +1,7 @@
 # Helen 语言完整教程
 
 > **Helen** — A Prompt-first Agent Programming Language
-> 版本: v1.4 | 状态: Phase 0-8 全部实现 + 流式输出 + Python FFI | 测试: 1030 passed
+> 版本: v1.5 | 状态: Phase 0-9 全部实现 + 安全沙箱 + CI/CD | 测试: 1805 passed
 
 ---
 
@@ -20,6 +20,7 @@
 | [09](#教程-09-python-ffi) | Python 库导入、类型转换、调用 Python 函数 |
 | [10](#教程-10-标准库参考) | 185 个内置函数，覆盖 AI 应用开发所有核心需求 |
 | [11](#教程-11-构建多-agent-系统) | 完整案例：智能客服系统 |
+| [12](#教程-12-安全沙箱) | 路径验证、URL 过滤、命令安全、资源限制 |
 
 ---
 
@@ -3268,6 +3269,157 @@ $ helen doc customer-service/main.helen --format markdown
 3. ✅ 使用 `async` + `await` 并发获取上下文
 4. ✅ 使用 `try-catch` 处理 LLM 异常
 5. ✅ 组织多文件项目结构
+
+---
+
+# 教程 12: 安全沙箱
+
+> Helen 运行时内置安全机制，保护系统资源免受恶意或意外操作的影响
+
+## 概述
+
+Helen 的安全沙箱（`helen/runtime/security.py`）为所有系统交互提供防护层：
+
+```
+Helen 程序
+    │
+    ▼
+┌─────────────────────┐
+│   安全沙箱           │  ← 所有系统调用经过此层
+│  validate_path()    │
+│  validate_url()     │
+│  validate_command() │
+└──────────┬──────────┘
+           │
+           ▼
+      操作系统资源
+```
+
+## 路径安全
+
+所有文件操作（`read_file`、`write_file`、`import`）都经过路径验证：
+
+```python
+# 安全的路径验证规则
+validate_path(path, base_dir=".")
+```
+
+| 规则 | 说明 |
+|------|------|
+| 基础目录限制 | 路径必须在 `base_dir` 内，阻止 `../` 遍历 |
+| 敏感路径阻止 | `/etc/shadow`、`/proc`、`/sys`、`/dev` 被禁止 |
+| 符号链接解析 | 先解析符号链接再验证，防止绕过 |
+| 绝对路径检查 | 绝对路径也需要通过安全检查 |
+
+```helen
+# 这些操作会被安全沙箱阻止
+read_file("/etc/shadow")       # ❌ SecurityError: sensitive path
+read_file("../../etc/passwd")  # ❌ SecurityError: path traversal
+```
+
+## URL 过滤 (SSRF 防护)
+
+网络请求（`http_get`、`http_post`、`web_fetch`）经过 URL 验证：
+
+```python
+validate_url(url, allow_private=False)
+```
+
+| 规则 | 说明 |
+|------|------|
+| 协议限制 | 仅允许 `http://` 和 `https://` |
+| 私有 IP 阻止 | `10/8`、`172.16/12`、`192.168/16`、`127/8` 被禁止 |
+| IPv6 保护 | 阻止 `::1`（回环）、`fc00::/7`（ULA）、`fe80::/10`（link-local） |
+| DNS 重绑定 | 解析后再次验证 IP（防止 DNS rebinding 攻击） |
+
+```helen
+# SSRF 防护示例
+http_get("http://169.254.169.254/latest/meta-data/")  # ❌ SecurityError: private IP
+http_get("https://example.com/api")                     # ✅ OK
+```
+
+## 命令安全
+
+`shell_exec` 工具集成命令安全检查：
+
+```python
+validate_command(command)
+```
+
+| 阻止的命令 | 原因 |
+|-----------|------|
+| `rm -rf /` | 删除根目录 |
+| `mkfs.*` | 格式化磁盘 |
+| `dd if=/dev/zero of=/dev/sda` | 覆盖磁盘 |
+| `:(){ :\|:& };:` | Fork bomb |
+| `chmod -R 777 /` | 权限破坏 |
+
+此外，`shell_exec` 默认使用 `shell=False`（列表参数模式），防止命令注入：
+
+```helen
+# 安全的命令执行（推荐）
+shell_exec(["ls", "-la", "/tmp"])  # ✅ 列表参数，无注入风险
+
+# 不安全的命令执行（需要显式启用）
+shell_exec("ls -la /tmp", shell=True)  # ⚠️ 需要显式 opt-in
+```
+
+## 资源限制
+
+| 资源 | 限制 | 常量 |
+|------|------|------|
+| 文件读取大小 | 16 MB | `MAX_READ_SIZE` |
+| 文件写入大小 | 64 MB | `MAX_WRITE_SIZE` |
+| HTTP 下载大小 | 100 MB | `MAX_DOWNLOAD_SIZE` |
+| HTTP 响应大小 | 8 MB | `MAX_RESPONSE_SIZE` |
+| 命令超时 | 300 秒 | `MAX_COMMAND_TIMEOUT` |
+| HTTP 请求超时 | 30 秒 | `DEFAULT_REQUEST_TIMEOUT` |
+
+## 环境变量保护
+
+`env_list` 函数自动掩码敏感环境变量：
+
+```helen
+let env = env_list()
+# PASSWORD=********  (自动掩码)
+# API_KEY=********   (自动掩码)
+# HOME=/home/user    (正常显示)
+```
+
+掩码规则：键名包含 `PASSWORD`、`SECRET`、`TOKEN`、`API_KEY`、`PRIVATE_KEY` 的值会被替换为 `********`。
+
+## 进程安全
+
+| 功能 | 限制 |
+|------|------|
+| `kill(pid, signal)` | PID ≤ 1 或当前进程被阻止 |
+| 允许的信号 | 仅 SIGTERM、SIGINT、SIGHUP、SIGUSR1、SIGUSR2 |
+
+## 安全错误处理
+
+安全违规抛出 `SecurityError` 异常：
+
+```helen
+try {
+    read_file("/etc/shadow")
+} catch SecurityError as e {
+    print("安全违规: " + e.message)
+    # 输出: 安全违规: Path '/etc/shadow' is in sensitive directory
+}
+```
+
+## 总结
+
+Helen 安全沙箱提供多层防护：
+
+1. ✅ **路径验证** — 阻止敏感文件访问和目录遍历
+2. ✅ **URL 过滤** — SSRF 防护，阻止私有网络访问
+3. ✅ **命令安全** — 阻止危险命令，默认防注入
+4. ✅ **资源限制** — 防止资源耗尽攻击
+5. ✅ **环境掩码** — 保护敏感凭据
+6. ✅ **进程保护** — 限制信号和 PID 操作
+
+这些安全机制对所有 Helen 程序透明生效，无需额外配置。
 
 ## 下一步
 
