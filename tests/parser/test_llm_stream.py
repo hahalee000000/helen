@@ -7,6 +7,11 @@ from helen.core.errors import ErrorReporter
 from helen.core.ast import LlmStreamStmtNode, VariableNode
 
 
+def _format_errors(errors: ErrorReporter) -> str:
+    """格式化错误报告用于测试断言。"""
+    return "\n".join(str(e) for e in errors.errors)
+
+
 class TestLlmStreamParsing:
     """Tests for parsing llm stream statements."""
     
@@ -19,7 +24,7 @@ class TestLlmStreamParsing:
         parser = Parser(tokens, errors=errors)
         program = parser.parse()
         
-        assert not errors.has_errors, f"Parse errors: {errors.format_report()}"
+        assert not errors.has_errors, f"Parse errors: {_format_errors(errors)}"
         assert len(program.statements) == 1
         
         stmt = program.statements[0]
@@ -35,7 +40,7 @@ class TestLlmStreamParsing:
         parser = Parser(tokens, errors=errors)
         program = parser.parse()
         
-        assert not errors.has_errors, f"Parse errors: {errors.format_report()}"
+        assert not errors.has_errors, f"Parse errors: {_format_errors(errors)}"
         assert len(program.statements) == 1
         
         stmt = program.statements[0]
@@ -53,7 +58,7 @@ class TestLlmStreamParsing:
         parser = Parser(tokens, errors=errors)
         program = parser.parse()
         
-        assert not errors.has_errors, f"Parse errors: {errors.format_report()}"
+        assert not errors.has_errors, f"Parse errors: {_format_errors(errors)}"
         assert len(program.statements) == 1
         
         stmt = program.statements[0]
@@ -68,7 +73,7 @@ class TestLlmStreamParsing:
         parser = Parser(tokens, errors=errors)
         program = parser.parse()
         
-        assert not errors.has_errors, f"Bare form should parse OK: {errors.format_report()}"
+        assert not errors.has_errors, f"Bare form should parse OK: {_format_errors(errors)}"
         assert len(program.statements) == 1
         
         stmt = program.statements[0]
@@ -94,7 +99,7 @@ class TestLlmStreamParsing:
         parser = Parser(tokens, errors=errors)
         program = parser.parse()
         
-        assert not errors.has_errors, f"Parse errors: {errors.format_report()}"
+        assert not errors.has_errors, f"Parse errors: {_format_errors(errors)}"
     
     def test_llm_act_still_works(self):
         """llm act should still work after adding stream."""
@@ -105,4 +110,4 @@ class TestLlmStreamParsing:
         parser = Parser(tokens, errors=errors)
         program = parser.parse()
         
-        assert not errors.has_errors, f"Parse errors: {errors.format_report()}"
+        assert not errors.has_errors, f"Parse errors: {_format_errors(errors)}"

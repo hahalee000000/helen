@@ -15,6 +15,11 @@ from helen.interpreter.interpreter import Interpreter
 from helen.runtime.http_llm import HttpLLMRuntime
 
 
+def _format_errors(errors: ErrorReporter) -> str:
+    """格式化错误报告用于测试断言。"""
+    return "\n".join(str(e) for e in errors.errors)
+
+
 class TestHelenAssistantProgram:
     """Test the Helen assistant Helen program."""
 
@@ -52,7 +57,7 @@ main {
         parser = Parser(tokens, errors=errors)
         program = parser.parse()
         
-        assert not errors.has_errors, f"Parse errors: {errors.format_report()}"
+        assert not errors.has_errors, f"Parse errors: {_format_errors(errors)}"
         
         llm_runtime = HttpLLMRuntime()
         interp = Interpreter(errors=errors, llm_runtime=llm_runtime)
@@ -177,7 +182,7 @@ main {
         parser = Parser(tokens, errors=errors)
         program = parser.parse()
         
-        assert not errors.has_errors, f"Parse errors: {errors.format_report()}"
+        assert not errors.has_errors, f"Parse errors: {_format_errors(errors)}"
         
         llm_runtime = HttpLLMRuntime()
         interp = Interpreter(errors=errors, llm_runtime=llm_runtime)

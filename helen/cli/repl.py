@@ -159,7 +159,8 @@ def _run_helen_assistant(question: str) -> bool:
     program = parser.parse()
 
     if errors.has_errors:
-        print(f"Parse error: {errors.format_report()}", file=sys.stderr)
+        msgs = [format_error(err) for err in errors.errors]
+        print(f"Parse error:\n{chr(10).join(msgs)}", file=sys.stderr)
         return False
 
     # Create interpreter with modified main block that uses the question
@@ -186,7 +187,8 @@ def _run_helen_assistant(question: str) -> bool:
     program = parser.parse()
 
     if errors.has_errors:
-        print(f"Parse error: {errors.format_report()}", file=sys.stderr)
+        msgs = [format_error(err) for err in errors.errors]
+        print(f"Parse error:\n{chr(10).join(msgs)}", file=sys.stderr)
         return False
 
     try:
@@ -194,7 +196,8 @@ def _run_helen_assistant(question: str) -> bool:
         # With llm stream, output is already printed to stdout.
         # If there were errors during execution, report them.
         if errors.has_errors:
-            print(f"\nError: {errors.format_report()}", file=sys.stderr)
+            msgs = [format_error(err) for err in errors.errors]
+            print(f"\nError:\n{chr(10).join(msgs)}", file=sys.stderr)
         return True
     except Exception as e:
         print(f"Runtime error: {e}", file=sys.stderr)

@@ -23,6 +23,11 @@ def _parse_source(source: str) -> tuple[ProgramNode, ErrorReporter]:
     return program, errors
 
 
+def _format_errors(errors: ErrorReporter) -> str:
+    """格式化错误报告用于测试断言。"""
+    return "\n".join(str(e) for e in errors.errors)
+
+
 class TestEmptyProgram:
     def test_empty_token_stream(self):
         """空 Token 流解析为 ProgramNode(statements=[])。"""
@@ -40,7 +45,7 @@ class TestAgentDecl:
     def test_minimal_agent_with_prompt(self):
         """最小 Agent: agent Test { prompt "hello" }"""
         program, errors = _parse_source('agent Test { prompt "hello" }')
-        assert not errors.has_errors, errors.format_report()
+        assert not errors.has_errors, _format_errors(errors)
         assert len(program.statements) == 1
         agent = program.statements[0]
         assert isinstance(agent, AgentDeclNode)
@@ -53,7 +58,7 @@ class TestAgentDecl:
         """Agent with main block."""
         source = 'agent A { prompt "p" main { let x = 1 } }'
         program, errors = _parse_source(source)
-        assert not errors.has_errors, errors.format_report()
+        assert not errors.has_errors, _format_errors(errors)
         agent = program.statements[0]
         assert isinstance(agent, AgentDeclNode)
         assert agent.name == "A"
@@ -63,7 +68,7 @@ class TestAgentDecl:
         """Agent with both prompt and main."""
         source = 'agent Bot { prompt "You are a bot" main { let x = 42 } }'
         program, errors = _parse_source(source)
-        assert not errors.has_errors, errors.format_report()
+        assert not errors.has_errors, _format_errors(errors)
         agent = program.statements[0]
         assert agent.name == "Bot"
         assert agent.prompt.content == "You are a bot"
@@ -72,7 +77,7 @@ class TestAgentDecl:
         """Agent with triple-quoted prompt."""
         source = 'agent A { prompt """line1\nline2""" main { } }'
         program, errors = _parse_source(source)
-        assert not errors.has_errors, errors.format_report()
+        assert not errors.has_errors, _format_errors(errors)
         agent = program.statements[0]
         assert "line1" in agent.prompt.content
 
@@ -249,7 +254,7 @@ class TestFunctions:
         """fn add(a, b) -> int { return a + b }"""
         source = 'fn add(a, b) -> int { return a + b }'
         program, errors = _parse_source(source)
-        assert not errors.has_errors, errors.format_report()
+        assert not errors.has_errors, _format_errors(errors)
         stmt = program.statements[0]
         assert isinstance(stmt, FunctionDeclNode)
         assert stmt.name == "add"
@@ -269,7 +274,7 @@ class TestImport:
         """import "utils.helen" as utils"""
         source = 'import "utils.helen" as utils'
         program, errors = _parse_source(source)
-        assert not errors.has_errors, errors.format_report()
+        assert not errors.has_errors, _format_errors(errors)
         stmt = program.statements[0]
         assert isinstance(stmt, ImportStmtNode)
         assert "utils" in stmt.module_path
@@ -310,13 +315,13 @@ class TestMainBlock:
         """main { let x = 1 let y = 2 }"""
         source = 'agent A { prompt "p" main { let x = 1 } }'
         program, errors = _parse_source(source)
-        assert not errors.has_errors, errors.format_report()
+        assert not errors.has_errors, _format_errors(errors)
 
     def test_main_block_empty(self):
         """main { }"""
         source = 'agent A { prompt "p" main { } }'
         program, errors = _parse_source(source)
-        assert not errors.has_errors, errors.format_report()
+        assert not errors.has_errors, _format_errors(errors)
 
 
 class TestComplexProgram:
@@ -339,7 +344,7 @@ agent ResearchBot {
 }
 """
         program, errors = _parse_source(source)
-        assert not errors.has_errors, errors.format_report()
+        assert not errors.has_errors, _format_errors(errors)
         assert len(program.statements) == 1
         agent = program.statements[0]
         assert agent.name == "ResearchBot"
