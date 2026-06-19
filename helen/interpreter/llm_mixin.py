@@ -227,6 +227,11 @@ class LlmMixin:
             # Bare form: system_prompt is the agent description
             system_prompt = self._get_agent_setting("description")
 
+        # Inject skill index into system prompt
+        skill_index = self._build_skill_index()
+        if skill_index:
+            system_prompt = (system_prompt or "") + "\n\n" + skill_index
+
         # Record user message to history
         self._add_to_history("user", prompt)
 
@@ -407,6 +412,46 @@ class LlmMixin:
             tools.extend(get_tool_schemas(["load_skill"]))
 
         return tools
+
+    def _build_skill_index(self: Any) -> str:
+        """Build the Tier 1 Skill Index for system prompt injection.
+
+        Scans skill directories and formats as <available_skills> XML block.
+        Returns empty string if no skills found.
+        """
+        from helen.runtime import HelenHermesRuntime
+
+        try:
+            # Create a temporary runtime instance to list skills
+            runtime = HelenHermesRuntime()
+            skills = runtime.list_skills()
+            if not skills:
+                return ""
+
+            # Group by category
+            by_category: dict[str, list] = {}
+            for s in skills:
+                by_category.setdefault(s.category or "uncategorized", []).append(s)
+
+            lines = ["<available_skills>"]
+            lines.append("Before replying, scan skills below. If relevant,")
+            lines.append("use load_skill tool to load full content.")
+            lines.append("")
+
+            for category, skill_list in sorted(by_category.items()):
+                lines.append(f"  {category}:")
+                for s in skill_list:
+                    # Truncate long descriptions
+                    desc = s.description
+                    if len(desc) > 100:
+                        desc = desc[:97] + "..."
+                    lines.append(f"    - {s.name}: {desc}")
+
+            lines.append("</available_skills>")
+            return "\n".join(lines)
+        except Exception:
+            # If skill listing fails, silently continue without skills
+            return ""
 
     def _render_prompt_template(self: Any, template: str) -> str:
         """Render a prompt template by replacing {{var}} with environment values.
