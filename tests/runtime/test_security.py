@@ -73,6 +73,32 @@ class TestValidatePath:
         assert os.path.exists(result)
 
 
+class TestValidatePathExists:
+    """Tests for validate_path_exists()."""
+
+    def test_allows_existing_file(self, tmp_path):
+        """Existing files pass validation."""
+        from helen.runtime.security import validate_path_exists
+        test_file = tmp_path / "exists.txt"
+        test_file.write_text("data")
+        result = validate_path_exists(str(test_file), base_dir=str(tmp_path))
+        assert os.path.exists(result)
+
+    def test_raises_for_missing_file(self, tmp_path):
+        """Non-existent files raise SecurityError."""
+        from helen.runtime.security import validate_path_exists
+        with pytest.raises(SecurityError, match="does not exist"):
+            validate_path_exists(
+                str(tmp_path / "nonexistent.txt"), base_dir=str(tmp_path)
+            )
+
+    def test_blocks_path_traversal(self, tmp_path):
+        """Path traversal is blocked."""
+        from helen.runtime.security import validate_path_exists
+        with pytest.raises(SecurityError, match="traversal|blocked|escape"):
+            validate_path_exists("../../etc/passwd", base_dir=str(tmp_path))
+
+
 # ── URL Safety Tests (SSRF Protection) ────────────────────────
 
 
@@ -118,6 +144,62 @@ class TestValidateUrl:
         """URLs without hostname are blocked."""
         with pytest.raises(SecurityError, match="hostname"):
             validate_url("http:///path")
+
+    def test_blocks_private_ip_10(self):
+        """Private IP range 10.0.0.0/8 is blocked."""
+        from unittest.mock import patch
+        import socket
+        # Mock getaddrinfo to return a private IP
+        with patch('socket.getaddrinfo') as mock_getaddrinfo:
+            mock_getaddrinfo.return_value = [
+                (socket.AF_INET, socket.SOCK_STREAM, 0, '', ('10.0.0.1', 0))
+            ]
+            with pytest.raises(SecurityError, match="private|reserved"):
+                validate_url("http://private.example.com")
+
+    def test_blocks_private_ip_172(self):
+        """Private IP range 172.16.0.0/12 is blocked."""
+        from unittest.mock import patch
+        import socket
+        with patch('socket.getaddrinfo') as mock_getaddrinfo:
+            mock_getaddrinfo.return_value = [
+                (socket.AF_INET, socket.SOCK_STREAM, 0, '', ('172.16.0.1', 0))
+            ]
+            with pytest.raises(SecurityError, match="private|reserved"):
+                validate_url("http://internal.example.com")
+
+    def test_blocks_private_ip_192(self):
+        """Private IP range 192.168.0.0/16 is blocked."""
+        from unittest.mock import patch
+        import socket
+        with patch('socket.getaddrinfo') as mock_getaddrinfo:
+            mock_getaddrinfo.return_value = [
+                (socket.AF_INET, socket.SOCK_STREAM, 0, '', ('192.168.1.1', 0))
+            ]
+            with pytest.raises(SecurityError, match="private|reserved"):
+                validate_url("http://local.example.com")
+
+    def test_blocks_unresolvable_hostname(self):
+        """Unresolvable hostnames raise SecurityError."""
+        from unittest.mock import patch
+        import socket
+        with patch('socket.getaddrinfo') as mock_getaddrinfo:
+            mock_getaddrinfo.side_effect = socket.gaierror("Name resolution failed")
+            with pytest.raises(SecurityError, match="Cannot resolve"):
+                validate_url("http://nonexistent.example.com")
+
+    def test_handles_invalid_ip_gracefully(self):
+        """Invalid IP addresses from DNS are handled gracefully."""
+        from unittest.mock import patch
+        import socket
+        # Mock getaddrinfo to return an invalid IP string
+        with patch('socket.getaddrinfo') as mock_getaddrinfo:
+            mock_getaddrinfo.return_value = [
+                (socket.AF_INET, socket.SOCK_STREAM, 0, '', ('not-a-valid-ip', 0))
+            ]
+            # Should not raise an error, just skip the invalid IP
+            result = validate_url("http://example.com")
+            assert result == "http://example.com"
 
 
 # ── Command Safety Tests ──────────────────────────────────────
