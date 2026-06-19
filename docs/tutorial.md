@@ -21,6 +21,7 @@
 | [10](#教程-10-标准库参考) | 185 个内置函数，覆盖 AI 应用开发所有核心需求 |
 | [11](#教程-11-构建多-agent-系统) | 完整案例：智能客服系统 |
 | [12](#教程-12-安全沙箱) | 路径验证、URL 过滤、命令安全、资源限制 |
+| [13](#教程-13-技能系统) | 技能概念、三层搜索、创建技能、REPL 技能感知 |
 
 ---
 
@@ -3427,3 +3428,397 @@ Helen 安全沙箱提供多层防护：
 - 使用 `helen repl` 快速原型
 - 阅读设计哲学深入了解语言理念
 - 查看错误码参考排查问题
+
+---
+
+# 教程 13: 技能系统
+
+> 技能概念 / 三层搜索架构 / 创建自定义技能 / REPL 技能感知 / 在 LLM 语句中使用技能
+
+## 什么是技能（Skill）
+
+**技能**是 Helen 的扩展知识单元。每个技能是一个包含 `SKILL.md` 的目录，用 Markdown 描述特定的领域知识、工作流程或操作指南。
+
+技能的核心价值：**让 LLM 在需要时加载专业知识，而不是把所有知识塞进一个巨大的 system prompt。**
+
+```
+skills/
+├── web-research/
+│   └── SKILL.md          # 网络搜索技能
+├── code-review/
+│   ├── SKILL.md          # 代码审查技能
+│   └── templates/
+│       └── checklist.md  # 审查清单模板
+└── data-analysis/
+    ├── SKILL.md          # 数据分析技能
+    └── scripts/
+        └── visualize.py  # 可视化脚本
+```
+
+## 技能目录结构
+
+### 最小结构
+
+一个技能只需要一个 `SKILL.md` 文件：
+
+```
+my-skill/
+└── SKILL.md
+```
+
+### 完整结构
+
+```
+my-skill/
+├── SKILL.md              # 必需：技能描述和指令
+├── references/           # 参考资料（API 文档、规范等）
+│   └── api.md
+├── templates/            # 模板文件
+│   └── config.yaml
+├── scripts/              # 辅助脚本
+│   └── validate.py
+└── assets/               # 其他资源
+    └── examples.json
+```
+
+## SKILL.md 格式
+
+`SKILL.md` 使用 YAML frontmatter + Markdown body：
+
+```markdown
+---
+name: web-research
+description: Research topics using web search and content extraction
+category: research
+triggers:
+  - search
+  - research
+  - find information
+---
+
+# Web Research Skill
+
+## When to Use
+- User asks to search for information online
+- Need to find current/recent data
+- Research a topic across multiple sources
+
+## Steps
+1. Analyze the user's query to extract search terms
+2. Use `web_search()` to find relevant pages
+3. Use `web_extract()` to read page content
+4. Synthesize findings into a clear answer
+
+## Pitfalls
+- Don't rely on a single source
+- Check publication dates for recency
+- Summarize, don't copy-paste
+```
+
+### Frontmatter 字段
+
+| 字段 | 必需 | 说明 |
+|------|------|------|
+| `name` | ✅ | 技能唯一标识（小写，连字符分隔） |
+| `description` | ✅ | 一句话描述技能用途 |
+| `category` | ❌ | 分类（research, devops, creative 等） |
+| `triggers` | ❌ | 触发关键词列表 |
+
+### Markdown Body
+
+正文包含：
+- **使用场景**：什么时候应该使用这个技能
+- **操作步骤**：具体的工作流程
+- **注意事项**：常见陷阱和最佳实践
+- **示例**：具体的使用案例
+
+## 三层搜索架构
+
+Helen 使用三层技能搜索，按优先级从高到低：
+
+```
+┌─────────────────────────────────────┐
+│  🥇 项目级   <project>/.helen/skills/  │  ← 最高优先级
+├─────────────────────────────────────┤
+│  🥈 用户级   ~/.helen/skills/          │  ← 用户自定义
+├─────────────────────────────────────┤
+│  🥉 内置级   ~/helen/skills/           │  ← 语言自带
+├─────────────────────────────────────┤
+│  4️⃣ Hermes   ~/.hermes/skills/         │  ← Hermes 回退
+├─────────────────────────────────────┤
+│  5️⃣ Hermes   ~/.hermes/hermes-agent/   │  ← Hermes agent
+│             skills/                    │
+└─────────────────────────────────────┘
+```
+
+**优先级规则：**
+- 高优先级目录的技能**覆盖**低优先级的同名技能
+- 不同名的技能**累加**，全部可用
+- 项目级技能适合团队共享的项目特定知识
+
+### 查看可用技能
+
+在 REPL 中使用 `:ask` 命令，技能会自动注入到 LLM 上下文中：
+
+```bash
+helen> :ask 列出当前可用的技能
+```
+
+LLM 会看到所有 149 个可用技能的索引，并能根据需求推荐合适的技能。
+
+## 创建自定义技能
+
+### 示例：创建代码审查技能
+
+**第 1 步：创建目录**
+
+```bash
+mkdir -p ~/.helen/skills/code-review
+```
+
+**第 2 步：编写 SKILL.md**
+
+```markdown
+---
+name: code-review
+description: Systematic code review with security and quality checks
+category: development
+triggers:
+  - review
+  - code review
+  - quality check
+---
+
+# Code Review Skill
+
+## When to Use
+- User asks to review code
+- Before merging a PR
+- Checking code quality
+
+## Review Checklist
+
+### 1. Correctness
+- Logic errors, off-by-one, null handling
+- Edge cases and boundary conditions
+
+### 2. Security
+- Input validation
+- No SQL injection, command injection
+- Secrets not hardcoded
+
+### 3. Performance
+- Unnecessary loops or allocations
+- N+1 queries
+- Missing indexes
+
+### 4. Maintainability
+- Clear naming
+- Functions < 50 lines
+- No dead code
+
+## Output Format
+
+For each issue found:
+- **Severity**: 🔴 Critical / 🟡 Warning / 🟢 Suggestion
+- **Location**: file:line
+- **Issue**: what's wrong
+- **Fix**: how to fix it
+```
+
+**第 3 步：验证技能**
+
+```bash
+helen> :ask 帮我审查这段代码
+```
+
+LLM 会自动加载 `code-review` 技能并按照清单进行审查。
+
+### 示例：项目级技能
+
+为团队项目创建共享技能：
+
+```bash
+mkdir -p myproject/.helen/skills/api-conventions
+```
+
+```markdown
+---
+name: api-conventions
+description: Our team's API design conventions and patterns
+category: project
+---
+
+# API Conventions
+
+## Naming
+- REST resources: plural nouns (`/users`, `/orders`)
+- Actions: POST with verb (`/users/:id/activate`)
+
+## Error Format
+```json
+{
+  "error": {
+    "code": "USER_NOT_FOUND",
+    "message": "User with id 123 not found"
+  }
+}
+```
+
+## Authentication
+- Bearer token in Authorization header
+- Token expires after 24 hours
+```
+
+这样团队成员在使用 Helen 时，会自动加载项目的 API 规范。
+
+## REPL 技能感知
+
+### `:ask` 命令
+
+REPL 的 `:ask` 命令会自动注入所有可用技能的索引到 LLM 上下文中：
+
+```bash
+helen> :ask 如何搜索网络信息？
+```
+
+LLM 会：
+1. 看到 149 个技能的完整索引
+2. 识别出 `web-search`、`research` 等相关技能
+3. 按照技能中的指导回答问题
+
+### 技能索引格式
+
+注入的技能索引是 XML 格式的摘要：
+
+```xml
+<skills>
+<skill name="web-search" category="research">
+  <description>Search the web for information</description>
+  <triggers>search, find, lookup</triggers>
+</skill>
+...
+</skills>
+```
+
+这使 LLM 能快速定位相关技能，而不需要加载每个技能的完整内容。
+
+## 在 LLM 语句中使用技能
+
+### `llm act` 和 `llm stream`
+
+当你在 Helen 代码中使用 `llm act` 或 `llm stream` 时，技能索引会自动注入到 system prompt 中：
+
+```helen
+agent Researcher {
+    description "Research assistant"
+    prompt "You are a research assistant."
+}
+
+main {
+    let result = llm act Researcher
+        "搜索关于量子计算的最新进展"
+    print(result)
+}
+```
+
+LLM 在执行时会看到所有可用技能，并能根据需要参考相关技能的知识。
+
+### 技能与 Agent 的关系
+
+| 概念 | 作用域 | 加载方式 |
+|------|--------|----------|
+| **Agent prompt** | 单个 Agent | 声明时定义 |
+| **技能索引** | 所有 LLM 调用 | 自动注入 |
+| **技能完整内容** | 按需 | LLM 判断需要时加载 |
+
+Agent 的 `prompt` 定义角色和行为，技能提供额外的领域知识。两者互补。
+
+## 技能管理最佳实践
+
+### 1. 技能命名
+
+```
+✅ web-search, code-review, data-analysis
+❌ WebSearch, code_review, dataAnalysis
+```
+
+使用小写 + 连字符，简洁明了。
+
+### 2. 技能粒度
+
+```
+✅ 一个技能 = 一个明确的任务领域
+❌ 一个技能 = 所有事情（太宽泛）
+❌ 一个技能 = 一行指令（太细碎）
+```
+
+### 3. 技能描述
+
+```markdown
+✅ description: "Review code for security vulnerabilities and quality issues"
+❌ description: "Does stuff with code"
+```
+
+描述越精确，LLM 越能正确选择和使用技能。
+
+### 4. 包含实际示例
+
+```markdown
+✅ ## Example
+    Input: "SELECT * FROM users WHERE id = " + user_input
+    Issue: 🔴 SQL Injection
+    Fix: Use parameterized queries
+
+❌ ## Example
+    Check for SQL injection.
+```
+
+### 5. 分层组织
+
+```
+项目级（.helen/skills/）  → 项目特定规范、API 约定
+用户级（~/.helen/skills/） → 个人偏好、常用工作流
+内置级（helen/skills/）    → 通用技能、语言相关
+```
+
+## 内置技能
+
+Helen 自带 13 个内置技能，覆盖常见任务：
+
+| 技能 | 说明 |
+|------|------|
+| `helen-debugging` | Helen 程序调试 |
+| `helen-testing` | Helen 测试编写 |
+| `helen-stdlib` | 标准库使用指南 |
+| `helen-async` | 异步编程模式 |
+| `helen-security` | 安全编程实践 |
+| `helen-ffi` | Python FFI 集成 |
+| `helen-lsp` | LSP 开发 |
+| `helen-contributing` | 贡献指南 |
+| `helen-architecture` | 架构设计 |
+| `helen-tutorial` | 教程内容 |
+| `helen-design` | 设计哲学 |
+| `helen-overview` | 语言概览 |
+| `helen-llm-runtime` | LLM 运行时 |
+
+这些技能在 REPL 的 `:ask` 命令中自动可用，帮助 LLM 更准确地回答 Helen 相关问题。
+
+## 练习
+
+1. 在 `~/.helen/skills/` 下创建一个 `greeting` 技能，让 LLM 用特定格式打招呼
+2. 为当前项目创建 `.helen/skills/` 目录，添加一个项目规范技能
+3. 在 REPL 中用 `:ask` 测试你的技能是否被正确感知
+4. 编写一个 Helen 程序，使用 `llm stream` 调用一个会参考技能的 Agent
+
+## 总结
+
+Helen 技能系统提供：
+
+1. ✅ **模块化知识** — 每个技能独立，按需加载
+2. ✅ **三层搜索** — 项目 > 用户 > 内置 > Hermes，灵活覆盖
+3. ✅ **自动感知** — `:ask` 和 `llm` 语句自动注入技能索引
+4. ✅ **易于创建** — 只需一个 `SKILL.md` 文件
+5. ✅ **团队共享** — 项目级技能随代码库分发
+
+技能让 Helen 程序不只是代码，而是**带着专业知识工作的智能 Agent**。
