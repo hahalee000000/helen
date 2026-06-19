@@ -128,8 +128,8 @@ class HistoryManager:
 
         # Log truncation (in real impl, this would go to debug log)
         if truncated > 0:
-            # _truncation_count would be stored for logging
-            pass
+            import logging
+            logging.debug("History truncated: %d messages omitted to fit token limit", truncated)
 
         return "\n".join(lines)
 

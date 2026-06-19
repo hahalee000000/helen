@@ -4,13 +4,10 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from helen.core.source import SourceSpan
 from helen.core.tokens import Token
-
-if TYPE_CHECKING:
-    pass
 
 R = TypeVar("R")
 

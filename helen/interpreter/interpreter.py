@@ -9,7 +9,6 @@ expression evaluation.
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING
 
 from helen.core.ast import (
     AccessNode,
@@ -84,9 +83,6 @@ from helen.semantic.types import (
     type_compatible,
     type_of_literal,
 )
-
-if TYPE_CHECKING:
-    pass
 
 
 class Interpreter(LlmMixin, Visitor[object]):
@@ -727,7 +723,7 @@ class Interpreter(LlmMixin, Visitor[object]):
         raise exc_class(message, node.span)
 
     # ------------------------------------------------------------------
-    # Import & LLM (stubs for Phase 3)
+    # Import & LLM
     # ------------------------------------------------------------------
 
     def visit_import_stmt(self, node: ImportStmtNode) -> object:

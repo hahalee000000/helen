@@ -135,8 +135,9 @@ def _load_yaml_config(path: Path) -> dict[str, Any]:
     except ImportError:
         # PyYAML not installed, try simple parsing
         config.update(_parse_yaml_simple(path))
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.debug("Failed to load YAML config from %s: %s", path, e)
 
     return config
 
@@ -175,8 +176,9 @@ def _parse_yaml_simple(path: Path) -> dict[str, Any]:
                             config["temperature"] = float(value)
                         elif key == "timeout":
                             config["timeout"] = int(value)
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.debug("Failed to parse simple YAML config from %s: %s", path, e)
 
     return config
 
@@ -206,8 +208,9 @@ def _load_env_config(path: Path) -> dict[str, Any]:
                         config["temperature"] = float(value)
                     elif key in ("HELEN_TIMEOUT", "TIMEOUT"):
                         config["timeout"] = int(value)
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.debug("Failed to load .env config from %s: %s", path, e)
 
     return config
 

@@ -121,10 +121,9 @@ def _web_search(query: str, num_results: int = 3) -> str:
             extract = data.get("extract", "")
             url = data.get("content_urls", {}).get("desktop", {}).get("page", "")
             results.append(f"- {title}\n  {extract[:300]}\n  {url}")
-    except Exception:
-        pass
-
-    # Also try Wikipedia search for multiple results
+    except Exception as e:
+        import logging
+        logging.debug("Wikipedia summary API failed for query %r: %s", query, e)
     try:
         search_url = (
             f"https://en.wikipedia.org/w/api.php?"
@@ -148,8 +147,9 @@ def _web_search(query: str, num_results: int = 3) -> str:
                 entry += f"\n  {u}"
                 if entry not in results:
                     results.append(entry)
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.debug("Wikipedia search API failed for query %r: %s", query, e)
 
     if not results:
         return json.dumps({"results": [], "message": f"No results found for '{query}'."})

@@ -16,7 +16,6 @@ Walks the AST (as a Visitor[None]) performing semantic checks:
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING
 
 from helen.core.ast import (
     ASTNode,
@@ -78,9 +77,6 @@ from helen.semantic.types import (
     type_compatible,
     type_of_literal,
 )
-
-if TYPE_CHECKING:
-    pass
 
 
 # Predefined exception type names (HLD 3.6.4)
