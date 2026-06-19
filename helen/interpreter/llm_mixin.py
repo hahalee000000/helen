@@ -176,6 +176,11 @@ class LlmMixin:
         # Get rendered agent prompt as system_prompt
         system_prompt = self._get_rendered_agent_prompt()
 
+        # Inject skill index into system prompt
+        skill_index = self._build_skill_index()
+        if skill_index:
+            system_prompt = (system_prompt or "") + "\n\n" + skill_index
+
         # Record user message to history
         self._add_to_history("user", prompt)
 
