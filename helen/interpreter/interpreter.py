@@ -207,10 +207,33 @@ class Interpreter(LlmMixin, Visitor[object]):
         return node.value
 
     def visit_variable(self, node: VariableNode) -> object:
-        """Look up a variable in the environment."""
+        """Look up a variable in the environment.
+
+        Resolution order:
+        1. Environment (let/const variables, builtins)
+        2. User-defined functions (fn declarations) — returns callable wrapper
+        3. User-defined agents (agent declarations) — returns callable wrapper
+        """
         try:
             return self.environment.lookup(node.name)
         except NameError:
+            # Fallback: check if it's a user-defined function name
+            if node.name in self._functions:
+                func_node = self._functions[node.name]
+                # Return a callable wrapper so functions can be used as first-class values
+                def _function_wrapper(*args):
+                    return self._call_function(func_node, list(args))
+                return _function_wrapper
+            # Fallback: check if it's a user-defined agent name
+            if node.name in self._agents:
+                agent_node = self._agents[node.name]
+                def _agent_wrapper(*args):
+                    agent_args = {}
+                    for i, arg in enumerate(args):
+                        if i < len(agent_node.params):
+                            agent_args[agent_node.params[i].name] = arg
+                    return self._call_agent(agent_node, agent_args)
+                return _agent_wrapper
             self.errors.error(
                 ErrorCode.UNDECLARED_VARIABLE,
                 f"Undefined variable '{node.name}'",
