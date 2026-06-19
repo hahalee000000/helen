@@ -85,7 +85,7 @@ class Task:
             else:
                 # Fallback to thread pool for sync interpreters
                 # Use run_in_executor for Python 3.7+ compatibility
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 result = await loop.run_in_executor(None, self._execute_sync)
 
             self.result_value = result
