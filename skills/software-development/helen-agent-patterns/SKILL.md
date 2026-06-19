@@ -525,6 +525,59 @@ agent HistoryAwareAgent {
 }
 ```
 
+### 4. 使用可观测性调试 Agent
+
+Helen 提供 AI 原生可观测性，帮助调试 Agent 行为：
+
+```helen
+agent DebuggableAgent(input) {
+    description "Agent with observability"
+    
+    fn validate(data) {
+        # 运行时断言
+        assert data != null, "input must not be null"
+        assert len(data) > 0, "input must not be empty"
+        
+        # 结构化调试输出
+        debug("validated input", data)
+        return true
+    }
+    
+    main {
+        # 开启执行追踪
+        trace_on()
+        
+        let valid = validate(input)
+        if valid {
+            let result = llm act "Process: " + str(input)
+            debug("LLM result", result)
+            return result
+        }
+        
+        trace_off()
+    }
+}
+```
+
+**REPL 调试命令**：
+
+```
+:trace on          # 开启追踪
+:trace show 20     # 显示最近 20 条执行记录
+:last_error        # 显示上次错误的 JSON 上下文
+:llm_log 5         # 显示最近 5 次 LLM 调用审计
+```
+
+**错误快照格式**（JSON，AI 可直接消费）：
+
+```json
+{
+  "error": {"type": "AssertionError", "message": "...", "location": "..."},
+  "call_stack": [{"function": "...", "args": {...}}],
+  "scope": {"var": "value"}
+}
+```
+
 ## 总结
 
 Helen Agent 设计模式：

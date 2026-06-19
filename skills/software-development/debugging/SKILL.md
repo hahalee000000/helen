@@ -199,6 +199,90 @@ const { profile } = await client.Profiler.stop();
 
 ---
 
+## 4. Helen AI-Native Observability
+
+Helen provides **AI-native observability** instead of traditional interactive debuggers. AI agents need structured, machine-consumable context — not breakpoints and single-stepping.
+
+### Core Concepts
+
+| Traditional Debugger | Helen Observability |
+|---------------------|---------------------|
+| Breakpoints | `assert` statements |
+| Single-step execution | Execution tracing (`trace_on/off`) |
+| Variable watch | `debug()` structured output |
+| Call stack panel | Programmatic call stack tracking |
+| No LLM logging | LLM call audit log |
+
+### assert Statement
+
+```helen
+# Runtime assertion with optional message
+assert x > 0, "x must be positive"
+
+# Catchable — throws AssertionError
+try {
+    assert false, "test"
+} catch AssertionError as e {
+    print("Caught: " + e.message)
+}
+```
+
+### debug() Function
+
+```helen
+# Structured debug output to stderr (JSON format)
+let x = 42
+debug("variable value", x)
+# Output: [DEBUG] variable value {"value": 42}
+```
+
+### Execution Tracing
+
+```helen
+# Programmatic control
+trace_on()
+let result = compute()
+trace_off()
+let trace = get_trace(10)
+```
+
+**REPL commands**:
+```
+:trace on          # Enable tracing
+:trace off         # Disable tracing
+:trace show [n]    # Show last n trace entries
+:last_error        # Show structured error context (JSON)
+:llm_log [n]       # Show LLM call audit log
+```
+
+### Error Snapshot Format (JSON)
+
+```json
+{
+  "error": {"type": "RuntimeError", "message": "...", "location": "..."},
+  "call_stack": [{"function": "...", "args": {...}}],
+  "scope": {"var": "value"},
+  "trace": [...]
+}
+```
+
+### LLM Audit Log
+
+All `llm act` / `llm stream` calls are automatically logged:
+- timestamp, call_type, agent_name, model
+- prompt, response, tokens_in/out, duration_ms
+- tool_calls list (for stream mode)
+- error (if any)
+
+### Key Design Decisions
+
+1. **Zero overhead when disabled**: Tracing is opt-in
+2. **Ring buffers**: Trace (10000), LLM log (1000), call stack (100)
+3. **JSON structured**: AI can parse directly
+4. **Auto-capture**: Errors/assertions capture full context
+
+---
+
 ## Quick Decision Guide
 
 | Situation | Use |

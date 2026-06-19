@@ -9,7 +9,7 @@ tags: [helen, syntax, reference, language]
 
 # Helen 语法参考
 
-## 关键字（42 个）
+## 关键字（43 个）
 
 ### Agent 声明
 - `agent` — 声明 Agent
@@ -36,6 +36,7 @@ tags: [helen, syntax, reference, language]
 - `return` — 函数返回
 - `throw` — 抛出异常
 - `try` / `catch` / `finally` — 异常处理
+- `assert` — 运行时断言（条件为 false 时抛出 AssertionError）
 
 ### 变量与函数
 - `let` — 可变变量
@@ -177,6 +178,22 @@ try {
     print("Network failed: " + e.message)
 } finally {
     cleanup()
+}
+```
+
+### 断言
+```helen
+# 简单断言
+assert x > 0
+
+# 带消息的断言
+assert x > 0, "x must be positive"
+
+# 可捕获
+try {
+    assert false, "test"
+} catch AssertionError as e {
+    print("Caught: " + e.message)
 }
 ```
 
