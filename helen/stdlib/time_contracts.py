@@ -3,6 +3,8 @@
 Defines interfaces for time, date, and datetime operations.
 """
 
+from __future__ import annotations
+
 
 class TimeContract:
     """Contract for time operations."""

@@ -3,6 +3,8 @@
 Defines interfaces for advanced file operations.
 """
 
+from __future__ import annotations
+
 
 class FileInfoContract:
     """Contract for file information operations."""

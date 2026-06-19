@@ -48,24 +48,45 @@ def get_skill_dirs() -> list[Path]:
 
     Returns:
         List of paths to scan for skills:
-        1. ~/.helen/skills/ (Helen native)
-        2. ~/.hermes/skills/ (Hermes fallback)
-        3. ~/.hermes/hermes-agent/skills/ (Hermes agent skills)
+        1. <project>/.helen/skills/ (project-level, highest priority)
+        2. ~/.helen/skills/ (user-level)
+        3. <helen-install>/skills/ (built-in, distributed with language)
+        4. ~/.hermes/skills/ (Hermes fallback)
+        5. ~/.hermes/hermes-agent/skills/ (Hermes agent skills)
     """
     dirs = []
 
-    # Helen native skills
+    # 1. Project-level skills (highest priority)
+    # Look for .helen/skills/ in current working directory and parents
+    try:
+        cwd = Path.cwd()
+        for parent in [cwd] + list(cwd.parents):
+            project_skills = parent / ".helen" / "skills"
+            if project_skills.exists() and project_skills not in dirs:
+                dirs.append(project_skills)
+                break  # Only use the closest one
+    except (OSError, RuntimeError):
+        pass  # cwd may not be accessible
+
+    # 2. User-level skills
     helen_skills = HELEN_HOME / "skills"
-    if helen_skills.exists():
+    if helen_skills.exists() and helen_skills not in dirs:
         dirs.append(helen_skills)
 
-    # Hermes fallback
+    # 3. Built-in skills (distributed with Helen language)
+    # helen/runtime/config.py -> helen/runtime -> helen -> helen package root
+    helen_package = Path(__file__).parent.parent.parent
+    builtin_skills = helen_package / "skills"
+    if builtin_skills.exists() and builtin_skills not in dirs:
+        dirs.append(builtin_skills)
+
+    # 4. Hermes fallback
     hermes_skills = HERMES_HOME / "skills"
-    if hermes_skills.exists():
+    if hermes_skills.exists() and hermes_skills not in dirs:
         dirs.append(hermes_skills)
 
     hermes_agent_skills = HERMES_HOME / "hermes-agent" / "skills"
-    if hermes_agent_skills.exists():
+    if hermes_agent_skills.exists() and hermes_agent_skills not in dirs:
         dirs.append(hermes_agent_skills)
 
     return dirs

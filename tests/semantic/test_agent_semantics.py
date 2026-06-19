@@ -1,5 +1,7 @@
 """Tests for agent semantics — param declaration, call param validation, import verification."""
 
+from __future__ import annotations
+
 import os
 import tempfile
 

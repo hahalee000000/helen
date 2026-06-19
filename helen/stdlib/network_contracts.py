@@ -3,6 +3,8 @@
 This module defines the interface for HTTP operations.
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 

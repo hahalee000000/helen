@@ -3,6 +3,8 @@
 Defines interfaces for environment, process, and logging operations.
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 

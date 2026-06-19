@@ -3,6 +3,8 @@
 Defines interfaces for JSON, HTML, Markdown, CSV, YAML/TOML operations.
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 

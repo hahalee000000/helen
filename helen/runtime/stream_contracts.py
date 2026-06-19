@@ -4,6 +4,8 @@ This module defines the interface contracts for streaming LLM output.
 Implementation will follow TDD after tests are written.
 """
 
+from __future__ import annotations
+
 from typing import Protocol, runtime_checkable, Iterator, AsyncIterator
 
 
