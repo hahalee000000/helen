@@ -3822,3 +3822,384 @@ Helen 技能系统提供：
 5. ✅ **团队共享** — 项目级技能随代码库分发
 
 技能让 Helen 程序不只是代码，而是**带着专业知识工作的智能 Agent**。
+
+# 教程 14: AI 原生可观测性
+
+> 给 AI 一个它能读懂的"黑匣子"，而不是给人类一个 GDB。
+
+---
+
+## 为什么需要 AI 原生可观测性？
+
+传统调试器（断点、单步执行、变量监视）是为**人类交互式调试**设计的。在 AI 编程场景下，消费调试信息的是 AI Agent，它需要的是**结构化的、可机器消费的上下文**——而不是交互式暂停/恢复。
+
+Helen 的 AI 原生可观测性提供：
+
+| 传统 Debugger | Helen 可观测性 |
+|--------------|---------------|
+| 断点暂停 | 结构化错误快照 (JSON) |
+| 单步执行 | 执行追踪日志 |
+| 变量监视 | 调用栈 + 作用域变量 |
+| 调用栈面板 | 程序化调用栈追踪 |
+| 无 LLM 记录 | LLM 调用审计日志 |
+
+## assert 语句
+
+`assert` 是最基础的可观测性工具——在运行时验证假设。
+
+### 基本语法
+
+```helen
+// 简单断言
+assert x > 0
+
+// 带消息的断言
+assert x > 0, "x must be positive"
+```
+
+### 断言失败
+
+当断言条件为 `false` 时，抛出 `AssertionError`：
+
+```helen
+fn divide(a, b) {
+    assert b != 0, "divisor must not be zero"
+    return a / b
+}
+
+main {
+    try {
+        let result = divide(10, 0)
+    } catch AssertionError as e {
+        print("Caught: " + e.message)
+        // 输出: Caught: assertion failed: divisor must not be zero
+    }
+}
+```
+
+### assert 与可观测性集成
+
+断言失败时，自动捕获结构化错误上下文：
+
+```json
+{
+  "error": {
+    "type": "AssertionError",
+    "message": "assertion failed: divisor must not be zero",
+    "location": "main.helen:2:5"
+  },
+  "call_stack": [
+    {"function": "main", "location": "main.helen:7:1"},
+    {"function": "divide", "location": "main.helen:1:1", "args": {"a": 10, "b": 0}}
+  ],
+  "scope": {"a": 10, "b": 0}
+}
+```
+
+## debug() 函数
+
+`debug()` 输出结构化调试信息到 stderr，不影响程序正常输出。
+
+### 基本用法
+
+```helen
+main {
+    let x = 42
+    let items = [1, 2, 3]
+    
+    debug("variable value", x)
+    // 输出: [DEBUG] variable value {"value": 42}
+    
+    debug("list contents", items)
+    // 输出: [DEBUG] list contents {"value": [1, 2, 3]}
+    
+    debug("checkpoint reached")
+    // 输出: [DEBUG] checkpoint reached
+}
+```
+
+### 与 print() 的区别
+
+| 特性 | `print()` | `debug()` |
+|------|-----------|-----------|
+| 输出目标 | stdout | stderr |
+| 格式 | 纯文本 | JSON 结构化 |
+| 用途 | 程序正常输出 | 开发调试信息 |
+| 生产环境 | 保留 | 可过滤 |
+
+## 执行追踪
+
+执行追踪记录程序的执行路径，帮助理解代码流程和定位问题。
+
+### REPL 命令
+
+```
+:trace on          # 开启执行追踪
+:trace off         # 关闭执行追踪
+:trace show [n]    # 显示最近 n 条追踪记录（默认 50）
+```
+
+### 程序化追踪
+
+```helen
+main {
+    trace_on()
+    
+    let x = compute_value()
+    let y = transform(x)
+    let z = validate(y)
+    
+    trace_off()
+    
+    // 获取追踪记录
+    let trace = get_trace(10)
+    print(trace)
+}
+```
+
+### 追踪输出格式
+
+```
+[TRACE] call main at <repl>:1:1 {}
+[TRACE] call compute_value at <repl>:3:9 {}
+[TRACE] return compute_value → 42
+[TRACE] call transform at <repl>:4:9 {"x": 42}
+[TRACE] return transform → 84
+[TRACE] call validate at <repl>:5:9 {"y": 84}
+[TRACE] return validate → true
+```
+
+## 结构化错误上下文
+
+当运行时错误发生时，Helen 自动捕获完整的错误上下文。
+
+### REPL 命令
+
+```
+:last_error        # 显示上次错误的完整上下文（JSON）
+```
+
+### 错误快照格式
+
+```json
+{
+  "error": {
+    "type": "RuntimeError",
+    "message": "division by zero",
+    "location": "main.helen:23:5"
+  },
+  "call_stack": [
+    {"function": "main", "location": "main.helen:10:1", "args": {}},
+    {"function": "calculate", "location": "main.helen:20:1", "args": {"total": 100, "count": 0}}
+  ],
+  "scope": {
+    "total": 100,
+    "count": 0
+  },
+  "trace": [
+    {"type": "call", "function": "main", "location": "main.helen:10:1"},
+    {"type": "call", "function": "calculate", "location": "main.helen:20:1"}
+  ],
+  "timestamp": 1718812800.0
+}
+```
+
+### 为什么 AI 需要 JSON 格式？
+
+AI Agent 可以直接解析 JSON 错误快照，提取：
+- **错误类型和消息** → 理解问题本质
+- **调用栈** → 理解错误发生的路径
+- **作用域变量** → 理解错误发生时的数据状态
+- **执行追踪** → 理解程序的执行流程
+
+这比传统的 stack trace 文本格式更容易被 AI 消费和分析。
+
+## LLM 调用审计日志
+
+所有 `llm act` 和 `llm stream` 调用自动记录到审计日志。
+
+### REPL 命令
+
+```
+:llm_log [n]       # 显示最近 n 次 LLM 调用（默认 10）
+```
+
+### 审计记录内容
+
+每次 LLM 调用记录：
+
+| 字段 | 说明 |
+|------|------|
+| `timestamp` | 调用时间 |
+| `call_type` | `act` 或 `stream` |
+| `agent_name` | 调用的 Agent 名称 |
+| `model` | 使用的模型 |
+| `prompt` | 输入的 prompt |
+| `response` | 返回的文本（act）或 null（stream） |
+| `tokens_in` | 输入 token 数 |
+| `tokens_out` | 输出 token 数 |
+| `duration_ms` | 耗时（毫秒） |
+| `tool_calls` | 工具调用列表（stream 模式） |
+| `error` | 错误信息（如果有） |
+
+### 审计日志示例
+
+```json
+[
+  {
+    "timestamp": 1718812800.0,
+    "call_type": "act",
+    "agent_name": "Translator",
+    "model": "qwen3.7-plus",
+    "prompt": "translate Hello to Chinese",
+    "response": "你好",
+    "tokens_in": 15,
+    "tokens_out": 3,
+    "duration_ms": 1200.5,
+    "error": null
+  },
+  {
+    "timestamp": 1718812805.0,
+    "call_type": "stream",
+    "agent_name": "Researcher",
+    "model": "qwen3.7-plus",
+    "prompt": "search for Helen language",
+    "response": null,
+    "tokens_in": 20,
+    "tokens_out": 150,
+    "duration_ms": 3500.0,
+    "tool_calls": [
+      {"name": "web_search", "args": {"query": "Helen language"}},
+      {"name": "web_fetch", "args": {"url": "https://..."}}
+    ],
+    "error": null
+  }
+]
+```
+
+## 可观测性架构
+
+```
+helen/runtime/observability.py
+├── CallFrame              # 单个栈帧（函数名、位置、参数）
+├── CallStackTracker       # 调用栈追踪（push/pop，最大深度保护）
+├── TraceEntry             # 单条追踪记录（类型、位置、数据）
+├── ExecutionTracer        # 执行追踪（环形缓冲区）
+├── ErrorSnapshot          # 结构化错误上下文（JSON 可序列化）
+├── LLMAuditEntry          # 单条 LLM 调用记录
+├── LLMAuditLog            # LLM 审计日志（环形缓冲区）
+└── ObservabilityManager   # 统一管理器
+```
+
+### 集成点
+
+| 模块 | 集成方式 |
+|------|----------|
+| `interpreter.py` | `ObservabilityManager` 初始化，调用栈 push/pop，错误捕获 |
+| `llm_mixin.py` | LLM 调用审计日志记录 |
+| `stdlib/__init__.py` | `debug()`, `trace_on/off()`, `get_trace()` 内置函数 |
+| `cli/repl.py` | `:trace`, `:last_error`, `:llm_log` REPL 命令 |
+
+### 零开销设计
+
+- **追踪默认关闭**：只有显式 `trace_on()` 或 `:trace on` 才记录
+- **调用栈默认关闭**：只在追踪开启时记录
+- **LLM 审计默认开启**：对 prompt-first 程序至关重要
+- **环形缓冲区**：限制内存使用（追踪 10000 条，LLM 日志 1000 条，调用栈 100 层）
+
+## 实战示例：调试 Agent 行为
+
+```helen
+agent DataProcessor(input) {
+    description: "Process and validate data"
+    
+    fn validate(data) {
+        assert data != null, "data must not be null"
+        assert data.size > 0, "data must not be empty"
+        debug("validated data", data)
+        return true
+    }
+    
+    fn transform(data) {
+        debug("transforming", data)
+        let result = []
+        for item in data {
+            result.append(item * 2)
+        }
+        return result
+    }
+    
+    main {
+        trace_on()
+        
+        let valid = validate(input)
+        if valid {
+            let result = transform(input)
+            debug("final result", result)
+            return result
+        }
+        
+        trace_off()
+    }
+}
+
+main {
+    try {
+        let data = [1, 2, 3, 4, 5]
+        let result = DataProcessor(data)
+        print("Result: " + result)
+    } catch AssertionError as e {
+        print("Validation failed: " + e.message)
+        // 在 REPL 中可以用 :last_error 查看完整上下文
+    }
+}
+```
+
+## REPL 调试工作流
+
+```
+>>> :trace on
+追踪已开启
+
+>>> let result = my_function()
+[DEBUG] entering my_function {"x": 42}
+[TRACE] call my_function at <repl>:1:1 {"x": 42}
+[TRACE] return my_function → 84
+
+>>> :trace show 5
+[TRACE] call my_function at <repl>:1:1 {"x": 42}
+[TRACE] return my_function → 84
+
+>>> :llm_log 3
+[LLM] act Translator "translate Hello" → "你好" (1200ms)
+[LLM] stream Researcher "search..." → 2 tool calls (3500ms)
+
+>>> :last_error
+{
+  "error": {"type": "RuntimeError", "message": "..."},
+  "call_stack": [...],
+  "scope": {...}
+}
+```
+
+## 练习
+
+1. 编写一个函数，使用 `assert` 验证输入参数，测试正常和异常情况
+2. 在 REPL 中使用 `:trace on` 追踪一段代码的执行路径
+3. 使用 `debug()` 输出中间计算结果
+4. 编写一个会抛出异常的程序，用 `:last_error` 查看错误上下文
+5. 使用 `llm act` 调用一个 Agent，然后用 `:llm_log` 查看审计记录
+
+## 总结
+
+Helen 的 AI 原生可观测性提供：
+
+1. ✅ **assert 语句** — 运行时假设验证，失败自动捕获上下文
+2. ✅ **debug() 函数** — 结构化调试输出，JSON 格式
+3. ✅ **执行追踪** — 记录程序执行路径，程序化 + REPL 控制
+4. ✅ **结构化错误** — JSON 格式错误快照，包含调用栈 + 作用域变量
+5. ✅ **LLM 审计** — 自动记录所有 LLM 调用，含 prompt/response/tokens/耗时
+6. ✅ **零开销默认** — 追踪关闭时无性能影响
+7. ✅ **AI 友好** — 所有输出都是结构化 JSON，AI 可直接解析
+
+传统调试器给人用，Helen 可观测性给 AI 用。
