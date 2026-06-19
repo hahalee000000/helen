@@ -8,6 +8,8 @@ Covers:
 - Truncation logging
 """
 
+from __future__ import annotations
+
 from helen.runtime.history import HistoryManager, Message
 
 

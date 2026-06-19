@@ -15,6 +15,8 @@ Covers:
 - scan_one streaming mode
 """
 
+from __future__ import annotations
+
 from helen.core.lexer import Scanner
 from helen.core.tokens import Token, TokenType
 from helen.core.errors import ErrorCode

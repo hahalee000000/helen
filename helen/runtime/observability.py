@@ -452,7 +452,7 @@ class LLMAuditLog:
         errors = sum(1 for e in self._entries if e.error)
 
         lines = [
-            f"LLM Call Summary:",
+            "LLM Call Summary:",
             f"  Total calls: {total_calls}",
             f"  Total tokens: {total_tokens_in} in / {total_tokens_out} out",
             f"  Total duration: {total_duration:.0f}ms",

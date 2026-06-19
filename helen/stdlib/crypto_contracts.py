@@ -3,6 +3,8 @@
 Defines interfaces for cryptographic hash operations.
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 

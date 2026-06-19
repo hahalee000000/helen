@@ -1,4 +1,6 @@
 """Extract and test all helen code blocks from the tutorial."""
+from __future__ import annotations
+
 import re
 import sys
 import os

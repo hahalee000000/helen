@@ -1,5 +1,7 @@
 """Tests for helen.semantic.analyzer — complete semantic analysis flow."""
 
+from __future__ import annotations
+
 import pytest
 
 from helen.core.ast import (

@@ -1,5 +1,7 @@
 """tests/parser/test_parser_basics.py — Parser 基础测试。"""
 
+from __future__ import annotations
+
 import pytest
 from helen.core.lexer import Scanner
 from helen.core.parser import Parser

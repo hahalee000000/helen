@@ -9,6 +9,8 @@ Covers:
 - Keyword regex patterns compile without error
 """
 
+from __future__ import annotations
+
 import json
 import re
 from pathlib import Path

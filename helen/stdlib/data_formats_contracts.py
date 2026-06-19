@@ -3,6 +3,8 @@
 Defines interfaces for YAML, TOML, and XML operations.
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 

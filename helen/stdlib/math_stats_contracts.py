@@ -3,6 +3,8 @@
 Defines interfaces for statistical operations.
 """
 
+from __future__ import annotations
+
 
 class MathStatsContract:
     """Contract for statistical operations."""

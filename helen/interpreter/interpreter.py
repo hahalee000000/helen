@@ -81,7 +81,6 @@ from helen.runtime.llm_runtime import LLMRuntime, MockLLMRuntime
 from helen.runtime.import_resolver import ImportResolver
 from helen.runtime.history import HistoryManager, Message as HistoryMessage
 from helen.runtime.observability import ObservabilityManager
-from helen.interpreter.task import Task, AggregateError
 from helen.semantic.types import (
     AnyType,
     Type,
@@ -221,12 +220,14 @@ class Interpreter(LlmMixin, Visitor[object]):
             if node.name in self._functions:
                 func_node = self._functions[node.name]
                 # Return a callable wrapper so functions can be used as first-class values
+
                 def _function_wrapper(*args):
                     return self._call_function(func_node, list(args))
                 return _function_wrapper
             # Fallback: check if it's a user-defined agent name
             if node.name in self._agents:
                 agent_node = self._agents[node.name]
+
                 def _agent_wrapper(*args):
                     agent_args = {}
                     for i, arg in enumerate(args):
