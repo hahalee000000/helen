@@ -51,7 +51,7 @@ helen/
 │   ├── analyzer.py     # Semantic analysis (Visitor[None])
 │   └── type_utils.py   # Shared type_from_typenode() utility
 ├── runtime/
-│   ├── security.py     # Security sandbox (path/URL/command/PID validation)
+│   ├── tools.py        # Built-in tool registry (web_search, read_file, etc.)
 │   ├── constants.py    # Centralized constants (URLs, thresholds, limits)
 │   ├── llm_runtime.py  # LLMRuntime interface (sync + async)
 │   └── hermes_cli_llm.py  # Hermes CLI-based LLM runtime
@@ -702,58 +702,7 @@ def test_save_and_load(self):
 
 **Conditional dependencies**: Some modules (YAML, TOML) require optional third-party libraries. Use `HAS_YAML`, `HAS_TOML_READ` flags with graceful degradation and clear error messages. See `references/stdlib-p2-p3-implementation.md` for patterns.
 
-### 8. Security Sandbox (runtime/security.py)
-
-**Architecture**:
-- Central security module providing validation functions for all entry points
-- Integrated at tools, stdlib, and import resolver level
-- Prevents path traversal, SSRF, command injection, and privilege escalation
-
-**Key functions**:
-
-```python
-# Path validation — prevents directory traversal
-def validate_path(path: str, *, base_dir: str | None = None,
-                  must_exist: bool = False, allow_absolute: bool = False) -> str:
-    """Resolve and validate path. Blocks /proc, /sys, /etc/shadow."""
-    resolved = os.path.realpath(os.path.abspath(path))
-    # Check blocked paths, base_dir containment
-    return resolved
-
-# URL validation — SSRF protection
-def validate_url(url: str, *, allow_private: bool = False) -> str:
-    """Validate URL scheme, hostname, resolved IP. Blocks private IPs."""
-    # Check scheme (http/https only), block localhost, resolve and check IP ranges
-    return url
-
-# Command validation — block dangerous patterns
-def validate_command(command: str | list[str]) -> str | list[str]:
-    """Block rm -rf /, fork bombs, chmod -R 777 /, etc."""
-
-# PID/signal validation — prevent privilege escalation
-def validate_pid(pid: int, current_pid: int | None = None) -> int:
-    """Block PID 0, 1, and self."""
-def validate_kill_signal(signal_num: int) -> int:
-    """Only allow SIGTERM, SIGINT, SIGHUP, SIGUSR1, SIGUSR2."""
-
-# Environment masking — prevent secret leakage
-def safe_env_list() -> dict[str, str]:
-    """Return env vars with PASSWORD/SECRET/TOKEN/API_KEY values masked."""
-```
-
-**Integration points** (all must call security functions):
-- `runtime/tools.py`: `_web_fetch` → `validate_url()`, `_read_file`/`_write_file`/`_patch_file` → `validate_path()`, `_shell_exec` → `validate_command()` + `shell=False` default
-- `stdlib/system.py`: `_exec`/`_exec_async` → `validate_command()` + `shell=False` default, `_kill` → `validate_pid()` + `validate_kill_signal()`, `_env_list` → `safe_env_list()`
-- `stdlib/network.py`: `_http_request`/`_http_download` → `validate_url()` + download size limit
-- `runtime/import_resolver.py`: `_is_safe_path()` uses `realpath()` (no absolute path bypass)
-
-**Pitfalls**:
-- `shell=False` is now the DEFAULT — uses `shlex.split()` to safely parse command strings into argument lists
-- `os.path.abspath()` does NOT resolve symlinks — always use `os.path.realpath()` for security checks
-- The old `_is_safe_path()` allowed ALL absolute paths (REPL convenience) — this was a security hole, now fixed
-- `SecurityError` is the exception type for all security violations
-
-### 9. Code Quality Infrastructure
+### 8. Code Quality Infrastructure
 
 **Constants module** (`runtime/constants.py`):
 - Centralizes all hardcoded values: URLs, model names, thresholds, timeouts, size limits

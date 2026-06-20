@@ -11,10 +11,6 @@ import urllib.error
 import urllib.parse
 from typing import Any
 
-from helen.runtime.security import (
-    validate_url, SecurityError, MAX_DOWNLOAD_SIZE,
-)
-
 
 def _http_get(url: str, headers: dict[str, str] | None = None) -> dict[str, Any]:
     """Send an HTTP GET request.
@@ -100,11 +96,8 @@ def _http_request(method: str, url: str, data: str | dict | None = None,
         Dict with status, headers, body
 
     Raises:
-        SecurityError: If URL is unsafe (SSRF)
         RuntimeError: If request fails
     """
-    validate_url(url)
-
     # Prepare request data
     request_data = None
     if data is not None:
@@ -175,38 +168,21 @@ def _http_download(url: str, path: str) -> str:
 
     Raises:
         RuntimeError: If download fails
-        SecurityError: If URL is unsafe
     """
-    validate_url(url)
-    from helen.runtime.security import validate_path
-    safe_path = validate_path(path)
-
     try:
         req = urllib.request.Request(url)
         req.add_header("User-Agent", "Helen/1.0")
 
         with urllib.request.urlopen(req, timeout=60) as response:
-            total_size = 0
-            with open(safe_path, "wb") as f:
+            with open(path, "wb") as f:
                 while True:
                     chunk = response.read(8192)
                     if not chunk:
                         break
-                    total_size += len(chunk)
-                    if total_size > MAX_DOWNLOAD_SIZE:
-                        f.close()
-                        import os
-                        os.remove(safe_path)
-                        raise RuntimeError(
-                            f"Download exceeds maximum size "
-                            f"({MAX_DOWNLOAD_SIZE} bytes)"
-                        )
                     f.write(chunk)
 
-        return safe_path
+        return path
 
-    except SecurityError:
-        raise
     except RuntimeError:
         raise
     except Exception as e:

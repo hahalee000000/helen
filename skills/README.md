@@ -12,7 +12,6 @@ Helen 技能系统 — 为 AI Agent 提供专业知识和工作流。
 │   ├── helen-language-development/   ← Helen 语言模式与陷阱
 │   ├── helen-syntax/                 ← Helen 语法参考
 │   ├── helen-stdlib/                 ← 标准库使用指南
-│   ├── helen-security/               ← 安全最佳实践
 │   ├── helen-agent-patterns/         ← Agent 设计模式
 │   ├── code-quality/                 ← 7 维质量评估
 │   ├── debugging/                    ← 调试方法论
@@ -93,7 +92,6 @@ tags: [tag1, tag2]
 | `helen-language-development` | Helen 专属 | Helen 语言模式、陷阱、最佳实践 |
 | `helen-syntax` | Helen 专属 | Helen 语法参考（关键字、类型、表达式） |
 | `helen-stdlib` | Helen 专属 | 185 个标准库函数使用指南 |
-| `helen-security` | Helen 专属 | 安全沙箱、路径验证、SSRF 防护 |
 | `helen-agent-patterns` | Helen 专属 | Agent 设计模式（路由、并发、错误处理） |
 | `code-quality` | 开发 | 7 维代码质量评估方法论 |
 | `debugging` | 开发 | 系统化调试方法论 |

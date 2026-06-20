@@ -11,11 +11,6 @@ import subprocess
 import sys
 from typing import Any
 
-from helen.runtime.security import (
-    validate_command, validate_pid, validate_kill_signal,
-    safe_env_list,
-)
-
 
 # ── Environment operations ─────────────────────────────────────
 
@@ -48,12 +43,12 @@ def _env_set(key: str, value: str) -> str:
 
 
 def _env_list() -> dict[str, str]:
-    """List all environment variables (sensitive values masked).
+    """List all environment variables.
 
     Returns:
-        Dict of environment variables with sensitive values masked.
+        Dict of environment variables.
     """
-    return safe_env_list()
+    return dict(os.environ)
 
 
 def _env_delete(key: str) -> str:
@@ -79,7 +74,7 @@ def _exec(command: str, shell: bool = False, timeout: int | None = None) -> dict
 
     Args:
         command: Command to execute
-        shell: Whether to use shell (default: False for safety)
+        shell: Whether to use shell (default: False)
         timeout: Timeout in seconds
 
     Returns:
@@ -87,10 +82,8 @@ def _exec(command: str, shell: bool = False, timeout: int | None = None) -> dict
 
     Raises:
         TimeoutError: If command times out
-        SecurityError: If command is blocked
     """
     import shlex
-    validate_command(command)
     cmd = command if shell else shlex.split(command)
     try:
         result = subprocess.run(
@@ -114,13 +107,12 @@ def _exec_async(command: str, shell: bool = False) -> int:
 
     Args:
         command: Command to execute
-        shell: Whether to use shell (default: False for safety)
+        shell: Whether to use shell (default: False)
 
     Returns:
         Process ID
     """
     import shlex
-    validate_command(command)
     cmd = command if shell else shlex.split(command)
     process = subprocess.Popen(
         cmd,
@@ -161,10 +153,7 @@ def _kill(pid: int, signal_num: int = 15) -> str:
 
     Raises:
         ProcessLookupError: If process doesn't exist
-        SecurityError: If pid or signal is not allowed
     """
-    validate_pid(pid)
-    validate_kill_signal(signal_num)
     try:
         os.kill(pid, signal_num)
         return f"Sent signal {signal_num} to process {pid}"

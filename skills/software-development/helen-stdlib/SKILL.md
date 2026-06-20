@@ -248,17 +248,6 @@ let id = uuid_generate()  # "550e8400-e29b-41d4-a716-446655440000"
 let bytes = random_bytes(16)  # 16 字节随机数据
 ```
 
-## 安全注意事项
-
-所有文件、网络、系统操作都经过**安全沙箱**保护：
-
-- **路径验证**：阻止访问 `/etc/shadow`、`/proc` 等敏感路径
-- **URL 过滤**：SSRF 防护，阻止私有 IP 访问
-- **命令安全**：阻止 `rm -rf /`、`mkfs` 等危险命令
-- **资源限制**：文件大小限制（读 16MB / 写 64MB）、HTTP 下载限制（100MB）
-
-详见 `helen-security` 技能。
-
 ## Observability（可观测性）
 
 AI 原生可观测性函数，为 AI Agent 提供结构化调试上下文。

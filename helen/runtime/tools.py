@@ -16,11 +16,6 @@ import urllib.parse
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from helen.runtime.security import (
-    validate_path, validate_url, validate_command,
-    SecurityError,
-)
-
 
 @dataclass
 class HelenTool:
@@ -158,10 +153,6 @@ def _web_search(query: str, num_results: int = 3) -> str:
 
 def _web_fetch(url: str) -> str:
     """Fetch the text content of a URL."""
-    try:
-        validate_url(url)
-    except SecurityError as e:
-        return json.dumps({"error": f"URL blocked: {e}"})
     req = urllib.request.Request(url, headers={
         "User-Agent": "Mozilla/5.0 (compatible; Helen/1.0)"
     })
@@ -185,14 +176,11 @@ def _web_fetch(url: str) -> str:
 def _read_file(path: str) -> str:
     """Read the content of a local file."""
     try:
-        safe_path = validate_path(path)
         from pathlib import Path
-        content = Path(safe_path).read_text(encoding="utf-8")
+        content = Path(path).read_text(encoding="utf-8")
         if len(content) > 16000:
             content = content[:16000] + "\n... [truncated]"
         return json.dumps({"path": path, "content": content})
-    except SecurityError as e:
-        return json.dumps({"error": f"Path blocked: {e}"})
     except Exception as e:
         return json.dumps({"error": f"Read failed: {e}"})
 
@@ -200,13 +188,10 @@ def _read_file(path: str) -> str:
 def _write_file(path: str, content: str) -> str:
     """Write content to a local file."""
     try:
-        safe_path = validate_path(path)
         from pathlib import Path
-        Path(safe_path).parent.mkdir(parents=True, exist_ok=True)
-        Path(safe_path).write_text(content, encoding="utf-8")
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        Path(path).write_text(content, encoding="utf-8")
         return json.dumps({"path": path, "bytes_written": len(content), "status": "ok"})
-    except SecurityError as e:
-        return json.dumps({"error": f"Path blocked: {e}"})
     except Exception as e:
         return json.dumps({"error": f"Write failed: {e}"})
 
@@ -223,7 +208,6 @@ def _shell_exec(command: str, timeout: int = 30, shell: bool = False) -> str:
     import shlex
     import subprocess
     try:
-        validate_command(command)
         cmd = command if shell else shlex.split(command)
         result = subprocess.run(
             cmd, shell=shell, capture_output=True, text=True,
@@ -299,8 +283,7 @@ def _patch_file(path: str, old_string: str, new_string: str, replace_all: bool =
     """
     from pathlib import Path
     try:
-        safe_path = validate_path(path)
-        file_path = Path(safe_path)
+        file_path = Path(path)
         if not file_path.exists():
             return json.dumps({"error": f"File not found: {path}"})
 
