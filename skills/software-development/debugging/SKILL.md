@@ -222,7 +222,7 @@ assert x > 0, "x must be positive"
 # Catchable — throws AssertionError
 try {
     assert false, "test"
-} catch AssertionError as e {
+} catch AssertionError e {
     print("Caught: " + e.message)
 }
 ```
@@ -251,9 +251,13 @@ let trace = get_trace(10)
 :trace on          # Enable tracing
 :trace off         # Disable tracing
 :trace show [n]    # Show last n trace entries
-:last_error        # Show structured error context (JSON)
-:llm_log [n]       # Show LLM call audit log
+:last_error        # Show structured error context (human-readable)
+:last_error -v     # Verbose: includes execution trace
+:llm_log [n]       # Show LLM call audit log (compact)
+:llm_log [n] -v    # Verbose: shows all audit fields
 ```
+
+> **Note**: Call stack and execution tracing are enabled by default in REPL — no need for `:trace on`.
 
 ### Error Snapshot Format (JSON)
 
@@ -262,7 +266,8 @@ let trace = get_trace(10)
   "error": {"type": "RuntimeError", "message": "...", "location": "..."},
   "call_stack": [{"function": "...", "args": {...}}],
   "scope": {"var": "value"},
-  "trace": [...]
+  "trace": [...],
+  "timestamp": 1718812800.0
 }
 ```
 
@@ -274,9 +279,11 @@ All `llm act` / `llm stream` calls are automatically logged:
 - tool_calls list (for stream mode)
 - error (if any)
 
+Compact mode shows one-line summary with model name and tool call count. Verbose mode (`-v`) shows all fields.
+
 ### Key Design Decisions
 
-1. **Zero overhead when disabled**: Tracing is opt-in
+1. **Zero overhead when disabled**: Tracing is opt-in (but enabled by default in REPL)
 2. **Ring buffers**: Trace (10000), LLM log (1000), call stack (100)
 3. **JSON structured**: AI can parse directly
 4. **Auto-capture**: Errors/assertions capture full context
