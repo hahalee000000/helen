@@ -3851,10 +3851,40 @@ main {
 ### REPL 命令
 
 ```
-:last_error        # 显示上次错误的完整上下文（JSON）
+:last_error        # 显示上次错误的完整上下文（人类可读格式）
 ```
 
 ### 错误快照格式
+
+REPL 中 `:last_error` 显示人类可读的文本格式：
+
+```
+Error: AssertionError: divisor must not be zero
+Location: <repl>:2:5-46
+
+Call Stack:
+-> <repl>:1:1 in divide
+   <repl>:5:5 in main
+
+Variables in scope:
+a = 10
+b = 0
+```
+
+### JSON 格式（编程访问）
+
+AI Agent 可以通过编程方式获取 JSON 格式的错误快照：
+
+```helen
+// 在代码中访问错误快照
+let snapshot = observability.last_error
+if snapshot != null {
+    let json_str = snapshot.to_json()  // JSON 格式
+    let dict = snapshot.to_dict()      // 字典格式
+}
+```
+
+JSON 格式结构：
 
 ```json
 {
@@ -4050,11 +4080,16 @@ main {
 [LLM] stream Researcher "search..." → 2 tool calls (3500ms)
 
 >>> :last_error
-{
-  "error": {"type": "RuntimeError", "message": "..."},
-  "call_stack": [...],
-  "scope": {...}
-}
+Error: RuntimeError: division by zero
+Location: main.helen:23:5
+
+Call Stack:
+-> main.helen:23:5 in calculate
+   main.helen:10:1 in main
+
+Variables in scope:
+total = 100
+count = 0
 ```
 
 ## 练习
