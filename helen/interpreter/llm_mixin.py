@@ -199,11 +199,12 @@ class LlmMixin:
             audit_duration = (time.time() - audit_start) * 1000
 
             # Log to audit trail
+            actual_model = model or getattr(self.llm_runtime, 'default_model', None) or 'default'
             audit_entry = LLMAuditEntry(
                 timestamp=audit_start,
                 call_type="act",
                 agent_name=agent_name,
-                model=model,
+                model=actual_model,
                 prompt=prompt,
                 response=response.text if response else None,
                 tokens_in=getattr(response, 'usage', {}).get('prompt_tokens', 0) if response else 0,
@@ -218,11 +219,12 @@ class LlmMixin:
             return response.text if response else None
         except HelenRuntimeError as e:
             audit_duration = (time.time() - audit_start) * 1000
+            actual_model = model or getattr(self.llm_runtime, 'default_model', None) or 'default'
             audit_entry = LLMAuditEntry(
                 timestamp=audit_start,
                 call_type="act",
                 agent_name=agent_name,
-                model=model,
+                model=actual_model,
                 prompt=prompt,
                 duration_ms=audit_duration,
                 error=str(e),
@@ -322,6 +324,7 @@ class LlmMixin:
             # Stream response with full tool-calling loop
             full_response = []
             tool_calls_log = []
+            stream_usage = {}  # accumulated token usage across turns
             for event in self.llm_runtime.act_stream(
                 prompt, model=model, temperature=temperature,
                 system_prompt=system_prompt, tools=tools,
@@ -364,6 +367,12 @@ class LlmMixin:
                     else:
                         on_chunk_fn(result_msg)
 
+                elif event_type == "usage":
+                    # Accumulate usage across multiple turns (tool-calling loop)
+                    u = event.get("usage", {})
+                    stream_usage["prompt_tokens"] = stream_usage.get("prompt_tokens", 0) + u.get("prompt_tokens", 0)
+                    stream_usage["completion_tokens"] = stream_usage.get("completion_tokens", 0) + u.get("completion_tokens", 0)
+
                 elif event_type == "error":
                     error_msg = event.get("message", "Unknown error")
                     self.errors.error(
@@ -384,13 +393,17 @@ class LlmMixin:
 
             # Log to audit trail (P2)
             audit_duration = (time.time() - audit_start) * 1000
+            # Use actual model name (from runtime if not specified)
+            actual_model = model or getattr(self.llm_runtime, 'default_model', None) or 'default'
             audit_entry = LLMAuditEntry(
                 timestamp=audit_start,
                 call_type="stream",
                 agent_name=agent_name,
-                model=model,
+                model=actual_model,
                 prompt=prompt,
                 response=full_text,
+                tokens_in=stream_usage.get("prompt_tokens", 0),
+                tokens_out=stream_usage.get("completion_tokens", 0),
                 duration_ms=audit_duration,
                 tool_calls=tool_calls_log,
             )
@@ -400,11 +413,12 @@ class LlmMixin:
         except Exception as e:
             # Log error to audit trail (P2)
             audit_duration = (time.time() - audit_start) * 1000
+            actual_model = model or getattr(self.llm_runtime, 'default_model', None) or 'default'
             audit_entry = LLMAuditEntry(
                 timestamp=audit_start,
                 call_type="stream",
                 agent_name=agent_name,
-                model=model,
+                model=actual_model,
                 prompt=prompt,
                 duration_ms=audit_duration,
                 error=str(e),

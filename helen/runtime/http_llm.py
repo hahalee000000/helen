@@ -306,6 +306,7 @@ class HttpLLMRuntime(LLMRuntime):
                 "messages": messages,
                 "temperature": temperature,
                 "stream": True,
+                "stream_options": {"include_usage": True},
             }
             if tools:
                 payload["tools"] = tools
@@ -326,6 +327,7 @@ class HttpLLMRuntime(LLMRuntime):
                 # Collect streamed chunks
                 full_content = ""
                 tool_calls_acc: dict[int, dict] = {}  # index -> {name, args_str, id}
+                usage_info: dict[str, int] = {}  # token usage from final chunk
 
                 with urllib.request.urlopen(req, timeout=self.timeout) as response:
                     for line_bytes in response:
@@ -340,6 +342,12 @@ class HttpLLMRuntime(LLMRuntime):
 
                             try:
                                 chunk_data = json.loads(data_str)
+
+                                # Capture usage info (sent in final chunk when include_usage=True)
+                                chunk_usage = chunk_data.get("usage")
+                                if chunk_usage:
+                                    usage_info = chunk_usage
+
                                 choices = chunk_data.get("choices", [])
                                 if not choices:
                                     continue
@@ -375,6 +383,10 @@ class HttpLLMRuntime(LLMRuntime):
 
                             except json.JSONDecodeError:
                                 continue
+
+                # Yield usage info at the end of this turn's stream
+                if usage_info:
+                    yield {"type": "usage", "usage": usage_info}
 
                 # After stream completes: check if we got tool calls
                 if tool_calls_acc:

@@ -224,7 +224,7 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
         print("  :trace on|off     Enable/disable execution tracing")
         print("  :trace show [n]   Show last n trace entries (default 50)")
         print("  :last_error       Show structured context of last error")
-        print("  :llm_log [n]      Show last n LLM call audit entries")
+        print("  :llm_log [n] [-v] Show last n LLM calls (-v for verbose)")
         print("  exit              Exit the REPL")
         return True
 
@@ -299,21 +299,55 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
         return True
 
     if cmd == ":llm_log":
+        # Parse arguments: [n] [-v|--verbose]
         n = 10
+        verbose = False
         if arg:
-            try:
-                n = int(arg)
-            except ValueError:
-                pass
+            parts = arg.split()
+            for part in parts:
+                if part in ("-v", "--verbose"):
+                    verbose = True
+                else:
+                    try:
+                        n = int(part)
+                    except ValueError:
+                        pass
+        
         entries = interp.observability.llm_audit.entries[-n:]
         if not entries:
             print("No LLM calls recorded yet.")
         else:
             print(f"Last {len(entries)} LLM calls:")
-            for entry in entries:
+            for i, entry in enumerate(entries, 1):
                 status = "❌" if entry.error else "✅"
-                print(f"  {status} [{entry.call_type}] {entry.agent_name or 'anonymous'} "
-                      f"({entry.tokens_in}+{entry.tokens_out} tokens, {entry.duration_ms:.0f}ms)")
+                if verbose:
+                    # Verbose mode: show all fields
+                    from datetime import datetime
+                    ts = datetime.fromtimestamp(entry.timestamp).strftime("%Y-%m-%d %H:%M:%S")
+                    print(f"\n  [{i}] {status} {ts}")
+                    print(f"      Type: {entry.call_type}")
+                    print(f"      Agent: {entry.agent_name or 'anonymous'}")
+                    print(f"      Model: {entry.model or 'default'}")
+                    print(f"      Prompt: {entry.prompt[:100]}{'...' if len(entry.prompt) > 100 else ''}")
+                    if entry.response:
+                        print(f"      Response: {entry.response[:100]}{'...' if len(entry.response) > 100 else ''}")
+                    print(f"      Tokens: {entry.tokens_in} in / {entry.tokens_out} out")
+                    print(f"      Duration: {entry.duration_ms:.0f}ms")
+                    if entry.tool_calls:
+                        print(f"      Tool calls: {len(entry.tool_calls)}")
+                        for tc in entry.tool_calls[:3]:  # Show first 3
+                            print(f"        - {tc.get('name', 'unknown')}")
+                    if entry.error:
+                        print(f"      Error: {entry.error}")
+                else:
+                    # Compact mode: one line per entry
+                    model_str = f" @{entry.model}" if entry.model else ""
+                    print(f"  {status} [{entry.call_type}] {entry.agent_name or 'anonymous'}{model_str} "
+                          f"({entry.tokens_in}+{entry.tokens_out} tokens, {entry.duration_ms:.0f}ms)")
+                    if entry.tool_calls:
+                        print(f"      🔧 {len(entry.tool_calls)} tool call(s)")
+                    if entry.error:
+                        print(f"      ❗ {entry.error}")
         return True
 
     print(f"Unknown command: {cmd}. Type :help for available commands.")
