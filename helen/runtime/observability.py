@@ -311,11 +311,19 @@ class ErrorSnapshot:
         """Convert to JSON string."""
         return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False)
 
-    def format_text(self) -> str:
-        """Format as human-readable error context."""
+    def format_text(self, verbose: bool = False) -> str:
+        """Format as human-readable error context.
+        
+        Args:
+            verbose: If True, include execution trace and timestamp.
+        """
+        from datetime import datetime
+        ts = datetime.fromtimestamp(self.timestamp).strftime("%Y-%m-%d %H:%M:%S")
+        
         lines = [
             f"Error: {self.error_type}: {self.message}",
             f"Location: {self.location}",
+            f"Time: {ts}",
             "",
             "Call Stack:",
         ]
@@ -332,6 +340,23 @@ class ErrorSnapshot:
             lines.append("Variables in scope:")
             for name, value in self.scope.items():
                 lines.append(f"  {name} = {_format_value(value)}")
+
+        if verbose and self.trace:
+            lines.append("")
+            lines.append(f"Execution Trace (last {min(len(self.trace), 20)} entries):")
+            for entry in self.trace[-20:]:
+                trace_type = entry.get("type", "?")
+                # Function name is in the "data" dict
+                data = entry.get("data", {})
+                func = data.get("function", "") or data.get("agent", "")
+                loc = entry.get("location", "")
+                if trace_type == "call":
+                    lines.append(f"  → {loc} call {func}")
+                elif trace_type == "return":
+                    ret_val = data.get("return_value", "")
+                    lines.append(f"  ← {loc} return {func} → {ret_val}")
+                else:
+                    lines.append(f"  [{trace_type}] {loc} {func}")
 
         return "\n".join(lines)
 

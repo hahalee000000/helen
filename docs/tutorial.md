@@ -3852,6 +3852,7 @@ main {
 
 ```
 :last_error        # 显示上次错误的完整上下文（人类可读格式）
+:last_error -v     # 详细模式，包含执行追踪
 ```
 
 ### 错误快照格式
@@ -3860,15 +3861,24 @@ REPL 中 `:last_error` 显示人类可读的文本格式：
 
 ```
 Error: AssertionError: divisor must not be zero
-Location: <repl>:2:5-46
+Location: <repl>:1:31
+Time: 2026-06-20 18:56:59
 
 Call Stack:
 -> <repl>:1:1 in divide
-   <repl>:5:5 in main
 
 Variables in scope:
-a = 10
-b = 0
+  a = 10
+  b = 0
+
+Tip: use :last_error -v to show execution trace
+```
+
+使用 `-v` 参数会额外显示执行追踪：
+
+```
+Execution Trace (last 1 entries):
+  → <repl>:1:1 call divide
 ```
 
 ### JSON 格式（编程访问）
@@ -3927,6 +3937,7 @@ AI Agent 可以直接解析 JSON 错误快照，提取：
 
 ```
 :llm_log [n]       # 显示最近 n 次 LLM 调用（默认 10）
+:llm_log [n] -v    # 详细模式，显示完整审计信息
 ```
 
 ### 审计记录内容
@@ -4007,8 +4018,8 @@ helen/runtime/observability.py
 
 ### 零开销设计
 
-- **追踪默认关闭**：只有显式 `trace_on()` 或 `:trace on` 才记录
-- **调用栈默认关闭**：只在追踪开启时记录
+- **追踪默认关闭**：只有显式 `trace_on()` 或 `:trace on` 才记录（REPL 中默认开启）
+- **调用栈默认关闭**：只在追踪开启时记录（REPL 中默认开启）
 - **LLM 审计默认开启**：对 prompt-first 程序至关重要
 - **环形缓冲区**：限制内存使用（追踪 10000 条，LLM 日志 1000 条，调用栈 100 层）
 

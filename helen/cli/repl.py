@@ -104,6 +104,14 @@ def _execute_input(source: str, interp: Interpreter, analyzer: SemanticAnalyzer)
     try:
         result = interp.interpret(program)
     except Exception as e:
+        # Capture structured error context for :last_error
+        # Only capture if not already captured by the interpreter (e.g., in function/agent calls)
+        from helen.interpreter.exceptions import HelenRuntimeError
+        if interp.observability.last_error is None:
+            span = getattr(e, 'span', None)
+            interp.observability.capture_error(
+                type(e).__name__, str(e), span, scope={}
+            )
         return False, f"RuntimeError: {e}"
 
     if errors.has_errors:
@@ -223,7 +231,7 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
         print("  :ask <question>   Ask the Helen language assistant")
         print("  :trace on|off     Enable/disable execution tracing")
         print("  :trace show [n]   Show last n trace entries (default 50)")
-        print("  :last_error       Show structured context of last error")
+        print("  :last_error [-v]  Show structured context of last error (-v for trace)")
         print("  :llm_log [n] [-v] Show last n LLM calls (-v for verbose)")
         print("  exit              Exit the REPL")
         return True
@@ -291,11 +299,14 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
         return True
 
     if cmd == ":last_error":
+        verbose = "-v" in arg or "--verbose" in arg
         last_err = interp.observability.last_error
         if last_err is None:
             print("No error captured yet.")
         else:
-            print(last_err.format_text())
+            print(last_err.format_text(verbose=verbose))
+            if not verbose:
+                print("\nTip: use :last_error -v to show execution trace")
         return True
 
     if cmd == ":llm_log":
@@ -376,6 +387,9 @@ def repl_command() -> int:
     errors = ErrorReporter()
     llm_runtime = _create_llm_runtime()
     interp = Interpreter(errors=errors, llm_runtime=llm_runtime)
+    # Enable call stack and execution tracing by default in REPL for better error diagnostics
+    interp.observability.call_stack.enabled = True
+    interp.observability.tracer.enabled = True
     analyzer = SemanticAnalyzer(errors, base_dir=".")
 
     buffer_lines: list[str] = []
