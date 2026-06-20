@@ -7,7 +7,7 @@ Phase 1-3 streaming features for Helen language (966 tests).
 ```
 Phase 1: Stream output stdlib functions (stream_print, progress_bar, etc.)
 Phase 2: llm stream statement syntax + interpreter execution
-Phase 3: Async iterator support (for await, StreamingResponse)
+Phase 3: Async iterator support (for await, StreamingResponse, streaming true)
 ```
 
 ## Key Files
@@ -19,9 +19,10 @@ Phase 3: Async iterator support (for await, StreamingResponse)
 | `helen/runtime/stream_contracts.py` | StreamChunk, StreamingLLMRuntime, LlmStreamCallback protocols |
 | `helen/runtime/async_iterator_contracts.py` | AsyncIterable, StreamingResponse, AsyncGenerator protocols |
 | `helen/runtime/streaming_response.py` | StreamingResponse async iterable wrapper |
-| `helen/core/ast.py` | LlmStreamStmtNode (line ~785) |
-| `helen/core/parser.py` | llm stream parsing |
-| `helen/interpreter/interpreter.py` | visit_llm_stream_stmt (line ~945) |
+| `helen/core/ast.py` | LlmStreamStmtNode, ForAwaitStmtNode, DeclarationNode.streaming |
+| `helen/core/parser.py` | llm stream parsing, for await parsing, streaming true parsing |
+| `helen/core/tokens.py` | STREAMING token, 'streaming' keyword |
+| `helen/interpreter/interpreter.py` | visit_llm_stream_stmt, visit_for_await_stmt, _call_llm_streaming |
 
 ## Syntax
 
@@ -39,9 +40,18 @@ agent Poet(topic: str) {
     main { llm stream }
 }
 
-// Async iteration
-for await chunk in streaming_response {
-    stream_print(chunk)
+// Streaming agent with for await (custom chunk processing)
+agent Streamer(topic: str) {
+    description "Stream a long response"
+    streaming true
+    prompt "Write a detailed essay about: {{topic}}"
+}
+
+main {
+    let response = async Streamer("coding")
+    for await chunk in response {
+        stream_print(chunk)
+    }
 }
 ```
 

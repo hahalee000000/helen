@@ -58,6 +58,7 @@ agent ConfiguredAgent {
     model "gpt-4"              # LLM 模型
     temperature 0.7            # 创造性 (0.0-1.0)
     max-turns 10               # 最大工具调用轮次
+    streaming true             # 启用流式响应（返回 StreamingResponse）
     tools ["web_search", "read_file", "write_file"]  # 可用工具
     
     main {
@@ -240,9 +241,11 @@ agent DataAggregator {
 }
 ```
 
-### 模式 5: 流式 Agent（llm stream）
+### 模式 5: 流式 Agent（llm stream / streaming true + for await）
 
 **场景**：实时输出 LLM 响应，改善用户体验
+
+#### 方式 A：使用 `llm stream`（自动输出到终端）
 
 ```helen
 agent StreamingWriter(topic: str) {
@@ -260,6 +263,44 @@ agent StreamingWriter(topic: str) {
 
 # 使用 — 用户立即看到输出，无需等待完整响应
 StreamingWriter("The future of AI")
+```
+
+#### 方式 B：使用 `streaming true` + `for await`（自定义处理每个 chunk）
+
+```helen
+agent Streamer(topic: str) {
+    description "Stream a long response"
+    streaming true
+    prompt "Write a detailed essay about: {{topic}}"
+}
+
+main {
+    let response = async Streamer("the history of computing")
+    
+    // 逐 chunk 处理流式响应
+    for await chunk in response {
+        stream_print(chunk)
+    }
+}
+```
+
+`streaming true` 使 agent 调用返回 `StreamingResponse` 对象，可在 `for await` 中迭代。
+适用于需要自定义处理逻辑的场景（过滤、转换、聚合）：
+
+```helen
+main {
+    let response = async Streamer("long essay")
+    let total_length = 0
+    
+    // 流式聚合
+    for await chunk in response {
+        total_length = total_length + len(chunk)
+        if len(chunk) > 10 {
+            stream_print(chunk)  // 只输出长 chunk
+        }
+    }
+    print("Total length: " + total_length)
+}
 ```
 
 ### 模式 6: 工具使用 Agent

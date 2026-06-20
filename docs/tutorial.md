@@ -1748,11 +1748,12 @@ main {
 
 ## 流式迭代（for await）
 
-Helen 支持 `for await` 语法异步迭代流式响应：
+Helen 支持 `for await` 语法异步迭代流式响应。Agent 声明 `streaming true` 后，调用返回 `StreamingResponse` 对象，可在 `for await` 中逐 chunk 处理：
 
 ```helen
 agent Streamer(topic: str) {
     description "Stream a long response"
+    streaming true
     prompt "Write a detailed essay about: {{topic}}"
 }
 
@@ -1764,12 +1765,42 @@ main {
 }
 ```
 
-`for await` 逐 chunk 处理异步可迭代对象，适用于：
-- 流式 LLM 响应
+### 流式过滤与转换
+
+`for await` 支持在循环体中对 chunk 进行自定义处理：
+
+```helen
+main {
+    let response = async Streamer("long essay")
+    
+    // 过滤：只处理长 chunk
+    for await chunk in response {
+        if len(chunk) > 10 {
+            stream_print(chunk)
+        }
+    }
+}
+```
+
+### 流式聚合
+
+```helen
+main {
+    let response = async Streamer("essay")
+    let total_length = 0
+    for await chunk in response {
+        total_length = total_length + len(chunk)
+    }
+    print("Total length: " + total_length)
+}
+```
+
+`for await` 适用于：
+- 流式 LLM 响应（`streaming true` agent）
 - 异步数据源
 - 大文件逐行处理
 
-**注意**：`for await` 只能在 `async` 上下文中使用。
+**注意**：`for await` 只能在 `async` 上下文中使用。Agent 必须声明 `streaming true` 才能返回可迭代的流式响应。
 
 ## 注意事项
 

@@ -9,7 +9,7 @@ tags: [helen, syntax, reference, language]
 
 # Helen 语法参考
 
-## 关键字（43 个）
+## 关键字（44 个）
 
 ### Agent 声明
 - `agent` — 声明 Agent
@@ -19,6 +19,7 @@ tags: [helen, syntax, reference, language]
 - `temperature` — 温度参数
 - `max-turns` — 最大工具调用轮次
 - `tools` — 可用工具列表
+- `streaming` — 启用流式响应（`streaming true`）
 
 ### LLM 语句
 - `llm` — LLM 操作关键字
@@ -26,10 +27,12 @@ tags: [helen, syntax, reference, language]
 - `if` — LLM 路由（分类分支）
 - `stream` — 流式输出
 - `async` — 异步执行
+- `await` — 等待异步任务完成
 
 ### 控制流
 - `if` / `else` — 条件分支
 - `for` / `in` — 循环
+- `for await` / `in` — 异步流式迭代
 - `while` — 条件循环
 - `break` / `continue` — 循环控制
 - `match` / `case` / `default` — 模式匹配
@@ -134,6 +137,13 @@ agent Translator {
         return llm act "Translate: Hello"
     }
 }
+
+// 流式 Agent（返回 StreamingResponse，可用 for await 迭代）
+agent Streamer(topic: str) {
+    description "Stream a long response"
+    streaming true
+    prompt "Write a detailed essay about: {{topic}}"
+}
 ```
 
 ### LLM 语句
@@ -166,6 +176,19 @@ let result = await task
 
 # 等待多个（并发）
 let results = await [task1, task2, task3]
+
+# 流式迭代（for await）
+agent Streamer(topic: str) {
+    streaming true
+    prompt "Write about: {{topic}}"
+}
+
+main {
+    let response = async Streamer("coding")
+    for await chunk in response {
+        stream_print(chunk)
+    }
+}
 ```
 
 ### 异常处理
