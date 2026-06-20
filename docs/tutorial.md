@@ -3745,7 +3745,7 @@ fn divide(a, b) {
 main {
     try {
         let result = divide(10, 0)
-    } catch AssertionError as e {
+    } catch AssertionError e {
         print("Caught: " + e.message)
         // 输出: Caught: assertion failed: divisor must not be zero
     }
@@ -4023,7 +4023,7 @@ main {
         let data = [1, 2, 3, 4, 5]
         let result = DataProcessor(data)
         print("Result: " + result)
-    } catch AssertionError as e {
+    } catch AssertionError e {
         print("Validation failed: " + e.message)
         // 在 REPL 中可以用 :last_error 查看完整上下文
     }

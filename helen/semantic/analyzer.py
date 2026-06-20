@@ -90,6 +90,13 @@ _PREDEFINED_EXCEPTIONS = frozenset({
     "ToolError",
     "RuntimeError",
     "AggregateError",
+    "AssertionError",
+    "ValueError",
+    "TypeError",
+    "KeyError",
+    "IndexError",
+    "FileNotFoundError",
+    "PermissionError",
 })
 
 
