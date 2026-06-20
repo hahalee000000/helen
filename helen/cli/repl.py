@@ -335,7 +335,7 @@ def repl_command() -> int:
 
     print("Helen REPL v1.2")
     print("Type 'exit' or Ctrl+D to quit, ':help' for commands")
-    print("In multi-line mode (...), press Enter on empty line or Ctrl+C to cancel")
+    print("In multi-line mode (...), press Enter twice on empty line to execute, or Ctrl+C to cancel")
     print()
 
     # Persistent interpreter state across REPL iterations
@@ -345,6 +345,7 @@ def repl_command() -> int:
     analyzer = SemanticAnalyzer(errors, base_dir=".")
 
     buffer_lines: list[str] = []
+    empty_line_count = 0  # Track consecutive empty lines
 
     try:
         while True:
@@ -362,12 +363,14 @@ def repl_command() -> int:
                 # Handle terminal encoding issues (e.g., with CJK characters)
                 print(f"Input encoding error: {e}. Please try again.", file=sys.stderr)
                 buffer_lines.clear()
+                empty_line_count = 0
                 continue
             except KeyboardInterrupt:
                 # Ctrl+C in multi-line mode: cancel current input
                 if buffer_lines:
                     print("\n(multi-line input cancelled)")
                     buffer_lines.clear()
+                    empty_line_count = 0
                     continue
                 # Ctrl+C at top level: exit REPL
                 print("\nInterrupted")
@@ -380,8 +383,15 @@ def repl_command() -> int:
             if not buffer_lines and _handle_repl_command(line, interp, analyzer):
                 continue
 
-            # In multi-line mode, empty line means "execute what we have"
-            if buffer_lines and not line.strip():
+            # Track empty lines
+            if not line.strip():
+                empty_line_count += 1
+            else:
+                empty_line_count = 0
+
+            # In multi-line mode, two consecutive empty lines means "execute what we have"
+            # This allows single empty lines in code (for spacing) without triggering execution
+            if buffer_lines and empty_line_count >= 2:
                 buffer = "\n".join(buffer_lines)
                 # Force execution even if braces are unbalanced
                 if buffer.strip():
@@ -395,6 +405,7 @@ def repl_command() -> int:
                     except Exception as e:
                         print(f"Internal Error: {e}", file=sys.stderr)
                 buffer_lines = []
+                empty_line_count = 0
                 continue
 
             buffer_lines.append(line)
@@ -418,6 +429,7 @@ def repl_command() -> int:
                     # Don't crash the REPL
 
             buffer_lines = []
+            empty_line_count = 0
 
     except KeyboardInterrupt:
         print("\nInterrupted")
