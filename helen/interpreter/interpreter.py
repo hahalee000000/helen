@@ -30,6 +30,7 @@ from helen.core.ast import (
     FinallyBlockNode,
     FnBlockNode,
     ForStmtNode,
+    ForAwaitStmtNode,
     FunctionDeclNode,
     GroupingNode,
     IfStmtNode,
@@ -526,6 +527,51 @@ class Interpreter(LlmMixin, Visitor[object]):
                 self.environment = old_env
 
         return result
+
+    def visit_for_await_stmt(self, node: ForAwaitStmtNode) -> object:
+        """Execute a for-await-in loop (async iteration)."""
+        import asyncio
+        from helen.interpreter.task import Task
+        
+        iterable = node.iterable.accept(self)
+        
+        # If iterable is a Task, await it first to get the actual async iterable
+        if isinstance(iterable, Task):
+            if iterable.is_pending:
+                iterable.execute()
+            iterable = iterable.result()
+        
+        # Check if iterable is an async iterable
+        if not hasattr(iterable, '__aiter__'):
+            self._runtime_error(node.span, f"Cannot async iterate over {type(iterable).__name__}")
+            return None
+        
+        # Run async iteration using asyncio
+        async def _async_iterate():
+            result = None
+            async for item in iterable:
+                old_env = self.environment
+                self.environment = self.environment.enter_scope()
+                try:
+                    if node.iterator is not None:
+                        self.environment.define(node.iterator.name, item)
+                    result = self._execute(node.body)
+                    if isinstance(result, BreakSentinel):
+                        break
+                    if isinstance(result, ContinueSentinel):
+                        continue
+                    if isinstance(result, ReturnSentinel):
+                        return result
+                finally:
+                    self.environment = old_env
+            return result
+        
+        # Run the async iteration
+        try:
+            return asyncio.run(_async_iterate())
+        except Exception as e:
+            self._runtime_error(node.span, f"Error in for-await loop: {e}")
+            return None
 
     def visit_while_stmt(self, node: WhileStmtNode) -> object:
         """Execute a while loop."""
@@ -1074,6 +1120,9 @@ class Interpreter(LlmMixin, Visitor[object]):
             agent: The AgentDeclNode to execute.
             args: Keyword arguments from the call statement.
         """
+        # Check if agent is streaming mode
+        is_streaming = self._is_agent_streaming(agent)
+        
         # Push call stack frame (AI observability)
         self.observability.call_stack.push(agent.name, agent.span, args)
         self.observability.tracer.trace("call", agent.span, {"agent": agent.name, "args": args})
@@ -1120,9 +1169,26 @@ class Interpreter(LlmMixin, Visitor[object]):
                 result = agent.logic.accept(self)
                 if isinstance(result, ReturnSentinel):
                     self.observability.tracer.trace("return", agent.span, {"agent": agent.name, "value": result.value})
+                    # If streaming mode, wrap result in StreamingResponse
+                    if is_streaming and isinstance(result.value, str):
+                        return self._create_streaming_response(result.value)
                     return result.value
                 self.observability.tracer.trace("return", agent.span, {"agent": agent.name})
+                # If streaming mode, wrap result in StreamingResponse
+                if is_streaming and isinstance(result, str):
+                    return self._create_streaming_response(result)
                 return result
+            elif agent.prompt is not None:
+                # Agent has no logic but has a prompt - auto-execute LLM call
+                rendered_prompt = self._get_rendered_agent_prompt()
+                if rendered_prompt:
+                    if is_streaming:
+                        # Return streaming response
+                        return self._call_llm_streaming(rendered_prompt, agent)
+                    else:
+                        # Return complete response
+                        return self.llm_runtime.act(rendered_prompt)
+                return None
             return None
         except Exception as e:
             # Capture error snapshot with call stack
@@ -1144,6 +1210,56 @@ class Interpreter(LlmMixin, Visitor[object]):
             # Unregister agent functions to avoid leaking
             for fname in registered_names:
                 self._functions.pop(fname, None)
+
+    def _is_agent_streaming(self, agent: AgentDeclNode) -> bool:
+        """Check if agent has streaming true declaration."""
+        for decl in agent.declarations:
+            if decl.streaming:
+                return True
+        return False
+
+    def _create_streaming_response(self, text: str):
+        """Create a StreamingResponse from text for for-await iteration."""
+        from helen.runtime.streaming_response import StreamingResponse
+        
+        # Create a simple async iterator that yields the text in chunks
+        async def _text_iterator():
+            # Split text into chunks for streaming effect
+            chunk_size = 50
+            for i in range(0, len(text), chunk_size):
+                yield text[i:i + chunk_size]
+        
+        return StreamingResponse(_text_iterator())
+
+    def _call_llm_streaming(self, prompt: str, agent: AgentDeclNode):
+        """Call LLM with streaming and return StreamingResponse."""
+        from helen.runtime.streaming_response import StreamingResponse
+        
+        # Get agent settings
+        model = self._get_agent_setting("model")
+        temperature = float(self._get_agent_setting("temperature", 1.0))
+        system_prompt = self._get_agent_setting("description")
+        
+        # Get the stream iterator from LLM runtime
+        if hasattr(self.llm_runtime, 'act_stream'):
+            stream_iterator = self.llm_runtime.act_stream(
+                prompt,
+                model=model,
+                temperature=temperature,
+                system_prompt=system_prompt,
+            )
+            return StreamingResponse(stream_iterator)
+        else:
+            # Fallback to non-streaming
+            response = self.llm_runtime.act(
+                prompt,
+                model=model,
+                temperature=temperature,
+                system_prompt=system_prompt,
+            )
+            if response and response.text:
+                return self._create_streaming_response(response.text)
+            return None
 
     def _await_tasks(self, tasks: list[Task] | Task) -> object:
         """Await one or more tasks with Promise.all semantics (HLD 3.6.7).

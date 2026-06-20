@@ -38,6 +38,7 @@ from helen.core.ast import (
     FinallyBlockNode,
     FnBlockNode,
     ForStmtNode,
+    ForAwaitStmtNode,
     FunctionDeclNode,
     GroupingNode,
     IfStmtNode,
@@ -299,6 +300,20 @@ class SemanticAnalyzer(Visitor[None]):
         node.iterable.accept(self)
         self._in_loop += 1
         self.symbols.enter_scope("for", "block")
+        try:
+            if node.iterator is not None:
+                # The loop variable is declared in this scope
+                sym = Symbol(name=node.iterator.name, kind="variable")
+                self.symbols.define(node.iterator.name, sym)
+            node.body.accept(self)
+        finally:
+            self.symbols.exit_scope()
+            self._in_loop -= 1
+
+    def visit_for_await_stmt(self, node: ForAwaitStmtNode) -> None:
+        node.iterable.accept(self)
+        self._in_loop += 1
+        self.symbols.enter_scope("for-await", "block")
         try:
             if node.iterator is not None:
                 # The loop variable is declared in this scope

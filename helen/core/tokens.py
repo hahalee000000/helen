@@ -82,6 +82,7 @@ class TokenType(Enum):
     MEMORY = auto()
     TEMPERATURE = auto()
     MAX_TURNS = auto()
+    STREAMING = auto()
     PROMPT = auto()
     LLM = auto()
     IMPORT = auto()
@@ -132,6 +133,7 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "memory": TokenType.MEMORY,
     "temperature": TokenType.TEMPERATURE,
     "max-turns": TokenType.MAX_TURNS,
+    "streaming": TokenType.STREAMING,
     "prompt": TokenType.PROMPT,
     "llm": TokenType.LLM,
     "import": TokenType.IMPORT,

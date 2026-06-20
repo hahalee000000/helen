@@ -25,6 +25,7 @@ from .ast import (
     FinallyBlockNode,
     FnBlockNode,
     ForStmtNode,
+    ForAwaitStmtNode,
     FunctionDeclNode,
     GroupingNode,
     IfStmtNode,
@@ -529,9 +530,11 @@ class Parser:
                           else_branch=else_branch,
                           span=self._make_span(start, end))
 
-    def _for_stmt(self) -> ForStmtNode:
-        """Parse a for statement: for x in expr { ... }."""
+    def _for_stmt(self) -> ForStmtNode | ForAwaitStmtNode:
+        """Parse a for statement: for x in expr { ... } or for await x in expr { ... }."""
         start = self._previous()
+        # Check for 'for await' syntax
+        is_await = self._match(TokenType.AWAIT)
         iter_tok = self._consume(TokenType.IDENTIFIER, "Expected iterator after 'for'.")
         self._consume(TokenType.IN, "Expected 'in' after iterator.")
         iterable = self._expression()
@@ -539,6 +542,9 @@ class Parser:
         body = self._block_body()
         end = self._previous()
         iter_node = VariableNode(name=iter_tok.lexeme, span=iter_tok.span)
+        if is_await:
+            return ForAwaitStmtNode(iterator=iter_node, iterable=iterable, body=body,
+                                    span=self._make_span(start, end))
         return ForStmtNode(iterator=iter_node, iterable=iterable, body=body,
                            span=self._make_span(start, end))
 
@@ -628,7 +634,7 @@ class Parser:
             elif self._check(
                 TokenType.DESCRIPTION, TokenType.MODEL, TokenType.TOOLS,
                 TokenType.SKILLS, TokenType.MEMORY, TokenType.TEMPERATURE,
-                TokenType.MAX_TURNS, TokenType.SUB_AGENTS,
+                TokenType.MAX_TURNS, TokenType.SUB_AGENTS, TokenType.STREAMING,
             ):
                 declarations.append(self._declaration_block())
             else:
@@ -655,7 +661,7 @@ class Parser:
                               span=self._make_span(name_tok, end))
 
     def _declaration_block(self) -> DeclarationNode:
-        """Parse a config declaration: description "..." / model "..." / tools [...] etc."""
+        """Parse a config declaration: description "..." / model "..." / tools [...] / streaming true etc."""
         start = self._advance()  # consume the config keyword
         token_type = start.type
         # Parse the value
@@ -670,6 +676,13 @@ class Parser:
             value_tok = self._previous()
             value = LiteralNode(
                 value=value_tok.literal, span=value_tok.span
+            )
+        elif self._check(TokenType.TRUE, TokenType.FALSE):
+            # Boolean value for streaming
+            self._advance()
+            value_tok = self._previous()
+            value = LiteralNode(
+                value=value_tok.type == TokenType.TRUE, span=value_tok.span
             )
         elif self._check(TokenType.LEFT_BRACKET):
             # tools/skills/sub_agents list: [ "a", "b" ]
@@ -703,9 +716,14 @@ class Parser:
             TokenType.MEMORY: "memory",
             TokenType.TEMPERATURE: "temperature",
             TokenType.MAX_TURNS: "max_turns",
+            TokenType.STREAMING: "streaming",
         }
         field_name = field_map.get(token_type)
 
+        streaming_value = False
+        if field_name == "streaming" and isinstance(value, LiteralNode):
+            streaming_value = bool(value.value)
+        
         return DeclarationNode(
             description=value if field_name == "description" else None,
             model=value if field_name == "model" else None,
@@ -715,6 +733,7 @@ class Parser:
             memory=value if field_name == "memory" else None,
             temperature=value if field_name == "temperature" else None,
             max_turns=value if field_name == "max_turns" else None,
+            streaming=streaming_value,
             span=span,
         )
 

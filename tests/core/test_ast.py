@@ -131,6 +131,10 @@ class MockVisitor(Visitor[str]):
         self.calls.append("visit_for_stmt")
         return "<for>"
 
+    def visit_for_await_stmt(self, node) -> str:
+        self.calls.append("visit_for_await_stmt")
+        return "<for-await>"
+
     def visit_while_stmt(self, node) -> str:
         self.calls.append("visit_while_stmt")
         return "<while>"

@@ -60,6 +60,10 @@ class Visitor(ABC, Generic[R]):
         """Visit a ForStmtNode."""
 
     @abstractmethod
+    def visit_for_await_stmt(self, node: ForAwaitStmtNode) -> R:
+        """Visit a ForAwaitStmtNode."""
+
+    @abstractmethod
     def visit_while_stmt(self, node: WhileStmtNode) -> R:
         """Visit a WhileStmtNode."""
 
@@ -480,6 +484,19 @@ class ForStmtNode(StatementNode):
 
 
 @dataclass(frozen=True)
+class ForAwaitStmtNode(StatementNode):
+    """For-await loop: for await x in async_iterable { ... }."""
+    iterator: VariableNode | None
+    iterable: ExpressionNode
+    body: StatementNode
+    span: SourceSpan
+
+    def accept(self, visitor: Visitor[R]) -> R:
+        """Dispatch to the visitor."""
+        return visitor.visit_for_await_stmt(self)
+
+
+@dataclass(frozen=True)
 class WhileStmtNode(StatementNode):
     """While loop: while cond { ... }."""
     condition: ExpressionNode
@@ -556,6 +573,7 @@ class DeclarationNode(StatementNode):
     temperature: float | None
     max_turns: int | None
     span: SourceSpan
+    streaming: bool = False  # Whether agent returns StreamingResponse
 
     def accept(self, visitor: Visitor[R]) -> R:
         """Dispatch to the visitor."""
@@ -940,6 +958,10 @@ class ASTPrinter(Visitor[str]):
     def visit_for_stmt(self, node: ForStmtNode) -> str:
         """Visit a ForStmtNode."""
         return self._parenthesize("for", node.iterator, node.iterable, node.body)
+
+    def visit_for_await_stmt(self, node: ForAwaitStmtNode) -> str:
+        """Visit a ForAwaitStmtNode."""
+        return self._parenthesize("for await", node.iterator, node.iterable, node.body)
 
     def visit_while_stmt(self, node: WhileStmtNode) -> str:
         """Visit a WhileStmtNode."""
