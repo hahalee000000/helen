@@ -41,6 +41,7 @@ class TokenType(Enum):
     SEMICOLON = auto()
     QUESTION = auto()
     PIPE = auto()
+    PIPE_RIGHT = auto()  # |> pipe operator
 
     # === Operators ===
     MINUS = auto()

@@ -42,6 +42,7 @@ from .ast import (
     MapLiteralNode,
     MatchStmtNode,
     OptionalTypeNode,
+    PipeExprNode,
     ProgramNode,
     PromptDefNode,
     ProtocolDeclNode,
@@ -86,15 +87,16 @@ class Precedence:
     """Pratt parsing precedence levels (higher value = tighter binding)."""
     NONE = 0
     ASSIGNMENT = 1
-    OR = 2
-    AND = 3
-    EQUALITY = 4
-    COMPARISON = 5
-    TERM = 6
-    FACTOR = 7
-    UNARY = 8
-    AWAIT = 9
-    CALL = 10
+    PIPE = 2          # |> pipe operator
+    OR = 3
+    AND = 4
+    EQUALITY = 5
+    COMPARISON = 6
+    TERM = 7
+    FACTOR = 8
+    UNARY = 9
+    AWAIT = 10
+    CALL = 11
 
 
 @dataclass
@@ -200,6 +202,10 @@ class Parser:
             self._rules[tt].infix = self._binary if tt not in (TokenType.LEFT_PAREN, TokenType.LEFT_BRACKET, TokenType.DOT) else (self._call if tt == TokenType.LEFT_PAREN else (self._index if tt == TokenType.LEFT_BRACKET else self._access))
             self._rules[tt].precedence = prec
 
+        # Pipe operator: |> (left-associative, low precedence)
+        self._rules[TokenType.PIPE_RIGHT].infix = self._pipe
+        self._rules[TokenType.PIPE_RIGHT].precedence = Precedence.PIPE
+
     def _expression(self, precedence: int = Precedence.NONE) -> ExpressionNode:
         """Pratt core: parse an expression."""
         if self._at_end():
@@ -301,6 +307,14 @@ class Parser:
         rule = self._rules.get(operator.type, ParseFn())
         right = self._expression(rule.precedence + 1)
         return BinaryOpNode(left=left, operator=operator, right=right,
+                            span=self._make_span(operator, self._previous()))
+
+    def _pipe(self, left: ExpressionNode) -> ExpressionNode:
+        """Parse a pipe expression: value |> fn."""
+        operator = self._previous()  # PIPE_RIGHT token
+        rule = self._rules.get(TokenType.PIPE_RIGHT, ParseFn())
+        right = self._expression(rule.precedence + 1)  # left-associative
+        return PipeExprNode(value=left, function=right,
                             span=self._make_span(operator, self._previous()))
 
     def _call(self, callee: ExpressionNode) -> ExpressionNode:

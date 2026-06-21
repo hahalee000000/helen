@@ -32,6 +32,10 @@ class Visitor(ABC, Generic[R]):
         """Visit a BinaryOpNode."""
 
     @abstractmethod
+    def visit_pipe_expr(self, node: PipeExprNode) -> R:
+        """Visit a PipeExprNode."""
+
+    @abstractmethod
     def visit_unary_op(self, node: UnaryOpNode) -> R:
         """Visit a UnaryOpNode."""
 
@@ -290,6 +294,18 @@ class BinaryOpNode(ExpressionNode):
     def accept(self, visitor: Visitor[R]) -> R:
         """Dispatch to the visitor."""
         return visitor.visit_binary_op(self)
+
+
+@dataclass(frozen=True)
+class PipeExprNode(ExpressionNode):
+    """Pipe expression: value |> fn (desugars to fn(value))."""
+    value: ExpressionNode
+    function: ExpressionNode
+    span: SourceSpan
+
+    def accept(self, visitor: Visitor[R]) -> R:
+        """Dispatch to the visitor."""
+        return visitor.visit_pipe_expr(self)
 
 
 @dataclass(frozen=True)
@@ -990,6 +1006,10 @@ class ASTPrinter(Visitor[str]):
     def visit_binary_op(self, node: BinaryOpNode) -> str:
         """Visit a BinaryOpNode."""
         return self._parenthesize(node.operator.lexeme, node.left, node.right)
+
+    def visit_pipe_expr(self, node: PipeExprNode) -> str:
+        """Visit a PipeExprNode."""
+        return self._parenthesize("|>", node.value, node.function)
 
     def visit_unary_op(self, node: UnaryOpNode) -> str:
         """Visit a UnaryOpNode."""

@@ -45,6 +45,7 @@ from helen.core.ast import (
     MapLiteralNode,
     MatchStmtNode,
     OptionalTypeNode,
+    PipeExprNode,
     ProgramNode,
     PromptDefNode,
     ProtocolDeclNode,
@@ -326,6 +327,51 @@ class Interpreter(LlmMixin, Visitor[object]):
             return self._truthy(left) or self._truthy(right)
 
         self._runtime_error(node.span, f"Unknown operator '{node.operator.lexeme}'")
+        return None
+
+    def visit_pipe_expr(self, node: PipeExprNode) -> object:
+        """Evaluate a pipe expression: value |> fn.
+
+        Desugars to: fn(value)
+        """
+        # Evaluate the left-hand side (the value to pipe)
+        value = node.value.accept(self)
+
+        # The right-hand side should be a callable
+        func_name = node.function.name if isinstance(node.function, VariableNode) else None
+
+        # Check if it's a registered function
+        if func_name is not None and func_name in self._functions:
+            func = self._functions[func_name]
+            return self._call_function(func, [value])
+
+        # Check if it's a registered agent
+        if func_name is not None and func_name in self._agents:
+            agent = self._agents[func_name]
+            if len(agent.params) > 0:
+                agent_args = {agent.params[0].name: value}
+            else:
+                agent_args = {}
+            return self._call_agent(agent, agent_args)
+
+        # Otherwise evaluate as expression and try to call
+        func = node.function.accept(self)
+
+        # Closure call
+        if isinstance(func, Closure):
+            return self._call_closure(func, [value])
+
+        # Python FFI
+        from helen.ffi.python_object import WrappedPythonObject
+        if isinstance(func, WrappedPythonObject):
+            return func.call(value)
+
+        # Stdlib builtin or any other callable
+        if callable(func):
+            return func(value)
+
+        func_str = func_name if func_name else type(func).__name__
+        self._runtime_error(node.span, f"'{func_str}' is not callable")
         return None
 
     def visit_unary_op(self, node: UnaryOpNode) -> object:

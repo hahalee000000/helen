@@ -57,6 +57,7 @@ from helen.core.ast import (
     MapLiteralNode,
     MatchStmtNode,
     OptionalTypeNode,
+    PipeExprNode,
     ProgramNode,
     PromptDefNode,
     ProtocolDeclNode,
@@ -448,6 +449,11 @@ class SemanticAnalyzer(Visitor[None]):
                             f"cannot assign {actual.name} to '{node.left.name}' of type {expected.name}",
                             node.span,
                         )
+
+    def visit_pipe_expr(self, node: PipeExprNode) -> None:
+        """Analyze a pipe expression: value |> fn."""
+        node.value.accept(self)
+        node.function.accept(self)
 
     def visit_unary_op(self, node: UnaryOpNode) -> None:
         node.operand.accept(self)

@@ -26,6 +26,7 @@ from helen.core.ast import (
     IfStmtNode,
     LiteralNode,
     MainBlockNode,
+    PipeExprNode,
     ProgramNode,
     PromptDefNode,
     StatementNode,
@@ -85,6 +86,10 @@ class MockVisitor(Visitor[str]):
     def visit_binary_op(self, node: BinaryOpNode) -> str:
         self.calls.append("visit_binary_op")
         return "<binary>"
+
+    def visit_pipe_expr(self, node: PipeExprNode) -> str:
+        self.calls.append("visit_pipe_expr")
+        return "<pipe>"
 
     def visit_unary_op(self, node: UnaryOpNode) -> str:
         self.calls.append("visit_unary_op")

@@ -272,6 +272,9 @@ class Scanner:
         if two == "||":
             self._consume_two(TokenType.OR)
             return
+        if two == "|>":
+            self._consume_two(TokenType.PIPE_RIGHT)
+            return
         if two == "->":
             self._consume_two(TokenType.ARROW)
             return
