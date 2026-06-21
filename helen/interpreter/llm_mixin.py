@@ -577,28 +577,6 @@ class LlmMixin:
             return None
         return self._render_prompt_template(prompt_def.content)
 
-    @staticmethod
-    def _load_skill_tool_schema() -> dict[str, Any]:
-        """Generate the load_skill tool schema (always included per HLD 3.6.5).
-
-        This tool enables the LLM to autonomously load skill content
-        based on the Skill Index injected in System Prompt (Tier 2).
-        """
-        return {
-            "type": "function",
-            "function": {
-                "name": "load_skill",
-                "description": "Load a skill's full content by name",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "name": {"type": "string", "description": "Skill name to load"}
-                    },
-                    "required": ["name"]
-                }
-            }
-        }
-
     def _get_context(self: Any) -> str | None:
         """Get the current conversation context for LLM calls.
 

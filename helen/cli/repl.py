@@ -106,7 +106,6 @@ def _execute_input(source: str, interp: Interpreter, analyzer: SemanticAnalyzer)
     except Exception as e:
         # Capture structured error context for :last_error
         # Only capture if not already captured by the interpreter (e.g., in function/agent calls)
-        from helen.interpreter.exceptions import HelenRuntimeError
         if interp.observability.last_error is None:
             span = getattr(e, 'span', None)
             interp.observability.capture_error(

@@ -193,16 +193,6 @@ class SemanticAnalyzer(Visitor[None]):
                 span,
             )
 
-    def _check_async_usage(self, node: AsyncCallStmtNode) -> None:
-        """Validate async is only used on call statements.
-
-        AsyncCallStmtNode is only created for 'async call', so this is
-        already validated by the parser. Semantic check: the callee
-        must be a valid agent or function.
-        """
-        # Parser ensures 'async' is followed by a call expression.
-        # The callee is validated during visit_call.
-
     def _check_branch_completeness(self, has_default: bool, span, stmt_type: str) -> None:
         """Report error if llm-if or match has no default branch."""
         if not has_default:

@@ -486,17 +486,6 @@ class Scanner:
         while self._peek() in _DIGITS or self._peek() == "_":
             self._advance()
 
-    def _scan_optional_fraction(self) -> bool:
-        """If a dot is followed by digits, consume them.
-
-        Returns ``True`` if a fractional part was found.
-        """
-        if self._peek() == "." and self._peek_next() in _DIGITS:
-            self._advance()  # dot
-            self._scan_integer_part()
-            return True
-        return False
-
     def _scan_optional_exponent(self) -> bool:
         """If 'e' or 'E' is followed by an optional sign and digits, consume them.
 
