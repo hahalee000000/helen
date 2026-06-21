@@ -1,7 +1,13 @@
 // ============================================================
-// Programming Agent — Main Orchestrator
+// Programming Agent — Main Orchestrator (v2.0)
+// 
 // Coordinates all sub-agents to provide Helen programming
 // assistance with self-evolving skill system.
+//
+// Uses Helen v1.5 features:
+// - functions block variables (let/const in agent functions)
+// - list methods (append, extend, etc.)
+// - match range patterns
 //
 // Workflow:
 // 1. Load agent memory
@@ -13,7 +19,11 @@
 // 7. Update agent memory
 // ============================================================
 
-// ── Helper Functions ─────────────────────────────────────────
+// ── Helper Functions ──────────────────────────────────────────
+
+// Note: Contract functions are defined in agents/contracts/contracts.helen
+// For now, we duplicate the needed functions here until Helen supports
+// module-level imports properly.
 
 fn get_memory_path() -> str {
     return "agents/memory/MEMORY.md"
@@ -91,35 +101,44 @@ fn run_project_tests(project_dir: str) -> map {
     }
 }
 
+// Skill search implementation (mirrors contracts.helen)
 fn search_skills_for_context(context: str) -> map {
-    // Searches skill index for matching skills
+    let keywords = []
+    let lower_context = context.lower()
+    
+    // Extract keywords
+    let error_keywords = ["division", "zero", "error", "exception", "fail", "crash"]
+    for kw in error_keywords {
+        if regex_search(lower_context, kw) {
+            keywords.append(kw)
+        }
+    }
+    
+    let quality_keywords = ["complexity", "quality", "score", "metric", "security"]
+    for kw in quality_keywords {
+        if regex_search(lower_context, kw) {
+            keywords.append(kw)
+        }
+    }
+    
+    let test_keywords = ["test", "assert", "coverage", "pytest"]
+    for kw in test_keywords {
+        if regex_search(lower_context, kw) {
+            keywords.append(kw)
+        }
+    }
+    
+    // Search skill index
     let index_path = "agents/skills/SKILL_INDEX.md"
     if path_exists(index_path) == false {
-        return {"matches": [], "count": 0}
+        return {"matches": [], "keywords": keywords, "count": 0}
     }
     
     let index = read_file(index_path)
-    let keywords = []
-    
-    // Simple keyword extraction
-    if regex_search(context, "(?i)division") {
-        keywords.append("division")
-    }
-    if regex_search(context, "(?i)error") {
-        keywords.append("error")
-    }
-    if regex_search(context, "(?i)test") {
-        keywords.append("test")
-    }
-    if regex_search(context, "(?i)quality") {
-        keywords.append("quality")
-    }
-    
-    // Search index for keywords
     let matches = []
     for kw in keywords {
         if regex_search(index, "(?i)" + kw) {
-            matches.append(kw)
+            matches.append({"keyword": kw, "found": true})
         }
     }
     
@@ -130,7 +149,7 @@ fn search_skills_for_context(context: str) -> map {
     }
 }
 
-// ── Programming Agent ────────────────────────────────────────
+// ── Programming Agent ─────────────────────────────────────────
 
 agent ProgrammingAgent(project_dir: str, user_input: str) {
     description "Main orchestrator for Helen programming assistance"
@@ -168,7 +187,11 @@ agent ProgrammingAgent(project_dir: str, user_input: str) {
     - helen test for running tests
     """
 
+    // v1.5: functions block variables
     functions {
+        const AGENT_VERSION = "2.0"
+        const MAX_SKILL_RESULTS = 10
+        
         fn get_memory_content() -> str {
             return load_memory()
         }
@@ -225,6 +248,10 @@ agent ProgrammingAgent(project_dir: str, user_input: str) {
         fn save_skill_from_fix(error_info: map, fix: str) -> map {
             return save_as_skill(error_info, fix)
         }
+        
+        fn get_version() -> str {
+            return AGENT_VERSION
+        }
     }
 
     main {
@@ -238,12 +265,13 @@ agent ProgrammingAgent(project_dir: str, user_input: str) {
         return {
             "response": response,
             "context": context,
-            "project_dir": project_dir
+            "project_dir": project_dir,
+            "version": get_version()
         }
     }
 }
 
-// ── Entry Point ──────────────────────────────────────────────
+// ── Entry Point ───────────────────────────────────────────────
 
 main {
     // Example usage
@@ -252,8 +280,8 @@ main {
     
     let result = ProgrammingAgent(project_dir=project, user_input=task)
     
-    print("Helen Programming Agent")
-    print("=======================")
+    print("Helen Programming Agent v" + result["version"])
+    print("===========================")
     print("Project: " + result["project_dir"])
     print("")
     print(result["response"])
