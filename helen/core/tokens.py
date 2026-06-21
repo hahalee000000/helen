@@ -117,6 +117,8 @@ class TokenType(Enum):
     MAIN = auto()
     PROTOCOL = auto()  # v1.7: protocol declaration
     IMPL = auto()      # v1.7: protocol implementation
+    IS = auto()        # v1.8: type pattern in match
+    WILDCARD = auto()  # v1.8: wildcard pattern `_` in match
 
     # === Special ===
     EOF = auto()
@@ -169,6 +171,7 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "main": TokenType.MAIN,
     "protocol": TokenType.PROTOCOL,  # v1.7
     "impl": TokenType.IMPL,          # v1.7
+    "is": TokenType.IS,              # v1.8
     "true": TokenType.TRUE,
     "false": TokenType.FALSE,
     "null": TokenType.NULL_KW,

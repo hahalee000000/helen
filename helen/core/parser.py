@@ -54,10 +54,13 @@ from .ast import (
     ThrowStmtNode,
     TryStmtNode,
     TypeNode,
+    TypePatternNode,
     UnaryOpNode,
     UnionTypeNode,
     VarDeclNode,
     VariableNode,
+    VariablePatternNode,
+    WildcardPatternNode,
     WhileStmtNode,
     IndexNode,
     AccessNode,
@@ -1141,20 +1144,60 @@ class Parser:
                              span=self._make_span(start, end))
 
     def _case(self) -> CaseNode:
-        """Parse a case clause: case pattern { ... } or case start..end { ... } or case pattern if guard { ... }."""
+        """Parse a case clause: case pattern { ... } or case start..end { ... } or case pattern if guard { ... }.
+        
+        v1.8 patterns:
+        - case _ { ... }                    wildcard
+        - case x { ... }                    variable binding
+        - case x if x > 0 { ... }           variable binding with guard
+        - case is Type { ... }              type pattern
+        - case is Type name { ... }         type pattern with binding
+        """
         start = self._advance()  # consume CASE
-        pattern = self._expression()
-        # Check for range pattern: expr..expr
-        if self._match(TokenType.DOTDOT):
-            pattern_start = pattern.span  # Save start span before parsing end
-            end_expr = self._expression()
-            pattern = RangePatternNode(start=pattern, end=end_expr,
-                                       span=SourceSpan(
-                                           pattern_start.file,
-                                           pattern_start.start_line,
-                                           pattern_start.start_col,
-                                           end_expr.span.end_line,
-                                           end_expr.span.end_col))
+        
+        # v1.8: Check for wildcard pattern
+        if self._check(TokenType.WILDCARD):
+            wildcard_tok = self._advance()
+            pattern = WildcardPatternNode(span=self._make_span(wildcard_tok, wildcard_tok))
+        # v1.8: Check for type pattern: is Type [name]
+        elif self._check(TokenType.IS):
+            is_tok = self._advance()
+            type_tok = self._consume(TokenType.IDENTIFIER, "Expected type name after 'is'.")
+            type_name = type_tok.lexeme
+            binding_name = None
+            # Optional binding name
+            if self._check(TokenType.IDENTIFIER):
+                binding_tok = self._advance()
+                binding_name = binding_tok.lexeme
+            pattern = TypePatternNode(
+                type_name=type_name,
+                binding_name=binding_name,
+                span=self._make_span(is_tok, self._previous())
+            )
+        else:
+            pattern = self._expression()
+            
+            # v1.8: Check if pattern is a simple variable (variable binding)
+            if isinstance(pattern, VariableNode):
+                # Check if it's followed by guard or brace (not a value comparison)
+                if self._check(TokenType.IF) or self._check(TokenType.LEFT_BRACE):
+                    pattern = VariablePatternNode(
+                        name=pattern.name,
+                        span=pattern.span
+                    )
+            
+            # Check for range pattern: expr..expr
+            if self._match(TokenType.DOTDOT):
+                pattern_start = pattern.span  # Save start span before parsing end
+                end_expr = self._expression()
+                pattern = RangePatternNode(start=pattern, end=end_expr,
+                                           span=SourceSpan(
+                                               pattern_start.file,
+                                               pattern_start.start_line,
+                                               pattern_start.start_col,
+                                               end_expr.span.end_line,
+                                               end_expr.span.end_col))
+        
         # Check for guard condition: if expr
         guard = None
         if self._match(TokenType.IF):

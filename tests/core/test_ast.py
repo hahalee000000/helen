@@ -217,6 +217,18 @@ class MockVisitor(Visitor[str]):
         self.calls.append("visit_range_pattern")
         return "<range>"
 
+    def visit_wildcard_pattern(self, node) -> str:
+        self.calls.append("visit_wildcard_pattern")
+        return "<wildcard>"
+
+    def visit_variable_pattern(self, node) -> str:
+        self.calls.append("visit_variable_pattern")
+        return f"<var_pattern:{node.name}>"
+
+    def visit_type_pattern(self, node) -> str:
+        self.calls.append("visit_type_pattern")
+        return f"<type_pattern:{node.type_name}>"
+
     def visit_catch_clause(self, node) -> str:
         self.calls.append("visit_catch_clause")
         return "<catch_clause>"

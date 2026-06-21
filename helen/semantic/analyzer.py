@@ -69,12 +69,15 @@ from helen.core.ast import (
     ThrowStmtNode,
     TryStmtNode,
     TypeNode,
+    TypePatternNode,
     UnaryOpNode,
     UnionTypeNode,
     VarDeclNode,
     VariableNode,
+    VariablePatternNode,
     Visitor,
     WhileStmtNode,
+    WildcardPatternNode,
 )
 from helen.core.errors import ErrorCode, ErrorReporter
 from helen.semantic.symbols import Symbol, SymbolTable
@@ -207,8 +210,17 @@ class SemanticAnalyzer(Visitor[None]):
             self.errors.error(code, f"{stmt_type} must have a default branch", span)
 
     def _check_match_completeness(self, node: MatchStmtNode) -> None:
-        """Validate that match has a default branch."""
-        self._check_branch_completeness(bool(node.default), node.span, "match")
+        """Validate that match has a default branch or wildcard/variable pattern."""
+        # Check if any case has a wildcard or variable pattern (acts as default)
+        has_default_pattern = any(
+            isinstance(case.pattern, (WildcardPatternNode, VariablePatternNode)) 
+            for case in node.cases
+        )
+        self._check_branch_completeness(
+            bool(node.default) or has_default_pattern, 
+            node.span, 
+            "match"
+        )
 
     def _type_from_typenode(self, type_node: TypeNode | None) -> "Type":
         """Convert an AST TypeNode to a semantic Type.
@@ -537,6 +549,23 @@ class SemanticAnalyzer(Visitor[None]):
         """Visit a RangePatternNode."""
         node.start.accept(self)
         node.end.accept(self)
+
+    def visit_wildcard_pattern(self, node: WildcardPatternNode) -> None:
+        """Visit a WildcardPatternNode."""
+        pass  # Wildcard matches anything, no analysis needed
+
+    def visit_variable_pattern(self, node: VariablePatternNode) -> None:
+        """Visit a VariablePatternNode."""
+        # Variable binding creates a new variable in the case scope
+        # We don't need to do anything special here since the interpreter
+        # will handle binding the value to the variable name
+        pass
+
+    def visit_type_pattern(self, node: TypePatternNode) -> None:
+        """Visit a TypePatternNode."""
+        # Type pattern checks the type at runtime
+        # If there's a binding name, it will be handled by the interpreter
+        pass
 
     def visit_map_literal(self, node: MapLiteralNode) -> None:
         for entry in node.entries:
@@ -983,10 +1012,20 @@ class SemanticAnalyzer(Visitor[None]):
 
     def visit_case(self, node: CaseNode) -> None:
         node.pattern.accept(self)
-        if node.guard is not None:
-            node.guard.accept(self)
         self.symbols.enter_scope("match-case", "block")
         try:
+            # Define variables from variable binding patterns BEFORE guard evaluation
+            if isinstance(node.pattern, VariablePatternNode):
+                from helen.semantic.symbols import Symbol
+                sym = Symbol(name=node.pattern.name, kind="variable", is_const=False)
+                self.symbols.define(node.pattern.name, sym)
+            elif isinstance(node.pattern, TypePatternNode) and node.pattern.binding_name:
+                from helen.semantic.symbols import Symbol
+                sym = Symbol(name=node.pattern.binding_name, kind="variable", is_const=False)
+                self.symbols.define(node.pattern.binding_name, sym)
+            # Now evaluate guard with variables in scope
+            if node.guard is not None:
+                node.guard.accept(self)
             self._visit_stmts(node.body)
         finally:
             self.symbols.exit_scope()

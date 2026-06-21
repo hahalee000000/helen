@@ -559,7 +559,12 @@ class Scanner:
 
         lexeme = self._current_lexeme()
         kw_map = keywords()
-        tt = kw_map.get(lexeme, TokenType.IDENTIFIER)
+        
+        # v1.8: `_` alone is a wildcard token
+        if lexeme == "_":
+            tt = TokenType.WILDCARD
+        else:
+            tt = kw_map.get(lexeme, TokenType.IDENTIFIER)
 
         # Assign correct Python literal for boolean/null keywords
         if tt == TokenType.TRUE:

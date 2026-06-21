@@ -57,12 +57,15 @@ from helen.core.ast import (
     ThrowStmtNode,
     TryStmtNode,
     TypeNode,
+    TypePatternNode,
     UnaryOpNode,
     UnionTypeNode,
     VarDeclNode,
     VariableNode,
+    VariablePatternNode,
     Visitor,
     WhileStmtNode,
+    WildcardPatternNode,
 )
 from helen.core.errors import ErrorCode, ErrorReporter
 from helen.core.source import SourceSpan
@@ -807,26 +810,58 @@ class Interpreter(LlmMixin, Visitor[object]):
     # ------------------------------------------------------------------
 
     def visit_match_stmt(self, node: MatchStmtNode) -> object:
-        """Execute a match statement with range and guard support."""
+        """Execute a match statement with range, wildcard, variable binding, and type pattern support."""
         subject = node.subject.accept(self)
         for case in node.cases:
-            pattern = case.pattern.accept(self)
+            pattern_node = case.pattern
             matched = False
-            # Check if pattern is a range pattern
-            if isinstance(pattern, tuple) and len(pattern) == 3 and pattern[0] == "__range__":
-                _, start, end = pattern
-                if isinstance(subject, (int, float)) and isinstance(start, (int, float)) and isinstance(end, (int, float)):
-                    matched = start <= subject <= end
+            bindings = {}  # Variable bindings for this case
+            
+            # Handle different pattern types
+            if isinstance(pattern_node, WildcardPatternNode):
+                # Wildcard matches anything
+                matched = True
+            elif isinstance(pattern_node, VariablePatternNode):
+                # Variable binding: bind subject to variable name
+                matched = True
+                bindings[pattern_node.name] = subject
+            elif isinstance(pattern_node, TypePatternNode):
+                # Type pattern: check if subject is of the specified type
+                matched = self._check_type(subject, pattern_node.type_name)
+                if matched and pattern_node.binding_name:
+                    bindings[pattern_node.binding_name] = subject
             else:
-                matched = self._equal(subject, pattern)
+                # Evaluate pattern (for range, literal, etc.)
+                pattern = pattern_node.accept(self)
+                # Check if pattern is a range pattern
+                if isinstance(pattern, tuple) and len(pattern) == 3 and pattern[0] == "__range__":
+                    _, start, end = pattern
+                    if isinstance(subject, (int, float)) and isinstance(start, (int, float)) and isinstance(end, (int, float)):
+                        matched = start <= subject <= end
+                else:
+                    matched = self._equal(subject, pattern)
+            
             # Check guard condition if present
             if matched and case.guard is not None:
-                guard_result = case.guard.accept(self)
-                matched = self._truthy(guard_result)
+                # Enter scope with bindings before evaluating guard
+                old_env = self.environment
+                self.environment = self.environment.enter_scope()
+                try:
+                    # Bind variables for guard evaluation
+                    for name, value in bindings.items():
+                        self.environment.define(name, value, is_const=False)
+                    guard_result = case.guard.accept(self)
+                    matched = self._truthy(guard_result)
+                finally:
+                    self.environment = old_env
+            
             if matched:
                 old_env = self.environment
                 self.environment = self.environment.enter_scope()
                 try:
+                    # Bind variables in the case scope
+                    for name, value in bindings.items():
+                        self.environment.define(name, value, is_const=False)
                     return self._execute_stmts(case.body)
                 finally:
                     self.environment = old_env
@@ -840,6 +875,22 @@ class Interpreter(LlmMixin, Visitor[object]):
                 self.environment = old_env
         return None
 
+    def _check_type(self, value: object, type_name: str) -> bool:
+        """Check if value matches the specified type name."""
+        type_map = {
+            "Int": int,
+            "Float": float,
+            "String": str,
+            "Bool": bool,
+            "List": list,
+            "Map": dict,
+            "Null": type(None),
+        }
+        expected_type = type_map.get(type_name)
+        if expected_type is None:
+            return False
+        return isinstance(value, expected_type)
+
     def visit_case(self, node: CaseNode) -> object:
         # Cases are handled inside visit_match_stmt
         return None
@@ -849,6 +900,18 @@ class Interpreter(LlmMixin, Visitor[object]):
         start = node.start.accept(self)
         end = node.end.accept(self)
         return ("__range__", start, end)
+
+    def visit_wildcard_pattern(self, node: WildcardPatternNode) -> object:
+        """Visit a WildcardPatternNode. Handled in visit_match_stmt."""
+        return None
+
+    def visit_variable_pattern(self, node: VariablePatternNode) -> object:
+        """Visit a VariablePatternNode. Handled in visit_match_stmt."""
+        return None
+
+    def visit_type_pattern(self, node: TypePatternNode) -> object:
+        """Visit a TypePatternNode. Handled in visit_match_stmt."""
+        return None
 
     # ------------------------------------------------------------------
     # Try/catch/finally (basic)

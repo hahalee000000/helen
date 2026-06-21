@@ -160,6 +160,18 @@ class Visitor(ABC, Generic[R]):
         """Visit a RangePatternNode."""
 
     @abstractmethod
+    def visit_wildcard_pattern(self, node: WildcardPatternNode) -> R:
+        """Visit a WildcardPatternNode."""
+
+    @abstractmethod
+    def visit_variable_pattern(self, node: VariablePatternNode) -> R:
+        """Visit a VariablePatternNode."""
+
+    @abstractmethod
+    def visit_type_pattern(self, node: TypePatternNode) -> R:
+        """Visit a TypePatternNode."""
+
+    @abstractmethod
     def visit_catch_clause(self, node: CatchClauseNode) -> R:
         """Visit a CatchClauseNode."""
 
@@ -796,6 +808,39 @@ class RangePatternNode(ExpressionNode):
 
 
 @dataclass(frozen=True)
+class WildcardPatternNode(ExpressionNode):
+    """Wildcard pattern for match: _ (matches anything)."""
+    span: SourceSpan
+
+    def accept(self, visitor: Visitor[R]) -> R:
+        """Dispatch to the visitor."""
+        return visitor.visit_wildcard_pattern(self)
+
+
+@dataclass(frozen=True)
+class VariablePatternNode(ExpressionNode):
+    """Variable binding pattern for match: case x { ... } binds value to x."""
+    name: str
+    span: SourceSpan
+
+    def accept(self, visitor: Visitor[R]) -> R:
+        """Dispatch to the visitor."""
+        return visitor.visit_variable_pattern(self)
+
+
+@dataclass(frozen=True)
+class TypePatternNode(ExpressionNode):
+    """Type pattern for match: case is Type or case is Type name."""
+    type_name: str
+    span: SourceSpan
+    binding_name: str | None = None  # Optional variable binding
+
+    def accept(self, visitor: Visitor[R]) -> R:
+        """Dispatch to the visitor."""
+        return visitor.visit_type_pattern(self)
+
+
+@dataclass(frozen=True)
 class CatchClauseNode(StatementNode):
     """Typed catch clause."""
     error_type: TypeNode
@@ -1152,6 +1197,20 @@ class ASTPrinter(Visitor[str]):
     def visit_range_pattern(self, node: RangePatternNode) -> str:
         """Visit a RangePatternNode."""
         return self._parenthesize("range", node.start, node.end)
+
+    def visit_wildcard_pattern(self, node: WildcardPatternNode) -> str:
+        """Visit a WildcardPatternNode."""
+        return "_"
+
+    def visit_variable_pattern(self, node: VariablePatternNode) -> str:
+        """Visit a VariablePatternNode."""
+        return f"(var {node.name})"
+
+    def visit_type_pattern(self, node: TypePatternNode) -> str:
+        """Visit a TypePatternNode."""
+        if node.binding_name:
+            return self._parenthesize("is", node.type_name, node.binding_name)
+        return self._parenthesize("is", node.type_name)
 
     def visit_catch_clause(self, node: CatchClauseNode) -> str:
         """Visit a CatchClauseNode."""
