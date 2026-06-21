@@ -55,7 +55,7 @@ _SINGLE_CHAR_TOKENS: Final[dict[str, TokenType]] = {
 }
 
 # ── Characters that may start a two-character operator ─────────────────────
-_TWO_CHAR_OPS: Final[set[str]] = {"!", "=", ">", "<", "&", "|", "-"}
+_TWO_CHAR_OPS: Final[set[str]] = {"!", "=", ">", "<", "&", "|", "-", "."}
 
 
 @dataclass
@@ -275,6 +275,9 @@ class Scanner:
         if two == "->":
             self._consume_two(TokenType.ARROW)
             return
+        if two == "..":
+            self._consume_two(TokenType.DOTDOT)
+            return
 
         # Fall back to single-char token
         self._advance()
@@ -295,6 +298,8 @@ class Scanner:
             self._consume_one(TokenType.PIPE)
         elif c == "-":
             self._consume_one(TokenType.MINUS)
+        elif c == ".":
+            self._consume_one(TokenType.DOT)
 
     # ── whitespace & comments ──────────────────────────────────────────
 
@@ -423,15 +428,23 @@ class Scanner:
         """
         has_dot = False
         if self._peek() == ".":
-            has_dot = True
-            self._advance()
-            self._scan_integer_part()
-        else:
-            self._scan_integer_part()
-            if self._peek() == ".":
+            # Check if next char is also . (range operator ..)
+            if self._peek_next() == ".":
+                pass  # Don't consume . as decimal, it's part of ..
+            else:
                 has_dot = True
                 self._advance()
                 self._scan_integer_part()
+        else:
+            self._scan_integer_part()
+            if self._peek() == ".":
+                # Check if next char is also . (range operator ..)
+                if self._peek_next() == ".":
+                    pass  # Don't consume . as decimal, it's part of ..
+                else:
+                    has_dot = True
+                    self._advance()
+                    self._scan_integer_part()
 
         has_exp = False
         if self._peek() in ("e", "E"):

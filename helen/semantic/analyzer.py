@@ -58,6 +58,7 @@ from helen.core.ast import (
     OptionalTypeNode,
     ProgramNode,
     PromptDefNode,
+    RangePatternNode,
     ReturnStmtNode,
     StatementNode,
     TemplateRefNode,
@@ -475,13 +476,18 @@ class SemanticAnalyzer(Visitor[None]):
         for elem in node.elements:
             elem.accept(self)
 
-    def visit_map_entry(self, node: MapEntryNode) -> None:
-        node.key.accept(self)
-        node.value.accept(self)
+    def visit_range_pattern(self, node: RangePatternNode) -> None:
+        """Visit a RangePatternNode."""
+        node.start.accept(self)
+        node.end.accept(self)
 
     def visit_map_literal(self, node: MapLiteralNode) -> None:
         for entry in node.entries:
             entry.accept(self)
+
+    def visit_map_entry(self, node: MapEntryNode) -> None:
+        node.key.accept(self)
+        node.value.accept(self)
 
     def visit_template_ref(self, node: TemplateRefNode) -> None:
         node.expression.accept(self)
@@ -821,6 +827,8 @@ class SemanticAnalyzer(Visitor[None]):
 
     def visit_case(self, node: CaseNode) -> None:
         node.pattern.accept(self)
+        if node.guard is not None:
+            node.guard.accept(self)
         self.symbols.enter_scope("match-case", "block")
         try:
             self._visit_stmts(node.body)

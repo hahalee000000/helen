@@ -36,6 +36,7 @@ class TokenType(Enum):
     RIGHT_BRACKET = auto()
     COMMA = auto()
     DOT = auto()
+    DOTDOT = auto()  # ..
     COLON = auto()
     SEMICOLON = auto()
     QUESTION = auto()
@@ -77,7 +78,6 @@ class TokenType(Enum):
     DESCRIPTION = auto()
     MODEL = auto()
     TOOLS = auto()
-    SKILLS = auto()
     SUB_AGENTS = auto()
     MEMORY = auto()
     TEMPERATURE = auto()
@@ -122,13 +122,12 @@ class TokenType(Enum):
 # Type alias for literal values a token can carry
 LiteralValue = Union[str, int, float, bool, None]
 
-# Keyword → TokenType mapping (42 entries)
+# Keyword → TokenType mapping (41 entries)
 _KEYWORD_MAP: dict[str, TokenType] = {
     "agent": TokenType.AGENT,
     "description": TokenType.DESCRIPTION,
     "model": TokenType.MODEL,
     "tools": TokenType.TOOLS,
-    "skills": TokenType.SKILLS,
     "sub-agents": TokenType.SUB_AGENTS,
     "memory": TokenType.MEMORY,
     "temperature": TokenType.TEMPERATURE,

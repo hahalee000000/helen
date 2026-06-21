@@ -196,6 +196,10 @@ class MockVisitor(Visitor[str]):
         self.calls.append("visit_case")
         return "<case>"
 
+    def visit_range_pattern(self, node) -> str:
+        self.calls.append("visit_range_pattern")
+        return "<range>"
+
     def visit_catch_clause(self, node) -> str:
         self.calls.append("visit_catch_clause")
         return "<catch_clause>"

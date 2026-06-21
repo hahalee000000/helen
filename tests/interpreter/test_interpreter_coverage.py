@@ -984,7 +984,7 @@ class TestVisitMethods:
     def test_visit_declaration_returns_none(self):
         """DeclarationNode visit returns None."""
         decl = DeclarationNode(
-            description=None, model=None, tools=None, skills=None,
+            description=None, model=None, tools=None,
             sub_agents=None, memory=None, temperature=None, max_turns=None,
             span=_span(),
         )

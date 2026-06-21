@@ -82,7 +82,6 @@ class TestTokenType:
             "DESCRIPTION",
             "MODEL",
             "TOOLS",
-            "SKILLS",
             "SUB_AGENTS",
             "MEMORY",
             "TEMPERATURE",
@@ -139,7 +138,7 @@ class TestKeywords:
     def test_keyword_count(self):
         """Test that all expected keywords are present."""
         kw = keywords()
-        assert len(kw) == 44  # Updated: added 'streaming' keyword
+        assert len(kw) == 43  # Updated: removed 'skills' keyword
 
     def test_all_keywords_map_to_token_types(self) -> None:
         """Every keyword value should be a TokenType member."""

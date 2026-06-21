@@ -46,6 +46,7 @@ from helen.core.ast import (
     OptionalTypeNode,
     ProgramNode,
     PromptDefNode,
+    RangePatternNode,
     ReturnStmtNode,
     StatementNode,
     TemplateRefNode,
@@ -655,11 +656,23 @@ class Interpreter(LlmMixin, Visitor[object]):
     # ------------------------------------------------------------------
 
     def visit_match_stmt(self, node: MatchStmtNode) -> object:
-        """Execute a match statement."""
+        """Execute a match statement with range and guard support."""
         subject = node.subject.accept(self)
         for case in node.cases:
             pattern = case.pattern.accept(self)
-            if self._equal(subject, pattern):
+            matched = False
+            # Check if pattern is a range pattern
+            if isinstance(pattern, tuple) and len(pattern) == 3 and pattern[0] == "__range__":
+                _, start, end = pattern
+                if isinstance(subject, (int, float)) and isinstance(start, (int, float)) and isinstance(end, (int, float)):
+                    matched = start <= subject <= end
+            else:
+                matched = self._equal(subject, pattern)
+            # Check guard condition if present
+            if matched and case.guard is not None:
+                guard_result = case.guard.accept(self)
+                matched = self._truthy(guard_result)
+            if matched:
                 old_env = self.environment
                 self.environment = self.environment.enter_scope()
                 try:
@@ -679,6 +692,12 @@ class Interpreter(LlmMixin, Visitor[object]):
     def visit_case(self, node: CaseNode) -> object:
         # Cases are handled inside visit_match_stmt
         return None
+
+    def visit_range_pattern(self, node: RangePatternNode) -> object:
+        """Evaluate a range pattern to a (start, end) tuple."""
+        start = node.start.accept(self)
+        end = node.end.accept(self)
+        return ("__range__", start, end)
 
     # ------------------------------------------------------------------
     # Try/catch/finally (basic)
@@ -1160,6 +1179,14 @@ class Interpreter(LlmMixin, Visitor[object]):
             self._functions.get(func_node.name)
             self._functions[func_node.name] = func_node
             registered_names.append(func_node.name)
+
+        # Define variables from functions { } block (let/const declarations)
+        for var_node in agent.function_vars:
+            value = None
+            if var_node.initializer is not None:
+                value = var_node.initializer.accept(self)
+            is_const = not var_node.mutable
+            call_env.define(var_node.name, value, is_const=is_const)
 
         # Execute the agent's logic (main block)
         old_env = self.environment

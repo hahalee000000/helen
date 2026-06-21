@@ -43,6 +43,7 @@ from .ast import (
     OptionalTypeNode,
     ProgramNode,
     PromptDefNode,
+    RangePatternNode,
     ReturnStmtNode,
     StatementNode,
     TemplateRefNode,
@@ -609,6 +610,7 @@ class Parser:
         prompt: PromptDefNode | None = None
         logic: StatementNode | None = None
         agent_functions: list = []
+        agent_function_vars: list = []
         while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF):
             if self._match(TokenType.PROMPT):
                 if self._match(TokenType.STRING, TokenType.TRIPLE_QUOTE_STRING):
@@ -622,18 +624,21 @@ class Parser:
             elif self._match(TokenType.FN):
                 self._function_decl()
             elif self._match(TokenType.FUNCTIONS):
-                # Parse functions { fn ... } block — collect functions for agent scope
+                # Parse functions { fn ... / let ... / const ... } block
                 self._consume(TokenType.LEFT_BRACE, "Expected '{' after 'functions'.")
                 while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF):
                     if self._match(TokenType.FN):
                         agent_functions.append(self._function_decl())
+                    elif self._check(TokenType.LET, TokenType.CONST):
+                        self._advance()  # consume let/const
+                        agent_function_vars.append(self._var_decl())
                     else:
-                        self._error(f"Expected 'fn' inside functions block, got {self._current().type.name}")
+                        self._error(f"Expected 'fn', 'let', or 'const' inside functions block, got {self._current().type.name}")
                         self._synchronize()
                 self._consume(TokenType.RIGHT_BRACE, "Expected '}' after functions block.")
             elif self._check(
                 TokenType.DESCRIPTION, TokenType.MODEL, TokenType.TOOLS,
-                TokenType.SKILLS, TokenType.MEMORY, TokenType.TEMPERATURE,
+                TokenType.MEMORY, TokenType.TEMPERATURE,
                 TokenType.MAX_TURNS, TokenType.SUB_AGENTS, TokenType.STREAMING,
             ):
                 declarations.append(self._declaration_block())
@@ -644,7 +649,8 @@ class Parser:
         return AgentDeclNode(name=name_tok.lexeme, params=params,
                              declarations=declarations, prompt=prompt, logic=logic,
                              span=self._make_span(name_tok, end),
-                             functions=agent_functions)
+                             functions=agent_functions,
+                             function_vars=agent_function_vars)
 
     def _agent_param(self) -> AgentParamNode:
         """Parse an agent parameter: name: Type? = expr?."""
@@ -711,7 +717,6 @@ class Parser:
             TokenType.DESCRIPTION: "description",
             TokenType.MODEL: "model",
             TokenType.TOOLS: "tools",
-            TokenType.SKILLS: "skills",
             TokenType.SUB_AGENTS: "sub_agents",
             TokenType.MEMORY: "memory",
             TokenType.TEMPERATURE: "temperature",
@@ -728,7 +733,6 @@ class Parser:
             description=value if field_name == "description" else None,
             model=value if field_name == "model" else None,
             tools=value if field_name == "tools" else None,
-            skills=value if field_name == "skills" else None,
             sub_agents=value if field_name == "sub_agents" else None,
             memory=value if field_name == "memory" else None,
             temperature=value if field_name == "temperature" else None,
@@ -801,7 +805,7 @@ class Parser:
         while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF,
                               TokenType.PROMPT, TokenType.MAIN, TokenType.FN,
                               TokenType.DESCRIPTION, TokenType.MODEL, TokenType.TOOLS,
-                              TokenType.SKILLS, TokenType.MEMORY, TokenType.TEMPERATURE,
+                              TokenType.MEMORY, TokenType.TEMPERATURE,
                               TokenType.MAX_TURNS, TokenType.SUB_AGENTS):
             prev_pos = self._pos
             s = self._statement()
@@ -987,13 +991,28 @@ class Parser:
                              span=self._make_span(start, end))
 
     def _case(self) -> CaseNode:
-        """Parse a case clause: case pattern { ... }."""
+        """Parse a case clause: case pattern { ... } or case start..end { ... } or case pattern if guard { ... }."""
         start = self._advance()  # consume CASE
         pattern = self._expression()
+        # Check for range pattern: expr..expr
+        if self._match(TokenType.DOTDOT):
+            pattern_start = pattern.span  # Save start span before parsing end
+            end_expr = self._expression()
+            pattern = RangePatternNode(start=pattern, end=end_expr,
+                                       span=SourceSpan(
+                                           pattern_start.file,
+                                           pattern_start.start_line,
+                                           pattern_start.start_col,
+                                           end_expr.span.end_line,
+                                           end_expr.span.end_col))
+        # Check for guard condition: if expr
+        guard = None
+        if self._match(TokenType.IF):
+            guard = self._expression()
         self._consume(TokenType.LEFT_BRACE, "Expected '{' after case pattern.")
         body = self._block_body_list()
         self._consume(TokenType.RIGHT_BRACE, "Expected '}' after case body.")
-        return CaseNode(pattern=pattern, body=body,
+        return CaseNode(pattern=pattern, body=body, guard=guard,
                         span=self._make_span(start, self._previous()))
 
     def _try_stmt(self) -> TryStmtNode:

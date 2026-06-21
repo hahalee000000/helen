@@ -145,7 +145,7 @@ class TestAgentDeclarations:
             description=None,
             model=_lit("gpt-4"),
             tools=None,
-            skills=None,
+
             sub_agents=None,
             memory=None,
             temperature=None,

@@ -140,6 +140,10 @@ class Visitor(ABC, Generic[R]):
         """Visit a CaseNode."""
 
     @abstractmethod
+    def visit_range_pattern(self, node: RangePatternNode) -> R:
+        """Visit a RangePatternNode."""
+
+    @abstractmethod
     def visit_catch_clause(self, node: CatchClauseNode) -> R:
         """Visit a CatchClauseNode."""
 
@@ -567,7 +571,6 @@ class DeclarationNode(StatementNode):
     description: str | None
     model: str | None
     tools: list[str] | None
-    skills: list[str] | None
     sub_agents: list[str] | None
     memory: str | None
     temperature: float | None
@@ -608,6 +611,7 @@ class AgentDeclNode(StatementNode):
     logic: StatementNode | None  # MainBlockNode or other statement
     span: SourceSpan
     functions: list["FunctionDeclNode"] = field(default_factory=list)
+    function_vars: list["VarDeclNode"] = field(default_factory=list)  # let/const in functions block
 
     def accept(self, visitor: Visitor[R]) -> R:
         """Dispatch to the visitor."""
@@ -690,14 +694,27 @@ class AsyncCallExprNode(ExpressionNode):
 
 @dataclass(frozen=True)
 class CaseNode(StatementNode):
-    """Match case: case pattern { ... }."""
+    """Match case: case pattern { ... } or case pattern if guard { ... }."""
     pattern: ExpressionNode
     body: list[StatementNode]
     span: SourceSpan
+    guard: ExpressionNode | None = None  # Optional guard condition
 
     def accept(self, visitor: Visitor[R]) -> R:
         """Dispatch to the visitor."""
         return visitor.visit_case(self)
+
+
+@dataclass(frozen=True)
+class RangePatternNode(ExpressionNode):
+    """Range pattern for match: start..end (inclusive)."""
+    start: ExpressionNode
+    end: ExpressionNode
+    span: SourceSpan
+
+    def accept(self, visitor: Visitor[R]) -> R:
+        """Dispatch to the visitor."""
+        return visitor.visit_range_pattern(self)
 
 
 @dataclass(frozen=True)
@@ -1037,6 +1054,10 @@ class ASTPrinter(Visitor[str]):
     def visit_case(self, node: CaseNode) -> str:
         """Visit a CaseNode."""
         return self._parenthesize("case", node.pattern)
+
+    def visit_range_pattern(self, node: RangePatternNode) -> str:
+        """Visit a RangePatternNode."""
+        return self._parenthesize("range", node.start, node.end)
 
     def visit_catch_clause(self, node: CatchClauseNode) -> str:
         """Visit a CatchClauseNode."""
