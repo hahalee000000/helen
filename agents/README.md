@@ -1,224 +1,157 @@
 # Helen Programming Agent
 
-一个用纯 Helen 语言编写的编程代理，支持 TDD 开发和 7 维质量评估。
+> 用 Helen 语言编写的自进化编程助手，具备 Hermes 级别的技能自进化能力。
 
 ## 架构
 
 ```
-HelenProgrammer (主编排器)
-├── CodeAnalyzer      — 代码分析（质量指标、安全检查）
-├── TestRunner        — 测试运行（执行测试、分析失败）
-├── CodeGenerator     — 代码生成（LLM 驱动）
-└── QualityGate       — 质量门禁（阈值检查、改进建议）
+agents/
+├── programming_agent.helen     # 核心编排 Agent
+├── skill_manager.helen         # 技能 CRUD
+├── skill_matcher.helen         # 技能搜索匹配
+├── skill_learner.helen         # 技能学习（自进化）
+├── skill_evolver.helen         # 技能进化（更新）
+├── contracts/                  # Python 接口契约
+│   ├── __init__.py
+│   └── agent_contracts.py
+├── skills/                     # 技能库（全局，跨项目共享）
+│   ├── SKILL_INDEX.md
+│   ├── error-patterns/
+│   ├── code-quality/
+│   ├── testing/
+│   └── architecture/
+├── memory/                     # Agent 记忆
+│   ├── MEMORY.md
+│   └── USER.md
+├── HELEN_LANGUAGE_ISSUES.md    # Helen 语言不足记录
+└── README.md
 ```
 
-## 工作流程
+## Agent 说明
+
+### ProgrammingAgent（核心编排）
+
+协调所有子 Agent，提供完整的编程辅助。
+
+**参数**：
+- `project_dir: str` — 项目目录
+- `user_input: str` — 用户输入
+
+**工作流**：
+1. 加载 Agent 记忆
+2. 搜索技能库匹配已知模式
+3. 如果匹配到技能，优先复用
+4. 如果没有匹配，用 LLM 推理
+5. 如果修复成功，提取新模式保存为技能
+6. 更新 Agent 记忆
+
+### SkillManager（技能 CRUD）
+
+管理技能的创建、读取、更新、删除、列表。
+
+**参数**：
+- `action: str` — "create" | "read" | "update" | "delete" | "list"
+- `name: str` — 技能名称
+- `category: str` — 技能类别
+- `content: str` — SKILL.md 内容
+
+### SkillMatcher（技能搜索）
+
+根据上下文搜索匹配的技能。
+
+**参数**：
+- `context: str` — 错误信息、代码片段或问题
+
+**返回**：
+- 匹配的技能列表
+- 提取的关键词
+
+### SkillLearner（技能学习）
+
+从成功修复中学习新模式，保存为新技能。
+
+**参数**：
+- `error: map` — 错误信息
+- `fix: str` — 应用的修复
+- `confirmed: bool` — 用户是否确认修复成功
+
+### SkillEvolver（技能进化）
+
+根据新发现更新已有技能。
+
+**参数**：
+- `skill_path: str` — 技能文件路径
+- `new_finding: str` — 新发现
+
+## 技能格式
+
+```markdown
+---
+name: skill-name
+description: "技能描述"
+version: 1.0.0
+category: error-patterns
+tags: [tag1, tag2]
+triggers:
+  - error_type: "RuntimeError"
+    message_contains: "error message"
+confidence: 0.9
+occurrences: 5
+---
+
+# Skill Name
+
+## Trigger
+触发条件描述
+
+## Steps
+1. 步骤一
+2. 步骤二
+
+## Pitfalls
+- 注意事项
+```
+
+## 自进化循环
 
 ```
-1. 分析当前状态 → CodeAnalyzer
-2. 生成/修改代码 → CodeGenerator
-3. 生成测试     → CodeGenerator
-4. 运行测试     → TestRunner
-5. 质量检查     → QualityGate
-6. 迭代改进     → 循环 2-5（最多 5 次）
+解决问题 → 用户确认 → 提取模式 → 保存为技能 → 下次复用
 ```
 
 ## 使用方法
 
-### 基本用法
+```helen
+// 在 Helen 代码中使用
+let result = ProgrammingAgent(
+    project_dir="~/my-project",
+    user_input="How do I fix division by zero?"
+)
+print(result["response"])
+```
+
+## 开发
+
+### 运行测试
 
 ```bash
-# 运行默认示例
-helen agents/helen_programmer.helen
-
-# 自定义任务和文件
-helen agents/helen_programmer.helen --task "实现排序算法" --file "examples/sort.helen"
+python -m pytest tests/agents/ -v
 ```
 
-### 在 REPL 中使用
+### 检查语法
 
-```helen
-helen> import "agents/helen_programmer.helen"
-
-helen> let result = HelenProgrammer(
-    task="Create a string utility module",
-    target_file="examples/string_utils.helen"
-)
-
-helen> print(result["quality"]["scores"]["grade"])
+```bash
+helen check agents/programming_agent.helen
+helen check agents/skill_manager.helen
+# ...
 ```
 
-## Agent 详解
+## Helen 语言不足
 
-### CodeAnalyzer
+开发过程中发现的 Helen 语言限制记录在 `HELEN_LANGUAGE_ISSUES.md`。
 
-分析 Helen 源代码的质量和安全性。
-
-```helen
-let analysis = CodeAnalyzer(
-    source="fn add(a, b) { return a + b }",
-    filename="test.helen"
-)
-
-// 返回:
-// - analysis: 质量评分、安全问题的 map
-// - report: 格式化的文本报告
-// - insights: LLM 生成的改进建议
-```
-
-### TestRunner
-
-运行 Helen 测试并分析结果。
-
-```helen
-let result = TestRunner(test_file="examples/test_calculator.helen")
-
-// 返回:
-// - results: 测试结果的 JSON
-// - summary: 文本摘要
-// - analysis: LLM 分析的失败原因
-// - all_passed: 是否全部通过
-```
-
-### CodeGenerator
-
-使用 LLM 生成或修改 Helen 代码。
-
-```helen
-let code = CodeGenerator(
-    task="Implement binary search",
-    context="Existing code: ..."
-)
-
-// LLM 生成符合 Helen 语法的代码
-// 遵循 snake_case、docstring、函数长度 < 30 行等规范
-```
-
-### QualityGate
-
-检查代码是否达到质量阈值。
-
-```helen
-let gate = QualityGate(
-    file_path="examples/calculator.helen",
-    threshold=7.5
-)
-
-// 返回:
-// - status: "PASS" 或 "FAIL"
-// - scores: 7 维评分
-// - suggestions: 改进建议（如果 FAIL）
-```
-
-### HelenProgrammer
-
-主编排器，协调所有子 Agent。
-
-```helen
-let result = HelenProgrammer(
-    task="Create a calculator with add/subtract/multiply/divide",
-    target_file="examples/calculator.helen"
-)
-
-// 执行流程:
-// 1. 分析现有代码
-// 2. 生成新代码
-// 3. 生成测试
-// 4. 运行测试
-// 5. 质量检查
-// 6. 迭代改进（最多 5 次）
-
-// 返回:
-// - file: 生成的代码文件
-// - test_file: 生成的测试文件
-// - quality: 最终质量评分
-// - tests: 测试结果
-// - iterations: 迭代次数
-```
-
-## 7 维质量评估
-
-| 维度 | 权重 | 评估内容 |
-|------|:----:|---------|
-| 架构设计 | 20% | 函数长度、复杂度、嵌套深度 |
-| 代码质量 | 15% | 注释率、函数平均长度 |
-| 安全性 | 20% | 危险模式检测 |
-| 测试覆盖 | 15% | 测试文件存在性 |
-| 文档 | 10% | docstring 覆盖率 |
-| 可维护性 | 10% | 长函数、高复杂度函数 |
-| 工程规范 | 10% | 命名规范、文件大小 |
-
-**评分等级**: S (9.0+) / A (7.5+) / B (6.0+) / C (4.0+) / D (<4.0)
-
-## 配置
-
-在 `helen_programmer.helen` 顶部修改常量：
-
-```helen
-const QUALITY_THRESHOLD = 7.5  // 质量阈值
-const MAX_ITERATIONS = 5       // 最大迭代次数
-```
-
-## 示例输出
-
-```
-🚀 Helen Programmer starting...
-   Task: Create a calculator module
-   Target: examples/calculator.helen
-
-📊 Phase 1: Analyzing current state...
-   File does not exist, will create new.
-
-🔨 Phase 2: Generating/modifying code...
-   Code written to examples/calculator.helen
-
-🧪 Phase 3: Generating tests...
-   Tests written to examples/test_calculator.helen
-
-▶ Phase 4: Running tests...
-   Tests: 5/5 passed
-
-🔍 Phase 5: Quality gate...
-   Status: PASS
-   Score: 8.2/10
-
-============================================================
-✅ SUCCESS! Code meets quality threshold.
-============================================================
-```
-
-## 限制
-
-1. **无闭包** — Helen 不支持闭包，Agent 间通信通过返回值
-2. **无匿名函数** — 必须使用命名函数
-3. **LLM 依赖** — 需要配置 LLM API（`~/.helen/config.yaml`）
-4. **迭代上限** — 最多 5 次迭代，避免无限循环
-
-## 扩展
-
-可以添加新的 Agent 来扩展功能：
-
-```helen
-agent DocumentationGenerator(file: str) {
-    description "Generate API documentation"
-    prompt "Generate markdown documentation for..."
-    main {
-        // ...
-    }
-}
-
-agent RefactorAgent(file: str, pattern: str) {
-    description "Refactor code based on pattern"
-    prompt "Apply refactoring pattern..."
-    main {
-        // ...
-    }
-}
-```
-
-## 相关文件
-
-- `agents/helen_programmer.helen` — 主 Agent 实现
-- `helen/stdlib/test.py` — 测试框架
-- `helen/stdlib/quality.py` — 质量评估
-- `docs/tutorial.md` — Helen 语言教程
+主要问题：
+1. 不支持 `and` / `or` / `else if`
+2. 不支持闭包
+3. 不支持匿名函数作为参数
+4. 保留字过多（match, skills, user 等）
+5. Agent functions 块只能有 fn 声明

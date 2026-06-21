@@ -1,0 +1,188 @@
+// ============================================================
+// Skill Learner Agent
+// Learns new skills from successful fixes.
+// When a user confirms a fix worked, this agent extracts
+// the pattern and saves it as a new SKILL.md.
+// ============================================================
+
+// ── Helper Functions ─────────────────────────────────────────
+
+fn determine_category_from_error(error_type: str) -> str {
+    // Determines skill category based on error type
+    if error_type == "RuntimeError" {
+        return "error-patterns"
+    }
+    if error_type == "IndexError" {
+        return "error-patterns"
+    }
+    if error_type == "QualityIssue" {
+        return "code-quality"
+    }
+    if error_type == "TestFailure" {
+        return "testing"
+    }
+    if error_type == "Architecture" {
+        return "architecture"
+    }
+    return "error-patterns"  // default
+}
+
+fn generate_skill_name(error_message: str) -> str {
+    // Generates a skill name from error message
+    // Takes first few meaningful words
+    let words = split(error_message, " ")
+    let name_parts = []
+    let count = 0
+    
+    for word in words {
+        if count >= 3 {
+            break
+        }
+        let lower_word = lower(word)
+        // Skip common words (nested if since Helen doesn't support 'or' in conditions)
+        if lower_word == "the" {
+            continue
+        }
+        if lower_word == "a" {
+            continue
+        }
+        if lower_word == "an" {
+            continue
+        }
+        if lower_word == "in" {
+            continue
+        }
+        if lower_word == "on" {
+            continue
+        }
+        // Remove non-alphanumeric characters
+        let clean = regex_replace(lower_word, "[^a-z0-9]", "")
+        if len(clean) > 0 {
+            name_parts.append(clean)
+            count = count + 1
+        }
+    }
+    
+    return join(name_parts, "-")
+}
+
+fn generate_skill_content(error: map, fix: str) -> str {
+    // Generates SKILL.md content from error and fix
+    let error_type = error["type"]
+    let error_message = error["message"]
+    let skill_name = generate_skill_name(error_message)
+    let category = determine_category_from_error(error_type)
+    
+    let content = "---\n"
+    content = content + "name: " + skill_name + "\n"
+    content = content + "description: \"Fix for " + error_message + "\"\n"
+    content = content + "version: 1.0.0\n"
+    content = content + "category: " + category + "\n"
+    content = content + "tags: [" + lower(error_type) + "]\n"
+    content = content + "triggers:\n"
+    content = content + "  - error_type: \"" + error_type + "\"\n"
+    content = content + "    message_contains: \"" + error_message + "\"\n"
+    content = content + "confidence: 0.8\n"
+    content = content + "occurrences: 1\n"
+    content = content + "---\n\n"
+    content = content + "# " + skill_name + "\n\n"
+    content = content + "## Trigger\n"
+    content = content + error_type + ": " + error_message + "\n\n"
+    content = content + "## Fix\n"
+    content = content + fix + "\n\n"
+    content = content + "## Steps\n"
+    content = content + "1. Identify the error location\n"
+    content = content + "2. Apply the fix\n"
+    content = content + "3. Run tests to verify\n\n"
+    content = content + "## Pitfalls\n"
+    content = content + "- Verify the fix doesn't break other functionality\n"
+    
+    return content
+}
+
+fn save_skill(category: str, name: str, content: str) -> str {
+    // Saves skill to file system
+    let skill_dir = "agents/skills/" + category + "/" + name
+    mkdir_p(skill_dir)
+    let skill_file = skill_dir + "/SKILL.md"
+    write_file(skill_file, content)
+    return skill_file
+}
+
+// ── Skill Learner Agent ──────────────────────────────────────
+
+agent SkillLearner(error: map, fix: str, confirmed: bool) {
+    description "Learn new skills from successful fixes"
+    model "gpt-4"
+    temperature 0.1
+
+    prompt """
+    You are the Skill Learner for Helen Programming Agent.
+    
+    Error: {{error}}
+    Fix: {{fix}}
+    Confirmed: {{confirmed}}
+    
+    If the user confirmed the fix worked, generate a new SKILL.md
+    that captures this pattern for future reuse.
+    
+    Return a map with:
+    - status: "saved" | "skipped" | "error"
+    - path: where skill was saved (if saved)
+    - category: determined category
+    - name: generated skill name
+    """
+
+    functions {
+        fn do_learn(error: map, fix: str, confirmed: bool) -> map {
+            // Check if fix was confirmed
+            if confirmed == false {
+                return {
+                    "status": "skipped",
+                    "message": "Fix not confirmed by user",
+                    "path": "",
+                    "category": "",
+                    "name": ""
+                }
+            }
+            
+            // Validate inputs
+            if len(fix) == 0 {
+                return {
+                    "status": "error",
+                    "message": "Fix cannot be empty",
+                    "path": "",
+                    "category": "",
+                    "name": ""
+                }
+            }
+            
+            // Extract error info
+            let error_type = error["type"]
+            let error_message = error["message"]
+            
+            // Determine category and name
+            let category = determine_category_from_error(error_type)
+            let name = generate_skill_name(error_message)
+            
+            // Generate content
+            let content = generate_skill_content(error, fix)
+            
+            // Save skill
+            let path = save_skill(category, name, content)
+            
+            return {
+                "status": "saved",
+                "message": "Skill saved: " + name,
+                "path": path,
+                "category": category,
+                "name": name
+            }
+        }
+    }
+
+    main {
+        let result = do_learn(error, fix, confirmed)
+        return result
+    }
+}

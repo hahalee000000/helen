@@ -1,0 +1,168 @@
+// ============================================================
+// Skill Evolver Agent
+// Evolves existing skills with new findings.
+// When using a skill reveals new pitfalls or edge cases,
+// this agent updates the skill to include them.
+// ============================================================
+
+// ── Helper Functions ─────────────────────────────────────────
+
+fn read_skill_content(skill_path: str) -> str {
+    // Reads the content of a skill file
+    if path_exists(skill_path) {
+        return read_file(skill_path)
+    }
+    return ""
+}
+
+fn update_occurrences(content: str) -> str {
+    // Increments the occurrences count in frontmatter
+    let lines = split(content, "\n")
+    let updated_lines = []
+    
+    for line in lines {
+        if startswith(line, "occurrences:") {
+            // Extract current count and increment
+            let parts = split(line, ":")
+            if len(parts) >= 2 {
+                let count_str = strip(parts[1])
+                let count = int(count_str)
+                let new_count = count + 1
+                updated_lines.append("occurrences: " + str(new_count))
+            } else {
+                updated_lines.append(line)
+            }
+        } else {
+            updated_lines.append(line)
+        }
+    }
+    
+    return join(updated_lines, "\n")
+}
+
+fn append_pitfall(content: str, new_finding: str) -> str {
+    // Appends a new finding to the Pitfalls section
+    // Simple approach: just append to end if Pitfalls section exists
+    let has_pitfalls = regex_search(content, "## Pitfalls")
+    
+    if has_pitfalls {
+        // Find the Pitfalls section and append to it
+        let lines = split(content, "\n")
+        let updated_lines = []
+        let found_pitfalls = false
+        let added = false
+        
+        for line in lines {
+            updated_lines.append(line)
+            
+            if startswith(strip(line), "## Pitfalls") {
+                found_pitfalls = true
+            }
+        }
+        
+        // If we found pitfalls, append the new finding at the end
+        if found_pitfalls {
+            updated_lines.append("- " + new_finding)
+        }
+        
+        return join(updated_lines, "\n")
+    } else {
+        // No pitfalls section, add one at the end
+        return content + "\n\n## Pitfalls\n- " + new_finding + "\n"
+    }
+}
+
+fn write_updated_skill(skill_path: str, content: str) -> str {
+    // Writes updated content back to skill file
+    write_file(skill_path, content)
+    return skill_path
+}
+
+// ── Skill Evolver Agent ──────────────────────────────────────
+
+agent SkillEvolver(skill_path: str, new_finding: str) {
+    description "Evolve existing skills with new findings"
+    model "gpt-4"
+    temperature 0.1
+
+    prompt """
+    You are the Skill Evolver for Helen Programming Agent.
+    
+    Skill Path: {{skill_path}}
+    New Finding: {{new_finding}}
+    
+    Update the skill to include this new finding:
+    1. Increment the occurrences count
+    2. Add the finding to the Pitfalls section
+    
+    Return a map with:
+    - status: "evolved" | "error"
+    - path: updated skill path
+    - changes: description of changes made
+    """
+
+    functions {
+        fn do_evolve(skill_path: str, new_finding: str) -> map {
+            // Validate inputs
+            if len(skill_path) == 0 {
+                return {
+                    "status": "error",
+                    "message": "Skill path cannot be empty",
+                    "path": "",
+                    "changes": ""
+                }
+            }
+            
+            if len(new_finding) == 0 {
+                return {
+                    "status": "error",
+                    "message": "New finding cannot be empty",
+                    "path": "",
+                    "changes": ""
+                }
+            }
+            
+            // Check if skill exists
+            if path_exists(skill_path) == false {
+                return {
+                    "status": "error",
+                    "message": "Skill not found: " + skill_path,
+                    "path": "",
+                    "changes": ""
+                }
+            }
+            
+            // Read current content
+            let content = read_skill_content(skill_path)
+            if len(content) == 0 {
+                return {
+                    "status": "error",
+                    "message": "Skill file is empty",
+                    "path": skill_path,
+                    "changes": ""
+                }
+            }
+            
+            // Update occurrences
+            let updated = update_occurrences(content)
+            
+            // Append new finding to pitfalls
+            updated = append_pitfall(updated, new_finding)
+            
+            // Write back
+            write_updated_skill(skill_path, updated)
+            
+            return {
+                "status": "evolved",
+                "message": "Skill evolved: " + skill_path,
+                "path": skill_path,
+                "changes": "Incremented occurrences, added pitfall: " + new_finding
+            }
+        }
+    }
+
+    main {
+        let result = do_evolve(skill_path, new_finding)
+        return result
+    }
+}

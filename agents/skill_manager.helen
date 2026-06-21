@@ -1,0 +1,230 @@
+// ============================================================
+// Skill Manager Agent
+// CRUD operations for Helen Programming Agent skills.
+//
+// Skills are stored in: agents/skills/<category>/<name>/SKILL.md
+// Categories: error-patterns, code-quality, testing, architecture
+// ============================================================
+
+// ── Helper Functions ─────────────────────────────────────────
+
+fn get_skills_base_dir() -> str {
+    // Returns the base directory for skills
+    return "agents/skills"
+}
+
+fn get_skill_path(category: str, name: str) -> str {
+    // Returns the full path to a skill directory
+    return get_skills_base_dir() + "/" + category + "/" + name
+}
+
+fn get_skill_file(category: str, name: str) -> str {
+    // Returns the full path to a skill's SKILL.md file
+    return get_skill_path(category, name) + "/SKILL.md"
+}
+
+fn is_valid_category(category: str) -> bool {
+    // Validates that category is one of the allowed values
+    if category == "error-patterns" { return true }
+    if category == "code-quality" { return true }
+    if category == "testing" { return true }
+    if category == "architecture" { return true }
+    return false
+}
+
+fn skill_exists(category: str, name: str) -> bool {
+    // Checks if a skill exists
+    let skill_file = get_skill_file(category, name)
+    return path_exists(skill_file)
+}
+
+fn create_skill_dir(category: str, name: str) -> str {
+    // Creates the directory structure for a skill
+    let skill_dir = get_skill_path(category, name)
+    mkdir_p(skill_dir)
+    return skill_dir
+}
+
+fn write_skill_file(category: str, name: str, content: str) -> str {
+    // Writes content to a skill's SKILL.md file
+    let skill_file = get_skill_file(category, name)
+    write_file(skill_file, content)
+    return skill_file
+}
+
+fn read_skill_file(category: str, name: str) -> str {
+    // Reads content from a skill's SKILL.md file
+    let skill_file = get_skill_file(category, name)
+    if path_exists(skill_file) {
+        return read_file(skill_file)
+    }
+    return ""
+}
+
+fn delete_skill_dir(category: str, name: str) -> str {
+    // Deletes a skill's directory
+    let cmd = "rm -rf " + get_skill_path(category, name)
+    let result = exec(cmd, true)
+    return "deleted"
+}
+
+fn list_all_skills() -> str {
+    // Lists all skills by scanning the skills directory
+    let cmd = "find agents/skills -name 'SKILL.md' -type f | sort"
+    let result = exec(cmd, true)
+    return result["stdout"]
+}
+
+// ── Skill Manager Agent ──────────────────────────────────────
+
+agent SkillManager(action: str, name: str, category: str, content: str) {
+    description "CRUD operations for Helen Programming Agent skills"
+    model "gpt-4"
+    temperature 0.1
+
+    prompt """
+    You are the Skill Manager for Helen Programming Agent.
+    
+    Action: {{action}}
+    Name: {{name}}
+    Category: {{category}}
+    Content: {{content}}
+    
+    Valid categories: error-patterns, code-quality, testing, architecture
+    
+    Perform the requested action and return a result map with:
+    - status: "success" or "error"
+    - message: human-readable description
+    - path: file path (for create/read/update)
+    - skills: list of skill paths (for list)
+    """
+
+    functions {
+        fn do_create(name: str, category: str, content: str) -> map {
+            // Validate inputs
+            if len(name) == 0 {
+                return {"status": "error", "message": "Name cannot be empty"}
+            }
+            if is_valid_category(category) == false {
+                return {"status": "error", "message": "Invalid category: " + category}
+            }
+            if len(content) == 0 {
+                return {"status": "error", "message": "Content cannot be empty"}
+            }
+            
+            // Check if skill already exists
+            if skill_exists(category, name) {
+                return {"status": "error", "message": "Skill already exists: " + name}
+            }
+            
+            // Create directory and write file
+            create_skill_dir(category, name)
+            let path = write_skill_file(category, name, content)
+            
+            return {
+                "status": "success",
+                "message": "Skill created: " + name,
+                "path": path
+            }
+        }
+
+        fn do_read(name: str, category: str) -> map {
+            // Validate inputs
+            if len(name) == 0 {
+                return {"status": "error", "message": "Name cannot be empty"}
+            }
+            
+            // Check if skill exists
+            if skill_exists(category, name) == false {
+                return {"status": "error", "message": "Skill not found: " + name}
+            }
+            
+            // Read content
+            let content = read_skill_file(category, name)
+            let path = get_skill_file(category, name)
+            
+            return {
+                "status": "success",
+                "message": "Skill read: " + name,
+                "path": path,
+                "content": content
+            }
+        }
+
+        fn do_update(name: str, category: str, content: str) -> map {
+            // Validate inputs
+            if len(name) == 0 {
+                return {"status": "error", "message": "Name cannot be empty"}
+            }
+            if len(content) == 0 {
+                return {"status": "error", "message": "Content cannot be empty"}
+            }
+            
+            // Check if skill exists
+            if skill_exists(category, name) == false {
+                return {"status": "error", "message": "Skill not found: " + name}
+            }
+            
+            // Update file
+            let path = write_skill_file(category, name, content)
+            
+            return {
+                "status": "success",
+                "message": "Skill updated: " + name,
+                "path": path
+            }
+        }
+
+        fn do_delete(name: str, category: str) -> map {
+            // Validate inputs
+            if len(name) == 0 {
+                return {"status": "error", "message": "Name cannot be empty"}
+            }
+            
+            // Check if skill exists
+            if skill_exists(category, name) == false {
+                return {"status": "error", "message": "Skill not found: " + name}
+            }
+            
+            // Delete directory
+            delete_skill_dir(category, name)
+            
+            return {
+                "status": "success",
+                "message": "Skill deleted: " + name
+            }
+        }
+
+        fn do_list() -> map {
+            // List all skills
+            let skills_output = list_all_skills()
+            let skills_list = split(skills_output, "\n")
+            
+            return {
+                "status": "success",
+                "message": "Skills listed",
+                "skills": skills_list
+            }
+        }
+    }
+
+    main {
+        let result = {}
+        
+        if action == "create" {
+            result = do_create(name, category, content)
+        } else if action == "read" {
+            result = do_read(name, category)
+        } else if action == "update" {
+            result = do_update(name, category, content)
+        } else if action == "delete" {
+            result = do_delete(name, category)
+        } else if action == "list" {
+            result = do_list()
+        } else {
+            result = {"status": "error", "message": "Unknown action: " + action}
+        }
+        
+        return result
+    }
+}
