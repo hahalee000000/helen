@@ -33,8 +33,8 @@ from helen.stdlib.string import (
 # Import data functions
 from helen.stdlib.data import (
     _json_parse, _json_stringify, _json_load, _json_save,
-    _html_parse, _html_text, _html_links,
-    _markdown_to_html, _markdown_extract_headings,
+    _html_parse, _html_text, _html_links, _html_select,
+    _markdown_to_html, _markdown_extract_headings, _markdown_parse,
     _csv_parse, _csv_stringify, _csv_load, _csv_save,
 )
 
@@ -641,10 +641,12 @@ def _register_builtins() -> None:
         BuiltinFunction("html_parse", "Parse HTML", "html_parse(text)", _html_parse, "data"),
         BuiltinFunction("html_text", "Extract HTML text", "html_text(html)", _html_text, "data"),
         BuiltinFunction("html_links", "Extract HTML links", "html_links(html)", _html_links, "data"),
+        BuiltinFunction("html_select", "CSS select elements", "html_select(html, selector)", _html_select, "data"),
 
         # Data Markdown operations
         BuiltinFunction("markdown_to_html", "Convert Markdown to HTML", "markdown_to_html(text)", _markdown_to_html, "data"),
         BuiltinFunction("markdown_extract_headings", "Extract Markdown headings", "markdown_extract_headings(text)", _markdown_extract_headings, "data"),
+        BuiltinFunction("markdown_parse", "Parse Markdown to blocks", "markdown_parse(text)", _markdown_parse, "data"),
 
         # Data CSV operations
         BuiltinFunction("csv_parse", "Parse CSV", "csv_parse(text, delimiter?)", _csv_parse, "data"),

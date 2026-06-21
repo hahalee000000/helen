@@ -10,9 +10,9 @@ from helen.stdlib.data import (
     # JSON
     _json_parse, _json_stringify, _json_load, _json_save,
     # HTML
-    _html_parse, _html_text, _html_links,
+    _html_parse, _html_text, _html_links, _html_select,
     # Markdown
-    _markdown_to_html, _markdown_extract_headings,
+    _markdown_to_html, _markdown_extract_headings, _markdown_parse,
     # CSV
     _csv_parse, _csv_stringify, _csv_load, _csv_save,
 )
@@ -149,6 +149,63 @@ class TestHtmlLinks:
         assert result == []
 
 
+class TestHtmlSelect:
+    """Tests for html_select."""
+
+    def test_select_by_tag(self):
+        html = "<p>One</p><div>Two</div><p>Three</p>"
+        result = _html_select(html, "p")
+        assert len(result) == 2
+        assert result[0]["tag"] == "p"
+        assert result[0]["text"] == "One"
+        assert result[1]["text"] == "Three"
+
+    def test_select_by_class(self):
+        html = '<p class="intro">Hello</p><p class="body">World</p>'
+        result = _html_select(html, ".intro")
+        assert len(result) == 1
+        assert result[0]["text"] == "Hello"
+
+    def test_select_by_id(self):
+        html = '<div id="main">Content</div><div id="side">Other</div>'
+        result = _html_select(html, "#main")
+        assert len(result) == 1
+        assert result[0]["text"] == "Content"
+
+    def test_select_by_attribute(self):
+        html = '<input type="text" /><input type="hidden" />'
+        result = _html_select(html, "[type]")
+        assert len(result) == 2
+
+    def test_select_by_attribute_value(self):
+        html = '<input type="text" /><input type="hidden" />'
+        result = _html_select(html, "[type=hidden]")
+        assert len(result) == 1
+        assert result[0]["attrs"]["type"] == "hidden"
+
+    def test_select_tag_and_class(self):
+        html = '<p class="a">One</p><div class="a">Two</div>'
+        result = _html_select(html, "p.a")
+        assert len(result) == 1
+        assert result[0]["tag"] == "p"
+
+    def test_select_no_match(self):
+        html = "<p>Hello</p>"
+        result = _html_select(html, "div")
+        assert result == []
+
+    def test_select_empty_selector_raises(self):
+        with pytest.raises(ValueError):
+            _html_select("<p>Hi</p>", "")
+
+    def test_select_preserves_attrs(self):
+        html = '<a href="http://x.com" class="link">Click</a>'
+        result = _html_select(html, "a")
+        assert len(result) == 1
+        assert result[0]["attrs"]["href"] == "http://x.com"
+        assert result[0]["attrs"]["class"] == "link"
+
+
 # ── Markdown Tests ─────────────────────────────────────────────
 
 
@@ -187,6 +244,86 @@ class TestMarkdownExtractHeadings:
     def test_no_headings(self):
         md = "Just plain text"
         result = _markdown_extract_headings(md)
+        assert result == []
+
+
+class TestMarkdownParse:
+    """Tests for markdown_parse."""
+
+    def test_parse_heading(self):
+        md = "# Hello World"
+        result = _markdown_parse(md)
+        assert len(result) == 1
+        assert result[0]["type"] == "heading"
+        assert result[0]["level"] == 1
+        assert result[0]["text"] == "Hello World"
+
+    def test_parse_multiple_headings(self):
+        md = "# H1\n\n## H2\n\n### H3"
+        result = _markdown_parse(md)
+        assert len(result) == 3
+        assert result[0]["level"] == 1
+        assert result[1]["level"] == 2
+        assert result[2]["level"] == 3
+
+    def test_parse_paragraph(self):
+        md = "This is a paragraph.\nSecond line."
+        result = _markdown_parse(md)
+        assert len(result) == 1
+        assert result[0]["type"] == "paragraph"
+        assert "paragraph" in result[0]["text"]
+
+    def test_parse_code_block(self):
+        md = "```python\nprint('hello')\n```"
+        result = _markdown_parse(md)
+        assert len(result) == 1
+        assert result[0]["type"] == "code_block"
+        assert result[0]["language"] == "python"
+        assert "print" in result[0]["text"]
+
+    def test_parse_code_block_no_lang(self):
+        md = "```\nsome code\n```"
+        result = _markdown_parse(md)
+        assert result[0]["type"] == "code_block"
+        assert result[0]["language"] == ""
+
+    def test_parse_unordered_list(self):
+        md = "- item one\n- item two\n- item three"
+        result = _markdown_parse(md)
+        assert len(result) == 1
+        assert result[0]["type"] == "list"
+        assert result[0]["ordered"] is False
+        assert len(result[0]["items"]) == 3
+
+    def test_parse_ordered_list(self):
+        md = "1. first\n2. second\n3. third"
+        result = _markdown_parse(md)
+        assert len(result) == 1
+        assert result[0]["type"] == "list"
+        assert result[0]["ordered"] is True
+        assert len(result[0]["items"]) == 3
+
+    def test_parse_blockquote(self):
+        md = "> This is a quote\n> Second line"
+        result = _markdown_parse(md)
+        assert len(result) == 1
+        assert result[0]["type"] == "blockquote"
+        assert "quote" in result[0]["text"]
+
+    def test_parse_horizontal_rule(self):
+        md = "---"
+        result = _markdown_parse(md)
+        assert len(result) == 1
+        assert result[0]["type"] == "hr"
+
+    def test_parse_mixed(self):
+        md = "# Title\n\nA paragraph.\n\n- item\n\n> quote\n\n---"
+        result = _markdown_parse(md)
+        types = [b["type"] for b in result]
+        assert types == ["heading", "paragraph", "list", "blockquote", "hr"]
+
+    def test_parse_empty(self):
+        result = _markdown_parse("")
         assert result == []
 
 

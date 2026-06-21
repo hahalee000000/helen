@@ -168,6 +168,115 @@ def _html_links(html_text: str) -> list[str]:
     return re.findall(r'href="([^"]+)"', html_text)
 
 
+def _html_select(html_text: str, selector: str) -> list[dict[str, Any]]:
+    """Select elements using CSS selector.
+
+    Supports basic CSS selectors:
+    - Tag name: ``div``, ``p``, ``a``
+    - Class: ``.classname``
+    - ID: ``#id``
+    - Attribute: ``[attr]``, ``[attr=value]``
+    - Combinations: ``div.class``, ``div#id[attr=val]``
+
+    Args:
+        html_text: HTML string
+        selector: CSS selector
+
+    Returns:
+        List of matching elements as dicts with 'tag', 'attrs', 'text'
+
+    Raises:
+        ValueError: If selector is invalid or empty
+    """
+    if not selector or not selector.strip():
+        raise ValueError("Selector cannot be empty")
+
+    selector = selector.strip()
+
+    # Parse selector into components
+    tag_pattern = None
+    id_value = None
+    class_value = None
+    attr_name = None
+    attr_value = None
+
+    # Extract attribute selector [attr] or [attr=value]
+    attr_match = re.search(r'\[(\w+)(?:=["\']?([^"\']*)["\']?)?\]', selector)
+    if attr_match:
+        attr_name = attr_match.group(1)
+        attr_value = attr_match.group(2)  # None if just [attr]
+        selector = selector[:attr_match.start()] + selector[attr_match.end():]
+
+    # Extract ID selector #id
+    id_match = re.search(r'#([\w-]+)', selector)
+    if id_match:
+        id_value = id_match.group(1)
+        selector = selector[:id_match.start()] + selector[id_match.end():]
+
+    # Extract class selector .class
+    class_match = re.search(r'\.([\w-]+)', selector)
+    if class_match:
+        class_value = class_match.group(1)
+        selector = selector[:class_match.start()] + selector[class_match.end():]
+
+    # Remaining is tag name
+    remaining = selector.strip()
+    if remaining:
+        tag_pattern = remaining
+
+    # Validate: at least one selector component must be present
+    if not any([tag_pattern, id_value, class_value, attr_name]):
+        raise ValueError(f"Invalid selector: '{selector}'")
+
+    # Find all tags in HTML (both normal and self-closing)
+    results = []
+    # Match both <tag attrs>content</tag> and <tag attrs />
+    tag_regex = r'<(\w+)([^>]*?)(?:/>|>(.*?)</\1>)'
+    for tag_match in re.finditer(tag_regex, html_text, re.DOTALL):
+        tag = tag_match.group(1)
+        attrs_str = tag_match.group(2)
+        content = tag_match.group(3) or ""
+
+        # Parse attributes from the tag
+        attrs: dict[str, str] = {}
+        for a_match in re.finditer(r'([\w-]+)=["\']([^"\']*)["\']', attrs_str):
+            attrs[a_match.group(1)] = a_match.group(2)
+        # Also handle boolean attributes (no value)
+        for a_match in re.finditer(r'\s([\w-]+)(?:\s|$)', attrs_str):
+            attr_key = a_match.group(1)
+            if attr_key not in attrs and '=' not in attrs_str.split(attr_key)[-1][:1]:
+                attrs[attr_key] = ""
+
+        # Check tag match
+        if tag_pattern and tag != tag_pattern:
+            continue
+
+        # Check ID match
+        if id_value and attrs.get("id") != id_value:
+            continue
+
+        # Check class match
+        if class_value:
+            classes = attrs.get("class", "").split()
+            if class_value not in classes:
+                continue
+
+        # Check attribute match
+        if attr_name is not None:
+            if attr_name not in attrs:
+                continue
+            if attr_value is not None and attrs[attr_name] != attr_value:
+                continue
+
+        results.append({
+            "tag": tag,
+            "attrs": attrs,
+            "text": content,
+        })
+
+    return results
+
+
 # ── Markdown operations ────────────────────────────────────────
 
 
@@ -253,6 +362,152 @@ def _markdown_extract_headings(text: str) -> list[dict[str, Any]]:
             })
 
     return headings
+
+
+def _markdown_parse(text: str) -> list[dict[str, Any]]:
+    """Parse Markdown text into structured blocks.
+
+    Recognizes: headings, paragraphs, code blocks (fenced),
+    unordered lists, ordered lists, blockquotes, horizontal rules.
+
+    Args:
+        text: Markdown string
+
+    Returns:
+        List of block dicts. Each dict has a ``type`` key and
+        type-specific keys:
+        - ``heading``: ``{type, level, text}``
+        - ``paragraph``: ``{type, text}``
+        - ``code_block``: ``{type, language, text}``
+        - ``list``: ``{type, ordered, items: [str]}``
+        - ``blockquote``: ``{type, text}``
+        - ``hr``: ``{type}``
+    """
+    lines = text.split("\n")
+    blocks: list[dict[str, Any]] = []
+    i = 0
+    n = len(lines)
+
+    while i < n:
+        line = lines[i]
+        stripped = line.strip()
+
+        # Blank line — skip
+        if not stripped:
+            i += 1
+            continue
+
+        # Fenced code block (``` or ~~~)
+        fence_match = re.match(r'^(`{3,}|~{3,})(\w*)', stripped)
+        if fence_match:
+            fence_char = fence_match.group(1)[0]
+            fence_len = len(fence_match.group(1))
+            language = fence_match.group(2) or ""
+            code_lines: list[str] = []
+            i += 1
+            while i < n:
+                close = re.match(
+                    rf'^{re.escape(fence_char)}{{{fence_len},}}\s*$',
+                    lines[i].strip(),
+                )
+                if close:
+                    i += 1
+                    break
+                code_lines.append(lines[i])
+                i += 1
+            blocks.append({
+                "type": "code_block",
+                "language": language,
+                "text": "\n".join(code_lines),
+            })
+            continue
+
+        # Horizontal rule (---, ***, ___)
+        if re.match(r'^[-*_]{3,}\s*$', stripped) and len(set(stripped.replace(' ', ''))) == 1:
+            blocks.append({"type": "hr"})
+            i += 1
+            continue
+
+        # Heading (# ... ######)
+        heading_match = re.match(r'^(#{1,6})\s+(.+)$', stripped)
+        if heading_match:
+            blocks.append({
+                "type": "heading",
+                "level": len(heading_match.group(1)),
+                "text": heading_match.group(2).strip(),
+            })
+            i += 1
+            continue
+
+        # Blockquote (> ...)
+        if stripped.startswith(">"):
+            quote_lines: list[str] = []
+            while i < n and lines[i].strip().startswith(">"):
+                content = re.sub(r'^>\s?', '', lines[i].strip())
+                quote_lines.append(content)
+                i += 1
+            blocks.append({
+                "type": "blockquote",
+                "text": "\n".join(quote_lines),
+            })
+            continue
+
+        # Unordered list (- or * or +)
+        if re.match(r'^[-*+]\s+', stripped):
+            items: list[str] = []
+            while i < n and re.match(r'^\s*[-*+]\s+', lines[i]):
+                item_text = re.sub(r'^\s*[-*+]\s+', '', lines[i])
+                items.append(item_text)
+                i += 1
+            blocks.append({
+                "type": "list",
+                "ordered": False,
+                "items": items,
+            })
+            continue
+
+        # Ordered list (1. 2. etc.)
+        if re.match(r'^\d+\.\s+', stripped):
+            items = []
+            while i < n and re.match(r'^\s*\d+\.\s+', lines[i]):
+                item_text = re.sub(r'^\s*\d+\.\s+', '', lines[i])
+                items.append(item_text)
+                i += 1
+            blocks.append({
+                "type": "list",
+                "ordered": True,
+                "items": items,
+            })
+            continue
+
+        # Paragraph (default — collect consecutive non-blank, non-special lines)
+        para_lines: list[str] = []
+        while i < n:
+            l = lines[i]
+            ls = l.strip()
+            if not ls:
+                break
+            if re.match(r'^(#{1,6})\s+', ls):
+                break
+            if re.match(r'^(`{3,}|~{3,})', ls):
+                break
+            if re.match(r'^[-*_]{3,}\s*$', ls) and len(set(ls.replace(' ', ''))) == 1:
+                break
+            if ls.startswith(">"):
+                break
+            if re.match(r'^[-*+]\s+', ls):
+                break
+            if re.match(r'^\d+\.\s+', ls):
+                break
+            para_lines.append(ls)
+            i += 1
+        if para_lines:
+            blocks.append({
+                "type": "paragraph",
+                "text": " ".join(para_lines),
+            })
+
+    return blocks
 
 
 # ── CSV operations ─────────────────────────────────────────────
