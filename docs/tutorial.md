@@ -1,7 +1,7 @@
 # Helen 语言完整教程
 
 > **Helen** — A Prompt-first Agent Programming Language
-> 版本: v1.5 | 状态: Phase 0-9 全部实现 | 测试: 1805 passed
+> 版本: v1.8 | 状态: Phase 0-10 全部实现 | 测试: 1850+ passed
 
 ---
 
@@ -11,9 +11,9 @@
 |------|------|
 | [01](#教程-01-入门指南) | 安装、配置、Hello World、REPL、代码验证、文档生成 |
 | [02](#教程-02-变量与类型) | let/const、数据类型、类型注解、运算、集合操作 |
-| [03](#教程-03-函数) | fn 声明、参数、返回值、递归、Agent 内部函数、作用域 |
-| [04](#教程-04-控制流) | if/for/while/match、break/continue、try-catch |
-| [05](#教程-05-agent-编程) | agent 声明、配置、参数、调用 |
+| [03](#教程-03-函数) | fn 声明、参数、返回值、递归、Agent 内部函数、作用域、闭包(v1.7) |
+| [04](#教程-04-控制流) | if/for/while/match、break/continue、try-catch、管道操作符(v1.8)、模式匹配增强(v1.8) |
+| [05](#教程-05-agent-编程) | agent 声明、配置、参数、调用、协议(v1.7) |
 | [06](#教程-06-llm-语句) | llm act/if/stream、对话历史、流式输出 |
 | [07](#教程-07-异步编程) | async、await、并发 Agent 调用 |
 | [08](#教程-08-模块与导入) | import、多格式、跨文件复用、路径安全 |

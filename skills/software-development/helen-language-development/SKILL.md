@@ -1,9 +1,9 @@
 ---
 name: helen-language-development
 description: Helen programming language implementation patterns, pitfalls, and development workflows. Covers AST/parser/interpreter extension, async/await implementation, exception hierarchy, streaming with tool calls, Python FFI integration, and testing patterns.
-version: 1.4.0
+version: 1.8.0
 author: Hermes Agent
-tags: [helen, language-design, interpreter, async, parser, streaming, tool-calls, ffi, python-integration, contract-first, stdlib]
+tags: [helen, language-design, interpreter, async, parser, streaming, tool-calls, ffi, python-integration, contract-first, stdlib, closures, protocols, pipe-operator, pattern-matching]
 ---
 
 # Helen Language Development
@@ -1213,6 +1213,7 @@ After implementing new stdlib modules:
 - `references/stdlib-p1-implementation.md` — P1 modules: Time (13), Math Stats (11), File Advanced (10)
 - `references/stdlib-p2-p3-implementation.md` — P2+P3 modules: System (16), Crypto (11), Data Formats (12)
 - `references/documentation-workflow.md` — Wiki sync, tutorial updates, documentation patterns
+- `references/v1.6-v1.7-v1.8-implementation.md` — v1.6-v1.8 improvements: module import function access, closures/protocols, pipe operator/pattern matching
 
 ### Pitfalls, Bugs & Semantic Analysis
 - `references/environment-and-pitfalls.md` — Environment setup, type checking pitfalls, parser bugs, interpreter sentinel flow, naming conventions, SemanticAnalyzer patterns

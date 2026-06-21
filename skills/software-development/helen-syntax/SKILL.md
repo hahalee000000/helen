@@ -1,7 +1,7 @@
 ---
 name: helen-syntax
 description: "Helen 语言语法快速参考 — 关键字、类型、表达式、语句"
-version: 1.0.0
+version: 1.8.0
 author: Helen Team
 license: MIT
 tags: [helen, syntax, reference, language]
@@ -9,7 +9,7 @@ tags: [helen, syntax, reference, language]
 
 # Helen 语法参考
 
-## 关键字（43 个）
+## 关键字（45 个）
 
 ### Agent 声明
 - `agent` — 声明 Agent
@@ -263,6 +263,88 @@ match x {
     case 1..100 if x == 42 { print("the answer") }
     case 1..100 { print("in range") }
     default { print("out of range") }
+}
+
+// v1.8: 通配符模式（可作为默认分支）
+match value {
+    case 1 { print("one") }
+    case _ { print("other") }  // 匹配任何值
+}
+
+// v1.8: 变量绑定
+match value {
+    case n if n > 0 { print("positive: " + str(n)) }
+    case n if n < 0 { print("negative: " + str(n)) }
+    case _ { print("zero") }
+}
+
+// v1.8: 类型模式
+match value {
+    case is String { print("it's a string") }
+    case is Int { print("it's an int") }
+    case _ { print("unknown type") }
+}
+
+// v1.8: 类型模式带绑定
+match value {
+    case is String s { print("string: " + s) }
+    case _ { print("not a string") }
+}
+```
+
+### 管道操作符（v1.8）
+```helen
+// 基本用法
+let result = 5 |> double  // 等价于 double(5)
+
+// 链式调用
+let result = "hello" |> upper |> strip  // 等价于 strip(upper("hello"))
+
+// 与内置函数
+let len = [1, 2, 3] |> len  // 3
+
+// 与自定义函数
+fn add_one(x) { return x + 1 }
+let result = 10 |> add_one  // 11
+```
+
+### 闭包与匿名函数（v1.7）
+```helen
+// 匿名函数
+let add = fn(x, y) { return x + y }
+print(add(1, 2))  // 3
+
+// 闭包（词法作用域）
+fn make_counter() {
+    let count = 0
+    return fn() {
+        count = count + 1
+        return count
+    }
+}
+
+let counter = make_counter()
+print(counter())  // 1
+print(counter())  // 2
+```
+
+### 协议（v1.7）
+```helen
+// 协议声明
+protocol Printable {
+    fn to_string(self) -> String
+}
+
+// 协议实现（鸭子类型）
+struct Point {
+    x: Int
+    y: Int
+}
+
+impl Printable for Point {
+    fn to_string(self) -> String {
+        return "Point(" + str(self.x) + ", " + str(self.y) + ")"
+    }
 }
 ```
 
