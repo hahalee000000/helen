@@ -104,6 +104,15 @@ from helen.stdlib.data_formats import (
     _xml_parse, _xml_stringify, _xml_load, _xml_save,
 )
 
+# Import test framework functions
+from helen.stdlib.test import (
+    _describe, _it, _it_skip,
+    _assert_true, _assert_equal, _assert_not_equal, _assert_throws,
+    _expect, _before_each, _after_each,
+    _run_tests, _run_tests_json, _test_reset, _test_count,
+    _test_suite, _test_case, _test_case_skip, _test_end_suite,
+)
+
 
 @dataclass
 class BuiltinFunction:
@@ -789,6 +798,26 @@ def _register_builtins() -> None:
         BuiltinFunction("trace_on", "Enable execution tracing", "trace_on()", _trace_on, "debug"),
         BuiltinFunction("trace_off", "Disable execution tracing", "trace_off()", _trace_off, "debug"),
         BuiltinFunction("get_trace", "Get recent execution trace", "get_trace(n?)", _get_trace, "debug"),
+
+        # Test framework (TDD support)
+        BuiltinFunction("describe", "Define a test suite", "describe(name, fn)", _describe, "test"),
+        BuiltinFunction("it", "Define a test case", "it(name, fn)", _it, "test"),
+        BuiltinFunction("it_skip", "Define a skipped test case", "it_skip(name, fn)", _it_skip, "test"),
+        BuiltinFunction("assert_true", "Assert condition is truthy", "assert_true(condition, message?)", _assert_true, "test"),
+        BuiltinFunction("assert_equal", "Assert equality", "assert_equal(actual, expected, message?)", _assert_equal, "test"),
+        BuiltinFunction("assert_not_equal", "Assert inequality", "assert_not_equal(actual, expected, message?)", _assert_not_equal, "test"),
+        BuiltinFunction("assert_throws", "Assert function throws", "assert_throws(fn, error_type?)", _assert_throws, "test"),
+        BuiltinFunction("expect", "Create chainable expectation", "expect(value)", _expect, "test"),
+        BuiltinFunction("before_each", "Register before-each hook", "before_each(fn)", _before_each, "test"),
+        BuiltinFunction("after_each", "Register after-each hook", "after_each(fn)", _after_each, "test"),
+        BuiltinFunction("run_tests", "Execute all tests and print report", "run_tests()", _run_tests, "test"),
+        BuiltinFunction("run_tests_json", "Execute tests and return JSON", "run_tests_json()", _run_tests_json, "test"),
+        BuiltinFunction("test_reset", "Clear all registered tests", "test_reset()", _test_reset, "test"),
+        BuiltinFunction("test_count", "Count registered tests", "test_count()", _test_count, "test"),
+        BuiltinFunction("test_suite", "Start a test suite", "test_suite(name)", _test_suite, "test"),
+        BuiltinFunction("test_case", "Register a test case", "test_case(name, fn)", _test_case, "test"),
+        BuiltinFunction("test_case_skip", "Register a skipped test", "test_case_skip(name, fn)", _test_case_skip, "test"),
+        BuiltinFunction("test_end_suite", "End current test suite", "test_end_suite()", _test_end_suite, "test"),
     ]
 
     for func in builtins:

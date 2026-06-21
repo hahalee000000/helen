@@ -1,0 +1,96 @@
+// Example Helen test file demonstrating the test framework
+// Run with: helen test examples/test_example.helen
+
+// ── Define test functions ────────────────────────────────────
+
+fn test_assert_true() {
+    assert_true(1 == 1)
+    assert_true("hello" != "")
+    assert_true(len([1, 2, 3]) > 0)
+}
+
+fn test_assert_equal() {
+    assert_equal(2 + 3, 5)
+    assert_equal(upper("hello"), "HELLO")
+    assert_equal(len("test"), 4)
+}
+
+fn test_assert_not_equal() {
+    assert_not_equal(1, 2)
+    assert_not_equal("hello", "world")
+}
+
+fn test_expect_toBe() {
+    expect(42).toBe(42)
+    expect("hello").toBe("hello")
+}
+
+fn test_expect_toContain() {
+    expect("hello world").toContain("world")
+    expect([1, 2, 3]).toContain(2)
+}
+
+fn test_expect_comparisons() {
+    expect(10).toBeGreaterThan(5)
+    expect(3).toBeLessThan(7)
+}
+
+fn test_expect_toMatch() {
+    expect("test123").toMatch("[0-9]+")
+    expect("hello@example.com").toContain("@")
+}
+
+fn test_expect_length() {
+    expect([1, 2, 3]).toHaveLength(3)
+    expect("").toBeEmpty()
+}
+
+fn test_expect_not() {
+    expect(5).not_.toBe(6)
+    expect("hello").not_.toContain("xyz")
+}
+
+fn test_expect_chain() {
+    expect("hello world")
+        .toContain("hello")
+        .toContain("world")
+        .toStartWith("hello")
+        .toEndWith("world")
+}
+
+fn test_arithmetic() {
+    assert_equal(1 + 1, 2)
+    assert_equal(10 - 3, 7)
+}
+
+fn test_skip_demo() {
+    assert_true(true)
+}
+
+// ── Register tests using simple API ──────────────────────────
+
+test_suite("Basic assertions")
+test_case("assert_true passes for truthy values", test_assert_true)
+test_case("assert_equal checks equality", test_assert_equal)
+test_case("assert_not_equal checks inequality", test_assert_not_equal)
+test_end_suite()
+
+test_suite("Expect API")
+test_case("toBe checks strict equality", test_expect_toBe)
+test_case("toContain checks substring/element", test_expect_toContain)
+test_case("toBeGreaterThan / toBeLessThan", test_expect_comparisons)
+test_case("toMatch checks regex", test_expect_toMatch)
+test_case("toHaveLength and toBeEmpty", test_expect_length)
+test_case("not_ negates assertions", test_expect_not)
+test_case("chaining multiple assertions", test_expect_chain)
+test_end_suite()
+
+test_suite("Simple tests")
+test_case("basic arithmetic", test_arithmetic)
+test_case("this test runs", test_skip_demo)
+test_case_skip("this test is skipped", test_skip_demo)
+test_end_suite()
+
+// ── Run all tests and print report ───────────────────────────
+
+run_tests()
