@@ -16,26 +16,29 @@
 
 ## 2. 变量名限制
 
-### 2.1 保留字过多
+### 2.1 保留字可优化
 
-**问题**：`match`、`skills`、`user` 等常见词是保留字，不能用作变量名。
+**问题**：`skills` 是保留字，不能用作变量名。
+
+**说明**：
+- `match` 是保留字，但 Python 3.10+ 也有 `match`，合理
+- `user` 不是保留字，可以正常使用
 
 **示例**：
 ```helen
-// ❌ 报错
-let match = regex_search(text, pattern)
+// ❌ 报错（skills 是保留字）
 let skills = get_skills()
-let user = get_user()
 
 // ✅ 必须用其他名字
-let matched = regex_search(text, pattern)
 let skill_list = get_skills()
-let usr = get_user()
+
+// ✅ user 不是保留字，可以正常使用
+let user = get_user()
 ```
 
-**影响**：命名不自然，需要记忆大量保留字。
+**影响**：命名稍有限制。
 
-**建议**：减少保留字，或提供命名指南。
+**建议**：考虑将 `skills` 改为上下文关键字（仅在 agent 声明中有特殊含义）。
 
 ---
 
@@ -226,7 +229,7 @@ let result = try {
 | 类别 | 问题数 | 优先级 |
 |------|:------:|:------:|
 | 控制流 | 0 | ✅ 已完善 |
-| 变量名 | 1 | P1 |
+| 变量名 | 1 | P2 |
 | 函数 | 3 | P0 |
 | 内置函数 | 2 | P1 |
 | 数据结构 | 1 | P2 |
@@ -236,4 +239,4 @@ let result = try {
 **最紧急**：
 1. 实现闭包（词法作用域）
 2. 支持匿名函数 / 箭头函数
-3. 减少保留字 / 允许 functions 块中 let 声明
+3. 允许 functions 块中 let 声明
