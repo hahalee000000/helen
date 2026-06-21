@@ -1,0 +1,75 @@
+// Example: Using Helen's quality assessment tools
+// Run: helen examples/quality_example.helen
+
+// ── Sample code to analyze ───────────────────────────────────
+
+// A simple calculator with good practices
+fn add(a, b) {
+    // Add two numbers
+    return a + b
+}
+
+fn subtract(a, b) {
+    // Subtract b from a
+    return a - b
+}
+
+fn multiply(a, b) {
+    // Multiply two numbers
+    return a * b
+}
+
+fn divide(a, b) {
+    // Divide a by b with safety check
+    if b == 0 {
+        return 0
+    }
+    return a / b
+}
+
+// ── Quality Analysis ─────────────────────────────────────────
+
+// Read this file's source
+let source = read_file("examples/quality_example.helen")
+
+// 1. Analyze code metrics
+print("=== Code Metrics ===")
+let metrics = analyze_code(source, "quality_example.helen")
+print("Total lines: " + str(metrics["total_lines"]))
+print("Functions: " + str(metrics["function_count"]))
+print("Comment ratio: " + str(metrics["comment_ratio"]))
+print("Avg complexity: " + str(metrics["avg_complexity"]))
+print("")
+
+// 2. Check security
+print("=== Security Check ===")
+let issues = check_security(source)
+if len(issues) == 0 {
+    print("No security issues found!")
+} else {
+    print("Found " + str(len(issues)) + " issue(s):")
+    for issue in issues {
+        print("  Line " + str(issue["line"]) + ": " + issue["message"])
+    }
+}
+print("")
+
+// 3. Get quality scores
+print("=== Quality Scores ===")
+let scores = quality_score(source, "examples/quality_example.helen")
+print("Architecture:    " + str(scores["architecture"]))
+print("Code Quality:    " + str(scores["code_quality"]))
+print("Security:        " + str(scores["security"]))
+print("Test Coverage:   " + str(scores["test_coverage"]))
+print("Documentation:   " + str(scores["documentation"]))
+print("Maintainability: " + str(scores["maintainability"]))
+print("Engineering:     " + str(scores["engineering"]))
+print("─────────────────────────")
+print("TOTAL:           " + str(scores["total"]))
+print("GRADE:           " + scores["grade"])
+print("")
+
+// 4. Full report
+print("=== Full Report ===")
+let report = quality_report(source, "quality_example.helen")
+print(report)

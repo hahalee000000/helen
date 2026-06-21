@@ -113,6 +113,11 @@ from helen.stdlib.test import (
     _test_suite, _test_case, _test_case_skip, _test_end_suite,
 )
 
+# Import quality assessment functions
+from helen.stdlib.quality import (
+    _analyze_code, _check_security, _quality_score, _quality_report,
+)
+
 
 @dataclass
 class BuiltinFunction:
@@ -818,6 +823,12 @@ def _register_builtins() -> None:
         BuiltinFunction("test_case", "Register a test case", "test_case(name, fn)", _test_case, "test"),
         BuiltinFunction("test_case_skip", "Register a skipped test", "test_case_skip(name, fn)", _test_case_skip, "test"),
         BuiltinFunction("test_end_suite", "End current test suite", "test_end_suite()", _test_end_suite, "test"),
+
+        # Quality assessment (7-dimension evaluation)
+        BuiltinFunction("analyze_code", "Analyze code metrics", "analyze_code(source, filename?)", _analyze_code, "quality"),
+        BuiltinFunction("check_security", "Check security issues", "check_security(source)", _check_security, "quality"),
+        BuiltinFunction("quality_score", "Calculate quality score", "quality_score(source, file_path?)", _quality_score, "quality"),
+        BuiltinFunction("quality_report", "Generate quality report", "quality_report(source, filename?)", _quality_report, "quality"),
     ]
 
     for func in builtins:

@@ -150,7 +150,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return repl_command()
 
     # Check for known subcommands
-    subcommands = {"check", "repl", "doc", "init", "test"}
+    subcommands = {"check", "repl", "doc", "init", "test", "quality"}
     first = argv[0]
 
     if first in subcommands:
@@ -168,6 +168,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return init_command()
         elif first == "test":
             return test_command(argv[1:])
+        elif first == "quality":
+            return quality_command(argv[1:])
     elif first in ("-h", "--help", "help"):
         _print_help()
         return 0
@@ -461,6 +463,171 @@ def test_command(argv: list[str]) -> int:
         return run_test_files()
 
 
+def quality_command(argv: list[str]) -> int:
+    """Run 7-dimension quality assessment on Helen file(s).
+
+    Usage:
+        helen quality <file> [file2 ...] [options]
+
+    Options:
+        --json              Output results as JSON
+        --dimension <name>  Assess only one dimension
+        --threshold <n>     Fail if total score below threshold
+
+    Dimensions: architecture, code_quality, security, test_coverage,
+                documentation, maintainability, engineering
+
+    Returns:
+        0 if score meets threshold, 1 if below, 2 on error.
+    """
+    import json as json_module
+
+    # Parse arguments
+    files: list[str] = []
+    json_output = False
+    dimension: str | None = None
+    threshold: float = 0.0
+
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg == "--json":
+            json_output = True
+        elif arg == "--dimension":
+            if i + 1 >= len(argv):
+                print("Error: --dimension requires a name argument", file=sys.stderr)
+                return 2
+            i += 1
+            dimension = argv[i]
+            valid_dims = [
+                "architecture", "code_quality", "security", "test_coverage",
+                "documentation", "maintainability", "engineering",
+            ]
+            if dimension not in valid_dims:
+                print(f"Error: invalid dimension '{dimension}'", file=sys.stderr)
+                print(f"Valid dimensions: {', '.join(valid_dims)}", file=sys.stderr)
+                return 2
+        elif arg == "--threshold":
+            if i + 1 >= len(argv):
+                print("Error: --threshold requires a number argument", file=sys.stderr)
+                return 2
+            i += 1
+            try:
+                threshold = float(argv[i])
+            except ValueError:
+                print(f"Error: invalid threshold '{argv[i]}'", file=sys.stderr)
+                return 2
+        elif not arg.startswith("-"):
+            files.append(arg)
+        else:
+            print(f"Unknown option: {arg}", file=sys.stderr)
+            return 2
+        i += 1
+
+    if not files:
+        print("Error: 'quality' requires at least one file argument", file=sys.stderr)
+        print("Usage: helen quality <file> [file2 ...] [--json] [--dimension <name>]", file=sys.stderr)
+        return 1
+
+    # Validate files exist
+    for f in files:
+        p = Path(f)
+        if not p.exists():
+            print(f"Error: file not found: {f}", file=sys.stderr)
+            return 1
+
+    all_results = []
+    min_score = 10.0
+
+    for file in files:
+        source_path = Path(file)
+        source_text = source_path.read_text(encoding="utf-8")
+
+        from helen.stdlib.quality import (
+            HelenCodeAnalyzer, SecurityAnalyzer, QualityScorer,
+            QualityScore,
+        )
+
+        code_analyzer = HelenCodeAnalyzer(source_text, file)
+        metrics = code_analyzer.analyze()
+
+        security_analyzer = SecurityAnalyzer(source_text)
+        security_issues = security_analyzer.analyze()
+
+        scorer = QualityScorer()
+
+        score = QualityScore(
+            architecture=scorer.score_architecture(metrics),
+            code_quality=scorer.score_code_quality(metrics),
+            security=scorer.score_security(security_issues),
+            test_coverage=scorer.score_test_coverage(file),
+            documentation=scorer.score_documentation(metrics),
+            maintainability=scorer.score_maintainability(metrics),
+            engineering=scorer.score_engineering(metrics),
+        )
+
+        score.total = scorer.calculate_total(score)
+        score.grade = scorer.assign_grade(score.total)
+        min_score = min(min_score, score.total)
+
+        if json_output:
+            result = {
+                "file": file,
+                "metrics": {
+                    "total_lines": metrics.total_lines,
+                    "code_lines": metrics.code_lines,
+                    "comment_lines": metrics.comment_lines,
+                    "comment_ratio": round(metrics.comment_ratio, 3),
+                    "function_count": metrics.function_count,
+                    "agent_count": metrics.agent_count,
+                    "avg_function_length": round(metrics.avg_function_length, 1),
+                    "max_function_length": metrics.max_function_length,
+                    "avg_complexity": round(metrics.avg_complexity, 1),
+                    "max_complexity": metrics.max_complexity,
+                },
+                "security_issues": [
+                    {"line": iss.line, "severity": iss.severity, "message": iss.message}
+                    for iss in security_issues
+                ],
+                "scores": {
+                    "architecture": round(score.architecture, 2),
+                    "code_quality": round(score.code_quality, 2),
+                    "security": round(score.security, 2),
+                    "test_coverage": round(score.test_coverage, 2),
+                    "documentation": round(score.documentation, 2),
+                    "maintainability": round(score.maintainability, 2),
+                    "engineering": round(score.engineering, 2),
+                    "total": score.total,
+                    "grade": score.grade,
+                },
+            }
+
+            if dimension:
+                result["scores"] = {
+                    dimension: result["scores"][dimension],
+                    "total": result["scores"]["total"],
+                    "grade": result["scores"]["grade"],
+                }
+
+            all_results.append(result)
+        else:
+            from helen.stdlib.quality import _quality_report
+            print(_quality_report(source_text, file))
+
+    if json_output:
+        if len(all_results) == 1:
+            print(json_module.dumps(all_results[0], ensure_ascii=False, indent=2))
+        else:
+            print(json_module.dumps(all_results, ensure_ascii=False, indent=2))
+
+    # Check threshold
+    if threshold > 0 and min_score < threshold:
+        print(f"\n❌ Score {min_score:.2f} is below threshold {threshold:.2f}", file=sys.stderr)
+        return 1
+
+    return 0
+
+
 def _print_help() -> None:
     """Print CLI help."""
     print("""helen — Helen Agent Programming Language
@@ -470,6 +637,7 @@ Usage:
   helen <file>              Run a Helen program
   helen check <file>        Check without executing
   helen test <file> [opts]  Run Helen test file(s)
+  helen quality <file>      Run 7-dimension quality assessment
   helen doc [files]         Generate API documentation
   helen init                Initialize Helen configuration
 
@@ -481,6 +649,11 @@ Test Options:
   --suite <name>            Run only tests in this suite
   --filter <pattern>        Run only tests matching this pattern (regex)
   --coverage                Show code coverage hints
+
+Quality Options:
+  --json                    Output results as JSON
+  --dimension <name>        Assess only one dimension
+  --threshold <n>           Fail if total score below threshold
 
 Options:
   -h, --help                 Show this help message""")
