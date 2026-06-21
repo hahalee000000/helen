@@ -612,7 +612,7 @@ def quality_command(argv: list[str]) -> int:
             all_results.append(result)
         else:
             from helen.stdlib.quality import _quality_report
-            print(_quality_report(source_text, file))
+            print(_quality_report(source_text, file, file_path=file))
 
     if json_output:
         if len(all_results) == 1:

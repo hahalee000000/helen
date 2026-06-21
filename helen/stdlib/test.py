@@ -5,6 +5,7 @@ Provides describe/it/assert/expect for TDD-style testing of Helen programs.
 
 from __future__ import annotations
 
+import signal
 import time
 import traceback
 from dataclasses import dataclass, field
@@ -31,6 +32,8 @@ class TestSuite:
     tests: list[dict[str, Any]] = field(default_factory=list)
     before_each: Callable | None = None
     after_each: Callable | None = None
+    before_all: Callable | None = None
+    after_all: Callable | None = None
 
 
 @dataclass
@@ -43,6 +46,7 @@ class TestReport:
     failed: int = 0
     skipped: int = 0
     duration_ms: float = 0.0
+    warnings: list[str] = field(default_factory=list)
 
 
 # ── Global Test Registry ──────────────────────────────────────
@@ -56,12 +60,15 @@ class TestRegistry:
         self._current_suite: TestSuite | None = None
         self._results: list[TestResult] = []
         self._running = False
+        self._warnings: list[str] = []
+        self._test_timeout: float = 30.0  # seconds per test
 
     def reset(self) -> None:
         """Clear all registered tests and results."""
         self._suites.clear()
         self._current_suite = None
         self._results.clear()
+        self._warnings.clear()
         self._running = False
 
     def start_suite(self, name: str) -> None:
@@ -74,12 +81,20 @@ class TestRegistry:
         """End the current test suite."""
         self._current_suite = None
 
-    def register_test(self, name: str, fn: Callable, skip: bool = False) -> None:
+    def register_test(self, name: str, fn: Callable | None, skip: bool = False) -> None:
         """Register a test case (it block) in the current suite."""
         if self._current_suite is None:
             # Auto-create a default suite
             self.start_suite("(default)")
         assert self._current_suite is not None  # for type checker
+
+        # Check for duplicate test names
+        for existing in self._current_suite.tests:
+            if existing["name"] == name:
+                warning = f"Warning: duplicate test name '{name}' in suite '{self._current_suite.name}'"
+                self._warnings.append(warning)
+                break
+
         self._current_suite.tests.append({
             "name": name,
             "fn": fn,
@@ -95,6 +110,20 @@ class TestRegistry:
         """Set after-each hook for current suite."""
         if self._current_suite is not None:
             self._current_suite.after_each = fn
+
+    def set_before_all(self, fn: Callable) -> None:
+        """Set before-all hook for current suite."""
+        if self._current_suite is not None:
+            self._current_suite.before_all = fn
+
+    def set_after_all(self, fn: Callable) -> None:
+        """Set after-all hook for current suite."""
+        if self._current_suite is not None:
+            self._current_suite.after_all = fn
+
+    def set_timeout(self, seconds: float) -> None:
+        """Set per-test timeout in seconds."""
+        self._test_timeout = max(0.1, seconds)
 
     def run_all(
         self,
@@ -160,12 +189,28 @@ class TestRegistry:
                     tests=filtered_tests,
                     before_each=s.before_each,
                     after_each=s.after_each,
+                    before_all=s.before_all,
+                    after_all=s.after_all,
                 )
                 filtered_suites.append(filtered_suite)
+
+                # Run before_all hook once
+                if s.before_all is not None:
+                    try:
+                        s.before_all()
+                    except Exception:
+                        pass  # before_all failure doesn't stop tests
 
                 for test in filtered_tests:
                     result = self._run_test(filtered_suite, test)
                     self._results.append(result)
+
+                # Run after_all hook once
+                if s.after_all is not None:
+                    try:
+                        s.after_all()
+                    except Exception:
+                        pass
 
         elapsed = (time.monotonic() - start) * 1000
 
@@ -174,12 +219,11 @@ class TestRegistry:
             results=self._results,
             total=len(self._results),
             passed=sum(1 for r in self._results if r.passed),
-            failed=sum(1 for r in self._results if not r.passed and not r.error),
+            failed=sum(1 for r in self._results if not r.passed and r.error != "SKIPPED"),
             skipped=sum(1 for r in self._results if r.error == "SKIPPED"),
             duration_ms=round(elapsed, 2),
+            warnings=list(self._warnings),
         )
-        # Recalculate failed (exclude skipped)
-        report.failed = report.total - report.passed - report.skipped
         self._running = False
         return report
 
@@ -189,7 +233,7 @@ class TestRegistry:
         fn = test["fn"]
         skip = test.get("skip", False)
 
-        if skip:
+        if skip or fn is None:
             return TestResult(
                 name=name, suite=suite.name,
                 passed=False, error="SKIPPED", duration_ms=0.0,
@@ -201,12 +245,17 @@ class TestRegistry:
             if suite.before_each is not None:
                 suite.before_each()
 
-            # Run the test
-            fn()
-
-            # Run after_each hook
-            if suite.after_each is not None:
-                suite.after_each()
+            # Run the test with timeout
+            try:
+                self._run_with_timeout(fn, self._test_timeout)
+            except TimeoutError:
+                elapsed = (time.monotonic() - start) * 1000
+                return TestResult(
+                    name=name, suite=suite.name,
+                    passed=False,
+                    error=f"Test timed out after {self._test_timeout}s",
+                    duration_ms=round(elapsed, 2),
+                )
 
             elapsed = (time.monotonic() - start) * 1000
             return TestResult(
@@ -228,6 +277,31 @@ class TestRegistry:
                 passed=False, error=f"{type(e).__name__}: {e}\n{tb}",
                 duration_ms=round(elapsed, 2),
             )
+        finally:
+            # Always run after_each hook, even on failure
+            if suite.after_each is not None:
+                try:
+                    suite.after_each()
+                except Exception:
+                    pass  # after_each failure doesn't override test result
+
+    def _run_with_timeout(self, fn: Callable, timeout: float) -> None:
+        """Run a function with a timeout."""
+        # Use signal-based timeout on Unix
+        if hasattr(signal, 'SIGALRM'):
+            def handler(signum: int, frame: Any) -> None:
+                raise TimeoutError(f"Test timed out after {timeout}s")
+
+            old_handler = signal.signal(signal.SIGALRM, handler)
+            signal.setitimer(signal.ITIMER_REAL, timeout)
+            try:
+                fn()
+            finally:
+                signal.setitimer(signal.ITIMER_REAL, 0)
+                signal.signal(signal.SIGALRM, old_handler)
+        else:
+            # Fallback: just run without timeout
+            fn()
 
     @property
     def suites(self) -> list[TestSuite]:
@@ -236,6 +310,10 @@ class TestRegistry:
     @property
     def results(self) -> list[TestResult]:
         return list(self._results)
+
+    @property
+    def warnings(self) -> list[str]:
+        return list(self._warnings)
 
 
 # Global registry instance
@@ -383,16 +461,31 @@ class Expectation:
         self._check(len(self._value) == 0, msg)
         return self
 
+    def toHaveProperty(self, key: str) -> "Expectation":
+        """Assert dict/map has given key."""
+        if not isinstance(self._value, dict):
+            raise AssertionError(f"Expected a dict, got {type(self._value).__name__}")
+        msg = f"Expected dict to have key {key!r}"
+        self._check(key in self._value, msg)
+        return self
+
     # ── Exception ──
 
     def toThrow(self, error_type: str | None = None) -> "Expectation":
-        """Assert calling value() raises an exception."""
+        """Assert calling value() raises an exception.
+
+        Note: Does NOT catch test framework's own AssertionError —
+        only catches application-level exceptions.
+        """
         if not callable(self._value):
             raise AssertionError(f"Expected a callable, got {type(self._value).__name__}")
         try:
             self._value()
             raised = False
             actual_error = None
+        except AssertionError:
+            # Re-raise framework's own assertion errors
+            raise
         except Exception as e:
             raised = True
             actual_error = e
@@ -447,12 +540,12 @@ def _test_case(name: str, fn: Callable) -> str:
     return name
 
 
-def _test_case_skip(name: str, fn: Callable) -> str:
+def _test_case_skip(name: str, fn: Callable | None = None) -> str:
     """Register a skipped test case.
 
     Args:
         name: Test name
-        fn: Test function (will not be called)
+        fn: Optional test function (will not be called). Can be null.
 
     Returns:
         Test name with [SKIP] prefix
@@ -503,12 +596,12 @@ def _it(name: str, fn: Callable) -> str:
     return name
 
 
-def _it_skip(name: str, fn: Callable) -> str:
+def _it_skip(name: str, fn: Callable | None = None) -> str:
     """Define a skipped test case.
 
     Args:
         name: Test name
-        fn: Test function (will not be called)
+        fn: Optional test function (will not be called). Can be null.
 
     Returns:
         Test name with [SKIP] prefix
@@ -591,6 +684,9 @@ def _assert_throws(fn: Callable, error_type: str = "") -> str:
     """
     try:
         fn()
+    except AssertionError:
+        # Re-raise framework's own assertion errors
+        raise
     except Exception as e:
         if error_type and type(e).__name__ != error_type:
             raise AssertionError(
@@ -598,6 +694,18 @@ def _assert_throws(fn: Callable, error_type: str = "") -> str:
             ) from e
         return str(e)
     raise AssertionError("Expected function to throw, but it did not")
+
+
+def _fail(message: str = "Test failed") -> None:
+    """Explicitly fail a test with a message.
+
+    Args:
+        message: Failure message
+
+    Raises:
+        AssertionError: Always
+    """
+    raise AssertionError(message)
 
 
 def _expect(value: Any) -> Expectation:
@@ -634,7 +742,7 @@ def _after_each(fn: Callable) -> str:
     """Register an after-each hook for the current suite.
 
     Args:
-        fn: Function to run after each test
+        fn: Function to run after each test (always runs, even on failure)
 
     Returns:
         "after_each registered"
@@ -643,30 +751,96 @@ def _after_each(fn: Callable) -> str:
     return "after_each registered"
 
 
-def _run_tests() -> str:
+def _before_all(fn: Callable) -> str:
+    """Register a before-all hook for the current suite.
+
+    Args:
+        fn: Function to run once before all tests in suite
+
+    Returns:
+        "before_all registered"
+    """
+    _registry.set_before_all(fn)
+    return "before_all registered"
+
+
+def _after_all(fn: Callable) -> str:
+    """Register an after-all hook for the current suite.
+
+    Args:
+        fn: Function to run once after all tests in suite
+
+    Returns:
+        "after_all registered"
+    """
+    _registry.set_after_all(fn)
+    return "after_all registered"
+
+
+def _set_test_timeout(seconds: float) -> str:
+    """Set per-test timeout in seconds.
+
+    Args:
+        seconds: Timeout in seconds (minimum 0.1)
+
+    Returns:
+        Confirmation message
+    """
+    _registry.set_timeout(seconds)
+    return f"Test timeout set to {seconds}s"
+
+
+def _run_tests(
+    only: str = "",
+    suite: str = "",
+    filter_pattern: str = "",
+) -> str:
     """Execute all registered tests and return a formatted report.
+
+    Args:
+        only: Run only the test with this exact name (empty = all)
+        suite: Run only tests in this suite (empty = all)
+        filter_pattern: Run only tests matching this pattern (empty = all)
 
     Returns:
         Formatted test report string
     """
-    report = _registry.run_all()
+    report = _registry.run_all(
+        only=only or None,
+        suite=suite or None,
+        filter_pattern=filter_pattern or None,
+    )
     return _format_report(report)
 
 
-def _run_tests_json() -> str:
+def _run_tests_json(
+    only: str = "",
+    suite: str = "",
+    filter_pattern: str = "",
+) -> str:
     """Execute all registered tests and return JSON results.
+
+    Args:
+        only: Run only the test with this exact name (empty = all)
+        suite: Run only tests in this suite (empty = all)
+        filter_pattern: Run only tests matching this pattern (empty = all)
 
     Returns:
         JSON string with test results
     """
     import json
-    report = _registry.run_all()
+    report = _registry.run_all(
+        only=only or None,
+        suite=suite or None,
+        filter_pattern=filter_pattern or None,
+    )
     data = {
         "total": report.total,
         "passed": report.passed,
         "failed": report.failed,
         "skipped": report.skipped,
         "duration_ms": report.duration_ms,
+        "warnings": report.warnings,
         "suites": [
             {
                 "name": s.name,
@@ -722,6 +896,12 @@ def _format_report(report: TestReport) -> str:
     lines.append("  HELEN TEST RESULTS")
     lines.append("=" * 60)
     lines.append("")
+
+    # Show warnings
+    if report.warnings:
+        for warning in report.warnings:
+            lines.append(f"  ⚠ {warning}")
+        lines.append("")
 
     for suite in report.suites:
         suite_results = [r for r in report.results if r.suite == suite.name]

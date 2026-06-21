@@ -32,6 +32,8 @@ class FunctionMetrics:
     max_nesting: int
     has_docstring: bool
     complexity: int = 1  # Cyclomatic complexity
+    is_method: bool = False  # True if inside an agent
+    parent_agent: str = ""  # Name of parent agent if is_method
 
 
 @dataclass
@@ -49,6 +51,7 @@ class CodeMetrics:
     max_function_length: int = 0
     avg_complexity: float = 1.0
     max_complexity: int = 1
+    dead_code_lines: int = 0  # Lines with pass/TODO/unreachable
 
 
 @dataclass
@@ -100,25 +103,34 @@ class HelenCodeAnalyzer:
         metrics = CodeMetrics()
         metrics.total_lines = len(self.lines)
 
-        # Count line types
+        # Count line types (including inline comments)
         for line in self.lines:
             stripped = line.strip()
             if not stripped:
                 metrics.blank_lines += 1
             elif stripped.startswith("//") or stripped.startswith("/*"):
+                # Pure comment line
                 metrics.comment_lines += 1
             else:
-                metrics.code_lines += 1
+                # Code line — check for inline comment
+                code_part, has_comment = self._split_code_and_comment(line)
+                if has_comment and not code_part.strip():
+                    metrics.comment_lines += 1
+                else:
+                    metrics.code_lines += 1
 
         if metrics.total_lines > 0:
             metrics.comment_ratio = metrics.comment_lines / metrics.total_lines
 
-        # Analyze functions
+        # Analyze functions (including agent methods)
         metrics.functions = self._analyze_functions()
         metrics.function_count = len(metrics.functions)
 
         # Analyze agents
         metrics.agent_count = self._count_agents()
+
+        # Detect dead code
+        metrics.dead_code_lines = self._count_dead_code()
 
         # Calculate aggregates
         if metrics.functions:
@@ -132,31 +144,102 @@ class HelenCodeAnalyzer:
 
         return metrics
 
+    def _split_code_and_comment(self, line: str) -> tuple[str, bool]:
+        """Split a line into code part and check for inline comment.
+
+        Returns (code_part, has_inline_comment).
+        Handles strings to avoid false positives.
+        """
+        in_string = False
+        string_char = None
+        i = 0
+
+        while i < len(line):
+            ch = line[i]
+
+            if in_string:
+                if ch == '\\':
+                    i += 2  # Skip escaped character
+                    continue
+                if ch == string_char:
+                    in_string = False
+            else:
+                if ch in ('"', "'"):
+                    in_string = True
+                    string_char = ch
+                elif ch == '/' and i + 1 < len(line) and line[i + 1] == '/':
+                    # Found inline comment
+                    return line[:i], True
+
+            i += 1
+
+        return line, False
+
     def _analyze_functions(self) -> list[FunctionMetrics]:
-        """Extract and analyze all functions."""
+        """Extract and analyze all functions, including agent methods."""
         functions = []
-        fn_pattern = re.compile(r'^\s*fn\s+(\w+)\s*\(([^)]*)\)\s*\{')
+
+        # Match both top-level functions and agent methods
+        # Handles: fn name(params) { and fn name(\n  params\n) {
+        fn_start_pattern = re.compile(r'^(\s*)fn\s+(\w+)\s*\(')
+
+        # Track agent context
+        current_agent = ""
+        agent_depth = 0
 
         i = 0
         while i < len(self.lines):
             line = self.lines[i]
-            match = fn_pattern.match(line)
+            stripped = line.strip()
 
+            # Track agent blocks
+            agent_match = re.match(r'^\s*agent\s+(\w+)', line)
+            if agent_match:
+                current_agent = agent_match.group(1)
+                # Find the opening brace
+                for j in range(i, min(i + 5, len(self.lines))):
+                    if '{' in self.lines[j]:
+                        agent_depth = 1
+                        for k in range(j + 1, len(self.lines)):
+                            agent_depth += self.lines[k].count('{') - self.lines[k].count('}')
+                            if agent_depth <= 0:
+                                break
+                        break
+                i += 1
+                continue
+
+            # Check for function definition
+            match = fn_start_pattern.match(line)
             if match:
-                fn_name = match.group(1)
-                params = match.group(2).strip()
-                param_count = len([p for p in params.split(',') if p.strip()]) if params else 0
+                indent = match.group(1)
+                fn_name = match.group(2)
+
+                # Determine if this is a method (inside agent)
+                is_method = len(indent) > 0 and current_agent != ""
+
+                # Find the full parameter list (may span multiple lines)
+                params_text, param_end_line = self._extract_params(i)
+                param_count = self._count_params(params_text)
 
                 # Find function end (matching brace)
                 start_line = i
-                brace_count = line.count('{') - line.count('}')
-                j = i + 1
+                brace_count = 0
+                j = i
 
-                while j < len(self.lines) and brace_count > 0:
-                    brace_count += self.lines[j].count('{') - self.lines[j].count('}')
+                # Find opening brace
+                while j < len(self.lines):
+                    brace_count += self._count_braces_outside_strings(self.lines[j])
+                    if brace_count > 0:
+                        break
                     j += 1
 
-                end_line = j - 1
+                # Now find matching closing brace
+                while j < len(self.lines) and brace_count > 0:
+                    j += 1
+                    if j < len(self.lines):
+                        brace_count += self._count_braces_outside_strings(self.lines[j])
+
+                end_line = j
                 line_count = end_line - start_line + 1
 
                 # Check for docstring
@@ -177,13 +260,81 @@ class HelenCodeAnalyzer:
                     max_nesting=max_nesting,
                     has_docstring=has_docstring,
                     complexity=complexity,
+                    is_method=is_method,
+                    parent_agent=current_agent if is_method else "",
                 ))
 
-                i = j
+                i = j + 1
             else:
                 i += 1
 
+            # Reset agent context if we've left the agent block
+            if current_agent and i > 0:
+                # Simple heuristic: if indent returns to 0, we left the agent
+                if i < len(self.lines) and not self.lines[i].startswith(' ') and not self.lines[i].startswith('\t'):
+                    if not self.lines[i].strip().startswith('fn '):
+                        current_agent = ""
+
         return functions
+
+    def _extract_params(self, start_line: int) -> tuple[str, int]:
+        """Extract parameter text, handling multi-line signatures."""
+        params = []
+        paren_depth = 0
+        found_open = False
+
+        for i in range(start_line, min(start_line + 10, len(self.lines))):
+            line = self.lines[i]
+            for ch in line:
+                if ch == '(':
+                    paren_depth += 1
+                    found_open = True
+                elif ch == ')':
+                    paren_depth -= 1
+                    if found_open and paren_depth == 0:
+                        return ''.join(params), i
+                elif found_open:
+                    params.append(ch)
+
+        return ''.join(params), start_line
+
+    def _count_params(self, params_text: str) -> int:
+        """Count parameters from parameter text."""
+        params_text = params_text.strip()
+        if not params_text:
+            return 0
+        # Split by comma, filter empty
+        parts = [p.strip() for p in params_text.split(',') if p.strip()]
+        return len(parts)
+
+    def _count_braces_outside_strings(self, line: str) -> int:
+        """Count net braces ({ minus }) outside of string literals."""
+        count = 0
+        in_string = False
+        string_char = None
+        i = 0
+
+        while i < len(line):
+            ch = line[i]
+
+            if in_string:
+                if ch == '\\':
+                    i += 2
+                    continue
+                if ch == string_char:
+                    in_string = False
+            else:
+                if ch in ('"', "'"):
+                    in_string = True
+                    string_char = ch
+                elif ch == '{':
+                    count += 1
+                elif ch == '}':
+                    count -= 1
+
+            i += 1
+
+        return count
 
     def _has_docstring(self, start: int, end: int) -> bool:
         """Check if function has a docstring (comment after opening brace)."""
@@ -197,35 +348,63 @@ class HelenCodeAnalyzer:
         return False
 
     def _calculate_complexity(self, start: int, end: int) -> int:
-        """Calculate cyclomatic complexity."""
+        """Calculate cyclomatic complexity.
+
+        Counts: if, else if, for, while, case, catch, &&, ||, and, or
+        Avoids double-counting 'else if' by checking for it first.
+        """
         complexity = 1
-        branch_keywords = ['if', 'else if', 'elif', 'for', 'while', 'case', 'catch']
+
+        # Helen keywords that add branches (NOT elif — Helen doesn't have it)
+        branch_keywords = ['if', 'for', 'while', 'case', 'catch']
 
         for i in range(start, end + 1):
             line = self.lines[i].strip()
-            for keyword in branch_keywords:
-                if re.match(rf'^{keyword}\b', line) or f' {keyword} ' in line:
+
+            # Skip comments
+            if line.startswith('//'):
+                continue
+
+            # Check for 'else if' first (counts as 1, not 2)
+            if re.match(r'^else\s+if\b', line):
+                complexity += 1
+                continue
+
+            # Check for standalone 'if' (not part of 'else if')
+            if re.match(r'^if\b', line) or re.search(r'\bif\b', line):
+                # Make sure it's not 'else if' which we already counted
+                if not re.match(r'^else\s+if\b', line):
                     complexity += 1
 
-        # Count logical operators
-        for i in range(start, end + 1):
-            line = self.lines[i]
-            complexity += line.count('&&') + line.count('||')
-            complexity += line.count(' and ') + line.count(' or ')
+            # Other branch keywords
+            for keyword in ['for', 'while', 'case', 'catch']:
+                if re.search(rf'\b{keyword}\b', line):
+                    complexity += 1
+
+            # Logical operators
+            code_part, _ = self._split_code_and_comment(self.lines[i])
+            complexity += code_part.count('&&') + code_part.count('||')
+            complexity += len(re.findall(r'\band\b', code_part))
+            complexity += len(re.findall(r'\bor\b', code_part))
 
         return complexity
 
     def _calculate_nesting(self, start: int, end: int) -> int:
-        """Calculate maximum nesting depth."""
+        """Calculate maximum nesting depth (brace-aware of strings)."""
         max_depth = 0
         current_depth = 0
 
         for i in range(start, end + 1):
             line = self.lines[i]
-            current_depth += line.count('{') - line.count('}')
+            # Skip comment-only lines
+            if line.strip().startswith('//'):
+                continue
+
+            delta = self._count_braces_outside_strings(line)
+            current_depth += delta
             max_depth = max(max_depth, current_depth)
 
-        return max_depth
+        return max(0, max_depth)
 
     def _count_agents(self) -> int:
         """Count agent declarations."""
@@ -238,6 +417,23 @@ class HelenCodeAnalyzer:
 
         return count
 
+    def _count_dead_code(self) -> int:
+        """Count lines that appear to be dead code."""
+        dead_patterns = [
+            r'^\s*pass\s*$',
+            r'^\s*TODO\b',
+            r'^\s*FIXME\b',
+            r'^\s*HACK\b',
+            r'^\s*return\s+null\s*;\s*//\s*(?:stub|placeholder|not implemented)',
+        ]
+        count = 0
+        for line in self.lines:
+            for pattern in dead_patterns:
+                if re.search(pattern, line, re.IGNORECASE):
+                    count += 1
+                    break
+        return count
+
 
 # ── Security Analyzer ─────────────────────────────────────────
 
@@ -245,15 +441,27 @@ class HelenCodeAnalyzer:
 class SecurityAnalyzer:
     """Analyzes Helen code for security issues."""
 
+    # Helen-specific dangerous patterns
     DANGEROUS_PATTERNS = [
+        # High severity
         (r'\beval\s*\(', 'high', 'eval()', 'eval() can execute arbitrary code'),
         (r'\bexec\s*\(', 'high', 'exec()', 'exec() can execute arbitrary code'),
-        (r'shell\s*=\s*true', 'high', 'shell=True', 'shell=True enables command injection'),
-        (r'import\s+os', 'medium', 'os import', 'os module can access system resources'),
-        (r'import\s+subprocess', 'medium', 'subprocess import', 'subprocess can execute commands'),
-        (r'\bopen\s*\([^)]*["\']w', 'medium', 'file write', 'file write without validation'),
-        (r'http_get\s*\([^)]*\+', 'medium', 'URL concatenation', 'URL built from user input may be unsafe'),
-        (r'input\s*\(', 'low', 'user input', 'user input should be validated'),
+        (r'shell\s*=\s*true', 'high', 'shell=true', 'shell=true enables command injection'),
+        (r'shell_exec\s*\([^)]*\+', 'high', 'shell_exec concat', 'shell_exec with concatenated input allows command injection'),
+        (r'\bimport\s+["\']os["\']', 'high', 'FFI os import', 'FFI import of os module enables system access'),
+        (r'\bimport\s+["\']subprocess["\']', 'high', 'FFI subprocess import', 'FFI import of subprocess enables command execution'),
+
+        # Medium severity
+        (r'shell_exec\s*\(', 'medium', 'shell_exec()', 'shell_exec can execute system commands'),
+        (r'\bopen\s*\([^)]*["\']w', 'medium', 'file write', 'file write without path validation'),
+        (r'http_get\s*\([^)]*\+', 'medium', 'URL concatenation', 'URL built from user input may allow SSRF'),
+        (r'http_post\s*\([^)]*\+', 'medium', 'URL concatenation', 'URL built from user input may allow SSRF'),
+        (r'read_file\s*\([^)]*\+', 'medium', 'path concatenation', 'file path from user input may allow traversal'),
+        (r'write_file\s*\([^)]*\+', 'medium', 'path concatenation', 'file path from user input may allow traversal'),
+
+        # Low severity
+        (r'\binput\s*\(', 'low', 'user input', 'user input should be validated before use'),
+        (r'llm\s+act\b', 'low', 'LLM act', 'LLM output should be validated before use in critical operations'),
     ]
 
     def __init__(self, source: str) -> None:
@@ -341,6 +549,10 @@ class QualityScorer:
         elif metrics.avg_complexity > 5:
             score -= 1.0
 
+        # Penalize dead code
+        if metrics.dead_code_lines > 5:
+            score -= 1.0
+
         return max(0.0, min(10.0, score))
 
     def score_security(self, issues: list[SecurityIssue]) -> float:
@@ -359,6 +571,9 @@ class QualityScorer:
 
     def score_test_coverage(self, file_path: str) -> float:
         """Score test coverage (15% weight)."""
+        if not file_path:
+            return 5.0  # Unknown
+
         # Check if test file exists
         path = Path(file_path)
         test_file = path.with_name(path.stem + '_test.helen')
@@ -405,17 +620,22 @@ class QualityScorer:
         if metrics.avg_function_length < 20:
             score += 1.0
 
+        # Penalize dead code
+        if metrics.dead_code_lines > 0:
+            score -= min(2.0, metrics.dead_code_lines * 0.3)
+
         return max(0.0, min(10.0, score))
 
     def score_engineering(self, metrics: CodeMetrics) -> float:
         """Score engineering standards (10% weight)."""
         score = 10.0
 
-        # Check naming conventions
-        for fn in metrics.functions:
-            if not re.match(r'^[a-z_][a-z0-9_]*$', fn.name):
-                score -= 0.5
-                break
+        # Check naming conventions — check ALL functions, not just first
+        naming_violations = sum(
+            1 for fn in metrics.functions
+            if not re.match(r'^[a-z_][a-z0-9_]*$', fn.name)
+        )
+        score -= min(3.0, naming_violations * 0.5)
 
         # Check for reasonable file size
         if metrics.total_lines > 1000:
@@ -480,6 +700,7 @@ def _analyze_code(source: str, filename: str = "<unknown>") -> dict[str, Any]:
         "max_function_length": metrics.max_function_length,
         "avg_complexity": round(metrics.avg_complexity, 1),
         "max_complexity": metrics.max_complexity,
+        "dead_code_lines": metrics.dead_code_lines,
         "functions": [
             {
                 "name": f.name,
@@ -488,6 +709,8 @@ def _analyze_code(source: str, filename: str = "<unknown>") -> dict[str, Any]:
                 "complexity": f.complexity,
                 "nesting": f.max_nesting,
                 "has_docstring": f.has_docstring,
+                "is_method": f.is_method,
+                "parent_agent": f.parent_agent,
             }
             for f in metrics.functions
         ],
@@ -539,7 +762,7 @@ def _quality_score(source: str, file_path: str = "") -> dict[str, Any]:
         architecture=scorer.score_architecture(metrics),
         code_quality=scorer.score_code_quality(metrics),
         security=scorer.score_security(security_issues),
-        test_coverage=scorer.score_test_coverage(file_path) if file_path else 5.0,
+        test_coverage=scorer.score_test_coverage(file_path),
         documentation=scorer.score_documentation(metrics),
         maintainability=scorer.score_maintainability(metrics),
         engineering=scorer.score_engineering(metrics),
@@ -561,12 +784,13 @@ def _quality_score(source: str, file_path: str = "") -> dict[str, Any]:
     }
 
 
-def _quality_report(source: str, filename: str = "<unknown>") -> str:
+def _quality_report(source: str, filename: str = "<unknown>", file_path: str = "") -> str:
     """Generate formatted quality report.
 
     Args:
         source: Helen source code
-        filename: Optional filename
+        filename: Optional filename for display
+        file_path: Optional file path for test detection
 
     Returns:
         Formatted quality report string
@@ -579,11 +803,14 @@ def _quality_report(source: str, filename: str = "<unknown>") -> str:
 
     scorer = QualityScorer()
 
+    # Use file_path for test coverage detection (consistent with _quality_score)
+    effective_path = file_path or (filename if filename != "<unknown>" else "")
+
     score = QualityScore(
         architecture=scorer.score_architecture(metrics),
         code_quality=scorer.score_code_quality(metrics),
         security=scorer.score_security(security_issues),
-        test_coverage=5.0,
+        test_coverage=scorer.score_test_coverage(effective_path),
         documentation=scorer.score_documentation(metrics),
         maintainability=scorer.score_maintainability(metrics),
         engineering=scorer.score_engineering(metrics),
@@ -610,8 +837,17 @@ def _quality_report(source: str, filename: str = "<unknown>") -> str:
             recommendations.append(f"Fix {len(high_severity)} high-severity security issues")
 
     undocumented = [f for f in metrics.functions if not f.has_docstring]
-    if len(undocumented) > len(metrics.functions) * 0.5:
-        recommendations.append("Add docstrings to functions")
+    if metrics.functions and len(undocumented) > len(metrics.functions) * 0.5:
+        recommendations.append(f"Add docstrings to {len(undocumented)} undocumented functions")
+
+    if metrics.dead_code_lines > 0:
+        recommendations.append(f"Remove {metrics.dead_code_lines} lines of dead code (pass/TODO/FIXME)")
+
+    # Check naming violations
+    naming_violations = [f for f in metrics.functions if not re.match(r'^[a-z_][a-z0-9_]*$', f.name)]
+    if naming_violations:
+        names = ', '.join(f.name for f in naming_violations[:3])
+        recommendations.append(f"Rename functions to snake_case: {names}")
 
     # Format report
     lines = []
@@ -632,6 +868,8 @@ def _quality_report(source: str, filename: str = "<unknown>") -> str:
     lines.append(f"    Max function length: {metrics.max_function_length} lines")
     lines.append(f"    Avg complexity: {metrics.avg_complexity:.1f}")
     lines.append(f"    Max complexity: {metrics.max_complexity}")
+    if metrics.dead_code_lines > 0:
+        lines.append(f"    Dead code lines: {metrics.dead_code_lines}")
     lines.append("")
 
     lines.append("  Quality Scores (0-10):")

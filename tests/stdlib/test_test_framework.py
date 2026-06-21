@@ -13,12 +13,21 @@ from helen.stdlib.test import (
     _expect,
     _before_each,
     _after_each,
+    _before_all,
+    _after_all,
     _run_tests,
     _run_tests_json,
     _test_reset,
     _test_count,
+    _test_suite,
+    _test_case,
+    _test_case_skip,
+    _test_end_suite,
+    _fail,
+    _set_test_timeout,
     AssertionError,
     Expectation,
+    TestRegistry,
 )
 
 
@@ -111,6 +120,26 @@ class TestAssertThrows:
         with pytest.raises(AssertionError, match="Expected .TypeError."):
             _assert_throws(failing, "TypeError")
 
+    def test_reraises_framework_assertion_error(self):
+        """Bug fix #3: assert_throws should NOT catch framework's AssertionError."""
+        def failing():
+            _assert_true(False, "inner assertion")
+
+        with pytest.raises(AssertionError, match="inner assertion"):
+            _assert_throws(failing)
+
+
+class TestFail:
+    """Tests for fail function (new)."""
+
+    def test_fail_raises_assertion(self):
+        with pytest.raises(AssertionError, match="explicit fail"):
+            _fail("explicit fail")
+
+    def test_fail_default_message(self):
+        with pytest.raises(AssertionError, match="Test failed"):
+            _fail()
+
 
 class TestExpectation:
     """Tests for expect() chainable assertions."""
@@ -198,12 +227,28 @@ class TestExpectation:
         with pytest.raises(AssertionError):
             _expect([1]).toBeEmpty()
 
+    def test_toHaveProperty(self):
+        """New matcher for dict/map key checking."""
+        _expect({"name": "Alice", "age": 30}).toHaveProperty("name")
+        with pytest.raises(AssertionError):
+            _expect({"name": "Alice"}).toHaveProperty("missing")
+        with pytest.raises(AssertionError, match="Expected a dict"):
+            _expect("not a dict").toHaveProperty("key")
+
     def test_toThrow(self):
         def failing():
             raise ValueError("oops")
 
         _expect(failing).toThrow()
         _expect(failing).toThrow("ValueError")
+
+    def test_toThrow_does_not_catch_framework_assertion(self):
+        """Bug fix #3: toThrow should NOT catch framework's AssertionError."""
+        def failing():
+            _assert_true(False, "inner assertion")
+
+        with pytest.raises(AssertionError, match="inner assertion"):
+            _expect(failing).toThrow()
 
     def test_not_negation(self):
         _expect(5).not_.toBe(6)
@@ -235,6 +280,12 @@ class TestDescribeIt:
         _describe("suite", lambda: _it_skip("skipped", lambda: None))
         assert _registry.suites[0].tests[0]["skip"] is True
 
+    def test_it_skip_with_none_fn(self):
+        """Bug fix #2: it_skip should accept None as fn."""
+        _describe("suite", lambda: _it_skip("skipped", None))
+        assert _registry.suites[0].tests[0]["skip"] is True
+        assert _registry.suites[0].tests[0]["fn"] is None
+
     def test_nested_describe(self):
         def outer():
             _it("outer test", lambda: None)
@@ -247,6 +298,75 @@ class TestDescribeIt:
         _it("standalone test", lambda: None)
         assert len(_registry.suites) == 1
         assert _registry.suites[0].name == "(default)"
+
+    def test_duplicate_test_name_warning(self):
+        """Bug fix #4: duplicate test names should generate warning."""
+        def suite():
+            _it("same name", lambda: None)
+            _it("same name", lambda: None)
+
+        _describe("suite", suite)
+        assert len(_registry.warnings) == 1
+        assert "duplicate" in _registry.warnings[0].lower()
+
+
+class TestHooks:
+    """Tests for before_each/after_each/before_all/after_all hooks."""
+
+    def setup_method(self):
+        _registry.reset()
+
+    def test_after_each_runs_on_failure(self):
+        """Bug fix #1: after_each must run even when test fails."""
+        cleanup_ran = {"value": False}
+
+        def cleanup():
+            cleanup_ran["value"] = True
+
+        def failing_test():
+            raise AssertionError("fail")
+
+        _registry.start_suite("suite")
+        _registry.set_after_each(cleanup)
+        _registry.register_test("failing", failing_test)
+        _registry.end_suite()
+
+        report = _registry.run_all()
+        assert report.failed == 1
+        assert cleanup_ran["value"] is True  # after_each ran despite failure
+
+    def test_before_all_runs_once(self):
+        """New feature: before_all hook."""
+        counter = {"value": 0}
+
+        def setup():
+            counter["value"] += 1
+
+        def suite():
+            _before_all(setup)
+            _it("test1", lambda: None)
+            _it("test2", lambda: None)
+            _it("test3", lambda: None)
+
+        _describe("suite", suite)
+        _registry.run_all()
+        assert counter["value"] == 1  # Ran once, not 3 times
+
+    def test_after_all_runs_once(self):
+        """New feature: after_all hook."""
+        counter = {"value": 0}
+
+        def teardown():
+            counter["value"] += 1
+
+        def suite():
+            _after_all(teardown)
+            _it("test1", lambda: None)
+            _it("test2", lambda: None)
+
+        _describe("suite", suite)
+        _registry.run_all()
+        assert counter["value"] == 1
 
 
 class TestRunTests:
@@ -280,42 +400,12 @@ class TestRunTests:
 
     def test_run_skipped_tests(self):
         def suite():
-            _it_skip("skipped", lambda: None)
+            _it_skip("skipped", None)
 
         _describe("suite", suite)
         report = _registry.run_all()
         assert report.total == 1
         assert report.skipped == 1
-
-    def test_before_each_hook(self):
-        counter = {"value": 0}
-
-        def increment():
-            counter["value"] += 1
-
-        def suite():
-            _before_each(increment)
-            _it("test1", lambda: None)
-            _it("test2", lambda: None)
-
-        _describe("suite", suite)
-        _registry.run_all()
-        assert counter["value"] == 2
-
-    def test_after_each_hook(self):
-        counter = {"value": 0}
-
-        def increment():
-            counter["value"] += 1
-
-        def suite():
-            _after_each(increment)
-            _it("test1", lambda: None)
-            _it("test2", lambda: None)
-
-        _describe("suite", suite)
-        _registry.run_all()
-        assert counter["value"] == 2
 
     def test_run_tests_returns_formatted_report(self):
         def suite():
@@ -340,46 +430,16 @@ class TestRunTests:
         assert data["passed"] == 1
         assert data["failed"] == 0
 
-
-class TestTestCount:
-    """Tests for test_count function."""
-
-    def setup_method(self):
-        _registry.reset()
-
-    def test_empty_registry(self):
-        count = _test_count()
-        assert count["suites"] == 0
-        assert count["tests"] == 0
-        assert count["results"] == 0
-
-    def test_with_registered_tests(self):
+    def test_run_tests_with_filter(self):
+        """Bug fix #5: run_tests should accept filter parameters."""
         def suite():
-            _it("test1", lambda: None)
-            _it("test2", lambda: None)
+            _it("test_add", lambda: None)
+            _it("test_sub", lambda: None)
+            _it("test_mul", lambda: None)
 
         _describe("suite", suite)
-        count = _test_count()
-        assert count["suites"] == 1
-        assert count["tests"] == 2
-
-
-class TestTestReset:
-    """Tests for test_reset function."""
-
-    def test_reset_clears_everything(self):
-        def suite():
-            _it("test", lambda: None)
-
-        _describe("suite", suite)
-        _registry.run_all()
-
-        result = _test_reset()
-        assert result == "Tests reset"
-        count = _test_count()
-        assert count["suites"] == 0
-        assert count["tests"] == 0
-        assert count["results"] == 0
+        report = _run_tests(filter_pattern="add")
+        assert "1 passed" in report
 
 
 class TestRunAllFilters:
@@ -456,3 +516,86 @@ class TestRunAllFilters:
         _describe("suite", suite)
         report = _registry.run_all(filter_pattern="test")
         assert report.total == 2
+
+
+class TestTestCount:
+    """Tests for test_count function."""
+
+    def setup_method(self):
+        _registry.reset()
+
+    def test_empty_registry(self):
+        count = _test_count()
+        assert count["suites"] == 0
+        assert count["tests"] == 0
+        assert count["results"] == 0
+
+    def test_with_registered_tests(self):
+        def suite():
+            _it("test1", lambda: None)
+            _it("test2", lambda: None)
+
+        _describe("suite", suite)
+        count = _test_count()
+        assert count["suites"] == 1
+        assert count["tests"] == 2
+
+
+class TestTestReset:
+    """Tests for test_reset function."""
+
+    def test_reset_clears_everything(self):
+        def suite():
+            _it("test", lambda: None)
+
+        _describe("suite", suite)
+        _registry.run_all()
+
+        result = _test_reset()
+        assert result == "Tests reset"
+        count = _test_count()
+        assert count["suites"] == 0
+        assert count["tests"] == 0
+        assert count["results"] == 0
+
+
+class TestSimpleAPI:
+    """Tests for test_suite/test_case/test_end_suite API."""
+
+    def setup_method(self):
+        _registry.reset()
+
+    def test_simple_registration(self):
+        _test_suite("My Suite")
+        _test_case("test1", lambda: None)
+        _test_case("test2", lambda: None)
+        _test_end_suite()
+
+        assert len(_registry.suites) == 1
+        assert _registry.suites[0].name == "My Suite"
+        assert len(_registry.suites[0].tests) == 2
+
+    def test_case_skip_with_none(self):
+        """Bug fix #2: test_case_skip should accept None."""
+        _test_suite("Suite")
+        _test_case_skip("skipped", None)
+        _test_end_suite()
+
+        assert _registry.suites[0].tests[0]["skip"] is True
+        assert _registry.suites[0].tests[0]["fn"] is None
+
+
+class TestTimeout:
+    """Tests for test timeout functionality."""
+
+    def setup_method(self):
+        _registry.reset()
+
+    def test_set_timeout(self):
+        result = _set_test_timeout(5.0)
+        assert "5.0" in result
+        assert _registry._test_timeout == 5.0
+
+    def test_timeout_minimum(self):
+        _set_test_timeout(0.01)
+        assert _registry._test_timeout >= 0.1

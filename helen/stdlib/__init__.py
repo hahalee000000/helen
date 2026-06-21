@@ -108,9 +108,10 @@ from helen.stdlib.data_formats import (
 from helen.stdlib.test import (
     _describe, _it, _it_skip,
     _assert_true, _assert_equal, _assert_not_equal, _assert_throws,
-    _expect, _before_each, _after_each,
+    _expect, _before_each, _after_each, _before_all, _after_all,
     _run_tests, _run_tests_json, _test_reset, _test_count,
     _test_suite, _test_case, _test_case_skip, _test_end_suite,
+    _fail, _set_test_timeout,
 )
 
 # Import quality assessment functions
@@ -807,7 +808,7 @@ def _register_builtins() -> None:
         # Test framework (TDD support)
         BuiltinFunction("describe", "Define a test suite", "describe(name, fn)", _describe, "test"),
         BuiltinFunction("it", "Define a test case", "it(name, fn)", _it, "test"),
-        BuiltinFunction("it_skip", "Define a skipped test case", "it_skip(name, fn)", _it_skip, "test"),
+        BuiltinFunction("it_skip", "Define a skipped test case", "it_skip(name, fn?)", _it_skip, "test"),
         BuiltinFunction("assert_true", "Assert condition is truthy", "assert_true(condition, message?)", _assert_true, "test"),
         BuiltinFunction("assert_equal", "Assert equality", "assert_equal(actual, expected, message?)", _assert_equal, "test"),
         BuiltinFunction("assert_not_equal", "Assert inequality", "assert_not_equal(actual, expected, message?)", _assert_not_equal, "test"),
@@ -815,14 +816,18 @@ def _register_builtins() -> None:
         BuiltinFunction("expect", "Create chainable expectation", "expect(value)", _expect, "test"),
         BuiltinFunction("before_each", "Register before-each hook", "before_each(fn)", _before_each, "test"),
         BuiltinFunction("after_each", "Register after-each hook", "after_each(fn)", _after_each, "test"),
-        BuiltinFunction("run_tests", "Execute all tests and print report", "run_tests()", _run_tests, "test"),
-        BuiltinFunction("run_tests_json", "Execute tests and return JSON", "run_tests_json()", _run_tests_json, "test"),
+        BuiltinFunction("before_all", "Register before-all hook", "before_all(fn)", _before_all, "test"),
+        BuiltinFunction("after_all", "Register after-all hook", "after_all(fn)", _after_all, "test"),
+        BuiltinFunction("run_tests", "Execute all tests and print report", "run_tests(only?, suite?, filter?)", _run_tests, "test"),
+        BuiltinFunction("run_tests_json", "Execute tests and return JSON", "run_tests_json(only?, suite?, filter?)", _run_tests_json, "test"),
         BuiltinFunction("test_reset", "Clear all registered tests", "test_reset()", _test_reset, "test"),
         BuiltinFunction("test_count", "Count registered tests", "test_count()", _test_count, "test"),
         BuiltinFunction("test_suite", "Start a test suite", "test_suite(name)", _test_suite, "test"),
         BuiltinFunction("test_case", "Register a test case", "test_case(name, fn)", _test_case, "test"),
-        BuiltinFunction("test_case_skip", "Register a skipped test", "test_case_skip(name, fn)", _test_case_skip, "test"),
+        BuiltinFunction("test_case_skip", "Register a skipped test", "test_case_skip(name, fn?)", _test_case_skip, "test"),
         BuiltinFunction("test_end_suite", "End current test suite", "test_end_suite()", _test_end_suite, "test"),
+        BuiltinFunction("fail", "Explicitly fail a test", "fail(message?)", _fail, "test"),
+        BuiltinFunction("set_test_timeout", "Set per-test timeout", "set_test_timeout(seconds)", _set_test_timeout, "test"),
 
         # Quality assessment (7-dimension evaluation)
         BuiltinFunction("analyze_code", "Analyze code metrics", "analyze_code(source, filename?)", _analyze_code, "quality"),
