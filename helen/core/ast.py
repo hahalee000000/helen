@@ -104,6 +104,10 @@ class Visitor(ABC, Generic[R]):
         """Visit a FunctionDeclNode."""
 
     @abstractmethod
+    def visit_lambda(self, node: LambdaNode) -> R:
+        """Visit a LambdaNode."""
+
+    @abstractmethod
     def visit_import_stmt(self, node: ImportStmtNode) -> R:
         """Visit an ImportStmtNode."""
 
@@ -655,6 +659,23 @@ class FnBlockNode(StatementNode):
 
 
 @dataclass(frozen=True)
+class LambdaNode(ExpressionNode):
+    """Lambda expression: fn(params) { body }.
+    
+    Anonymous function that can be assigned to variables or passed as arguments.
+    Supports closures by capturing the defining environment.
+    """
+    params: list[AgentParamNode]
+    return_type: TypeNode | None
+    body: "FnBlockNode"
+    span: SourceSpan
+
+    def accept(self, visitor: Visitor[R]) -> R:
+        """Dispatch to the visitor."""
+        return visitor.visit_lambda(self)
+
+
+@dataclass(frozen=True)
 class ImportStmtNode(StatementNode):
     """Import statement: import \"path\" as alias."""
     module_path: str
@@ -1026,6 +1047,10 @@ class ASTPrinter(Visitor[str]):
     def visit_function_decl(self, node: FunctionDeclNode) -> str:
         """Visit a FunctionDeclNode."""
         return self._parenthesize("fn", node.name)
+
+    def visit_lambda(self, node: LambdaNode) -> str:
+        """Visit a LambdaNode."""
+        return self._parenthesize("lambda")
 
     def visit_import_stmt(self, node: ImportStmtNode) -> str:
         """Visit an ImportStmtNode."""

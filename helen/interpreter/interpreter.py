@@ -36,6 +36,7 @@ from helen.core.ast import (
     IfStmtNode,
     ImportStmtNode,
     IndexNode,
+    LambdaNode,
     ListLiteralNode,
     LiteralNode,
     LiteralTypeNode,
@@ -89,6 +90,21 @@ from helen.semantic.types import (
     type_compatible,
     type_of_literal,
 )
+
+
+class Closure:
+    """Represents a closure - a lambda function with its captured environment.
+    
+    A closure captures the lexical environment where it was defined,
+    allowing it to access variables from that environment even when
+    called from a different scope.
+    """
+    def __init__(self, lambda_node: LambdaNode, captured_env: Environment):
+        self.lambda_node = lambda_node
+        self.captured_env = captured_env
+    
+    def __repr__(self):
+        return f"<closure with {len(self.lambda_node.params)} params>"
 
 
 class Interpreter(LlmMixin, Visitor[object]):
@@ -380,6 +396,10 @@ class Interpreter(LlmMixin, Visitor[object]):
         if isinstance(callee, FunctionDeclNode):
             return self._call_function(callee, args)
 
+        # Closure call (lambda expression)
+        if isinstance(callee, Closure):
+            return self._call_closure(callee, args)
+
         # Check if callee is a Python FFI object
         from helen.ffi.python_object import WrappedPythonObject
         if isinstance(callee, WrappedPythonObject):
@@ -656,6 +676,14 @@ class Interpreter(LlmMixin, Visitor[object]):
         """Register a function definition (do not execute)."""
         self._functions[node.name] = node
         return None
+
+    def visit_lambda(self, node: LambdaNode) -> object:
+        """Create a closure from a lambda expression.
+        
+        The closure captures the current environment, allowing the lambda
+        to access variables from its defining scope.
+        """
+        return Closure(lambda_node=node, captured_env=self.environment)
 
     def visit_fn_block(self, node: FnBlockNode) -> object:
         """Execute a function body (list of statements)."""
@@ -1201,6 +1229,55 @@ class Interpreter(LlmMixin, Visitor[object]):
         finally:
             self.environment = old_env
             self.observability.call_stack.pop()
+
+    def _call_closure(self, closure: Closure, args: list[object]) -> object:
+        """Call a closure (lambda expression) with the given arguments.
+        
+        The key difference from _call_function is that we use the captured
+        environment (from where the lambda was defined) as the parent scope,
+        not the current caller's environment. This enables closures.
+        """
+        lambda_node = closure.lambda_node
+        
+        # Runtime parameter type checking (same as _call_function)
+        for i, param in enumerate(lambda_node.params):
+            if i < len(args) and param.type_annotation is not None:
+                expected_type = self._type_from_typenode(param.type_annotation)
+                actual_value = args[i]
+                if actual_value is not None:
+                    actual_type = type_of_literal(actual_value)
+                    if not isinstance(actual_type, AnyType):
+                        if not type_compatible(actual_type, expected_type):
+                            raise HelenRuntimeError(
+                                f"argument {i+1} type '{actual_type.name}' is not compatible with parameter type '{expected_type.name}'"
+                            )
+        
+        # Create a new scope with the CAPTURED environment as parent
+        # This is the key to closures - we use closure.captured_env, not self.environment
+        call_env = closure.captured_env.enter_scope()
+        
+        # Bind parameters
+        for i, param in enumerate(lambda_node.params):
+            if i < len(args):
+                call_env.define(param.name, args[i])
+            elif param.default_value is not None:
+                # Evaluate default in caller's environment
+                default_val = param.default_value.accept(self)
+                call_env.define(param.name, default_val)
+            else:
+                # Too few arguments — use None
+                call_env.define(param.name, None)
+        
+        # Execute lambda body in the new environment
+        old_env = self.environment
+        self.environment = call_env
+        try:
+            result = self._execute_stmts(lambda_node.body.body)
+            if isinstance(result, ReturnSentinel):
+                return result.value
+            return result
+        finally:
+            self.environment = old_env
 
     def _call_agent(self, agent: AgentDeclNode, args: dict[str, object]) -> object:
         """Call an agent with the given arguments (HLD 3.5.2, 3.6.2).

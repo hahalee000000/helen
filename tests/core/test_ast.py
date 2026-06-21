@@ -159,6 +159,10 @@ class MockVisitor(Visitor[str]):
         self.calls.append("visit_function_decl")
         return "<fn>"
 
+    def visit_lambda(self, node) -> str:
+        self.calls.append("visit_lambda")
+        return "<lambda>"
+
     def visit_import_stmt(self, node) -> str:
         self.calls.append("visit_import_stmt")
         return "<import>"

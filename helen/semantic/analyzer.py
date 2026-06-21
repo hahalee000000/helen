@@ -44,6 +44,7 @@ from helen.core.ast import (
     IfStmtNode,
     ImportStmtNode,
     IndexNode,
+    LambdaNode,
     ListLiteralNode,
     LiteralNode,
     LiteralTypeNode,
@@ -681,6 +682,44 @@ class SemanticAnalyzer(Visitor[None]):
 
     def visit_fn_block(self, node: FnBlockNode) -> None:
         self._visit_stmts(node.body)
+
+    def visit_lambda(self, node: LambdaNode) -> None:
+        """Visit a lambda expression (anonymous function).
+        
+        Lambda expressions are similar to function declarations but:
+        - No name (anonymous)
+        - Are expressions (can be assigned to variables or passed as arguments)
+        - Support closures by capturing the defining environment
+        """
+        # Check for duplicate param names
+        seen_params: set[str] = set()
+        for param in node.params:
+            if param.name in seen_params:
+                self.errors.error(
+                    ErrorCode.DUPLICATE_PARAM,
+                    f"duplicate parameter '{param.name}' in lambda",
+                    param.span,
+                )
+            seen_params.add(param.name)
+            param.accept(self)
+
+        # Return type annotation
+        if node.return_type is not None:
+            node.return_type.accept(self)
+
+        # Lambda body gets its own scope
+        self._in_function += 1
+        self.symbols.enter_scope("lambda", "lambda")
+        try:
+            # Bind parameters in lambda scope
+            for param in node.params:
+                sym = Symbol(name=param.name, kind="param", type_node=param.type_annotation)
+                self.symbols.define(param.name, sym)
+            # Visit lambda body
+            node.body.accept(self)
+        finally:
+            self.symbols.exit_scope()
+            self._in_function -= 1
 
     # ------------------------------------------------------------------
     # Import

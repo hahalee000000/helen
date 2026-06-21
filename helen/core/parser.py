@@ -30,6 +30,7 @@ from .ast import (
     GroupingNode,
     IfStmtNode,
     ImportStmtNode,
+    LambdaNode,
     ListLiteralNode,
     LlmActExprNode,
     LlmBranchNode,
@@ -163,6 +164,9 @@ class Parser:
 
         # async as expression: async Agent(...)
         self._rules[TokenType.ASYNC].prefix = self._async_call_expr
+
+        # lambda as expression: fn(params) { body }
+        self._rules[TokenType.FN].prefix = self._lambda_expr
 
         # Precedence for prefix operators
         self._rules[TokenType.BANG].precedence = Precedence.UNARY
@@ -826,6 +830,44 @@ class Parser:
         return FunctionDeclNode(name=name_tok.lexeme, params=params,
                                 return_type=ret_type, body=fn_body,
                                 span=self._make_span(start, end))
+
+    def _lambda_expr(self) -> LambdaNode:
+        """Parse a lambda expression: fn(params) { body }.
+        
+        Anonymous function that can be assigned to variables or passed as arguments.
+        """
+        start = self._previous()  # FN token
+        # Parse parameters (same as function declaration)
+        self._consume(TokenType.LEFT_PAREN, "Expected '(' after 'fn'.")
+        params: list[AgentParamNode] = []
+        if not self._check(TokenType.RIGHT_PAREN):
+            params.append(self._agent_param())
+            while self._match(TokenType.COMMA):
+                if self._check(TokenType.RIGHT_PAREN):
+                    break
+                params.append(self._agent_param())
+        self._consume(TokenType.RIGHT_PAREN, "Expected ')' after parameters.")
+        
+        # Optional return type
+        ret_type: TypeNode | None = None
+        if self._match(TokenType.ARROW) or self._match(TokenType.COLON):
+            ret_type = self._parse_type()
+        
+        # Parse body
+        self._consume(TokenType.LEFT_BRACE, "Expected '{' before lambda body.")
+        body_stmts: list[StatementNode] = []
+        while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF):
+            prev_pos = self._pos
+            s = self._statement()
+            if s is not None:
+                body_stmts.append(s)
+            if self._pos == prev_pos:
+                break
+        end = self._consume(TokenType.RIGHT_BRACE, "Expected '}' after lambda body.")
+        fn_body = FnBlockNode(body=body_stmts, span=self._make_span(self._previous(), end))
+        
+        return LambdaNode(params=params, return_type=ret_type, body=fn_body,
+                         span=self._make_span(start, end))
 
     def _import_stmt(self) -> ImportStmtNode:
         """Parse an import statement: import "path" as alias."""
