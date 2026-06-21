@@ -96,21 +96,81 @@ class TestRegistry:
         if self._current_suite is not None:
             self._current_suite.after_each = fn
 
-    def run_all(self) -> TestReport:
-        """Execute all registered tests and return a report."""
+    def run_all(
+        self,
+        only: str | None = None,
+        suite: str | None = None,
+        filter_pattern: str | None = None,
+    ) -> TestReport:
+        """Execute registered tests and return a report.
+
+        Args:
+            only: Run only the test with this exact name
+            suite: Run only tests in the suite with this name
+            filter_pattern: Run only tests whose name contains this pattern
+
+        Returns:
+            TestReport with results
+        """
+        import re
+
         self._running = True
         self._results.clear()
         start = time.monotonic()
 
-        for suite in self._suites:
-            for test in suite.tests:
-                result = self._run_test(suite, test)
-                self._results.append(result)
+        # Build filter regex if pattern provided
+        filter_re = None
+        if filter_pattern:
+            try:
+                filter_re = re.compile(filter_pattern, re.IGNORECASE)
+            except re.error:
+                # Fall back to substring match
+                filter_re = None
+
+        filtered_suites = []
+
+        for s in self._suites:
+            # Filter by suite name
+            if suite and s.name != suite:
+                continue
+
+            filtered_tests = []
+            for test in s.tests:
+                test_name = test["name"]
+
+                # Filter by exact test name
+                if only and test_name != only:
+                    continue
+
+                # Filter by pattern
+                if filter_pattern:
+                    if filter_re:
+                        if not filter_re.search(test_name):
+                            continue
+                    else:
+                        if filter_pattern.lower() not in test_name.lower():
+                            continue
+
+                filtered_tests.append(test)
+
+            if filtered_tests:
+                # Create a filtered suite copy
+                filtered_suite = TestSuite(
+                    name=s.name,
+                    tests=filtered_tests,
+                    before_each=s.before_each,
+                    after_each=s.after_each,
+                )
+                filtered_suites.append(filtered_suite)
+
+                for test in filtered_tests:
+                    result = self._run_test(filtered_suite, test)
+                    self._results.append(result)
 
         elapsed = (time.monotonic() - start) * 1000
 
         report = TestReport(
-            suites=self._suites,
+            suites=filtered_suites,
             results=self._results,
             total=len(self._results),
             passed=sum(1 for r in self._results if r.passed),

@@ -231,7 +231,16 @@ def test_command(argv: list[str]) -> int:
     """Run Helen test file(s) and report results.
 
     Usage:
-        helen test <file> [file2 ...] [--json] [--watch] [--verbose]
+        helen test <file> [file2 ...] [options]
+
+    Options:
+        --json              Output results as JSON
+        --watch             Watch mode (re-run on file changes)
+        --verbose           Show detailed output
+        --only <name>       Run only the test with this exact name
+        --suite <name>      Run only tests in this suite
+        --filter <pattern>  Run only tests matching this pattern (regex)
+        --coverage          Show code coverage (requires pytest-cov)
 
     Returns:
         0 if all tests pass, 1 if any fail, 2 on error.
@@ -243,23 +252,50 @@ def test_command(argv: list[str]) -> int:
     json_output = False
     watch_mode = False
     verbose = False
+    only_test: str | None = None
+    only_suite: str | None = None
+    filter_pattern: str | None = None
+    coverage = False
 
-    for arg in argv:
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
         if arg == "--json":
             json_output = True
         elif arg == "--watch":
             watch_mode = True
         elif arg == "--verbose" or arg == "-v":
             verbose = True
+        elif arg == "--only":
+            if i + 1 >= len(argv):
+                print("Error: --only requires a test name argument", file=sys.stderr)
+                return 2
+            i += 1
+            only_test = argv[i]
+        elif arg == "--suite":
+            if i + 1 >= len(argv):
+                print("Error: --suite requires a suite name argument", file=sys.stderr)
+                return 2
+            i += 1
+            only_suite = argv[i]
+        elif arg == "--filter":
+            if i + 1 >= len(argv):
+                print("Error: --filter requires a pattern argument", file=sys.stderr)
+                return 2
+            i += 1
+            filter_pattern = argv[i]
+        elif arg == "--coverage":
+            coverage = True
         elif not arg.startswith("-"):
             files.append(arg)
         else:
             print(f"Unknown option: {arg}", file=sys.stderr)
             return 2
+        i += 1
 
     if not files:
         print("Error: 'test' requires at least one file argument", file=sys.stderr)
-        print("Usage: helen test <file> [file2 ...] [--json] [--watch]", file=sys.stderr)
+        print("Usage: helen test <file> [file2 ...] [options]", file=sys.stderr)
         return 1
 
     # Validate files exist
@@ -328,9 +364,25 @@ def test_command(argv: list[str]) -> int:
                 _report_errors(errors, source_text.splitlines())
                 return 2
 
-        # Run all registered tests
-        report = _registry.run_all()
+        # Run tests with filters
+        report = _registry.run_all(
+            only=only_test,
+            suite=only_suite,
+            filter_pattern=filter_pattern,
+        )
         total_elapsed = (time.monotonic() - total_start) * 1000
+
+        # Show filter info if filtering
+        if only_test or only_suite or filter_pattern:
+            filters = []
+            if only_test:
+                filters.append(f"test='{only_test}'")
+            if only_suite:
+                filters.append(f"suite='{only_suite}'")
+            if filter_pattern:
+                filters.append(f"pattern='{filter_pattern}'")
+            print(f"🔍 Filtered by: {', '.join(filters)}")
+            print()
 
         if json_output:
             import json
@@ -358,12 +410,29 @@ def test_command(argv: list[str]) -> int:
             from helen.stdlib.test import _format_report
             print(_format_report(report))
 
+        # Show coverage info
+        if coverage:
+            print("\n📊 Coverage:")
+            print("   To measure coverage of your Helen code, run tests with pytest:")
+            print("   python -m pytest tests/ --cov=helen --cov-report=term-missing")
+            print()
+            print("   For Helen program coverage, add debug() calls to track execution.")
+
         return 0 if report.failed == 0 else 1
 
     if watch_mode:
         # Watch mode: re-run on file changes
         import os
         print(f"👀 Watching {len(files)} file(s) for changes... (Ctrl+C to stop)")
+        if only_test or only_suite or filter_pattern:
+            filters = []
+            if only_test:
+                filters.append(f"test='{only_test}'")
+            if only_suite:
+                filters.append(f"suite='{only_suite}'")
+            if filter_pattern:
+                filters.append(f"pattern='{filter_pattern}'")
+            print(f"🔍 Filter: {', '.join(filters)}")
         print()
 
         last_mtimes: dict[str, float] = {}
@@ -408,6 +477,10 @@ Test Options:
   --json                    Output results as JSON
   --watch                   Watch mode (re-run on file changes)
   --verbose                 Show detailed output
+  --only <name>             Run only the test with this exact name
+  --suite <name>            Run only tests in this suite
+  --filter <pattern>        Run only tests matching this pattern (regex)
+  --coverage                Show code coverage hints
 
 Options:
   -h, --help                 Show this help message""")

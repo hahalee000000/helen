@@ -380,3 +380,79 @@ class TestTestReset:
         assert count["suites"] == 0
         assert count["tests"] == 0
         assert count["results"] == 0
+
+
+class TestRunAllFilters:
+    """Tests for run_all filtering options."""
+
+    def setup_method(self):
+        _registry.reset()
+
+    def test_run_all_with_only_filter(self):
+        def suite():
+            _it("test1", lambda: None)
+            _it("test2", lambda: None)
+            _it("test3", lambda: None)
+
+        _describe("suite", suite)
+        report = _registry.run_all(only="test2")
+        assert report.total == 1
+        assert report.results[0].name == "test2"
+
+    def test_run_all_with_suite_filter(self):
+        _registry.start_suite("suite1")
+        _registry.register_test("test1", lambda: None)
+        _registry.end_suite()
+
+        _registry.start_suite("suite2")
+        _registry.register_test("test2", lambda: None)
+        _registry.end_suite()
+
+        report = _registry.run_all(suite="suite2")
+        assert report.total == 1
+        assert report.results[0].suite == "suite2"
+
+    def test_run_all_with_pattern_filter(self):
+        def suite():
+            _it("test_add", lambda: None)
+            _it("test_subtract", lambda: None)
+            _it("test_multiply", lambda: None)
+
+        _describe("suite", suite)
+        report = _registry.run_all(filter_pattern="add|multiply")
+        assert report.total == 2
+        names = [r.name for r in report.results]
+        assert "test_add" in names
+        assert "test_multiply" in names
+
+    def test_run_all_with_combined_filters(self):
+        _registry.start_suite("math")
+        _registry.register_test("test_add", lambda: None)
+        _registry.register_test("test_subtract", lambda: None)
+        _registry.end_suite()
+
+        _registry.start_suite("string")
+        _registry.register_test("test_concat", lambda: None)
+        _registry.end_suite()
+
+        # Filter by suite and pattern
+        report = _registry.run_all(suite="math", filter_pattern="add")
+        assert report.total == 1
+        assert report.results[0].name == "test_add"
+
+    def test_run_all_no_matches(self):
+        def suite():
+            _it("test1", lambda: None)
+
+        _describe("suite", suite)
+        report = _registry.run_all(only="nonexistent")
+        assert report.total == 0
+
+    def test_run_all_pattern_case_insensitive(self):
+        def suite():
+            _it("TestAdd", lambda: None)
+            _it("TESTSUBTRACT", lambda: None)
+
+        _describe("suite", suite)
+        report = _registry.run_all(filter_pattern="test")
+        assert report.total == 2
