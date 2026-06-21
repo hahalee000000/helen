@@ -4124,3 +4124,308 @@ Helen 的 AI 原生可观测性提供：
 7. ✅ **AI 友好** — 所有输出都是结构化 JSON，AI 可直接解析
 
 传统调试器给人用，Helen 可观测性给 AI 用。
+
+---
+
+# 测试框架 (TDD 支持)
+
+Helen 内置了完整的测试框架，支持 TDD（测试驱动开发）工作流。
+
+## 快速开始
+
+### 1. 创建测试文件
+
+```helen
+// calculator_test.helen
+
+// 定义测试函数
+fn test_add() {
+    assert_equal(2 + 3, 5)
+}
+
+fn test_subtract() {
+    assert_equal(10 - 4, 6)
+}
+
+// 注册测试
+test_suite("Calculator")
+test_case("adds numbers", test_add)
+test_case("subtracts numbers", test_subtract)
+test_end_suite()
+
+// 运行测试
+run_tests()
+```
+
+### 2. 运行测试
+
+```bash
+# 基本运行
+helen test calculator_test.helen
+
+# 监听模式（TDD）
+helen test calculator_test.helen --watch
+
+# JSON 输出
+helen test calculator_test.helen --json
+```
+
+## 测试 API
+
+### 断言函数
+
+| 函数 | 说明 |
+|------|------|
+| `assert_true(condition)` | 断言条件为真 |
+| `assert_equal(actual, expected)` | 断言相等 |
+| `assert_not_equal(a, b)` | 断言不等 |
+| `assert_throws(fn)` | 断言抛出异常 |
+
+```helen
+fn test_assertions() {
+    assert_true(1 == 1)
+    assert_equal(2 + 3, 5)
+    assert_not_equal("hello", "world")
+}
+```
+
+### Expect 链式 API
+
+```helen
+fn test_expect() {
+    // 相等
+    expect(42).toBe(42)
+    
+    // 包含
+    expect("hello world").toContain("world")
+    expect([1, 2, 3]).toContain(2)
+    
+    // 比较
+    expect(10).toBeGreaterThan(5)
+    expect(3).toBeLessThan(7)
+    
+    // 字符串
+    expect("test123").toMatch("[0-9]+")
+    expect("hello").toStartWith("he")
+    expect("world").toEndWith("ld")
+    
+    // 集合
+    expect([1, 2, 3]).toHaveLength(3)
+    expect("").toBeEmpty()
+    
+    // 否定
+    expect(5).not_.toBe(6)
+    
+    // 链式
+    expect("hello world")
+        .toContain("hello")
+        .toContain("world")
+        .toStartWith("hello")
+}
+```
+
+### 测试组织
+
+```helen
+// 方式 1：简单注册（推荐）
+test_suite("Math")
+test_case("adds", test_add)
+test_case("subtracts", test_subtract)
+test_end_suite()
+
+test_suite("String")
+test_case("uppercases", test_upper)
+test_end_suite()
+
+// 方式 2：使用 describe/it（需要箭头函数）
+describe("Math", () => {
+    it("adds", test_add)
+    it("subtracts", test_subtract)
+})
+```
+
+### 钩子函数
+
+```helen
+fn setup() {
+    // 每个测试前运行
+}
+
+fn teardown() {
+    // 每个测试后运行
+}
+
+test_suite("With hooks")
+before_each(setup)
+after_each(teardown)
+test_case("test1", test_something)
+test_case("test2", test_another)
+test_end_suite()
+```
+
+## CLI 选项
+
+### 过滤测试
+
+```bash
+# 运行单个测试
+helen test my_test.helen --only "adds numbers"
+
+# 运行单个 suite
+helen test my_test.helen --suite "Calculator"
+
+# 按模式过滤（正则）
+helen test my_test.helen --filter "add|subtract"
+helen test my_test.helen --filter "test_.*_api"
+```
+
+### 输出格式
+
+```bash
+# 人类可读（默认）
+helen test my_test.helen
+
+# JSON 格式（CI 集成）
+helen test my_test.helen --json
+
+# 显示覆盖率提示
+helen test my_test.helen --coverage
+```
+
+### 监听模式
+
+```bash
+# 文件变更自动重跑
+helen test my_test.helen --watch
+
+# 监听 + 过滤
+helen test my_test.helen --watch --filter "add"
+```
+
+## 输出示例
+
+```
+============================================================
+  HELEN TEST RESULTS
+============================================================
+
+  Calculator
+    ✓ adds numbers (0.1ms)
+    ✓ subtracts numbers (0.0ms)
+    ○ skipped test (skipped)
+
+  String
+    ✓ uppercases (0.0ms)
+
+------------------------------------------------------------
+  3 passed, 0 failed, 1 skipped (4 total)
+  Duration: 0.5ms
+============================================================
+  ✓ ALL TESTS PASSED
+============================================================
+```
+
+## TDD 工作流
+
+### 1. 红（RED）— 写失败的测试
+
+```helen
+// my_feature_test.helen
+import "my_feature" as feature
+
+fn test_new_feature() {
+    assert_equal(feature.do_something(), expected_result)
+}
+
+test_suite("New Feature")
+test_case("does something", test_new_feature)
+test_end_suite()
+
+run_tests()
+```
+
+```bash
+# 启动监听
+helen test my_feature_test.helen --watch
+```
+
+### 2. 绿（GREEN）— 实现功能
+
+```helen
+// my_feature.helen
+fn do_something() {
+    return expected_result
+}
+```
+
+保存文件 → 测试自动重跑 → 看到通过！
+
+### 3. 重构（REFACTOR）
+
+改进代码，保持测试通过。
+
+## 跳过测试
+
+```helen
+test_suite("Work in progress")
+test_case("completed", test_done)
+test_case_skip("not ready", test_wip)  // 跳过
+test_end_suite()
+```
+
+## 完整示例
+
+```helen
+// string_utils_test.helen
+
+fn test_reverse() {
+    assert_equal(reverse("hello"), "olleh")
+    assert_equal(reverse(""), "")
+}
+
+fn test_uppercase() {
+    expect(upper("hello")).toBe("HELLO")
+    expect(upper("World")).toBe("WORLD")
+}
+
+fn test_contains() {
+    expect("hello world").toContain("world")
+    expect("hello world").not_.toContain("xyz")
+}
+
+fn test_split() {
+    let parts = split("a,b,c", ",")
+    expect(parts).toHaveLength(3)
+    expect(parts).toContain("b")
+}
+
+test_suite("String Utils")
+test_case("reverse", test_reverse)
+test_case("uppercase", test_uppercase)
+test_case("contains", test_contains)
+test_case("split", test_split)
+test_end_suite()
+
+run_tests()
+```
+
+## 练习
+
+1. 为 `calculator.helen` 编写测试，覆盖加减乘除
+2. 使用 `--watch` 模式进行 TDD 开发
+3. 使用 `--filter` 只运行特定测试
+4. 使用 `expect` 链式 API 重写断言
+5. 添加 `before_each` 钩子初始化测试数据
+
+## 总结
+
+Helen 测试框架提供：
+
+1. ✅ **简单 API** — `test_suite` / `test_case` / `test_end_suite`
+2. ✅ **丰富断言** — `assert_*` + `expect().toBe()` 链式
+3. ✅ **灵活过滤** — `--only` / `--suite` / `--filter`
+4. ✅ **TDD 支持** — `--watch` 监听模式
+5. ✅ **CI 集成** — `--json` 输出
+6. ✅ **跳过测试** — `test_case_skip`
+7. ✅ **钩子函数** — `before_each` / `after_each`
+
