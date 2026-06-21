@@ -9,7 +9,7 @@ tags: [helen, syntax, reference, language]
 
 # Helen 语法参考
 
-## 关键字（44 个）
+## 关键字（43 个）
 
 ### Agent 声明
 - `agent` — 声明 Agent
@@ -138,6 +138,25 @@ agent Translator {
     }
 }
 
+// Agent functions 块支持变量定义
+agent MyAgent {
+    description "Example agent"
+    prompt "..."
+    
+    functions {
+        let config = "default"
+        const MAX_RETRIES = 3
+        
+        fn get_config() -> str {
+            return config  // 可以访问 functions 块变量
+        }
+    }
+    
+    main {
+        print(get_config())
+    }
+}
+
 // 流式 Agent（返回 StreamingResponse，可用 for await 迭代）
 agent Streamer(topic: str) {
     description "Stream a long response"
@@ -222,11 +241,28 @@ try {
 
 ### 模式匹配
 ```helen
+// 基本匹配
 match status {
     case 200 { print("OK") }
     case 404 { print("Not Found") }
     case 500 { print("Server Error") }
     default { print("Unknown") }
+}
+
+// 范围匹配（.. 运算符，包含边界）
+let score = 85
+match score {
+    case 90..100 { print("A") }
+    case 80..89 { print("B") }
+    case 70..79 { print("C") }
+    default { print("F") }
+}
+
+// 守卫条件（if 表达式）
+match x {
+    case 1..100 if x == 42 { print("the answer") }
+    case 1..100 { print("in range") }
+    default { print("out of range") }
 }
 ```
 

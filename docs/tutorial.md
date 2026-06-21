@@ -446,6 +446,51 @@ let len = len(nums)        // 3
 let range_nums = range(5)  // [0, 1, 2, 3, 4]
 ```
 
+### 列表方法
+
+Helen 的列表基于 Python list，自动支持所有常用方法：
+
+```helen
+let items = [1, 2, 3]
+
+// 添加元素
+items.append(4)           // [1, 2, 3, 4]
+items.insert(0, 0)        // [0, 1, 2, 3, 4]
+items.extend([5, 6])      // [0, 1, 2, 3, 4, 5, 6]
+
+// 移除元素
+items.pop()               // 移除并返回最后一个: 6
+items.remove(0)           // 移除第一个值为 0 的元素
+items.clear()             // 清空列表
+
+// 查询
+let idx = items.index(2)  // 返回元素 2 的索引
+let cnt = items.count(3)  // 返回元素 3 出现的次数
+
+// 排序与反转
+let unsorted = [3, 1, 4, 1, 5]
+unsorted.sort()           // [1, 1, 3, 4, 5]
+unsorted.reverse()        // [5, 4, 3, 1, 1]
+
+// 复制
+let copy = items.copy()   // 浅拷贝
+```
+
+**可用方法列表**：
+| 方法 | 说明 |
+|------|------|
+| `append(x)` | 在末尾添加元素 |
+| `extend(iterable)` | 扩展列表 |
+| `insert(i, x)` | 在位置 i 插入元素 |
+| `remove(x)` | 移除第一个值为 x 的元素 |
+| `pop([i])` | 移除并返回位置 i 的元素（默认末尾） |
+| `clear()` | 清空列表 |
+| `index(x)` | 返回第一个值为 x 的索引 |
+| `count(x)` | 返回 x 出现的次数 |
+| `sort()` | 原地排序 |
+| `reverse()` | 原地反转 |
+| `copy()` | 浅拷贝 |
+
 ## 映射操作
 
 ```helen
@@ -788,6 +833,42 @@ match code {
 }
 ```
 
+### 范围匹配
+
+使用 `..` 运算符匹配数值范围（包含边界）：
+
+```helen
+let score = 85
+
+match score {
+    case 90..100 { print("A") }
+    case 80..89 { print("B") }
+    case 70..79 { print("C") }
+    case 60..69 { print("D") }
+    default { print("F") }
+}
+// 输出: B
+```
+
+**注意**：范围运算符 `..` 不会与浮点数混淆。`1..10` 被解析为范围，`1.5` 被解析为浮点数。
+
+### 守卫条件
+
+使用 `if` 添加额外条件判断：
+
+```helen
+let x = 25
+
+match x {
+    case 21..30 if x == 25 { print("exactly 25") }
+    case 21..30 { print("other in range") }
+    default { print("out of range") }
+}
+// 输出: exactly 25
+```
+
+守卫条件在范围匹配之后求值，只有两者都满足才会执行对应的 case 块。
+
 ## 异常处理
 
 ### throw 抛出异常
@@ -1078,15 +1159,25 @@ agent Translator(text: str, target: str) {
     """
     
     functions {
+        let default_format = "formal"
+        const MAX_LENGTH = 1000
+        
         fn validate_input(s: str): bool {
             return len(s) > 0
+        }
+        
+        fn format_output(text: str): str {
+            if default_format == "formal" {
+                return text.upper()
+            }
+            return text
         }
     }
     
     main {
         if validate_input(text) {
             let result = llm act    // bare form：自动使用渲染后的 prompt
-            return result
+            return format_output(result)
         }
         return "输入为空"
     }
@@ -1095,6 +1186,32 @@ agent Translator(text: str, target: str) {
 // 调用方式（推荐函数式调用）：
 let translated = Translator(text="Hello", target="French")
 // 函数式调用：let translated = Translator(text="Hello", target="French")
+```
+
+**functions 块中的变量定义**：
+
+`functions {}` 块现在支持 `let` 和 `const` 声明，这些变量在 agent 的所有函数中可见：
+
+```helen
+agent MyAgent {
+    description "Example agent"
+    prompt "..."
+    
+    functions {
+        let config = "default"
+        const MAX_RETRIES = 3
+        
+        fn get_config() -> str {
+            return config  // ✅ 可以访问
+        }
+        
+        fn retry() {
+            for i in range(MAX_RETRIES) {
+                print("Retry " + str(i))
+            }
+        }
+    }
+}
 ```
 
 **执行流程：**
