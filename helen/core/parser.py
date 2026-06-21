@@ -44,6 +44,8 @@ from .ast import (
     OptionalTypeNode,
     ProgramNode,
     PromptDefNode,
+    ProtocolDeclNode,
+    ImplDeclNode,
     RangePatternNode,
     ReturnStmtNode,
     StatementNode,
@@ -448,6 +450,10 @@ class Parser:
             return self._assert_stmt()
         if self._match(TokenType.MATCH):
             return self._match_stmt()
+        if self._match(TokenType.PROTOCOL):
+            return self._protocol_decl()
+        if self._match(TokenType.IMPL):
+            return self._impl_decl()
 
         # LLM keyword disambiguation (HLD 3.3.5)
         if self._check(TokenType.LLM):
@@ -868,6 +874,86 @@ class Parser:
         
         return LambdaNode(params=params, return_type=ret_type, body=fn_body,
                          span=self._make_span(start, end))
+
+    def _protocol_decl(self) -> ProtocolDeclNode:
+        """Parse a protocol declaration: protocol Name { fn signatures }.
+        
+        v1.7 feature for interface/protocol support.
+        """
+        start = self._previous()  # PROTOCOL token
+        name_tok = self._consume(TokenType.IDENTIFIER, "Expected protocol name.")
+        self._consume(TokenType.LEFT_BRACE, "Expected '{' after protocol name.")
+        
+        methods: list[FunctionDeclNode] = []
+        while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF):
+            # Parse method signature (no body)
+            self._consume(TokenType.FN, "Expected 'fn' in protocol.")
+            method_name = self._consume(TokenType.IDENTIFIER, "Expected method name.")
+            self._consume(TokenType.LEFT_PAREN, "Expected '(' after method name.")
+            
+            # Parse parameters
+            params: list[AgentParamNode] = []
+            if not self._check(TokenType.RIGHT_PAREN):
+                params.append(self._agent_param())
+                while self._match(TokenType.COMMA):
+                    if self._check(TokenType.RIGHT_PAREN):
+                        break
+                    params.append(self._agent_param())
+            self._consume(TokenType.RIGHT_PAREN, "Expected ')' after parameters.")
+            
+            # Parse return type
+            ret_type: TypeNode | None = None
+            if self._match(TokenType.ARROW) or self._match(TokenType.COLON):
+                ret_type = self._parse_type()
+            
+            # Protocol methods have no body - just a signature
+            # Create a minimal FnBlockNode with empty body
+            empty_body = FnBlockNode(body=[], span=self._make_span(self._previous(), self._previous()))
+            
+            method = FunctionDeclNode(
+                name=method_name.lexeme,
+                params=params,
+                return_type=ret_type,
+                body=empty_body,
+                span=self._make_span(start, self._previous())
+            )
+            methods.append(method)
+        
+        end = self._consume(TokenType.RIGHT_BRACE, "Expected '}' after protocol body.")
+        return ProtocolDeclNode(
+            name=name_tok.lexeme,
+            methods=methods,
+            span=self._make_span(start, end)
+        )
+
+    def _impl_decl(self) -> ImplDeclNode:
+        """Parse a protocol implementation: impl Protocol for Struct { fn implementations }.
+        
+        v1.7 feature for interface/protocol support.
+        """
+        start = self._previous()  # IMPL token
+        protocol_name = self._consume(TokenType.IDENTIFIER, "Expected protocol name.")
+        self._consume(TokenType.FOR, "Expected 'for' after protocol name.")
+        struct_name = self._consume(TokenType.IDENTIFIER, "Expected struct name.")
+        self._consume(TokenType.LEFT_BRACE, "Expected '{' after struct name.")
+        
+        methods: list[FunctionDeclNode] = []
+        while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF):
+            # Parse full function implementation
+            if self._match(TokenType.FN):
+                method = self._function_decl()
+                methods.append(method)
+            else:
+                self._error("Expected 'fn' in impl block.")
+                self._advance()
+        
+        end = self._consume(TokenType.RIGHT_BRACE, "Expected '}' after impl body.")
+        return ImplDeclNode(
+            protocol_name=protocol_name.lexeme,
+            struct_name=struct_name.lexeme,
+            methods=methods,
+            span=self._make_span(start, end)
+        )
 
     def _import_stmt(self) -> ImportStmtNode:
         """Parse an import statement: import "path" as alias."""

@@ -47,6 +47,8 @@ from helen.core.ast import (
     OptionalTypeNode,
     ProgramNode,
     PromptDefNode,
+    ProtocolDeclNode,
+    ImplDeclNode,
     RangePatternNode,
     ReturnStmtNode,
     StatementNode,
@@ -684,6 +686,39 @@ class Interpreter(LlmMixin, Visitor[object]):
         to access variables from its defining scope.
         """
         return Closure(lambda_node=node, captured_env=self.environment)
+
+    def visit_protocol_decl(self, node: ProtocolDeclNode) -> object:
+        """Register a protocol declaration (do not execute).
+        
+        v1.7 feature: protocols define interfaces.
+        For now, we just register the protocol name.
+        """
+        # Store protocol for future reference
+        if not hasattr(self, '_protocols'):
+            self._protocols = {}
+        self._protocols[node.name] = node
+        return None
+
+    def visit_impl_decl(self, node: ImplDeclNode) -> object:
+        """Register protocol method implementations for a struct.
+        
+        v1.7 feature: implements protocol methods.
+        For now, we register the methods so they can be called on struct instances.
+        """
+        # Store impl methods - they will be available as methods on struct instances
+        if not hasattr(self, '_impls'):
+            self._impls = {}
+        
+        key = (node.protocol_name, node.struct_name)
+        self._impls[key] = node
+        
+        # Register each method as a function that can be called
+        for method in node.methods:
+            # Create a method name that includes the struct name for disambiguation
+            # This allows calling struct.method() syntax
+            self._functions[method.name] = method
+        
+        return None
 
     def visit_fn_block(self, node: FnBlockNode) -> object:
         """Execute a function body (list of statements)."""

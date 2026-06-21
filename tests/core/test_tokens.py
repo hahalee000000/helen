@@ -136,9 +136,9 @@ class TestKeywords:
         assert isinstance(kw, dict)
 
     def test_keyword_count(self) -> None:
-        """Should have 42 keywords (v1.6: removed 'memory' as reserved word)."""
+        """Should have 44 keywords (v1.7: added 'protocol' and 'impl')."""
         kw = keywords()
-        assert len(kw) == 42  # Updated: removed 'memory' keyword (now context keyword)
+        assert len(kw) == 44  # Updated: added 'protocol' and 'impl' keywords (v1.7)
 
     def test_all_keywords_map_to_token_types(self) -> None:
         """Every keyword value should be a TokenType member."""

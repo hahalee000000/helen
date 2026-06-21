@@ -114,6 +114,8 @@ class TokenType(Enum):
     IN = auto()
     FUNCTIONS = auto()
     MAIN = auto()
+    PROTOCOL = auto()  # v1.7: protocol declaration
+    IMPL = auto()      # v1.7: protocol implementation
 
     # === Special ===
     EOF = auto()
@@ -164,6 +166,8 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "in": TokenType.IN,
     "functions": TokenType.FUNCTIONS,
     "main": TokenType.MAIN,
+    "protocol": TokenType.PROTOCOL,  # v1.7
+    "impl": TokenType.IMPL,          # v1.7
     "true": TokenType.TRUE,
     "false": TokenType.FALSE,
     "null": TokenType.NULL_KW,

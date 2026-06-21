@@ -59,6 +59,8 @@ from helen.core.ast import (
     OptionalTypeNode,
     ProgramNode,
     PromptDefNode,
+    ProtocolDeclNode,
+    ImplDeclNode,
     RangePatternNode,
     ReturnStmtNode,
     StatementNode,
@@ -720,6 +722,54 @@ class SemanticAnalyzer(Visitor[None]):
         finally:
             self.symbols.exit_scope()
             self._in_function -= 1
+
+    def visit_protocol_decl(self, node: ProtocolDeclNode) -> None:
+        """Visit a protocol declaration.
+        
+        v1.7 feature: protocols define interfaces that structs can implement.
+        For now, we just register the protocol name and validate method signatures.
+        """
+        # Register protocol name in current scope
+        sym = Symbol(name=node.name, kind="protocol", type_node=None)
+        existing = self.symbols.define(node.name, sym)
+        if existing is not None:
+            self.errors.error(
+                ErrorCode.DUPLICATE_SYMBOL,
+                f"duplicate declaration of protocol '{node.name}'",
+                node.span,
+            )
+        
+        # Validate method signatures (no bodies to check)
+        for method in node.methods:
+            method.accept(self)
+
+    def visit_impl_decl(self, node: ImplDeclNode) -> None:
+        """Visit a protocol implementation.
+        
+        v1.7 feature: implements protocol methods for a struct.
+        For now, we just validate the method implementations.
+        """
+        # Check that protocol exists
+        protocol_sym = self.symbols.resolve(node.protocol_name)
+        if protocol_sym is None or protocol_sym.kind != "protocol":
+            self.errors.error(
+                ErrorCode.UNDECLARED_VARIABLE,
+                f"undefined protocol '{node.protocol_name}'",
+                node.span,
+            )
+        
+        # Check that struct exists
+        struct_sym = self.symbols.resolve(node.struct_name)
+        if struct_sym is None or struct_sym.kind != "struct":
+            self.errors.error(
+                ErrorCode.UNDECLARED_VARIABLE,
+                f"undefined struct '{node.struct_name}'",
+                node.span,
+            )
+        
+        # Validate method implementations
+        for method in node.methods:
+            method.accept(self)
 
     # ------------------------------------------------------------------
     # Import

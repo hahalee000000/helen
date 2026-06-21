@@ -108,6 +108,14 @@ class Visitor(ABC, Generic[R]):
         """Visit a LambdaNode."""
 
     @abstractmethod
+    def visit_protocol_decl(self, node: ProtocolDeclNode) -> R:
+        """Visit a ProtocolDeclNode."""
+
+    @abstractmethod
+    def visit_impl_decl(self, node: ImplDeclNode) -> R:
+        """Visit an ImplDeclNode."""
+
+    @abstractmethod
     def visit_import_stmt(self, node: ImportStmtNode) -> R:
         """Visit an ImportStmtNode."""
 
@@ -676,6 +684,39 @@ class LambdaNode(ExpressionNode):
 
 
 @dataclass(frozen=True)
+class ProtocolDeclNode(StatementNode):
+    """Protocol declaration: protocol Name { fn signatures }.
+    
+    Defines an interface that structs can implement.
+    v1.7 feature for interface/protocol support.
+    """
+    name: str
+    methods: list[FunctionDeclNode]  # Only signatures, no body
+    span: SourceSpan
+
+    def accept(self, visitor: Visitor[R]) -> R:
+        """Dispatch to the visitor."""
+        return visitor.visit_protocol_decl(self)
+
+
+@dataclass(frozen=True)
+class ImplDeclNode(StatementNode):
+    """Protocol implementation: impl Protocol for Struct { fn implementations }.
+    
+    Provides concrete implementations of protocol methods for a struct.
+    v1.7 feature for interface/protocol support.
+    """
+    protocol_name: str
+    struct_name: str
+    methods: list[FunctionDeclNode]  # Full implementations
+    span: SourceSpan
+
+    def accept(self, visitor: Visitor[R]) -> R:
+        """Dispatch to the visitor."""
+        return visitor.visit_impl_decl(self)
+
+
+@dataclass(frozen=True)
 class ImportStmtNode(StatementNode):
     """Import statement: import \"path\" as alias."""
     module_path: str
@@ -1051,6 +1092,14 @@ class ASTPrinter(Visitor[str]):
     def visit_lambda(self, node: LambdaNode) -> str:
         """Visit a LambdaNode."""
         return self._parenthesize("lambda")
+
+    def visit_protocol_decl(self, node: ProtocolDeclNode) -> str:
+        """Visit a ProtocolDeclNode."""
+        return self._parenthesize("protocol", node.name)
+
+    def visit_impl_decl(self, node: ImplDeclNode) -> str:
+        """Visit an ImplDeclNode."""
+        return self._parenthesize("impl", node.protocol_name, node.struct_name)
 
     def visit_import_stmt(self, node: ImportStmtNode) -> str:
         """Visit an ImportStmtNode."""
