@@ -13,7 +13,9 @@ Helen 技能系统 — 为 AI Agent 提供专业知识和工作流。
 │   ├── helen-syntax/                 ← Helen 语法参考
 │   ├── helen-stdlib/                 ← 标准库使用指南
 │   ├── helen-agent-patterns/         ← Agent 设计模式
-│   ├── code-quality/                 ← 7 维质量评估
+│   ├── helen-testing/                ← 测试框架与 TDD 工作流
+│   ├── helen-quality/                ← 7 维质量评估工具
+│   ├── code-quality/                 ← 代码质量评估方法论
 │   ├── debugging/                    ← 调试方法论
 │   ├── test-driven-development/      ← TDD RED-GREEN-REFACTOR
 │   ├── writing-plans/                ← 实现计划编写
@@ -91,8 +93,10 @@ tags: [tag1, tag2]
 |------|------|------|
 | `helen-language-development` | Helen 专属 | Helen 语言模式、陷阱、最佳实践 |
 | `helen-syntax` | Helen 专属 | Helen 语法参考（关键字、类型、表达式） |
-| `helen-stdlib` | Helen 专属 | 185 个标准库函数使用指南 |
+| `helen-stdlib` | Helen 专属 | 193 个标准库函数使用指南 |
 | `helen-agent-patterns` | Helen 专属 | Agent 设计模式（路由、并发、错误处理） |
+| `helen-testing` | Helen 专属 | 测试框架与 TDD 工作流 |
+| `helen-quality` | Helen 专属 | 7 维质量评估工具（CLI + API） |
 | `code-quality` | 开发 | 7 维代码质量评估方法论 |
 | `debugging` | 开发 | 系统化调试方法论 |
 | `test-driven-development` | 开发 | TDD RED-GREEN-REFACTOR 工作流 |
