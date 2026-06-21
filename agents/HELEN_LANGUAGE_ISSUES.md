@@ -16,29 +16,19 @@
 
 ## 2. 变量名限制
 
-### 2.1 保留字可优化
+### 2.1 `skills` 保留字应移除
 
-**问题**：`skills` 是保留字，不能用作变量名。
+**问题**：`skills` 是保留字，但在语法中没有实际使用。
 
-**说明**：
-- `match` 是保留字，但 Python 3.10+ 也有 `match`，合理
-- `user` 不是保留字，可以正常使用
+**分析**：
+- Parser 可以解析 `skills = [...]`（agent 声明块中）
+- AST 有 `DeclarationNode.skills` 字段
+- 但解释器**完全不处理**这个字段
+- 没有任何 `.helen` 文件使用 `skills = ...` 语法
 
-**示例**：
-```helen
-// ❌ 报错（skills 是保留字）
-let skills = get_skills()
+**影响**：用户不能写 `let skills = get_skills()`，必须用 `skill_list` 等替代名。
 
-// ✅ 必须用其他名字
-let skill_list = get_skills()
-
-// ✅ user 不是保留字，可以正常使用
-let user = get_user()
-```
-
-**影响**：命名稍有限制。
-
-**建议**：考虑将 `skills` 改为上下文关键字（仅在 agent 声明中有特殊含义）。
+**建议**：移除 `skills` 保留字，释放给用户使用。
 
 ---
 
