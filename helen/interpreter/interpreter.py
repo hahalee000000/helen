@@ -80,7 +80,7 @@ from helen.interpreter.exceptions import (
 from helen.interpreter.task import Task
 from helen.interpreter.llm_mixin import LlmMixin
 from helen.runtime.llm_runtime import LLMRuntime, MockLLMRuntime
-from helen.runtime.import_resolver import ImportResolver
+from helen.runtime.import_resolver import ImportResolver, ImportResult
 from helen.runtime.history import HistoryManager, Message as HistoryMessage
 from helen.runtime.observability import ObservabilityManager
 from helen.semantic.types import (
@@ -420,7 +420,25 @@ class Interpreter(LlmMixin, Visitor[object]):
         target = node.target.accept(self)
         try:
             if isinstance(target, dict):
-                return target[node.property]
+                # v1.6: Check if this is a module object
+                if target.get("__type__") == "module":
+                    # Look up function or agent in module
+                    prop = node.property
+                    if prop in target.get("__functions__", {}):
+                        func_node = target["__functions__"][prop]
+                        # Return a callable wrapper for the function
+                        return self._create_module_function_wrapper(func_node, target)
+                    elif prop in target.get("__agents__", {}):
+                        agent_node = target["__agents__"][prop]
+                        # Return a callable wrapper for the agent
+                        return self._create_module_agent_wrapper(agent_node, target)
+                    elif prop in target.get("__data__", {}):
+                        return target["__data__"][prop]
+                    else:
+                        # Fall back to regular dict access
+                        return target[prop]
+                else:
+                    return target[node.property]
             if hasattr(target, node.property):
                 return getattr(target, node.property)
             self._runtime_error(node.span, f"'{type(target).__name__}' has no property '{node.property}'")
@@ -428,6 +446,30 @@ class Interpreter(LlmMixin, Visitor[object]):
         except KeyError:
             self._runtime_error(node.span, f"Property '{node.property}' not found")
             return None
+    
+    def _create_module_function_wrapper(self, func_node, module: dict):
+        """Create a callable wrapper for a module function (v1.6)."""
+        def wrapper(*args, **kwargs):
+            # Call the function with the provided arguments
+            return self._call_function(func_node, list(args))
+        return wrapper
+    
+    def _create_module_agent_wrapper(self, agent_node, module: dict):
+        """Create a callable wrapper for a module agent (v1.6)."""
+        def wrapper(*args, **kwargs):
+            # Convert positional args to dict based on agent params
+            args_dict = {}
+            for i, param in enumerate(agent_node.params):
+                if i < len(args):
+                    args_dict[param.name] = args[i]
+                elif param.name in kwargs:
+                    args_dict[param.name] = kwargs[param.name]
+                elif param.default_value is not None:
+                    # Evaluate default value
+                    args_dict[param.name] = param.default_value.accept(self)
+            # Call the agent with the provided arguments
+            return self._call_agent(agent_node, args_dict)
+        return wrapper
 
     def visit_expr_stmt(self, node: ExprStmtNode) -> object:
         """Evaluate an expression as a statement."""
@@ -866,6 +908,8 @@ class Interpreter(LlmMixin, Visitor[object]):
         - .md/.txt: Load as text, register to import_resolver.data
         - .json/.yaml: Parse as data, register to import_resolver.data
         - Python modules (no extension or .py): Import via Python FFI
+        
+        v1.6: Module imports support function/agent access via alias
         """
         # Check if this is a Python module import
         # Python modules: no extension, or .py extension, or dotted names like "os.path"
@@ -890,12 +934,18 @@ class Interpreter(LlmMixin, Visitor[object]):
 
         # Register imported content into the interpreter's namespaces
         if result.format == "helen":
-            for name, agent in self.import_resolver.agents.items():
-                if name not in self._agents:
-                    self._agents[name] = agent
-            for name, func in self.import_resolver.functions.items():
-                if name not in self._functions:
-                    self._functions[name] = func
+            # v1.6: If alias is provided, create a module object for function/agent access
+            if node.alias:
+                module_obj = self._create_module_object(result)
+                self.environment.define(node.alias, module_obj)
+            else:
+                # No alias: register agents/functions directly to global namespace
+                for name, agent in self.import_resolver.agents.items():
+                    if name not in self._agents:
+                        self._agents[name] = agent
+                for name, func in self.import_resolver.functions.items():
+                    if name not in self._functions:
+                        self._functions[name] = func
         else:
             # Register data by user-specified alias (or filename if no alias)
             alias = node.alias if node.alias else os.path.splitext(os.path.basename(result.path))[0]
@@ -903,6 +953,30 @@ class Interpreter(LlmMixin, Visitor[object]):
             self.environment.define(alias, result.content)
 
         return None
+    
+    def _create_module_object(self, result: ImportResult) -> dict:
+        """Create a module object containing agents and functions from imported .helen file (v1.6)."""
+        module = {
+            "__type__": "module",
+            "__path__": result.path,
+            "__agents__": {},
+            "__functions__": {},
+            "__data__": {}
+        }
+        
+        # Collect agents
+        for name, agent in self.import_resolver.agents.items():
+            module["__agents__"][name] = agent
+        
+        # Collect functions
+        for name, func in self.import_resolver.functions.items():
+            module["__functions__"][name] = func
+        
+        # Collect data (constants, etc.)
+        for name, data in self.import_resolver.data.items():
+            module["__data__"][name] = data
+        
+        return module
 
     def _import_python_module(self, node: ImportStmtNode) -> object:
         """Import a Python module via FFI.

@@ -122,14 +122,14 @@ class TokenType(Enum):
 # Type alias for literal values a token can carry
 LiteralValue = Union[str, int, float, bool, None]
 
-# Keyword → TokenType mapping (41 entries)
+# Keyword → TokenType mapping (40 entries)
 _KEYWORD_MAP: dict[str, TokenType] = {
     "agent": TokenType.AGENT,
     "description": TokenType.DESCRIPTION,
     "model": TokenType.MODEL,
     "tools": TokenType.TOOLS,
     "sub-agents": TokenType.SUB_AGENTS,
-    "memory": TokenType.MEMORY,
+    # "memory" removed from reserved words (v1.6) — now context keyword in agent blocks
     "temperature": TokenType.TEMPERATURE,
     "max-turns": TokenType.MAX_TURNS,
     "streaming": TokenType.STREAMING,

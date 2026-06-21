@@ -640,7 +640,7 @@ class Parser:
                 TokenType.DESCRIPTION, TokenType.MODEL, TokenType.TOOLS,
                 TokenType.MEMORY, TokenType.TEMPERATURE,
                 TokenType.MAX_TURNS, TokenType.SUB_AGENTS, TokenType.STREAMING,
-            ):
+            ) or self._is_context_keyword("memory"):
                 declarations.append(self._declaration_block())
             else:
                 self._error(f"Unexpected token in agent body: {self._current().type.name}")
@@ -670,6 +670,11 @@ class Parser:
         """Parse a config declaration: description "..." / model "..." / tools [...] / streaming true etc."""
         start = self._advance()  # consume the config keyword
         token_type = start.type
+        
+        # Handle context keyword "memory" (v1.6)
+        if token_type == TokenType.IDENTIFIER and start.lexeme == "memory":
+            token_type = TokenType.MEMORY
+        
         # Parse the value
         if self._check(TokenType.STRING, TokenType.TRIPLE_QUOTE_STRING):
             self._advance()
@@ -807,6 +812,9 @@ class Parser:
                               TokenType.DESCRIPTION, TokenType.MODEL, TokenType.TOOLS,
                               TokenType.MEMORY, TokenType.TEMPERATURE,
                               TokenType.MAX_TURNS, TokenType.SUB_AGENTS):
+            # Also check for context keyword "memory" (v1.6)
+            if self._is_context_keyword("memory"):
+                break
             prev_pos = self._pos
             s = self._statement()
             if s is not None:
@@ -1132,6 +1140,13 @@ class Parser:
         if self._at_end():
             return TokenType.EOF in types
         return self._current().type in types
+
+    def _is_context_keyword(self, keyword: str) -> bool:
+        """Check if current token is an identifier matching a context keyword (v1.6)."""
+        if self._at_end():
+            return False
+        tok = self._current()
+        return tok.type == TokenType.IDENTIFIER and tok.lexeme == keyword
 
     def _peek(self) -> Token:
         """Peek at the current token (without consuming it)."""

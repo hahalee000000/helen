@@ -8,6 +8,7 @@ Commands:
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Sequence
@@ -68,7 +69,11 @@ def run_command(file: str) -> int:
 
     # Interpret
     llm_runtime = HttpLLMRuntime()
-    interp = Interpreter(errors=errors, llm_runtime=llm_runtime)
+    # v1.6: Set import resolver base_dir to source file directory
+    from helen.runtime.import_resolver import ImportResolver
+    source_dir = str(source_path.parent.absolute()) if source_path.parent else os.getcwd()
+    import_resolver = ImportResolver(base_dir=source_dir)
+    interp = Interpreter(errors=errors, llm_runtime=llm_runtime, import_resolver=import_resolver)
     try:
         interp.interpret(program)
     except Exception as e:

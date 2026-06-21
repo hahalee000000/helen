@@ -219,8 +219,56 @@ class SemanticAnalyzer(Visitor[None]):
     # ------------------------------------------------------------------
 
     def visit_program(self, node: ProgramNode) -> None:
+        # Two-pass analysis for forward references (v1.6)
+        # Pass 1: Collect all function and agent declarations (register names only)
+        for stmt in node.statements:
+            if isinstance(stmt, FunctionDeclNode):
+                self._register_function_signature(stmt)
+            elif isinstance(stmt, AgentDeclNode):
+                self._register_agent_signature(stmt)
+        
+        # Pass 2: Full analysis (including function bodies)
         for stmt in node.statements:
             stmt.accept(self)
+    
+    def _register_function_signature(self, node: FunctionDeclNode) -> None:
+        """Register function signature without analyzing body (for forward references)."""
+        # Check for duplicate param names
+        seen_params: set[str] = set()
+        for param in node.params:
+            if param.name in seen_params:
+                self.errors.error(
+                    ErrorCode.DUPLICATE_PARAM,
+                    f"duplicate parameter '{param.name}' in function '{node.name}'",
+                    param.span,
+                )
+            seen_params.add(param.name)
+        
+        # Register function in current scope (without analyzing body)
+        sym = Symbol(name=node.name, kind="function", type_node=node.return_type)
+        existing = self.symbols.define(node.name, sym)
+        if existing is not None:
+            self.errors.error(
+                ErrorCode.DUPLICATE_SYMBOL,
+                f"duplicate declaration of '{node.name}'",
+                node.span,
+            )
+        
+        # Store parameter types for compile-time call checking
+        self._function_param_types[node.name] = [p.type_annotation for p in node.params]
+    
+    def _register_agent_signature(self, node: AgentDeclNode) -> None:
+        """Register agent signature without analyzing body (for forward references)."""
+        # Register agent in current scope
+        sym = Symbol(name=node.name, kind="agent", type_node=None)
+        existing = self.symbols.define(node.name, sym)
+        if existing is not None:
+            self.errors.error(
+                ErrorCode.DUPLICATE_SYMBOL,
+                f"duplicate declaration of '{node.name}'",
+                node.span,
+            )
+        self._agent_names[node.name] = node
 
     def visit_main_block(self, node: MainBlockNode) -> None:
         self.symbols.enter_scope("main", "block")
@@ -515,6 +563,9 @@ class SemanticAnalyzer(Visitor[None]):
     # ------------------------------------------------------------------
 
     def visit_agent_decl(self, node: AgentDeclNode) -> None:
+        # Check if already registered in pass 1 (forward reference support, v1.6)
+        already_registered = node.name in self._agent_names
+        
         # Check for duplicate param names in agent
         seen_params: set[str] = set()
         for param in node.params:
@@ -535,15 +586,16 @@ class SemanticAnalyzer(Visitor[None]):
                 node.span,
             )
 
-        # Check for duplicate agent names
-        if node.name in self._agent_names:
-            self.errors.error(
-                ErrorCode.DUPLICATE_AGENT_NAME,
-                f"duplicate agent name '{node.name}'",
-                node.span,
-            )
-        else:
-            self._agent_names[node.name] = node
+        # Check for duplicate agent names (skip if already registered in pass 1)
+        if not already_registered:
+            if node.name in self._agent_names:
+                self.errors.error(
+                    ErrorCode.DUPLICATE_AGENT_NAME,
+                    f"duplicate agent name '{node.name}'",
+                    node.span,
+                )
+            else:
+                self._agent_names[node.name] = node
 
         # Validate prompt if present (prompt is optional)
         if node.prompt is not None:
@@ -567,6 +619,9 @@ class SemanticAnalyzer(Visitor[None]):
     # ------------------------------------------------------------------
 
     def visit_function_decl(self, node: FunctionDeclNode) -> None:
+        # Check if already registered in pass 1 (forward reference support, v1.6)
+        already_registered = node.name in self._function_param_types
+        
         # Check for duplicate param names
         seen_params: set[str] = set()
         for param in node.params:
@@ -583,18 +638,19 @@ class SemanticAnalyzer(Visitor[None]):
         if node.return_type is not None:
             node.return_type.accept(self)
 
-        # Register function in current scope
-        sym = Symbol(name=node.name, kind="function", type_node=node.return_type)
-        existing = self.symbols.define(node.name, sym)
-        if existing is not None:
-            self.errors.error(
-                ErrorCode.DUPLICATE_SYMBOL,
-                f"duplicate declaration of '{node.name}'",
-                node.span,
-            )
-
-        # Store parameter types for compile-time call checking
-        self._function_param_types[node.name] = [p.type_annotation for p in node.params]
+        # Register function in current scope (skip if already registered in pass 1)
+        if not already_registered:
+            sym = Symbol(name=node.name, kind="function", type_node=node.return_type)
+            existing = self.symbols.define(node.name, sym)
+            if existing is not None:
+                self.errors.error(
+                    ErrorCode.DUPLICATE_SYMBOL,
+                    f"duplicate declaration of '{node.name}'",
+                    node.span,
+                )
+            
+            # Store parameter types for compile-time call checking
+            self._function_param_types[node.name] = [p.type_annotation for p in node.params]
 
         # Record error count before body analysis to detect body-specific errors
         errors_before_body = len(self.errors.errors)
@@ -660,14 +716,19 @@ class SemanticAnalyzer(Visitor[None]):
             return
 
         # Register the alias as a variable in the current scope
-        # For .helen files, agents/functions are registered separately
+        # For .helen files with alias (v1.6), register as module object
         # For .json/.md/.txt/.yaml files, the data is registered under the alias
-        # If no alias specified, use the filename (without extension) as the alias
+        # If no alias specified for data files, use the filename (without extension) as the alias
         if path.endswith(('.json', '.md', '.txt', '.yaml', '.yml')):
             alias = node.alias if node.alias else os.path.splitext(os.path.basename(path))[0]
             from helen.semantic.symbols import Symbol
             sym = Symbol(alias, kind="import", is_const=False)
             self.symbols.define(alias, sym)
+        elif path.endswith('.helen') and node.alias:
+            # v1.6: Register module alias for .helen files
+            from helen.semantic.symbols import Symbol
+            sym = Symbol(node.alias, kind="module", is_const=False)
+            self.symbols.define(node.alias, sym)
 
         # Track imported paths to avoid duplicate processing for .helen files
         # But still allow multiple aliases for data files
