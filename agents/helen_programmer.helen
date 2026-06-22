@@ -17,7 +17,9 @@ import "contracts/contracts.helen"
 // ── Agent 定义 ────────────────────────────────────────────────
 
 agent HelenProgrammer(project_dir: str, user_input: str) {
-    description """你是 Helen 编程助手，专注于辅助 Helen 语言开发。
+    description "你是 Helen 编程助手，专注于辅助 Helen 语言开发。你具备代码生成、错误诊断、质量改进和技能复用能力。"
+    
+    prompt """你是 Helen 编程助手，专注于辅助 Helen 语言开发。
 
 你的核心能力：
 1. 代码生成：根据需求生成符合 Helen 语法的代码
@@ -36,7 +38,6 @@ agent HelenProgrammer(project_dir: str, user_input: str) {
 用户输入: {{user_input}}
 """
     
-    model "gpt-4"
     temperature 0.2
     max-turns 10
     streaming true
@@ -227,6 +228,6 @@ main {
     let project_dir = "."
     let user_input = "How do I define an agent in Helen?"
     
-    let result = HelenProgrammer(project_dir, user_input)
-    print(result)
+    // 调用 agent，结果由 llm stream 自动输出
+    HelenProgrammer(project_dir, user_input)
 }
