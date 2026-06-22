@@ -214,8 +214,7 @@ def _run_helen_assistant(question: str) -> bool:
 def _run_programming_agent(interp: Interpreter, analyzer: SemanticAnalyzer) -> None:
     """Run an interactive Helen programming agent session.
     
-    Loads helen/agents/programming_agent.helen which has its own
-    interactive loop (interactive_loop function).
+    Loads helen/agents/helen_programmer.helen and enters interactive mode.
     """
     from pathlib import Path
     import helen.cli.repl as repl_module
@@ -236,27 +235,70 @@ def _run_programming_agent(interp: Interpreter, analyzer: SemanticAnalyzer) -> N
     old_cwd = os.getcwd()
     os.chdir(agent_path.parent)
     
+    print("Helen Programming Agent v1.0")
+    print("Type your question or 'exit' to quit")
+    print("")
+    
     try:
-        errors = ErrorReporter()
-        llm_runtime = HttpLLMRuntime()
-        agent_interp = Interpreter(errors=errors, llm_runtime=llm_runtime)
-        
-        scanner = Scanner(source=agent_source, file=str(agent_path))
-        tokens = scanner.scan_all()
-        parser = Parser(tokens, errors=errors)
-        program = parser.parse()
-        
-        if errors.has_errors:
-            msgs = [format_error(err) for err in errors.errors]
-            print(f"Parse error: {msgs[0]}", file=sys.stderr)
-            return
-        
-        # Execute agent (it will enter its own interactive loop)
-        agent_interp.interpret(program)
+        while True:
+            try:
+                user_input = input("agent> ").strip()
+            except EOFError:
+                print()
+                break
+            
+            if not user_input:
+                continue
+            
+            if user_input in ("exit", ":quit"):
+                print("Returning to REPL...")
+                break
+            
+            # Execute agent with user input
+            errors = ErrorReporter()
+            llm_runtime = HttpLLMRuntime()
+            agent_interp = Interpreter(errors=errors, llm_runtime=llm_runtime)
+            
+            # Modify agent source to inject user input
+            modified_source = agent_source.replace(
+                'let project_dir = "."',
+                f'let project_dir = "{old_cwd}"'
+            ).replace(
+                'let user_input = "How do I define an agent in Helen?"',
+                f'let user_input = """{user_input}"""'
+            )
+            
+            try:
+                scanner = Scanner(source=modified_source, file=str(agent_path))
+                tokens = scanner.scan_all()
+                parser = Parser(tokens, errors=errors)
+                program = parser.parse()
+                
+                if errors.has_errors:
+                    msgs = [format_error(err) for err in errors.errors]
+                    print(f"Parse error: {msgs[0]}", file=sys.stderr)
+                    continue
+                
+                result = agent_interp.interpret(program)
+                
+                # Handle StreamingResponse
+                if result is not None and hasattr(result, '__class__'):
+                    class_name = result.__class__.__name__
+                    if class_name == 'StreamingResponse':
+                        # Iterate through the stream and print
+                        for chunk in result:
+                            print(chunk, end='', flush=True)
+                        print()  # Final newline
+                        continue
+                # Not a StreamingResponse, print normally (but skip None)
+                if result is not None:
+                    print(result)
+                    
+            except Exception as e:
+                print(f"Error: {e}", file=sys.stderr)
+                
     except KeyboardInterrupt:
         print("\n(Interrupted)")
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
     finally:
         os.chdir(old_cwd)
 

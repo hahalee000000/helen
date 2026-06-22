@@ -215,12 +215,8 @@ agent HelenProgrammer(project_dir: str, user_input: str) {
         }
         
         // 2. LLM 推理（结合技能上下文）
-        let response = llm act
-        
-        // 3. 输出结果
-        print(response)
-        
-        return response
+        // llm stream 会自动输出到 stdout
+        llm stream
     }
 }
 

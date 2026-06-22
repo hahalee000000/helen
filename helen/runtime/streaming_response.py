@@ -15,6 +15,10 @@ class StreamingResponse:
         response = llm.stream("prompt")
         async for chunk in response:
             print(chunk)
+        
+        # Or synchronous iteration:
+        for chunk in response:
+            print(chunk)
     """
 
     def __init__(self, stream_iterator: Any):
@@ -31,6 +35,20 @@ class StreamingResponse:
 
     async def _async_iter(self) -> AsyncIterator[str]:
         """Async generator that yields chunks."""
+        for chunk in self._iterator:
+            if isinstance(chunk, dict) and 'content' in chunk:
+                yield chunk['content']
+            elif hasattr(chunk, 'content'):
+                yield chunk.content
+            else:
+                yield str(chunk)
+
+    def __iter__(self) -> Any:
+        """Return a synchronous iterator over response chunks."""
+        return self._sync_iter()
+
+    def _sync_iter(self) -> Any:
+        """Synchronous generator that yields chunks."""
         for chunk in self._iterator:
             if isinstance(chunk, dict) and 'content' in chunk:
                 yield chunk['content']
