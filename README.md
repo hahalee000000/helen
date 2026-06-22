@@ -36,6 +36,9 @@ Hello, World!
 | `helen check <file>` | Validate syntax and semantics without executing |
 | `helen repl` | Start the interactive REPL |
 | `helen doc <file>` | Generate documentation |
+| `helen test <file>` | Run test suite |
+| `helen quality <file>` | Run 7-dimension quality assessment |
+| `helen lsp` | Start Language Server for IDE integration |
 
 ## Configuration
 
@@ -79,9 +82,9 @@ helen/
 │   ├── stdlib/        # Built-in functions
 │   ├── cli/           # CLI entry point, REPL, Formatter, DocGen
 │   └── lsp/           # Language Server Protocol
-├── tests/             # 904 unit + integration tests
+├── tests/             # 1850+ unit + integration tests
 ├── docs/              # Documentation & tutorials
-└── extensions/        # VS Code extension
+└── vscode-extension/  # VS Code extension with LSP integration
 ```
 
 ## Architecture
@@ -118,12 +121,12 @@ helen/
 | 0-3 | Lexer → Parser → Analyzer → Interpreter | ✅ Complete |
 | 4 | Type System | ✅ Complete (14 types) |
 | 5 | CLI/REPL | ✅ Complete |
-| 6 | Stdlib | ✅ Complete (24+ builtins) |
-| 7 | LSP/VS Code | ⚠️ Partial (syntax highlight + diagnostics) |
+| 6 | Stdlib | ✅ Complete (185 builtins) |
+| 7 | LSP/VS Code | ✅ Complete (syntax highlight + LSP + diagnostics + completion + go-to-definition) |
 | 8 | Independent Runtime | ✅ Complete (config, tools, function calling) |
 | - | Memory (HLD v1.2.1) | ⚠️ Partial (interface mismatch) |
 
-**Tests:** 904 passed | **flake8:** 0 errors
+**Tests:** 1850+ passed | **flake8:** 0 errors
 
 ## License
 

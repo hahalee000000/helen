@@ -134,6 +134,50 @@ $ helen run hello.helen
 Hello, World!
 ```
 
+## VS Code 集成
+
+Helen 提供完整的 VS Code 支持，包括语法高亮、代码补全和实时错误检查。
+
+### 安装 VS Code 扩展
+
+**方法一：从源码安装（推荐）**
+
+```bash
+cd vscode-extension
+npm install
+npm run compile
+npx vsce package
+# 在 VS Code 中安装生成的 .vsix 文件
+```
+
+**方法二：开发模式**
+
+```bash
+# 复制扩展目录到 VS Code 扩展目录
+cp -r vscode-extension ~/.vscode/extensions/helen-language
+```
+
+### 使用
+
+1. 在 VS Code 中打开 `.helen` 文件
+2. 自动获得语法高亮
+3. Language Server 自动启动，提供：
+   - 🎨 语法高亮
+   - 💡 代码补全（关键字、类型、stdlib 函数）
+   - ⚡ 实时诊断（语法和语义错误）
+   - 🚀 跳转定义（Ctrl+Click 跳转到 agent/fn/let 声明）
+
+### 配置
+
+如果 Helen 不在 PATH 中，在 VS Code 设置中配置：
+
+```json
+{
+  "helen.lsp.path": "/path/to/helen",
+  "helen.lsp.args": ["lsp"]
+}
+```
+
 ## 代码验证
 
 在不执行的情况下检查语法和语义:
