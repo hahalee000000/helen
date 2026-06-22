@@ -152,14 +152,23 @@ class ImportResolver:
         return None
 
     def _is_safe_path(self, resolved: str) -> bool:
-        """Check that resolved path is within base_dir (HLD 3.9.2 path safety).
+        """Check that resolved path is safe to import (HLD 3.9.2 path safety).
 
-        Prevents ../ escape outside the project directory.
-        Uses realpath to resolve symlinks before checking.
+        Allows:
+        - Absolute paths (for REPL and explicit imports)
+        - Paths within base_dir (for relative imports)
+        
+        Prevents:
+        - Relative paths that escape base_dir via ../
         """
         abs_resolved = os.path.realpath(os.path.abspath(resolved))
+        
+        # Allow absolute paths (explicit imports from REPL or scripts)
+        if os.path.isabs(resolved):
+            return True
+        
+        # For relative paths, ensure they stay within base_dir
         abs_base = os.path.realpath(os.path.abspath(self.base_dir))
-
         return abs_resolved.startswith(abs_base + os.sep) or abs_resolved == abs_base
 
     @staticmethod

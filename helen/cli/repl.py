@@ -385,11 +385,16 @@ def repl_command() -> int:
     # Persistent interpreter state across REPL iterations
     errors = ErrorReporter()
     llm_runtime = _create_llm_runtime()
-    interp = Interpreter(errors=errors, llm_runtime=llm_runtime)
+    # Use current working directory as base_dir for imports
+    import os
+    cwd = os.getcwd()
+    from helen.runtime.import_resolver import ImportResolver
+    import_resolver = ImportResolver(base_dir=cwd, error_reporter=errors)
+    interp = Interpreter(errors=errors, llm_runtime=llm_runtime, import_resolver=import_resolver)
     # Enable call stack and execution tracing by default in REPL for better error diagnostics
     interp.observability.call_stack.enabled = True
     interp.observability.tracer.enabled = True
-    analyzer = SemanticAnalyzer(errors, base_dir=".")
+    analyzer = SemanticAnalyzer(errors, base_dir=cwd)
 
     buffer_lines: list[str] = []
     empty_line_count = 0  # Track consecutive empty lines
