@@ -322,7 +322,7 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
                         n = int(part)
                     except ValueError:
                         pass
-        
+
         entries = interp.observability.llm_audit.entries[-n:]
         if not entries:
             print("No LLM calls recorded yet.")

@@ -138,14 +138,34 @@ class SemanticAnalyzer(Visitor[None]):
             self.symbols.define(name, sym)
 
     def analyze(self, program: "ProgramNode") -> None:
-        """Run semantic analysis on a full program."""
+        """Run semantic analysis on a full program.
+        
+        Performs a complete semantic analysis pass including:
+        - Variable declaration and resolution
+        - Type checking (when annotations present)
+        - Control flow validation (break/continue in loops)
+        - Const assignment protection
+        - Branch completeness verification
+        
+        Args:
+            program: The root ProgramNode to analyze.
+            
+        Note:
+            Resets transient state (_in_loop, _in_function) for REPL safety.
+            Errors are collected in self.errors, not raised immediately.
+        """
         # Reset transient state for REPL safety
         self._in_loop = 0
         self._in_function = 0
         program.accept(self)
 
     def reset(self) -> None:
-        """Reset all state for REPL :reset command."""
+        """Reset all state for REPL :reset command.
+        
+        Clears all symbol tables, agent registries, and analysis state
+        while re-registering stdlib builtins. Use this between REPL
+        evaluations to ensure clean state.
+        """
         self.symbols = SymbolTable()
         self._in_loop = 0
         self._in_function = 0
@@ -156,7 +176,19 @@ class SemanticAnalyzer(Visitor[None]):
         self._register_stdlib()
 
     def undefine(self, name: str) -> bool:
-        """Remove a symbol from the global scope. Returns True if it existed."""
+        """Remove a symbol from the global scope. Returns True if it existed.
+        
+        Removes the symbol from:
+        - Global symbol table
+        - Agent registry (if it was an agent)
+        - Function parameter types registry (if it was a function)
+        
+        Args:
+            name: The symbol name to remove.
+            
+        Returns:
+            True if the symbol existed and was removed, False otherwise.
+        """
         removed = self.symbols.global_scope.undefine(name) is not None
         # Also remove from agent registry if it was an agent
         if name in self._agent_names:
@@ -200,15 +232,27 @@ class SemanticAnalyzer(Visitor[None]):
             self.errors.error(code, f"{stmt_type} must have a default branch", span)
 
     def _check_match_completeness(self, node: MatchStmtNode) -> None:
-        """Validate that match has a default branch or wildcard/variable pattern."""
+        """Validate that match has a default branch or wildcard/variable pattern.
+        
+        A match statement must be exhaustive. This is satisfied if:
+        - There is an explicit default branch, OR
+        - At least one case has a wildcard pattern (_), OR
+        - At least one case has a variable pattern (binds any value)
+        
+        Args:
+            node: The MatchStmtNode to validate.
+            
+        Reports:
+            MATCH_NO_DEFAULT error if no exhaustive pattern found.
+        """
         # Check if any case has a wildcard or variable pattern (acts as default)
         has_default_pattern = any(
-            isinstance(case.pattern, (WildcardPatternNode, VariablePatternNode)) 
+            isinstance(case.pattern, (WildcardPatternNode, VariablePatternNode))
             for case in node.cases
         )
         self._check_branch_completeness(
-            bool(node.default) or has_default_pattern, 
-            node.span, 
+            bool(node.default) or has_default_pattern,
+            node.span,
             "match"
         )
 
@@ -232,11 +276,11 @@ class SemanticAnalyzer(Visitor[None]):
                 self._register_function_signature(stmt)
             elif isinstance(stmt, AgentDeclNode):
                 self._register_agent_signature(stmt)
-        
+
         # Pass 2: Full analysis (including function bodies)
         for stmt in node.statements:
             stmt.accept(self)
-    
+
     def _register_function_signature(self, node: FunctionDeclNode) -> None:
         """Register function signature without analyzing body (for forward references)."""
         # Check for duplicate param names
@@ -249,7 +293,7 @@ class SemanticAnalyzer(Visitor[None]):
                     param.span,
                 )
             seen_params.add(param.name)
-        
+
         # Register function in current scope (without analyzing body)
         sym = Symbol(name=node.name, kind="function", type_node=node.return_type)
         existing = self.symbols.define(node.name, sym)
@@ -259,10 +303,10 @@ class SemanticAnalyzer(Visitor[None]):
                 f"duplicate declaration of '{node.name}'",
                 node.span,
             )
-        
+
         # Store parameter types for compile-time call checking
         self._function_param_types[node.name] = [p.type_annotation for p in node.params]
-    
+
     def _register_agent_signature(self, node: AgentDeclNode) -> None:
         """Register agent signature without analyzing body (for forward references)."""
         # Register agent in current scope
@@ -593,7 +637,7 @@ class SemanticAnalyzer(Visitor[None]):
     def visit_agent_decl(self, node: AgentDeclNode) -> None:
         # Check if already registered in pass 1 (forward reference support, v1.6)
         already_registered = node.name in self._agent_names
-        
+
         # Check for duplicate param names in agent
         seen_params: set[str] = set()
         for param in node.params:
@@ -649,7 +693,7 @@ class SemanticAnalyzer(Visitor[None]):
     def visit_function_decl(self, node: FunctionDeclNode) -> None:
         # Check if already registered in pass 1 (forward reference support, v1.6)
         already_registered = node.name in self._function_param_types
-        
+
         # Check for duplicate param names
         seen_params: set[str] = set()
         for param in node.params:
@@ -676,7 +720,7 @@ class SemanticAnalyzer(Visitor[None]):
                     f"duplicate declaration of '{node.name}'",
                     node.span,
                 )
-            
+
             # Store parameter types for compile-time call checking
             self._function_param_types[node.name] = [p.type_annotation for p in node.params]
 
@@ -712,7 +756,7 @@ class SemanticAnalyzer(Visitor[None]):
 
     def visit_lambda(self, node: LambdaNode) -> None:
         """Visit a lambda expression (anonymous function).
-        
+
         Lambda expressions are similar to function declarations but:
         - No name (anonymous)
         - Are expressions (can be assigned to variables or passed as arguments)
@@ -750,7 +794,7 @@ class SemanticAnalyzer(Visitor[None]):
 
     def visit_protocol_decl(self, node: ProtocolDeclNode) -> None:
         """Visit a protocol declaration.
-        
+
         v1.7 feature: protocols define interfaces that structs can implement.
         For now, we just register the protocol name and validate method signatures.
         """
@@ -763,14 +807,14 @@ class SemanticAnalyzer(Visitor[None]):
                 f"duplicate declaration of protocol '{node.name}'",
                 node.span,
             )
-        
+
         # Validate method signatures (no bodies to check)
         for method in node.methods:
             method.accept(self)
 
     def visit_impl_decl(self, node: ImplDeclNode) -> None:
         """Visit a protocol implementation.
-        
+
         v1.7 feature: implements protocol methods for a struct.
         For now, we just validate the method implementations.
         """
@@ -782,7 +826,7 @@ class SemanticAnalyzer(Visitor[None]):
                 f"undefined protocol '{node.protocol_name}'",
                 node.span,
             )
-        
+
         # Check that struct exists
         struct_sym = self.symbols.resolve(node.struct_name)
         if struct_sym is None or struct_sym.kind != "struct":
@@ -791,7 +835,7 @@ class SemanticAnalyzer(Visitor[None]):
                 f"undefined struct '{node.struct_name}'",
                 node.span,
             )
-        
+
         # Validate method implementations
         for method in node.methods:
             method.accept(self)

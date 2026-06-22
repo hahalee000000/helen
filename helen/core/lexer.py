@@ -548,7 +548,7 @@ class Scanner:
 
         lexeme = self._current_lexeme()
         kw_map = keywords()
-        
+
         # v1.8: `_` alone is a wildcard token
         if lexeme == "_":
             tt = TokenType.WILDCARD

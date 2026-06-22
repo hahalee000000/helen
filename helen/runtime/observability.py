@@ -313,13 +313,13 @@ class ErrorSnapshot:
 
     def format_text(self, verbose: bool = False) -> str:
         """Format as human-readable error context.
-        
+
         Args:
             verbose: If True, include execution trace and timestamp.
         """
         from datetime import datetime
         ts = datetime.fromtimestamp(self.timestamp).strftime("%Y-%m-%d %H:%M:%S")
-        
+
         lines = [
             f"Error: {self.error_type}: {self.message}",
             f"Location: {self.location}",

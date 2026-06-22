@@ -697,7 +697,7 @@ class FnBlockNode(StatementNode):
 @dataclass(frozen=True)
 class LambdaNode(ExpressionNode):
     """Lambda expression: fn(params) { body }.
-    
+
     Anonymous function that can be assigned to variables or passed as arguments.
     Supports closures by capturing the defining environment.
     """
@@ -714,7 +714,7 @@ class LambdaNode(ExpressionNode):
 @dataclass(frozen=True)
 class ProtocolDeclNode(StatementNode):
     """Protocol declaration: protocol Name { fn signatures }.
-    
+
     Defines an interface that structs can implement.
     v1.7 feature for interface/protocol support.
     """
@@ -730,7 +730,7 @@ class ProtocolDeclNode(StatementNode):
 @dataclass(frozen=True)
 class ImplDeclNode(StatementNode):
     """Protocol implementation: impl Protocol for Struct { fn implementations }.
-    
+
     Provides concrete implementations of protocol methods for a struct.
     v1.7 feature for interface/protocol support.
     """

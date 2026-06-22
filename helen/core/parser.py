@@ -697,11 +697,11 @@ class Parser:
         """Parse a config declaration: description "..." / model "..." / tools [...] / streaming true etc."""
         start = self._advance()  # consume the config keyword
         token_type = start.type
-        
+
         # Handle context keyword "memory" (v1.6)
         if token_type == TokenType.IDENTIFIER and start.lexeme == "memory":
             token_type = TokenType.MEMORY
-        
+
         # Parse the value
         if self._check(TokenType.STRING, TokenType.TRIPLE_QUOTE_STRING):
             self._advance()
@@ -760,7 +760,7 @@ class Parser:
         streaming_value = False
         if field_name == "streaming" and isinstance(value, LiteralNode):
             streaming_value = bool(value.value)
-        
+
         return DeclarationNode(
             description=value if field_name == "description" else None,
             model=value if field_name == "model" else None,
@@ -856,7 +856,7 @@ class Parser:
 
     def _lambda_expr(self) -> LambdaNode:
         """Parse a lambda expression: fn(params) { body }.
-        
+
         Anonymous function that can be assigned to variables or passed as arguments.
         """
         start = self._previous()  # FN token
@@ -870,12 +870,12 @@ class Parser:
                     break
                 params.append(self._agent_param())
         self._consume(TokenType.RIGHT_PAREN, "Expected ')' after parameters.")
-        
+
         # Optional return type
         ret_type: TypeNode | None = None
         if self._match(TokenType.ARROW) or self._match(TokenType.COLON):
             ret_type = self._parse_type()
-        
+
         # Parse body
         self._consume(TokenType.LEFT_BRACE, "Expected '{' before lambda body.")
         body_stmts: list[StatementNode] = []
@@ -888,26 +888,26 @@ class Parser:
                 break
         end = self._consume(TokenType.RIGHT_BRACE, "Expected '}' after lambda body.")
         fn_body = FnBlockNode(body=body_stmts, span=self._make_span(self._previous(), end))
-        
+
         return LambdaNode(params=params, return_type=ret_type, body=fn_body,
                          span=self._make_span(start, end))
 
     def _protocol_decl(self) -> ProtocolDeclNode:
         """Parse a protocol declaration: protocol Name { fn signatures }.
-        
+
         v1.7 feature for interface/protocol support.
         """
         start = self._previous()  # PROTOCOL token
         name_tok = self._consume(TokenType.IDENTIFIER, "Expected protocol name.")
         self._consume(TokenType.LEFT_BRACE, "Expected '{' after protocol name.")
-        
+
         methods: list[FunctionDeclNode] = []
         while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF):
             # Parse method signature (no body)
             self._consume(TokenType.FN, "Expected 'fn' in protocol.")
             method_name = self._consume(TokenType.IDENTIFIER, "Expected method name.")
             self._consume(TokenType.LEFT_PAREN, "Expected '(' after method name.")
-            
+
             # Parse parameters
             params: list[AgentParamNode] = []
             if not self._check(TokenType.RIGHT_PAREN):
@@ -917,16 +917,16 @@ class Parser:
                         break
                     params.append(self._agent_param())
             self._consume(TokenType.RIGHT_PAREN, "Expected ')' after parameters.")
-            
+
             # Parse return type
             ret_type: TypeNode | None = None
             if self._match(TokenType.ARROW) or self._match(TokenType.COLON):
                 ret_type = self._parse_type()
-            
+
             # Protocol methods have no body - just a signature
             # Create a minimal FnBlockNode with empty body
             empty_body = FnBlockNode(body=[], span=self._make_span(self._previous(), self._previous()))
-            
+
             method = FunctionDeclNode(
                 name=method_name.lexeme,
                 params=params,
@@ -935,7 +935,7 @@ class Parser:
                 span=self._make_span(start, self._previous())
             )
             methods.append(method)
-        
+
         end = self._consume(TokenType.RIGHT_BRACE, "Expected '}' after protocol body.")
         return ProtocolDeclNode(
             name=name_tok.lexeme,
@@ -945,7 +945,7 @@ class Parser:
 
     def _impl_decl(self) -> ImplDeclNode:
         """Parse a protocol implementation: impl Protocol for Struct { fn implementations }.
-        
+
         v1.7 feature for interface/protocol support.
         """
         start = self._previous()  # IMPL token
@@ -953,7 +953,7 @@ class Parser:
         self._consume(TokenType.FOR, "Expected 'for' after protocol name.")
         struct_name = self._consume(TokenType.IDENTIFIER, "Expected struct name.")
         self._consume(TokenType.LEFT_BRACE, "Expected '{' after struct name.")
-        
+
         methods: list[FunctionDeclNode] = []
         while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF):
             # Parse full function implementation
@@ -963,7 +963,7 @@ class Parser:
             else:
                 self._error("Expected 'fn' in impl block.")
                 self._advance()
-        
+
         end = self._consume(TokenType.RIGHT_BRACE, "Expected '}' after impl body.")
         return ImplDeclNode(
             protocol_name=protocol_name.lexeme,
@@ -1145,7 +1145,7 @@ class Parser:
 
     def _case(self) -> CaseNode:
         """Parse a case clause: case pattern { ... } or case start..end { ... } or case pattern if guard { ... }.
-        
+
         v1.8 patterns:
         - case _ { ... }                    wildcard
         - case x { ... }                    variable binding
@@ -1154,7 +1154,7 @@ class Parser:
         - case is Type name { ... }         type pattern with binding
         """
         start = self._advance()  # consume CASE
-        
+
         # v1.8: Check for wildcard pattern
         if self._check(TokenType.WILDCARD):
             wildcard_tok = self._advance()
@@ -1176,7 +1176,7 @@ class Parser:
             )
         else:
             pattern = self._expression()
-            
+
             # v1.8: Check if pattern is a simple variable (variable binding)
             if isinstance(pattern, VariableNode):
                 # Check if it's followed by guard or brace (not a value comparison)
@@ -1185,7 +1185,7 @@ class Parser:
                         name=pattern.name,
                         span=pattern.span
                     )
-            
+
             # Check for range pattern: expr..expr
             if self._match(TokenType.DOTDOT):
                 pattern_start = pattern.span  # Save start span before parsing end
@@ -1197,7 +1197,7 @@ class Parser:
                                                pattern_start.start_col,
                                                end_expr.span.end_line,
                                                end_expr.span.end_col))
-        
+
         # Check for guard condition: if expr
         guard = None
         if self._match(TokenType.IF):

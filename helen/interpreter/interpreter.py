@@ -100,7 +100,7 @@ from helen.semantic.types import (
 
 class Closure:
     """Represents a closure - a lambda function with its captured environment.
-    
+
     A closure captures the lexical environment where it was defined,
     allowing it to access variables from that environment even when
     called from a different scope.
@@ -108,7 +108,7 @@ class Closure:
     def __init__(self, lambda_node: LambdaNode, captured_env: Environment):
         self.lambda_node = lambda_node
         self.captured_env = captured_env
-    
+
     def __repr__(self):
         return f"<closure with {len(self.lambda_node.params)} params>"
 
@@ -146,7 +146,14 @@ class Interpreter(LlmMixin, Visitor[object]):
         self._register_stdlib()
 
     def _register_stdlib(self) -> None:
-        """Inject all stdlib functions into the global environment."""
+        """Inject all stdlib functions into the global environment.
+        
+        Loads the Helen stdlib module and registers all builtin functions
+        (e.g., print, len, type, debug_*) into the global environment.
+        Also connects the observability manager to stdlib debug functions.
+        
+        Called during initialization and after reset_definitions().
+        """
         from helen.stdlib import stdlib  # noqa: PLC0415
         from helen.stdlib import _set_interpreter_observability  # noqa: PLC0415
         # Connect observability manager to stdlib debug functions
@@ -176,7 +183,16 @@ class Interpreter(LlmMixin, Visitor[object]):
         }
 
     def reset_definitions(self) -> None:
-        """Clear all user-defined functions and agents (keep stdlib)."""
+        """Clear all user-defined functions and agents (keep stdlib).
+        
+        Removes all user-defined functions and agents from the interpreter's
+        registries, then re-registers stdlib builtins. Use this to reset
+        the interpreter state between REPL evaluations.
+        
+        Note:
+            Does NOT clear the environment (variables persist).
+            Use Environment.reset() for full environment reset.
+        """
         self._functions.clear()
         self._agents.clear()
         self._current_agent = None
@@ -517,14 +533,14 @@ class Interpreter(LlmMixin, Visitor[object]):
         except KeyError:
             self._runtime_error(node.span, f"Property '{node.property}' not found")
             return None
-    
+
     def _create_module_function_wrapper(self, func_node, module: dict):
         """Create a callable wrapper for a module function (v1.6)."""
         def wrapper(*args, **kwargs):
             # Call the function with the provided arguments
             return self._call_function(func_node, list(args))
         return wrapper
-    
+
     def _create_module_agent_wrapper(self, agent_node, module: dict):
         """Create a callable wrapper for a module agent (v1.6)."""
         def wrapper(*args, **kwargs):
@@ -646,20 +662,20 @@ class Interpreter(LlmMixin, Visitor[object]):
         """Execute a for-await-in loop (async iteration)."""
         import asyncio
         from helen.interpreter.task import Task
-        
+
         iterable = node.iterable.accept(self)
-        
+
         # If iterable is a Task, await it first to get the actual async iterable
         if isinstance(iterable, Task):
             if iterable.is_pending:
                 iterable.execute()
             iterable = iterable.result()
-        
+
         # Check if iterable is an async iterable
         if not hasattr(iterable, '__aiter__'):
             self._runtime_error(node.span, f"Cannot async iterate over {type(iterable).__name__}")
             return None
-        
+
         # Run async iteration using asyncio
         async def _async_iterate():
             result = None
@@ -679,7 +695,7 @@ class Interpreter(LlmMixin, Visitor[object]):
                 finally:
                     self.environment = old_env
             return result
-        
+
         # Run the async iteration
         try:
             return asyncio.run(_async_iterate())
@@ -730,7 +746,7 @@ class Interpreter(LlmMixin, Visitor[object]):
 
     def visit_lambda(self, node: LambdaNode) -> object:
         """Create a closure from a lambda expression.
-        
+
         The closure captures the current environment, allowing the lambda
         to access variables from its defining scope.
         """
@@ -738,7 +754,7 @@ class Interpreter(LlmMixin, Visitor[object]):
 
     def visit_protocol_decl(self, node: ProtocolDeclNode) -> object:
         """Register a protocol declaration (do not execute).
-        
+
         v1.7 feature: protocols define interfaces.
         For now, we just register the protocol name.
         """
@@ -750,23 +766,23 @@ class Interpreter(LlmMixin, Visitor[object]):
 
     def visit_impl_decl(self, node: ImplDeclNode) -> object:
         """Register protocol method implementations for a struct.
-        
+
         v1.7 feature: implements protocol methods.
         For now, we register the methods so they can be called on struct instances.
         """
         # Store impl methods - they will be available as methods on struct instances
         if not hasattr(self, '_impls'):
             self._impls = {}
-        
+
         key = (node.protocol_name, node.struct_name)
         self._impls[key] = node
-        
+
         # Register each method as a function that can be called
         for method in node.methods:
             # Create a method name that includes the struct name for disambiguation
             # This allows calling struct.method() syntax
             self._functions[method.name] = method
-        
+
         return None
 
     def visit_fn_block(self, node: FnBlockNode) -> object:
@@ -816,7 +832,7 @@ class Interpreter(LlmMixin, Visitor[object]):
             pattern_node = case.pattern
             matched = False
             bindings = {}  # Variable bindings for this case
-            
+
             # Handle different pattern types
             if isinstance(pattern_node, WildcardPatternNode):
                 # Wildcard matches anything
@@ -840,7 +856,7 @@ class Interpreter(LlmMixin, Visitor[object]):
                         matched = start <= subject <= end
                 else:
                     matched = self._equal(subject, pattern)
-            
+
             # Check guard condition if present
             if matched and case.guard is not None:
                 # Enter scope with bindings before evaluating guard
@@ -854,7 +870,7 @@ class Interpreter(LlmMixin, Visitor[object]):
                     matched = self._truthy(guard_result)
                 finally:
                     self.environment = old_env
-            
+
             if matched:
                 old_env = self.environment
                 self.environment = self.environment.enter_scope()
@@ -1080,7 +1096,7 @@ class Interpreter(LlmMixin, Visitor[object]):
         - .md/.txt: Load as text, register to import_resolver.data
         - .json/.yaml: Parse as data, register to import_resolver.data
         - Python modules (no extension or .py): Import via Python FFI
-        
+
         v1.6: Module imports support function/agent access via alias
         """
         # Check if this is a Python module import
@@ -1125,7 +1141,7 @@ class Interpreter(LlmMixin, Visitor[object]):
             self.environment.define(alias, result.content)
 
         return None
-    
+
     def _create_module_object(self, result: ImportResult) -> dict:
         """Create a module object containing agents and functions from imported .helen file (v1.6)."""
         module = {
@@ -1135,19 +1151,19 @@ class Interpreter(LlmMixin, Visitor[object]):
             "__functions__": {},
             "__data__": {}
         }
-        
+
         # Collect agents
         for name, agent in self.import_resolver.agents.items():
             module["__agents__"][name] = agent
-        
+
         # Collect functions
         for name, func in self.import_resolver.functions.items():
             module["__functions__"][name] = func
-        
+
         # Collect data (constants, etc.)
         for name, data in self.import_resolver.data.items():
             module["__data__"][name] = data
-        
+
         return module
 
     def _import_python_module(self, node: ImportStmtNode) -> object:
@@ -1376,13 +1392,13 @@ class Interpreter(LlmMixin, Visitor[object]):
 
     def _call_closure(self, closure: Closure, args: list[object]) -> object:
         """Call a closure (lambda expression) with the given arguments.
-        
+
         The key difference from _call_function is that we use the captured
         environment (from where the lambda was defined) as the parent scope,
         not the current caller's environment. This enables closures.
         """
         lambda_node = closure.lambda_node
-        
+
         # Runtime parameter type checking (same as _call_function)
         for i, param in enumerate(lambda_node.params):
             if i < len(args) and param.type_annotation is not None:
@@ -1395,11 +1411,11 @@ class Interpreter(LlmMixin, Visitor[object]):
                             raise HelenRuntimeError(
                                 f"argument {i+1} type '{actual_type.name}' is not compatible with parameter type '{expected_type.name}'"
                             )
-        
+
         # Create a new scope with the CAPTURED environment as parent
         # This is the key to closures - we use closure.captured_env, not self.environment
         call_env = closure.captured_env.enter_scope()
-        
+
         # Bind parameters
         for i, param in enumerate(lambda_node.params):
             if i < len(args):
@@ -1411,7 +1427,7 @@ class Interpreter(LlmMixin, Visitor[object]):
             else:
                 # Too few arguments — use None
                 call_env.define(param.name, None)
-        
+
         # Execute lambda body in the new environment
         old_env = self.environment
         self.environment = call_env
@@ -1436,7 +1452,7 @@ class Interpreter(LlmMixin, Visitor[object]):
         """
         # Check if agent is streaming mode
         is_streaming = self._is_agent_streaming(agent)
-        
+
         # Push call stack frame (AI observability)
         self.observability.call_stack.push(agent.name, agent.span, args)
         self.observability.tracer.trace("call", agent.span, {"agent": agent.name, "args": args})
@@ -1543,25 +1559,25 @@ class Interpreter(LlmMixin, Visitor[object]):
     def _create_streaming_response(self, text: str):
         """Create a StreamingResponse from text for for-await iteration."""
         from helen.runtime.streaming_response import StreamingResponse
-        
+
         # Create a simple async iterator that yields the text in chunks
         async def _text_iterator():
             # Split text into chunks for streaming effect
             chunk_size = 50
             for i in range(0, len(text), chunk_size):
                 yield text[i:i + chunk_size]
-        
+
         return StreamingResponse(_text_iterator())
 
     def _call_llm_streaming(self, prompt: str, agent: AgentDeclNode):
         """Call LLM with streaming and return StreamingResponse."""
         from helen.runtime.streaming_response import StreamingResponse
-        
+
         # Get agent settings
         model = self._get_agent_setting("model")
         temperature = float(self._get_agent_setting("temperature", 1.0))
         system_prompt = self._get_agent_setting("description")
-        
+
         # Get the stream iterator from LLM runtime
         if hasattr(self.llm_runtime, 'act_stream'):
             stream_iterator = self.llm_runtime.act_stream(
