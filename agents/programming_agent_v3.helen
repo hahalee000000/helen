@@ -213,7 +213,7 @@ fn skill_matcher_extract_keywords(context: str) -> list {
     // 错误相关关键词
     let error_keywords = ["division", "zero", "error", "exception", "fail", "crash"]
     for kw in error_keywords {
-        if regex_search(kw, lower_context) != null {
+        if regex_search(lower_context, kw) != null {
             keywords.append(kw)
         }
     }
@@ -221,7 +221,7 @@ fn skill_matcher_extract_keywords(context: str) -> list {
     // 质量相关关键词
     let quality_keywords = ["complexity", "quality", "score", "metric", "security"]
     for kw in quality_keywords {
-        if regex_search(kw, lower_context) != null {
+        if regex_search(lower_context, kw) != null {
             keywords.append(kw)
         }
     }
@@ -229,7 +229,7 @@ fn skill_matcher_extract_keywords(context: str) -> list {
     // 测试相关关键词
     let test_keywords = ["test", "assert", "coverage", "pytest"]
     for kw in test_keywords {
-        if regex_search(kw, lower_context) != null {
+        if regex_search(lower_context, kw) != null {
             keywords.append(kw)
         }
     }
@@ -266,7 +266,7 @@ fn skill_matcher_match(context: str) -> map {
     let index = read_file(INDEX_PATH)
     
     for kw in keywords {
-        if regex_search("(?i)" + kw, index) != null {
+        if regex_search(index, "(?i)" + kw) != null {
             matches.append({"keyword": kw, "found": true})
         }
     }
@@ -424,7 +424,7 @@ fn programming_agent_run_tests(project_dir: str) -> map {
     let failed = 0
     let total = 0
     
-    if regex_search("All tests passed", output) != null {
+    if regex_search(output, "All tests passed") != null {
         passed = 1
         total = 1
     }

@@ -20,7 +20,7 @@ from helen.stdlib.network import (
 # Import string functions
 from helen.stdlib.string import (
     # Regex
-    _regex_match, _regex_search, _regex_replace, _regex_split, _regex_findall,
+    _regex_match, _regex_search, _regex_test, _regex_replace, _regex_split, _regex_findall,
     # Text analysis
     _tokenize, _word_count, _levenshtein, _similarity,
     _remove_punctuation, _normalize_whitespace, _extract_urls, _extract_emails,
@@ -614,12 +614,13 @@ def _register_builtins() -> None:
         BuiltinFunction("url_encode", "URL encode", "url_encode(s)", _url_encode, "network"),
         BuiltinFunction("url_decode", "URL decode", "url_decode(s)", _url_decode, "network"),
 
-        # String regex operations
-        BuiltinFunction("regex_match", "Regex match at start", "regex_match(pattern, s)", _regex_match, "string"),
-        BuiltinFunction("regex_search", "Regex search anywhere", "regex_search(pattern, s)", _regex_search, "string"),
-        BuiltinFunction("regex_replace", "Regex replace", "regex_replace(pattern, s, replacement)", _regex_replace, "string"),
-        BuiltinFunction("regex_split", "Regex split", "regex_split(pattern, s)", _regex_split, "string"),
-        BuiltinFunction("regex_findall", "Regex find all", "regex_findall(pattern, s)", _regex_findall, "string"),
+        # String regex Operations
+        BuiltinFunction("regex_match", "Regex match at start", "regex_match(s, pattern)", _regex_match, "string"),
+        BuiltinFunction("regex_search", "Regex search anywhere", "regex_search(s, pattern)", _regex_search, "string"),
+        BuiltinFunction("regex_test", "Regex test returns bool", "regex_test(s, pattern)", _regex_test, "string"),
+        BuiltinFunction("regex_replace", "Regex replace", "regex_replace(s, pattern, replacement)", _regex_replace, "string"),
+        BuiltinFunction("regex_split", "Regex split", "regex_split(s, pattern)", _regex_split, "string"),
+        BuiltinFunction("regex_findall", "Regex find all", "regex_findall(s, pattern)", _regex_findall, "string"),
 
         # String text analysis
         BuiltinFunction("tokenize", "Tokenize text", "tokenize(text)", _tokenize, "string"),
