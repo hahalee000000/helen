@@ -155,7 +155,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return repl_command()
 
     # Check for known subcommands
-    subcommands = {"check", "repl", "doc", "init", "test", "quality"}
+    subcommands = {"check", "repl", "doc", "init", "test", "quality", "lsp"}
     first = argv[0]
 
     if first in subcommands:
@@ -175,6 +175,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return test_command(argv[1:])
         elif first == "quality":
             return quality_command(argv[1:])
+        elif first == "lsp":
+            return lsp_command()
     elif first in ("-h", "--help", "help"):
         _print_help()
         return 0
@@ -645,6 +647,7 @@ Usage:
   helen quality <file>      Run 7-dimension quality assessment
   helen doc [files]         Generate API documentation
   helen init                Initialize Helen configuration
+  helen lsp                 Start Language Server (LSP) for IDE support
 
 Test Options:
   --json                    Output results as JSON
@@ -662,6 +665,34 @@ Quality Options:
 
 Options:
   -h, --help                 Show this help message""")
+
+
+def lsp_command() -> int:
+    """Start the Helen Language Server.
+
+    The LSP server communicates via JSON-RPC 2.0 over stdin/stdout,
+    following the Language Server Protocol specification.
+
+    Usage with VS Code:
+        Install the Helen VS Code extension, which will automatically
+        start the LSP server when opening .helen files.
+
+    Manual usage:
+        helen lsp  # Starts server on stdin/stdout
+
+    Returns:
+        0 on clean exit, 1 on error.
+    """
+    try:
+        from helen.lsp.server import HelenLanguageServer
+        server = HelenLanguageServer()
+        server.run()
+        return 0
+    except KeyboardInterrupt:
+        return 0
+    except Exception as e:
+        print(f"Error starting LSP server: {e}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
