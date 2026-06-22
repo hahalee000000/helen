@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class SourceSpan:
     """An immutable region within a source file.
 
@@ -29,6 +29,8 @@ class SourceSpan:
         instead of ~200 bytes.
     """
 
+    __slots__ = ('file', 'start_line', 'start_col', 'end_line', 'end_col')
+    
     file: str
     start_line: int
     start_col: int

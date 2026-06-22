@@ -92,16 +92,32 @@ class Location:
 # ── Helen keywords for completion ─────────────────────────────
 
 HELLEN_KEYWORDS = [
+    # Agent keywords
     "agent", "main", "prompt", "description", "model", "temperature",
-    "max-turns", "tools", "skills", "memory", "sub-agents",
-    "let", "const", "if", "else", "for", "in", "while",
-    "break", "continue", "return", "fn",
-    "try", "catch", "finally", "match", "case", "default",
+    "max-turns", "tools", "sub-agents", "streaming",
+    # Variable declarations
+    "let", "const",
+    # Control flow
+    "if", "else", "for", "in", "while",
+    "break", "continue", "return",
+    # Functions
+    "fn", "call",
+    # Error handling
+    "try", "catch", "finally", "throw", "assert",
+    # Pattern matching
+    "match", "case", "branch", "default",
+    # Imports
     "import", "as",
-    "llm", "act", "choose",
+    # LLM keywords
+    "llm", "act", "stream",
+    # Async
     "async", "await",
+    # Protocol/Interface (v1.7)
+    "protocol", "impl", "is",
+    # Agent functions block
+    "functions",
+    # Literals
     "true", "false", "null",
-    "call",
 ]
 
 HELLEN_TYPES = ["string", "int", "float", "bool", "list", "dict", "any", "number"]
