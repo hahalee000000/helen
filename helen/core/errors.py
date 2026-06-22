@@ -71,6 +71,7 @@ class ErrorCode(Enum):
     MISSING_DEFAULT_BRANCH = 349
     SCOPE_VIOLATION = 350
     RUNTIME_ERROR = 351
+    IMPORT_ERROR = 352
 
 
 @dataclass

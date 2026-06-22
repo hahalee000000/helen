@@ -1127,13 +1127,25 @@ class Interpreter(LlmMixin, Visitor[object]):
                 module_obj = self._create_module_object(result)
                 self.environment.define(node.alias, module_obj)
             else:
-                # No alias: register agents/functions directly to global namespace
+                # No alias: register agents/functions/constants directly to global namespace
                 for name, agent in self.import_resolver.agents.items():
                     if name not in self._agents:
                         self._agents[name] = agent
                 for name, func in self.import_resolver.functions.items():
                     if name not in self._functions:
                         self._functions[name] = func
+                # Register constants by evaluating their initializers
+                for name, const_node in self.import_resolver.data.items():
+                    # Check if already defined in environment
+                    try:
+                        self.environment.lookup(name)
+                        # Already defined, skip
+                    except NameError:
+                        # Not defined, evaluate and define it
+                        from helen.core.ast import VarDeclNode
+                        if isinstance(const_node, VarDeclNode) and const_node.initializer is not None:
+                            value = const_node.initializer.accept(self)
+                            self.environment.define(name, value)
         else:
             # Register data by user-specified alias (or filename if no alias)
             alias = node.alias if node.alias else os.path.splitext(os.path.basename(result.path))[0]

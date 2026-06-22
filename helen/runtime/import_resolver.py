@@ -118,7 +118,7 @@ class ImportResolver:
         # Register content based on format
         alias = os.path.splitext(os.path.basename(resolved))[0]
         if fmt == "helen":
-            self._register_helen(content, alias)
+            self._register_helen(content, alias, resolved)
         else:
             self._data[alias] = content
 
@@ -201,23 +201,41 @@ class ImportResolver:
         parser = Parser(tokens)
         return parser.parse()
 
-    def _register_helen(self, program: ProgramNode, alias: str) -> None:
-        """Register agents/functions from a parsed .helen file (HLD 3.9.1).
+    def _register_helen(self, program: ProgramNode, alias: str, file_path: str | None = None) -> None:
+        """Register agents/functions/constants from a parsed .helen file (HLD 3.9.1).
 
-        Per HLD: import only registers Agent/Function definitions to the
+        Per HLD: import only registers Agent/Function/Const definitions to the
         global namespace. It does NOT execute the imported file's main block.
+        
+        P0 FIX: Also recursively process imports in the imported file.
+        
+        Args:
+            program: The parsed ProgramNode from the .helen file
+            alias: The alias for the module (filename without extension)
+            file_path: The absolute path of the .helen file (for resolving nested imports)
         """
+        from helen.core.ast import (  # noqa: PLC0415
+            AgentDeclNode,
+            FunctionDeclNode,
+            VarDeclNode,
+            ImportStmtNode,
+        )
+        
         for stmt in program.statements:
-            # Import AST classes dynamically to avoid circular imports
-            from helen.core.ast import (  # noqa: PLC0415
-                AgentDeclNode,
-                FunctionDeclNode,
-            )
-
             if isinstance(stmt, AgentDeclNode):
                 self._agents[stmt.name] = stmt
             elif isinstance(stmt, FunctionDeclNode):
                 self._functions[stmt.name] = stmt
+            elif isinstance(stmt, VarDeclNode) and not stmt.mutable:
+                # Register const declarations
+                # Store the VarDeclNode so we can evaluate it later
+                self._data[stmt.name] = stmt
+            elif isinstance(stmt, ImportStmtNode):
+                # Recursively process imports in the imported file
+                # Resolve the import path relative to the current file's directory
+                import_path = stmt.module_path
+                # Pass the current file's path so nested imports can be resolved correctly
+                self.resolve(import_path, file_path)
 
     @property
     def agents(self) -> dict[str, Any]:

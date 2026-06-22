@@ -863,8 +863,21 @@ class SemanticAnalyzer(Visitor[None]):
             self.symbols.define(alias, sym)
             return
 
-        # Resolve relative to base_dir for Helen/data files
-        target = os.path.join(self.base_dir, path)
+        # P0 FIX: Resolve relative paths based on the importing file's directory
+        # If path is absolute, use it directly
+        # If path is relative, resolve it relative to the importing file's directory
+        if os.path.isabs(path):
+            target = path
+        else:
+            # Get the directory of the file doing the import
+            importing_file = node.span.file if hasattr(node.span, 'file') and node.span.file else None
+            if importing_file and importing_file != '<unknown>':
+                importing_dir = os.path.dirname(os.path.abspath(importing_file))
+                target = os.path.join(importing_dir, path)
+            else:
+                # Fallback to base_dir if no file info
+                target = os.path.join(self.base_dir, path)
+        
         if not os.path.exists(target):
             self.errors.error(
                 ErrorCode.IMPORT_NOT_FOUND,
@@ -882,18 +895,77 @@ class SemanticAnalyzer(Visitor[None]):
             from helen.semantic.symbols import Symbol
             sym = Symbol(alias, kind="import", is_const=False)
             self.symbols.define(alias, sym)
-        elif path.endswith('.helen') and node.alias:
-            # v1.6: Register module alias for .helen files
-            from helen.semantic.symbols import Symbol
-            sym = Symbol(node.alias, kind="module", is_const=False)
-            self.symbols.define(node.alias, sym)
-
-        # Track imported paths to avoid duplicate processing for .helen files
-        # But still allow multiple aliases for data files
-        if path.endswith('.helen'):
-            if path in self._imported_paths:
+        elif path.endswith('.helen'):
+            # P0 FIX: Parse imported .helen file and register its functions/agents
+            # Use absolute path for tracking to avoid duplicate imports
+            abs_target = os.path.abspath(target)
+            if abs_target in self._imported_paths:
+                # Already imported, but still register alias if provided
+                if node.alias:
+                    from helen.semantic.symbols import Symbol
+                    sym = Symbol(node.alias, kind="module", is_const=False)
+                    self.symbols.define(node.alias, sym)
                 return
-            self._imported_paths.add(path)
+            
+            self._imported_paths.add(abs_target)
+            
+            # Parse the imported file
+            try:
+                from helen.core.lexer import Scanner
+                from helen.core.parser import Parser
+                from helen.core.errors import ErrorReporter
+                
+                with open(target, 'r', encoding='utf-8') as f:
+                    source = f.read()
+                
+                # Create a separate error reporter for the imported file
+                import_errors = ErrorReporter()
+                scanner = Scanner(source, file=target)
+                tokens = scanner.scan_all()
+                parser = Parser(tokens, import_errors)
+                imported_program = parser.parse()
+                
+                # Register all functions from imported file
+                # Also recursively process imports in the imported file
+                for stmt in imported_program.statements:
+                    if isinstance(stmt, FunctionDeclNode):
+                        # Register function in current symbol table
+                        from helen.semantic.symbols import Symbol
+                        sym = Symbol(stmt.name, kind="function", is_const=True)
+                        self.symbols.define(stmt.name, sym)
+                        
+                        # Store parameter types for compile-time checking
+                        self._function_param_types[stmt.name] = [p.type_annotation for p in stmt.params]
+                    
+                    elif isinstance(stmt, AgentDeclNode):
+                        # Register agent in current symbol table
+                        from helen.semantic.symbols import Symbol
+                        sym = Symbol(stmt.name, kind="agent", is_const=True)
+                        self.symbols.define(stmt.name, sym)
+                        self._agent_names[stmt.name] = stmt
+                    
+                    elif isinstance(stmt, VarDeclNode) and stmt.mutable == False:
+                        # Register const declarations
+                        from helen.semantic.symbols import Symbol
+                        sym = Symbol(stmt.name, kind="const", is_const=True)
+                        self.symbols.define(stmt.name, sym)
+                    
+                    elif isinstance(stmt, ImportStmtNode):
+                        # Recursively process imports in the imported file
+                        stmt.accept(self)
+                
+                # If alias is provided, register it as a module reference
+                if node.alias:
+                    from helen.semantic.symbols import Symbol
+                    sym = Symbol(node.alias, kind="module", is_const=False)
+                    self.symbols.define(node.alias, sym)
+                    
+            except Exception as e:
+                self.errors.error(
+                    ErrorCode.IMPORT_ERROR,
+                    f"failed to parse imported file '{path}': {str(e)}",
+                    node.span,
+                )
 
     # ------------------------------------------------------------------
     # Async call
