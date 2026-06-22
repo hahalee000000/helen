@@ -113,6 +113,9 @@ class ParseFn:
 class Parser:
     """Helen Pratt precedence parser + recursive descent."""
 
+    # Class-level cache for Pratt rules to avoid re-registration
+    _PRATT_RULES_CACHE: dict[TokenType, ParseFn] | None = None
+
     def __init__(self, tokens: list[Token], errors: ErrorReporter | None = None):
         """Initialize the Parser.
         Args:
@@ -145,7 +148,11 @@ class Parser:
         return ProgramNode(statements=statements, span=span)
 
     def _register_pratt_rules(self) -> None:
-        """Register Pratt parsing rules."""
+        """Register Pratt parsing rules.
+        
+        Note: Cannot cache rules at class level because they contain bound methods
+        (self._literal_number, etc.) that are specific to each Parser instance.
+        """
         # Initialize all token types with empty rules
         for tt in TokenType:
             self._rules[tt] = ParseFn()

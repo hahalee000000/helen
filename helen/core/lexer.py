@@ -24,10 +24,11 @@ from .source import SourceSpan
 from .tokens import Token, TokenType, keywords
 
 # ── Character-class constants ──────────────────────────────────────────────
-_DIGITS: Final[str] = "0123456789"
-_ALPHA: Final[str] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
-_ALNUM: Final[str] = _ALPHA + _DIGITS
-_WHITESPACE: Final[str] = " \t\r"
+# Use frozenset for O(1) lookup instead of O(n) string search
+_DIGITS: Final[frozenset] = frozenset("0123456789")
+_ALPHA: Final[frozenset] = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_")
+_ALNUM: Final[frozenset] = _ALPHA | _DIGITS
+_WHITESPACE: Final[frozenset] = frozenset(" \t\r")
 
 # ── Single-character dispatch table ────────────────────────────────────────
 _SINGLE_CHAR_TOKENS: Final[dict[str, TokenType]] = {
