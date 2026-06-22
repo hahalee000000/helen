@@ -211,6 +211,91 @@ def _run_helen_assistant(question: str) -> bool:
         return False
 
 
+def _run_programming_agent(interp: Interpreter, analyzer: SemanticAnalyzer) -> None:
+    """Run an interactive Helen programming agent session.
+    
+    This is a persistent agent that helps users write Helen code,
+    debug programs, and understand the language.
+    """
+    from pathlib import Path
+    import helen.cli.repl as repl_module
+    
+    module_dir = Path(repl_module.__file__).parent.parent
+    agent_path = module_dir / "agent" / "helen_programming_agent.helen"
+    docs_path = module_dir.parent / "docs" / "tutorial.md"
+    source_dir = module_dir
+    
+    if not agent_path.exists():
+        print(f"Error: Programming agent not found at {agent_path}", file=sys.stderr)
+        return
+    
+    # Load agent source
+    agent_source = agent_path.read_text(encoding="utf-8")
+    
+    # Conversation history
+    conversation = []
+    
+    while True:
+        try:
+            # Get user input
+            user_input = input("agent> ").strip()
+            
+            if not user_input:
+                continue
+            
+            if user_input in ("exit", ":quit"):
+                print("Returning to REPL...")
+                break
+            
+            # Add to conversation history
+            conversation.append(f"User: {user_input}")
+            
+            # Build context with conversation history
+            context = "\n".join(conversation)
+            
+            # Execute agent with current context
+            errors = ErrorReporter()
+            llm_runtime = HttpLLMRuntime()
+            agent_interp = Interpreter(errors=errors, llm_runtime=llm_runtime)
+            
+            # Modify agent source to inject context
+            modified_source = agent_source.replace(
+                'let docs_path = "docs/tutorial.md"',
+                f'let docs_path = "{docs_path}"'
+            ).replace(
+                'let source_dir = "helen/"',
+                f'let source_dir = "{source_dir}/"'
+            ).replace(
+                'let conversation = ""',
+                f'let conversation = """{context}"""'
+            )
+            
+            scanner = Scanner(source=modified_source, file=str(agent_path))
+            tokens = scanner.scan_all()
+            parser = Parser(tokens, errors=errors)
+            program = parser.parse()
+            
+            if errors.has_errors:
+                msgs = [format_error(err) for err in errors.errors]
+                print(f"Parse error: {msgs[0]}", file=sys.stderr)
+                continue
+            
+            try:
+                agent_interp.interpret(program)
+                # Capture agent response from stdout (would need to redirect)
+                # For now, output is streamed directly
+                print()
+            except Exception as e:
+                print(f"Error: {e}", file=sys.stderr)
+                
+        except KeyboardInterrupt:
+            print("\n(Interrupted)")
+            continue
+        except EOFError:
+            print()
+            break
+
+
 def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnalyzer) -> bool:
     """Handle REPL colon-commands. Returns True if the line was a command."""
     stripped = line.strip()
@@ -227,7 +312,8 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
         print("  :reset            Clear all definitions (functions, agents)")
         print("  :list             List all defined functions and agents")
         print("  :undefine <name>  Remove a function or agent definition")
-        print("  :ask <question>   Ask the Helen language assistant")
+        print("  :ask <question>   Ask the Helen language assistant (single question)")
+        print("  :agent            Start interactive Helen programming agent")
         print("  :trace on|off     Enable/disable execution tracing")
         print("  :trace show [n]   Show last n trace entries (default 50)")
         print("  :last_error [-v]  Show structured context of last error (-v for trace)")
@@ -275,6 +361,12 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
         _run_helen_assistant(arg)
         # Output is streamed directly to stdout by llm stream
         print()  # Final newline after streaming completes
+        return True
+
+    if cmd == ":agent":
+        print("\n🤖 Starting Helen Programming Agent...")
+        print("   Type 'exit' or ':quit' to return to REPL\n")
+        _run_programming_agent(interp, analyzer)
         return True
 
     if cmd == ":trace":
