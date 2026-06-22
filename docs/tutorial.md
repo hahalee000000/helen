@@ -138,17 +138,21 @@ Hello, World!
 
 Helen 提供完整的 VS Code 支持，包括语法高亮、代码补全和实时错误检查。
 
-### 安装 VS Code 扩展
+### 第一步：安装扩展
 
-**方法一：从源码安装（推荐）**
+**方法一：从 VSIX 安装（推荐）**
 
 ```bash
-cd vscode-extension
+cd ~/helen/vscode-extension
 npm install
 npm run compile
 npx vsce package
-# 在 VS Code 中安装生成的 .vsix 文件
 ```
+
+然后在 VS Code 中：
+1. 按 `Ctrl+Shift+P` 打开命令面板
+2. 输入 `Extensions: Install from VSIX...`
+3. 选择生成的 `helen-language-1.8.0.vsix` 文件
 
 **方法二：开发模式**
 
@@ -157,26 +161,84 @@ npx vsce package
 cp -r vscode-extension ~/.vscode/extensions/helen-language
 ```
 
-### 使用
+### 第二步：确保 Helen 已安装
 
-1. 在 VS Code 中打开 `.helen` 文件
-2. 自动获得语法高亮
-3. Language Server 自动启动，提供：
-   - 🎨 语法高亮
-   - 💡 代码补全（关键字、类型、stdlib 函数）
-   - ⚡ 实时诊断（语法和语义错误）
-   - 🚀 跳转定义（Ctrl+Click 跳转到 agent/fn/let 声明）
+```bash
+# 确认 helen 命令可用
+which helen
+helen help
+```
 
-### 配置
+### 第三步：开始使用
 
-如果 Helen 不在 PATH 中，在 VS Code 设置中配置：
+1. **打开 .helen 文件** — 自动获得语法高亮
+2. **LSP 自动启动** — 提供实时错误检查、代码补全、跳转定义
+
+### 功能一览
+
+| 功能 | 操作 |
+|------|------|
+| 语法高亮 | 自动 |
+| 实时诊断 | 自动（红/黄波浪线） |
+| 代码补全 | 输入时自动弹出，或按 `Ctrl+Space` |
+| 跳转定义 | `Ctrl+Click` 或 `F12` |
+| 重启 LSP | `Ctrl+Shift+P` → `Helen: Restart Language Server` |
+
+### 快速测试
+
+创建 `test.helen`：
+
+```helen
+fn greet(name: string) -> string {
+    return "Hello, " + name + "!"
+}
+
+main {
+    let msg = greet("Helen")
+    print(msg)
+}
+```
+
+打开后应该看到：
+- ✅ 关键字高亮（`fn`, `let`, `main`, `return`）
+- ✅ 类型高亮（`string`）
+- ✅ 函数名高亮（`greet`, `print`）
+- ✅ 输入 `pri` 时弹出补全（`print`）
+- ✅ `Ctrl+Click` 函数名跳转到定义
+
+### 配置选项
+
+在 VS Code 设置（`Ctrl+,`）中搜索 `helen`：
+
+| 设置 | 说明 | 默认值 |
+|------|------|--------|
+| `helen.lsp.path` | LSP 服务器路径 | `"helen"` |
+| `helen.lsp.args` | LSP 参数 | `["lsp"]` |
+| `helen.lsp.enabled` | 启用/禁用 LSP | `true` |
+
+如果 helen 不在 PATH 中，配置自定义路径：
 
 ```json
 {
-  "helen.lsp.path": "/path/to/helen",
-  "helen.lsp.args": ["lsp"]
+  "helen.lsp.path": "/home/user/.local/bin/helen"
 }
 ```
+
+### 故障排除
+
+**LSP 没启动？**
+
+1. 检查 VS Code 输出面板：`View` → `Output` → 选择 `Helen Language Server`
+2. 确认 helen 命令可用：`which helen`
+3. 如果路径不对，修改 `helen.lsp.path` 设置
+4. 重启 LSP：`Ctrl+Shift+P` → `Helen: Restart Language Server`
+
+**语法高亮不工作？**
+
+1. 确保文件扩展名为 `.helen`
+2. 检查右下角语言模式，手动设置为 "Helen"
+
+详见 [VS Code 扩展文档](../toolchain/vscode.md)。
 
 ## 代码验证
 
