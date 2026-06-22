@@ -1,31 +1,25 @@
 # Helen Programming Agent — User Profile
 
-> User preferences and working style.
+## 编码风格
 
-## Communication
+- 偏好函数式编程风格
+- 使用 snake_case 命名
+- 质量阈值：7 维评分 ≥ 7.5
 
-- Prefers Chinese for narrative/explanations
-- English for code, paths, and technical terms
-- Wants comprehensive test coverage
-- Expects git commit AND push for all changes
+## 工作流
 
-## Development Style
+- Git：commit + push 一步完成
+- 测试：分批运行以避免 OOM
+- 文档：中文叙述，英文代码/路径
 
-- Plan-first, then refine, then execute
-- Contract-first + TDD for language development
-- Systematic quality improvement cycles
-- Prefers grounded answers over hallucinations
+## 偏好
 
-## Quality Standards
+- 优先使用 asyncio（内存受限环境）
+- 文档必须可运行
+- 自托管：核心用 Helen，Python 作为 shell
 
-- 7-dimension quality assessment framework
-- Actionable P0/P1/P2 priorities with file locations
-- Verification after fixes (tests pass, flake8=0, coverage improved)
-- Followed by commit + push
+## 环境
 
-## Technical Constraints
-
-- Memory-constrained environment (1.8GB RAM)
-- Tests must run in batches to avoid OOM
-- Prefers asyncio with zero threads
-- Helen repo uses master branch (not main)
+- 系统：Linux (1.8GB RAM)
+- Python: 3.11.15
+- Helen 仓库: ~/helen/ (master 分支)

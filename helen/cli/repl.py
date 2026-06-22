@@ -221,9 +221,9 @@ def _run_programming_agent(interp: Interpreter, analyzer: SemanticAnalyzer) -> N
     import helen.cli.repl as repl_module
     import os
     
-    # Use helen/agents/programming_agent.helen (the main programming agent)
+    # Use helen/agents/helen_programmer.helen (the main programming agent)
     module_dir = Path(repl_module.__file__).parent.parent
-    agent_path = module_dir.parent / "agents" / "programming_agent.helen"
+    agent_path = module_dir.parent / "agents" / "helen_programmer.helen"
     
     if not agent_path.exists():
         print(f"Error: Programming agent not found at {agent_path}", file=sys.stderr)

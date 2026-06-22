@@ -1,34 +1,31 @@
 # Helen Programming Agent — Memory
 
-> Agent-level persistent memory. Tracks learnings, preferences, and environment info.
+## 学习笔记
 
-## Learnings
+- Helen 语言支持 agent 块，包含 description、model、temperature、tools、prompt、functions、main 等属性
+- agent 的 prompt 支持 {{variable}} 语法进行变量替换
+- Helen 不支持闭包，需要用命名函数替代
+- Helen 使用 || 和 && 而不是 or 和 and
+- Helen 的字符串切片使用 substring() 方法而不是 [start:end] 语法
 
-- Division by zero is the most common runtime error
-- Users prefer snake_case naming convention
-- Quality threshold is typically 7.5
-- Helen does not support closures (dynamic scoping, not lexical)
-- Anonymous functions as arguments are not supported in Helen
+## 用户偏好
 
-## User Preferences
+- 编码风格：函数式优先
+- 测试框架：test_suite/test_case API
+- 质量要求：7 维评分 ≥ 7.5
+- Git 工作流：commit + push 一步完成
 
-- Coding style: functional-first
-- Test framework: test_suite/test_case API
-- Quality requirement: 7-dimension score ≥ 7.5
-- Git workflow: commit + push in one step
-- Language: Chinese narrative, English code/paths
+## 环境信息
 
-## Environment
-
-- System: Linux (1.8GB RAM + 8GB swap)
+- 系统：Linux (1.8GB RAM)
 - Python: 3.11.15
-- Helen repo: ~/helen/ (master branch)
-- Tests run in batches to avoid OOM
-- Memory-constrained: prefer asyncio with zero threads
+- Helen 仓库: ~/helen/ (master 分支)
+- 测试分批运行以避免 OOM
 
-## Known Patterns
+## Helen 语言限制（待改进）
 
-- Division by zero → add `assert divisor != 0`
-- Empty list access → check `len > 0`
-- High complexity → extract sub-functions
-- Low security score → add input validation
+1. 不支持闭包（closures）
+2. 不支持匿名函数
+3. 字符串切片语法不够直观（使用 substring() 而不是 [start:end]）
+4. 逻辑运算符使用 || 和 && 而不是 or 和 and（虽然更明确，但与 Python 不一致）
+5. 缺少泛型支持（v1.8 已取消）
