@@ -216,6 +216,10 @@ class Visitor(ABC, Generic[R]):
         """Visit a MatchStmtNode."""
 
     @abstractmethod
+    def visit_match_expr(self, node: MatchExprNode) -> R:
+        """Visit a MatchExprNode."""
+
+    @abstractmethod
     def visit_optional_type(self, node: OptionalTypeNode) -> R:
         """Visit an OptionalTypeNode."""
 
@@ -988,6 +992,29 @@ class MatchStmtNode(StatementNode):
     def accept(self, visitor: Visitor[R]) -> R:
         """Dispatch to the visitor."""
         return visitor.visit_match_stmt(self)
+
+
+@dataclass(frozen=True)
+class MatchExprNode(ExpressionNode):
+    """Match expression — returns the value of the matched branch.
+
+    Syntax:
+        match expr {
+            case pattern { expr }
+            case pattern if guard { expr }
+            default { expr }
+        }
+
+    Each case body is a single expression whose value becomes the match result.
+    """
+    subject: ExpressionNode
+    cases: list[CaseNode]
+    default_body: ExpressionNode | None  # Single expression for default branch
+    span: SourceSpan
+
+    def accept(self, visitor: Visitor[R]) -> R:
+        """Dispatch to the visitor."""
+        return visitor.visit_match_expr(self)
 
 
 # ---------------------------------------------------------------------------

@@ -41,6 +41,7 @@ from .ast import (
     MapEntryNode,
     MapLiteralNode,
     MatchStmtNode,
+    MatchExprNode,
     OptionalTypeNode,
     PipeExprNode,
     ProgramNode,
@@ -181,6 +182,9 @@ class Parser:
 
         # lambda as expression: fn(params) { body }
         self._rules[TokenType.FN].prefix = self._lambda_expr
+
+        # match as expression: match expr { case ... { value } ... }
+        self._rules[TokenType.MATCH].prefix = self._match_expr
 
         # Precedence for prefix operators
         self._rules[TokenType.BANG].precedence = Precedence.UNARY
@@ -1148,6 +1152,89 @@ class Parser:
         self._consume(TokenType.RIGHT_BRACE, "Expected '}' after match body.")
         end = self._previous()
         return MatchStmtNode(subject=subject, cases=cases, default=default,
+                             span=self._make_span(start, end))
+
+    def _match_expr(self) -> MatchExprNode:
+        """Parse a match expression: match expr { case pattern { expr } ... default { expr } }.
+
+        Unlike match statement, each case body is a single expression whose
+        value becomes the result of the match expression.
+
+        Syntax:
+            let result = match value {
+                case 1 { "one" }
+                case 2..5 { "few" }
+                case x if x > 10 { "many" }
+                default { "unknown" }
+            }
+        """
+        start = self._previous()  # MATCH token
+        subject = self._expression()
+        self._consume(TokenType.LEFT_BRACE, "Expected '{' after match subject.")
+        cases: list[CaseNode] = []
+        default_body: ExpressionNode | None = None
+        while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF):
+            if self._check(TokenType.CASE):
+                case_start = self._advance()  # consume CASE
+
+                # Parse pattern (reuse same logic as _case)
+                if self._check(TokenType.WILDCARD):
+                    wildcard_tok = self._advance()
+                    pattern = WildcardPatternNode(span=self._make_span(wildcard_tok, wildcard_tok))
+                elif self._check(TokenType.IS):
+                    is_tok = self._advance()
+                    type_tok = self._consume(TokenType.IDENTIFIER, "Expected type name after 'is'.")
+                    binding_name = None
+                    if self._check(TokenType.IDENTIFIER):
+                        binding_tok = self._advance()
+                        binding_name = binding_tok.lexeme
+                    pattern = TypePatternNode(
+                        type_name=type_tok.lexeme,
+                        binding_name=binding_name,
+                        span=self._make_span(is_tok, self._previous())
+                    )
+                else:
+                    pattern = self._expression()
+                    if isinstance(pattern, VariableNode):
+                        if self._check(TokenType.IF) or self._check(TokenType.LEFT_BRACE):
+                            pattern = VariablePatternNode(name=pattern.name, span=pattern.span)
+                    if self._match(TokenType.DOTDOT):
+                        pattern_start = pattern.span
+                        end_expr = self._expression()
+                        pattern = RangePatternNode(
+                            start=pattern, end=end_expr,
+                            span=SourceSpan(
+                                pattern_start.file,
+                                pattern_start.start_line, pattern_start.start_col,
+                                end_expr.span.end_line, end_expr.span.end_col))
+
+                guard = None
+                if self._match(TokenType.IF):
+                    guard = self._expression()
+
+                self._consume(TokenType.LEFT_BRACE, "Expected '{' after case pattern.")
+                # Expression body: parse a single expression
+                body_expr = self._expression()
+                self._consume(TokenType.RIGHT_BRACE, "Expected '}' after case expression.")
+
+                # Wrap expression in ExprStmtNode for CaseNode compatibility
+                from .ast import ExprStmtNode
+                body_stmt = ExprStmtNode(expression=body_expr, span=body_expr.span)
+                cases.append(CaseNode(
+                    pattern=pattern, body=[body_stmt], guard=guard,
+                    span=self._make_span(case_start, self._previous())))
+
+            elif self._check(TokenType.DEFAULT):
+                self._advance()
+                self._consume(TokenType.LEFT_BRACE, "Expected '{' after default.")
+                default_body = self._expression()
+                self._consume(TokenType.RIGHT_BRACE, "Expected '}' after default expression.")
+            else:
+                self._error(f"Expected 'case' or 'default', got {self._current().type.name}")
+                self._synchronize()
+        self._consume(TokenType.RIGHT_BRACE, "Expected '}' after match body.")
+        end = self._previous()
+        return MatchExprNode(subject=subject, cases=cases, default_body=default_body,
                              span=self._make_span(start, end))
 
     def _case(self) -> CaseNode:

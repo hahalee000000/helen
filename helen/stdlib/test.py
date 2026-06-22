@@ -794,8 +794,8 @@ def _run_tests(
     only: str = "",
     suite: str = "",
     filter_pattern: str = "",
-) -> str:
-    """Execute all registered tests and return a formatted report.
+) -> dict:
+    """Execute all registered tests and return a result map.
 
     Args:
         only: Run only the test with this exact name (empty = all)
@@ -803,14 +803,21 @@ def _run_tests(
         filter_pattern: Run only tests matching this pattern (empty = all)
 
     Returns:
-        Formatted test report string
+        dict with keys: total, passed, failed, skipped, duration_ms, report (str)
     """
     report = _registry.run_all(
         only=only or None,
         suite=suite or None,
         filter_pattern=filter_pattern or None,
     )
-    return _format_report(report)
+    return {
+        "total": report.total,
+        "passed": report.passed,
+        "failed": report.failed,
+        "skipped": report.skipped,
+        "duration_ms": report.duration_ms,
+        "report": _format_report(report),
+    }
 
 
 def _run_tests_json(

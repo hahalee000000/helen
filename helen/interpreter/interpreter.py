@@ -9,7 +9,6 @@ expression evaluation.
 from __future__ import annotations
 
 import os
-
 from helen.core.ast import (
     AccessNode,
     AgentDeclNode,
@@ -27,6 +26,7 @@ from helen.core.ast import (
     ContinueStmtNode,
     DeclarationNode,
     ExprStmtNode,
+    ExpressionNode,
     FinallyBlockNode,
     FnBlockNode,
     ForStmtNode,
@@ -44,6 +44,7 @@ from helen.core.ast import (
     MapEntryNode,
     MapLiteralNode,
     MatchStmtNode,
+    MatchExprNode,
     OptionalTypeNode,
     PipeExprNode,
     ProgramNode,
@@ -889,6 +890,66 @@ class Interpreter(LlmMixin, Visitor[object]):
                 return self._execute_stmts(node.default)
             finally:
                 self.environment = old_env
+        return None
+
+    def visit_match_expr(self, node: MatchExprNode) -> object:
+        """Evaluate a match expression — returns the value of the matched branch.
+
+        Each case body is a single expression (wrapped in ExprStmtNode).
+        The result of that expression becomes the match result.
+        """
+        subject = node.subject.accept(self)
+        for case in node.cases:
+            pattern_node = case.pattern
+            matched = False
+            bindings = {}
+
+            if isinstance(pattern_node, WildcardPatternNode):
+                matched = True
+            elif isinstance(pattern_node, VariablePatternNode):
+                matched = True
+                bindings[pattern_node.name] = subject
+            elif isinstance(pattern_node, TypePatternNode):
+                matched = self._check_type(subject, pattern_node.type_name)
+                if matched and pattern_node.binding_name:
+                    bindings[pattern_node.binding_name] = subject
+            else:
+                pattern = pattern_node.accept(self)
+                if isinstance(pattern, tuple) and len(pattern) == 3 and pattern[0] == "__range__":
+                    _, start, end = pattern
+                    if isinstance(subject, (int, float)) and isinstance(start, (int, float)) and isinstance(end, (int, float)):
+                        matched = start <= subject <= end
+                else:
+                    matched = self._equal(subject, pattern)
+
+            if matched and case.guard is not None:
+                old_env = self.environment
+                self.environment = self.environment.enter_scope()
+                try:
+                    for name, value in bindings.items():
+                        self.environment.define(name, value, is_const=False)
+                    guard_result = case.guard.accept(self)
+                    matched = self._truthy(guard_result)
+                finally:
+                    self.environment = old_env
+
+            if matched:
+                old_env = self.environment
+                self.environment = self.environment.enter_scope()
+                try:
+                    for name, value in bindings.items():
+                        self.environment.define(name, value, is_const=False)
+                    # Body is a single ExprStmtNode — evaluate its expression
+                    body_stmt = case.body[0]
+                    if isinstance(body_stmt, ExprStmtNode):
+                        return body_stmt.expression.accept(self)
+                    return self._execute_stmts(case.body)
+                finally:
+                    self.environment = old_env
+
+        # Default branch
+        if node.default_body is not None:
+            return node.default_body.accept(self)
         return None
 
     def _check_type(self, value: object, type_name: str) -> bool:

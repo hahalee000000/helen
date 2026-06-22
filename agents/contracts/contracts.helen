@@ -277,19 +277,21 @@ fn match_skills(context) -> map {
 /**
  * determine_category — Map error code to skill category
  *
- * Uses match with range patterns.
+ * Uses match expression with range patterns.
  *
- * @return str — category name
+ * @return map { category, code }
  */
 fn determine_category(error) -> map {
     let code = 0
     if error["code"] != null { code = error["code"] }
 
-    let category = "general"
-    if code >= 1 && code <= 100 { category = "error-patterns" }
-    if code >= 101 && code <= 200 { category = "code-quality" }
-    if code >= 201 && code <= 300 { category = "testing" }
-    if code >= 301 && code <= 400 { category = "architecture" }
+    let category = match code {
+        case 1..100 { "error-patterns" }
+        case 101..200 { "code-quality" }
+        case 201..300 { "testing" }
+        case 301..400 { "architecture" }
+        default { "general" }
+    }
 
     return {"category": category, "code": code}
 }

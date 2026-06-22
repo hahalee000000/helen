@@ -140,6 +140,6 @@ test_case("skill_dir constructs correct directory", test_skill_dir_construction)
 test_end_suite()
 
 main {
-    let report = run_tests()
-    print(report)
+    let result = run_tests()
+    print(result["report"])
 }

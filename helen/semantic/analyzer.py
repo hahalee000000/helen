@@ -56,6 +56,7 @@ from helen.core.ast import (
     MapEntryNode,
     MapLiteralNode,
     MatchStmtNode,
+    MatchExprNode,
     OptionalTypeNode,
     PipeExprNode,
     ProgramNode,
@@ -1115,6 +1116,14 @@ class SemanticAnalyzer(Visitor[None]):
         for case in node.cases:
             case.accept(self)
         self._check_match_completeness(node)
+
+    def visit_match_expr(self, node: MatchExprNode) -> None:
+        """Analyze a match expression."""
+        node.subject.accept(self)
+        for case in node.cases:
+            case.accept(self)
+        if node.default_body is not None:
+            node.default_body.accept(self)
 
     def visit_case(self, node: CaseNode) -> None:
         node.pattern.accept(self)
