@@ -1,0 +1,210 @@
+// ============================================================
+// Helen Programming Agent
+//
+// Orchestrator for Helen language development assistance.
+// Uses contract-first design with skill management, matching,
+// learning, and evolution capabilities.
+//
+// Features used:
+//   - Module imports (v1.8)
+//   - Pipe operator |> (v1.8)
+//   - Enhanced pattern matching (v1.8)
+//   - Closures (v1.7)
+//   - regex_test for boolean checks (v1.8)
+// ============================================================
+
+// ── Import Contracts ──────────────────────────────────────────
+
+import "contracts/contracts.helen"
+
+// ── Agent Configuration ───────────────────────────────────────
+
+const AGENT_NAME = "Helen Programming Agent"
+const AGENT_VERSION = "1.0"
+
+// ── Utility Functions ─────────────────────────────────────────
+
+/**
+ * format_result — Format a result map for display
+ *
+ * Uses pipe operator for clean composition.
+ */
+fn format_result(result) -> str {
+    let status = result["status"]
+    let message = result["message"]
+
+    if status == "success" {
+        return "[OK] " + message
+    }
+    if status == "error" {
+        let code = result["error_code"]
+        return "[ERR:" + str(code) + "] " + message
+    }
+    if status == "skipped" {
+        return "[SKIP] " + message
+    }
+    return "[?] " + str(status) + ": " + str(message)
+}
+
+/**
+ * classify_input — Classify user input by intent
+ *
+ * Uses regex_test for clean boolean checks.
+ */
+fn classify_input(user_input) -> str {
+    let lower = user_input.lower()
+
+    if regex_test(lower, "create|new|add") {
+        return "create"
+    }
+    if regex_test(lower, "read|show|display|list") {
+        return "read"
+    }
+    if regex_test(lower, "update|modify|edit") {
+        return "update"
+    }
+    if regex_test(lower, "delete|remove") {
+        return "delete"
+    }
+    if regex_test(lower, "search|find|match") {
+        return "search"
+    }
+    if regex_test(lower, "learn|remember") {
+        return "learn"
+    }
+    if regex_test(lower, "analyze|quality|score") {
+        return "analyze"
+    }
+    if regex_test(lower, "test|run") {
+        return "test"
+    }
+    return "unknown"
+}
+
+/**
+ * handle_skill_operation — Route skill CRUD operations
+ *
+ * Uses match with string patterns.
+ */
+fn handle_skill_operation(operation, name, category, content) -> map {
+    match operation {
+        case "create" {
+            return skill_create(name, category, content)
+        }
+        case "read" {
+            return skill_read(name, category)
+        }
+        case "update" {
+            return skill_update(name, category, content)
+        }
+        case "delete" {
+            return skill_delete(name, category)
+        }
+        case "list" {
+            return skill_list()
+        }
+        default {
+            return {"status": "error", "message": "unknown operation: " + operation, "error_code": ERROR_VALIDATION}
+        }
+    }
+}
+
+/**
+ * run_quality_analysis — Analyze a Helen source file
+ *
+ * Demonstrates pipe-style composition.
+ */
+fn run_quality_analysis(file_path) -> map {
+    if path_exists(file_path) == false {
+        return {"status": "error", "message": "file not found: " + file_path, "error_code": ERROR_NOT_FOUND}
+    }
+
+    let result = analyze_file(file_path)
+
+    if result["error"] != null {
+        return {"status": "error", "message": result["error"], "error_code": ERROR_IO}
+    }
+
+    let scores = result["scores"]
+    let grade = scores["grade"]
+    let total = scores["total"]
+
+    return {
+        "status": "success",
+        "message": "Quality: " + grade + " (" + str(total) + "/10)",
+        "scores": scores,
+        "metrics": result["metrics"],
+        "security": result["security"],
+        "error_code": 0
+    }
+}
+
+/**
+ * run_test_suite — Execute tests for a project
+ */
+fn run_test_suite(project_dir) -> map {
+    if path_exists(project_dir) == false {
+        return {"status": "error", "message": "directory not found: " + project_dir, "error_code": ERROR_NOT_FOUND}
+    }
+
+    let result = run_project_tests(project_dir)
+
+    if result["success"] {
+        return {
+            "status": "success",
+            "message": "All tests passed (" + str(result["passed"]) + "/" + str(result["total"]) + ")",
+            "error_code": 0
+        }
+    }
+
+    return {
+        "status": "error",
+        "message": "Tests failed: " + str(result["failed"]) + " failures",
+        "error_code": ERROR_VALIDATION
+    }
+}
+
+// ── Main Entry Point ──────────────────────────────────────────
+
+main {
+    print(AGENT_NAME + " v" + AGENT_VERSION)
+    print("================================")
+    print("")
+    print("Contract Functions (from contracts/contracts.helen):")
+    print("")
+    print("  SkillManager:")
+    print("    skill_create(name, category, content) -> map")
+    print("    skill_read(name, category) -> map")
+    print("    skill_update(name, category, content) -> map")
+    print("    skill_delete(name, category) -> map")
+    print("    skill_list() -> map")
+    print("")
+    print("  SkillMatcher:")
+    print("    extract_keywords(context) -> list")
+    print("    match_skills(context) -> map")
+    print("")
+    print("  SkillLearner:")
+    print("    determine_category(error) -> map")
+    print("    learn_from_fix(error, fix, confirmed) -> map")
+    print("")
+    print("  SkillEvolver:")
+    print("    evolve_skill(skill_path, new_finding) -> map")
+    print("")
+    print("  ProgrammingAgent:")
+    print("    process_input(project_dir, user_input) -> map")
+    print("    analyze_file(file_path) -> map")
+    print("    run_project_tests(project_dir) -> map")
+    print("")
+    print("Orchestrator Functions:")
+    print("    format_result(result) -> str")
+    print("    classify_input(user_input) -> str")
+    print("    handle_skill_operation(op, name, cat, content) -> map")
+    print("    run_quality_analysis(file_path) -> map")
+    print("    run_test_suite(project_dir) -> map")
+    print("")
+    print("Error Codes:")
+    print("  " + str(ERROR_VALIDATION) + ": Validation error")
+    print("  " + str(ERROR_IO) + ": IO error")
+    print("  " + str(ERROR_NOT_FOUND) + ": Not found")
+    print("  " + str(ERROR_ALREADY_EXISTS) + ": Already exists")
+}

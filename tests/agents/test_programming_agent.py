@@ -1,219 +1,369 @@
-"""Tests for Helen Programming Agent system.
+"""Tests for Helen Programming Agent contracts.
 
-Tests verify that .helen Agent files:
-1. Pass syntax check (helen check)
-2. Execute without runtime errors
-3. Produce expected output/behavior
+Tests the contract functions by running Helen programs via subprocess.
+This validates the contracts work correctly when executed.
 """
-
 import pytest
+import subprocess
 from pathlib import Path
 
-from tests.agents.test_helpers import (
-    check_helen,
-    run_helen,
-    create_test_skill,
-    cleanup_test_skills,
-    rebuild_skill_index,
-    AGENTS_DIR,
-    SKILLS_DIR,
-    MEMORY_DIR,
-)
+
+@pytest.fixture
+def helen_dir():
+    """Return the helen project root directory."""
+    return Path(__file__).parent.parent.parent
 
 
-# ── Syntax Validation Tests ───────────────────────────────────
+@pytest.fixture
+def agents_dir():
+    """Return the agents directory."""
+    return Path(__file__).parent.parent.parent / "agents"
 
 
-class TestAgentSyntax:
-    """Verify all agent .helen files pass syntax check."""
-    
-    def test_skill_manager_syntax(self):
-        """skill_manager.helen must pass syntax check."""
-        result = check_helen(str(AGENTS_DIR / "skill_manager.helen"))
-        assert result["valid"], f"Syntax errors: {result['errors']}"
-    
-    def test_skill_matcher_syntax(self):
-        """skill_matcher.helen must pass syntax check."""
-        result = check_helen(str(AGENTS_DIR / "skill_matcher.helen"))
-        assert result["valid"], f"Syntax errors: {result['errors']}"
-    
-    def test_skill_learner_syntax(self):
-        """skill_learner.helen must pass syntax check."""
-        result = check_helen(str(AGENTS_DIR / "skill_learner.helen"))
-        assert result["valid"], f"Syntax errors: {result['errors']}"
-    
-    def test_skill_evolver_syntax(self):
-        """skill_evolver.helen must pass syntax check."""
-        result = check_helen(str(AGENTS_DIR / "skill_evolver.helen"))
-        assert result["valid"], f"Syntax errors: {result['errors']}"
-    
-    def test_programming_agent_syntax(self):
-        """programming_agent.helen must pass syntax check."""
-        result = check_helen(str(AGENTS_DIR / "programming_agent.helen"))
-        assert result["valid"], f"Syntax errors: {result['errors']}"
+def run_helen(code, cwd=None):
+    """Run Helen code and return stdout."""
+    import tempfile
+    import os
+    # Write temp file in cwd so relative imports work
+    work_dir = cwd or os.getcwd()
+    temp_path = os.path.join(work_dir, "_test_temp.helen")
+    with open(temp_path, 'w') as f:
+        f.write(code)
+    try:
+        result = subprocess.run(
+            ["helen", "_test_temp.helen"],
+            capture_output=True,
+            text=True,
+            cwd=work_dir
+        )
+    finally:
+        os.unlink(temp_path)
+    return result
 
 
-# ── Skill Manager Tests ───────────────────────────────────────
+class TestContractsSyntax:
+    """Test that contract files pass syntax check."""
+
+    def test_contracts_check(self, agents_dir):
+        """contracts.helen passes syntax check."""
+        result = subprocess.run(
+            ["helen", "check", "contracts/contracts.helen"],
+            capture_output=True,
+            text=True,
+            cwd=agents_dir
+        )
+        assert result.returncode == 0
+        assert "OK" in result.stdout
+
+    def test_programming_agent_check(self, agents_dir):
+        """programming_agent.helen passes syntax check."""
+        result = subprocess.run(
+            ["helen", "check", "programming_agent.helen"],
+            capture_output=True,
+            text=True,
+            cwd=agents_dir
+        )
+        assert result.returncode == 0
+        assert "OK" in result.stdout
 
 
-class TestSkillManager:
-    """Tests for skill_manager.helen — skill CRUD operations."""
-    
-    def setup_method(self):
-        """Clean up test skills before each test."""
-        cleanup_test_skills()
-    
-    def teardown_method(self):
-        """Clean up after tests."""
-        cleanup_test_skills()
-    
-    def test_create_skill(self):
-        """SkillManager can create a new skill."""
-        # This test verifies the skill_manager agent can create skills
-        # by checking that the file system operations work correctly
-        skill_path = create_test_skill("test-create", "error-patterns")
-        assert skill_path.exists()
-        assert "SKILL.md" in skill_path.name
-    
-    def test_list_skills(self):
-        """SkillManager can list existing skills."""
-        # Create some test skills
-        create_test_skill("test-list-1", "error-patterns")
-        create_test_skill("test-list-2", "code-quality")
-        
-        # Verify they exist
-        assert (SKILLS_DIR / "error-patterns" / "test-list-1" / "SKILL.md").exists()
-        assert (SKILLS_DIR / "code-quality" / "test-list-2" / "SKILL.md").exists()
+class TestProgrammingAgentExecution:
+    """Test that the programming agent runs correctly."""
+
+    def test_programming_agent_runs(self, agents_dir):
+        """programming_agent.helen executes and prints header."""
+        result = subprocess.run(
+            ["helen", "programming_agent.helen"],
+            capture_output=True,
+            text=True,
+            cwd=agents_dir
+        )
+        assert result.returncode == 0
+        assert "Helen Programming Agent" in result.stdout
+        assert "v1.0" in result.stdout
+
+    def test_programming_agent_lists_functions(self, agents_dir):
+        """programming_agent.helen lists all contract functions."""
+        result = subprocess.run(
+            ["helen", "programming_agent.helen"],
+            capture_output=True,
+            text=True,
+            cwd=agents_dir
+        )
+        assert result.returncode == 0
+        # Check that all major function groups are listed
+        assert "skill_create" in result.stdout
+        assert "skill_read" in result.stdout
+        assert "extract_keywords" in result.stdout
+        assert "determine_category" in result.stdout
+        assert "evolve_skill" in result.stdout
+        assert "process_input" in result.stdout
+        assert "analyze_file" in result.stdout
 
 
-# ── Skill Matcher Tests ───────────────────────────────────────
+class TestContractFunctions:
+    """Test individual contract functions via Helen execution."""
+
+    def test_is_valid_category(self, agents_dir):
+        """is_valid_category returns correct results."""
+        code = '''
+import "contracts/contracts.helen"
+
+main {
+    print(is_valid_category("testing"))
+    print(is_valid_category("invalid"))
+}
+'''
+        result = run_helen(code, cwd=agents_dir)
+        assert result.returncode == 0
+        assert "true" in result.stdout.lower()
+        assert "false" in result.stdout.lower()
+
+    def test_skill_path_construction(self, agents_dir):
+        """skill_path constructs correct paths."""
+        code = '''
+import "contracts/contracts.helen"
+
+main {
+    print(skill_path("testing", "my-skill"))
+}
+'''
+        result = run_helen(code, cwd=agents_dir)
+        assert result.returncode == 0
+        assert "agents/skills/testing/my-skill/SKILL.md" in result.stdout
+
+    def test_skill_dir_construction(self, agents_dir):
+        """skill_dir constructs correct directories."""
+        code = '''
+import "contracts/contracts.helen"
+
+main {
+    print(skill_dir("testing", "my-skill"))
+}
+'''
+        result = run_helen(code, cwd=agents_dir)
+        assert result.returncode == 0
+        assert "agents/skills/testing/my-skill" in result.stdout
+
+    def test_skill_create_validates_name(self, agents_dir):
+        """skill_create rejects empty name."""
+        code = '''
+import "contracts/contracts.helen"
+
+main {
+    let result = skill_create("", "testing", "content")
+    print(result["status"])
+    print(result["error_code"])
+}
+'''
+        result = run_helen(code, cwd=agents_dir)
+        assert result.returncode == 0
+        assert "error" in result.stdout
+        assert "1" in result.stdout  # ERROR_VALIDATION
+
+    def test_skill_create_validates_category(self, agents_dir):
+        """skill_create rejects invalid category."""
+        code = '''
+import "contracts/contracts.helen"
+
+main {
+    let result = skill_create("test", "invalid-cat", "content")
+    print(result["status"])
+    print(result["error_code"])
+}
+'''
+        result = run_helen(code, cwd=agents_dir)
+        assert result.returncode == 0
+        assert "error" in result.stdout
+        assert "1" in result.stdout  # ERROR_VALIDATION
+
+    def test_skill_read_not_found(self, agents_dir):
+        """skill_read returns error for non-existent skill."""
+        code = '''
+import "contracts/contracts.helen"
+
+main {
+    let result = skill_read("non-existent", "testing")
+    print(result["status"])
+    print(result["error_code"])
+}
+'''
+        result = run_helen(code, cwd=agents_dir)
+        assert result.returncode == 0
+        assert "error" in result.stdout
+        assert "201" in result.stdout  # ERROR_NOT_FOUND
+
+    def test_extract_keywords_finds_error_kws(self, agents_dir):
+        """extract_keywords finds error-related keywords."""
+        code = '''
+import "contracts/contracts.helen"
+
+main {
+    let kws = extract_keywords("Division by zero error")
+    print(len(kws))
+}
+'''
+        result = run_helen(code, cwd=agents_dir)
+        assert result.returncode == 0
+        # Should find at least "division", "zero", "error"
+        assert int(result.stdout.strip()) >= 1
+
+    def test_extract_keywords_empty_for_unrelated(self, agents_dir):
+        """extract_keywords returns empty for unrelated text."""
+        code = '''
+import "contracts/contracts.helen"
+
+main {
+    let kws = extract_keywords("hello world")
+    print(len(kws))
+}
+'''
+        result = run_helen(code, cwd=agents_dir)
+        assert result.returncode == 0
+        assert "0" in result.stdout
+
+    def test_determine_category_validation(self, agents_dir):
+        """determine_category maps validation errors correctly."""
+        code = '''
+import "contracts/contracts.helen"
+
+main {
+    let result = determine_category({"code": 1, "message": "test"})
+    print(result["category"])
+}
+'''
+        result = run_helen(code, cwd=agents_dir)
+        assert result.returncode == 0
+        assert "error-patterns" in result.stdout
+
+    def test_determine_category_io(self, agents_dir):
+        """determine_category maps IO errors correctly."""
+        code = '''
+import "contracts/contracts.helen"
+
+main {
+    let result = determine_category({"code": 101, "message": "test"})
+    print(result["category"])
+}
+'''
+        result = run_helen(code, cwd=agents_dir)
+        assert result.returncode == 0
+        assert "code-quality" in result.stdout
+
+    def test_determine_category_default(self, agents_dir):
+        """determine_category defaults to general."""
+        code = '''
+import "contracts/contracts.helen"
+
+main {
+    let result = determine_category({"code": 999, "message": "test"})
+    print(result["category"])
+}
+'''
+        result = run_helen(code, cwd=agents_dir)
+        assert result.returncode == 0
+        assert "general" in result.stdout
+
+    def test_learn_from_fix_skips_unconfirmed(self, agents_dir):
+        """learn_from_fix skips when not confirmed."""
+        code = '''
+import "contracts/contracts.helen"
+
+main {
+    let result = learn_from_fix({"message": "err"}, "fix", false)
+    print(result["status"])
+}
+'''
+        result = run_helen(code, cwd=agents_dir)
+        assert result.returncode == 0
+        assert "skipped" in result.stdout
+
+    def test_learn_from_fix_rejects_empty(self, agents_dir):
+        """learn_from_fix rejects empty fix."""
+        code = '''
+import "contracts/contracts.helen"
+
+main {
+    let result = learn_from_fix({"message": "err"}, "", true)
+    print(result["status"])
+    print(result["error_code"])
+}
+'''
+        result = run_helen(code, cwd=agents_dir)
+        assert result.returncode == 0
+        assert "error" in result.stdout
+        assert "1" in result.stdout  # ERROR_VALIDATION
+
+    def test_evolve_skill_missing_file(self, agents_dir):
+        """evolve_skill returns error for missing file."""
+        code = '''
+import "contracts/contracts.helen"
+
+main {
+    let result = evolve_skill("/non/existent/path.md", "finding")
+    print(result["status"])
+    print(result["error_code"])
+}
+'''
+        result = run_helen(code, cwd=agents_dir)
+        assert result.returncode == 0
+        assert "error" in result.stdout
+        assert "201" in result.stdout  # ERROR_NOT_FOUND
+
+    def test_process_input_returns_structure(self, agents_dir):
+        """process_input returns valid structure."""
+        code = '''
+import "contracts/contracts.helen"
+
+main {
+    let result = process_input(".", "hello world")
+    print(result["response"] != null)
+    print(result["skills_used"] != null)
+}
+'''
+        result = run_helen(code, cwd=agents_dir)
+        assert result.returncode == 0
+        assert "true" in result.stdout.lower()
 
 
-class TestSkillMatcher:
-    """Tests for skill_matcher.helen — skill search and matching."""
-    
-    def setup_method(self):
-        """Set up test skills and rebuild index."""
-        cleanup_test_skills()
-        create_test_skill("test-division-zero", "error-patterns", """---
-name: test-division-zero
-description: "Fix division by zero errors"
-version: 1.0.0
-category: error-patterns
-tags: [division, zero, runtime-error]
-triggers:
-  - error_type: "RuntimeError"
-    message_contains: "Division by zero"
-confidence: 0.95
-occurrences: 5
----
+class TestProtocolDeclarations:
+    """Test that protocol declarations are valid."""
 
-# Division by Zero Fix
+    def test_protocols_declared(self, agents_dir):
+        """All 5 protocols are declared in contracts.helen."""
+        contracts_file = agents_dir / "contracts" / "contracts.helen"
+        content = contracts_file.read_text()
 
-## Trigger
-RuntimeError with message containing "Division by zero"
-
-## Steps
-1. Find the division operation
-2. Add assert divisor != 0 before division
-""")
-        rebuild_skill_index()
-    
-    def teardown_method(self):
-        cleanup_test_skills()
-    
-    def test_index_exists(self):
-        """SKILL_INDEX.md should exist after rebuild."""
-        index_path = SKILLS_DIR / "SKILL_INDEX.md"
-        assert index_path.exists()
-    
-    def test_index_contains_skill(self):
-        """SKILL_INDEX.md should contain created skill."""
-        index_path = SKILLS_DIR / "SKILL_INDEX.md"
-        content = index_path.read_text()
-        assert "test-division-zero" in content
-        assert "division" in content.lower()
+        assert "protocol SkillManagerContract" in content
+        assert "protocol SkillMatcherContract" in content
+        assert "protocol SkillLearnerContract" in content
+        assert "protocol SkillEvolverContract" in content
+        assert "protocol ProgrammingAgentContract" in content
 
 
-# ── Skill Learner Tests ───────────────────────────────────────
+class TestFileCleanup:
+    """Test that obsolete files have been removed."""
 
+    def test_no_versioned_files(self, agents_dir):
+        """No versioned .helen files remain."""
+        import os
+        for f in os.listdir(agents_dir):
+            assert "_v2" not in f, f"Obsolete file found: {f}"
+            assert "_v3" not in f, f"Obsolete file found: {f}"
 
-class TestSkillLearner:
-    """Tests for skill_learner.helen — learning from fixes."""
-    
-    def setup_method(self):
-        cleanup_test_skills()
-    
-    def teardown_method(self):
-        cleanup_test_skills()
-    
-    def test_skill_directory_creation(self):
-        """Skill learner should create proper directory structure."""
-        # Verify directory structure exists
-        assert SKILLS_DIR.exists()
-        assert (SKILLS_DIR / "error-patterns").exists()
-        assert (SKILLS_DIR / "code-quality").exists()
-        assert (SKILLS_DIR / "testing").exists()
+    def test_no_old_skill_agents(self, agents_dir):
+        """Old skill_*.helen agent files removed."""
+        import os
+        files = os.listdir(agents_dir)
+        assert "skill_manager.helen" not in files
+        assert "skill_matcher.helen" not in files
+        assert "skill_learner.helen" not in files
+        assert "skill_evolver.helen" not in files
 
-
-# ── Programming Agent Tests ───────────────────────────────────
-
-
-class TestProgrammingAgent:
-    """Tests for programming_agent.helen — main orchestrator."""
-    
-    def test_agent_file_exists(self):
-        """programming_agent.helen must exist."""
-        assert (AGENTS_DIR / "programming_agent.helen").exists()
-    
-    def test_agent_has_required_sections(self):
-        """programming_agent.helen must have agent declaration, functions, main."""
-        content = (AGENTS_DIR / "programming_agent.helen").read_text()
-        assert "agent " in content
-        assert "functions" in content
-        assert "main" in content
-
-
-# ── Integration Tests ─────────────────────────────────────────
-
-
-class TestIntegration:
-    """Integration tests for the full agent system."""
-    
-    def setup_method(self):
-        cleanup_test_skills()
-    
-    def teardown_method(self):
-        cleanup_test_skills()
-    
-    def test_full_workflow(self):
-        """Test complete workflow: create skill → match → learn."""
-        # 1. Create a skill
-        skill_path = create_test_skill("test-workflow", "error-patterns")
-        assert skill_path.exists()
-        
-        # 2. Rebuild index
-        rebuild_skill_index()
-        
-        # 3. Verify index contains the skill
-        index_content = (SKILLS_DIR / "SKILL_INDEX.md").read_text()
-        assert "test-workflow" in index_content
-
-
-# ── Memory Tests ──────────────────────────────────────────────
-
-
-class TestMemory:
-    """Tests for agent memory system."""
-    
-    def test_memory_directory_exists(self):
-        """agents/memory/ directory must exist."""
-        assert MEMORY_DIR.exists()
-    
-    def test_memory_file_exists(self):
-        """MEMORY.md must exist."""
-        assert (MEMORY_DIR / "MEMORY.md").exists()
-    
-    def test_user_file_exists(self):
-        """USER.md must exist."""
-        assert (MEMORY_DIR / "USER.md").exists()
+    def test_contracts_no_version(self, agents_dir):
+        """contracts directory has no versioned files."""
+        import os
+        contracts_dir = agents_dir / "contracts"
+        files = os.listdir(contracts_dir)
+        assert "contracts.helen" in files
+        assert "contracts_v3.helen" not in files
