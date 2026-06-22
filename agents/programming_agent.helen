@@ -164,6 +164,114 @@ fn run_test_suite(project_dir) -> map {
     }
 }
 
+// ── Interactive Mode ──────────────────────────────────────────
+
+/**
+ * interactive_loop — Run interactive REPL-style loop
+ *
+ * Accepts commands like:
+ *   analyze <file>     - Analyze code quality
+ *   test <dir>         - Run tests
+ *   skills             - List all skills
+ *   search <query>     - Search skills
+ *   help               - Show help
+ *   exit               - Exit agent mode
+ */
+fn interactive_loop() -> void {
+    print("Type 'help' for available commands, 'exit' to quit")
+    print("")
+    
+    let running = true
+    while running {
+        let input = input("agent> ")
+        let trimmed = input.strip()
+        
+        if trimmed == "" {
+            continue
+        }
+        
+        if trimmed == "exit" || trimmed == ":quit" {
+            print("Returning to REPL...")
+            running = false
+            continue
+        }
+        
+        if trimmed == "help" {
+            print("Commands:")
+            print("  analyze <file>   - Analyze code quality of a file")
+            print("  test <dir>       - Run test suite in directory")
+            print("  skills           - List all skills")
+            print("  search <query>   - Search skills by keyword")
+            print("  help             - Show this help")
+            print("  exit             - Exit agent mode")
+            continue
+        }
+        
+        if trimmed == "skills" {
+            let result = skill_list()
+            print(format_result(result))
+            if result["status"] == "success" {
+                let skills = result["skills"]
+                for skill in skills {
+                    print("  - " + skill["name"] + " (" + skill["category"] + ")")
+                }
+            }
+            continue
+        }
+        
+        let parts = trimmed.split(" ")
+        let cmd = parts[0]
+        let arg = ""
+        if len(parts) > 1 {
+            // Get everything after the first space
+            let first_space = trimmed.find(" ")
+            if first_space >= 0 {
+                arg = trimmed.substring(first_space + 1)
+            }
+        }
+        
+        if cmd == "analyze" {
+            if arg == "" {
+                print("Usage: analyze <file>")
+                continue
+            }
+            let result = run_quality_analysis(arg)
+            print(format_result(result))
+            continue
+        }
+        
+        if cmd == "test" {
+            if arg == "" {
+                print("Usage: test <directory>")
+                continue
+            }
+            let result = run_test_suite(arg)
+            print(format_result(result))
+            continue
+        }
+        
+        if cmd == "search" {
+            if arg == "" {
+                print("Usage: search <query>")
+                continue
+            }
+            let result = match_skills(arg)
+            let keywords = result["keywords"]
+            let matches = result["matches"]
+            print("Keywords: " + str(keywords))
+            print("Matches: " + str(result["count"]))
+            continue
+        }
+        
+        // Default: process as general input
+        let result = process_input(".", trimmed)
+        print("Response: " + result["response"])
+        if len(result["skills_used"]) > 0 {
+            print("Skills used: " + str(result["skills_used"]))
+        }
+    }
+}
+
 // ── Main Entry Point ──────────────────────────────────────────
 
 main {
@@ -207,4 +315,8 @@ main {
     print("  " + str(ERROR_IO) + ": IO error")
     print("  " + str(ERROR_NOT_FOUND) + ": Not found")
     print("  " + str(ERROR_ALREADY_EXISTS) + ": Already exists")
+    print("")
+    
+    // Enter interactive mode
+    interactive_loop()
 }

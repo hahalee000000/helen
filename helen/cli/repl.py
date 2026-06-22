@@ -214,16 +214,16 @@ def _run_helen_assistant(question: str) -> bool:
 def _run_programming_agent(interp: Interpreter, analyzer: SemanticAnalyzer) -> None:
     """Run an interactive Helen programming agent session.
     
-    This is a persistent agent that helps users write Helen code,
-    debug programs, and understand the language.
+    Loads helen/agents/programming_agent.helen which has its own
+    interactive loop (interactive_loop function).
     """
     from pathlib import Path
     import helen.cli.repl as repl_module
+    import os
     
+    # Use helen/agents/programming_agent.helen (the main programming agent)
     module_dir = Path(repl_module.__file__).parent.parent
-    agent_path = module_dir / "agent" / "helen_programming_agent.helen"
-    docs_path = module_dir.parent / "docs" / "tutorial.md"
-    source_dir = module_dir
+    agent_path = module_dir.parent / "agents" / "programming_agent.helen"
     
     if not agent_path.exists():
         print(f"Error: Programming agent not found at {agent_path}", file=sys.stderr)
@@ -232,68 +232,33 @@ def _run_programming_agent(interp: Interpreter, analyzer: SemanticAnalyzer) -> N
     # Load agent source
     agent_source = agent_path.read_text(encoding="utf-8")
     
-    # Conversation history
-    conversation = []
+    # Set working directory to agents/ so imports work correctly
+    old_cwd = os.getcwd()
+    os.chdir(agent_path.parent)
     
-    while True:
-        try:
-            # Get user input
-            user_input = input("agent> ").strip()
-            
-            if not user_input:
-                continue
-            
-            if user_input in ("exit", ":quit"):
-                print("Returning to REPL...")
-                break
-            
-            # Add to conversation history
-            conversation.append(f"User: {user_input}")
-            
-            # Build context with conversation history
-            context = "\n".join(conversation)
-            
-            # Execute agent with current context
-            errors = ErrorReporter()
-            llm_runtime = HttpLLMRuntime()
-            agent_interp = Interpreter(errors=errors, llm_runtime=llm_runtime)
-            
-            # Modify agent source to inject context
-            modified_source = agent_source.replace(
-                'let docs_path = "docs/tutorial.md"',
-                f'let docs_path = "{docs_path}"'
-            ).replace(
-                'let source_dir = "helen/"',
-                f'let source_dir = "{source_dir}/"'
-            ).replace(
-                'let conversation = ""',
-                f'let conversation = """{context}"""'
-            )
-            
-            scanner = Scanner(source=modified_source, file=str(agent_path))
-            tokens = scanner.scan_all()
-            parser = Parser(tokens, errors=errors)
-            program = parser.parse()
-            
-            if errors.has_errors:
-                msgs = [format_error(err) for err in errors.errors]
-                print(f"Parse error: {msgs[0]}", file=sys.stderr)
-                continue
-            
-            try:
-                agent_interp.interpret(program)
-                # Capture agent response from stdout (would need to redirect)
-                # For now, output is streamed directly
-                print()
-            except Exception as e:
-                print(f"Error: {e}", file=sys.stderr)
-                
-        except KeyboardInterrupt:
-            print("\n(Interrupted)")
-            continue
-        except EOFError:
-            print()
-            break
+    try:
+        errors = ErrorReporter()
+        llm_runtime = HttpLLMRuntime()
+        agent_interp = Interpreter(errors=errors, llm_runtime=llm_runtime)
+        
+        scanner = Scanner(source=agent_source, file=str(agent_path))
+        tokens = scanner.scan_all()
+        parser = Parser(tokens, errors=errors)
+        program = parser.parse()
+        
+        if errors.has_errors:
+            msgs = [format_error(err) for err in errors.errors]
+            print(f"Parse error: {msgs[0]}", file=sys.stderr)
+            return
+        
+        # Execute agent (it will enter its own interactive loop)
+        agent_interp.interpret(program)
+    except KeyboardInterrupt:
+        print("\n(Interrupted)")
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+    finally:
+        os.chdir(old_cwd)
 
 
 def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnalyzer) -> bool:
