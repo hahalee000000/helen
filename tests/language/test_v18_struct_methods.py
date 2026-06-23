@@ -30,7 +30,7 @@ class TestStructLikePatterns:
     def test_map_with_functions(self, temp_helen_file, helen_dir):
         """测试使用map和函数模拟struct方法"""
         test_file = temp_helen_file("""
-fn point_to_string(p) -> String {
+fn point_to_string(p): String {
     return "Point(" + str(p["x"]) + ", " + str(p["y"]) + ")"
 }
 
@@ -51,11 +51,11 @@ main {
     def test_map_with_computation_functions(self, temp_helen_file, helen_dir):
         """测试使用函数对map进行计算"""
         test_file = temp_helen_file("""
-fn rectangle_area(r) -> Int {
+fn rectangle_area(r): Int {
     return r["width"] * r["height"]
 }
 
-fn rectangle_perimeter(r) -> Int {
+fn rectangle_perimeter(r): Int {
     return 2 * (r["width"] + r["height"])
 }
 

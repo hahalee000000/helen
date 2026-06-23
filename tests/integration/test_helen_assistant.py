@@ -35,7 +35,7 @@ agent HelenAssistant(question: str, docs_path: str, source_dir: str) {
     prompt "You are a Helen language assistant."
     
     functions {
-        fn load_docs() -> str {
+        fn load_docs(): str {
             return read_file(docs_path)
         }
     }
@@ -75,7 +75,7 @@ agent HelenAssistant(question: str, docs_path: str, source_dir: str) {
     prompt "You are a Helen language assistant."
     
     functions {
-        fn build_context() -> str {
+        fn build_context(): str {
             let docs = read_file(docs_path)
             return "Documentation:\\n" + docs + "\\n\\nQuestion: " + question
         }
@@ -116,7 +116,7 @@ agent HelenAssistant(question: str, docs_path: str, source_dir: str) {
     prompt "You are a Helen language assistant. Answer questions about Helen."
     
     functions {
-        fn build_context() -> str {
+        fn build_context(): str {
             let docs = read_file(docs_path)
             return "Helen Documentation:\\n" + docs + "\\n\\nUser question: " + question
         }
@@ -159,7 +159,7 @@ agent HelenAssistant(question: str, docs_path: str, source_dir: str) {
     prompt "You are a Helen language assistant."
     
     functions {
-        fn load_sources() -> str {
+        fn load_sources(): str {
             let parser = read_file(source_dir + "core/parser.py")
             return "Parser source loaded: " + str(len(parser)) + " chars"
         }

@@ -29,53 +29,53 @@ const ERR_ALREADY_EXISTS = 202
 // ── Protocols (Interface Contracts) ───────────────────────────
 
 protocol SkillManagerContract {
-    fn skill_create(name, category, content) -> map
-    fn skill_read(name, category) -> map
-    fn skill_update(name, category, content) -> map
-    fn skill_delete(name, category) -> map
-    fn skill_list() -> map
+    fn skill_create(name, category, content): map
+    fn skill_read(name, category): map
+    fn skill_update(name, category, content): map
+    fn skill_delete(name, category): map
+    fn skill_list(): map
 }
 
 protocol SkillMatcherContract {
-    fn extract_keywords(context) -> list
-    fn match_skills(context) -> map
+    fn extract_keywords(context): list
+    fn match_skills(context): map
 }
 
 protocol SkillLearnerContract {
-    fn determine_category(error) -> str
-    fn learn_from_fix(error, fix, confirmed) -> map
+    fn determine_category(error): str
+    fn learn_from_fix(error, fix, confirmed): map
 }
 
 protocol SkillEvolverContract {
-    fn evolve_skill(skill_path, new_finding) -> map
+    fn evolve_skill(skill_path, new_finding): map
 }
 
 protocol ProgrammingAgentContract {
-    fn process_input(project_dir, user_input) -> map
-    fn analyze_file(file_path) -> map
-    fn run_project_tests(project_dir) -> map
+    fn process_input(project_dir, user_input): map
+    fn analyze_file(file_path): map
+    fn run_project_tests(project_dir): map
 }
 
 // ── Helpers ───────────────────────────────────────────────────
 
-fn is_valid_category(category) -> bool {
+fn is_valid_category(category): bool {
     for cat in SKILL_CATEGORIES {
         if cat == category { return true }
     }
     return false
 }
 
-fn build_skill_path(category, name) -> str {
+fn build_skill_path(category, name): str {
     return SKILLS_BASE_PATH + "/" + category + "/" + name + "/SKILL.md"
 }
 
-fn build_skill_dir(category, name) -> str {
+fn build_skill_dir(category, name): str {
     return SKILLS_BASE_PATH + "/" + category + "/" + name
 }
 
 // ── SkillManager Implementation ───────────────────────────────
 
-fn skill_create(name, category, content) -> map {
+fn skill_create(name, category, content): map {
     if name == "" {
         return {"status": "error", "message": "name cannot be empty", "path": "", "error_code": ERR_VALIDATION}
     }
@@ -103,7 +103,7 @@ fn skill_create(name, category, content) -> map {
     return {"status": "success", "message": "Skill created: " + name, "path": path, "error_code": 0}
 }
 
-fn skill_read(name, category) -> map {
+fn skill_read(name, category): map {
     let path = build_skill_path(category, name)
 
     if !path_exists(path) {
@@ -114,7 +114,7 @@ fn skill_read(name, category) -> map {
     return {"status": "success", "message": "Skill loaded: " + name, "content": content, "path": path, "error_code": 0}
 }
 
-fn skill_update(name, category, content) -> map {
+fn skill_update(name, category, content): map {
     let path = build_skill_path(category, name)
 
     if !path_exists(path) {
@@ -129,7 +129,7 @@ fn skill_update(name, category, content) -> map {
     return {"status": "success", "message": "Skill updated: " + name, "path": path, "error_code": 0}
 }
 
-fn skill_delete(name, category) -> map {
+fn skill_delete(name, category): map {
     let dir = build_skill_dir(category, name)
 
     if !path_exists(dir) {
@@ -144,7 +144,7 @@ fn skill_delete(name, category) -> map {
     return {"status": "success", "message": "Skill deleted: " + name, "error_code": 0}
 }
 
-fn skill_list() -> map {
+fn skill_list(): map {
     let skills = []
 
     for category in SKILL_CATEGORIES {
@@ -169,7 +169,7 @@ fn skill_list() -> map {
 
 // ── SkillMatcher Implementation ───────────────────────────────
 
-fn extract_keywords(context) -> list {
+fn extract_keywords(context): list {
     let keywords = []
     let lower_ctx = context.lower()
 
@@ -220,7 +220,7 @@ fn extract_keywords(context) -> list {
     return unique
 }
 
-fn match_skills(context) -> map {
+fn match_skills(context): map {
     let keywords = extract_keywords(context)
     let matches = []
 
@@ -241,7 +241,7 @@ fn match_skills(context) -> map {
 
 // ── SkillLearner Implementation ───────────────────────────────
 
-fn determine_category(error) -> str {
+fn determine_category(error): str {
     let code = 0
     if error["code"] != null { code = error["code"] }
 
@@ -256,7 +256,7 @@ fn determine_category(error) -> str {
     return category
 }
 
-fn generate_skill_name(error) -> str {
+fn generate_skill_name(error): str {
     let msg = error["message"]
     let parts = split(msg, " ")
     
@@ -280,7 +280,7 @@ fn generate_skill_name(error) -> str {
     return join(limited, "-")
 }
 
-fn learn_from_fix(error, fix, confirmed) -> map {
+fn learn_from_fix(error, fix, confirmed): map {
     if !confirmed {
         return {"status": "skipped", "path": "", "category": "", "name": "", "error_code": 0}
     }
@@ -315,7 +315,7 @@ fn learn_from_fix(error, fix, confirmed) -> map {
 
 // ── SkillEvolver Implementation ───────────────────────────────
 
-fn evolve_skill(skill_file_path, new_finding) -> map {
+fn evolve_skill(skill_file_path, new_finding): map {
     if !path_exists(skill_file_path) {
         return {"status": "error", "path": "", "changes": "skill not found", "error_code": ERR_NOT_FOUND}
     }
@@ -333,7 +333,7 @@ fn evolve_skill(skill_file_path, new_finding) -> map {
 
 // ── ProgrammingAgent Implementation ───────────────────────────
 
-fn process_input(project_dir, user_input) -> map {
+fn process_input(project_dir, user_input): map {
     let agent_context = ""
     if path_exists(MEMORY_PATH) {
         agent_context = read_file(MEMORY_PATH)
@@ -353,7 +353,7 @@ fn process_input(project_dir, user_input) -> map {
     }
 }
 
-fn analyze_file(file_path) -> map {
+fn analyze_file(file_path): map {
     if !path_exists(file_path) {
         return {"metrics": {}, "security": {}, "scores": {}, "error": "file not found"}
     }
@@ -366,7 +366,7 @@ fn analyze_file(file_path) -> map {
     return {"metrics": metrics, "security": security, "scores": scores}
 }
 
-fn run_project_tests(project_dir) -> map {
+fn run_project_tests(project_dir): map {
     let cmd = "cd " + project_dir + " && helen test tests/ 2>&1"
     let result = exec(cmd, true)
     let output = result["stdout"]
@@ -385,7 +385,7 @@ fn run_project_tests(project_dir) -> map {
 
 // ── Index Management ──────────────────────────────────────────
 
-fn update_skill_index() -> map {
+fn update_skill_index(): map {
     let all_skills = skill_list()
     let lines = ["# Helen Programming Agent — Skill Index", "", "> Auto-maintained. Do not edit manually.", ""]
 

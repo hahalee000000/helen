@@ -27,7 +27,7 @@ agent SearchAgent(query: str, max_results: int = 10) {
 
     prompt "Search for {{query}} with max {{max_results}} results"
 
-    fn format_result(item: str) -> str {
+    fn format_result(item: str): str {
         return "Result: " + item
     }
 
@@ -80,7 +80,7 @@ agent SearchAgent(query: str, max_results: int = 10) {
 
     def test_multiple_declarations(self):
         source = '''
-fn helper(x: int) -> int { return x * 2 }
+fn helper(x: int): int { return x * 2 }
 
 agent Agent1 { prompt "hello" }
 

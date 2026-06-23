@@ -24,11 +24,11 @@ class TestModuleImport:
         # Create a module file
         module_file = temp_dir / "math_utils.helen"
         module_file.write_text("""
-fn add(a: int, b: int) -> int {
+fn add(a: int, b: int): int {
     return a + b
 }
 
-fn multiply(a: int, b: int) -> int {
+fn multiply(a: int, b: int): int {
     return a * b
 }
 """)
@@ -63,7 +63,7 @@ main {{
         """Test if namespaced imports work."""
         module_file = temp_dir / "utils.helen"
         module_file.write_text("""
-fn helper() -> str {
+fn helper(): str {
     return "help"
 }
 """)
@@ -93,11 +93,11 @@ main {{
         """Test if selective imports work."""
         module_file = temp_dir / "math.helen"
         module_file.write_text("""
-fn add(a: int, b: int) -> int {
+fn add(a: int, b: int): int {
     return a + b
 }
 
-fn subtract(a: int, b: int) -> int {
+fn subtract(a: int, b: int): int {
     return a - b
 }
 """)

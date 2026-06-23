@@ -831,7 +831,7 @@ class Parser:
         return MainBlockNode(body=body, span=self._make_span(start, end))  # type: ignore[return-value]
 
     def _function_decl(self) -> FunctionDeclNode:
-        """Parse a function declaration: fn name(params) -> type { stmt* }."""
+        """Parse a function declaration: fn name(params): type { stmt* }."""
         start = self._previous()
         name_tok = self._consume(TokenType.IDENTIFIER, "Expected function name.")
         self._consume(TokenType.LEFT_PAREN, "Expected '(' after function name.")
@@ -844,7 +844,7 @@ class Parser:
                 params.append(self._agent_param())
         self._consume(TokenType.RIGHT_PAREN, "Expected ')' after parameters.")
         ret_type: TypeNode | None = None
-        if self._match(TokenType.ARROW) or self._match(TokenType.COLON):
+        if self._match(TokenType.COLON):
             ret_type = self._parse_type()
         self._consume(TokenType.LEFT_BRACE, "Expected '{' before function body.")
         body_stmts: list[StatementNode] = []
@@ -887,7 +887,7 @@ class Parser:
 
         # Optional return type
         ret_type: TypeNode | None = None
-        if self._match(TokenType.ARROW) or self._match(TokenType.COLON):
+        if self._match(TokenType.COLON):
             ret_type = self._parse_type()
 
         # Parse body
@@ -934,7 +934,7 @@ class Parser:
 
             # Parse return type
             ret_type: TypeNode | None = None
-            if self._match(TokenType.ARROW) or self._match(TokenType.COLON):
+            if self._match(TokenType.COLON):
                 ret_type = self._parse_type()
 
             # Protocol methods have no body - just a signature

@@ -21,13 +21,13 @@ reference the source code. Be concise, practical, and provide code examples when
 Cite specific files and functions from the source code when appropriate."""
     
     functions {
-        fn load_documentation() -> str {
+        fn load_documentation(): str {
             // Load Helen tutorial documentation from absolute path
             let tutorial = read_file(docs_path)
             return tutorial
         }
         
-        fn load_source_code() -> str {
+        fn load_source_code(): str {
             // Load key source files for implementation-level questions
             let parser = read_file(source_dir + "core/parser.py")
             let interpreter = read_file(source_dir + "interpreter/interpreter.py")
@@ -43,7 +43,7 @@ Cite specific files and functions from the source code when appropriate."""
             return sources
         }
         
-        fn build_context() -> str {
+        fn build_context(): str {
             // Build comprehensive context for LLM
             let docs = load_documentation()
             let sources = load_source_code()

@@ -32,7 +32,7 @@ class TestModuleFunctionImport:
         """Should support: import "module.helen" as m"""
         # Create a module file
         module = temp_helen_file("""
-fn greet(name: str) -> str {
+fn greet(name: str): str {
     return "Hello, " + name
 }
 
@@ -65,7 +65,7 @@ main {{
     def test_import_function_directly(self, temp_helen_file, helen_dir):
         """Should support: import "module.helen" { greet, VERSION }"""
         module = temp_helen_file("""
-fn greet(name: str) -> str {
+fn greet(name: str): str {
     return "Hello, " + name
 }
 
@@ -95,7 +95,7 @@ main {{
     def test_module_function_execution(self, temp_helen_file, helen_dir):
         """Module functions should be callable and return correct values."""
         module = temp_helen_file("""
-fn add(a: int, b: int) -> int {
+fn add(a: int, b: int): int {
     return a + b
 }
 """, "math_module.helen")
@@ -145,7 +145,7 @@ main {
     def test_memory_as_function_parameter(self, temp_helen_file, helen_dir):
         """Should allow 'memory' as function parameter."""
         code = """
-fn load_memory(memory: str) -> str {
+fn load_memory(memory: str): str {
     return memory
 }
 
@@ -221,14 +221,14 @@ main {
     def test_mutual_recursion(self, temp_helen_file, helen_dir):
         """Should support mutually recursive functions."""
         code = """
-fn is_even(n: int) -> bool {
+fn is_even(n: int): bool {
     if n == 0 {
         return true
     }
     return is_odd(n - 1)
 }
 
-fn is_odd(n: int) -> bool {
+fn is_odd(n: int): bool {
     if n == 0 {
         return false
     }
@@ -255,11 +255,11 @@ main {
     def test_forward_reference_execution(self, temp_helen_file, helen_dir):
         """Forward referenced functions should execute correctly."""
         code = """
-fn function_a() -> int {
+fn function_a(): int {
     return function_b() + 10
 }
 
-fn function_b() -> int {
+fn function_b(): int {
     return 5
 }
 
@@ -287,11 +287,11 @@ agent TestAgent {
     prompt "Test"
     
     functions {
-        fn helper_a() -> str {
+        fn helper_a(): str {
             return helper_b()
         }
         
-        fn helper_b() -> str {
+        fn helper_b(): str {
             return "from B"
         }
     }
@@ -320,11 +320,11 @@ class TestIntegration:
     def test_combined_features(self, temp_helen_file, helen_dir):
         """Test all v1.6 features together."""
         module = temp_helen_file("""
-fn process(data: str) -> str {
+fn process(data: str): str {
     return transform(data)
 }
 
-fn transform(data: str) -> str {
+fn transform(data: str): str {
     return data.upper()
 }
 
@@ -334,7 +334,7 @@ const VERSION = "1.6"
         main = temp_helen_file(f"""
 import "{module}" as utils
 
-fn main_helper() -> str {{
+fn main_helper(): str {{
     return utils.process("hello")
 }}
 

@@ -33,7 +33,7 @@ class TestFunctionDecl:
         assert isinstance(fn.body, FnBlockNode)
 
     def test_fn_with_params(self):
-        p = _parse('fn add(a: int, b: int) -> int { return a + b }')
+        p = _parse('fn add(a: int, b: int): int { return a + b }')
         fn = _first_fn(p)
         assert isinstance(fn, FunctionDeclNode)
         assert len(fn.params) == 2
@@ -49,7 +49,7 @@ class TestFunctionDecl:
         assert fn.params[0].default_value is not None
 
     def test_fn_optional_return_type(self):
-        p = _parse('fn find() -> str? { return null }')
+        p = _parse('fn find(): str? { return null }')
         fn = _first_fn(p)
         assert isinstance(fn, FunctionDeclNode)
         assert fn.return_type is not None
@@ -62,7 +62,7 @@ class TestFunctionDecl:
         assert fn.return_type is None
 
     def test_fn_union_return_type(self):
-        p = _parse('fn parse() -> int|str { return 1 }')
+        p = _parse('fn parse(): int|str { return 1 }')
         fn = _first_fn(p)
         assert isinstance(fn, FunctionDeclNode)
         assert fn.return_type is not None

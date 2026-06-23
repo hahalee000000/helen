@@ -189,7 +189,7 @@ helen help
 创建 `test.helen`：
 
 ```helen
-fn greet(name: string) -> string {
+fn greet(name: string): string {
     return "Hello, " + name + "!"
 }
 
@@ -1371,11 +1371,11 @@ agent CodeAnalyzer {
     
     // functions 块中的函数自动成为 LLM 工具
     functions {
-        fn count_lines(code: str) -> int {
+        fn count_lines(code: str): int {
             return len(split(code, "\n"))
         }
         
-        fn find_todos(code: str) -> list {
+        fn find_todos(code: str): list {
             let lines = split(code, "\n")
             let todos = []
             for line in lines {
@@ -1386,7 +1386,7 @@ agent CodeAnalyzer {
             return todos
         }
         
-        fn calculate_complexity(code: str) -> int {
+        fn calculate_complexity(code: str): int {
             // 简单的复杂度估算：统计控制流关键字
             let keywords = ["if", "for", "while", "match"]
             var complexity = 0
@@ -1426,7 +1426,7 @@ agent HybridAgent {
     
     // Helen 自定义工具（自动暴露给 LLM）
     functions {
-        fn search_local_docs(query: str) -> str {
+        fn search_local_docs(query: str): str {
             // 自定义搜索逻辑
             let results = read_file("docs/index.txt")
             return filter(results, fn(line) { return contains(line, query) })
@@ -1513,7 +1513,7 @@ agent MyAgent {
         let config = "default"
         const MAX_RETRIES = 3
         
-        fn get_config() -> str {
+        fn get_config(): str {
             return config  // ✅ 可以访问
         }
         
@@ -2631,7 +2631,7 @@ agent DataAnalyzer(data: list) {
     """
     
     functions {
-        fn calculate_stats() -> map {
+        fn calculate_stats(): map {
             let n = len(data)
             let sum = 0
             for value in data {

@@ -79,7 +79,7 @@ class TestAgentFunctionsBlockVariables:
         agent MyAgent() {
             functions {
                 let config = "default"
-                fn get_config() -> str {
+                fn get_config(): str {
                     return config
                 }
             }
@@ -101,7 +101,7 @@ class TestAgentFunctionsBlockVariables:
         agent MyAgent() {
             functions {
                 const MAX = 100
-                fn get_max() -> int {
+                fn get_max(): int {
                     return MAX
                 }
             }
@@ -125,7 +125,7 @@ class TestAgentFunctionsBlockVariables:
                 let a = 1
                 let b = 2
                 const c = 3
-                fn sum() -> int {
+                fn sum(): int {
                     return a + b + c
                 }
             }

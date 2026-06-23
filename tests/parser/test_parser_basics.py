@@ -253,8 +253,8 @@ class TestExpressions:
 
 class TestFunctions:
     def test_function_decl_simple(self):
-        """fn add(a, b) -> int { return a + b }"""
-        source = 'fn add(a, b) -> int { return a + b }'
+        """fn add(a, b): int { return a + b }"""
+        source = 'fn add(a, b): int { return a + b }'
         program, errors = _parse_source(source)
         assert not errors.has_errors, _format_errors(errors)
         stmt = program.statements[0]

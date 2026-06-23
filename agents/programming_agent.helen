@@ -55,7 +55,7 @@ agent HelenProgrammingAgent(project_dir: str, user_input: str) {
     // Functions in this block are automatically exposed as LLM-callable tools.
     // The LLM can invoke them during reasoning via function calling.
     functions {
-        fn search_skills(context: str) -> list {
+        fn search_skills(context: str): list {
             let result = match_skills(context)
             // Use map with lambda to extract keywords
             let matched = map(result["matches"], fn(item) {
@@ -64,7 +64,7 @@ agent HelenProgrammingAgent(project_dir: str, user_input: str) {
             return matched
         }
 
-        fn load_skill_content(name: str, category: str) -> str {
+        fn load_skill_content(name: str, category: str): str {
             let result = skill_read(name, category)
             if result["status"] == "success" {
                 return result["content"]
@@ -72,7 +72,7 @@ agent HelenProgrammingAgent(project_dir: str, user_input: str) {
             return ""
         }
 
-        fn save_skill(name: str, category: str, content: str) -> str {
+        fn save_skill(name: str, category: str, content: str): str {
             let result = skill_create(name, category, content)
             if result["status"] == "success" {
                 update_skill_index()
@@ -81,7 +81,7 @@ agent HelenProgrammingAgent(project_dir: str, user_input: str) {
             return "Failed to save skill: " + result["message"]
         }
 
-        fn analyze_and_fix(file: str, error_msg: str) -> map {
+        fn analyze_and_fix(file: str, error_msg: str): map {
             if !path_exists(file) {
                 return {"error": "file not found: " + file}
             }
@@ -103,15 +103,15 @@ agent HelenProgrammingAgent(project_dir: str, user_input: str) {
             }
         }
 
-        fn run_tests_for_project(dir: str) -> map {
+        fn run_tests_for_project(dir: str): map {
             return run_project_tests(dir)
         }
 
-        fn learn_from_interaction(error: map, fix: str, confirmed: bool) -> map {
+        fn learn_from_interaction(error: map, fix: str, confirmed: bool): map {
             return learn_from_fix(error, fix, confirmed)
         }
 
-        fn get_agent_context() -> str {
+        fn get_agent_context(): str {
             let context = ""
             if path_exists(MEMORY_PATH) {
                 context = read_file(MEMORY_PATH)

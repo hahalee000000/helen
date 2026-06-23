@@ -28,7 +28,7 @@ class TestProtocolDeclaration:
         """测试简单协议声明"""
         test_file = temp_helen_file("""
 protocol Printable {
-    fn to_string(self) -> String
+    fn to_string(self): String
 }
 
 main {
@@ -48,8 +48,8 @@ main {
         """测试协议多个方法"""
         test_file = temp_helen_file("""
 protocol Shape {
-    fn area(self) -> Float
-    fn perimeter(self) -> Float
+    fn area(self): Float
+    fn perimeter(self): Float
 }
 
 main {
@@ -73,11 +73,11 @@ class TestProtocolImplementation:
         """测试简单协议实现 - 使用 map 模拟结构体"""
         test_file = temp_helen_file("""
 protocol Printable {
-    fn to_string(obj) -> String
+    fn to_string(obj): String
 }
 
 // 使用函数而不是方法
-fn Point_to_string(p) -> String {
+fn Point_to_string(p): String {
     return "Point"
 }
 
@@ -100,10 +100,10 @@ main {
         """测试协议实现带计算 - 使用 map"""
         test_file = temp_helen_file("""
 protocol Area {
-    fn area(rect) -> Float
+    fn area(rect): Float
 }
 
-fn Rectangle_area(r) -> Float {
+fn Rectangle_area(r): Float {
     return r["width"] * r["height"]
 }
 
@@ -130,11 +130,11 @@ class TestProtocolDuckTyping:
         """测试鸭子类型 - 不需要显式 impl"""
         test_file = temp_helen_file("""
 protocol Quackable {
-    fn quack(d) -> String
+    fn quack(d): String
 }
 
 // 不需要 impl，只要函数签名匹配即可
-fn Duck_quack(d) -> String {
+fn Duck_quack(d): String {
     return "Quack! I am " + d["name"]
 }
 

@@ -56,13 +56,13 @@ class TestUnionType:
 
 class TestTypeInFunctionReturn:
     def test_optional_return_type(self):
-        p = _parse('fn f() -> str? { return null }')
+        p = _parse('fn f(): str? { return null }')
         prog = p.parse()
         fn = prog.statements[0]
         assert isinstance(fn.return_type, OptionalTypeNode)
 
     def test_union_return_type(self):
-        p = _parse('fn f() -> int|str { return 1 }')
+        p = _parse('fn f(): int|str { return 1 }')
         prog = p.parse()
         fn = prog.statements[0]
         assert isinstance(fn.return_type, UnionTypeNode)

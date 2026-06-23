@@ -42,11 +42,11 @@ class TestModuleImport:
         # Create math module
         math_file = temp_dir / "math_utils.helen"
         math_file.write_text("""
-fn add(a: int, b: int) -> int {
+fn add(a: int, b: int): int {
     return a + b
 }
 
-fn multiply(a: int, b: int) -> int {
+fn multiply(a: int, b: int): int {
     return a * b
 }
 """)
@@ -73,7 +73,7 @@ main {{
         # Create math module
         math_file = temp_dir / "math_utils.helen"
         math_file.write_text("""
-fn add(a: int, b: int) -> int {
+fn add(a: int, b: int): int {
     return a + b
 }
 """)
@@ -100,7 +100,7 @@ main {{
         # Create math module
         math_file = temp_dir / "math.helen"
         math_file.write_text("""
-fn add(a: int, b: int) -> int {
+fn add(a: int, b: int): int {
     return a + b
 }
 """)
@@ -108,7 +108,7 @@ fn add(a: int, b: int) -> int {
         # Create string module
         string_file = temp_dir / "string_utils.helen"
         string_file.write_text("""
-fn greet(name: str) -> str {
+fn greet(name: str): str {
     return "Hello, " + name
 }
 """)
@@ -182,7 +182,7 @@ main {
         # Create module
         module_file = temp_dir / "utils.helen"
         module_file.write_text("""
-fn calculate(a: int, b: int, c: int) -> int {
+fn calculate(a: int, b: int, c: int): int {
     return a + b * c
 }
 """)
@@ -213,7 +213,7 @@ agent Greeter(name: str) {
     model "test"
     
     functions {
-        fn greet() -> str {
+        fn greet(): str {
             return "Hello, " + name
         }
     }
@@ -249,7 +249,7 @@ class TestImportEdgeCases:
         # Create module
         module_file = temp_dir / "utils.helen"
         module_file.write_text("""
-fn add(a: int, b: int) -> int {
+fn add(a: int, b: int): int {
     return a + b
 }
 """)
@@ -277,7 +277,7 @@ main {{
         # Create base module
         base_file = temp_dir / "base.helen"
         base_file.write_text("""
-fn double(x: int) -> int {
+fn double(x: int): int {
     return x * 2
 }
 """)
@@ -287,7 +287,7 @@ fn double(x: int) -> int {
         wrapper_file.write_text(f"""
 import "base.helen"
 
-fn quadruple(x: int) -> int {{
+fn quadruple(x: int): int {{
     return double(double(x))
 }}
 """)
