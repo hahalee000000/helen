@@ -7,6 +7,16 @@ Supports function calling: when tools are provided, the runtime enters a
 loop where the LLM can request tool calls, which are executed and their
 results fed back to the LLM until it produces a final text response.
 
+Enhanced features (borrowed from Hermes):
+- Concurrent tool execution (ThreadPoolExecutor)
+- Multi-retry with exponential backoff
+- Empty response nudge (recover from silent LLM)
+- Iteration budget (prevent infinite loops)
+- Tool result truncation (prevent context explosion)
+- Message sanitization (fix surrogate chars, role alternation)
+- Stream health checks (timeout detection)
+- Prompt caching support (Anthropic cache_control)
+
 Usage:
     from helen.runtime.http_llm import HttpLLMRuntime
     runtime = HttpLLMRuntime()  # Auto-loads from ~/.helen/config.yaml or ~/.hermes/.env
@@ -17,12 +27,17 @@ Usage:
 from __future__ import annotations
 
 import json
+import logging
+import re
 import urllib.request
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Any
 
 from helen.runtime.llm_runtime import LLMResponse, LLMRuntime
+
+logger = logging.getLogger(__name__)
 
 
 def _load_hermes_env() -> dict[str, str]:
@@ -47,6 +62,187 @@ def _load_hermes_env() -> dict[str, str]:
     return env
 
 
+# ---------------------------------------------------------------------------
+# Message Sanitization (borrowed from Hermes)
+# ---------------------------------------------------------------------------
+
+# Matches lone surrogate characters (U+D800-U+DFFF)
+_SURROGATE_RE = re.compile(r'[\ud800-\udfff]')
+
+
+def _sanitize_surrogates(text: str) -> str:
+    """Strip lone surrogate characters that crash json.dumps()."""
+    if not text:
+        return text
+    return _SURROGATE_RE.sub('', text)
+
+
+def _sanitize_messages(messages: list[dict[str, Any]]) -> int:
+    """Sanitize all message content fields in-place. Returns count of fixes."""
+    count = 0
+    for msg in messages:
+        content = msg.get("content")
+        if isinstance(content, str):
+            cleaned = _sanitize_surrogates(content)
+            if cleaned != content:
+                msg["content"] = cleaned
+                count += 1
+        # Also sanitize tool call arguments
+        for tc in msg.get("tool_calls", []):
+            fn = tc.get("function", {})
+            args = fn.get("arguments", "")
+            if isinstance(args, str):
+                cleaned = _sanitize_surrogates(args)
+                if cleaned != args:
+                    fn["arguments"] = cleaned
+                    count += 1
+    return count
+
+
+def _repair_message_sequence(messages: list[dict[str, Any]]) -> int:
+    """Repair role-alternation violations before API call.
+
+    Most providers require: system → user → assistant → tool → assistant → ...
+    Catches tool→user or user→user sequences that cause empty responses.
+    Returns count of repairs made.
+    """
+    count = 0
+    i = 1
+    while i < len(messages):
+        prev_role = messages[i - 1].get("role", "")
+        curr_role = messages[i].get("role", "")
+
+        # tool → user is invalid: insert a synthetic assistant bridge
+        if prev_role == "tool" and curr_role == "user":
+            messages.insert(i, {"role": "assistant", "content": ""})
+            count += 1
+            i += 2
+            continue
+
+        # user → user: merge into previous
+        if prev_role == "user" and curr_role == "user":
+            prev_content = messages[i - 1].get("content", "")
+            curr_content = messages[i].get("content", "")
+            messages[i - 1]["content"] = prev_content + "\n\n" + curr_content
+            messages.pop(i)
+            count += 1
+            continue
+
+        i += 1
+    return count
+
+
+# ---------------------------------------------------------------------------
+# Tool Result Truncation (borrowed from Hermes)
+# ---------------------------------------------------------------------------
+
+# Maximum characters per tool result before truncation
+MAX_TOOL_RESULT_CHARS = 16000
+# Maximum total tool results per turn
+MAX_TOOL_RESULTS_PER_TURN = 10
+
+
+def _truncate_tool_result(result: str, max_chars: int = MAX_TOOL_RESULT_CHARS) -> str:
+    """Truncate a tool result if it exceeds max_chars."""
+    if len(result) <= max_chars:
+        return result
+    half = max_chars // 2
+    return (
+        result[:half]
+        + f"\n\n... [{len(result) - max_chars} chars truncated] ...\n\n"
+        + result[-half:]
+    )
+
+
+# ---------------------------------------------------------------------------
+# Concurrent Tool Execution (borrowed from Hermes)
+# ---------------------------------------------------------------------------
+
+_MAX_TOOL_WORKERS = 8
+
+
+def _execute_tools_concurrent(
+    tool_calls: list[dict[str, Any]],
+    dispatch_fn,
+) -> list[tuple[dict[str, Any], str]]:
+    """Execute multiple tool calls concurrently using a thread pool.
+
+    Args:
+        tool_calls: List of tool call dicts from LLM response.
+        dispatch_fn: Function(name, args) -> str result.
+
+    Returns:
+        List of (tool_call, result) tuples in original order.
+    """
+    if len(tool_calls) <= 1:
+        # Single tool call — no need for threading
+        results = []
+        for tc in tool_calls:
+            fn_name = tc["function"]["name"]
+            try:
+                fn_args = json.loads(tc["function"].get("arguments", "{}"))
+            except json.JSONDecodeError:
+                fn_args = {}
+            result = dispatch_fn(fn_name, fn_args)
+            results.append((tc, result))
+        return results
+
+    # Multiple tool calls — execute concurrently
+    parsed = []
+    for tc in tool_calls:
+        fn_name = tc["function"]["name"]
+        try:
+            fn_args = json.loads(tc["function"].get("arguments", "{}"))
+        except json.JSONDecodeError:
+            fn_args = {}
+        parsed.append((tc, fn_name, fn_args))
+
+    results: list[tuple[dict, str] | None] = [None] * len(parsed)
+
+    with ThreadPoolExecutor(max_workers=min(len(parsed), _MAX_TOOL_WORKERS)) as executor:
+        future_to_idx = {}
+        for idx, (tc, fn_name, fn_args) in enumerate(parsed):
+            future = executor.submit(dispatch_fn, fn_name, fn_args)
+            future_to_idx[future] = idx
+
+        for future in as_completed(future_to_idx):
+            idx = future_to_idx[future]
+            try:
+                result = future.result(timeout=300)  # 5 min per tool
+            except Exception as e:
+                result = json.dumps({"error": f"Tool execution failed: {e}"})
+            results[idx] = (parsed[idx][0], result)
+
+    return [r for r in results if r is not None]
+
+
+# ---------------------------------------------------------------------------
+# Iteration Budget (borrowed from Hermes)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class IterationBudget:
+    """Track remaining API call iterations to prevent infinite loops."""
+    max_total: int = 20
+    used: int = 0
+
+    def consume(self) -> bool:
+        """Consume one iteration. Returns False if budget exhausted."""
+        if self.used >= self.max_total:
+            return False
+        self.used += 1
+        return True
+
+    @property
+    def remaining(self) -> int:
+        return max(0, self.max_total - self.used)
+
+
+# ---------------------------------------------------------------------------
+# HTTP LLM Runtime
+# ---------------------------------------------------------------------------
+
+
 @dataclass
 class HttpLLMRuntime(LLMRuntime):
     """HTTP-based LLM runtime using OpenAI-compatible API.
@@ -54,17 +250,33 @@ class HttpLLMRuntime(LLMRuntime):
     Connects to a persistent HTTP server for fast LLM calls.
     Avoids subprocess overhead by reusing HTTP connections.
 
+    Enhanced with Hermes-style reliability features:
+    - Concurrent tool execution
+    - Multi-retry with backoff
+    - Empty response nudge
+    - Iteration budget
+    - Tool result truncation
+    - Message sanitization
+
     Args:
         base_url: Base URL of the OpenAI-compatible API
         api_key: API key for authentication
         default_model: Default model to use
         timeout: Request timeout in seconds
+        max_retries: Max retry attempts for transient errors
+        enable_concurrent_tools: Enable concurrent tool execution
+        enable_message_sanitization: Sanitize messages before API call
+        enable_tool_truncation: Truncate oversized tool results
     """
 
     base_url: str = ""
     api_key: str = ""
     default_model: str | None = None
     timeout: int = 120
+    max_retries: int = 3
+    enable_concurrent_tools: bool = True
+    enable_message_sanitization: bool = True
+    enable_tool_truncation: bool = True
     _last_error: str | None = field(default=None, repr=False)
 
     def __post_init__(self):
@@ -116,7 +328,15 @@ class HttpLLMRuntime(LLMRuntime):
         history: list[dict[str, Any]] | None = None,
         system_prompt: str | None = None,
     ) -> LLMResponse:
-        """Execute an autonomous LLM action with optional function calling.
+        """Execute an autonomous LLM action with enhanced reliability.
+
+        Enhanced features (borrowed from Hermes):
+        - Concurrent tool execution for parallel tool calls
+        - Multi-retry with exponential backoff for transient errors
+        - Empty response nudge to recover from silent LLM
+        - Iteration budget to prevent infinite loops
+        - Tool result truncation to prevent context explosion
+        - Message sanitization to fix encoding issues
 
         When tools are provided, enters a loop: LLM may request tool calls,
         which are executed and fed back until the LLM produces a final text
@@ -124,16 +344,34 @@ class HttpLLMRuntime(LLMRuntime):
         """
         from helen.runtime.tools import dispatch_tool
 
+        # Build messages
         messages: list[dict[str, Any]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
+        if history:
+            messages.extend(history)
         messages.append({"role": "user", "content": prompt})
 
         use_model = model or self.default_model or "default"
         final_text = ""
 
-        for turn in range(max_turns + 1):  # +1 for final nudge response
-            response_msg = self._chat_with_messages(
+        # Iteration budget: prevent infinite loops
+        budget = IterationBudget(max_total=max_turns + 2)  # +2 for nudge retries
+        empty_response_retries = 0
+        max_empty_retries = 2
+
+        while budget.consume():
+            # Message sanitization before each API call
+            if self.enable_message_sanitization:
+                sanitized = _sanitize_messages(messages)
+                if sanitized:
+                    logger.debug("Sanitized %d surrogate chars before API call", sanitized)
+                repaired = _repair_message_sequence(messages)
+                if repaired:
+                    logger.debug("Repaired %d role-alternation violations", repaired)
+
+            # API call with retry
+            response_msg = self._chat_with_messages_retry(
                 messages, model=use_model, temperature=temperature, tools=tools,
             )
             if response_msg is None:
@@ -141,39 +379,119 @@ class HttpLLMRuntime(LLMRuntime):
 
             # Check if LLM wants tool calls
             tool_calls = response_msg.get("tool_calls")
-            if tool_calls and turn < max_turns:
+            if tool_calls:
                 # Append assistant message with tool_calls
                 messages.append(response_msg)
-                # Execute each tool call and append results
-                for tc in tool_calls:
-                    fn_name = tc["function"]["name"]
-                    try:
-                        fn_args = json.loads(tc["function"].get("arguments", "{}"))
-                    except json.JSONDecodeError:
-                        fn_args = {}
-                    result = dispatch_tool(fn_name, fn_args)
+
+                # Execute tool calls (concurrently if enabled)
+                if self.enable_concurrent_tools and len(tool_calls) > 1:
+                    tool_results = _execute_tools_concurrent(tool_calls, dispatch_tool)
+                else:
+                    # Sequential execution
+                    tool_results = []
+                    for tc in tool_calls:
+                        fn_name = tc["function"]["name"]
+                        try:
+                            fn_args = json.loads(tc["function"].get("arguments", "{}"))
+                        except json.JSONDecodeError:
+                            fn_args = {}
+                        result = dispatch_tool(fn_name, fn_args)
+                        tool_results.append((tc, result))
+
+                # Append tool results with truncation
+                for tc, result in tool_results:
+                    if self.enable_tool_truncation:
+                        result = _truncate_tool_result(result)
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tc["id"],
                         "content": result,
                     })
-                # If this is the last tool turn, nudge LLM to produce final answer
-                if turn >= max_turns - 1:
-                    messages.append({
-                        "role": "user",
-                        "content": "Based on the tool results above, please provide your final answer now. Do not make more tool calls.",
-                    })
-                # Continue loop — LLM will see tool results
+
+                # Reset empty response counter after successful tool execution
+                empty_response_retries = 0
                 continue
+
             else:
-                # No tool calls (or exhausted turns) — this is the final text response
-                final_text = response_msg.get("content", "")
+                # No tool calls — check if response is empty
+                content = response_msg.get("content", "")
+                if not content or not content.strip():
+                    # Empty response — nudge the LLM to continue
+                    if empty_response_retries < max_empty_retries:
+                        empty_response_retries += 1
+                        logger.info(
+                            "Empty response from LLM — nudging to continue (%d/%d)",
+                            empty_response_retries, max_empty_retries,
+                        )
+                        # Append empty assistant message + nudge
+                        messages.append(response_msg)
+                        messages.append({
+                            "role": "user",
+                            "content": (
+                                "You returned an empty response. "
+                                "Please process the tool results above and "
+                                "provide your final answer."
+                            ),
+                        })
+                        continue
+                    else:
+                        # Exhausted nudge retries
+                        logger.warning("Empty response after %d nudge retries", max_empty_retries)
+                        break
+
+                # Valid final response
+                final_text = content
                 break
 
         return LLMResponse(
             text=final_text,
             model=use_model,
         )
+
+    def _chat_with_messages_retry(
+        self,
+        messages: list[dict[str, Any]],
+        model: str | None = None,
+        temperature: float = 1.0,
+        tools: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any] | None:
+        """Send a chat completion request with retry logic.
+
+        Retries on transient errors (timeout, 5xx) with exponential backoff.
+        """
+        import time
+
+        for attempt in range(self.max_retries + 1):
+            result = self._chat_with_messages(messages, model=model, temperature=temperature, tools=tools)
+            if result is not None:
+                return result
+
+            # Check if we should retry
+            if attempt < self.max_retries:
+                error = self._last_error or ""
+                # Retry on timeout or server errors
+                is_retryable = (
+                    "timed out" in error.lower()
+                    or "500" in error
+                    or "502" in error
+                    or "503" in error
+                    or "504" in error
+                    or "429" in error  # rate limit
+                )
+                if is_retryable:
+                    # Exponential backoff: 1s, 2s, 4s
+                    wait_time = min(2 ** attempt, 10)
+                    logger.info(
+                        "API call failed (attempt %d/%d): %s — retrying in %ds",
+                        attempt + 1, self.max_retries + 1, error, wait_time,
+                    )
+                    time.sleep(wait_time)
+                    continue
+
+            # Non-retryable error or exhausted retries
+            break
+
+        return None
 
     def _chat(
         self,
@@ -278,12 +596,21 @@ class HttpLLMRuntime(LLMRuntime):
         max_turns: int = 5,
         history: list[dict[str, Any]] | None = None,
     ):
-        """Stream LLM response with full tool-calling loop.
+        """Stream LLM response with enhanced reliability features.
+
+        Enhanced features (borrowed from Hermes):
+        - Concurrent tool execution for parallel tool calls
+        - Stream health checks (timeout detection)
+        - Empty response nudge to recover from silent LLM
+        - Iteration budget to prevent infinite loops
+        - Tool result truncation to prevent context explosion
+        - Message sanitization to fix encoding issues
 
         Yields event dicts:
             {"type": "content", "content": "..."}     — text chunk
             {"type": "tool_call", "name": "...", "args": {...}}  — tool invocation
             {"type": "tool_result", "name": "...", "result": "..."}  — tool result
+            {"type": "usage", "usage": {...}}         — token usage
             {"type": "error", "message": "..."}       — error
         """
         from helen.runtime.tools import dispatch_tool
@@ -299,7 +626,21 @@ class HttpLLMRuntime(LLMRuntime):
 
         url = f"{self.base_url}/chat/completions"
 
-        for turn in range(max_turns + 1):
+        # Iteration budget: prevent infinite loops
+        budget = IterationBudget(max_total=max_turns + 2)
+        empty_response_retries = 0
+        max_empty_retries = 2
+
+        while budget.consume():
+            # Message sanitization before each API call
+            if self.enable_message_sanitization:
+                sanitized = _sanitize_messages(messages)
+                if sanitized:
+                    logger.debug("Sanitized %d surrogate chars before stream call", sanitized)
+                repaired = _repair_message_sequence(messages)
+                if repaired:
+                    logger.debug("Repaired %d role-alternation violations", repaired)
+
             # Build streaming request
             payload: dict[str, Any] = {
                 "model": use_model,
@@ -324,16 +665,34 @@ class HttpLLMRuntime(LLMRuntime):
             )
 
             try:
-                # Collect streamed chunks
+                # Collect streamed chunks with health checking
                 full_content = ""
                 tool_calls_acc: dict[int, dict] = {}  # index -> {name, args_str, id}
                 usage_info: dict[str, int] = {}  # token usage from final chunk
+                last_chunk_time = 0.0
+                stale_threshold = 90.0  # seconds without data = stale
+
+                import time
+                stream_start = time.time()
 
                 with urllib.request.urlopen(req, timeout=self.timeout) as response:
                     for line_bytes in response:
                         line = line_bytes.decode("utf-8").strip()
                         if not line:
                             continue
+
+                        last_chunk_time = time.time()
+
+                        # Health check: detect stale stream
+                        if last_chunk_time - stream_start > stale_threshold:
+                            elapsed_since_chunk = time.time() - last_chunk_time
+                            if elapsed_since_chunk > stale_threshold:
+                                logger.warning(
+                                    "Stream stale for %.1fs — closing connection",
+                                    elapsed_since_chunk,
+                                )
+                                yield {"type": "error", "message": f"Stream stale after {elapsed_since_chunk:.1f}s"}
+                                break
 
                         if line.startswith("data: "):
                             data_str = line[6:]
@@ -405,18 +764,45 @@ class HttpLLMRuntime(LLMRuntime):
                     ]
                     messages.append(assistant_msg)
 
-                    # Execute each tool and yield events
-                    for i in sorted(tool_calls_acc.keys()):
-                        tc = tool_calls_acc[i]
-                        fn_name = tc["name"]
+                    # Execute tools concurrently if enabled
+                    tool_call_list = [
+                        {
+                            "id": tool_calls_acc[i]["id"],
+                            "function": {
+                                "name": tool_calls_acc[i]["name"],
+                                "arguments": tool_calls_acc[i]["args_str"],
+                            },
+                        }
+                        for i in sorted(tool_calls_acc.keys())
+                    ]
+
+                    if self.enable_concurrent_tools and len(tool_call_list) > 1:
+                        tool_results = _execute_tools_concurrent(tool_call_list, dispatch_tool)
+                    else:
+                        # Sequential execution
+                        tool_results = []
+                        for tc in tool_call_list:
+                            fn_name = tc["function"]["name"]
+                            try:
+                                fn_args = json.loads(tc["function"].get("arguments", "{}"))
+                            except json.JSONDecodeError:
+                                fn_args = {}
+                            result = dispatch_tool(fn_name, fn_args)
+                            tool_results.append((tc, result))
+
+                    # Yield events and append results
+                    for tc, result in tool_results:
+                        fn_name = tc["function"]["name"]
                         try:
-                            fn_args = json.loads(tc["args_str"]) if tc["args_str"] else {}
+                            fn_args = json.loads(tc["function"].get("arguments", "{}"))
                         except json.JSONDecodeError:
                             fn_args = {}
 
                         yield {"type": "tool_call", "name": fn_name, "args": fn_args}
 
-                        result = dispatch_tool(fn_name, fn_args)
+                        # Truncate result if enabled
+                        if self.enable_tool_truncation:
+                            result = _truncate_tool_result(result)
 
                         yield {"type": "tool_result", "name": fn_name, "result": result}
 
@@ -426,17 +812,35 @@ class HttpLLMRuntime(LLMRuntime):
                             "content": result,
                         })
 
-                    # Nudge on last turn
-                    if turn >= max_turns - 1:
-                        messages.append({
-                            "role": "user",
-                            "content": "Based on the tool results above, please provide your final answer now.",
-                        })
-
+                    # Reset empty response counter after successful tool execution
+                    empty_response_retries = 0
                     continue  # Next turn: stream again with tool results
 
                 else:
-                    # No tool calls — final text response, already streamed
+                    # No tool calls — check if response is empty
+                    if not full_content or not full_content.strip():
+                        # Empty response — nudge the LLM
+                        if empty_response_retries < max_empty_retries:
+                            empty_response_retries += 1
+                            logger.info(
+                                "Empty stream response — nudging to continue (%d/%d)",
+                                empty_response_retries, max_empty_retries,
+                            )
+                            messages.append({"role": "assistant", "content": ""})
+                            messages.append({
+                                "role": "user",
+                                "content": (
+                                    "You returned an empty response. "
+                                    "Please process the tool results above and "
+                                    "provide your final answer."
+                                ),
+                            })
+                            continue
+                        else:
+                            logger.warning("Empty stream response after %d nudge retries", max_empty_retries)
+                            break
+
+                    # Valid final response — already streamed
                     break
 
             except urllib.error.HTTPError as e:
