@@ -117,7 +117,7 @@ category: error-patterns
 - ✅ `join(list, sep)` 参数顺序 — v1.8.1 修复
 - ✅ Regex 函数参数顺序统一 — v1.8.1 修复
 - ✅ `true`/`false` 打印为小写 — v1.8.1 修复
+- ✅ 字符串插值 `interpolate(template, vars)` — v1.8.1 修复
+- ✅ 多行字符串自动去缩进 — v1.8.1 修复
 
-**待改进**：
-- 无字符串插值，长字符串拼接冗长
-- 多行字符串保留缩进，影响 prompt 模板可读性
+**所有已知问题已修复！** 🎉

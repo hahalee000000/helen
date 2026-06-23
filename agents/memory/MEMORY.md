@@ -39,19 +39,35 @@ _在开发过程中发现的 Helen 语言限制将记录在此。_
 - **状态**：已在 v1.8.1 修复，与 Python `re` 模块一致
 
 ### ✅ 已修复：`True`/`False` 打印为 Python 风格
-- **原问题**：Helen 代码中写 `true`/`false`（小写），但 `print(true)` 输出 `True`（首字母大写）
-- **修复**：`print()` 现在输出 `true`/`false`（小写），与 Helen 代码风格一致
+## Helen 语言不足（待改进）
+
+_在开发过程中发现的 Helen 语言限制将记录在此。_
+
+### ✅ 已修复：字符串插值
+- **原问题**：没有字符串插值，长字符串拼接冗长
+- **修复**：添加 `interpolate(template, vars)` 函数
+- **示例**：
+  ```helen
+  let template = "Hello, {{name}}! You are {{age}} years old."
+  let vars = {"name": "Alice", "age": 30}
+  let result = interpolate(template, vars)
+  // result = "Hello, Alice! You are 30 years old."
+  ```
 - **状态**：已在 v1.8.1 修复
 
-### 4. 字符串拼接冗长
-- **问题**：没有字符串插值（string interpolation），只能 `+` 拼接
-- **影响**：构建长字符串（如 SKILL.md 内容）时代码可读性差
-- **建议**：支持 `"Hello {{name}}"` 模板语法或 `f"Hello {name}"` 语法
-
-### 5. 无多行字符串的缩进处理
-- **问题**：多行字符串 `"""..."""` 保留所有缩进空格
-- **影响**：在 agent block 中写 prompt 时，缩进会混入内容
-- **变通**：手动 trim 或不在缩进处写多行字符串
+### ✅ 已修复：多行字符串缩进处理
+- **原问题**：三引号字符串保留所有缩进，影响代码可读性
+- **修复**：自动去除公共前导空白（dedent）
+- **示例**：
+  ```helen
+  let text = """
+      Line 1
+      Line 2
+          Nested indentation preserved
+  """
+  // Result: "Line 1\nLine 2\n    Nested indentation preserved"
+  ```
+- **状态**：已在 v1.8.1 修复
 
 ## Helen 语言特性（已验证支持）
 
