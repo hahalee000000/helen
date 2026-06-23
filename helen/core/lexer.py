@@ -387,6 +387,7 @@ class Scanner:
         """Consume a triple-quoted string literal.
 
         Triple-quoted strings may span multiple lines.
+        Automatically removes common leading whitespace (dedent).
         
         Performance: Uses StringIO for efficient string building.
         """
@@ -416,6 +417,8 @@ class Scanner:
             )
 
         literal = buffer.getvalue()
+        # Dedent: remove common leading whitespace
+        literal = self._dedent_string(literal)
         self._tokens.append(
             Token(
                 type=TokenType.TRIPLE_QUOTE_STRING,
@@ -428,6 +431,37 @@ class Scanner:
                 file=self.file,
             )
         )
+
+    def _dedent_string(self, text: str) -> str:
+        """Remove common leading whitespace from a multiline string.
+        
+        This makes triple-quoted strings more readable when indented in code.
+        Empty lines are ignored when calculating common indent.
+        """
+        lines = text.split('\n')
+        if not lines:
+            return text
+        
+        # Find minimum indentation (ignoring empty lines)
+        min_indent = None
+        for line in lines:
+            if line.strip():  # Non-empty line
+                indent = len(line) - len(line.lstrip())
+                if min_indent is None or indent < min_indent:
+                    min_indent = indent
+        
+        if min_indent is None or min_indent == 0:
+            return text
+        
+        # Remove common indent from all lines
+        dedented_lines = []
+        for line in lines:
+            if line.strip():  # Non-empty line
+                dedented_lines.append(line[min_indent:])
+            else:  # Empty line
+                dedented_lines.append('')
+        
+        return '\n'.join(dedented_lines)
 
     # ── numbers ────────────────────────────────────────────────────────
 

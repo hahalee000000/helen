@@ -372,6 +372,47 @@ def _find(s: str, sub: str) -> int:
     return s.find(sub)
 
 
+def _interpolate(template: str, vars: dict) -> str:
+    """Interpolate a template string with variables.
+    
+    Replaces {{var}} placeholders with values from the vars dict.
+    Supports nested attribute access like {{user.name}}.
+    
+    Args:
+        template: String with {{var}} placeholders
+        vars: Dictionary of variable names to values
+    
+    Returns:
+        Interpolated string
+    
+    Example:
+        let result = interpolate("Hello, {{name}}!", {"name": "Alice"})
+        // result = "Hello, Alice!"
+    """
+    import re
+    
+    def replace_var(match):
+        var_path = match.group(1).strip()
+        parts = var_path.split(".")
+        try:
+            value = vars.get(parts[0])
+        except (AttributeError, TypeError):
+            return match.group(0)  # Keep original if not found
+        
+        for part in parts[1:]:
+            if isinstance(value, dict):
+                value = value.get(part)
+            else:
+                value = None
+                break
+        
+        if value is None:
+            return match.group(0)  # Keep original if not found
+        return str(value)
+    
+    return re.sub(r"\{\{(.+?)\}\}", replace_var, template)
+
+
 # ── Math builtins ──────────────────────────────────────────────
 
 
@@ -588,6 +629,7 @@ def _register_builtins() -> None:
         BuiltinFunction("substring", "Extract substring", "substring(s, start, end?)", _substring, "string"),
         BuiltinFunction("trim_prefix", "Remove prefix", "trim_prefix(s, prefix)", _trim_prefix, "string"),
         BuiltinFunction("trim_suffix", "Remove suffix", "trim_suffix(s, suffix)", _trim_suffix, "string"),
+        BuiltinFunction("interpolate", "Template string interpolation", "interpolate(template, vars)", _interpolate, "string"),
 
         # Math
         BuiltinFunction("round", "Round number", "round(value, ndigits?)", _round, "math"),
