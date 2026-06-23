@@ -18,7 +18,7 @@
 | [07](#教程-07-异步编程) | async、await、并发 Agent 调用 |
 | [08](#教程-08-模块与导入) | import、多格式、跨文件复用、路径安全 |
 | [09](#教程-09-python-ffi) | Python 库导入、类型转换、调用 Python 函数 |
-| [10](#教程-10-标准库参考) | 185 个内置函数，覆盖 AI 应用开发所有核心需求 |
+| [10](#教程-10-标准库参考) | 186 个内置函数，覆盖 AI 应用开发所有核心需求 |
 | [11](#教程-11-构建多-agent-系统) | 多 Agent 协作、工具调用、Agent 模式 |
 | [12](#教程-12-测试框架与-tdd) | 测试 API、断言函数、Expect 链式、TDD 工作流、监听模式 |
 | [13](#教程-13-技能系统) | 技能概念、三层搜索、创建技能、REPL 技能感知 |
@@ -533,11 +533,25 @@ let le = 5 <= 5     // true
 
 ### 逻辑运算
 
+Helen 使用 `&&`（与）、`||`（或）、`!`（非）作为逻辑操作符：
+
 ```helen
 let and = true && false   // false
 let or = true || false    // true
 let not = !true           // false
+
+// 实际使用示例
+let x = 5
+if x > 0 && x < 10 {
+    print("x is between 0 and 10")
+}
+
+if !path_exists(file) {
+    print("File not found")
+}
 ```
+
+**注意**：Helen 不使用 `and`、`or`、`not` 关键字，而是使用符号 `&&`、`||`、`!`。
 
 ### 字符串连接
 
@@ -806,11 +820,92 @@ main {
 
 **注意**: `local_x` 只在 `test()` 函数内部可见，在 `main` 中无法访问。
 
+## 闭包与匿名函数（v1.7+）
+
+Helen 支持闭包（closures）和匿名函数（anonymous functions），允许你创建内联函数并捕获外部作用域的变量。
+
+### 匿名函数
+
+使用 `fn(params) { body }` 语法创建匿名函数：
+
+```helen
+// 匿名函数赋值给变量
+let add = fn(a, b) { return a + b }
+print(add(2, 3))  // 5
+
+// 直接作为参数传递
+let doubled = map([1, 2, 3], fn(x) { return x * 2 })
+print(doubled)  // [2, 4, 6]
+
+let evens = filter([1, 2, 3, 4, 5], fn(x) { return x % 2 == 0 })
+print(evens)  // [2, 4]
+```
+
+### 闭包
+
+闭包可以捕获定义时的环境，在后续调用中访问外部变量：
+
+```helen
+// 闭包捕获外部变量
+fn make_adder(x) {
+    return fn(y) { return x + y }
+}
+
+let add5 = make_adder(5)
+print(add5(10))  // 15
+print(add5(20))  // 25
+
+// 闭包在实际应用中
+fn make_multiplier(factor) {
+    return fn(x) { return x * factor }
+}
+
+let double = make_multiplier(2)
+let triple = make_multiplier(3)
+
+print(double(5))   // 10
+print(triple(5))   // 15
+```
+
+### 与高阶函数配合
+
+闭包与 `map`、`filter`、`reduce` 等高阶函数配合使用：
+
+```helen
+let nums = [1, 2, 3, 4, 5]
+
+// 使用闭包进行数据转换
+let squared = map(nums, fn(n) { return n * n })
+print(squared)  // [1, 4, 9, 16, 25]
+
+// 使用闭包进行过滤
+let large = filter(nums, fn(n) { return n > 3 })
+print(large)  // [4, 5]
+
+// 使用闭包进行聚合
+let sum = reduce(nums, fn(acc, n) { return acc + n }, 0)
+print(sum)  // 15
+
+// 链式调用
+let result = nums
+    |> filter(fn(n) { return n % 2 == 0 })
+    |> map(fn(n) { return n * 10 })
+print(result)  // [20, 40]
+```
+
+### 注意事项
+
+- 闭包捕获的是变量的**引用**，不是值
+- 匿名函数可以访问定义时的所有外部变量
+- 闭包可以用于创建工厂函数、回调函数等模式
+
 ## 练习
 
 1. 编写一个计算斐波那契数列的递归函数
 2. 编写一个函数，接受列表并返回最大值
 3. 编写一个函数，判断一个字符串是否为回文
+4. 使用闭包实现一个计数器函数 `make_counter()`，每次调用返回递增的值
+5. 使用 `map` 和匿名函数将列表中的所有字符串转换为大写
 
 ---
 
@@ -1185,6 +1280,8 @@ agent Translator {
     """
 }
 ```
+
+**注意**：三引号字符串（`"""..."""`）会自动去除公共前导空白（auto-dedent），使得在代码中缩进的多行字符串在运行时保持整洁。例如上面的 prompt 在运行时不会包含前导空格。
 
 ## Agent 配置
 
@@ -2537,16 +2634,16 @@ main {
 
 # 教程 10: 标准库参考
 
-> 185 个内置函数，覆盖 AI 应用开发的所有核心需求
+> 186 个内置函数，覆盖 AI 应用开发的所有核心需求
 
 ## 概览
 
-Helen 标准库提供 185 个内置函数，分为 9 大类别：
+Helen 标准库提供 186 个内置函数，分为 9 大类别：
 
 | 类别 | 函数数 | 功能 |
 |------|--------|------|
 | **Core** | 11 | 类型转换、通用操作 |
-| **String** | 36 | 字符串处理、正则、文本分析 |
+| **String** | 37 | 字符串处理、正则、文本分析、模板插值 |
 | **Data** | 25 | JSON、HTML、CSV、Markdown、YAML、TOML、XML |
 | **Collection** | 22 | 列表、字典、集合操作 |
 | **Network** | 9 | HTTP 请求、URL 处理 |
@@ -2588,7 +2685,7 @@ type(42)                      // "int"
 isinstance(42, "int")         // true
 ```
 
-## String 函数 (36)
+## String 函数 (37)
 
 ### 基础操作 (12)
 
@@ -2614,6 +2711,18 @@ endswith("hello", "lo")       // true
 find("hello", "ell")          // 1
 replace("hello", "l", "L")    // "heLLo"
 substring("hello", 1, 3)      // "el"
+
+// 字符串插值（v1.8.1+）
+let template = "Hello, {{name}}! You are {{age}} years old."
+let vars = {"name": "Alice", "age": 30}
+interpolate(template, vars)
+// "Hello, Alice! You are 30 years old."
+
+// 支持嵌套属性访问
+let template2 = "User: {{user.name}}, Email: {{user.email}}"
+let vars2 = {"user": {"name": "Bob", "email": "bob@example.com"}}
+interpolate(template2, vars2)
+// "User: Bob, Email: bob@example.com"
 ```
 
 ### 正则表达式 (5)
