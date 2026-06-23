@@ -327,6 +327,7 @@ class HttpLLMRuntime(LLMRuntime):
         max_turns: int = 1,
         history: list[dict[str, Any]] | None = None,
         system_prompt: str | None = None,
+        dispatch_fn: Any = None,
     ) -> LLMResponse:
         """Execute an autonomous LLM action with enhanced reliability.
 
@@ -338,11 +339,20 @@ class HttpLLMRuntime(LLMRuntime):
         - Tool result truncation to prevent context explosion
         - Message sanitization to fix encoding issues
 
+        Args:
+            dispatch_fn: Optional custom tool dispatch function.
+                Signature: (name: str, args: dict) -> str
+                If not provided, uses the default dispatch_tool from helen.runtime.tools.
+                This allows injecting Helen function execution logic.
+
         When tools are provided, enters a loop: LLM may request tool calls,
         which are executed and fed back until the LLM produces a final text
         response or max_turns is reached.
         """
-        from helen.runtime.tools import dispatch_tool
+        from helen.runtime.tools import dispatch_tool as default_dispatch
+
+        # Use custom dispatch function or fall back to default
+        _dispatch = dispatch_fn if dispatch_fn is not None else default_dispatch
 
         # Build messages
         messages: list[dict[str, Any]] = []
@@ -385,7 +395,7 @@ class HttpLLMRuntime(LLMRuntime):
 
                 # Execute tool calls (concurrently if enabled)
                 if self.enable_concurrent_tools and len(tool_calls) > 1:
-                    tool_results = _execute_tools_concurrent(tool_calls, dispatch_tool)
+                    tool_results = _execute_tools_concurrent(tool_calls, _dispatch)
                 else:
                     # Sequential execution
                     tool_results = []
@@ -395,7 +405,7 @@ class HttpLLMRuntime(LLMRuntime):
                             fn_args = json.loads(tc["function"].get("arguments", "{}"))
                         except json.JSONDecodeError:
                             fn_args = {}
-                        result = dispatch_tool(fn_name, fn_args)
+                        result = _dispatch(fn_name, fn_args)
                         tool_results.append((tc, result))
 
                 # Append tool results with truncation
@@ -595,6 +605,7 @@ class HttpLLMRuntime(LLMRuntime):
         tools: list[dict[str, Any]] | None = None,
         max_turns: int = 5,
         history: list[dict[str, Any]] | None = None,
+        dispatch_fn: Any = None,
     ):
         """Stream LLM response with enhanced reliability features.
 
@@ -606,6 +617,12 @@ class HttpLLMRuntime(LLMRuntime):
         - Tool result truncation to prevent context explosion
         - Message sanitization to fix encoding issues
 
+        Args:
+            dispatch_fn: Optional custom tool dispatch function.
+                Signature: (name: str, args: dict) -> str
+                If not provided, uses the default dispatch_tool from helen.runtime.tools.
+                This allows injecting Helen function execution logic.
+
         Yields event dicts:
             {"type": "content", "content": "..."}     — text chunk
             {"type": "tool_call", "name": "...", "args": {...}}  — tool invocation
@@ -613,7 +630,10 @@ class HttpLLMRuntime(LLMRuntime):
             {"type": "usage", "usage": {...}}         — token usage
             {"type": "error", "message": "..."}       — error
         """
-        from helen.runtime.tools import dispatch_tool
+        from helen.runtime.tools import dispatch_tool as default_dispatch
+
+        # Use custom dispatch function or fall back to default
+        _dispatch = dispatch_fn if dispatch_fn is not None else default_dispatch
 
         use_model = model or self.default_model or "default"
 
@@ -777,7 +797,7 @@ class HttpLLMRuntime(LLMRuntime):
                     ]
 
                     if self.enable_concurrent_tools and len(tool_call_list) > 1:
-                        tool_results = _execute_tools_concurrent(tool_call_list, dispatch_tool)
+                        tool_results = _execute_tools_concurrent(tool_call_list, _dispatch)
                     else:
                         # Sequential execution
                         tool_results = []
@@ -787,7 +807,7 @@ class HttpLLMRuntime(LLMRuntime):
                                 fn_args = json.loads(tc["function"].get("arguments", "{}"))
                             except json.JSONDecodeError:
                                 fn_args = {}
-                            result = dispatch_tool(fn_name, fn_args)
+                            result = _dispatch(fn_name, fn_args)
                             tool_results.append((tc, result))
 
                     # Yield events and append results

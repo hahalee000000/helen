@@ -4,6 +4,10 @@
 // Pure Helen language implementation of a self-evolving
 // programming assistant with skill management.
 //
+// NEW ARCHITECTURE: Functions in the `functions` block are
+// automatically exposed as LLM-callable tools. The LLM can
+// invoke these functions directly during reasoning.
+//
 // Usage:
 //   helen agents/programming_agent.helen
 //   // Or from REPL: :agent agents/programming_agent.helen
@@ -17,7 +21,10 @@ agent HelenProgrammingAgent(project_dir: str, user_input: str) {
     temperature 0.2
     max-turns 10
     streaming true
-    tools ["read_file", "write_file", "exec", "path_exists", "analyze_code", "check_security", "quality_score"]
+    // Note: `tools` declaration is now optional. Functions in the
+    // `functions` block are automatically exposed as LLM tools.
+    // You can still use `tools` to add Python built-in tools.
+    tools ["read_file", "write_file", "shell_exec", "patch_file", "calculate", "load_skill"]
 
     prompt """
     你是 Helen 编程助手，专注于辅助 Helen 语言开发。
@@ -35,14 +42,18 @@ agent HelenProgrammingAgent(project_dir: str, user_input: str) {
     技能存储位置: agents/skills/（全局，跨项目共享）
     技能格式: SKILL.md (YAML frontmatter + Markdown)
 
-    你可以使用以下工具函数：
-    - search_skills(context): 搜索匹配的技能
-    - load_skill(name, category): 加载技能内容
-    - save_skill(name, category, content): 保存新技能
-    - analyze_and_fix(file, error): 分析文件并建议修复
-    - run_tests_for_project(dir): 运行项目测试
+    你可以调用以下工具函数（定义在 functions 块中）：
+    - search_skills(context: str): 搜索匹配的技能
+    - load_skill_content(name: str, category: str): 加载技能内容
+    - save_skill(name: str, category: str, content: str): 保存新技能
+    - analyze_and_fix(file: str, error_msg: str): 分析文件并建议修复
+    - run_tests_for_project(dir: str): 运行项目测试
+    - learn_from_interaction(error: map, fix: str, confirmed: bool): 从修复中学习
+    - get_agent_context(): 获取 agent 上下文（记忆 + 技能摘要）
     """
 
+    // Functions in this block are automatically exposed as LLM-callable tools.
+    // The LLM can invoke them during reasoning via function calling.
     functions {
         fn search_skills(context: str) -> list {
             let result = match_skills(context)
@@ -53,7 +64,7 @@ agent HelenProgrammingAgent(project_dir: str, user_input: str) {
             return matched
         }
 
-        fn load_skill(name: str, category: str) -> str {
+        fn load_skill_content(name: str, category: str) -> str {
             let result = skill_read(name, category)
             if result["status"] == "success" {
                 return result["content"]
@@ -121,6 +132,8 @@ agent HelenProgrammingAgent(project_dir: str, user_input: str) {
         }
 
         // 3. LLM reasoning with full context
+        // The LLM can now call any function defined in the `functions` block
         llm stream
     }
 }
+

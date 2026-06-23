@@ -194,10 +194,14 @@ class LlmMixin:
         agent_name = self._current_agent.name if self._current_agent else None
 
         try:
+            # Create custom dispatch function that can execute Helen functions
+            dispatch_fn = self._create_dispatch_fn()
+
             response = self.llm_runtime.act(
                 prompt, tools=tools, model=model,
                 temperature=temperature, max_turns=max_turns,
                 system_prompt=system_prompt,
+                dispatch_fn=dispatch_fn,
             )
             audit_duration = (time.time() - audit_start) * 1000
 
@@ -324,6 +328,9 @@ class LlmMixin:
         agent_name = self._current_agent.name if self._current_agent else None
 
         try:
+            # Create custom dispatch function that can execute Helen functions
+            dispatch_fn = self._create_dispatch_fn()
+
             # Stream response with full tool-calling loop
             full_response = []
             tool_calls_log = []
@@ -332,6 +339,7 @@ class LlmMixin:
                 prompt, model=model, temperature=temperature,
                 system_prompt=system_prompt, tools=tools,
                 max_turns=max_turns,
+                dispatch_fn=dispatch_fn,
             ):
                 event_type = event.get("type", "content")
 
@@ -465,16 +473,26 @@ class LlmMixin:
     def _build_tools_list(self: Any) -> list[dict[str, Any]]:
         """Build the tools list for llm act from agent declarations.
 
+        Two sources of tools:
+        1. functions { } block — Helen functions become LLM-callable tools
+        2. tools ["web_search", ...] — Python tools from Helen tool registry
+
         Always includes load_skill (HLD 3.6.5) for Tier 2 skill disclosure.
-        If the agent declares `tools ["web_search", ...]`, includes those
-        built-in tool schemas from the Helen tool registry.
-        If no tools are declared, includes a default set of useful tools.
         """
         from helen.runtime.tools import get_tool_schemas
 
         tools: list[dict[str, Any]] = []
+        tool_names: set[str] = set()
 
-        # Check if agent declared specific tools
+        # 1. Scan functions block — Helen functions become tools
+        if self._current_agent is not None and self._current_agent.functions:
+            for fn_decl in self._current_agent.functions:
+                schema = self._function_to_tool_schema(fn_decl)
+                if schema and schema["function"]["name"] not in tool_names:
+                    tools.append(schema)
+                    tool_names.add(schema["function"]["name"])
+
+        # 2. Check if agent declared specific Python tools
         declared_tools: list[str] | None = None
         if self._current_agent is not None:
             for decl in self._current_agent.declarations:
@@ -486,21 +504,146 @@ class LlmMixin:
                     break
 
         if declared_tools is not None:
-            # Agent explicitly declared tools — use those
-            tools.extend(get_tool_schemas(declared_tools))
-        else:
-            # No explicit tools declaration — include default useful tools
+            # Agent explicitly declared tools — add those not already covered
+            for schema in get_tool_schemas(declared_tools):
+                if schema["function"]["name"] not in tool_names:
+                    tools.append(schema)
+                    tool_names.add(schema["function"]["name"])
+        elif not tools:
+            # No functions block and no explicit tools — include default useful tools
             default_tools = ["web_search", "web_fetch", "read_file",
                              "write_file", "patch_file", "calculate"]
-            tools.extend(get_tool_schemas(default_tools))
+            for schema in get_tool_schemas(default_tools):
+                if schema["function"]["name"] not in tool_names:
+                    tools.append(schema)
+                    tool_names.add(schema["function"]["name"])
 
         # Always include load_skill for Tier 2 skill disclosure (HLD 3.6.5)
-        # Check if it's already included
-        tool_names = [t["function"]["name"] for t in tools]
         if "load_skill" not in tool_names:
             tools.extend(get_tool_schemas(["load_skill"]))
 
         return tools
+
+    def _function_to_tool_schema(self: Any, fn_decl: Any) -> dict[str, Any] | None:
+        """Convert a Helen FunctionDeclNode to an OpenAI tool schema.
+
+        Generates a JSON Schema for the function's parameters based on
+        type annotations. Returns None if the function cannot be converted.
+        """
+        from helen.core.ast import TypeNode
+
+        fn_name = fn_decl.name
+        properties: dict[str, Any] = {}
+        required: list[str] = []
+
+        for param in fn_decl.params:
+            param_name = param.name
+            param_type = "string"  # default
+
+            # Infer type from annotation
+            if param.type_annotation is not None and isinstance(param.type_annotation, TypeNode):
+                type_name = param.type_annotation.name.lower()
+                if type_name in ("int", "integer"):
+                    param_type = "integer"
+                elif type_name in ("float", "number"):
+                    param_type = "number"
+                elif type_name in ("bool", "boolean"):
+                    param_type = "boolean"
+                elif type_name in ("list", "array"):
+                    param_type = "array"
+                    # TODO: infer items type if available
+                elif type_name in ("map", "dict", "object"):
+                    param_type = "object"
+                else:
+                    param_type = "string"
+
+            properties[param_name] = {"type": param_type}
+
+            # Required if no default value
+            if param.default_value is None:
+                required.append(param_name)
+
+        return {
+            "type": "function",
+            "function": {
+                "name": fn_name,
+                "description": f"Helen function: {fn_name}",
+                "parameters": {
+                    "type": "object",
+                    "properties": properties,
+                    "required": required,
+                },
+            },
+        }
+
+    def _create_dispatch_fn(self: Any) -> Any:
+        """Create a custom dispatch function that can execute Helen functions.
+
+        Returns a function with signature (name: str, args: dict) -> str.
+        When called:
+        1. First checks if the name matches an agent's Helen function
+        2. If yes, executes the Helen function and returns the result as JSON
+        3. If no, falls back to the default Python tool dispatch
+        """
+        from helen.runtime.tools import dispatch_tool as default_dispatch
+        import json
+
+        # Capture current agent context
+        agent = self._current_agent
+        interpreter = self
+
+        def dispatch(name: str, args: dict) -> str:
+            # Check if this is an agent's Helen function
+            if agent is not None and agent.functions:
+                for fn_decl in agent.functions:
+                    if fn_decl.name == name:
+                        # Execute the Helen function
+                        try:
+                            result = interpreter._execute_agent_function(fn_decl, args)
+                            # Convert result to JSON string for LLM
+                            if isinstance(result, str):
+                                return result
+                            return json.dumps(result, ensure_ascii=False, default=str)
+                        except Exception as e:
+                            return json.dumps({"error": f"Helen function '{name}' failed: {e}"})
+
+            # Fall back to Python tool dispatch
+            return default_dispatch(name, args)
+
+        return dispatch
+
+    def _execute_agent_function(self: Any, fn_decl: Any, args: dict) -> Any:
+        """Execute an agent's Helen function with the given arguments.
+
+        Creates a new scope, binds arguments to parameters, and executes the function body.
+        """
+        from helen.core.ast import AgentParamNode
+
+        # Create a new scope for the function
+        old_env = self.environment
+        self.environment = self.environment.enter_scope()
+
+        try:
+            # Bind arguments to parameters
+            for i, param in enumerate(fn_decl.params):
+                param_name = param.name
+                if param_name in args:
+                    value = args[param_name]
+                    self.environment.define(param_name, value)
+                elif param.default_value is not None:
+                    # Use default value
+                    default_val = param.default_value.accept(self)
+                    self.environment.define(param_name, default_val)
+                else:
+                    # Missing required argument
+                    raise ValueError(f"Missing required argument: {param_name}")
+
+            # Execute function body
+            result = fn_decl.body.accept(self)
+            return result
+        finally:
+            # Restore environment
+            self.environment = old_env
 
     def _build_skill_index(self: Any) -> str:
         """Build the Tier 1 Skill Index for system prompt injection.

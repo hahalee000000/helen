@@ -119,6 +119,13 @@ from helen.stdlib.quality import (
     _analyze_code, _check_security, _quality_score, _quality_report,
 )
 
+# Import tool wrapper functions
+from helen.stdlib.tools import (
+    # Tool wrappers
+    _web_search, _web_fetch, _read_file as _tool_read_file, _write_file as _tool_write_file,
+    _shell_exec, _calculate, _patch_file, _load_skill,
+)
+
 
 @dataclass
 class BuiltinFunction:

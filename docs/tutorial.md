@@ -1350,6 +1350,112 @@ agent Coder {
 | `shell_exec` | 执行 shell 命令 | `command: str` |
 | `calculate` | 数学计算 | `expression: str` |
 
+## functions 块作为 LLM 工具（新架构）
+
+**重要更新**：Agent 的 `functions` 块中定义的函数现在**自动成为 LLM 可调用的工具**。LLM 在推理时可以直接调用这些函数，无需额外的 `tools` 声明。
+
+### 工作原理
+
+当 agent 包含 `functions` 块时：
+1. 解释器扫描所有函数声明
+2. 为每个函数生成 OpenAI tool schema（基于参数类型注解）
+3. LLM 在 `llm act` 或 `llm stream` 时可以通过 function calling 调用这些函数
+4. 调用时，解释器在 agent 的 scope 中执行函数并返回结果
+
+### 示例
+
+```helen
+agent CodeAnalyzer {
+    description "Analyze code quality"
+    model "gpt-4"
+    
+    // functions 块中的函数自动成为 LLM 工具
+    functions {
+        fn count_lines(code: str) -> int {
+            return len(split(code, "\n"))
+        }
+        
+        fn find_todos(code: str) -> list {
+            let lines = split(code, "\n")
+            let todos = []
+            for line in lines {
+                if regex_test("TODO|FIXME", line) {
+                    todos.append(line)
+                }
+            }
+            return todos
+        }
+        
+        fn calculate_complexity(code: str) -> int {
+            // 简单的复杂度估算：统计控制流关键字
+            let keywords = ["if", "for", "while", "match"]
+            var complexity = 0
+            for kw in keywords {
+                complexity = complexity + count(code, kw)
+            }
+            return complexity
+        }
+    }
+    
+    prompt """
+    分析以下代码的质量：
+    {{code}}
+    
+    你可以调用以下工具函数：
+    - count_lines(code: str): 统计代码行数
+    - find_todos(code: str): 查找 TODO 注释
+    - calculate_complexity(code: str): 估算代码复杂度
+    """
+    
+    main {
+        // LLM 可以调用 functions 块中的函数
+        llm stream
+    }
+}
+```
+
+### 与 tools 声明的关系
+
+- `tools` 声明用于引用 **Python 内置工具**（如 `web_search`, `read_file`）
+- `functions` 块中的函数是 **Helen 自定义工具**
+- 两者可以共存：`functions` 块中的函数优先，`tools` 声明补充 Python 工具
+
+```helen
+agent HybridAgent {
+    description "Hybrid agent with both Helen and Python tools"
+    
+    // Helen 自定义工具（自动暴露给 LLM）
+    functions {
+        fn search_local_docs(query: str) -> str {
+            // 自定义搜索逻辑
+            let results = read_file("docs/index.txt")
+            return filter(results, fn(line) { return contains(line, query) })
+        }
+    }
+    
+    // Python 内置工具（补充）
+    tools ["web_search", "calculate"]
+    
+    prompt "..."
+    main { llm stream }
+}
+```
+
+### 类型推断
+
+函数参数的类型注解会被转换为 JSON Schema：
+
+| Helen 类型 | JSON Schema 类型 |
+|-----------|------------------|
+| `str` | `string` |
+| `int`, `integer` | `integer` |
+| `float`, `number` | `number` |
+| `bool`, `boolean` | `boolean` |
+| `list`, `array` | `array` |
+| `map`, `dict`, `object` | `object` |
+
+没有类型注解的参数默认为 `string`。
+
 ## Agent main 块
 
 Agent 可以包含 `main` 块作为执行入口，使用 `call` 调用：
