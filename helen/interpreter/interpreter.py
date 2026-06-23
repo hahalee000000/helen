@@ -9,6 +9,10 @@ expression evaluation.
 from __future__ import annotations
 
 import os
+import asyncio
+import concurrent.futures
+import types
+from typing import Callable, Mapping
 from helen.core.ast import (
     AccessNode,
     AgentDeclNode,
@@ -97,6 +101,34 @@ from helen.semantic.types import (
     type_compatible,
     type_of_literal,
 )
+
+# Module-level constants for performance optimization (P1)
+# Type name mapping for _check_type - avoids creating dict on every match
+_TYPE_NAME_MAP: dict[str, type] = {
+    "Int": int,
+    "Float": float,
+    "String": str,
+    "Bool": bool,
+    "List": list,
+    "Map": dict,
+    "Null": type(None),
+}
+
+# Stdlib function cache for agent calls - avoids 219+ lookups per call (P1)
+_STDLIB_CACHE: dict[str, Callable] | None = None
+
+
+def _get_stdlib_cache() -> dict[str, Callable]:
+    """Lazy-initialize and return the stdlib function cache."""
+    global _STDLIB_CACHE
+    if _STDLIB_CACHE is None:
+        from helen.stdlib import stdlib
+        _STDLIB_CACHE = {}
+        for name in stdlib.names:
+            builtin = stdlib.lookup(name)
+            if builtin is not None:
+                _STDLIB_CACHE[name] = builtin.fn
+    return _STDLIB_CACHE
 
 
 class Closure:
@@ -673,7 +705,6 @@ class Interpreter(LlmMixin, Visitor[object]):
 
     def visit_for_await_stmt(self, node: ForAwaitStmtNode) -> object:
         """Execute a for-await-in loop (async iteration)."""
-        import asyncio
         from helen.interpreter.task import Task
 
         iterable = node.iterable.accept(self)
@@ -966,16 +997,7 @@ class Interpreter(LlmMixin, Visitor[object]):
 
     def _check_type(self, value: object, type_name: str) -> bool:
         """Check if value matches the specified type name."""
-        type_map = {
-            "Int": int,
-            "Float": float,
-            "String": str,
-            "Bool": bool,
-            "List": list,
-            "Map": dict,
-            "Null": type(None),
-        }
-        expected_type = type_map.get(type_name)
+        expected_type = _TYPE_NAME_MAP.get(type_name)
         if expected_type is None:
             return False
         return isinstance(value, expected_type)
@@ -1546,11 +1568,10 @@ class Interpreter(LlmMixin, Visitor[object]):
         # Start from a fresh root, not inheriting parent agent's variables.
         # But stdlib must still be available — inject it into the fresh env.
         call_env = Environment()
-        from helen.stdlib import stdlib as _stdlib  # noqa: PLC0415
-        for _name in _stdlib.names:
-            _builtin = _stdlib.lookup(_name)
-            if _builtin is not None:
-                call_env.define(_name, _builtin.fn)
+        # Use pre-cached stdlib functions for performance (P1 optimization)
+        stdlib_cache = _get_stdlib_cache()
+        for _name, _fn in stdlib_cache.items():
+            call_env.define(_name, _fn)
 
         # Bind parameters from agent's param declarations
         for param in agent.params:
@@ -1636,10 +1657,8 @@ class Interpreter(LlmMixin, Visitor[object]):
 
     def _is_agent_streaming(self, agent: AgentDeclNode) -> bool:
         """Check if agent has streaming true declaration."""
-        for decl in agent.declarations:
-            if decl.streaming:
-                return True
-        return False
+        # Use pre-computed attribute for O(1) lookup (P2 optimization)
+        return agent.has_streaming
 
     def _create_streaming_response(self, text: str):
         """Create a StreamingResponse from text for for-await iteration."""
@@ -1705,8 +1724,6 @@ class Interpreter(LlmMixin, Visitor[object]):
             The task's exception for single failed task.
             AggregateError if any task in a list fails.
         """
-        import asyncio
-
         # Check if we're already in a running event loop (e.g., in REPL)
         # Use a safer approach that works in all contexts
         in_event_loop = False
@@ -1723,7 +1740,6 @@ class Interpreter(LlmMixin, Visitor[object]):
             if tasks.is_pending:
                 if in_event_loop:
                     # Already in event loop - use thread pool directly
-                    import concurrent.futures
                     with concurrent.futures.ThreadPoolExecutor() as executor:
                         future = executor.submit(tasks.execute)
                         future.result()  # Wait for completion
@@ -1738,7 +1754,6 @@ class Interpreter(LlmMixin, Visitor[object]):
         if pending_tasks:
             if in_event_loop:
                 # Already in event loop - use thread pool for concurrency
-                import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     futures = [executor.submit(task.execute) for task in pending_tasks]
                     # Wait for all to complete

@@ -147,6 +147,10 @@ class LlmMixin:
         repetition when the agent's prompt already contains all necessary
         information (HLD 3.6.5).
         """
+        # P1 optimization: Cache rendered prompt for this LLM call
+        # Avoids multiple _render_prompt_template calls during single llm act
+        rendered_prompt_cache = self._get_rendered_agent_prompt()
+        
         # Evaluate the prompt expression
         if node.prompt is not None:
             prompt = node.prompt.accept(self)
@@ -158,9 +162,8 @@ class LlmMixin:
         # Bare form: if prompt is empty and we're inside an agent,
         # use the rendered agent prompt as the user message
         if not prompt and self._current_agent is not None:
-            rendered = self._get_rendered_agent_prompt()
-            if rendered:
-                prompt = rendered
+            if rendered_prompt_cache:
+                prompt = rendered_prompt_cache
 
         # Extract agent settings if inside an agent context
         model = self._get_agent_setting("model")
@@ -174,8 +177,8 @@ class LlmMixin:
         if tools and max_turns < 3:
             max_turns = 3
 
-        # Get rendered agent prompt as system_prompt
-        system_prompt = self._get_rendered_agent_prompt()
+        # Use cached rendered agent prompt as system_prompt (P1 optimization)
+        system_prompt = rendered_prompt_cache
 
         # Inject skill index into system prompt
         skill_index = self._build_skill_index()

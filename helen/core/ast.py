@@ -647,6 +647,7 @@ class AgentDeclNode(StatementNode):
     Attributes:
         functions: Functions declared inside ``functions { }`` block (HLD 3.5.3).
             Registered in the agent's call scope when invoked, so ``main`` can call them.
+        has_streaming: Pre-computed flag indicating if any declaration has streaming=true (P2 optimization).
     """
     name: str
     params: list[AgentParamNode]
@@ -656,6 +657,7 @@ class AgentDeclNode(StatementNode):
     span: SourceSpan
     functions: list["FunctionDeclNode"] = field(default_factory=list)
     function_vars: list["VarDeclNode"] = field(default_factory=list)  # let/const in functions block
+    has_streaming: bool = False  # Pre-computed for _is_agent_streaming (P2)
 
     def accept(self, visitor: Visitor[R]) -> R:
         """Dispatch to the visitor."""
@@ -1288,6 +1290,10 @@ class ASTPrinter(Visitor[str]):
     def visit_match_stmt(self, node: MatchStmtNode) -> str:
         """Visit a MatchStmtNode."""
         return self._parenthesize("match", node.subject)
+
+    def visit_match_expr(self, node: MatchExprNode) -> str:
+        """Visit a MatchExprNode."""
+        return self._parenthesize("match-expr", node.subject)
 
     def visit_optional_type(self, node: OptionalTypeNode) -> str:
         """Visit an OptionalTypeNode."""

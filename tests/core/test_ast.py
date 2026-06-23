@@ -192,6 +192,10 @@ class MockVisitor(Visitor[str]):
         self.calls.append("visit_access")
         return "<access>"
 
+    def visit_match_expr(self, node) -> str:
+        self.calls.append("visit_match_expr")
+        return "<match_expr>"
+
     # Additional visit methods for Phase 0+ nodes
     def visit_declaration(self, node) -> str:
         self.calls.append("visit_declaration")

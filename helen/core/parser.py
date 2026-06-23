@@ -684,11 +684,14 @@ class Parser:
                 self._error(f"Unexpected token in agent body: {self._current().type.name}")
                 self._synchronize()
         end = self._consume(TokenType.RIGHT_BRACE, "Expected '}' after agent body.")
+        # Pre-compute has_streaming for performance (P2 optimization)
+        has_streaming = any(decl.streaming for decl in declarations)
         return AgentDeclNode(name=name_tok.lexeme, params=params,
                              declarations=declarations, prompt=prompt, logic=logic,
                              span=self._make_span(name_tok, end),
                              functions=agent_functions,
-                             function_vars=agent_function_vars)
+                             function_vars=agent_function_vars,
+                             has_streaming=has_streaming)
 
     def _agent_param(self) -> AgentParamNode:
         """Parse an agent parameter: name: Type? = expr?."""

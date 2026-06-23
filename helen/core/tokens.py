@@ -7,9 +7,10 @@ their corresponding TokenType values.
 
 from __future__ import annotations
 
+import types
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Union, Mapping
 
 if TYPE_CHECKING:
     from helen.core.source import SourceSpan
@@ -178,18 +179,18 @@ _KEYWORD_MAP: dict[str, TokenType] = {
 }
 
 
-def keywords() -> dict[str, TokenType]:
+def keywords() -> Mapping[str, TokenType]:
     """Return the mapping from keyword strings to their TokenType values.
 
     Returns:
-        A dict mapping each reserved keyword (e.g. ``"agent"``, ``"let"``)
-        to the corresponding ``TokenType`` enum member.  The returned dict
-        is a shallow copy so callers cannot mutate the internal cache.
+        A read-only mapping of reserved keywords (e.g. ``"agent"``, ``"let"``)
+        to their corresponding ``TokenType`` enum members.  Returns a
+        MappingProxyType to prevent mutation while avoiding copy overhead.
     """
-    return dict(_KEYWORD_MAP)
+    return types.MappingProxyType(_KEYWORD_MAP)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Token:
     """An immutable lexical token produced by the Helen scanner.
 

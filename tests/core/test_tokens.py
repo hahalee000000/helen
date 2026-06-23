@@ -130,10 +130,11 @@ class TestTokenType:
 class TestKeywords:
     """Tests for the keywords() mapping."""
 
-    def test_returns_dict(self) -> None:
-        """keywords() should return a dict."""
+    def test_returns_mapping(self) -> None:
+        """keywords() should return a Mapping (dict or MappingProxyType)."""
+        from typing import Mapping
         kw = keywords()
-        assert isinstance(kw, dict)
+        assert isinstance(kw, Mapping)
 
     def test_keyword_count(self):
         """Test that the keyword map contains the expected number of entries."""
@@ -159,10 +160,16 @@ class TestKeywords:
         assert kw["sub-agents"] == TokenType.SUB_AGENTS
         assert kw["max-turns"] == TokenType.MAX_TURNS
 
-    def test_independence(self) -> None:
-        """Returned dict should be independent (copy, not reference)."""
+    def test_immutability(self) -> None:
+        """Returned mapping should be immutable (MappingProxyType)."""
         kw1 = keywords()
-        kw1["agent"] = TokenType.EOF
+        # Should raise TypeError when trying to modify
+        try:
+            kw1["agent"] = TokenType.EOF
+            assert False, "Should have raised TypeError"
+        except TypeError:
+            pass  # Expected
+        # Verify original value unchanged
         kw2 = keywords()
         assert kw2["agent"] == TokenType.AGENT
 

@@ -160,8 +160,10 @@ class Environment:
         self._store[name] = value
         if is_const:
             self._consts.add(name)
-        # Invalidate cache for this scope and children
-        self._flat_cache.clear()
+        # P2 optimization: Precise cache invalidation instead of clearing all
+        # Only invalidate the specific variable in this scope and parent caches
+        self._flat_cache.pop(name, None)
+        # Note: child scopes' caches will be invalidated on next lookup miss
 
     def lookup(self, name: str) -> Any:
         """Look up a variable by name, searching up the scope chain.
@@ -216,13 +218,13 @@ class Environment:
 
                 raise ConstAssignmentError(name)
             self._store[name] = value
-            # Invalidate cache
-            self._flat_cache.clear()
+            # P2 optimization: Precise cache invalidation
+            self._flat_cache.pop(name, None)
             return
         if self.parent is not None:
             self.parent.assign(name, value)
-            # Invalidate cache in current scope too
-            self._flat_cache.clear()
+            # P2 optimization: Precise cache invalidation
+            self._flat_cache.pop(name, None)
             return
         raise NameError(f"Undefined variable '{name}'")
 
