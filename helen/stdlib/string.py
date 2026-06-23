@@ -15,12 +15,12 @@ from typing import Any
 # ── Regex operations ───────────────────────────────────────────
 
 
-def _regex_match(s: str, pattern: str) -> dict[str, Any] | None:
+def _regex_match(pattern: str, s: str) -> dict[str, Any] | None:
     """Match pattern at the beginning of string.
 
     Args:
-        s: Input string
         pattern: Regex pattern
+        s: Input string
 
     Returns:
         Dict with 'match', 'groups', 'start', 'end' if matched, None otherwise
@@ -29,13 +29,13 @@ def _regex_match(s: str, pattern: str) -> dict[str, Any] | None:
         ValueError: If pattern is invalid
 
     Example:
-        let result = regex_match("123abc", "\\d+")
+        let result = regex_match("\\d+", "123abc")
         // result = {"match": "123", "groups": (), "start": 0, "end": 3}
         
-        let result2 = regex_match("abc123", "\\d+")
+        let result2 = regex_match("\\d+", "abc123")
         // result2 = None (pattern doesn't match at start)
         
-        if regex_match(text, "^hello") != null {
+        if regex_match("^hello", text) != null {
             print("text starts with hello")
         }
     """
@@ -55,12 +55,12 @@ def _regex_match(s: str, pattern: str) -> dict[str, Any] | None:
     }
 
 
-def _regex_search(s: str, pattern: str) -> dict[str, Any] | None:
+def _regex_search(pattern: str, s: str) -> dict[str, Any] | None:
     """Search for pattern anywhere in string.
 
     Args:
-        s: Input string
         pattern: Regex pattern
+        s: Input string
 
     Returns:
         Dict with 'match', 'groups', 'start', 'end' if found, None otherwise
@@ -69,10 +69,10 @@ def _regex_search(s: str, pattern: str) -> dict[str, Any] | None:
         ValueError: If pattern is invalid
 
     Example:
-        let result = regex_search("abc123def", "\\d+")
+        let result = regex_search("\\d+", "abc123def")
         // result = {"match": "123", "groups": (), "start": 3, "end": 6}
         
-        if regex_search(text, "world") != null {
+        if regex_search("world", text) != null {
             print("found world")
         }
     """
@@ -92,15 +92,15 @@ def _regex_search(s: str, pattern: str) -> dict[str, Any] | None:
     }
 
 
-def _regex_test(s: str, pattern: str) -> bool:
+def _regex_test(pattern: str, s: str) -> bool:
     """Test if pattern matches anywhere in string. Returns boolean.
 
     This is a convenience function that returns true/false instead of
     a match dict, making it easier to use in conditions.
 
     Args:
-        s: Input string
         pattern: Regex pattern
+        s: Input string
 
     Returns:
         True if pattern matches, False otherwise
@@ -109,13 +109,13 @@ def _regex_test(s: str, pattern: str) -> bool:
         ValueError: If pattern is invalid
 
     Example:
-        if regex_test(text, "\\d+") {
+        if regex_test("\\d+", text) {
             print("text contains digits")
         }
         
         let words = ["apple", "banana", "cherry"]
         for word in words {
-            if regex_test(word, "a") {
+            if regex_test("a", word) {
                 print(word + " contains 'a'")
             }
         }
@@ -126,12 +126,12 @@ def _regex_test(s: str, pattern: str) -> bool:
         raise ValueError(f"Invalid regex pattern: {e}") from e
 
 
-def _regex_replace(s: str, pattern: str, replacement: str) -> str:
+def _regex_replace(pattern: str, s: str, replacement: str) -> str:
     """Replace all occurrences of pattern in string.
 
     Args:
-        s: Input string
         pattern: Regex pattern
+        s: Input string
         replacement: Replacement string (supports \\1, \\2 for groups)
 
     Returns:
@@ -141,10 +141,10 @@ def _regex_replace(s: str, pattern: str, replacement: str) -> str:
         ValueError: If pattern is invalid
 
     Example:
-        let result = regex_replace("abc123def456", "\\d+", "X")
+        let result = regex_replace("\\d+", "abc123def456", "X")
         // result = "abcXdefX"
         
-        let result2 = regex_replace("a@b c@d", "(\\w+)@(\\w+)", "$1_at_$2")
+        let result2 = regex_replace("(\\w+)@(\\w+)", "a@b c@d", "$1_at_$2")
         // result2 = "a_at_b c_at_d"
     """
     try:
@@ -153,12 +153,12 @@ def _regex_replace(s: str, pattern: str, replacement: str) -> str:
         raise ValueError(f"Invalid regex pattern: {e}") from e
 
 
-def _regex_split(s: str, pattern: str) -> list[str]:
+def _regex_split(pattern: str, s: str) -> list[str]:
     """Split string by regex pattern.
 
     Args:
-        s: Input string
         pattern: Regex pattern to split on
+        s: Input string
 
     Returns:
         List of string parts
@@ -179,12 +179,12 @@ def _regex_split(s: str, pattern: str) -> list[str]:
         raise ValueError(f"Invalid regex pattern: {e}") from e
 
 
-def _regex_findall(s: str, pattern: str) -> list[str]:
+def _regex_findall(pattern: str, s: str) -> list[str]:
     """Find all occurrences of pattern in string.
 
     Args:
-        s: Input string
         pattern: Regex pattern
+        s: Input string
 
     Returns:
         List of all matches
@@ -193,10 +193,10 @@ def _regex_findall(s: str, pattern: str) -> list[str]:
         ValueError: If pattern is invalid
 
     Example:
-        let numbers = regex_findall("abc123def456ghi789", "\\d+")
+        let numbers = regex_findall("\\d+", "abc123def456ghi789")
         // numbers = ["123", "456", "789"]
         
-        let words = regex_findall("hello world", "\\b\\w+\\b")
+        let words = regex_findall("\\b\\w+\\b", "hello world")
         // words = ["hello", "world"]
     """
     try:

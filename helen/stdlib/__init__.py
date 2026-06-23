@@ -170,7 +170,13 @@ stdlib = StdlibRegistry()
 
 def _print(*args: Any) -> str:
     """Print values to stdout."""
-    parts = [str(a) for a in args]
+    parts = []
+    for a in args:
+        # Convert booleans to lowercase to match Helen syntax
+        if isinstance(a, bool):
+            parts.append("true" if a else "false")
+        else:
+            parts.append(str(a))
     result = " ".join(parts)
     print(result)
     return result
@@ -341,7 +347,7 @@ def _split(s: str, sep: str = " ") -> list[str]:
     return s.split(sep)
 
 
-def _join(sep: str, items: list[str]) -> str:
+def _join(items: list[str], sep: str) -> str:
     """Join list of strings with separator."""
     return sep.join(str(item) for item in items)
 
@@ -574,7 +580,7 @@ def _register_builtins() -> None:
         BuiltinFunction("lower", "Lowercase string", "lower(s)", _lower, "string"),
         BuiltinFunction("strip", "Trim whitespace", "strip(s)", _strip, "string"),
         BuiltinFunction("split", "Split string", "split(s, sep?)", _split, "string"),
-        BuiltinFunction("join", "Join strings", "join(sep, items)", _join, "string"),
+        BuiltinFunction("join", "Join strings", "join(items, sep)", _join, "string"),
         BuiltinFunction("startswith", "Check prefix", "startswith(s, prefix)", _startswith, "string"),
         BuiltinFunction("endswith", "Check suffix", "endswith(s, suffix)", _endswith, "string"),
         BuiltinFunction("replace", "Replace substring", "replace(s, old, new)", _replace, "string"),
@@ -615,12 +621,12 @@ def _register_builtins() -> None:
         BuiltinFunction("url_decode", "URL decode", "url_decode(s)", _url_decode, "network"),
 
         # String regex Operations
-        BuiltinFunction("regex_match", "Regex match at start", "regex_match(s, pattern)", _regex_match, "string"),
-        BuiltinFunction("regex_search", "Regex search anywhere", "regex_search(s, pattern)", _regex_search, "string"),
-        BuiltinFunction("regex_test", "Regex test returns bool", "regex_test(s, pattern)", _regex_test, "string"),
-        BuiltinFunction("regex_replace", "Regex replace", "regex_replace(s, pattern, replacement)", _regex_replace, "string"),
-        BuiltinFunction("regex_split", "Regex split", "regex_split(s, pattern)", _regex_split, "string"),
-        BuiltinFunction("regex_findall", "Regex find all", "regex_findall(s, pattern)", _regex_findall, "string"),
+        BuiltinFunction("regex_match", "Regex match at start", "regex_match(pattern, s)", _regex_match, "string"),
+        BuiltinFunction("regex_search", "Regex search anywhere", "regex_search(pattern, s)", _regex_search, "string"),
+        BuiltinFunction("regex_test", "Regex test returns bool", "regex_test(pattern, s)", _regex_test, "string"),
+        BuiltinFunction("regex_replace", "Regex replace", "regex_replace(pattern, s, replacement)", _regex_replace, "string"),
+        BuiltinFunction("regex_split", "Regex split", "regex_split(pattern, s)", _regex_split, "string"),
+        BuiltinFunction("regex_findall", "Regex find all", "regex_findall(pattern, s)", _regex_findall, "string"),
 
         # String text analysis
         BuiltinFunction("tokenize", "Tokenize text", "tokenize(text)", _tokenize, "string"),

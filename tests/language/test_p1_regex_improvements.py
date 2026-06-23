@@ -73,12 +73,12 @@ main {
         assert "matched" in result["stdout"]
     
     def test_regex_replace_natural_order(self, temp_dir):
-        """regex_replace should be regex_replace(string, pattern, replacement)."""
+        """regex_replace should be regex_replace(pattern, string, replacement)."""
         test_file = temp_dir / "test.helen"
         test_file.write_text("""
 main {
     let text = "hello world"
-    let result = regex_replace(text, "world", "universe")
+    let result = regex_replace("world", text, "universe")
     print(result)
 }
 """)
@@ -96,7 +96,7 @@ class TestRegexTestFunction:
         test_file.write_text("""
 main {
     let text = "hello world"
-    if regex_test(text, "world") {
+    if regex_test("world", text) {
         print("found")
     } else {
         print("not found")
@@ -113,7 +113,7 @@ main {
         test_file.write_text("""
 main {
     let text = "hello world"
-    if regex_test(text, "xyz") {
+    if regex_test("xyz", text) {
         print("found")
     } else {
         print("not found")
@@ -132,7 +132,7 @@ main {
     let words = ["apple", "banana", "cherry", "date"]
     let count = 0
     for word in words {
-        if regex_test(word, "a") {
+        if regex_test("a", word) {
             count = count + 1
         }
     }
@@ -148,12 +148,12 @@ class TestRegexSplitFindall:
     """Test regex_split and regex_findall with new parameter order."""
     
     def test_regex_split_natural_order(self, temp_dir):
-        """regex_split should be regex_split(string, pattern)."""
+        """regex_split should be regex_split(pattern, string)."""
         test_file = temp_dir / "test.helen"
         test_file.write_text("""
 main {
     let text = "a,b,c,d"
-    let parts = regex_split(text, ",")
+    let parts = regex_split(",", text)
     print(len(parts))
     for part in parts {
         print(part)

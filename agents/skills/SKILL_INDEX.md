@@ -1,23 +1,24 @@
 # Helen Programming Agent — Skill Index
 
 > Auto-maintained skill catalog. Do not edit manually.
+> Updated by: `update_skill_index()` in `contracts/contracts.helen`
 
 ## error-patterns/
 
-(No skills yet)
+_No skills yet. Skills are learned from successful fixes._
 
 ## code-quality/
 
-(No skills yet)
+_No skills yet._
 
 ## testing/
 
-(No skills yet)
+_No skills yet._
 
 ## architecture/
 
-(No skills yet)
+_No skills yet._
 
 ## general/
 
-(No skills yet)
+_No skills yet._

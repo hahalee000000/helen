@@ -1,0 +1,9 @@
+import "contracts/contracts.helen"
+
+main {
+    print(is_valid_category("error-patterns"))
+    print(is_valid_category("nonexistent"))
+    
+    let result = process_input(".", "test")
+    print(result["context_loaded"])
+}

@@ -475,7 +475,19 @@ class Interpreter(LlmMixin, Visitor[object]):
 
         # Check if callee is a stdlib builtin function (HLD M15)
         if callable(callee):
-            return callee(*args)
+            # Wrap Closure arguments as Python callables for stdlib functions
+            wrapped_args = []
+            for arg in args:
+                if isinstance(arg, Closure):
+                    # Create a Python wrapper that calls the closure
+                    def make_wrapper(closure_obj):
+                        def wrapper(*py_args):
+                            return self._call_closure(closure_obj, list(py_args))
+                        return wrapper
+                    wrapped_args.append(make_wrapper(arg))
+                else:
+                    wrapped_args.append(arg)
+            return callee(*wrapped_args)
 
         callee_str = callee_name if callee_name else type(callee).__name__
         self._runtime_error(node.span, f"'{callee_str}' is not callable")

@@ -1,322 +1,126 @@
 // ============================================================
-// Helen Programming Agent
+// Helen Programming Agent — Main Entry Point
 //
-// Orchestrator for Helen language development assistance.
-// Uses contract-first design with skill management, matching,
-// learning, and evolution capabilities.
+// Pure Helen language implementation of a self-evolving
+// programming assistant with skill management.
 //
-// Features used:
-//   - Module imports (v1.8)
-//   - Pipe operator |> (v1.8)
-//   - Enhanced pattern matching (v1.8)
-//   - Closures (v1.7)
-//   - regex_test for boolean checks (v1.8)
+// Usage:
+//   helen agents/programming_agent.helen
+//   // Or from REPL: :agent agents/programming_agent.helen
 // ============================================================
-
-// ── Import Contracts ──────────────────────────────────────────
 
 import "contracts/contracts.helen"
 
-// ── Agent Configuration ───────────────────────────────────────
+agent HelenProgrammingAgent(project_dir: str, user_input: str) {
+    description "Helen 编程助手 — 具备技能自进化能力的垂直 Copilot"
+    model "gpt-4"
+    temperature 0.2
+    max-turns 10
+    streaming true
+    tools ["read_file", "write_file", "exec", "path_exists", "analyze_code", "check_security", "quality_score"]
 
-const AGENT_NAME = "Helen Programming Agent"
-const AGENT_VERSION = "1.0"
+    prompt """
+    你是 Helen 编程助手，专注于辅助 Helen 语言开发。
 
-// ── Utility Functions ─────────────────────────────────────────
+    项目目录: {{project_dir}}
+    用户输入: {{user_input}}
 
-/**
- * format_result — Format a result map for display
- *
- * Uses pipe operator for clean composition.
- */
-fn format_result(result) -> str {
-    let status = result["status"]
-    let message = result["message"]
+    你的工作流程：
+    1. 搜索技能库（agents/skills/）匹配已知模式
+    2. 如果匹配到技能，优先复用已知修复方案
+    3. 如果没有匹配，用 LLM 推理解决
+    4. 解决后，如果用户确认成功，提取新模式保存为技能
+    5. 更新 Agent 记忆（agents/memory/MEMORY.md）
 
-    if status == "success" {
-        return "[OK] " + message
-    }
-    if status == "error" {
-        let code = result["error_code"]
-        return "[ERR:" + str(code) + "] " + message
-    }
-    if status == "skipped" {
-        return "[SKIP] " + message
-    }
-    return "[?] " + str(status) + ": " + str(message)
-}
+    技能存储位置: agents/skills/（全局，跨项目共享）
+    技能格式: SKILL.md (YAML frontmatter + Markdown)
 
-/**
- * classify_input — Classify user input by intent
- *
- * Uses regex_test for clean boolean checks.
- */
-fn classify_input(user_input) -> str {
-    let lower = user_input.lower()
+    你可以使用以下工具函数：
+    - search_skills(context): 搜索匹配的技能
+    - load_skill(name, category): 加载技能内容
+    - save_skill(name, category, content): 保存新技能
+    - analyze_and_fix(file, error): 分析文件并建议修复
+    - run_tests_for_project(dir): 运行项目测试
+    """
 
-    if regex_test(lower, "create|new|add") {
-        return "create"
-    }
-    if regex_test(lower, "read|show|display|list") {
-        return "read"
-    }
-    if regex_test(lower, "update|modify|edit") {
-        return "update"
-    }
-    if regex_test(lower, "delete|remove") {
-        return "delete"
-    }
-    if regex_test(lower, "search|find|match") {
-        return "search"
-    }
-    if regex_test(lower, "learn|remember") {
-        return "learn"
-    }
-    if regex_test(lower, "analyze|quality|score") {
-        return "analyze"
-    }
-    if regex_test(lower, "test|run") {
-        return "test"
-    }
-    return "unknown"
-}
-
-/**
- * handle_skill_operation — Route skill CRUD operations
- *
- * Uses match with string patterns.
- */
-fn handle_skill_operation(operation, name, category, content) -> map {
-    match operation {
-        case "create" {
-            return skill_create(name, category, content)
+    functions {
+        fn search_skills(context: str) -> list {
+            let result = match_skills(context)
+            // Use map with lambda to extract keywords
+            let matched = map(result["matches"], fn(item) {
+                return item["keyword"]
+            })
+            return matched
         }
-        case "read" {
-            return skill_read(name, category)
-        }
-        case "update" {
-            return skill_update(name, category, content)
-        }
-        case "delete" {
-            return skill_delete(name, category)
-        }
-        case "list" {
-            return skill_list()
-        }
-        default {
-            return {"status": "error", "message": "unknown operation: " + operation, "error_code": ERROR_VALIDATION}
-        }
-    }
-}
 
-/**
- * run_quality_analysis — Analyze a Helen source file
- *
- * Demonstrates pipe-style composition.
- */
-fn run_quality_analysis(file_path) -> map {
-    if path_exists(file_path) == false {
-        return {"status": "error", "message": "file not found: " + file_path, "error_code": ERROR_NOT_FOUND}
-    }
-
-    let result = analyze_file(file_path)
-
-    if result["error"] != null {
-        return {"status": "error", "message": result["error"], "error_code": ERROR_IO}
-    }
-
-    let scores = result["scores"]
-    let grade = scores["grade"]
-    let total = scores["total"]
-
-    return {
-        "status": "success",
-        "message": "Quality: " + grade + " (" + str(total) + "/10)",
-        "scores": scores,
-        "metrics": result["metrics"],
-        "security": result["security"],
-        "error_code": 0
-    }
-}
-
-/**
- * run_test_suite — Execute tests for a project
- */
-fn run_test_suite(project_dir) -> map {
-    if path_exists(project_dir) == false {
-        return {"status": "error", "message": "directory not found: " + project_dir, "error_code": ERROR_NOT_FOUND}
-    }
-
-    let result = run_project_tests(project_dir)
-
-    if result["success"] {
-        return {
-            "status": "success",
-            "message": "All tests passed (" + str(result["passed"]) + "/" + str(result["total"]) + ")",
-            "error_code": 0
-        }
-    }
-
-    return {
-        "status": "error",
-        "message": "Tests failed: " + str(result["failed"]) + " failures",
-        "error_code": ERROR_VALIDATION
-    }
-}
-
-// ── Interactive Mode ──────────────────────────────────────────
-
-/**
- * interactive_loop — Run interactive REPL-style loop
- *
- * Accepts commands like:
- *   analyze <file>     - Analyze code quality
- *   test <dir>         - Run tests
- *   skills             - List all skills
- *   search <query>     - Search skills
- *   help               - Show help
- *   exit               - Exit agent mode
- */
-fn interactive_loop() -> void {
-    print("Type 'help' for available commands, 'exit' to quit")
-    print("")
-    
-    let running = true
-    while running {
-        let input = input("agent> ")
-        let trimmed = input.strip()
-        
-        if trimmed == "" {
-            continue
-        }
-        
-        if trimmed == "exit" || trimmed == ":quit" {
-            print("Returning to REPL...")
-            running = false
-            continue
-        }
-        
-        if trimmed == "help" {
-            print("Commands:")
-            print("  analyze <file>   - Analyze code quality of a file")
-            print("  test <dir>       - Run test suite in directory")
-            print("  skills           - List all skills")
-            print("  search <query>   - Search skills by keyword")
-            print("  help             - Show this help")
-            print("  exit             - Exit agent mode")
-            continue
-        }
-        
-        if trimmed == "skills" {
-            let result = skill_list()
-            print(format_result(result))
+        fn load_skill(name: str, category: str) -> str {
+            let result = skill_read(name, category)
             if result["status"] == "success" {
-                let skills = result["skills"]
-                for skill in skills {
-                    print("  - " + skill["name"] + " (" + skill["category"] + ")")
-                }
+                return result["content"]
             }
-            continue
+            return ""
         }
-        
-        let parts = trimmed.split(" ")
-        let cmd = parts[0]
-        let arg = ""
-        if len(parts) > 1 {
-            // Get everything after the first space
-            let first_space = trimmed.find(" ")
-            if first_space >= 0 {
-                arg = trimmed.substring(first_space + 1)
+
+        fn save_skill(name: str, category: str, content: str) -> str {
+            let result = skill_create(name, category, content)
+            if result["status"] == "success" {
+                update_skill_index()
+                return "Skill saved: " + result["path"]
+            }
+            return "Failed to save skill: " + result["message"]
+        }
+
+        fn analyze_and_fix(file: str, error_msg: str) -> map {
+            if !path_exists(file) {
+                return {"error": "file not found: " + file}
+            }
+
+            let source = read_file(file)
+            let metrics = analyze_code(source, file)
+            let security = check_security(source)
+            let scores = quality_score(source, file)
+
+            // Search for matching skills
+            let matched = search_skills(error_msg)
+
+            return {
+                "metrics": metrics,
+                "security": security,
+                "scores": scores,
+                "matched_skills": matched,
+                "error_context": error_msg
             }
         }
-        
-        if cmd == "analyze" {
-            if arg == "" {
-                print("Usage: analyze <file>")
-                continue
-            }
-            let result = run_quality_analysis(arg)
-            print(format_result(result))
-            continue
+
+        fn run_tests_for_project(dir: str) -> map {
+            return run_project_tests(dir)
         }
-        
-        if cmd == "test" {
-            if arg == "" {
-                print("Usage: test <directory>")
-                continue
-            }
-            let result = run_test_suite(arg)
-            print(format_result(result))
-            continue
+
+        fn learn_from_interaction(error: map, fix: str, confirmed: bool) -> map {
+            return learn_from_fix(error, fix, confirmed)
         }
-        
-        if cmd == "search" {
-            if arg == "" {
-                print("Usage: search <query>")
-                continue
+
+        fn get_agent_context() -> str {
+            let context = ""
+            if path_exists(MEMORY_PATH) {
+                context = read_file(MEMORY_PATH)
             }
-            let result = match_skills(arg)
-            let keywords = result["keywords"]
-            let matches = result["matches"]
-            print("Keywords: " + str(keywords))
-            print("Matches: " + str(result["count"]))
-            continue
-        }
-        
-        // Default: process as general input
-        let result = process_input(".", trimmed)
-        print("Response: " + result["response"])
-        if len(result["skills_used"]) > 0 {
-            print("Skills used: " + str(result["skills_used"]))
+            let skill_summary = skill_list()
+            return "Memory:\n" + context + "\n\nSkills: " + str(skill_summary["count"]) + " available"
         }
     }
-}
 
-// ── Main Entry Point ──────────────────────────────────────────
+    main {
+        // 1. Load agent context (memory + skill count)
+        let context = get_agent_context()
 
-main {
-    print(AGENT_NAME + " v" + AGENT_VERSION)
-    print("================================")
-    print("")
-    print("Contract Functions (from contracts/contracts.helen):")
-    print("")
-    print("  SkillManager:")
-    print("    skill_create(name, category, content) -> map")
-    print("    skill_read(name, category) -> map")
-    print("    skill_update(name, category, content) -> map")
-    print("    skill_delete(name, category) -> map")
-    print("    skill_list() -> map")
-    print("")
-    print("  SkillMatcher:")
-    print("    extract_keywords(context) -> list")
-    print("    match_skills(context) -> map")
-    print("")
-    print("  SkillLearner:")
-    print("    determine_category(error) -> map")
-    print("    learn_from_fix(error, fix, confirmed) -> map")
-    print("")
-    print("  SkillEvolver:")
-    print("    evolve_skill(skill_path, new_finding) -> map")
-    print("")
-    print("  ProgrammingAgent:")
-    print("    process_input(project_dir, user_input) -> map")
-    print("    analyze_file(file_path) -> map")
-    print("    run_project_tests(project_dir) -> map")
-    print("")
-    print("Orchestrator Functions:")
-    print("    format_result(result) -> str")
-    print("    classify_input(user_input) -> str")
-    print("    handle_skill_operation(op, name, cat, content) -> map")
-    print("    run_quality_analysis(file_path) -> map")
-    print("    run_test_suite(project_dir) -> map")
-    print("")
-    print("Error Codes:")
-    print("  " + str(ERROR_VALIDATION) + ": Validation error")
-    print("  " + str(ERROR_IO) + ": IO error")
-    print("  " + str(ERROR_NOT_FOUND) + ": Not found")
-    print("  " + str(ERROR_ALREADY_EXISTS) + ": Already exists")
-    print("")
-    
-    // Enter interactive mode
-    interactive_loop()
+        // 2. Search for matching skills
+        let matched_skills = search_skills(user_input)
+        if len(matched_skills) > 0 {
+            print("📚 Found " + str(len(matched_skills)) + " matching skill(s)\n")
+        }
+
+        // 3. LLM reasoning with full context
+        llm stream
+    }
 }

@@ -1,5 +1,5 @@
 // ============================================================
-// Helen Programming Agent — Contracts
+// Helen Programming Agent — Contracts (v3)
 //
 // Contract-first design: protocols define interfaces,
 // implementations satisfy the contracts.
@@ -17,14 +17,14 @@
 const SKILL_CATEGORIES = ["error-patterns", "code-quality", "testing", "architecture", "general"]
 const SKILLS_BASE_PATH = "agents/skills"
 const MEMORY_PATH = "agents/memory/MEMORY.md"
-const USER_PATH = "agents/memory/USER.md"
+const USER_PREFS_PATH = "agents/memory/USER.md"
 const INDEX_PATH = "agents/skills/SKILL_INDEX.md"
 
 // Error codes
-const ERROR_VALIDATION = 1
-const ERROR_IO = 101
-const ERROR_NOT_FOUND = 201
-const ERROR_ALREADY_EXISTS = 202
+const ERR_VALIDATION = 1
+const ERR_IO = 101
+const ERR_NOT_FOUND = 201
+const ERR_ALREADY_EXISTS = 202
 
 // ── Protocols (Interface Contracts) ───────────────────────────
 
@@ -65,128 +65,99 @@ fn is_valid_category(category) -> bool {
     return false
 }
 
-fn skill_path(category, name) -> str {
+fn build_skill_path(category, name) -> str {
     return SKILLS_BASE_PATH + "/" + category + "/" + name + "/SKILL.md"
 }
 
-fn skill_dir(category, name) -> str {
+fn build_skill_dir(category, name) -> str {
     return SKILLS_BASE_PATH + "/" + category + "/" + name
 }
 
 // ── SkillManager Implementation ───────────────────────────────
 
-/**
- * skill_create — Create a new skill
- *
- * @pre name is non-empty
- * @pre category is in SKILL_CATEGORIES
- * @post file created at agents/skills/{category}/{name}/SKILL.md
- *
- * @return map { status, message, path, error_code }
- */
 fn skill_create(name, category, content) -> map {
     if name == "" {
-        return {"status": "error", "message": "name cannot be empty", "path": "", "error_code": ERROR_VALIDATION}
+        return {"status": "error", "message": "name cannot be empty", "path": "", "error_code": ERR_VALIDATION}
     }
-    if is_valid_category(category) == false {
-        return {"status": "error", "message": "invalid category: " + category, "path": "", "error_code": ERROR_VALIDATION}
+    if !is_valid_category(category) {
+        return {"status": "error", "message": "invalid category: " + category, "path": "", "error_code": ERR_VALIDATION}
     }
 
-    let dir = skill_dir(category, name)
-    let path = skill_path(category, name)
+    let dir = build_skill_dir(category, name)
+    let path = build_skill_path(category, name)
 
     if path_exists(path) {
-        return {"status": "error", "message": "skill already exists: " + name, "path": path, "error_code": ERROR_ALREADY_EXISTS}
+        return {"status": "error", "message": "skill already exists: " + name, "path": path, "error_code": ERR_ALREADY_EXISTS}
     }
 
-    let mkdir_result = exec("mkdir -p " + dir, true)
-    if mkdir_result["returncode"] != 0 {
-        return {"status": "error", "message": "failed to create directory", "path": "", "error_code": ERROR_IO}
+    let mkdir_result = mkdir_p(dir)
+    if !mkdir_result {
+        return {"status": "error", "message": "failed to create directory", "path": "", "error_code": ERR_IO}
     }
 
     let write_result = write_file(path, content)
-    if write_result == false {
-        return {"status": "error", "message": "failed to write skill file", "path": "", "error_code": ERROR_IO}
+    if !write_result {
+        return {"status": "error", "message": "failed to write skill file", "path": "", "error_code": ERR_IO}
     }
 
     return {"status": "success", "message": "Skill created: " + name, "path": path, "error_code": 0}
 }
 
-/**
- * skill_read — Read skill content
- *
- * @return map { status, message, content, path, error_code }
- */
 fn skill_read(name, category) -> map {
-    let path = skill_path(category, name)
+    let path = build_skill_path(category, name)
 
-    if path_exists(path) == false {
-        return {"status": "error", "message": "skill not found: " + name, "content": "", "path": "", "error_code": ERROR_NOT_FOUND}
+    if !path_exists(path) {
+        return {"status": "error", "message": "skill not found: " + name, "content": "", "path": "", "error_code": ERR_NOT_FOUND}
     }
 
     let content = read_file(path)
     return {"status": "success", "message": "Skill loaded: " + name, "content": content, "path": path, "error_code": 0}
 }
 
-/**
- * skill_update — Update existing skill
- *
- * @return map { status, message, path, error_code }
- */
 fn skill_update(name, category, content) -> map {
-    let path = skill_path(category, name)
+    let path = build_skill_path(category, name)
 
-    if path_exists(path) == false {
-        return {"status": "error", "message": "skill not found: " + name, "path": "", "error_code": ERROR_NOT_FOUND}
+    if !path_exists(path) {
+        return {"status": "error", "message": "skill not found: " + name, "path": "", "error_code": ERR_NOT_FOUND}
     }
 
     let write_result = write_file(path, content)
-    if write_result == false {
-        return {"status": "error", "message": "failed to update skill", "path": path, "error_code": ERROR_IO}
+    if !write_result {
+        return {"status": "error", "message": "failed to update skill", "path": path, "error_code": ERR_IO}
     }
 
     return {"status": "success", "message": "Skill updated: " + name, "path": path, "error_code": 0}
 }
 
-/**
- * skill_delete — Delete a skill
- *
- * @return map { status, message, error_code }
- */
 fn skill_delete(name, category) -> map {
-    let dir = skill_dir(category, name)
+    let dir = build_skill_dir(category, name)
 
-    if path_exists(dir) == false {
-        return {"status": "error", "message": "skill not found: " + name, "error_code": ERROR_NOT_FOUND}
+    if !path_exists(dir) {
+        return {"status": "error", "message": "skill not found: " + name, "error_code": ERR_NOT_FOUND}
     }
 
     let rm_result = exec("rm -rf " + dir, true)
     if rm_result["returncode"] != 0 {
-        return {"status": "error", "message": "failed to delete skill", "error_code": ERROR_IO}
+        return {"status": "error", "message": "failed to delete skill", "error_code": ERR_IO}
     }
 
     return {"status": "success", "message": "Skill deleted: " + name, "error_code": 0}
 }
 
-/**
- * skill_list — List all skills
- *
- * @return map { status, skills: list[map], count }
- */
 fn skill_list() -> map {
     let skills = []
 
     for category in SKILL_CATEGORIES {
         let cat_path = SKILLS_BASE_PATH + "/" + category
-        if path_exists(cat_path) {
-            let ls_result = exec("ls -1 " + cat_path + " 2>/dev/null", true)
-            let lines = ls_result["stdout"].split("\n")
-            for line in lines {
-                if line != "" {
+        if path_exists(cat_path) && path_is_dir(cat_path) {
+            let items = list_dir(cat_path)
+            for item in items {
+                let item_path = cat_path + "/" + item
+                if path_is_dir(item_path) {
                     skills.append({
-                        "name": line,
+                        "name": item,
                         "category": category,
-                        "path": cat_path + "/" + line + "/SKILL.md"
+                        "path": item_path + "/SKILL.md"
                     })
                 }
             }
@@ -198,49 +169,50 @@ fn skill_list() -> map {
 
 // ── SkillMatcher Implementation ───────────────────────────────
 
-/**
- * extract_keywords — Extract searchable keywords from context
- *
- * Uses regex_test for boolean checks (cleaner than regex_search != null).
- *
- * @return list[str] — deduplicated keywords
- */
 fn extract_keywords(context) -> list {
     let keywords = []
-    let lower = context.lower()
+    let lower_ctx = context.lower()
 
     // Error keywords
-    let error_kws = ["division", "zero", "error", "exception", "fail", "crash"]
+    let error_kws = ["division", "zero", "error", "exception", "fail", "crash", "null", "index", "overflow"]
     for kw in error_kws {
-        if regex_test(lower, kw) {
+        if regex_test(kw, lower_ctx) {
             keywords.append(kw)
         }
     }
 
     // Quality keywords
-    let quality_kws = ["complexity", "quality", "score", "metric", "security"]
+    let quality_kws = ["complexity", "quality", "score", "metric", "security", "coverage"]
     for kw in quality_kws {
-        if regex_test(lower, kw) {
+        if regex_test(kw, lower_ctx) {
             keywords.append(kw)
         }
     }
 
     // Test keywords
-    let test_kws = ["test", "assert", "coverage", "pytest"]
+    let test_kws = ["test", "assert", "coverage", "pytest", "tdd"]
     for kw in test_kws {
-        if regex_test(lower, kw) {
+        if regex_test(kw, lower_ctx) {
             keywords.append(kw)
         }
     }
 
-    // Deduplicate using a filter
+    // Architecture keywords
+    let arch_kws = ["agent", "protocol", "module", "import", "pattern", "design"]
+    for kw in arch_kws {
+        if regex_test(kw, lower_ctx) {
+            keywords.append(kw)
+        }
+    }
+
+    // Deduplicate using filter with closure
     let unique = []
     for kw in keywords {
         let is_dup = false
         for existing in unique {
             if existing == kw { is_dup = true }
         }
-        if is_dup == false {
+        if !is_dup {
             unique.append(kw)
         }
     }
@@ -248,23 +220,18 @@ fn extract_keywords(context) -> list {
     return unique
 }
 
-/**
- * match_skills — Find skills matching context
- *
- * @return map { matches, keywords, count }
- */
 fn match_skills(context) -> map {
     let keywords = extract_keywords(context)
     let matches = []
 
-    if path_exists(INDEX_PATH) == false {
+    if !path_exists(INDEX_PATH) {
         return {"matches": matches, "keywords": keywords, "count": 0}
     }
 
     let index = read_file(INDEX_PATH)
 
     for kw in keywords {
-        if regex_test(index, "(?i)" + kw) {
+        if regex_test("(?i)" + kw, index) {
             matches.append({"keyword": kw, "found": true})
         }
     }
@@ -274,14 +241,7 @@ fn match_skills(context) -> map {
 
 // ── SkillLearner Implementation ───────────────────────────────
 
-/**
- * determine_category — Map error code to skill category
- *
- * Uses match expression with range patterns.
- *
- * @return map { category, code }
- */
-fn determine_category(error) -> map {
+fn determine_category(error) -> str {
     let code = 0
     if error["code"] != null { code = error["code"] }
 
@@ -293,67 +253,86 @@ fn determine_category(error) -> map {
         default { "general" }
     }
 
-    return {"category": category, "code": code}
+    return category
 }
 
-/**
- * learn_from_fix — Learn a new skill from a successful fix
- *
- * @pre error has "message" key
- * @pre fix is non-empty (when confirmed)
- *
- * @return map { status, path, category, name, error_code }
- */
+fn generate_skill_name(error) -> str {
+    let msg = error["message"]
+    let parts = split(msg, " ")
+    
+    // Use map with lambda to clean words
+    let cleaned_parts = map(parts, fn(word) {
+        let w = word.lower()
+        return regex_replace("[^a-z0-9]", w, "")
+    })
+    
+    // Filter empty strings
+    let name_parts = filter(cleaned_parts, fn(w) { return w != "" })
+    
+    // Take first 3
+    let limited = []
+    let i = 0
+    while i < 3 && i < len(name_parts) {
+        limited.append(name_parts[i])
+        i = i + 1
+    }
+    
+    return join(limited, "-")
+}
+
 fn learn_from_fix(error, fix, confirmed) -> map {
-    if confirmed == false {
+    if !confirmed {
         return {"status": "skipped", "path": "", "category": "", "name": "", "error_code": 0}
     }
     if fix == "" {
-        return {"status": "error", "path": "", "category": "", "name": "empty fix", "error_code": ERROR_VALIDATION}
+        return {"status": "error", "path": "", "category": "", "name": "", "message": "empty fix", "error_code": ERR_VALIDATION}
     }
 
-    let cat_result = determine_category(error)
-    let category = cat_result["category"]
-    let name = "learned-" + str(len(fix))
+    let category = determine_category(error)
+    let name = generate_skill_name(error)
 
     // Build SKILL.md content
-    let content = "---\nname: " + name + "\ndescription: Learned from " + error["message"] + "\ncategory: " + category + "\n---\n\n"
-    content = content + "# " + name + "\n\n## Error\n" + error["message"] + "\n\n## Fix\n" + fix + "\n"
+    let content = "---\nname: " + name + "\n"
+    content = content + "description: Learned from " + error["message"] + "\n"
+    content = content + "category: " + category + "\n"
+    content = content + "version: 1.0.0\n"
+    content = content + "---\n\n"
+    content = content + "# " + name + "\n\n"
+    content = content + "## Trigger\n"
+    content = content + "- " + error["message"] + "\n\n"
+    content = content + "## Fix\n" + fix + "\n\n"
+    content = content + "## Pitfalls\n- Review edge cases before applying\n"
 
     let result = skill_create(name, category, content)
-    return {"status": result["status"], "path": result["path"], "category": category, "name": name, "error_code": result["error_code"]}
+    return {
+        "status": result["status"],
+        "path": result["path"],
+        "category": category,
+        "name": name,
+        "error_code": result["error_code"]
+    }
 }
 
 // ── SkillEvolver Implementation ───────────────────────────────
 
-/**
- * evolve_skill — Append new findings to an existing skill
- *
- * @return map { status, path, changes, error_code }
- */
-fn evolve_skill(skill_path, new_finding) -> map {
-    if path_exists(skill_path) == false {
-        return {"status": "error", "path": "", "changes": "skill not found", "error_code": ERROR_NOT_FOUND}
+fn evolve_skill(skill_file_path, new_finding) -> map {
+    if !path_exists(skill_file_path) {
+        return {"status": "error", "path": "", "changes": "skill not found", "error_code": ERR_NOT_FOUND}
     }
 
-    let content = read_file(skill_path)
+    let content = read_file(skill_file_path)
     let updated = content + "\n\n## New Finding\n" + new_finding + "\n"
 
-    let write_result = write_file(skill_path, updated)
-    if write_result == false {
-        return {"status": "error", "path": skill_path, "changes": "failed to write", "error_code": ERROR_IO}
+    let write_result = write_file(skill_file_path, updated)
+    if !write_result {
+        return {"status": "error", "path": skill_file_path, "changes": "failed to write", "error_code": ERR_IO}
     }
 
-    return {"status": "evolved", "path": skill_path, "changes": "Added new finding", "error_code": 0}
+    return {"status": "evolved", "path": skill_file_path, "changes": "Added new finding", "error_code": 0}
 }
 
 // ── ProgrammingAgent Implementation ───────────────────────────
 
-/**
- * process_input — Main entry point: process user input with skill matching
- *
- * @return map { response, skills_used, tests_passed, quality_score }
- */
 fn process_input(project_dir, user_input) -> map {
     let agent_context = ""
     if path_exists(MEMORY_PATH) {
@@ -369,20 +348,13 @@ fn process_input(project_dir, user_input) -> map {
     return {
         "response": "Processed: " + user_input,
         "skills_used": skills_used,
-        "tests_passed": true,
-        "quality_score": 8.5
+        "context_loaded": agent_context != "",
+        "match_count": skill_result["count"]
     }
 }
 
-/**
- * analyze_file — Run 7-dimension quality analysis on a file
- *
- * Uses pipe-style composition for clarity.
- *
- * @return map { metrics, security, scores }
- */
 fn analyze_file(file_path) -> map {
-    if path_exists(file_path) == false {
+    if !path_exists(file_path) {
         return {"metrics": {}, "security": {}, "scores": {}, "error": "file not found"}
     }
 
@@ -394,13 +366,8 @@ fn analyze_file(file_path) -> map {
     return {"metrics": metrics, "security": security, "scores": scores}
 }
 
-/**
- * run_project_tests — Execute test suite and parse results
- *
- * @return map { total, passed, failed, results, success }
- */
 fn run_project_tests(project_dir) -> map {
-    let cmd = "cd " + project_dir + " && bash scripts/run_tests_batch.sh 2>&1"
+    let cmd = "cd " + project_dir + " && helen test tests/ 2>&1"
     let result = exec(cmd, true)
     let output = result["stdout"]
 
@@ -408,10 +375,38 @@ fn run_project_tests(project_dir) -> map {
     let failed = 0
     let total = 0
 
-    if regex_test(output, "All tests passed") {
+    if regex_test("All tests passed", output) {
         passed = 1
         total = 1
     }
 
     return {"total": total, "passed": passed, "failed": failed, "results": [], "success": result["returncode"] == 0}
+}
+
+// ── Index Management ──────────────────────────────────────────
+
+fn update_skill_index() -> map {
+    let all_skills = skill_list()
+    let lines = ["# Helen Programming Agent — Skill Index", "", "> Auto-maintained. Do not edit manually.", ""]
+
+    let current_cat = ""
+    for skill in all_skills["skills"] {
+        let cat = skill["category"]
+        if cat != current_cat {
+            lines.append("## " + cat + "/")
+            lines.append("")
+            current_cat = cat
+        }
+        lines.append("### " + skill["name"])
+        lines.append("- **Path**: " + skill["path"])
+        lines.append("")
+    }
+
+    let content = join(lines, "\n")
+    let write_result = write_file(INDEX_PATH, content)
+    if !write_result {
+        return {"status": "error", "message": "failed to write index", "error_code": ERR_IO}
+    }
+
+    return {"status": "success", "count": all_skills["count"]}
 }
