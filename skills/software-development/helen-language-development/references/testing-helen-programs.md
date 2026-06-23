@@ -65,7 +65,7 @@ modified_source = source.replace(
 // Helen side — accept path as parameter, don't hardcode
 agent HelenAssistant(question: str, docs_path: str) {
     functions {
-        fn load_docs() -> str {
+        fn load_docs(): str {
             return read_file(docs_path)  // Uses parameter, not hardcoded path
         }
     }

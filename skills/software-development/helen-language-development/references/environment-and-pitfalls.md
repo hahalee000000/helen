@@ -81,10 +81,10 @@ Helen is an AI-native DSL being developed at `/home/admin/helen/`. All 966 tests
 │  Helen Program (core logic)             │
 │  agent HelenAssistant(question: str) {  │
 │    functions {                          │
-│      fn load_docs() -> str {            │
+│      fn load_docs(): str {            │
 │        return read_file("docs/...")     │
 │      }                                  │
-│      fn build_context() -> str { ... }  │
+│      fn build_context(): str { ... }  │
 │    }                                    │
 │    main {                               │
 │      let ctx = build_context()          │
@@ -112,13 +112,13 @@ agent KnowledgeAssistant(query: str) {
     prompt "You are an expert assistant. Answer questions based on the provided context."
     
     functions {
-        fn load_knowledge() -> str {
+        fn load_knowledge(): str {
             // Load documentation, code, or data
             let docs = read_file("path/to/knowledge.md")
             return docs
         }
         
-        fn build_context() -> str {
+        fn build_context(): str {
             let knowledge = load_knowledge()
             // String concatenation to build full context
             let context = "Context:\n" + knowledge + "\n\nQuestion: " + query
@@ -479,9 +479,9 @@ for _name in _stdlib.names:
 
 **Lesson**: "Parse but don't store" is a silent bug — syntax check passes, but runtime fails with "'validate_input' is not callable". Always trace parsed constructs through to where they're consumed.
 
-### Parser: `:` and `->` Both Valid for Function Return Types
+### Parser: Only `:` Valid for Function Return Types (v1.8.1+)
 
-Function declarations accept both `fn add(a: int, b: int): int` and `fn add(a: int, b: int) -> int`. The `_function_decl()` method checks `self._match(TokenType.ARROW) or self._match(TokenType.COLON)` before parsing the return type.
+Function declarations now only accept `:` syntax for return types: `fn add(a: int, b: int): int`. The `->` syntax has been removed for consistency — parameters use `name: type`, so return types also use `: type`. The `_function_decl()` method now only checks `self._match(TokenType.COLON)`.
 
 ### Parser: Stray `RIGHT_BRACE` Must Not Cause Infinite Loop
 

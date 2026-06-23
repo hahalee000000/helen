@@ -141,7 +141,7 @@ agent MyFeature(param1: str, param2: str) {
     prompt "..."
     
     functions {
-        fn do_something() -> str {
+        fn do_something(): str {
             // Use param1, param2
         }
     }
@@ -173,7 +173,7 @@ def test_feature_loads_resources(self):
     source = """
 agent MyFeature(param1: str, param2: str) {
     functions {
-        fn load() -> str {
+        fn load(): str {
             return read_file(param1)
         }
     }
@@ -301,11 +301,11 @@ if not source_dir.exists():
 **Fix**: Load both documentation AND source code for comprehensive coverage:
 
 ```helen
-fn load_documentation() -> str {
+fn load_documentation(): str {
     return read_file(docs_path)
 }
 
-fn load_source_code() -> str {
+fn load_source_code(): str {
     let parser = read_file(source_dir + "core/parser.py")
     let interpreter = read_file(source_dir + "interpreter/interpreter.py")
     // ... load key files

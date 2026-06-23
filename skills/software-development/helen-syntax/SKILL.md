@@ -115,7 +115,7 @@ let name: str = "Helen"       # 类型注解
 
 ### 函数声明
 ```helen
-fn add(a: int, b: int) -> int {
+fn add(a: int, b: int): int {
     return a + b
 }
 
@@ -147,7 +147,7 @@ agent MyAgent {
         let config = "default"
         const MAX_RETRIES = 3
         
-        fn get_config() -> str {
+        fn get_config(): str {
             return config  // 可以访问 functions 块变量
         }
     }
@@ -332,7 +332,7 @@ print(counter())  // 2
 ```helen
 // 协议声明
 protocol Printable {
-    fn to_string(self) -> String
+    fn to_string(self): String
 }
 
 // 协议实现（鸭子类型）
@@ -342,7 +342,7 @@ struct Point {
 }
 
 impl Printable for Point {
-    fn to_string(self) -> String {
+    fn to_string(self): String {
         return "Point(" + str(self.x) + ", " + str(self.y) + ")"
     }
 }
