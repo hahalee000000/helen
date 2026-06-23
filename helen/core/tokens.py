@@ -190,7 +190,7 @@ def keywords() -> Mapping[str, TokenType]:
     return types.MappingProxyType(_KEYWORD_MAP)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class Token:
     """An immutable lexical token produced by the Helen scanner.
 
