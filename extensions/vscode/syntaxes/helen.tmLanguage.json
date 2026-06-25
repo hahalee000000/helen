@@ -115,7 +115,7 @@
         },
         {
           "name": "keyword.other.helen",
-          "match": "\\b(import|as|call|await|async|llm|act|stream|choose|option|is)\\b"
+          "match": "\\b(import|as|call|await|async|llm|act|stream|is)\\b"
         },
         {
           "name": "keyword.agent.property.helen",
