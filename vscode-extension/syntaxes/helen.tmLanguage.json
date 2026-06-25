@@ -100,7 +100,7 @@
         },
         {
           "name": "keyword.agent.property.helen",
-          "match": "\\b(description|model|tools|sub-agents|temperature|max-turns|streaming|prompt|memory)\\b"
+          "match": "\\b(description|model|tools|sub-agents|temperature|max-turns|streaming|prompt)\\b"
         }
       ]
     },

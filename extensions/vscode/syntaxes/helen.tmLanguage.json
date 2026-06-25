@@ -85,7 +85,7 @@
                 },
                 {
                     "name": "storage.modifier.helen",
-                    "match": "\\b(description|model|tools|skills|sub-agents|memory|temperature|max-turns|prompt)\\b"
+                    "match": "\\b(description|model|tools|skills|sub-agents|temperature|max-turns|prompt)\\b"
                 }
             ]
         },
