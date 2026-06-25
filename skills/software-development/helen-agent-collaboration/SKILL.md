@@ -4,7 +4,9 @@ description: "Helen Agent 协作模式 — 多 Agent 协作、编排、分工、
 version: 1.0.0
 author: Helen Team
 license: MIT
-tags: [helen, agent, collaboration, orchestration, workflow, multi-agent]
+metadata:
+  hermes:
+    tags: [helen, agent, collaboration, orchestration, workflow, multi-agent]
 ---
 
 # Helen Agent 协作模式

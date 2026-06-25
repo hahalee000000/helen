@@ -4,7 +4,9 @@ description: "Helen 标准库使用指南 — 193 个内置函数的分类参考
 version: 1.2.0
 author: Helen Team
 license: MIT
-tags: [helen, stdlib, builtins, reference]
+metadata:
+  hermes:
+    tags: [helen, stdlib, builtins, reference]
 ---
 
 # Helen 标准库参考

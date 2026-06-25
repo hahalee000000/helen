@@ -4,7 +4,9 @@ description: "Helen 测试框架使用指南 — TDD 工作流、断言 API、CL
 version: 1.0.0
 author: Helen Team
 license: MIT
-tags: [helen, testing, tdd, assertions, cli]
+metadata:
+  hermes:
+    tags: [helen, testing, tdd, assertions, cli]
 ---
 
 # Helen 测试框架

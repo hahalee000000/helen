@@ -3,7 +3,9 @@ name: helen-language-development
 description: Helen programming language implementation patterns, pitfalls, and development workflows. Covers AST/parser/interpreter extension, async/await implementation, exception hierarchy, streaming with tool calls, Python FFI integration, and testing patterns.
 version: 1.8.0
 author: Hermes Agent
-tags: [helen, language-design, interpreter, async, parser, streaming, tool-calls, ffi, python-integration, contract-first, stdlib, closures, protocols, pipe-operator, pattern-matching]
+metadata:
+  hermes:
+    tags: [helen, language-design, interpreter, async, parser, streaming, tool-calls, ffi, python-integration, contract-first, stdlib, closures, protocols, pipe-operator, pattern-matching]
 ---
 
 # Helen Language Development

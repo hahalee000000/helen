@@ -5,7 +5,9 @@ version: 1.3.0
 author: Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
-tags: [code-quality, code-review, security, verification, scoring, cleanup, refactor]
+metadata:
+  hermes:
+    tags: [code-quality, code-review, security, verification, scoring, cleanup, refactor]
 ---
 
 # Code Quality — Assessment, Verification & Cleanup

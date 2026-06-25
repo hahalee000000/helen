@@ -4,7 +4,9 @@ description: "Helen Agent 设计模式 — 单 Agent、多 Agent 协作、路由
 version: 1.0.0
 author: Helen Team
 license: MIT
-tags: [helen, agent, patterns, design, llm]
+metadata:
+  hermes:
+    tags: [helen, agent, patterns, design, llm]
 ---
 
 # Helen Agent 设计模式

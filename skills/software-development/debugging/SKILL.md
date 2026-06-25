@@ -5,7 +5,9 @@ version: 1.0.0
 author: Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
-tags: [debugging, troubleshooting, root-cause, python, pdb, debugpy, nodejs, inspect, CDP]
+metadata:
+  hermes:
+    tags: [debugging, troubleshooting, root-cause, python, pdb, debugpy, nodejs, inspect, CDP]
 ---
 
 # Debugging — Methodology & Tools

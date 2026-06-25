@@ -5,8 +5,10 @@ version: 2.0.0
 author: Hermes Agent (writing-craft adapted from obra/superpowers)
 license: MIT
 platforms: [linux, macos, windows]
-tags: [planning, plan-mode, implementation, workflow, design, documentation]
-related_skills: [subagent-driven-development, test-driven-development, requesting-code-review]
+metadata:
+  hermes:
+    tags: [planning, plan-mode, implementation, workflow, design, documentation]
+    related_skills: [subagent-driven-development, test-driven-development, requesting-code-review]
 ---
 
 # Plan Mode

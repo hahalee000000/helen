@@ -294,7 +294,7 @@ class HelenHermesRuntime(Runtime):
 
     @staticmethod
     def _parse_skill_frontmatter(path: str) -> dict[str, Any]:
-        """Parse YAML frontmatter from a SKILL.md file."""
+        """Parse YAML frontmatter from a SKILL.md file (supports Hermes nested format)."""
         try:
             with open(path, encoding="utf-8") as f:
                 content = f.read()
@@ -309,6 +309,8 @@ class HelenHermesRuntime(Runtime):
             current_key = None
             current_value_lines = []
             is_folded = False
+            in_metadata = False
+            in_hermes = False
             
             def save_current():
                 nonlocal current_key, current_value_lines, is_folded
@@ -324,6 +326,35 @@ class HelenHermesRuntime(Runtime):
             for line in yaml_text.split("\n"):
                 stripped = line.strip()
                 if not stripped or stripped.startswith("#"):
+                    continue
+                
+                # Check indentation level
+                indent = len(line) - len(line.lstrip())
+                
+                # Track nested structure for metadata.hermes.tags
+                if indent == 0 and stripped == "metadata:":
+                    in_metadata = True
+                    in_hermes = False
+                    save_current()
+                    continue
+                elif in_metadata and indent == 2 and stripped == "hermes:":
+                    in_hermes = True
+                    continue
+                elif in_hermes and indent == 4 and stripped.startswith("tags:"):
+                    # Parse tags array from nested format
+                    tags_str = stripped.split(":", 1)[1].strip()
+                    if tags_str.startswith("[") and tags_str.endswith("]"):
+                        tags_content = tags_str[1:-1]
+                        result["tags"] = [t.strip().strip("'\"") for t in tags_content.split(",") if t.strip()]
+                    else:
+                        result["tags"] = []
+                    continue
+                elif indent == 0 and not line.startswith(" "):
+                    in_metadata = False
+                    in_hermes = False
+                
+                # Skip nested content (already handled above)
+                if in_metadata or in_hermes:
                     continue
                 
                 # Continuation line
@@ -349,7 +380,7 @@ class HelenHermesRuntime(Runtime):
             
             save_current()
             
-            # Parse tags specially
+            # Parse root-level tags (for backward compatibility)
             if "tags" in result and isinstance(result["tags"], str):
                 tags_str = result["tags"]
                 if tags_str.startswith("[") and tags_str.endswith("]"):
