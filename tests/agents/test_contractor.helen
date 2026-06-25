@@ -2,7 +2,7 @@ import "../../agents/contracts/contracts.helen"
 import "../../agents/contractor.helen"
 
 fn test_design_simple_function_contract() {
-    let result = call Contractor(
+    let result = Contractor(
         "实现一个字符串反转函数",
         "项目: ~/helen, 模块: stdlib/string"
     )
@@ -12,13 +12,13 @@ fn test_design_simple_function_contract() {
 }
 
 fn test_request_clarification_for_unclear_requirement() {
-    let result = call Contractor("改进代码", "")
+    let result = Contractor("改进代码", "")
     assert_equal(result["status"], "needs_clarification")
     assert_true(contains(result["message"], "不明确"))
 }
 
 fn test_decompose_complex_requirement_into_modules() {
-    let result = call Contractor(
+    let result = Contractor(
         "实现用户认证系统，包括登录、注册、密码重置",
         "项目: ~/helen, 模块: auth"
     )

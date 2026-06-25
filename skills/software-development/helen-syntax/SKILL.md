@@ -190,7 +190,7 @@ llm stream "Write a poem" {
 ### 异步语句
 ```helen
 # 异步表达式（延迟执行）
-let task = async call fetch_data()
+let task = async fetch_data()
 
 # 等待单个
 let result = await task

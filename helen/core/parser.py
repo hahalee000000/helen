@@ -186,9 +186,6 @@ class Parser:
         # match as expression: match expr { case ... { value } ... }
         self._rules[TokenType.MATCH].prefix = self._match_expr
 
-        # call as expression: call SomeFunc("arg")
-        self._rules[TokenType.CALL].prefix = self._call_expr
-
         # Precedence for prefix operators
         self._rules[TokenType.BANG].precedence = Precedence.UNARY
         self._rules[TokenType.MINUS].precedence = Precedence.UNARY
@@ -528,19 +525,6 @@ class Parser:
             return AsyncCallExprNode(call=CallNode(callee=VariableNode(name="", span=start.span), arguments=[], span=start.span), span=start.span)
         return AsyncCallExprNode(call=call_expr,
                                  span=self._make_span(start, self._previous()))
-
-    def _call_expr(self) -> ExpressionNode:
-        """Parse call as expression prefix: call SomeFunc("arg").
-        
-        The 'call' keyword is consumed and we parse the following expression,
-        which should be a function call (identifier followed by arguments).
-        """
-        start = self._previous()  # CALL already consumed by Pratt framework
-        call_expr = self._expression(Precedence.CALL)
-        if not isinstance(call_expr, CallNode):
-            self._error("'call' must be followed by a function call.")
-            return CallNode(callee=VariableNode(name="", span=start.span), arguments=[], span=start.span)
-        return call_expr
 
     def _statement(self) -> StatementNode | None:
         """Parse a single statement."""

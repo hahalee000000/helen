@@ -27,8 +27,8 @@ agent SimpleAgent {
     }
 }
 
-# 调用（推荐显式使用 call 关键字）
-let result = call SimpleAgent()
+# 调用
+let result = SimpleAgent()
 print(result)
 ```
 
@@ -47,7 +47,7 @@ agent Translator(text: str, target_lang: str) {
 }
 
 # 调用
-let result = call Translator("Hello", "Chinese")
+let result = Translator("Hello", "Chinese")
 print(result)  # "你好"
 ```
 
@@ -230,9 +230,9 @@ agent DataAggregator {
     
     main {
         # 并发获取数据
-        let task1 = async call DataFetcher("https://api.source1.com/data")
-        let task2 = async call DataFetcher("https://api.source2.com/data")
-        let task3 = async call DataFetcher("https://api.source3.com/data")
+        let task1 = async DataFetcher("https://api.source1.com/data")
+        let task2 = async DataFetcher("https://api.source2.com/data")
+        let task3 = async DataFetcher("https://api.source3.com/data")
         
         # 等待所有完成
         let results = await [task1, task2, task3]

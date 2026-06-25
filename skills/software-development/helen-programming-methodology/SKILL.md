@@ -275,11 +275,11 @@ let sub = str[0:10]
 ```helen
 // ✅ 正确（在 functions 块中）
 fn call_my_agent(param: str): str {
-    return call MyAgent(param)
+    return MyAgent(param)
 }
 
 // ❌ 错误（不能在 prompt 中直接调用）
-// prompt 中写 "call MyAgent()" 会报错
+// prompt 中写 "MyAgent()" 会报错
 ```
 
 ### 4. 函数返回值

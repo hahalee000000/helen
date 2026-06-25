@@ -12,23 +12,6 @@ test_suite("Fix Verification", fn() {
         assert_contains([1, 2, 3], 2)
     })
     
-    // Fix #4: call keyword in expressions
-    test_case("call keyword works in expressions", fn() {
-        fn multiply(a, b) {
-            return a * b
-        }
-        let result = call multiply(3, 4)
-        assert_equal(result, 12)
-    })
-    
-    test_case("call keyword works with complex expressions", fn() {
-        fn greet(name) {
-            return "Hello, " + name
-        }
-        let msg = call greet("Helen")
-        assert_contains(msg, "Helen")
-    })
-    
     // Additional test: nested function calls
     test_case("nested function calls work", fn() {
         fn double(x) {
@@ -37,7 +20,7 @@ test_suite("Fix Verification", fn() {
         fn add_one(x) {
             return x + 1
         }
-        let result = add_one(call double(5))
+        let result = add_one(double(5))
         assert_equal(result, 11)
     })
 })

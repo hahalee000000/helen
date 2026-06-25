@@ -38,7 +38,7 @@ agent MyAgent(input: str) {
 }
 
 // 调用 Agent（像调用函数一样）
-let result = call MyAgent("hello")
+let result = MyAgent("hello")
 print(result)
 ```
 
@@ -47,11 +47,11 @@ print(result)
 ```helen
 // 在 functions 块中调用 Agent
 fn call_my_agent(param: str): str {
-    return call MyAgent(param)
+    return MyAgent(param)
 }
 
 // 不能在 prompt 中直接调用 Agent
-// ❌ 错误：prompt 中写 "call MyAgent()" 会报错
+// ❌ 错误：prompt 中写 "MyAgent()" 会报错
 ```
 
 ## 协作模式
@@ -76,21 +76,21 @@ agent WorkflowOrchestrator(requirement: str) {
     functions {
         fn run_workflow(req: str): map {
             // Step 1: 契约设计
-            let contract = call ContractDesigner(req)
+            let contract = ContractDesigner(req)
             print("✅ Step 1: 契约设计完成")
             
             // Step 2: 测试生成
-            let tests = call TestBuilder(contract)
+            let tests = TestBuilder(contract)
             write_file("tests/generated.helen", tests)
             print("✅ Step 2: 测试生成完成")
             
             // Step 3: 实现编写
-            let impl = call Implementer(contract, tests)
+            let impl = Implementer(contract, tests)
             write_file("src/implementation.helen", impl)
             print("✅ Step 3: 实现编写完成")
             
             // Step 4: 质量评估
-            let quality = call QualityChecker("src/implementation.helen")
+            let quality = QualityChecker("src/implementation.helen")
             print("✅ Step 4: 质量评估完成")
             
             return {
@@ -133,7 +133,7 @@ agent ParallelOrchestrator(file_paths: list) {
             
             // 并行调用 CodeAnalyzer（概念上并行，实际顺序执行）
             for path in paths {
-                let analysis = call CodeAnalyzer(path)
+                let analysis = CodeAnalyzer(path)
                 results.append({
                     "file": path,
                     "analysis": analysis
@@ -141,7 +141,7 @@ agent ParallelOrchestrator(file_paths: list) {
             }
             
             // 汇总结果
-            let summary = call ResultSummarizer(results)
+            let summary = ResultSummarizer(results)
             return {
                 "individual": results,
                 "summary": summary
@@ -184,13 +184,13 @@ agent Router(input: str) {
             let analysis = analyze_input_type(user_input)
             
             if analysis == "code_issue" {
-                return call Debugger(user_input)
+                return Debugger(user_input)
             } else if analysis == "quality_issue" {
-                return call QualityImprover(user_input)
+                return QualityImprover(user_input)
             } else if analysis == "doc_issue" {
-                return call DocWriter(user_input)
+                return DocWriter(user_input)
             } else {
-                return call GeneralAssistant(user_input)
+                return GeneralAssistant(user_input)
             }
         }
         
@@ -240,10 +240,10 @@ agent MasterCoordinator(project_dir: str) {
     functions {
         fn coordinate(dir: str): map {
             // 分配任务给从 Agent
-            let analysis = call Analyzer(dir)
-            let tests = call Tester(dir, analysis)
-            let review = call Reviewer(dir, analysis)
-            let optimization = call Optimizer(dir, analysis)
+            let analysis = Analyzer(dir)
+            let tests = Tester(dir, analysis)
+            let review = Reviewer(dir, analysis)
+            let optimization = Optimizer(dir, analysis)
             
             // 汇总结果
             let report = generate_report(analysis, tests, review, optimization)
@@ -298,16 +298,16 @@ agent DataFlowDemo(input: str) {
     functions {
         fn demonstrate_flow(data: str): map {
             // Agent 1: 处理输入
-            let step1 = call Processor(data)
+            let step1 = Processor(data)
             
             // Agent 2: 验证结果
-            let step2 = call Validator(step1)
+            let step2 = Validator(step1)
             
             // Agent 3: 转换格式
-            let step3 = call Transformer(step2)
+            let step3 = Transformer(step2)
             
             // Agent 4: 输出结果
-            let step4 = call OutputGenerator(step3)
+            let step4 = OutputGenerator(step3)
             
             return {
                 "step1": step1,
@@ -335,15 +335,15 @@ agent SharedStateOrchestrator(initial_state: map) {
             let current_state = state
             
             // Agent 1 修改状态
-            let result1 = call StateModifier1(current_state)
+            let result1 = StateModifier1(current_state)
             current_state = merge_state(current_state, result1)
             
             // Agent 2 读取并修改状态
-            let result2 = call StateModifier2(current_state)
+            let result2 = StateModifier2(current_state)
             current_state = merge_state(current_state, result2)
             
             // Agent 3 基于最终状态生成输出
-            let final_result = call OutputGenerator(current_state)
+            let final_result = OutputGenerator(current_state)
             
             return {
                 "final_state": current_state,
@@ -377,12 +377,12 @@ agent ErrorHandlingOrchestrator(input: str) {
     functions {
         fn safe_call_agent(data: str): map {
             // 尝试调用 Agent
-            let result = call WorkerAgent(data)
+            let result = WorkerAgent(data)
             
             // 检查结果
             if result == null || result == "" {
                 // 调用失败，使用备用 Agent
-                return call BackupAgent(data)
+                return BackupAgent(data)
             }
             
             return {"status": "success", "data": result}
@@ -392,7 +392,7 @@ agent ErrorHandlingOrchestrator(input: str) {
             let attempts = 0
             
             while attempts < max_retries {
-                let result = call WorkerAgent(data)
+                let result = WorkerAgent(data)
                 if result != null && result != "" {
                     return {"status": "success", "data": result, "attempts": attempts + 1}
                 }
@@ -439,17 +439,17 @@ agent DoEverythingAgent(requirement: str) {
 ```helen
 // ✅ 好：数据流清晰
 fn process(data: str): map {
-    let step1 = call Agent1(data)
-    let step2 = call Agent2(step1)
-    let step3 = call Agent3(step2)
+    let step1 = Agent1(data)
+    let step2 = Agent2(step1)
+    let step3 = Agent3(step2)
     return step3
 }
 
 // ❌ 差：数据流混乱
 fn process(data: str): map {
-    let a = call Agent1(data)
-    let b = call Agent2(data)  // 重复输入
-    let c = call Agent3(a)     // 跳过 b
+    let a = Agent1(data)
+    let b = Agent2(data)  // 重复输入
+    let c = Agent3(a)     // 跳过 b
     return c
 }
 ```
@@ -459,16 +459,16 @@ fn process(data: str): map {
 ```helen
 // ✅ 好：有错误处理
 fn safe_process(data: str): map {
-    let result = call WorkerAgent(data)
+    let result = WorkerAgent(data)
     if result == null {
-        return call BackupAgent(data)
+        return BackupAgent(data)
     }
     return result
 }
 
 // ❌ 差：无错误处理
 fn unsafe_process(data: str): map {
-    return call WorkerAgent(data)  // 如果失败会崩溃
+    return WorkerAgent(data)  // 如果失败会崩溃
 }
 ```
 
@@ -479,7 +479,7 @@ fn unsafe_process(data: str): map {
 agent AgentA(input: str) {
     functions {
         fn process(data: str): str {
-            return call AgentB(data)  // A 调用 B
+            return AgentB(data)  // A 调用 B
         }
     }
 }
@@ -487,7 +487,7 @@ agent AgentA(input: str) {
 agent AgentB(input: str) {
     functions {
         fn process(data: str): str {
-            return call AgentA(data)  // B 调用 A → 无限循环
+            return AgentA(data)  // B 调用 A → 无限循环
         }
     }
 }
@@ -496,7 +496,7 @@ agent AgentB(input: str) {
 agent AgentA(input: str) {
     functions {
         fn process(data: str): str {
-            return call AgentB(data)  // A 调用 B
+            return AgentB(data)  // A 调用 B
         }
     }
 }
@@ -504,7 +504,7 @@ agent AgentA(input: str) {
 agent AgentB(input: str) {
     functions {
         fn process(data: str): str {
-            return call AgentC(data)  // B 调用 C（不回调用 A）
+            return AgentC(data)  // B 调用 C（不回调用 A）
         }
     }
 }
@@ -526,7 +526,7 @@ agent MyAgent(input: str) {
 agent MyAgent(input: str) {
     functions {
         fn call_other(data: str): str {
-            return call OtherAgent(data)  // 在 functions 块中调用
+            return OtherAgent(data)  // 在 functions 块中调用
         }
     }
     
@@ -544,20 +544,20 @@ agent MyAgent(input: str, config: map) {
     // ...
 }
 
-let result = call MyAgent("hello")  // 缺少 config 参数
+let result = MyAgent("hello")  // 缺少 config 参数
 
 // ✅ 正确
-let result = call MyAgent("hello", {"mode": "strict"})
+let result = MyAgent("hello", {"mode": "strict"})
 ```
 
 ### 3. 忽略 Agent 返回值
 
 ```helen
 // ❌ 错误：忽略返回值
-call WorkerAgent(data)  // 结果丢失
+WorkerAgent(data)  // 结果丢失
 
 // ✅ 正确：处理返回值
-let result = call WorkerAgent(data)
+let result = WorkerAgent(data)
 if result != null {
     print(result)
 }

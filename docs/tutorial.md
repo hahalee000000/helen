@@ -1558,7 +1558,7 @@ main {
 
 ## 调用 Agent
 
-使用 `call` 关键字调用 Agent，使代码意图更清晰：
+Agent 使用函数式调用，像调用普通函数一样：
 
 ```helen
 agent Summarizer {
@@ -1568,25 +1568,25 @@ agent Summarizer {
 
 main {
     let text = "Long article content here..."
-    let summary = call Summarizer(text)
+    let summary = Summarizer(text)
     print(summary)
 }
 ```
 
-### call 关键字的优势
+### 函数式调用的优势
 
 ```helen
 main {
-    // 显式调用 - 意图清晰
-    let result = call MyAgent("input")
+    // 简洁直观
+    let result = MyAgent("input")
     
     // 可以在表达式中使用
-    if contains(call Analyzer(text), "error") {
+    if contains(Analyzer(text), "error") {
         print("问题检测")
     }
     
     // 可以链式调用
-    let processed = call call Cleaner(call call Parser(raw_data))
+    let processed = Cleaner(Parser(raw_data))
 }
 ```
 
@@ -1614,11 +1614,11 @@ agent UrgentResponder {
 main {
     let email = "URGENT: Server down in production!"
     
-    let category = call EmailClassifier(email)
+    let category = EmailClassifier(email)
     
     if category == "urgent" {
         print("🚨 URGENT email detected!")
-        let response = call UrgentResponder(email)
+        let response = UrgentResponder(email)
         print(response)
     } else if category == "meeting" {
         print("📅 Meeting request")
