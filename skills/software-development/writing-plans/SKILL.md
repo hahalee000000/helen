@@ -5,10 +5,8 @@ version: 1.1.0
 author: Hermes Agent (adapted from obra/superpowers)
 license: MIT
 platforms: [linux, macos, windows]
-metadata:
-  hermes:
-    tags: [planning, design, implementation, workflow, documentation]
-    related_skills: [subagent-driven-development, test-driven-development, requesting-code-review]
+tags: [planning, design, implementation, workflow, documentation]
+related_skills: [subagent-driven-development, test-driven-development, requesting-code-review]
 ---
 
 # Writing Implementation Plans

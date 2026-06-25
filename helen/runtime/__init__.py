@@ -34,6 +34,7 @@ class SkillMeta:
     name: str
     description: str
     category: str = ""
+    tags: list[str] = field(default_factory=list)
 
 
 class Runtime(ABC):
@@ -220,7 +221,7 @@ class HelenHermesRuntime(Runtime):
         """Return lightweight Skill Index by scanning skill directories.
 
         Reads SKILL.md frontmatter from each skill directory to extract
-        name, description, and category without loading full content.
+        name, description, category, and tags without loading full content.
         """
         skills: list[SkillMeta] = []
         skill_dirs = self._find_skill_directories()
@@ -233,6 +234,7 @@ class HelenHermesRuntime(Runtime):
                         name=meta.get("name", os.path.basename(skill_dir)),
                         description=meta.get("description", ""),
                         category=meta.get("category", ""),
+                        tags=meta.get("tags", []),
                     ))
         return skills
 
@@ -291,7 +293,7 @@ class HelenHermesRuntime(Runtime):
         return candidates
 
     @staticmethod
-    def _parse_skill_frontmatter(path: str) -> dict[str, str]:
+    def _parse_skill_frontmatter(path: str) -> dict[str, Any]:
         """Parse YAML frontmatter from a SKILL.md file."""
         try:
             with open(path, encoding="utf-8") as f:
@@ -302,11 +304,60 @@ class HelenHermesRuntime(Runtime):
             if end < 0:
                 return {}
             yaml_text = content[3:end].strip()
-            result: dict[str, str] = {}
+            result: dict[str, Any] = {}
+            
+            current_key = None
+            current_value_lines = []
+            is_folded = False
+            
+            def save_current():
+                nonlocal current_key, current_value_lines, is_folded
+                if current_key:
+                    if is_folded:
+                        result[current_key] = " ".join(current_value_lines).strip()
+                    else:
+                        result[current_key] = "\n".join(current_value_lines).strip()
+                current_key = None
+                current_value_lines = []
+                is_folded = False
+            
             for line in yaml_text.split("\n"):
-                if ":" in line:
-                    key, _, value = line.partition(":")
-                    result[key.strip()] = value.strip().strip('"').strip("'")
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                
+                # Continuation line
+                if line.startswith(" ") or line.startswith("\t"):
+                    if current_key:
+                        current_value_lines.append(stripped)
+                    continue
+                
+                # New field
+                if ":" in stripped:
+                    save_current()
+                    key, _, value = stripped.partition(":")
+                    current_key = key.strip()
+                    value = value.strip()
+                    
+                    if value == ">" or value == ">-" or value == ">+":
+                        is_folded = True
+                        current_value_lines = []
+                    elif value == "" or value == "|" or value == "|-" or value == "|+":
+                        current_value_lines = []
+                    else:
+                        current_value_lines = [value.strip('"').strip("'")]
+            
+            save_current()
+            
+            # Parse tags specially
+            if "tags" in result and isinstance(result["tags"], str):
+                tags_str = result["tags"]
+                if tags_str.startswith("[") and tags_str.endswith("]"):
+                    tags_content = tags_str[1:-1]
+                    result["tags"] = [t.strip().strip("'\"") for t in tags_content.split(",") if t.strip()]
+                else:
+                    result["tags"] = []
+            
             return result
         except (OSError, ValueError):
             return {}

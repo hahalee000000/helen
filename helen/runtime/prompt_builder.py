@@ -150,7 +150,7 @@ class PromptBuilder:
         """Build the Tier 1 Skill Index for System Prompt injection.
 
         Scans skills via runtime.list_skills() and formats as
-        <available_skills> XML block with name + description + category.
+        <available_skills> XML block with name + description + category + tags.
         """
         skills = self._runtime.list_skills()
         if not skills:
@@ -169,7 +169,8 @@ class PromptBuilder:
         for category, skill_list in sorted(by_category.items()):
             lines.append(f"  {category}:")
             for s in skill_list:
-                lines.append(f"    - {s.name}: {s.description}")
+                tag_str = f" (tags: {', '.join(s.tags)})" if s.tags else ""
+                lines.append(f"    - {s.name}: {s.description}{tag_str}")
 
         lines.append("</available_skills>")
         return "\n".join(lines)

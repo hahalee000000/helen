@@ -5,9 +5,7 @@ version: 1.0.0
 author: Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
-metadata:
-  hermes:
-    tags: [GitHub, Git, Pull-Requests, Issues, Code-Review, CI/CD, Releases, Authentication]
+tags: [GitHub, Git, Pull-Requests, Issues, Code-Review, CI/CD, Releases, Authentication]
 ---
 
 # GitHub — Complete Workflow

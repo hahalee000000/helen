@@ -4,6 +4,7 @@ trigger: "When checking or fixing Hellen language design document consistency"
 description: >
   Systematic, section-by-section consistency checker for Hellen detailed design documents.
   Reads documents front-to-back, validates each section against all preceding ones, and applies fixes.
+tags: [helen, consistency, documentation, hld, design-docs, verification]
 ---
 
 # Hellen 一致性检查器
