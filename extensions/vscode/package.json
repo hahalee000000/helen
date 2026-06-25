@@ -1,15 +1,28 @@
 {
-    "name": "helen",
-    "displayName": "Helen Language Support",
-    "description": "Syntax highlighting and language support for the Helen Agent Programming Language",
-    "version": "0.1.0",
+    "name": "helen-language",
+    "displayName": "Helen Language",
+    "description": "Helen Agent Programming Language support for VS Code",
+    "version": "1.8.0",
     "publisher": "helen-lang",
     "engines": {
         "vscode": "^1.75.0"
     },
     "categories": [
-        "Programming Languages"
+        "Programming Languages",
+        "Linters",
+        "Snippets"
     ],
+    "keywords": [
+        "helen",
+        "agent",
+        "llm",
+        "ai",
+        "programming language"
+    ],
+    "activationEvents": [
+        "onLanguage:helen"
+    ],
+    "main": "./out/extension.js",
     "contributes": {
         "languages": [
             {
@@ -32,8 +45,28 @@
             }
         ],
         "configuration": {
-            "title": "Helen",
+            "title": "Helen Language",
             "properties": {
+                "helen.lsp.path": {
+                    "type": "string",
+                    "default": "helen",
+                    "description": "Path to the Helen LSP server executable. Default uses 'helen' from PATH."
+                },
+                "helen.lsp.args": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "default": [
+                        "lsp"
+                    ],
+                    "description": "Arguments to pass to the Helen LSP server."
+                },
+                "helen.lsp.enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable/disable the Helen Language Server."
+                },
                 "helen.trace.server": {
                     "type": "string",
                     "enum": [
@@ -47,9 +80,25 @@
             }
         }
     },
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./",
+        "package": "vsce package"
+    },
+    "dependencies": {
+        "vscode-languageclient": "^9.0.1"
+    },
+    "devDependencies": {
+        "@types/vscode": "^1.75.0",
+        "@types/node": "^18.x",
+        "typescript": "^5.0.0",
+        "@vscode/vsce": "^2.22.0"
+    },
     "repository": {
         "type": "git",
-        "url": "https://github.com/helen-lang/helen"
+        "url": "https://github.com/hahalee000000/helen.git"
     },
+    "icon": "icon.png",
     "license": "MIT"
 }
