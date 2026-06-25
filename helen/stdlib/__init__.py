@@ -27,7 +27,7 @@ from helen.stdlib.string import (
     # Encoding
     _base64_encode, _base64_decode, _html_escape, _html_unescape,
     # String ops
-    _repeat, _reverse, _pad_left, _pad_right, _center, _count, _index,
+    _repeat, _reverse, _pad_left, _pad_right, _center, _count, _index, _contains,
 )
 
 # Import data functions
@@ -107,7 +107,7 @@ from helen.stdlib.data_formats import (
 # Import test framework functions
 from helen.stdlib.test import (
     _describe, _it, _it_skip,
-    _assert_true, _assert_equal, _assert_not_equal, _assert_throws,
+    _assert_true, _assert_equal, _assert_not_equal, _assert_contains, _assert_throws,
     _expect, _before_each, _after_each, _before_all, _after_all,
     _run_tests, _run_tests_json, _test_reset, _test_count,
     _test_suite, _test_case, _test_case_skip, _test_end_suite,
@@ -633,6 +633,7 @@ def _register_builtins() -> None:
         BuiltinFunction("endswith", "Check suffix", "endswith(s, suffix)", _endswith, "string"),
         BuiltinFunction("replace", "Replace substring", "replace(s, old, new)", _replace, "string"),
         BuiltinFunction("find", "Find substring index", "find(s, sub)", _find, "string"),
+        BuiltinFunction("contains", "Check if contains substring", "contains(s, sub)", _contains, "string"),
         BuiltinFunction("substring", "Extract substring", "substring(s, start, end?)", _substring, "string"),
         BuiltinFunction("trim_prefix", "Remove prefix", "trim_prefix(s, prefix)", _trim_prefix, "string"),
         BuiltinFunction("trim_suffix", "Remove suffix", "trim_suffix(s, suffix)", _trim_suffix, "string"),
@@ -868,6 +869,7 @@ def _register_builtins() -> None:
         BuiltinFunction("assert_true", "Assert condition is truthy", "assert_true(condition, message?)", _assert_true, "test"),
         BuiltinFunction("assert_equal", "Assert equality", "assert_equal(actual, expected, message?)", _assert_equal, "test"),
         BuiltinFunction("assert_not_equal", "Assert inequality", "assert_not_equal(actual, expected, message?)", _assert_not_equal, "test"),
+        BuiltinFunction("assert_contains", "Assert container contains item", "assert_contains(container, item, message?)", _assert_contains, "test"),
         BuiltinFunction("assert_throws", "Assert function throws", "assert_throws(fn, error_type?)", _assert_throws, "test"),
         BuiltinFunction("expect", "Create chainable expectation", "expect(value)", _expect, "test"),
         BuiltinFunction("before_each", "Register before-each hook", "before_each(fn)", _before_each, "test"),

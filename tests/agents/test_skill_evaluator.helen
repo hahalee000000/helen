@@ -1,0 +1,43 @@
+import "../../agents/contracts/contracts.helen"
+
+test_suite("SkillEvaluator", fn() {
+    test_case("简单 typo 修复不创建技能", fn() {
+        let result = SkillEvaluator(
+            "修复了 README 中的拼写错误",
+            "README.md"
+        )
+        
+        assert_true(len(result["new_skills"]) == 0)
+        assert_true(len(result["updates"]) == 0)
+        assert_true(contains(result["no_action_reason"], "简单"))
+    })
+
+    test_case("非平凡 bug 修复建议创建技能", fn() {
+        let task_summary = """
+        修复了 async/await 中的竞态条件：需要在 await 前检查 cancel token，
+        否则会导致资源泄漏。这是一个常见的并发编程陷阱。
+        """
+        let files_changed = "helen/runtime/async.py, helen/interpreter/execution.py"
+        
+        let result = SkillEvaluator(task_summary, files_changed)
+        
+        assert_true(len(result["new_skills"]) > 0 || len(result["updates"]) > 0)
+        if len(result["new_skills"]) > 0 {
+            assert_true(contains(result["new_skills"][0]["tags"], "async"))
+        }
+    })
+
+    test_case("发现现有技能遗漏时建议更新", fn() {
+        let task_summary = """
+        使用 helen-testing 技能编写测试，发现技能文档没提到 mock 对象
+        必须在 test_suite 外部定义，不能在 test_case 内部定义，
+        否则会导致作用域错误。
+        """
+        let files_changed = "tests/test_api.helen"
+        
+        let result = SkillEvaluator(task_summary, files_changed)
+        
+        assert_true(len(result["updates"]) > 0)
+        assert_equal(result["updates"][0]["name"], "helen-testing")
+    })
+})

@@ -19,6 +19,25 @@ Helen 内置完整的测试框架，支持 TDD 开发模式。
 
 ### 1. 创建测试文件
 
+**方式 1：回调风格（推荐）**
+
+```helen
+// calculator_test.helen
+
+test_suite("Calculator", fn() {
+    test_case("adds numbers", fn() {
+        assert_equal(2 + 3, 5)
+    })
+    test_case("subtracts numbers", fn() {
+        assert_equal(10 - 4, 6)
+    })
+})
+
+run_tests()
+```
+
+**方式 2：自动发现（最简单）**
+
 ```helen
 // calculator_test.helen
 
@@ -29,11 +48,6 @@ fn test_add() {
 fn test_subtract() {
     assert_equal(10 - 4, 6)
 }
-
-test_suite("Calculator")
-test_case("adds numbers", test_add)
-test_case("subtracts numbers", test_subtract)
-test_end_suite()
 
 run_tests()
 ```
@@ -53,7 +67,23 @@ helen test calculator_test.helen
 | `assert_true(condition)` | 断言条件为真 |
 | `assert_equal(actual, expected)` | 断言相等 |
 | `assert_not_equal(a, b)` | 断言不等 |
+| `assert_contains(haystack, needle)` | 断言容器包含元素（新增） |
 | `assert_throws(fn)` | 断言抛出异常 |
+
+**assert_contains 示例：**
+
+```helen
+fn test_contains() {
+    // 字符串
+    assert_contains("hello world", "world")
+    
+    // 数组
+    assert_contains([1, 2, 3], 2)
+    
+    // 对象
+    assert_contains({"name": "Helen", "version": "1.0"}, "name")
+}
+```
 
 ### Expect 链式 API
 

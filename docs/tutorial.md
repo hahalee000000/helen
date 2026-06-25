@@ -1558,6 +1558,8 @@ main {
 
 ## 调用 Agent
 
+使用 `call` 关键字调用 Agent，使代码意图更清晰：
+
 ```helen
 agent Summarizer {
     description "Summarize text"
@@ -1566,8 +1568,25 @@ agent Summarizer {
 
 main {
     let text = "Long article content here..."
-    let summary = Summarizer(text)
+    let summary = call Summarizer(text)
     print(summary)
+}
+```
+
+### call 关键字的优势
+
+```helen
+main {
+    // 显式调用 - 意图清晰
+    let result = call MyAgent("input")
+    
+    // 可以在表达式中使用
+    if contains(call Analyzer(text), "error") {
+        print("问题检测")
+    }
+    
+    // 可以链式调用
+    let processed = call call Cleaner(call call Parser(raw_data))
 }
 ```
 
@@ -1592,30 +1611,21 @@ agent UrgentResponder {
     prompt "Draft a professional response..."
 }
 
-agent EmailClassifier {
-    description "Classify emails"
-    prompt "Classify this email..."
-    main {
-        let email = "URGENT: Server down in production!"
-
-        llm if "Classify this email" {
-            branch "urgent" {
-                print("🚨 URGENT email detected!")
-                UrgentResponder(email)
-            }
-            branch "meeting" {
-                print("📅 Meeting request")
-            }
-            branch "informational" {
-                print("📧 FYI email")
-            }
-            branch "spam" {
-                print("🗑️ Spam, ignoring")
-            }
-            default {
-                print("📬 Uncategorized")
-            }
-        }
+main {
+    let email = "URGENT: Server down in production!"
+    
+    let category = call EmailClassifier(email)
+    
+    if category == "urgent" {
+        print("🚨 URGENT email detected!")
+        let response = call UrgentResponder(email)
+        print(response)
+    } else if category == "meeting" {
+        print("📅 Meeting request")
+    } else if category == "informational" {
+        print("📧 FYI email")
+    } else {
+        print("🗑️ Spam, ignoring")
     }
 }
 ```
@@ -4625,6 +4635,7 @@ helen test calculator_test.helen --json
 | `assert_true(condition)` | 断言条件为真 |
 | `assert_equal(actual, expected)` | 断言相等 |
 | `assert_not_equal(a, b)` | 断言不等 |
+| `assert_contains(container, item)` | 断言容器包含元素 |
 | `assert_throws(fn)` | 断言抛出异常 |
 
 ```helen
@@ -4632,6 +4643,8 @@ fn test_assertions() {
     assert_true(1 == 1)
     assert_equal(2 + 3, 5)
     assert_not_equal("hello", "world")
+    assert_contains("hello world", "world")
+    assert_contains([1, 2, 3], 2)
 }
 ```
 
@@ -4673,21 +4686,33 @@ fn test_expect() {
 ### 测试组织
 
 ```helen
-// 方式 1：简单注册（推荐）
-test_suite("Math")
-test_case("adds", test_add)
-test_case("subtracts", test_subtract)
-test_end_suite()
+// 方式 1：回调风格（推荐）
+test_suite("Math", fn() {
+    test_case("adds", fn() {
+        assert_equal(2 + 3, 5)
+    })
+    test_case("subtracts", fn() {
+        assert_equal(10 - 4, 6)
+    })
+})
 
+// 方式 2：自动发现（最简单）
+// 以 test_ 开头的函数会被自动注册
+fn test_addition() {
+    assert_equal(1 + 1, 2)
+}
+
+fn test_subtraction() {
+    assert_equal(5 - 3, 2)
+}
+
+// 运行: helen test your_file.helen
+// 所有 test_* 函数会自动执行
+
+// 方式 3：显式注册（传统方式）
 test_suite("String")
 test_case("uppercases", test_upper)
 test_end_suite()
-
-// 方式 2：使用 describe/it（需要箭头函数）
-describe("Math", () => {
-    it("adds", test_add)
-    it("subtracts", test_subtract)
-})
 ```
 
 ### 钩子函数

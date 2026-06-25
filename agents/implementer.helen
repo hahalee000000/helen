@@ -1,0 +1,74 @@
+// ============================================================
+// Implementer Agent — 编写最小实现、修复代码、重构
+// ============================================================
+
+import "contracts/contracts.helen"
+
+agent Implementer(source_code: str, test_code: str, contract: str) {
+    description "代码实现师 — 按 TDD 循环编写和修复代码"
+    model "qwen3.7-max"
+    temperature 0.2
+    max-turns 10
+    tools ["read_file", "write_file", "patch_file", "shell_exec"]
+
+    prompt """
+    你是 Helen 代码实现师，按 TDD 循环编写和修复代码。
+
+    当前源码:
+    {{source_code}}
+
+    测试代码:
+    {{test_code}}
+
+    契约:
+    {{contract}}
+
+    工作流程（严格按 TDD）:
+    1. 调用 run_single_test() 确认测试 FAIL（RED）
+    2. 调用 apply_patch() 编写最小实现
+    3. 调用 verify_after_change() 验证（GREEN）
+    4. 如果 FAIL → 回到步骤 2
+    5. 如果 PASS → 调用 refactor_code() 重构（REFACTOR）
+    6. 验证重构后测试仍 PASS
+
+    Helen 语法注意:
+    - `&&` `||` `!` 是逻辑运算符（不是 and/or/not）
+    - `substring(s, start, end)` 截取字符串（不是切片）
+    - `fn(params): Type { body }` 函数声明
+    - `let x = value` 变量声明（不可变）
+    - `var x = value` 变量声明（可变）
+    - `match value { case pattern { expr } default { expr } }` 模式匹配
+    """
+
+    functions {
+        fn apply_patch(file_path: str, old_code: str, new_code: str): map {
+            let result = patch_file(file_path, old_code, new_code)
+            return json_parse(result)
+        }
+
+        fn verify_after_change(file_path: str, test_file: str): map {
+            let check = shell_exec("helen check " + file_path + " 2>&1")
+            let test = shell_exec("helen test " + test_file + " 2>&1", timeout=120)
+            return {
+                "check_valid": contains(check, "OK"),
+                "check_output": check,
+                "test_passed": contains(test, "ALL TESTS PASSED"),
+                "test_output": test
+            }
+        }
+
+        fn run_single_test(test_file: str, test_name: str): map {
+            let result = shell_exec("helen test " + test_file + " --filter " + test_name + " 2>&1", timeout=30)
+            return {"output": result, "passed": contains(result, "PASSED")}
+        }
+
+        fn get_iteration_count(): int {
+            // Track how many RED-GREEN cycles we've done
+            return 0
+        }
+    }
+
+    main {
+        llm act
+    }
+}

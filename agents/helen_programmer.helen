@@ -1,0 +1,160 @@
+// ============================================================
+// HelenProgrammingAgent v5.2 — Main Orchestrator
+//
+// Coordinates 5 sub-agents through the workflow:
+//   Phase 1: Contractor → 契约设计
+//   Phase 2: TestBuilder → 测试生成
+//   Phase 3: Implementer → 代码实现 (TDD RED-GREEN-REFACTOR)
+//   Phase 4: QualityGate → 质量评估
+//   Phase 5: SkillEvaluator → 技能自进化
+//
+// Usage:
+//   helen agents/helen_programmer.helen
+//   // Or from REPL: :agent agents/helen_programmer.helen
+// ============================================================
+
+import "contracts/contracts.helen"
+import "contractor.helen"
+import "test_builder.helen"
+import "implementer.helen"
+import "quality_gate.helen"
+import "skill_evaluator.helen"
+
+agent HelenProgrammer(requirement: str, project_dir: str) {
+    description "Helen 编程助手主编排 — 契约驱动 + TDD + 技能自进化"
+    model "qwen3.7-max"
+    temperature 0.2
+    max-turns 20
+    streaming true
+    tools ["read_file", "write_file", "shell_exec", "mkdir_p", "path_exists"]
+
+    prompt """
+    你是 Helen 编程助手的主编排 Agent。
+
+    需求: {{requirement}}
+    项目目录: {{project_dir}}
+
+    你的职责是协调 5 个专业 Agent 完成完整的编程工作流：
+
+    ## Phase 1: 契约设计
+    调用 Contractor(requirement, project_dir) 设计接口契约
+    - 等待用户确认契约后再继续
+
+    ## Phase 2: 测试生成
+    调用 TestBuilder(source_code, contract) 生成测试用例
+    - 验证测试文件语法正确
+
+    ## Phase 3: 代码实现 (TDD 循环)
+    调用 Implementer(source_code, test_code, contract) 编写实现
+    - 按 RED-GREEN-REFACTOR 循环迭代
+    - 直到所有测试通过
+
+    ## Phase 4: 质量评估
+    调用 QualityGate(file_path, before_scores) 评估质量
+    - 如果总分 < 7.5 或单项 < 6.0 → 回到 Phase 3 改进
+    - 否则 → 进入 Phase 5
+
+    ## Phase 5: 技能自进化
+    调用 SkillEvaluator(task_summary, files_changed) 评估学习机会
+    - 保存新技能 / 更新现有技能
+
+    工作流程：
+    1. 调用 run_helen_check() 验证语法
+    2. 调用 run_helen_tests() 运行测试
+    3. 调用 get_quality_scores() 获取质量评分
+    4. 调用各子 Agent 完成对应阶段
+    5. 汇总所有阶段结果，生成最终报告
+    """
+
+    functions {
+        fn run_helen_check(file_path: str): map {
+            let result = shell_exec("helen check " + file_path + " 2>&1")
+            return {"output": result, "valid": contains(result, "OK")}
+        }
+
+        fn run_helen_tests(test_dir: str): map {
+            let result = shell_exec("helen test " + test_dir + " 2>&1", timeout=120)
+            return {"output": result, "success": contains(result, "ALL TESTS PASSED")}
+        }
+
+        fn get_quality_scores(file_path: str): map {
+            let content = read_file(file_path)
+            let scores = quality_score(content, file_path)
+            let security = check_security(content)
+            return {"scores": scores, "security": security}
+        }
+
+        fn call_contractor(req: str, ctx: str): map {
+            let result = Contractor(req, ctx)
+            return json_parse(result)
+        }
+
+        fn call_test_builder(source: str, contract: str): map {
+            let result = TestBuilder(source, contract)
+            return json_parse(result)
+        }
+
+        fn call_implementer(source: str, tests: str, contract: str): map {
+            let result = Implementer(source, tests, contract)
+            return json_parse(result)
+        }
+
+        fn call_quality_gate(file_path: str, before: str): map {
+            let result = QualityGate(file_path, before)
+            return json_parse(result)
+        }
+
+        fn call_skill_evaluator(summary: str, files: str): map {
+            let result = SkillEvaluator(summary, files)
+            return json_parse(result)
+        }
+    }
+
+    main {
+        print("🚀 Helen Programming Agent v5.2")
+        print("================================\n")
+
+        // Phase 1: 契约设计
+        print("📋 Phase 1: 契约设计")
+        let contract_result = call_contractor(requirement, project_dir)
+        print("契约设计完成: " + contract_result["status"])
+
+        // Phase 2: 测试生成
+        print("\n🧪 Phase 2: 测试生成")
+        let source_path = project_dir + "/src/main.helen"
+        let source_code = ""
+        if path_exists(source_path) {
+            source_code = read_file(source_path)
+        }
+        let test_result = call_test_builder(source_code, contract_result["contract"])
+        print("测试生成完成: " + test_result["status"])
+
+        // Phase 3: 代码实现 (TDD 循环)
+        print("\n💻 Phase 3: 代码实现")
+        let test_path = project_dir + "/tests/test_main.helen"
+        let test_code = ""
+        if path_exists(test_path) {
+            test_code = read_file(test_path)
+        }
+        let impl_result = call_implementer(source_code, test_code, contract_result["contract"])
+        print("代码实现完成: " + impl_result["status"])
+
+        // Phase 4: 质量评估
+        print("\n📊 Phase 4: 质量评估")
+        let before_scores = json_stringify({"overall": 0.0})
+        let quality_result = call_quality_gate(source_path, before_scores)
+        print("质量评估完成: " + quality_result["verdict"])
+
+        // Phase 5: 技能自进化
+        print("\n🧠 Phase 5: 技能自进化")
+        let task_summary = "完成了需求: " + requirement
+        let files_changed = source_path + ", " + test_path
+        let skill_result = call_skill_evaluator(task_summary, files_changed)
+        print("技能评估完成: " + skill_result["status"])
+
+        // 最终报告
+        print("\n================================")
+        print("✅ 全部阶段完成")
+        print("================================")
+    }
+}

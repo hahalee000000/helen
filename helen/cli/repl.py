@@ -212,15 +212,16 @@ def _run_helen_assistant(question: str) -> bool:
 
 
 def _run_programming_agent(interp: Interpreter, analyzer: SemanticAnalyzer) -> None:
-    """Run an interactive Helen programming agent session.
+    """Run an interactive Helen programming agent session (v5.2).
     
-    Loads helen/agents/helen_programmer.helen and enters interactive mode.
+    Loads agents/helen_programmer.helen and enters interactive mode.
+    Each user input is passed as requirement to HelenProgrammer agent.
     """
     from pathlib import Path
     import helen.cli.repl as repl_module
     import os
     
-    # Use helen/agents/helen_programmer.helen (the main programming agent)
+    # Resolve agent path
     module_dir = Path(repl_module.__file__).parent.parent
     agent_path = module_dir.parent / "agents" / "helen_programmer.helen"
     
@@ -228,15 +229,16 @@ def _run_programming_agent(interp: Interpreter, analyzer: SemanticAnalyzer) -> N
         print(f"Error: Programming agent not found at {agent_path}", file=sys.stderr)
         return
     
-    # Load agent source
+    # Read agent source
     agent_source = agent_path.read_text(encoding="utf-8")
     
-    # Set working directory to agents/ so imports work correctly
+    # Set working directory to agents/ so imports resolve correctly
     old_cwd = os.getcwd()
     os.chdir(agent_path.parent)
     
-    print("Helen Programming Agent v1.0")
-    print("Type your question or 'exit' to quit")
+    print("Helen Programming Agent v5.2")
+    print("Workflow: Contract → Test → Implement → Quality → Skill Evolution")
+    print("Type your programming requirement or 'exit' to quit")
     print("")
     
     try:
@@ -254,29 +256,31 @@ def _run_programming_agent(interp: Interpreter, analyzer: SemanticAnalyzer) -> N
                 print("Returning to REPL...")
                 break
             
-            # Execute agent with user input
+            # Build wrapper that calls HelenProgrammer with user input
+            wrapper_source = (
+                f'let _agent_result = HelenProgrammer('
+                f'"""{user_input}""", '
+                f'"{old_cwd}")\n'
+                f'_agent_result\n'
+            )
+            
+            # Combine: load agent + all imports, then call it
+            full_source = agent_source + "\n" + wrapper_source
+            
             errors = ErrorReporter()
             llm_runtime = HttpLLMRuntime()
             agent_interp = Interpreter(errors=errors, llm_runtime=llm_runtime)
             
-            # Modify agent source to inject user input
-            modified_source = agent_source.replace(
-                'let project_dir = "."',
-                f'let project_dir = "{old_cwd}"'
-            ).replace(
-                'let user_input = "How do I define an agent in Helen?"',
-                f'let user_input = """{user_input}"""'
-            )
-            
             try:
-                scanner = Scanner(source=modified_source, file=str(agent_path))
+                scanner = Scanner(source=full_source, file=str(agent_path))
                 tokens = scanner.scan_all()
                 parser = Parser(tokens, errors=errors)
                 program = parser.parse()
                 
                 if errors.has_errors:
                     msgs = [format_error(err) for err in errors.errors]
-                    print(f"Parse error: {msgs[0]}", file=sys.stderr)
+                    for msg in msgs[:5]:
+                        print(f"Parse error: {msg}", file=sys.stderr)
                     continue
                 
                 result = agent_interp.interpret(program)
@@ -285,12 +289,10 @@ def _run_programming_agent(interp: Interpreter, analyzer: SemanticAnalyzer) -> N
                 if result is not None and hasattr(result, '__class__'):
                     class_name = result.__class__.__name__
                     if class_name == 'StreamingResponse':
-                        # Iterate through the stream and print
                         for chunk in result:
                             print(chunk, end='', flush=True)
-                        print()  # Final newline
+                        print()
                         continue
-                # Not a StreamingResponse, print normally (but skip None)
                 if result is not None:
                     print(result)
                     

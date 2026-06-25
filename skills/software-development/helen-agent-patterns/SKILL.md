@@ -27,8 +27,8 @@ agent SimpleAgent {
     }
 }
 
-# 调用
-let result = SimpleAgent()
+# 调用（推荐显式使用 call 关键字）
+let result = call SimpleAgent()
 print(result)
 ```
 
@@ -47,7 +47,7 @@ agent Translator(text: str, target_lang: str) {
 }
 
 # 调用
-let result = Translator("Hello", "Chinese")
+let result = call Translator("Hello", "Chinese")
 print(result)  # "你好"
 ```
 

@@ -304,15 +304,27 @@ def test_command(argv: list[str]) -> int:
 
     if not files:
         print("Error: 'test' requires at least one file argument", file=sys.stderr)
-        print("Usage: helen test <file> [file2 ...] [options]", file=sys.stderr)
+        print("Usage: helen test <file|directory> [file2 ...] [options]", file=sys.stderr)
         return 1
 
-    # Validate files exist
+    # Expand directories to find all .helen test files
+    expanded_files: list[str] = []
     for f in files:
         p = Path(f)
-        if not p.exists():
+        if p.is_dir():
+            # Recursively find all .helen files in directory
+            for helen_file in p.rglob("*.helen"):
+                expanded_files.append(str(helen_file))
+        elif p.exists():
+            expanded_files.append(f)
+        else:
             print(f"Error: file not found: {f}", file=sys.stderr)
             return 1
+    
+    files = expanded_files
+    if not files:
+        print("Error: no .helen test files found", file=sys.stderr)
+        return 1
 
     def run_test_files() -> int:
         """Execute test files and return exit code."""
@@ -372,6 +384,16 @@ def test_command(argv: list[str]) -> int:
             if errors.has_errors:
                 _report_errors(errors, source_text.splitlines())
                 return 2
+
+            # Auto-discover fn test_* functions and register them
+            for func_name, func_node in interp._functions.items():
+                if func_name.startswith("test_"):
+                    # Create a wrapper that calls the function
+                    def make_wrapper(node):
+                        def wrapper():
+                            interp._call_function(node, [])
+                        return wrapper
+                    _registry.register_test(func_name, make_wrapper(func_node))
 
         # Run tests with filters
         report = _registry.run_all(

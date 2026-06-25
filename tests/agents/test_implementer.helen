@@ -1,0 +1,79 @@
+import "../../agents/contracts/contracts.helen"
+
+test_suite("Implementer", fn() {
+    test_case("实现简单函数", fn() {
+        let source = "fn add(a: int, b: int): int { return 0 }"
+        let tests = """
+        test_suite("add", fn() {
+            test_case("加法", fn() {
+                assert_equal(add(1, 2), 3)
+            })
+        })
+        """
+        let contract = """
+        protocol MathOps {
+            fn add(a: int, b: int): int
+        }
+        """
+        
+        let result = Implementer(source, tests, contract)
+        
+        assert_equal(result["status"], "success")
+        assert_true(result["tests_passed"])
+        assert_true(contains(result["implementation"], "return a + b"))
+    })
+
+    test_case("测试失败时继续迭代", fn() {
+        let source = "fn multiply(a: int, b: int): int { return 0 }"
+        let tests = """
+        test_suite("multiply", fn() {
+            test_case("乘法", fn() {
+                assert_equal(multiply(2, 3), 6)
+            })
+        })
+        """
+        let contract = """
+        protocol MathOps {
+            fn multiply(a: int, b: int): int
+        }
+        """
+        
+        let result = Implementer(source, tests, contract)
+        
+        // 应该迭代直到测试通过
+        assert_equal(result["status"], "success")
+        assert_true(result["tests_passed"])
+        assert_true(result["iterations"] > 0)
+    })
+
+    test_case("重构代码保持测试通过", fn() {
+        let source = """
+        fn calculate_total(items: list): int {
+            let total = 0
+            for item in items {
+                total = total + item
+            }
+            return total
+        }
+        """
+        let tests = """
+        test_suite("calculate_total", fn() {
+            test_case("求和", fn() {
+                assert_equal(calculate_total([1, 2, 3]), 6)
+            })
+        })
+        """
+        let contract = """
+        protocol ListOps {
+            fn calculate_total(items: list): int
+        }
+        """
+        
+        let result = Implementer(source, tests, contract)
+        
+        // 重构后测试仍然通过
+        assert_true(result["tests_passed"])
+        // 应该使用更简洁的实现
+        assert_true(contains(result["implementation"], "sum"))
+    })
+})

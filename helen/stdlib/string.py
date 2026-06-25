@@ -501,3 +501,16 @@ def _index(s: str, sub: str) -> int:
     if idx == -1:
         raise ValueError(f"Substring '{sub}' not found in '{s}'")
     return idx
+
+
+def _contains(s: str, sub: str) -> bool:
+    """Check if string contains substring.
+
+    Args:
+        s: Input string
+        sub: Substring to search for
+
+    Returns:
+        True if substring is found, False otherwise
+    """
+    return sub in s

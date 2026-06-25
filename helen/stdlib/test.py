@@ -513,16 +513,20 @@ class Expectation:
 # ── Stdlib Functions (registered in Helen) ─────────────────────
 
 
-def _test_suite(name: str) -> str:
-    """Start a new test suite.
+def _test_suite(name: str, fn: Callable | None = None) -> str:
+    """Start a new test suite, optionally with a callback.
 
     Args:
         name: Suite name
+        fn: Optional callback function that registers test cases
 
     Returns:
         Suite name
     """
     _registry.start_suite(name)
+    if fn is not None:
+        fn()
+        _registry.end_suite()
     return name
 
 
@@ -664,9 +668,33 @@ def _assert_not_equal(actual: Any, expected: Any, message: str = "") -> bool:
         AssertionError: If values are equal
     """
     if actual == expected:
-        msg = message or f"Expected values to differ, both are {actual!r}"
+        msg = message or f"Expected {actual!r} != {expected!r}"
         raise AssertionError(msg)
     return True
+
+
+def _assert_contains(container: Any, item: Any, message: str = "") -> bool:
+    """Assert that container contains item.
+
+    Args:
+        container: Container (string, list, dict, etc.)
+        item: Item to search for
+        message: Optional error message
+
+    Returns:
+        True if assertion passes
+
+    Raises:
+        AssertionError: If item not found in container
+    """
+    try:
+        if item not in container:
+            msg = message or f"Expected {container!r} to contain {item!r}"
+            raise AssertionError(msg)
+        return True
+    except TypeError as e:
+        msg = message or f"Cannot check containment: {e}"
+        raise AssertionError(msg)
 
 
 def _assert_throws(fn: Callable, error_type: str = "") -> str:
