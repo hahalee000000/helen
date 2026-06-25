@@ -167,12 +167,12 @@ main {
         assert "d" in result["stdout"]
     
     def test_regex_findall_natural_order(self, temp_dir):
-        """regex_findall should be regex_findall(string, pattern)."""
+        """regex_findall should be regex_findall(pattern, string)."""
         test_file = temp_dir / "test.helen"
         test_file.write_text("""
 main {
     let text = "cat bat rat hat"
-    let matches = regex_findall(text, "[a-z]at")
+    let matches = regex_findall("[a-z]at", text)
     print(len(matches))
     for m in matches {
         print(m)

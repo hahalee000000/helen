@@ -315,8 +315,8 @@ class SemanticAnalyzer(Visitor[None]):
         existing = self.symbols.define(node.name, sym)
         if existing is not None:
             self.errors.error(
-                ErrorCode.DUPLICATE_SYMBOL,
-                f"duplicate declaration of '{node.name}'",
+                ErrorCode.DUPLICATE_AGENT_NAME,
+                f"duplicate agent name '{node.name}'",
                 node.span,
             )
         self._agent_names[node.name] = node
@@ -872,7 +872,7 @@ class SemanticAnalyzer(Visitor[None]):
         else:
             # Get the directory of the file doing the import
             importing_file = node.span.file if hasattr(node.span, 'file') and node.span.file else None
-            if importing_file and importing_file != '<unknown>':
+            if importing_file and not importing_file.startswith('<'):
                 importing_dir = os.path.dirname(os.path.abspath(importing_file))
                 target = os.path.join(importing_dir, path)
             else:

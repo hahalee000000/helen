@@ -71,10 +71,10 @@ class TestKeywords:
     """Tests for keyword recognition."""
 
     def test_keywords_recognition(self) -> None:
-        """All 41 keywords should be correctly identified."""
+        """All 40 keywords should be correctly identified."""
         all_kws = [
             "agent", "description", "model", "tools",
-            "sub-agents", "memory", "temperature", "max-turns",
+            "sub-agents", "temperature", "max-turns",
             "prompt", "llm", "import", "let", "const", "if", "else",
             "for", "while", "break", "continue", "return", "call",
             "await", "async", "match", "case", "branch",

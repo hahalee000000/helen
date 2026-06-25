@@ -123,12 +123,12 @@ class TestThrowWithTryCatch:
     def test_throw_uncaught_propagates(self):
         """Uncaught throw should propagate up."""
         code = '''
-        fn fail() {
+        fn do_fail() {
             throw RuntimeError("fail");
         }
         
         try {
-            fail();
+            do_fail();
         } catch RuntimeError err {
             print("caught in caller");
         }
