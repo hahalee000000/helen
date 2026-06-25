@@ -3805,10 +3805,10 @@ my-skill/
 name: web-research
 description: Research topics using web search and content extraction
 category: research
-triggers:
-  - search
-  - research
-  - find information
+tags: [search, research, web, information]
+version: 1.0.0
+author: Helen Community
+license: MIT
 ---
 
 # Web Research Skill
@@ -3837,7 +3837,12 @@ triggers:
 | `name` | ✅ | 技能唯一标识（小写，连字符分隔） |
 | `description` | ✅ | 一句话描述技能用途 |
 | `category` | ❌ | 分类（research, devops, creative 等） |
-| `triggers` | ❌ | 触发关键词列表 |
+| `tags` | ❌ | 关键词标签列表（用于技能发现） |
+| `version` | ❌ | 技能版本号 |
+| `author` | ❌ | 作者信息 |
+| `license` | ❌ | 许可证（如 MIT） |
+
+**重要**：`tags` 字段是提升技能命中率的关键。系统会将 tags 注入到 system prompt 中，LLM 根据这些标签更容易发现和加载相关技能。建议使用统一的命名规范（如小写、英文关键词）。
 
 ### Markdown Body
 
@@ -3899,10 +3904,10 @@ mkdir -p ~/.helen/skills/code-review
 name: code-review
 description: Systematic code review with security and quality checks
 category: development
-triggers:
-  - review
-  - code review
-  - quality check
+tags: [review, code-review, security, quality, checklist]
+version: 1.0.0
+author: Helen Community
+license: MIT
 ---
 
 # Code Review Skill
