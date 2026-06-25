@@ -460,7 +460,7 @@ agent TaskAgent() {
 }
 
 main {
-    let agent = call TaskAgent()
+    let agent = TaskAgent()
     agent.main()
 }
 ```
