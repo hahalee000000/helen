@@ -1,0 +1,52 @@
+// HelenChat - 简单的对话式 AI 助手
+// 循环回答用户问题，直到收到 exit 命令退出
+//
+// 用法: helen examples/helenchat_simple.helen
+
+agent HelenChat(user_input: str) {
+    description "友好的对话式 AI 助手"
+    model "qwen3.7-plus"
+    temperature 0.7
+    
+    prompt """
+    你是 HelenChat，一个友好、专业的 AI 助手。
+    
+    用户的问题: {{user_input}}
+    
+    请用友好、自然的语气回答。
+    保持回答简洁但完整（2-4句话）。
+    如果涉及代码，给出简单示例。
+    """
+    
+    main {
+        llm stream user_input
+    }
+}
+
+main {
+    print("╔══════════════════════════════════════╗")
+    print("║  HelenChat - 你的 AI 助手            ║")
+    print("║  输入 'exit' 或 'quit' 退出          ║")
+    print("╚══════════════════════════════════════╝")
+    print("")
+
+    while (true) {
+        let user_input = input("你: ")
+
+        if (user_input == "exit" || user_input == "quit") {
+            print("")
+            print("HelenChat: 再见！感谢使用 👋")
+            break
+        }
+
+        if (user_input == "") {
+            continue
+        }
+
+        print("")
+        print("HelenChat: ", end="")
+        HelenChat(user_input)
+        print("")
+        print("")
+    }
+}
