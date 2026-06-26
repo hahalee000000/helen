@@ -18,10 +18,14 @@ agent HelenChat(user_input: str) {
     temperature 0.7
     
     main {
-        // 使用 llm act 获取回答
-        let response = llm act user_input
-        return response
+        // 使用 llm stream 流式输出
+        llm stream user_input
     }
+}
+
+fn on_complete() {
+    print("")
+    print("")
 }
 
 main {
@@ -47,9 +51,7 @@ main {
         // 调用 AI 助手
         print("")
         print("HelenChat: ", end="")
-        let response = HelenChat(user_input)
-        print(response)
-        print("")
-        print("")
+        HelenChat(user_input)
+        on_complete()
     }
 }

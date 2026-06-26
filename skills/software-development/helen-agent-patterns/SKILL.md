@@ -254,17 +254,32 @@ agent StreamingWriter(topic: str) {
     description "Write content with streaming output"
     
     main {
-        llm stream "Write a detailed article about " + topic {
-            on_chunk(chunk) {
-                # 实时输出每个片段
-                print(chunk, end="")
-            }
-        }
+        llm stream "Write a detailed article about " + topic
     }
 }
 
 # 使用 — 用户立即看到输出，无需等待完整响应
 StreamingWriter("The future of AI")
+```
+
+带回调的流式输出：
+
+```helen
+fn on_chunk(chunk) {
+    print(chunk, end="")
+}
+
+fn on_complete() {
+    print("\n\n✅ 完成")
+}
+
+agent StreamingWriter(topic: str) {
+    description "Write content with streaming output"
+    
+    main {
+        llm stream "Write a detailed article about " + topic on_chunk on_chunk on_complete on_complete
+    }
+}
 ```
 
 #### 方式 B：使用 `streaming true` + `for await`（自定义处理每个 chunk）

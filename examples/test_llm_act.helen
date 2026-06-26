@@ -1,0 +1,8 @@
+// 测试 llm act 是否能正常返回
+
+main {
+    print("测试 llm act...")
+    let response = llm act "你好，请简单介绍一下自己"
+    print("响应长度: " + len(response))
+    print("响应内容: " + response)
+}

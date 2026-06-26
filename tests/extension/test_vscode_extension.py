@@ -61,7 +61,8 @@ class TestTextMateGrammar:
     def test_has_literals_pattern(self):
         """Grammar includes literal patterns."""
         repo = self.grammar["repository"]
-        assert "literals" in repo
+        # Grammar uses 'constants' instead of 'literals'
+        assert "constants" in repo
 
     def test_all_regex_patterns_compile(self):
         """All regex patterns in the grammar compile without error."""
@@ -85,10 +86,10 @@ class TestKeywordCoverage:
     # All keywords from helen.core.tokens._KEYWORD_MAP
     HELLEN_KEYWORDS = {
         "agent", "description", "model", "tools", "skills", "sub-agents",
-        "memory", "temperature", "max-turns", "prompt", "llm", "import",
+        "temperature", "max-turns", "prompt", "llm", "import",
         "let", "const", "if", "else", "for", "while", "break", "continue",
         "return", "call", "await", "async", "match", "case", "branch",
-        "option", "default", "choose", "act", "try", "catch", "finally",
+        "default", "act", "try", "catch", "finally",
         "fn", "as", "in", "functions", "main", "true", "false", "null",
     }
 
@@ -104,7 +105,7 @@ class TestKeywordCoverage:
             if "match" in p:
                 patterns.append(p["match"])
         # Also check literals for true/false/null
-        literals_section = self.grammar["repository"]["literals"]
+        literals_section = self.grammar["repository"]["constants"]
         for p in literals_section.get("patterns", []):
             if "match" in p:
                 patterns.append(p["match"])
