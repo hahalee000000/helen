@@ -1,0 +1,14 @@
+// HelenProgrammer Agent v5 测试
+import "/app/hermes/helen/agents/helen_programmer.helen"
+
+fn test_helen_programmer_creation() {
+    let programmer = HelenProgrammer("实现一个函数", "/tmp/test_project")
+    assert_true(programmer != null)
+}
+
+fn test_helen_programmer_with_requirement() {
+    let requirement = "实现一个字符串反转函数"
+    let project_dir = "/tmp/helen_test"
+    let programmer = HelenProgrammer(requirement, project_dir)
+    assert_true(programmer != null)
+}

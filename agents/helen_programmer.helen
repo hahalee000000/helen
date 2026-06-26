@@ -1,31 +1,16 @@
-// ============================================================
-// HelenProgrammingAgent v5.2 — Main Orchestrator
-//
-// Coordinates 5 sub-agents through the workflow:
-//   Phase 1: Contractor → 契约设计
-//   Phase 2: TestBuilder → 测试生成
-//   Phase 3: Implementer → 代码实现 (TDD RED-GREEN-REFACTOR)
-//   Phase 4: QualityGate → 质量评估
-//   Phase 5: SkillEvaluator → 技能自进化
-//
-// Usage:
-//   helen agents/helen_programmer.helen
-//   // Or from REPL: :agent agents/helen_programmer.helen
-// ============================================================
+// HelenProgrammer Agent v5.2 - 主编排器
 
-import "contracts/contracts.helen"
-import "contractor.helen"
-import "test_builder.helen"
-import "implementer.helen"
-import "quality_gate.helen"
-import "skill_evaluator.helen"
+import "/app/hermes/helen/agents/contractor.helen"
+import "/app/hermes/helen/agents/test_builder.helen"
+import "/app/hermes/helen/agents/implementer.helen"
+import "/app/hermes/helen/agents/quality_gate.helen"
+import "/app/hermes/helen/agents/skill_evaluator.helen"
 
 agent HelenProgrammer(requirement: str, project_dir: str) {
     description "Helen 编程助手主编排 — 契约驱动 + TDD + 技能自进化"
     model "qwen3.7-max"
     temperature 0.2
     max-turns 20
-    streaming true
     tools ["read_file", "write_file", "shell_exec", "mkdir_p", "path_exists"]
 
     prompt """
@@ -156,5 +141,17 @@ agent HelenProgrammer(requirement: str, project_dir: str) {
         print("\n================================")
         print("✅ 全部阶段完成")
         print("================================")
+        
+        // 返回 JSON 结果
+        return json_stringify({
+            "status": "success",
+            "phases": {
+                "contract": contract_result,
+                "test": test_result,
+                "implement": impl_result,
+                "quality": quality_result,
+                "skill": skill_result
+            }
+        })
     }
 }

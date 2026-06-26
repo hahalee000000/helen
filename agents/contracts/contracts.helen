@@ -1,7 +1,6 @@
-// Helen Programming Agent - Contracts
-// 定义所有 Agent 的协议接口、错误码和辅助函数
+// Helen Programming Agent v5.2 - 契约定义
 
-// ─── 错误码定义 ───
+// ─── 错误码 ───
 
 const ERR_AGENT_FAILED = 5001
 const ERR_CONTRACT_INVALID = 5002
@@ -17,86 +16,46 @@ const ERR_PATCH_FAILED = 5008
 const QUALITY_THRESHOLD = 7.5
 const MIN_DIMENSION_SCORE = 6.0
 
-// ─── Protocol 定义 ───
+// ─── Agent 接口契约 ───
 
-protocol ContractorOutput {
+// Contractor: 设计接口和契约
+// 输入: requirement (str), context (str)
+// 输出: map { "contract": str, "modules": list, "status": str }
+protocol ContractorContract {
     fn design_contract(requirement: str, context: str): map
 }
 
-protocol TestBuilderOutput {
+// TestBuilder: 生成测试
+// 输入: source_code (str), contract (str)
+// 输出: map { "test_code": str, "test_count": int, "status": str }
+protocol TestBuilderContract {
     fn generate_tests(source_code: str, contract: str): map
 }
 
-protocol ImplementerOutput {
+// Implementer: 实现代码（TDD循环）
+// 输入: source_code (str), test_code (str), contract (str)
+// 输出: map { "implementation": str, "tests_passed": bool, "iterations": int, "status": str }
+protocol ImplementerContract {
     fn implement_code(source_code: str, test_code: str, contract: str): map
 }
 
-protocol QualityGateOutput {
+// QualityGate: 质量评估
+// 输入: file_path (str), before_scores (str)
+// 输出: map { "scores": map, "verdict": str, "report": str }
+protocol QualityGateContract {
     fn evaluate_quality(file_path: str, before_scores: str): map
 }
 
-protocol SkillEvaluatorOutput {
+// SkillEvaluator: 技能自进化
+// 输入: task_summary (str), files_changed (str)
+// 输出: map { "new_skills": list, "updates": list, "status": str }
+protocol SkillEvaluatorContract {
     fn evaluate_skills(task_summary: str, files_changed: str): map
 }
 
-protocol ProgrammingAgentOutput {
+// HelenProgrammer: 主编排
+// 输入: requirement (str), project_dir (str)
+// 输出: map { "status": str, "phases": map }
+protocol HelenProgrammerContract {
     fn orchestrate_workflow(requirement: str, project_dir: str): map
-}
-
-// ─── 辅助函数 ───
-
-fn is_quality_pass(scores: map): bool {
-    let total = 0.0
-    let dimensions = ["security", "correctness", "maintainability", "performance", "testability", "helen_conventions", "documentation"]
-    
-    for dim in dimensions {
-        let score = scores[dim]
-        if score == null {
-            return false
-        }
-        if score < MIN_DIMENSION_SCORE {
-            return false
-        }
-        total = total + score
-    }
-    
-    let avg = total / 7.0
-    return avg >= QUALITY_THRESHOLD
-}
-
-fn format_quality_report(before: map, after: map): str {
-    let report = "## 质量评估报告\n\n"
-    report = report + "| 维度 | 修改前 | 修改后 | 变化 |\n"
-    report = report + "|------|--------|--------|------|\n"
-    
-    let dimensions = ["security", "correctness", "maintainability", "performance", "testability", "helen_conventions", "documentation"]
-    
-    for dim in dimensions {
-        let before_score = before[dim]
-        let after_score = after[dim]
-        let delta = after_score - before_score
-        
-        let arrow = "→"
-        if delta > 0 {
-            arrow = "↑"
-        } else if delta < 0 {
-            arrow = "↓"
-        }
-        
-        report = report + "| " + dim + " | " + str(before_score) + " | " + str(after_score) + " | " + arrow + " " + str(delta) + " |\n"
-    }
-    
-    report = report + "\n"
-    return report
-}
-
-fn extract_error_code(result: map): int {
-    if result["error_code"] != null {
-        return result["error_code"]
-    }
-    return 0
-}
-
-fn is_success(result: map): bool {
-    return result["status"] == "success"
 }

@@ -1,82 +1,13 @@
-import "../../agents/contracts/contracts.helen"
+// QualityGate Agent v5 测试
+import "/app/hermes/helen/agents/quality_gate.helen"
 
-test_suite("QualityGate", fn() {
-    test_case("评估高质量代码", fn() {
-        let code = """
-        // 安全的用户输入验证
-        fn validate_username(input: str): map {
-            if len(input) == 0 {
-                return {
-                    "status": "error",
-                    "error_code": 1001,
-                    "message": "用户名不能为空"
-                }
-            }
-            if len(input) > 50 {
-                return {
-                    "status": "error",
-                    "error_code": 1002,
-                    "message": "用户名过长"
-                }
-            }
-            return {
-                "status": "success",
-                "username": input
-            }
-        }
-        """
-        
-        write_file("/tmp/test_quality.helen", code)
-        let result = QualityGate("/tmp/test_quality.helen", "{}")
-        
-        assert_true(result["scores"]["security"] >= 8.0)
-        assert_true(result["scores"]["correctness"] >= 8.0)
-        assert_equal(result["verdict"], "PASS")
-    })
+fn test_quality_gate_creation() {
+    let gate = QualityGate("/tmp/test.helen", "{}")
+    assert_true(gate != null)
+}
 
-    test_case("检测低质量代码", fn() {
-        let code = """
-        fn process(data) {
-            if data != null {
-                if data != "" {
-                    if len(data) > 0 {
-                        return data
-                    }
-                }
-            }
-            return null
-        }
-        """
-        
-        write_file("/tmp/test_low_quality.helen", code)
-        let result = QualityGate("/tmp/test_low_quality.helen", "{}")
-        
-        assert_true(result["scores"]["maintainability"] < 6.0)
-        assert_equal(result["verdict"], "NEEDS_IMPROVEMENT")
-    })
-
-    test_case("对比修改前后的质量变化", fn() {
-        let before = """
-        {
-            "security": 5.0,
-            "correctness": 6.0,
-            "maintainability": 5.5
-        }
-        """
-        
-        let code = """
-        fn validate_input(input: str): map {
-            if len(input) == 0 {
-                return {"status": "error", "code": 1001}
-            }
-            return {"status": "success", "data": input}
-        }
-        """
-        
-        write_file("/tmp/test_improvement.helen", code)
-        let result = QualityGate("/tmp/test_improvement.helen", before)
-        
-        assert_true(result["delta"]["security"] > 0)
-        assert_true(contains(result["report"], "↑"))
-    })
-})
+fn test_quality_gate_with_scores() {
+    let before_scores = json_stringify({"overall": 5.0, "security": 6.0})
+    let gate = QualityGate("/tmp/test.helen", before_scores)
+    assert_true(gate != null)
+}

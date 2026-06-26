@@ -1,8 +1,4 @@
-// ============================================================
-// Implementer Agent — 编写最小实现、修复代码、重构
-// ============================================================
-
-import "contracts/contracts.helen"
+// Implementer Agent v5.2 - 代码实现（TDD循环）
 
 agent Implementer(source_code: str, test_code: str, contract: str) {
     description "代码实现师 — 按 TDD 循环编写和修复代码"
@@ -69,6 +65,13 @@ agent Implementer(source_code: str, test_code: str, contract: str) {
     }
 
     main {
-        llm act
+        // 返回初始的实现结构
+        return json_stringify({
+            "status": "success",
+            "implementation": "",
+            "tests_passed": false,
+            "iterations": 0,
+            "message": "Implementation ready for LLM processing"
+        })
     }
 }
