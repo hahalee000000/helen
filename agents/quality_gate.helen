@@ -1,61 +1,49 @@
 // QualityGate Agent v5.2 - 质量评估
 
 agent QualityGate(file_path: str, before_scores: str) {
-    description "质量把关员 — 对代码进行7维质量评估，提供改进建议"
-    model "qwen3.7-max"
+    description "质量把关员 — 7 维质量评估"
     temperature 0.2
     max-turns 5
-    tools ["read_file", "shell_exec"]
+    tools ["read_file", "shell_exec", "path_exists"]
 
     prompt """
-    你是 Helen 质量把关员，对代码进行7维质量评估。
+    你是 Helen 质量把关员，进行 7 维质量评估。
 
-    文件路径: {{file_path}}
-    修改前评分: {{before_scores}}
+    文件: {{file_path}}
+    历史评分: {{before_scores}}
 
-    评估维度（每维度0-10分）:
-    1. 安全性 — 输入验证、无注入、秘密保护
-    2. 正确性 — 逻辑无误、边界处理、错误码覆盖
-    3. 可维护性 — 命名清晰、函数 < 50行、无死代码
-    4. 性能 — 无不必要的循环或分配
-    5. 可测试性 — 代码易于测试
-    6. Helen 规范 — 遵循语言最佳实践
-    7. 文档 — 注释完整、接口说明清晰
-
-    工作流程:
-    1. 调用 get_scores() 获取当前评分
-    2. 调用 get_metrics() 获取代码度量
-    3. 对比修改前后的变化
-    4. 生成质量报告和改进建议
-
-    质量阈值:
-    - 单项 < 6.0 → 必须改进
-    - 总分 < 7.5 → 建议改进
-    - 总分 ≥ 8.0 → 通过
+    返回 JSON 格式结果，包含 status、scores、verdict、report、message 字段。
     """
 
     functions {
         fn get_scores(path: str): map {
-            let content = read_file(path)
+            if !path_exists(path) {
+                let empty = {}
+                return {"scores": empty, "security": empty}
+            }
+            let content = substring(read_file(path), 0, 2000)
             let scores = quality_score(content, path)
             let security = check_security(content)
             return {"scores": scores, "security": security}
         }
 
         fn get_metrics(path: str): map {
-            let content = read_file(path)
+            if !path_exists(path) {
+                let empty = {}
+                return empty
+            }
+            let content = substring(read_file(path), 0, 2000)
             return analyze_code(content, path)
         }
     }
 
     main {
-        // 返回初始的质量评估结构
         return json_stringify({
             "status": "success",
             "scores": {},
             "verdict": "PENDING",
             "report": "",
-            "message": "Quality evaluation ready for LLM processing"
+            "message": "Ready for LLM processing"
         })
     }
 }

@@ -1,35 +1,19 @@
 // Implementer Agent v5.2 - 代码实现（TDD循环）
 
 agent Implementer(source_path: str, test_path: str, contract_path: str) {
-    description "代码实现师 — 按 TDD 循环编写和修复代码"
-    model "qwen3.7-max"
+    description "代码实现师 — TDD 循环编写代码"
     temperature 0.2
-    max-turns 10
+    max-turns 5
     tools ["read_file", "write_file", "patch_file", "shell_exec", "path_exists"]
 
     prompt """
-    你是 Helen 代码实现师，按 TDD 循环编写和修复代码。
+    你是 Helen 代码实现师，按 TDD 循环编写代码。
 
-    源码路径: {{source_path}}
-    测试路径: {{test_path}}
-    契约路径: {{contract_path}}
+    源码: {{source_path}}
+    测试: {{test_path}}
+    契约: {{contract_path}}
 
-    工作流程（严格按 TDD）:
-    1. 读取源码、测试和契约文件
-    2. 调用 run_single_test() 确认测试 FAIL（RED）
-    3. 调用 apply_patch() 编写最小实现
-    4. 调用 verify_after_change() 验证（GREEN）
-    5. 如果 FAIL → 回到步骤 3
-    6. 如果 PASS → 调用 refactor_code() 重构（REFACTOR）
-    7. 验证重构后测试仍 PASS
-
-    Helen 语法注意:
-    - `&&` `||` `!` 是逻辑运算符（不是 and/or/not）
-    - `substring(s, start, end)` 截取字符串（不是切片）
-    - `fn(params): Type { body }` 函数声明
-    - `let x = value` 变量声明（不可变）
-    - `var x = value` 变量声明（可变）
-    - `match value { case pattern { expr } default { expr } }` 模式匹配
+    返回 JSON: {"status":"success","implementation":"","tests_passed":false,"iterations":0,"message":""}
     """
 
     functions {
@@ -37,21 +21,21 @@ agent Implementer(source_path: str, test_path: str, contract_path: str) {
             if !path_exists(source_path) {
                 return ""
             }
-            return read_file(source_path)
+            return substring(read_file(source_path), 0, 2000)
         }
 
         fn read_tests(): str {
             if !path_exists(test_path) {
                 return ""
             }
-            return read_file(test_path)
+            return substring(read_file(test_path), 0, 2000)
         }
 
         fn read_contract(): str {
             if !path_exists(contract_path) {
                 return ""
             }
-            return read_file(contract_path)
+            return substring(read_file(contract_path), 0, 2000)
         }
 
         fn apply_patch(file_path: str, old_code: str, new_code: str): map {
@@ -61,23 +45,18 @@ agent Implementer(source_path: str, test_path: str, contract_path: str) {
 
         fn verify_after_change(file_path: str, test_file: str): map {
             let check = shell_exec("helen check " + file_path + " 2>&1")
-            let test = shell_exec("helen test " + test_file + " 2>&1", timeout=120)
+            let test = shell_exec("helen test " + test_file + " 2>&1", timeout=60)
             return {
                 "check_valid": contains(check, "OK"),
-                "check_output": check,
+                "check_output": substring(check, 0, 500),
                 "test_passed": contains(test, "ALL TESTS PASSED"),
-                "test_output": test
+                "test_output": substring(test, 0, 500)
             }
         }
 
         fn run_single_test(test_file: str, test_name: str): map {
             let result = shell_exec("helen test " + test_file + " --filter " + test_name + " 2>&1", timeout=30)
-            return {"output": result, "passed": contains(result, "PASSED")}
-        }
-
-        fn get_iteration_count(): int {
-            // Track how many RED-GREEN cycles we've done
-            return 0
+            return {"output": substring(result, 0, 500), "passed": contains(result, "PASSED")}
         }
     }
 
@@ -85,14 +64,13 @@ agent Implementer(source_path: str, test_path: str, contract_path: str) {
         let source = read_source()
         let tests = read_tests()
         let contract = read_contract()
-        
-        // 返回初始的实现结构
+
         return json_stringify({
             "status": "success",
             "implementation": "",
             "tests_passed": false,
             "iterations": 0,
-            "message": "Implementation ready for LLM processing"
+            "message": "Ready for LLM processing"
         })
     }
 }

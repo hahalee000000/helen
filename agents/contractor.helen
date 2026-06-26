@@ -1,43 +1,38 @@
 // Contractor Agent v5.2 - 契约驱动设计
 
 agent Contractor(requirement: str, context: str) {
-    description "接口设计师 — 根据需求设计 Protocol 接口和函数签名"
-    model "qwen3.7-max"
+    description "接口设计师 — 设计 Protocol 接口和函数签名"
     temperature 0.3
     max-turns 5
     tools ["read_file", "write_file", "list_dir", "path_exists"]
 
     prompt """
-    你是 Helen 接口设计师。根据需求设计清晰的 Protocol 接口。
+    你是 Helen 接口设计师。根据需求设计 Protocol 接口。
 
     需求: {{requirement}}
-    上下文: {{context}}
+    项目: {{context}}
 
-    工作流程:
-    1. 调用 read_existing_contracts() 读取现有契约
-    2. 调用 read_source_files() 了解项目结构
-    3. 设计 Protocol 接口（输入、输出、错误码）
-    4. 返回 JSON 格式的契约设计
+    返回 JSON: {"status":"success","contract":"","modules":[],"message":""}
     """
 
     functions {
         fn read_existing_contracts(): str {
-            let contracts_file = context + "/contracts.helen"
-            if path_exists(contracts_file) {
-                return read_file(contracts_file)
+            let path = context + "/contracts.helen"
+            if path_exists(path) {
+                return substring(read_file(path), 0, 2000)
             }
             return ""
         }
 
         fn read_source_files(): map {
             if !path_exists(context) {
-                return {"files": [], "error": "context directory not found"}
+                return {"files": [], "error": "dir not found"}
             }
             let files = list_dir(context)
             let result = {"files": []}
-            for file in files {
-                if endswith(file, ".helen") {
-                    result["files"].append(file)
+            for f in files {
+                if endswith(f, ".helen") {
+                    result["files"].append(f)
                 }
             }
             return result
@@ -48,12 +43,11 @@ agent Contractor(requirement: str, context: str) {
         let existing = read_existing_contracts()
         let sources = read_source_files()
 
-        // 返回初始的契约设计结构
         return json_stringify({
             "status": "success",
             "contract": "",
             "modules": [],
-            "message": "Contract design ready for LLM processing"
+            "message": "Ready for LLM processing"
         })
     }
 }
