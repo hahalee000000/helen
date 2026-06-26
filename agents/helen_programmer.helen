@@ -107,21 +107,14 @@ agent HelenProgrammer(requirement: str, project_dir: str) {
         // Phase 2: 测试生成
         print("\n🧪 Phase 2: 测试生成")
         let source_path = project_dir + "/src/main.helen"
-        let source_code = ""
-        if path_exists(source_path) {
-            source_code = read_file(source_path)
-        }
-        let test_result = call_test_builder(source_code, contract_result["contract"])
+        let contract_path = project_dir + "/contracts/contracts.helen"
+        let test_result = call_test_builder(source_path, contract_path)
         print("测试生成完成: " + test_result["status"])
 
         // Phase 3: 代码实现 (TDD 循环)
         print("\n💻 Phase 3: 代码实现")
         let test_path = project_dir + "/tests/test_main.helen"
-        let test_code = ""
-        if path_exists(test_path) {
-            test_code = read_file(test_path)
-        }
-        let impl_result = call_implementer(source_code, test_code, contract_result["contract"])
+        let impl_result = call_implementer(source_path, test_path, contract_path)
         print("代码实现完成: " + impl_result["status"])
 
         // Phase 4: 质量评估

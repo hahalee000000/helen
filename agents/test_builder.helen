@@ -1,6 +1,6 @@
 // TestBuilder Agent v5.2 - 测试生成
 
-agent TestBuilder(source_code: str, contract: str) {
+agent TestBuilder(source_path: str, contract_path: str) {
     description "测试构建师 — 根据契约和源码生成 Helen 测试用例"
     model "qwen3.7-max"
     temperature 0.3
@@ -10,20 +10,35 @@ agent TestBuilder(source_code: str, contract: str) {
     prompt """
     你是 Helen 测试构建师。根据契约和源码生成完整的测试用例。
 
-    源码: {{source_code}}
-    契约: {{contract}}
+    源码路径: {{source_path}}
+    契约路径: {{contract_path}}
 
     工作流程:
-    1. 分析契约中的函数签名和错误码
-    2. 为每个函数生成测试用例，覆盖：
+    1. 读取源码和契约文件
+    2. 分析契约中的函数签名和错误码
+    3. 为每个函数生成测试用例，覆盖：
        - 正常情况（success）
        - 错误情况（各种 error_code）
        - 边界情况（空值、极值等）
-    3. 使用 Helen 测试框架（test_ 开头的函数）
-    4. 返回生成的测试代码
+    4. 使用 Helen 测试框架（test_ 开头的函数）
+    5. 返回生成的测试代码
     """
 
     functions {
+        fn read_source(): str {
+            if !path_exists(source_path) {
+                return ""
+            }
+            return read_file(source_path)
+        }
+
+        fn read_contract(): str {
+            if !path_exists(contract_path) {
+                return ""
+            }
+            return read_file(contract_path)
+        }
+
         fn get_existing_tests(): list {
             let test_files = []
             let files = list_dir(".")
@@ -37,6 +52,8 @@ agent TestBuilder(source_code: str, contract: str) {
     }
 
     main {
+        let source = read_source()
+        let contract = read_contract()
         let existing = get_existing_tests()
         
         // 返回初始的测试生成结构

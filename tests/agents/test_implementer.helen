@@ -2,16 +2,12 @@
 import "/app/hermes/helen/agents/implementer.helen"
 
 fn test_implementer_creation() {
-    let implementer = Implementer("fn add(a, b) { return 0 }", "test code", "contract")
+    let implementer = Implementer("/tmp/src.helen", "/tmp/test.helen", "/tmp/contract.helen")
     assert_true(implementer != null)
 }
 
 fn test_implementer_with_complex_source() {
-    let source = """
-    fn calculate(a, b) {
-        return a + b
-    }
-    """
-    let implementer = Implementer(source, "test code", "contract")
+    let source = "/tmp/complex.helen"
+    let implementer = Implementer(source, "/tmp/test.helen", "/tmp/contract.helen")
     assert_true(implementer != null)
 }
