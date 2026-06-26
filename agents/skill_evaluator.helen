@@ -1,18 +1,40 @@
 // SkillEvaluator Agent v5.2 - 技能自进化
 
 agent SkillEvaluator(task_summary: str, files_changed: str) {
-    description "技能评估员 — 评估可学习的新技能"
+    description "技能评估员 — 评估可学习的新技能和可优化的技能"
+    model "qwen3.7-max"
     temperature 0.3
     max-turns 5
-    tools ["read_file", "write_file", "shell_exec", "load_skill", "path_exists"]
+    tools ["read_file", "write_file", "shell_exec", "load_skill"]
 
     prompt """
-    你是 Helen 技能评估员。评估任务是否产生可复用模式或需要更新现有技能。
+    你是 Helen 技能评估员。每次编程任务完成后，你负责评估：
+    1. 本次任务是否产生了可复用的新模式（→ 新技能）
+    2. 现有技能是否遗漏了本次遇到的问题（→ 更新技能）
 
-    任务: {{task_summary}}
-    文件: {{files_changed}}
+    任务摘要:
+    {{task_summary}}
 
-    返回 JSON: {"status":"success","new_skills":[],"updates":[],"message":""}
+    修改的文件:
+    {{files_changed}}
+
+    工作流程:
+    1. 调用 list_existing_skills() 获取现有技能列表
+    2. 分析任务摘要，判断是否有新模式值得保存
+    3. 检查现有技能是否需要更新（发现新陷阱/新技巧）
+    4. 如果确认需要，调用 save_new_skill() 或 update_existing_skill()
+    5. 调用 refresh_skill_index() 更新索引
+
+    评估标准:
+    - 新技能条件：解决了非平凡问题、发现了新陷阱、建立了可复用模式
+    - 更新条件：现有技能遗漏了关键信息、发现了更好的解决方案
+    - 不保存条件：简单 typo 修复、一次性配置修改、太泛化无法提取模式
+
+    技能格式要求:
+    - YAML frontmatter: name, description, tags, version
+    - Markdown body: 触发条件、步骤、代码示例、陷阱
+    - tags 使用小写英文关键词
+    - 存储位置: ~/.helen/skills/<category>/<name>/SKILL.md
     """
 
     functions {
@@ -25,7 +47,7 @@ agent SkillEvaluator(task_summary: str, files_changed: str) {
             let result = load_skill(skill_name)
             let parsed = json_parse(result)
             if parsed["content"] != null {
-                return substring(parsed["content"], 0, 2000)
+                return parsed["content"]
             }
             return ""
         }
@@ -39,33 +61,31 @@ agent SkillEvaluator(task_summary: str, files_changed: str) {
                 + "tags: " + tags + "\n"
                 + "version: 1.0.0\n"
                 + "---\n\n"
-            write_file(dir + "/SKILL.md", frontmatter + substring(content, 0, 2000))
+            write_file(dir + "/SKILL.md", frontmatter + content)
             refresh_skill_index()
             return {"status": "saved", "path": dir}
         }
 
         fn update_existing_skill(skill_path: str, addition: str): map {
-            if !path_exists(skill_path) {
-                return {"status": "error", "path": skill_path}
-            }
-            let content = substring(read_file(skill_path), 0, 2000)
-            let updated = content + "\n\n" + substring(addition, 0, 1000) + "\n"
+            let content = read_file(skill_path)
+            let updated = content + "\n\n" + addition + "\n"
             write_file(skill_path, updated)
             return {"status": "updated", "path": skill_path}
         }
 
         fn refresh_skill_index(): str {
             let result = shell_exec("find ~/.helen/skills ~/helen/skills -name 'SKILL.md' -exec head -6 {} \\; 2>/dev/null")
-            return substring(result, 0, 2000)
+            return result
         }
     }
 
     main {
+        // 返回初始的技能评估结构
         return json_stringify({
             "status": "success",
             "new_skills": [],
             "updates": [],
-            "message": "Ready for LLM processing"
+            "message": "Skill evaluation ready for LLM processing"
         })
     }
 }
