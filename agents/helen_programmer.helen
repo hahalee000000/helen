@@ -1,10 +1,10 @@
 // HelenProgrammer Agent v5.2 - 主编排器
 
-import "/app/hermes/helen/agents/contractor.helen"
-import "/app/hermes/helen/agents/test_builder.helen"
-import "/app/hermes/helen/agents/implementer.helen"
-import "/app/hermes/helen/agents/quality_gate.helen"
-import "/app/hermes/helen/agents/skill_evaluator.helen"
+import "contractor.helen"
+import "test_builder.helen"
+import "implementer.helen"
+import "quality_gate.helen"
+import "skill_evaluator.helen"
 
 agent HelenProgrammer(requirement: str, project_dir: str) {
     description "Helen 编程助手主编排 — 契约驱动 + TDD + 技能自进化"
@@ -68,31 +68,6 @@ agent HelenProgrammer(requirement: str, project_dir: str) {
             let security = check_security(content)
             return {"scores": scores, "security": security}
         }
-
-        fn call_contractor(req: str, ctx: str): map {
-            let result = Contractor(req, ctx)
-            return json_parse(result)
-        }
-
-        fn call_test_builder(source: str, contract: str): map {
-            let result = TestBuilder(source, contract)
-            return json_parse(result)
-        }
-
-        fn call_implementer(source: str, tests: str, contract: str): map {
-            let result = Implementer(source, tests, contract)
-            return json_parse(result)
-        }
-
-        fn call_quality_gate(file_path: str, before: str): map {
-            let result = QualityGate(file_path, before)
-            return json_parse(result)
-        }
-
-        fn call_skill_evaluator(summary: str, files: str): map {
-            let result = SkillEvaluator(summary, files)
-            return json_parse(result)
-        }
     }
 
     main {
@@ -101,33 +76,38 @@ agent HelenProgrammer(requirement: str, project_dir: str) {
 
         // Phase 1: 契约设计
         print("📋 Phase 1: 契约设计")
-        let contract_result = call_contractor(requirement, project_dir)
+        let contractor_result = Contractor(requirement, project_dir)
+        let contract_result = json_parse(contractor_result)
         print("契约设计完成: " + contract_result["status"])
 
         // Phase 2: 测试生成
         print("\n🧪 Phase 2: 测试生成")
         let source_path = project_dir + "/src/main.helen"
         let contract_path = project_dir + "/contracts/contracts.helen"
-        let test_result = call_test_builder(source_path, contract_path)
+        let test_builder_result = TestBuilder(source_path, contract_path)
+        let test_result = json_parse(test_builder_result)
         print("测试生成完成: " + test_result["status"])
 
         // Phase 3: 代码实现 (TDD 循环)
         print("\n💻 Phase 3: 代码实现")
         let test_path = project_dir + "/tests/test_main.helen"
-        let impl_result = call_implementer(source_path, test_path, contract_path)
+        let implementer_result = Implementer(source_path, test_path, contract_path)
+        let impl_result = json_parse(implementer_result)
         print("代码实现完成: " + impl_result["status"])
 
         // Phase 4: 质量评估
         print("\n📊 Phase 4: 质量评估")
         let before_scores = json_stringify({"overall": 0.0})
-        let quality_result = call_quality_gate(source_path, before_scores)
+        let quality_gate_result = QualityGate(source_path, before_scores)
+        let quality_result = json_parse(quality_gate_result)
         print("质量评估完成: " + quality_result["verdict"])
 
         // Phase 5: 技能自进化
         print("\n🧠 Phase 5: 技能自进化")
         let task_summary = "完成了需求: " + requirement
         let files_changed = source_path + ", " + test_path
-        let skill_result = call_skill_evaluator(task_summary, files_changed)
+        let skill_evaluator_result = SkillEvaluator(task_summary, files_changed)
+        let skill_result = json_parse(skill_evaluator_result)
         print("技能评估完成: " + skill_result["status"])
 
         // 最终报告

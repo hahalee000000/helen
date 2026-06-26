@@ -1,5 +1,5 @@
 // SkillEvaluator Agent v5 测试
-import "/app/hermes/helen/agents/skill_evaluator.helen"
+import "../../agents/skill_evaluator.helen"
 
 fn test_skill_evaluator_creation() {
     let evaluator = SkillEvaluator("completed task", "file1.helen, file2.helen")

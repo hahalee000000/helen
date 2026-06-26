@@ -1,5 +1,5 @@
 // Contractor Agent v5 测试
-import "/app/hermes/helen/agents/contractor.helen"
+import "../../agents/contractor.helen"
 
 fn test_contractor_creation() {
     let contractor = Contractor("test requirement", "/tmp/test")

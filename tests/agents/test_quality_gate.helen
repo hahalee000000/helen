@@ -1,5 +1,5 @@
 // QualityGate Agent v5 测试
-import "/app/hermes/helen/agents/quality_gate.helen"
+import "../../agents/quality_gate.helen"
 
 fn test_quality_gate_creation() {
     let gate = QualityGate("/tmp/test.helen", "{}")

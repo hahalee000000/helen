@@ -1,5 +1,5 @@
 // Implementer Agent v5 测试
-import "/app/hermes/helen/agents/implementer.helen"
+import "../../agents/implementer.helen"
 
 fn test_implementer_creation() {
     let implementer = Implementer("/tmp/src.helen", "/tmp/test.helen", "/tmp/contract.helen")

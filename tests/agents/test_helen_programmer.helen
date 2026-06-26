@@ -1,5 +1,5 @@
 // HelenProgrammer Agent v5 测试
-import "/app/hermes/helen/agents/helen_programmer.helen"
+import "../../agents/helen_programmer.helen"
 
 fn test_helen_programmer_creation() {
     let programmer = HelenProgrammer("实现一个函数", "/tmp/test_project")

@@ -1,5 +1,5 @@
 // TestBuilder Agent v5 测试
-import "/app/hermes/helen/agents/test_builder.helen"
+import "../../agents/test_builder.helen"
 
 fn test_test_builder_creation() {
     let builder = TestBuilder("/tmp/src.helen", "/tmp/contract.helen")
