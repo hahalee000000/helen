@@ -299,7 +299,8 @@ async def test_async_llm_calls():
 @dataclass(frozen=True)
 class LlmStreamStmtNode(StatementNode):
     prompt: ExpressionNode | None  # None = bare form (use agent's rendered prompt)
-    on_chunk: ExpressionNode | None  # Optional callback
+    on_chunk: ExpressionNode | None  # Optional callback for each chunk
+    on_complete: ExpressionNode | None  # Optional callback when streaming completes
     span: SourceSpan
 
 # Interpreter handles streaming events in visit_llm_stream_stmt()
@@ -317,6 +318,10 @@ def visit_llm_stream_stmt(self, node: LlmStreamStmtNode) -> object:
     max_turns = int(self._get_agent_setting("max-turns", 1))
     if tools and max_turns < 3:
         max_turns = 3
+    
+    # Evaluate callbacks
+    on_chunk_fn = node.on_chunk.accept(self) if node.on_chunk else None
+    on_complete_fn = node.on_complete.accept(self) if node.on_complete else None
     
     for event in self.llm_runtime.act_stream(
         prompt, tools=tools, max_turns=max_turns, ...

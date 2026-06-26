@@ -180,11 +180,18 @@ llm if input {
 }
 
 # llm stream — 流式输出
-llm stream "Write a poem" {
-    on_chunk(chunk) {
-        print(chunk, end="")
-    }
+llm stream "Write a poem"
+
+# llm stream 带回调
+fn handle_chunk(chunk) {
+    print(chunk, end="")
 }
+
+fn on_complete() {
+    print("\n✅ 完成")
+}
+
+llm stream "Write a story" on_chunk handle_chunk on_complete on_complete
 ```
 
 ### 异步语句

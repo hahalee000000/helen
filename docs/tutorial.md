@@ -1832,6 +1832,27 @@ main {
 }
 ```
 
+使用 `on_complete` 指定流式传输完成后的回调：
+
+```helen
+fn handle_chunk(chunk) {
+    print(chunk, end="")
+}
+
+fn on_complete() {
+    print("\n\n✅ 流式传输完成")
+}
+
+main {
+    llm stream "Write a short story" on_chunk handle_chunk on_complete on_complete
+}
+```
+
+`on_complete` 回调在流式传输完成后调用，适合用于：
+- 显示完成提示
+- 记录统计信息（如总 token 数）
+- 触发后续操作
+
 ### 在 agent 中使用
 
 `llm stream` 在 agent 内自动使用 agent 的配置（model、temperature、prompt）：
