@@ -1102,10 +1102,12 @@ class SemanticAnalyzer(Visitor[None]):
             node.prompt.accept(self)
 
     def visit_llm_stream_stmt(self, node: LlmStreamStmtNode) -> None:
-        """Visit llm stream statement: analyze prompt and optional callback."""
+        """Visit llm stream statement: analyze prompt and optional callbacks."""
         node.prompt.accept(self)
         if node.on_chunk is not None:
             node.on_chunk.accept(self)
+        if node.on_complete is not None:
+            node.on_complete.accept(self)
 
     # ------------------------------------------------------------------
     # Match

@@ -322,6 +322,18 @@ class LlmMixin:
                 )
                 return None
 
+        # Evaluate on_complete callback if provided
+        on_complete_fn = None
+        if node.on_complete is not None:
+            on_complete_fn = node.on_complete.accept(self)
+            if not callable(on_complete_fn):
+                self.errors.error(
+                    ErrorCode.SEMANTIC_TYPE_ERROR,
+                    f"on_complete callback must be callable, got {type(on_complete_fn).__name__}",
+                    node.span,
+                )
+                return None
+
         # Audit log entry (P2: LLM call audit)
         import time
         audit_start = time.time()
@@ -396,6 +408,10 @@ class LlmMixin:
             # Add newline at end if using auto-output
             if on_chunk_fn is None:
                 print()
+
+            # Call on_complete callback if provided
+            if on_complete_fn is not None:
+                on_complete_fn()
 
             # Record assistant response to history
             full_text = "".join(full_response)

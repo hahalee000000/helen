@@ -1109,6 +1109,7 @@ class Parser:
         - llm stream                             # bare form, automatically uses the rendered prompt inside an agent
         - llm stream "prompt"                    # automatically outputs to stdout
         - llm stream "prompt" on_chunk callback  # invokes callback(chunk)
+        - llm stream "prompt" on_complete callback  # invokes callback() after streaming completes
         """
         start = self._previous()  # LLM token
         self._consume(TokenType.STREAM, "Expected 'stream' after 'llm'.")
@@ -1128,9 +1129,16 @@ class Parser:
             self._advance()  # consume 'on_chunk'
             on_chunk_expr = self._expression()
 
+        # 检查是否有 on_complete 回调
+        on_complete_expr = None
+        if self._check(TokenType.IDENTIFIER) and self._current().lexeme == "on_complete":
+            self._advance()  # consume 'on_complete'
+            on_complete_expr = self._expression()
+
         return LlmStreamStmtNode(
             prompt=prompt_expr,
             on_chunk=on_chunk_expr,
+            on_complete=on_complete_expr,
             span=self._make_span(start, self._previous())
         )
 

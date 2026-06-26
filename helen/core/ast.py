@@ -964,18 +964,21 @@ class LlmActExprNode(ExpressionNode):
 
 @dataclass(frozen=True)
 class LlmStreamStmtNode(StatementNode):
-    """LLM stream statement: llm stream <prompt_expr>? [on_chunk <callback>].
+    """LLM stream statement: llm stream <prompt_expr>? [on_chunk <callback>] [on_complete <callback>].
 
     Streams LLM response chunk by chunk, optionally calling a callback for each chunk.
     If no callback is provided, chunks are printed to stdout using stream_print.
+    After streaming completes, on_complete callback is called if provided.
 
     Syntax:
         llm stream                             # Bare form (in agent main, uses rendered prompt)
         llm stream "prompt"                    # Auto-print chunks
         llm stream "prompt" on_chunk callback  # Call callback(chunk) for each chunk
+        llm stream "prompt" on_complete callback  # Call callback() after streaming completes
     """
     prompt: ExpressionNode | None  # None = bare form (use agent's rendered prompt)
-    on_chunk: ExpressionNode | None  # Optional callback function
+    on_chunk: ExpressionNode | None  # Optional callback function for each chunk
+    on_complete: ExpressionNode | None  # Optional callback function when streaming completes
     span: SourceSpan
 
     def accept(self, visitor: Visitor[R]) -> R:
@@ -1284,8 +1287,8 @@ class ASTPrinter(Visitor[str]):
         return self._parenthesize("llm-act-expr", node.prompt)
 
     def visit_llm_stream_stmt(self, node: LlmStreamStmtNode) -> str:
-        """Visit a LlmStreamStmtNode."""
-        return self._parenthesize("llm-stream", node.prompt, node.on_chunk)
+        """Print llm stream statement."""
+        return self._parenthesize("llm-stream", node.prompt, node.on_chunk, node.on_complete)
 
     def visit_match_stmt(self, node: MatchStmtNode) -> str:
         """Visit a MatchStmtNode."""
