@@ -385,7 +385,9 @@ class HttpLLMRuntime(LLMRuntime):
                 messages, model=use_model, temperature=temperature, tools=tools,
             )
             if response_msg is None:
-                break
+                # API call failed — raise error instead of silently returning empty
+                error_msg = self._last_error or "Unknown API error"
+                raise RuntimeError(f"LLM API call failed: {error_msg}")
 
             # Check if LLM wants tool calls
             tool_calls = response_msg.get("tool_calls")
@@ -581,7 +583,17 @@ class HttpLLMRuntime(LLMRuntime):
                 return {"content": ""}
 
         except urllib.error.HTTPError as e:
-            self._last_error = f"HTTP error {e.code}: {e.reason}"
+            # Read the error body for structured API error messages
+            error_body = ""
+            try:
+                error_body = e.read().decode("utf-8")
+                error_data = json.loads(error_body)
+                api_error = error_data.get("error", {})
+                error_msg = api_error.get("message", str(e))
+                error_code = api_error.get("code", "")
+                self._last_error = f"API error ({e.code} {error_code}): {error_msg}"
+            except Exception:
+                self._last_error = f"HTTP error {e.code}: {e.reason}"
             return None
         except urllib.error.URLError as e:
             self._last_error = f"HTTP request failed: {e}"
@@ -864,7 +876,17 @@ class HttpLLMRuntime(LLMRuntime):
                     break
 
             except urllib.error.HTTPError as e:
-                yield {"type": "error", "message": f"HTTP error {e.code}: {e.reason}"}
+                # Read the error body for structured API error messages
+                error_body = ""
+                try:
+                    error_body = e.read().decode("utf-8")
+                    error_data = json.loads(error_body)
+                    api_error = error_data.get("error", {})
+                    error_msg = api_error.get("message", str(e))
+                    error_code = api_error.get("code", "")
+                    yield {"type": "error", "message": f"API error ({e.code} {error_code}): {error_msg}"}
+                except Exception:
+                    yield {"type": "error", "message": f"HTTP error {e.code}: {e.reason}"}
                 break
             except urllib.error.URLError as e:
                 yield {"type": "error", "message": f"HTTP request failed: {e}"}
