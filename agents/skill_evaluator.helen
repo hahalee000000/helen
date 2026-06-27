@@ -2,8 +2,7 @@
 
 agent SkillEvaluator(task_summary: str, files_changed: str) {
     description "技能评估员 — 评估可学习的新技能和可优化的技能"
-    model "qwen3.7-max"
-    temperature 0.3
+    temperature 0.5
     max-turns 5
     tools ["read_file", "write_file", "shell_exec", "load_skill"]
 
@@ -35,6 +34,16 @@ agent SkillEvaluator(task_summary: str, files_changed: str) {
     - Markdown body: 触发条件、步骤、代码示例、陷阱
     - tags 使用小写英文关键词
     - 存储位置: ~/.helen/skills/<category>/<name>/SKILL.md
+
+    返回格式（严格遵守）:
+    只返回一个合法的 JSON 对象，不要包含 markdown 代码块、解释文字或任何其他内容。
+    {
+      "status": "success",
+      "new_skills": ["<技能1名称>", "<技能2名称>"],
+      "updates": ["<更新的技能路径1>"],
+      "summary": "<技能评估总结>"
+    }
+    如果没有新技能或更新，返回空数组即可。
     """
 
     functions {
@@ -75,17 +84,48 @@ agent SkillEvaluator(task_summary: str, files_changed: str) {
 
         fn refresh_skill_index(): str {
             let result = shell_exec("find ~/.helen/skills ~/helen/skills -name 'SKILL.md' -exec head -6 {} \\; 2>/dev/null")
+            // 把索引写入本地 SKILL_INDEX.md，让用户和后续 agent 都能看到最新目录
+            if path_exists("./skills") {
+                write_file("./skills/SKILL_INDEX.md", result)
+            }
             return result
         }
     }
 
     main {
-        // 返回初始的技能评估结构
-        return json_stringify({
-            "status": "success",
-            "new_skills": [],
-            "updates": [],
-            "message": "Skill evaluation ready for LLM processing"
-        })
+        // 调用 LLM 评估可学习技能；若 LLM 不可用则优雅降级
+        let response = ""
+        try {
+            response = llm act
+        } catch {
+            response = ""
+        }
+
+        // 防御性解析
+        let parsed = {"status": "success", "new_skills": [],
+                      "updates": [], "summary": ""}
+        if response != "" {
+            try {
+                parsed = json_parse(response)
+            } catch {
+                let parts = split(response, "```json")
+                if len(parts) >= 2 {
+                    let inner = split(parts[1], "```")
+                    try {
+                        parsed = json_parse(inner[0])
+                    } catch {
+                        parsed = {"status": "success", "new_skills": [],
+                                  "updates": [], "summary": response}
+                    }
+                } else {
+                    parsed = {"status": "success", "new_skills": [],
+                              "updates": [], "summary": response}
+                }
+            }
+        }
+        if parsed["status"] == null { parsed["status"] = "success" }
+        if parsed["new_skills"] == null { parsed["new_skills"] = [] }
+        if parsed["updates"] == null { parsed["updates"] = [] }
+        return json_stringify(parsed)
     }
 }

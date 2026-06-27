@@ -2,7 +2,6 @@
 
 agent QualityGate(file_path: str, before_scores: str) {
     description "质量把关员 — 对代码进行7维质量评估，提供改进建议"
-    model "qwen3.7-max"
     temperature 0.2
     max-turns 5
     tools ["read_file", "shell_exec"]
@@ -23,15 +22,28 @@ agent QualityGate(file_path: str, before_scores: str) {
     7. 文档 — 注释完整、接口说明清晰
 
     工作流程:
-    1. 调用 get_scores() 获取当前评分
-    2. 调用 get_metrics() 获取代码度量
+    1. 调用 get_scores({{file_path}}) 获取当前评分
+    2. 调用 get_metrics({{file_path}}) 获取代码度量
     3. 对比修改前后的变化
     4. 生成质量报告和改进建议
 
     质量阈值:
-    - 单项 < 6.0 → 必须改进
-    - 总分 < 7.5 → 建议改进
-    - 总分 ≥ 8.0 → 通过
+    - 单项 < 6.0 → 必须改进（FAIL）
+    - 总分 < 7.5 → 建议改进（CONDITIONAL）
+    - 总分 ≥ 8.0 → 通过（PASS）
+
+    返回格式（严格遵守）:
+    只返回一个合法的 JSON 对象，不要包含 markdown 代码块、解释文字或任何其他内容。
+    {
+      "status": "success",
+      "scores": {
+        "security": <0-10>, "correctness": <0-10>, "maintainability": <0-10>,
+        "performance": <0-10>, "testability": <0-10>, "helen_compliance": <0-10>,
+        "documentation": <0-10>, "overall": <平均分>
+      },
+      "verdict": "PASS/CONDITIONAL/FAIL",
+      "report": "<详细报告文本>"
+    }
     """
 
     functions {
@@ -49,13 +61,40 @@ agent QualityGate(file_path: str, before_scores: str) {
     }
 
     main {
-        // 返回初始的质量评估结构
-        return json_stringify({
-            "status": "success",
-            "scores": {},
-            "verdict": "PENDING",
-            "report": "",
-            "message": "Quality evaluation ready for LLM processing"
-        })
+        // 调用 LLM 进行质量评估；若 LLM 不可用则优雅降级
+        let response = ""
+        try {
+            response = llm act
+        } catch {
+            response = ""
+        }
+
+        // 防御性解析
+        let parsed = {"status": "success", "scores": {},
+                      "verdict": "PENDING", "report": ""}
+        if response != "" {
+            try {
+                parsed = json_parse(response)
+            } catch {
+                let parts = split(response, "```json")
+                if len(parts) >= 2 {
+                    let inner = split(parts[1], "```")
+                    try {
+                        parsed = json_parse(inner[0])
+                    } catch {
+                        parsed = {"status": "success", "scores": {},
+                                  "verdict": "PENDING", "report": response}
+                    }
+                } else {
+                    parsed = {"status": "success", "scores": {},
+                              "verdict": "PENDING", "report": response}
+                }
+            }
+        }
+        if parsed["status"] == null { parsed["status"] = "success" }
+        if parsed["scores"] == null { parsed["scores"] = {} }
+        if parsed["verdict"] == null { parsed["verdict"] = "PENDING" }
+        if parsed["report"] == null { parsed["report"] = "" }
+        return json_stringify(parsed)
     }
 }

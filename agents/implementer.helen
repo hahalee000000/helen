@@ -2,9 +2,8 @@
 
 agent Implementer(source_path: str, test_path: str, contract_path: str) {
     description "代码实现师 — 按 TDD 循环编写和修复代码"
-    model "qwen3.7-max"
     temperature 0.2
-    max-turns 10
+    max-turns 20
     tools ["read_file", "write_file", "patch_file", "shell_exec", "path_exists"]
 
     prompt """
@@ -15,21 +14,32 @@ agent Implementer(source_path: str, test_path: str, contract_path: str) {
     契约路径: {{contract_path}}
 
     工作流程（严格按 TDD）:
-    1. 读取源码、测试和契约文件
-    2. 调用 run_single_test() 确认测试 FAIL（RED）
-    3. 调用 apply_patch() 编写最小实现
-    4. 调用 verify_after_change() 验证（GREEN）
-    5. 如果 FAIL → 回到步骤 3
-    6. 如果 PASS → 调用 refactor_code() 重构（REFACTOR）
-    7. 验证重构后测试仍 PASS
+    1. 调用 read_source()、read_tests()、read_contract() 读取所有输入
+    2. 对每个测试函数:
+       a. 调用 run_single_test() 确认 FAIL（RED）
+       b. 调用 apply_patch() 编写最小实现
+       c. 调用 verify_after_change() 验证（GREEN）
+       d. 如果 FAIL → 回到步骤 b
+       e. 如果 PASS → 继续下一个测试
+    3. 所有测试通过后，进行重构（REFACTOR）
+    4. 验证重构后测试仍 PASS
 
     Helen 语法注意:
     - `&&` `||` `!` 是逻辑运算符（不是 and/or/not）
-    - `substring(s, start, end)` 截取字符串（不是切片）
+    - `substring(s, start, end)` 截取字符串
     - `fn(params): Type { body }` 函数声明
-    - `let x = value` 变量声明（不可变）
-    - `var x = value` 变量声明（可变）
+    - `let x = value` 不可变变量, `var x = value` 可变变量
     - `match value { case pattern { expr } default { expr } }` 模式匹配
+
+    返回格式（严格遵守）:
+    只返回一个合法的 JSON 对象，不要包含 markdown 代码块、解释文字或任何其他内容。
+    {
+      "status": "success",
+      "implementation": "<完整实现代码>",
+      "tests_passed": true/false,
+      "iterations": <RED-GREEN 循环次数>,
+      "file_path": "{{source_path}}"
+    }
     """
 
     functions {
@@ -82,17 +92,39 @@ agent Implementer(source_path: str, test_path: str, contract_path: str) {
     }
 
     main {
-        let source = read_source()
-        let tests = read_tests()
-        let contract = read_contract()
-        
-        // 返回初始的实现结构
-        return json_stringify({
-            "status": "success",
-            "implementation": "",
-            "tests_passed": false,
-            "iterations": 0,
-            "message": "Implementation ready for LLM processing"
-        })
+        // 调用 LLM 进行 TDD 循环实现；若 LLM 不可用则优雅降级
+        let response = ""
+        try {
+            response = llm act
+        } catch {
+            response = ""
+        }
+
+        // 防御性解析
+        let parsed = {"status": "success", "implementation": "",
+                      "tests_passed": false, "iterations": 0, "file_path": ""}
+        if response != "" {
+            try {
+                parsed = json_parse(response)
+            } catch {
+                let parts = split(response, "```json")
+                if len(parts) >= 2 {
+                    let inner = split(parts[1], "```")
+                    try {
+                        parsed = json_parse(inner[0])
+                    } catch {
+                        parsed = {"status": "success", "implementation": response,
+                                  "tests_passed": false, "iterations": 0, "file_path": ""}
+                    }
+                } else {
+                    parsed = {"status": "success", "implementation": response,
+                              "tests_passed": false, "iterations": 0, "file_path": ""}
+                }
+            }
+        }
+        if parsed["status"] == null { parsed["status"] = "success" }
+        if parsed["tests_passed"] == null { parsed["tests_passed"] = false }
+        if parsed["iterations"] == null { parsed["iterations"] = 0 }
+        return json_stringify(parsed)
     }
 }

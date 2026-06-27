@@ -6,9 +6,47 @@ import "implementer.helen"
 import "quality_gate.helen"
 import "skill_evaluator.helen"
 
+/** 安全读取 map 的 key，不存在时返回 default */
+fn _safe_get(m: map, key: str, default_val: str): str {
+    try {
+        let v = m[key]
+        if v != null {
+            return v
+        }
+        return default_val
+    } catch {
+        return default_val
+    }
+}
+
+/** 安全读取 map 的 key 作为 list，不存在时返回空 list */
+fn _safe_get_list(m: map, key: str): list {
+    try {
+        let v = m[key]
+        if v != null {
+            return v
+        }
+        return []
+    } catch {
+        return []
+    }
+}
+
+/** 安全读取 map 的 key 作为 map，不存在时返回空 map */
+fn _safe_get_map(m: map, key: str): map {
+    try {
+        let v = m[key]
+        if v != null {
+            return v
+        }
+        return {}
+    } catch {
+        return {}
+    }
+}
+
 agent HelenProgrammer(requirement: str, project_dir: str) {
     description "Helen 编程助手主编排 — 契约驱动 + TDD + 技能自进化"
-    model "qwen3.7-max"
     temperature 0.2
     max-turns 20
     tools ["read_file", "write_file", "shell_exec", "mkdir_p", "path_exists"]
@@ -71,59 +109,177 @@ agent HelenProgrammer(requirement: str, project_dir: str) {
     }
 
     main {
-        print("🚀 Helen Programming Agent v5.2")
-        print("================================\n")
+        stream_print("🚀 Helen Programming Agent v5.2\n")
+        stream_print("================================\n\n")
+        stream_print("需求: " + requirement + "\n")
+        stream_print("项目目录: " + project_dir + "\n\n")
+
+        // 确保项目目录结构存在
+        if !path_exists(project_dir) {
+            mkdir_p(project_dir)
+        }
+        if !path_exists(project_dir + "/src") {
+            mkdir_p(project_dir + "/src")
+        }
+        if !path_exists(project_dir + "/tests") {
+            mkdir_p(project_dir + "/tests")
+        }
+        if !path_exists(project_dir + "/contracts") {
+            mkdir_p(project_dir + "/contracts")
+        }
 
         // Phase 1: 契约设计
-        print("📋 Phase 1: 契约设计")
-        let contractor_result = Contractor(requirement, project_dir)
-        let contract_result = json_parse(contractor_result)
-        print("契约设计完成: " + contract_result["status"])
+        stream_print("📋 Phase 1: 契约设计\n")
+        stream_print("--------------------------------\n")
+        let contractor_result = json_parse(Contractor(requirement, project_dir))
+        stream_print("  状态: " + _safe_get(contractor_result, "status", "unknown") + "\n")
+        let contract_path = project_dir + "/contracts/contracts.helen"
+        let c_file = _safe_get(contractor_result, "file_path", "")
+        if c_file != "" {
+            stream_print("  契约文件: " + c_file + "\n")
+        } else if path_exists(contract_path) {
+            stream_print("  契约文件: " + contract_path + "\n")
+        }
+        let c_modules = _safe_get_list(contractor_result, "modules")
+        if len(c_modules) > 0 {
+            stream_print("  模块数量: " + len(c_modules) + "\n")
+        }
+        stream_print("\n")
 
         // Phase 2: 测试生成
-        print("\n🧪 Phase 2: 测试生成")
+        stream_print("🧪 Phase 2: 测试生成\n")
+        stream_print("--------------------------------\n")
         let source_path = project_dir + "/src/main.helen"
-        let contract_path = project_dir + "/contracts/contracts.helen"
-        let test_builder_result = TestBuilder(source_path, contract_path)
-        let test_result = json_parse(test_builder_result)
-        print("测试生成完成: " + test_result["status"])
-
-        // Phase 3: 代码实现 (TDD 循环)
-        print("\n💻 Phase 3: 代码实现")
+        let test_builder_result = json_parse(TestBuilder(source_path, contract_path))
+        stream_print("  状态: " + _safe_get(test_builder_result, "status", "unknown") + "\n")
         let test_path = project_dir + "/tests/test_main.helen"
-        let implementer_result = Implementer(source_path, test_path, contract_path)
-        let impl_result = json_parse(implementer_result)
-        print("代码实现完成: " + impl_result["status"])
+        let t_file = _safe_get(test_builder_result, "file_path", "")
+        if t_file != "" {
+            stream_print("  测试文件: " + t_file + "\n")
+        } else if path_exists(test_path) {
+            stream_print("  测试文件: " + test_path + "\n")
+        }
+        let t_count = _safe_get(test_builder_result, "test_count", "0")
+        if t_count != "0" && t_count != "" {
+            stream_print("  测试数量: " + t_count + "\n")
+        }
+        stream_print("\n")
 
-        // Phase 4: 质量评估
-        print("\n📊 Phase 4: 质量评估")
+        // Phase 3: 代码实现（TDD 循环）
+        stream_print("💻 Phase 3: 代码实现\n")
+        stream_print("--------------------------------\n")
+        let impl_result = json_parse(Implementer(source_path, test_path, contract_path))
+        stream_print("  状态: " + _safe_get(impl_result, "status", "unknown") + "\n")
+        let i_file = _safe_get(impl_result, "file_path", "")
+        if i_file != "" {
+            stream_print("  实现文件: " + i_file + "\n")
+        } else if path_exists(source_path) {
+            stream_print("  实现文件: " + source_path + "\n")
+        }
+        let i_passed = _safe_get(impl_result, "tests_passed", "")
+        if i_passed != "" {
+            stream_print("  测试通过: " + i_passed + "\n")
+        }
+        let i_iters = _safe_get(impl_result, "iterations", "")
+        if i_iters != "" {
+            stream_print("  TDD 迭代次数: " + i_iters + "\n")
+        }
+        stream_print("\n")
+
+        // Phase 4: 质量评估（如未达标则回到 Phase 3，最多重试 2 次）
+        stream_print("📊 Phase 4: 质量评估\n")
+        stream_print("--------------------------------\n")
         let before_scores = json_stringify({"overall": 0.0})
-        let quality_gate_result = QualityGate(source_path, before_scores)
-        let quality_result = json_parse(quality_gate_result)
-        print("质量评估完成: " + quality_result["verdict"])
+        let quality_result = json_parse(QualityGate(source_path, before_scores))
+        let quality_attempts = 0
+        while _safe_get(quality_result, "verdict", "") == "FAIL" && quality_attempts < 2 {
+            quality_attempts = quality_attempts + 1
+            stream_print("\n⚠️ 质量未达标 (第 " + quality_attempts + " 次重试)，返回 Phase 3 改进...\n")
+            impl_result = json_parse(Implementer(source_path, test_path, contract_path))
+            stream_print("  状态: " + _safe_get(impl_result, "status", "unknown") + "\n")
+            let retry_passed = _safe_get(impl_result, "tests_passed", "")
+            if retry_passed != "" {
+                stream_print("  测试通过: " + retry_passed + "\n")
+            }
+            quality_result = json_parse(QualityGate(source_path, before_scores))
+        }
+        stream_print("  判定: " + _safe_get(quality_result, "verdict", "PENDING") + "\n")
+        let q_scores = _safe_get_map(quality_result, "scores")
+        let q_overall = _safe_get(q_scores, "overall", "")
+        if q_overall != "" {
+            stream_print("  总体评分: " + q_overall + "/10\n")
+        }
+        stream_print("\n")
 
         // Phase 5: 技能自进化
-        print("\n🧠 Phase 5: 技能自进化")
+        stream_print("🧠 Phase 5: 技能自进化\n")
+        stream_print("--------------------------------\n")
         let task_summary = "完成了需求: " + requirement
-        let files_changed = source_path + ", " + test_path
-        let skill_evaluator_result = SkillEvaluator(task_summary, files_changed)
-        let skill_result = json_parse(skill_evaluator_result)
-        print("技能评估完成: " + skill_result["status"])
+        let files_changed = source_path + ", " + test_path + ", " + contract_path
+        let skill_result = json_parse(SkillEvaluator(task_summary, files_changed))
+        stream_print("  状态: " + _safe_get(skill_result, "status", "unknown") + "\n")
+        let s_new = _safe_get_list(skill_result, "new_skills")
+        if len(s_new) > 0 {
+            stream_print("  新技能数量: " + len(s_new) + "\n")
+        }
+        let s_upd = _safe_get_list(skill_result, "updates")
+        if len(s_upd) > 0 {
+            stream_print("  技能更新数量: " + len(s_upd) + "\n")
+        }
+        stream_print("\n")
 
-        // 最终报告
-        print("\n================================")
-        print("✅ 全部阶段完成")
-        print("================================")
-        
+        // 最终详细总结
+        stream_print("================================\n")
+        stream_print("✅ 全部阶段完成 — 执行总结\n")
+        stream_print("================================\n\n")
+        stream_print("📁 产出文件:\n")
+        stream_print("  • 契约: " + contract_path + "\n")
+        let test_summary = "  • 测试: " + test_path
+        let final_t_count = _safe_get(test_builder_result, "test_count", "")
+        if final_t_count != "" && final_t_count != "0" {
+            test_summary = test_summary + " (" + final_t_count + " 个测试"
+            if _safe_get(impl_result, "tests_passed", "") == "true" || _safe_get(impl_result, "tests_passed", "") == "True" {
+                test_summary = test_summary + ", 全部通过)"
+            } else {
+                test_summary = test_summary + ")"
+            }
+        }
+        stream_print(test_summary + "\n")
+        stream_print("  • 实现: " + source_path + "\n")
+        let final_verdict = _safe_get(quality_result, "verdict", "")
+        if final_verdict != "" {
+            let quality_line = "📊 质量: " + final_verdict
+            let final_overall = _safe_get(_safe_get_map(quality_result, "scores"), "overall", "")
+            if final_overall != "" {
+                quality_line = quality_line + " (" + final_overall + "/10)"
+            }
+            stream_print(quality_line + "\n")
+        }
+        let final_skills = _safe_get_list(skill_result, "new_skills")
+        if len(final_skills) > 0 {
+            stream_print("🧠 新学习技能: " + join(final_skills, ", ") + "\n")
+        }
+        let final_report = _safe_get(quality_result, "report", "")
+        if final_report != "" {
+            stream_print("\n📝 质量报告:\n")
+            stream_print(final_report + "\n")
+        }
+        stream_print("\n✨ Helen Programming Agent 完成!\n")
+
         // 返回 JSON 结果
         return json_stringify({
             "status": "success",
             "phases": {
-                "contract": contract_result,
-                "test": test_result,
+                "contract": contractor_result,
+                "test": test_builder_result,
                 "implement": impl_result,
                 "quality": quality_result,
                 "skill": skill_result
+            },
+            "files": {
+                "contract": contract_path,
+                "source": source_path,
+                "test": test_path
             }
         })
     }
