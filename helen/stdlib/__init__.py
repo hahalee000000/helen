@@ -892,6 +892,14 @@ def _register_builtins() -> None:
         BuiltinFunction("check_security", "Check security issues", "check_security(source)", _check_security, "quality"),
         BuiltinFunction("quality_score", "Calculate quality score", "quality_score(source, file_path?)", _quality_score, "quality"),
         BuiltinFunction("quality_report", "Generate quality report", "quality_report(source, filename?)", _quality_report, "quality"),
+
+        # Tool wrappers (from helen.stdlib.tools)
+        BuiltinFunction("web_search", "Search the web", "web_search(query, limit?)", _web_search, "tools"),
+        BuiltinFunction("web_fetch", "Fetch web page content", "web_fetch(url)", _web_fetch, "tools"),
+        BuiltinFunction("shell_exec", "Execute shell command", "shell_exec(command, timeout?, shell?)", _shell_exec, "tools"),
+        BuiltinFunction("calculate", "Evaluate math expression", "calculate(expression)", _calculate, "tools"),
+        BuiltinFunction("patch_file", "Patch a file", "patch_file(path, old_string, new_string, replace_all?)", _patch_file, "tools"),
+        BuiltinFunction("load_skill", "Load a skill by name", "load_skill(name)", _load_skill, "tools"),
     ]
 
     for func in builtins:
