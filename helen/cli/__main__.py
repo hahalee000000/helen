@@ -374,7 +374,11 @@ def test_command(argv: list[str]) -> int:
 
             # Interpret (registers tests)
             llm_runtime = HttpLLMRuntime()
-            interp = Interpreter(errors=errors, llm_runtime=llm_runtime)
+            # v1.9: Pass import_resolver so imported agents are available in test harness
+            from helen.runtime.import_resolver import ImportResolver
+            source_dir = str(source_path.parent.absolute()) if source_path.parent else os.getcwd()
+            import_resolver = ImportResolver(base_dir=source_dir)
+            interp = Interpreter(errors=errors, llm_runtime=llm_runtime, import_resolver=import_resolver)
             try:
                 interp.interpret(program)
             except Exception as e:
