@@ -273,14 +273,21 @@ let sub = str[0:10]
 ### 3. Agent 调用
 
 ```helen
-// ✅ 正确（在 functions 块中）
+// ✅ 正确（函数式调用）
 fn call_my_agent(param: str): str {
     return MyAgent(param)
+}
+
+// ❌ 错误（使用 call 关键字）
+fn call_my_agent(param: str): str {
+    return call MyAgent(param)  // 解析错误：Expected expression, got CALL
 }
 
 // ❌ 错误（不能在 prompt 中直接调用）
 // prompt 中写 "MyAgent()" 会报错
 ```
+
+**重要**：Helen 中 Agent 是一等公民，应该像函数一样调用。`call` 关键字在表达式位置（赋值、参数、返回值）会导致解析错误，仅用于语句位置（不接收返回值时）。
 
 ### 4. 函数返回值
 

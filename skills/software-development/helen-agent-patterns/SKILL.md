@@ -649,3 +649,35 @@ Helen Agent 设计模式：
 7. **对话 Agent** — 多轮对话，保持上下文
 
 选择合适的模式，遵循最佳实践，构建强大的 AI 应用。
+
+## 常见陷阱
+
+### ❌ 不要使用 `call` 关键字调用 Agent
+
+**错误示例**：
+```helen
+let result = call SimpleAgent()  // ❌ 解析错误：Expected expression, got CALL
+```
+
+**正确示例**：
+```helen
+let result = SimpleAgent()  // ✅ 函数式调用
+```
+
+**原因**：
+- Helen 中 Agent 是**一等公民**，可以像函数一样调用
+- `call` 关键字仅用于**语句位置**（不接收返回值时）
+- 在**表达式位置**（赋值、函数参数、返回值），必须使用函数式调用
+- 这是 Helen 的核心设计决策：Agent 是值，可以传递、返回、赋值
+
+**使用场景对比**：
+```helen
+// ✅ 表达式位置 - 函数式调用
+let result = AgentName(args)
+return AgentName(args)
+let x = some_fn(AgentName(args))
+
+// ✅ 语句位置 - 可以使用 call（但函数式也可以）
+call AgentName(args)  // 不关心返回值
+AgentName(args)       // 也可以，更简洁
+```

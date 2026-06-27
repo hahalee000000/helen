@@ -512,7 +512,34 @@ agent AgentB(input: str) {
 
 ## 常见陷阱
 
-### 1. 在 prompt 中直接调用 Agent
+### 1. 使用 `call` 关键字调用 Agent
+
+```helen
+// ❌ 错误：使用 call 关键字
+let result = call MyAgent("hello")  // 解析错误：Expected expression, got CALL
+
+// ✅ 正确：函数式调用
+let result = MyAgent("hello")
+```
+
+**原因**：
+- Helen 中 Agent 是一等公民，应该像函数一样调用
+- `call` 关键字在表达式位置（赋值、参数、返回值）会导致解析错误
+- `call` 仅用于语句位置（不接收返回值时），但函数式调用更简洁
+
+**正确用法**：
+```helen
+// 表达式位置 - 必须使用函数式调用
+let result = MyAgent("hello")
+return MyAgent("hello")
+let x = some_fn(MyAgent("hello"))
+
+// 语句位置 - 两种方式都可以
+call MyAgent("hello")  // 可以，但不推荐
+MyAgent("hello")       // 推荐，更简洁
+```
+
+### 2. 在 prompt 中直接调用 Agent
 
 ```helen
 // ❌ 错误

@@ -1,17 +1,75 @@
 ---
 name: helen-syntax
 description: "Helen 语言语法快速参考 — 关键字、类型、表达式、语句"
-version: 1.8.0
+version: 1.9.0
 author: Helen Team
 license: MIT
-metadata:
-  hermes:
-    tags: [helen, syntax, reference, language]
+tags: [helen, syntax, reference, language]
 ---
 
 # Helen 语法参考
 
-## 关键字（45 个）
+## 关键字（89 个：45 英文 + 44 中文）
+
+Helen 支持中英双语关键字，中文关键字与英文关键字映射到相同的 TokenType，可以自由混用。解析器和解释器无需任何改动。
+
+### 中文关键字映射表
+
+| 英文 | 中文 | 说明 |
+|------|------|------|
+| `let` | `让` | 可变变量 |
+| `const` | `常量` | 常量 |
+| `fn` | `函数` | 函数声明 |
+| `return` | `返回` | 函数返回 |
+| `if` / `else` | `如果` / `否则` | 条件分支 |
+| `for` / `in` | `对于` / `属于` | 循环 |
+| `while` | `当` | 条件循环 |
+| `break` / `continue` | `中断` / `继续` | 循环控制 |
+| `match` / `case` / `default` | `匹配` / `情况` / `默认` | 模式匹配 |
+| `try` / `catch` / `finally` | `尝试` / `捕获` / `最终` | 异常处理 |
+| `throw` | `抛出` | 抛出异常 |
+| `assert` | `断言` | 运行时断言 |
+| `true` / `false` | `真` / `假` | 布尔值 |
+| `null` | `空` | 空值 |
+| `is` | `是` | 类型判断 |
+| `agent` | `智能体` | 声明 Agent |
+| `llm` | `大模型` | LLM 操作 |
+| `act` | `执行` | 自主执行 |
+| `stream` | `流式执行` | 流式输出 |
+| `async` / `await` | `异步` / `等待` | 异步执行 |
+| `prompt` | `提示` | 系统提示 |
+| `description` | `描述` | Agent 描述 |
+| `model` | `模型` | 指定模型 |
+| `tools` | `工具` | 可用工具 |
+| `streaming` | `流式输出` | 启用流式 |
+| `temperature` | `温度` | 温度参数 |
+| `max-turns` | `最大轮次` | 最大轮次 |
+| `functions` | `函数区` | 函数定义区 |
+| `main` | `主` | 入口 |
+| `import` / `as` | `导入` / `作为` | 模块导入 |
+| `protocol` / `impl` | `协议` / `实现` | 协议声明 |
+| `call` | `调用` | 调用 |
+| `branch` | `分支` | 分支 |
+
+中文标识符（变量名、函数名）也完全支持，CJK 统一表意文字（U+4E00–U+9FFF 等）均可作为标识符字符。
+
+```helen
+// 纯中文
+函数 斐波那契(n: int): int {
+    如果 n <= 1 {
+        返回 n
+    } 否则 {
+        返回 斐波那契(n - 1) + 斐波那契(n - 2)
+    }
+}
+
+// 中英混合
+让 结果 = 斐波那契(10)
+const LIMIT = 100
+如果 结果 < LIMIT {
+    print("OK")
+}
+```
 
 ### Agent 声明
 - `agent` — 声明 Agent
@@ -166,6 +224,23 @@ agent Streamer(topic: str) {
     prompt "Write a detailed essay about: {{topic}}"
 }
 ```
+
+### Agent 调用
+```helen
+// ✅ 正确：函数式调用（Agent 是一等公民）
+let result = Translator("Hello")
+return MyAgent("test")
+let x = some_fn(Translator("test"))
+
+// ❌ 错误：使用 call 关键字（表达式位置）
+let result = call Translator("Hello")  // 解析错误：Expected expression, got CALL
+
+// ✅ 语句位置：两种方式都可以
+call MyAgent("test")  // 可以，但不推荐
+MyAgent("test")       // 推荐，更简洁
+```
+
+**重要**：Helen 中 Agent 是一等公民，可以像函数一样调用。`call` 关键字在表达式位置（赋值、参数、返回值）会导致解析错误，仅用于语句位置（不接收返回值时）。
 
 ### LLM 语句
 ```helen

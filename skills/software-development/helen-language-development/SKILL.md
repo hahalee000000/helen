@@ -1,11 +1,11 @@
 ---
 name: helen-language-development
 description: Helen programming language implementation patterns, pitfalls, and development workflows. Covers AST/parser/interpreter extension, async/await implementation, exception hierarchy, streaming with tool calls, Python FFI integration, and testing patterns.
-version: 1.8.0
+version: 1.9.0
 author: Hermes Agent
 metadata:
   hermes:
-    tags: [helen, language-design, interpreter, async, parser, streaming, tool-calls, ffi, python-integration, contract-first, stdlib, closures, protocols, pipe-operator, pattern-matching]
+    tags: [helen, language-design, interpreter, async, parser, streaming, tool-calls, ffi, python-integration, contract-first, stdlib, closures, protocols, pipe-operator, pattern-matching, chinese-keywords]
 ---
 
 # Helen Language Development
@@ -729,6 +729,86 @@ def test_save_and_load(self):
 **Security tests** (`tests/runtime/test_security.py`):
 - 30+ test cases covering path traversal, SSRF, command injection, PID safety, env masking
 
+### 9. Chinese Keyword Alias Pattern (v1.9)
+
+**Architecture**: Adding alternative-language keywords is a lexer-only change — no parser, interpreter, or AST changes needed.
+
+**How it works**: Multiple lexeme strings map to the same `TokenType` in `_KEYWORD_MAP`. The parser only sees `TokenType`, so `let` and `让` are indistinguishable downstream.
+
+**Steps to add a new language alias set**:
+
+1. **Add mappings to `tokens.py`** `_KEYWORD_MAP`:
+   ```python
+   # Chinese keywords
+   "让": TokenType.LET,
+   "函数": TokenType.FN,
+   # ... etc
+   ```
+
+2. **Extend identifier character set in `lexer.py`** if the language uses non-ASCII characters:
+   ```python
+   _CJK_RANGES: Final[list[tuple[int, int]]] = [
+       (0x4E00, 0x9FFF),   # CJK Unified Ideographs
+       (0x3400, 0x4DBF),   # Extension A
+       (0x20000, 0x2A6DF), # Extension B
+       (0xF900, 0xFAFF),   # Compatibility
+   ]
+
+   def _is_alpha_char(c: str) -> bool:
+       if c in _ALPHA:
+           return True
+       return _is_cjk(ord(c))
+   ```
+
+3. **Replace `_ALPHA`/`_ALNUM` checks** in `_try_multi_char_token` and `_identifier_or_keyword` with `_is_alpha_char`/`_is_alnum_char`.
+
+4. **Update keyword count test** in `tests/core/test_tokens.py`.
+
+5. **Write lexer + parser tests** verifying each keyword maps to the correct TokenType and full programs parse correctly.
+
+**Pitfalls**:
+- Multi-character Chinese keywords require maximal munch to work correctly (e.g., `流式执行` must be consumed as one token, not `流式` + `执行`). The lexer's `_identifier_or_keyword` already handles this — it greedily consumes all CJK characters then does a single `kw_map.get(lexeme)` lookup.
+- Keyword ordering in `_KEYWORD_MAP` doesn't matter — the lexer always tries the longest match first.
+- The `catch` syntax in Helen is `catch TypeName varName { }` (no `as` keyword). Chinese `捕获 TypeError e { }` works identically.
+- Zero parser/interpreter changes needed — this is the key insight that makes the pattern so clean.
+
+### 9. Chinese Keyword Alias Pattern (v1.9)
+
+**Architecture**: Adding alternative-language keywords is a lexer-only change — no parser, interpreter, or AST changes needed.
+
+**How it works**: Multiple lexeme strings map to the same `TokenType` in `_KEYWORD_MAP`. The parser only sees `TokenType`, so `let` and `让` are indistinguishable downstream.
+
+**Steps to add a new language alias set**:
+
+1. **Add mappings to `tokens.py`** `_KEYWORD_MAP`:
+   ```python
+   "让": TokenType.LET,
+   "函数": TokenType.FN,
+   # ... etc (44 Chinese keywords total)
+   ```
+
+2. **Extend identifier character set in `lexer.py`** if the language uses non-ASCII characters:
+   ```python
+   _CJK_RANGES = [(0x4E00, 0x9FFF), (0x3400, 0x4DBF), ...]
+   def _is_alpha_char(c): return c in _ALPHA or _is_cjk(ord(c))
+   def _is_alnum_char(c): return c in _ALNUM or _is_cjk(ord(c))
+   ```
+
+3. **Replace `_ALPHA`/`_ALNUM` checks** in `_try_multi_char_token` and `_identifier_or_keyword` with `_is_alpha_char`/`_is_alnum_char`.
+
+4. **Update keyword count test** in `tests/core/test_tokens.py`.
+
+5. **Write lexer + parser tests** verifying each keyword maps to the correct TokenType and full programs parse correctly.
+
+**Pitfalls**:
+- Multi-character Chinese keywords require maximal munch to work correctly (e.g., `流式执行` must be consumed as one token, not `流式` + `执行`). The lexer's `_identifier_or_keyword` already handles this.
+- Keyword ordering in `_KEYWORD_MAP` doesn't matter — the lexer always tries the longest match first.
+- The `catch` syntax in Helen is `catch TypeName varName { }` (no `as` keyword). Chinese `捕获 TypeError e { }` works identically.
+- Zero parser/interpreter changes needed — this is the key insight.
+- Documentation sync: update wiki keywords, lexical, language-spec, changelog, tutorial, both helen-syntax skill copies, and both helen-language-development skill copies.
+
+See `references/chinese-keyword-implementation.md` for the full implementation guide.
+
 ### 10. Python FFI (Foreign Function Interface)
 
 **Architecture**:
@@ -1129,6 +1209,21 @@ def test_import_python_module(self):
     - ✅ `python -m pip install toml` → Installs to active Python interpreter
     - Verify: `python -c "import toml"` after install
     - This ensures the dependency is available to the Helen runtime
+22. **Agent 调用风格**：Helen 中 Agent 是一等公民，应该使用函数式调用，不需要 `call` 关键字：
+    - ❌ `let result = call AgentName(args)` → 解析错误：Expected expression, got CALL
+    - ✅ `let result = AgentName(args)` → 正确
+    - Agent 声明后可以直接像函数一样调用
+    - `call` 关键字仅用于语句位置（不接收返回值时），如：`call AgentName(args)`
+    - 在表达式位置（如赋值、函数参数），必须使用函数式调用
+    - 这是 Helen 的设计决策：Agent 是值，可以传递、返回、赋值
+23. **llm stream on_complete 回调**：流式传输完成后的回调支持：
+    - AST: `LlmStreamStmtNode` 添加 `on_complete: ExpressionNode | None` 字段
+    - Parser: 解析 `on_complete` 关键字和回调表达式
+    - Analyzer: 验证回调是可调用的（`callable()`）
+    - Interpreter: 在流式传输循环结束后调用 `on_complete_fn()`
+    - 语法：`llm stream "prompt" on_chunk chunk_handler on_complete complete_handler`
+    - 用途：显示完成提示、记录统计信息、触发后续操作
+    - 实现位置：`helen/interpreter/llm_mixin.py` 的 `visit_llm_stream_stmt()` 方法
 
 ## Verification Checklist
 
@@ -1171,6 +1266,14 @@ Helen documentation exists in two places:
 | `~/wiki/helen/toolchain/stdlib.md` | — | Technical stdlib docs |
 | `~/wiki/helen/index.md` | — | Wiki index |
 
+**For Chinese keyword additions**, also update:
+| `~/wiki/helen/syntax/keywords.md` | — | Chinese keyword table |
+| `~/wiki/helen/syntax/lexical.md` | — | Keyword count |
+| `~/wiki/helen/overview/language-spec.md` | — | Chinese section |
+| `~/wiki/helen/appendix/changelog.md` | — | v1.9 entry |
+| `~/wiki/helen/tutorial/01-getting-started.md` | `~/helen/docs/tutorial.md` (section "教程 01") | Chinese programming section |
+| Both `helen-syntax` skills | — | Chinese keyword table |
+
 ### Update Workflow
 
 After implementing new stdlib modules:
@@ -1211,6 +1314,8 @@ After implementing new stdlib modules:
 ## References
 
 ### Implementation Patterns
+- `references/chinese-keyword-implementation.md` — Chinese keyword alias pattern: 44 mappings, CJK identifier support, lexer-only change
+- `references/async-await-implementation.md`
 - `references/async-await-implementation.md` — Detailed async/await design decisions and code patterns
 - `references/comprehensive-async-testing.md` — Comprehensive async testing patterns (32 tests, end-to-end approach)
 - `references/streaming-implementation.md` — Phase 1-3 streaming: llm stream, for await, IO stdlib functions
@@ -1248,3 +1353,6 @@ After implementing new stdlib modules:
 - `references/python-asyncio-compatibility.md` — Python asyncio patterns for REPL vs script contexts
 - `references/streaming-output-tdd.md` — Contract-first + TDD workflow for streaming output
 - `references/streaming-output-tdd.md` — Contract-first + TDD workflow for streaming output
+
+### Chinese Keywords (v1.9)
+- `references/chinese-keywords.md` — Chinese keyword implementation: token mapping, CJK lexer extension, zero parser/interpreter changes
