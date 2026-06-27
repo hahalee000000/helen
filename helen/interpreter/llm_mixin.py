@@ -238,6 +238,22 @@ class LlmMixin:
             )
             self.observability.llm_audit.log(audit_entry)
             return None
+        except RuntimeError as e:
+            # Python RuntimeError from LLM runtime (e.g. API errors) —
+            # wrap in HelenRuntimeError so it propagates to the user
+            audit_duration = (time.time() - audit_start) * 1000
+            actual_model = model or getattr(self.llm_runtime, 'default_model', None) or 'default'
+            audit_entry = LLMAuditEntry(
+                timestamp=audit_start,
+                call_type="act",
+                agent_name=agent_name,
+                model=actual_model,
+                prompt=prompt,
+                duration_ms=audit_duration,
+                error=str(e),
+            )
+            self.observability.llm_audit.log(audit_entry)
+            raise HelenRuntimeError(str(e), node.span) from e
 
     def visit_llm_stream_stmt(self: Any, node: LlmStreamStmtNode) -> object:
         """Execute llm stream statement: stream LLM response chunk by chunk.
