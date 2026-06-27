@@ -412,7 +412,8 @@ class TestRunTests:
             _it("passes", lambda: None)
 
         _describe("suite", suite)
-        report = _run_tests()
+        result = _run_tests()
+        report = result["report"]
         assert "HELEN TEST RESULTS" in report
         assert "1 passed" in report
         assert "ALL TESTS PASSED" in report
@@ -438,7 +439,8 @@ class TestRunTests:
             _it("test_mul", lambda: None)
 
         _describe("suite", suite)
-        report = _run_tests(filter_pattern="add")
+        result = _run_tests(filter_pattern="add")
+        report = result["report"]
         assert "1 passed" in report
 
 

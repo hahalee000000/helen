@@ -189,7 +189,7 @@ class TestStringBuiltins:
     def test_join(self):
         """join() joins list."""
         from helen.stdlib import _join
-        assert _join("-", ["a", "b", "c"]) == "a-b-c"
+        assert _join(["a", "b", "c"], "-") == "a-b-c"
 
     def test_startswith(self):
         """startswith() checks prefix."""
