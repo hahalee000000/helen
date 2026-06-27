@@ -31,6 +31,35 @@ _ALPHA: Final[frozenset] = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOP
 _ALNUM: Final[frozenset] = _ALPHA | _DIGITS
 _WHITESPACE: Final[frozenset] = frozenset(" \t\r")
 
+# ── CJK character ranges for Chinese identifiers ───────────────────────────
+# These ranges cover the most common CJK Unified Ideographs blocks.
+# We use range checks instead of frozenset to avoid huge memory usage.
+_CJK_RANGES: Final[list[tuple[int, int]]] = [
+    (0x4E00, 0x9FFF),   # CJK Unified Ideographs (common)
+    (0x3400, 0x4DBF),   # CJK Unified Ideographs Extension A
+    (0x20000, 0x2A6DF), # CJK Unified Ideographs Extension B
+    (0xF900, 0xFAFF),   # CJK Compatibility Ideographs
+]
+
+
+def _is_cjk(codepoint: int) -> bool:
+    """Return True if the codepoint is in a CJK Unified Ideograph range."""
+    return any(lo <= codepoint <= hi for lo, hi in _CJK_RANGES)
+
+
+def _is_alpha_char(c: str) -> bool:
+    """Return True if c is an ASCII alpha/underscore or a CJK character."""
+    if c in _ALPHA:
+        return True
+    return _is_cjk(ord(c))
+
+
+def _is_alnum_char(c: str) -> bool:
+    """Return True if c is ASCII alphanumeric/underscore or a CJK character."""
+    if c in _ALNUM:
+        return True
+    return _is_cjk(ord(c))
+
 # ── Single-character dispatch table ────────────────────────────────────────
 _SINGLE_CHAR_TOKENS: Final[dict[str, TokenType]] = {
     "(": TokenType.LEFT_PAREN,
@@ -244,7 +273,7 @@ class Scanner:
             return True
 
         # Identifiers / keywords
-        if c in _ALPHA:
+        if _is_alpha_char(c):
             self._identifier_or_keyword()
             return True
 
@@ -578,13 +607,13 @@ class Scanner:
         followed by an alpha character, we continue consuming as part
         of the potential keyword and look up the combined string.
         """
-        while self._peek() in _ALNUM:
+        while _is_alnum_char(self._peek()):
             self._advance()
 
         # Hyphenated keyword disambiguation
-        if self._peek() == "-" and self._peek_next() in _ALPHA:
+        if self._peek() == "-" and _is_alpha_char(self._peek_next()):
             self._advance()  # consume '-'
-            while self._peek() in _ALNUM:
+            while _is_alnum_char(self._peek()):
                 self._advance()
 
         lexeme = self._current_lexeme()
