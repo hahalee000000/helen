@@ -41,6 +41,20 @@ _CJK_RANGES: Final[list[tuple[int, int]]] = [
     (0xF900, 0xFAFF),   # CJK Compatibility Ideographs
 ]
 
+# ── Chinese quotation mark pairs ────────────────────────────────────────────
+# Maps opening quote → closing quote for Chinese/smart quotes.
+# These are treated as string delimiters, same as ASCII ".
+_CHINESE_QUOTE_PAIRS: Final[dict[str, str]] = {
+    "\u201c": "\u201d",  # " → "
+    "\u2018": "\u2019",  # ' → '
+    "\u300c": "\u300d",  # 「 → 」
+    "\u300e": "\u300f",  # 『 → 』
+}
+# Characters that can open a Chinese-quoted string (for fast lookup)
+_CHINESE_QUOTE_OPEN: Final[frozenset] = frozenset(_CHINESE_QUOTE_PAIRS.keys())
+# Fullwidth quotation mark ＂ (U+FF02) — symmetric, same char opens and closes
+_FULLWIDTH_QUOTE: Final[str] = "\uff02"
+
 
 def _is_cjk(codepoint: int) -> bool:
     """Return True if the codepoint is in a CJK Unified Ideograph range."""
@@ -83,10 +97,58 @@ _SINGLE_CHAR_TOKENS: Final[dict[str, TokenType]] = {
     ">": TokenType.GREATER,
     "<": TokenType.LESS,
     "|": TokenType.PIPE,
+    # ── Fullwidth (U+FF00) Chinese punctuation equivalents ──
+    "\uff08": TokenType.LEFT_PAREN,   # （
+    "\uff09": TokenType.RIGHT_PAREN,  # ）
+    "\uff3b": TokenType.LEFT_BRACKET, # ［
+    "\uff3d": TokenType.RIGHT_BRACKET,# ］
+    "\uff5b": TokenType.LEFT_BRACE,   # ｛
+    "\uff5d": TokenType.RIGHT_BRACE,  # ｝
+    "\uff0c": TokenType.COMMA,        # ，
+    "\uff0e": TokenType.DOT,          # ．
+    "\uff1a": TokenType.COLON,        # ：
+    "\uff1b": TokenType.SEMICOLON,    # ；
+    "\uff1f": TokenType.QUESTION,     # ？
+    "\uff0b": TokenType.PLUS,         # ＋
+    "\uff0d": TokenType.MINUS,        # －
+    "\uff0a": TokenType.STAR,         # ＊
+    "\uff0f": TokenType.SLASH,        # ／
+    "\uff05": TokenType.PERCENT,      # ％
+    "\uff01": TokenType.BANG,         # ！
+    "\uff1d": TokenType.ASSIGN,       # ＝
+    "\uff1e": TokenType.GREATER,      # ＞
+    "\uff1c": TokenType.LESS,         # ＜
+    "\uff5c": TokenType.PIPE,         # ｜
 }
 
 # ── Characters that may start a two-character operator ─────────────────────
-_TWO_CHAR_OPS: Final[set[str]] = {"!", "=", ">", "<", "&", "|", "-", "."}
+_TWO_CHAR_OPS: Final[set[str]] = {
+    "!", "=", ">", "<", "&", "|", "-", ".",
+    # Fullwidth equivalents
+    "\uff01",  # ！
+    "\uff1d",  # ＝
+    "\uff1e",  # ＞
+    "\uff1c",  # ＜
+    "\uff06",  # ＆
+    "\uff5c",  # ｜
+    "\uff0d",  # －
+    "\uff0e",  # ．
+}
+
+# ── Fullwidth two-character operator mapping ───────────────────────────────
+# Maps (fullwidth_char, second_char) → TokenType for two-char operators
+# where the first char is a fullwidth variant.
+_FULLWIDTH_TWO_CHAR_OPS: Final[dict[tuple[str, str], TokenType]] = {
+    ("\uff01", "\uff1d"): TokenType.BANG_EQUAL,      # ！＝ → !=
+    ("\uff1d", "\uff1d"): TokenType.EQUAL_EQUAL,     # ＝＝ → ==
+    ("\uff1e", "\uff1d"): TokenType.GREATER_EQUAL,   # ＞＝ → >=
+    ("\uff1c", "\uff1d"): TokenType.LESS_EQUAL,      # ＜＝ → <=
+    ("\uff06", "\uff06"): TokenType.AND,             # ＆＆ → &&
+    ("\uff5c", "\uff5c"): TokenType.OR,              # ｜｜ → ||
+    ("\uff5c", "\uff1e"): TokenType.PIPE_RIGHT,      # ｜＞ → |>
+    ("\uff0d", "\uff1e"): TokenType.ARROW,           # －＞ → ->
+    ("\uff0e", "\uff0e"): TokenType.DOTDOT,          # ．． → ..
+}
 
 
 @dataclass
@@ -251,12 +313,17 @@ class Scanner:
                 self._block_comment()
                 return True
 
-        # Strings
+        # Strings (ASCII)
         if c == '"':
             if self._peek_ahead(1) == '"' and self._peek_ahead(2) == '"':
                 self._triple_quoted_string()
             else:
                 self._string()
+            return True
+
+        # Strings (Chinese quotes: "" '' 「」 『』 ＂)
+        if c in _CHINESE_QUOTE_OPEN or c == _FULLWIDTH_QUOTE:
+            self._chinese_string(c)
             return True
 
         # Numbers (digit or dot followed by digit)
@@ -284,7 +351,7 @@ class Scanner:
         second = self._peek_next()
         two = c + second
 
-        # Priority: two-char ops first
+        # Priority: two-char ops first (ASCII)
         if two == "!=":
             self._consume_two(TokenType.BANG_EQUAL)
             return
@@ -313,26 +380,37 @@ class Scanner:
             self._consume_two(TokenType.DOTDOT)
             return
 
+        # Fullwidth two-character operators
+        fw_key = (c, second)
+        if fw_key in _FULLWIDTH_TWO_CHAR_OPS:
+            self._consume_two(_FULLWIDTH_TWO_CHAR_OPS[fw_key])
+            return
+
         # Fall back to single-char token
         self._advance()
-        if c == "!":
+        if c == "!" or c == "\uff01":
             self._consume_one(TokenType.BANG)
-        elif c == "=":
+        elif c == "=" or c == "\uff1d":
             self._consume_one(TokenType.ASSIGN)
-        elif c == ">":
+        elif c == ">" or c == "\uff1e":
             self._consume_one(TokenType.GREATER)
-        elif c == "<":
+        elif c == "<" or c == "\uff1c":
             self._consume_one(TokenType.LESS)
         elif c == "&":
             self._error(
                 ErrorCode.SCANNER_ERROR,
                 "Unexpected character: '&'. Did you mean '&&'?",
             )
-        elif c == "|":
+        elif c == "\uff06":
+            self._error(
+                ErrorCode.SCANNER_ERROR,
+                "Unexpected character: '＆'. Did you mean '＆＆'?",
+            )
+        elif c == "|" or c == "\uff5c":
             self._consume_one(TokenType.PIPE)
-        elif c == "-":
+        elif c == "-" or c == "\uff0d":
             self._consume_one(TokenType.MINUS)
-        elif c == ".":
+        elif c == "." or c == "\uff0e":
             self._consume_one(TokenType.DOT)
 
     # ── whitespace & comments ──────────────────────────────────────────
@@ -397,6 +475,51 @@ class Scanner:
             literal = buffer.getvalue()
         else:
             self._advance()  # closing "
+            literal = buffer.getvalue()
+
+        self._tokens.append(
+            Token(
+                type=TokenType.STRING,
+                lexeme=self._current_lexeme(),
+                literal=literal,
+                line=self._start_line,
+                col=self._start_col,
+                end_line=self._line,
+                end_col=self._col,
+                file=self.file,
+            )
+        )
+
+    def _chinese_string(self, open_quote: str) -> None:
+        """Consume a Chinese-quoted string literal.
+
+        Supports paired quotes ("" '' 「」 『』) and symmetric ＂.
+        Escape sequences (backslash) are supported.
+        Strings may NOT span multiple lines.
+        """
+        self._advance()  # opening quote
+        # Determine closing character
+        if open_quote == _FULLWIDTH_QUOTE:
+            close_quote = _FULLWIDTH_QUOTE  # symmetric
+        else:
+            close_quote = _CHINESE_QUOTE_PAIRS[open_quote]
+
+        buffer = StringIO()
+        while not self._at_end() and self._peek() != close_quote and self._peek() != "\n":
+            c = self._advance()
+            if c == "\\":
+                buffer.write(self._parse_escape())
+            else:
+                buffer.write(c)
+
+        if self._at_end() or self._peek() == "\n":
+            self._error(
+                ErrorCode.UNTERMINATED_STRING,
+                "Unterminated string literal",
+            )
+            literal = buffer.getvalue()
+        else:
+            self._advance()  # closing quote
             literal = buffer.getvalue()
 
         self._tokens.append(
