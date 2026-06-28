@@ -127,6 +127,8 @@ class SemanticAnalyzer(Visitor[None]):
         self._agent_names: dict[str, ASTNode] = {}  # global agent registry
         self._imported_paths: set[str] = set()  # validated import paths
         self._function_param_types: dict[str, list] = {}  # function name -> list of TypeNode
+        self._in_agent: bool = False  # whether we're inside an agent main {} block
+        self._agent_scope_boundary: int = 0  # scope depth where agent boundary starts
         # Register stdlib builtins in global scope (HLD M15)
         self._register_stdlib()
 
@@ -375,6 +377,23 @@ class SemanticAnalyzer(Visitor[None]):
                 f"undeclared variable '{node.name}'",
                 node.span,
             )
+        elif self._in_agent and sym.kind == "variable":
+            # Agent main {} runs in an isolated environment — module-level
+            # let/const variables are NOT visible at runtime.  But variables
+            # defined inside the agent main scope itself ARE fine.
+            # Check: if the variable resolves locally (in the current agent
+            # scope), it's agent-local and OK.  If it only resolves via
+            # parent scope, it's a module-level variable — flag it.
+            local_sym = self.symbols.resolve_local(node.name)
+            if local_sym is None:
+                self.errors.error(
+                    ErrorCode.SCOPE_VIOLATION,
+                    f"agent scope isolation: cannot access module-level variable "
+                    f"'{node.name}' from agent main {{}}. "
+                    f"Agent main runs in an isolated environment. "
+                    f"Pass data via agent parameters or use a getter function.",
+                    node.span,
+                )
 
     # ------------------------------------------------------------------
     # Control flow
@@ -485,6 +504,19 @@ class SemanticAnalyzer(Visitor[None]):
         if node.operator.type == TokenType.ASSIGN:
             if isinstance(node.left, VariableNode):
                 self._check_const_assignment(node.left.name, node.span)
+                # Agent scope isolation: writing to module-level variable
+                # from agent main {} is not allowed at runtime.
+                if self._in_agent:
+                    sym = self.symbols.resolve(node.left.name)
+                    if sym is not None and sym.kind == "variable":
+                        self.errors.error(
+                            ErrorCode.SCOPE_VIOLATION,
+                            f"agent scope isolation: cannot assign to module-level "
+                            f"variable '{node.left.name}' from agent main {{}}. "
+                            f"Agent main runs in an isolated environment. "
+                            f"Use a setter function instead.",
+                            node.span,
+                        )
                 # Type check on reassignment: declared type must be compatible with new value
                 sym = self.symbols.resolve(node.left.name)
                 if sym is not None and sym.type_node is not None:
@@ -673,6 +705,35 @@ class SemanticAnalyzer(Visitor[None]):
         # Validate prompt if present (prompt is optional)
         if node.prompt is not None:
             node.prompt.accept(self)
+
+        # Analyze agent main {} block with scope isolation
+        # Agent main runs in an isolated environment at runtime — module-level
+        # let/const variables are NOT visible.  We track this boundary so
+        # visit_variable can report compile-time errors for cross-boundary
+        # references instead of letting them fail silently at runtime.
+        if node.logic is not None:
+            old_in_agent = self._in_agent
+            old_boundary = self._agent_scope_boundary
+            self._in_agent = True
+            self._agent_scope_boundary = self.symbols.depth
+
+            # Register agent-scoped functions before analyzing main
+            # so forward references within the agent work correctly.
+            registered_funcs: list[str] = []
+            for func_node in node.functions:
+                sym = Symbol(name=func_node.name, kind="function",
+                             type_node=func_node.return_type)
+                self.symbols.define(func_node.name, sym)
+                registered_funcs.append(func_node.name)
+
+            try:
+                node.logic.accept(self)
+            finally:
+                # Clean up agent-scoped function registrations
+                for fname in registered_funcs:
+                    self.symbols.undefine(fname)
+                self._in_agent = old_in_agent
+                self._agent_scope_boundary = old_boundary
 
     def visit_prompt_def(self, node: PromptDefNode) -> None:
         pass  # prompt content is a string, validated at runtime
