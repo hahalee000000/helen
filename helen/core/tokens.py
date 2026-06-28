@@ -120,6 +120,7 @@ class TokenType(Enum):
     IMPL = auto()      # v1.7: protocol implementation
     IS = auto()        # v1.8: type pattern in match
     WILDCARD = auto()  # v1.8: wildcard pattern `_` in match
+    SHARED = auto()    # v1.10: shared let — cross-agent visible variable
 
     # === Special ===
     EOF = auto()
@@ -226,6 +227,9 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "实现": TokenType.IMPL,
     "调用": TokenType.CALL,
     "分支": TokenType.BRANCH,
+    # v1.10: shared keyword
+    "shared": TokenType.SHARED,
+    "共享": TokenType.SHARED,
 }
 
 

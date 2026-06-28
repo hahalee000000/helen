@@ -493,12 +493,19 @@ class LiteralTypeNode(ExpressionNode):
 
 @dataclass(frozen=True)
 class VarDeclNode(StatementNode):
-    """Variable declaration: let x = 42, const MAX = 100."""
+    """Variable declaration: let x = 42, const MAX = 100, shared let buf = "".
+
+    Attributes:
+        shared: If True, the variable is visible across agent boundaries
+            (``shared let`` keyword).  Agent main {} can read and write
+            shared variables directly.
+    """
     name: str
     type_annotation: TypeNode | None
     initializer: ExpressionNode | None
     mutable: bool
     span: SourceSpan
+    shared: bool = False  # v1.10: shared let — cross-agent visible
 
     def accept(self, visitor: Visitor[R]) -> R:
         """Dispatch to the visitor."""

@@ -195,11 +195,11 @@ class TestChineseKeywordsLexer:
         assert return_token.lexeme == "返回"
 
     def test_all_44_chinese_keywords_registered(self):
-        """Verify exactly 44 Chinese keywords are in the keyword map."""
+        """Verify exactly 45 Chinese keywords are in the keyword map (v1.10 added 共享)."""
         kw = keywords()
         chinese = {k: v for k, v in kw.items()
                    if any('\u4e00' <= c <= '\u9fff' for c in k)}
-        assert len(chinese) == 44, f"Expected 44, got {len(chinese)}: {sorted(chinese.keys())}"
+        assert len(chinese) == 45, f"Expected 45, got {len(chinese)}: {sorted(chinese.keys())}"
 
     def test_no_lexer_errors(self):
         """Full Chinese program should produce zero lexer errors."""

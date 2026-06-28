@@ -129,6 +129,8 @@ class SemanticAnalyzer(Visitor[None]):
         self._function_param_types: dict[str, list] = {}  # function name -> list of TypeNode
         self._in_agent: bool = False  # whether we're inside an agent main {} block
         self._agent_scope_boundary: int = 0  # scope depth where agent boundary starts
+        self._shared_var_names: set[str] = set()  # v1.10: shared let variable names
+        self._in_closure: int = 0  # v1.10: closure nesting depth (lambda inside agent main)
         # Register stdlib builtins in global scope (HLD M15)
         self._register_stdlib()
 
@@ -369,6 +371,10 @@ class SemanticAnalyzer(Visitor[None]):
                     node.span,
                 )
 
+        # v1.10: Track shared let variable names for cross-agent visibility
+        if node.shared:
+            self._shared_var_names.add(node.name)
+
     def visit_variable(self, node: VariableNode) -> None:
         sym = self.symbols.resolve(node.name)
         if sym is None:
@@ -383,9 +389,19 @@ class SemanticAnalyzer(Visitor[None]):
             # defined inside the agent main scope itself ARE fine.
             # Check: if the variable resolves locally (in the current agent
             # scope), it's agent-local and OK.  If it only resolves via
-            # parent scope, it's a module-level variable — flag it.
+            # parent scope, it's a module-level variable.
             local_sym = self.symbols.resolve_local(node.name)
             if local_sym is None:
+                # v1.10: const and shared let are visible across agent boundaries
+                if sym.is_const:
+                    return  # const is read-only shared — always OK
+                if node.name in self._shared_var_names:
+                    return  # shared let — explicitly cross-agent
+                # v1.10: Inside a closure (lambda) within agent main,
+                # the closure captures the agent's environment at runtime.
+                # The variable will be resolved via the captured scope chain.
+                if self._in_closure > 0:
+                    return
                 self.errors.error(
                     ErrorCode.SCOPE_VIOLATION,
                     f"agent scope isolation: cannot access module-level variable "
@@ -506,17 +522,35 @@ class SemanticAnalyzer(Visitor[None]):
                 self._check_const_assignment(node.left.name, node.span)
                 # Agent scope isolation: writing to module-level variable
                 # from agent main {} is not allowed at runtime.
+                # v1.10: shared let variables are writable across agent boundaries.
                 if self._in_agent:
                     sym = self.symbols.resolve(node.left.name)
                     if sym is not None and sym.kind == "variable":
-                        self.errors.error(
-                            ErrorCode.SCOPE_VIOLATION,
-                            f"agent scope isolation: cannot assign to module-level "
-                            f"variable '{node.left.name}' from agent main {{}}. "
-                            f"Agent main runs in an isolated environment. "
-                            f"Use a setter function instead.",
-                            node.span,
-                        )
+                        local_sym = self.symbols.resolve_local(node.left.name)
+                        if local_sym is None:
+                            # Not local — check if shared or const
+                            if sym.is_const:
+                                self.errors.error(
+                                    ErrorCode.SCOPE_VIOLATION,
+                                    f"agent scope isolation: cannot assign to const "
+                                    f"'{node.left.name}' from agent main {{}}. "
+                                    f"const is read-only shared across agents.",
+                                    node.span,
+                                )
+                            elif node.left.name not in self._shared_var_names:
+                                # v1.10: Inside a closure, the variable is captured
+                                # from the agent's environment at runtime.
+                                if self._in_closure > 0:
+                                    pass  # closure captures agent env — OK
+                                else:
+                                    self.errors.error(
+                                        ErrorCode.SCOPE_VIOLATION,
+                                        f"agent scope isolation: cannot assign to module-level "
+                                        f"variable '{node.left.name}' from agent main {{}}. "
+                                        f"Agent main runs in an isolated environment. "
+                                        f"Use 'shared let' or a setter function instead.",
+                                        node.span,
+                                    )
                 # Type check on reassignment: declared type must be compatible with new value
                 sym = self.symbols.resolve(node.left.name)
                 if sym is not None and sym.type_node is not None:
@@ -842,6 +876,7 @@ class SemanticAnalyzer(Visitor[None]):
 
         # Lambda body gets its own scope
         self._in_function += 1
+        self._in_closure += 1  # v1.10: track closure nesting for agent scope check
         self.symbols.enter_scope("lambda", "lambda")
         try:
             # Bind parameters in lambda scope
@@ -853,6 +888,7 @@ class SemanticAnalyzer(Visitor[None]):
         finally:
             self.symbols.exit_scope()
             self._in_function -= 1
+            self._in_closure -= 1
 
     def visit_protocol_decl(self, node: ProtocolDeclNode) -> None:
         """Visit a protocol declaration.

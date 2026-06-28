@@ -448,6 +448,13 @@ class Parser:
         if self._check(TokenType.ASYNC):
             return self._async_call_stmt()
 
+        if self._match(TokenType.SHARED):
+            # shared let / shared const — cross-agent visible variable
+            is_shared = True
+            if self._match(TokenType.LET, TokenType.CONST):
+                return self._var_decl(shared=True)
+            self._error("Expected 'let' or 'const' after 'shared'.")
+            return None
         if self._match(TokenType.LET, TokenType.CONST):
             return self._var_decl()
         if self._match(TokenType.IF):
@@ -530,7 +537,7 @@ class Parser:
         """Parse a single statement."""
         return self._declaration()
 
-    def _var_decl(self) -> VarDeclNode:
+    def _var_decl(self, shared: bool = False) -> VarDeclNode:
         """Parse a variable declaration: let/const name = expr."""
         mutable = self._previous().type == TokenType.LET
         name_tok = self._consume(TokenType.IDENTIFIER, "Expected variable name after 'let'/'const'.")
@@ -543,7 +550,8 @@ class Parser:
         end = self._previous()
         span = self._make_span(name_tok, end)
         return VarDeclNode(name=name_tok.lexeme, type_annotation=type_annotation,
-                           initializer=init, mutable=mutable, span=span)
+                           initializer=init, mutable=mutable, span=span,
+                           shared=shared)
 
     def _if_stmt(self) -> IfStmtNode:
         """Parse an if statement: if (cond) { ... } or if cond { ... }."""

@@ -659,6 +659,11 @@ class Interpreter(LlmMixin, Visitor[object]):
             value = node.initializer.accept(self)
         is_const = not node.mutable
         self.environment.define(node.name, value, is_const=is_const)
+        # v1.10: Track shared variables for cross-agent visibility
+        if node.shared:
+            if not hasattr(self, '_shared_vars'):
+                self._shared_vars: set[str] = set()
+            self._shared_vars.add(node.name)
         return value
 
     # ------------------------------------------------------------------
@@ -1572,6 +1577,21 @@ class Interpreter(LlmMixin, Visitor[object]):
         stdlib_cache = _get_stdlib_cache()
         for _name, _fn in stdlib_cache.items():
             call_env.define(_name, _fn)
+
+        # v1.10: Inject module-level consts as read-only shared state.
+        # const values are immutable by definition, so sharing them across
+        # agent boundaries is safe — no state corruption risk.
+        # Also inject shared let variables (explicitly declared cross-agent).
+        for _name, _value in self.environment._store.items():
+            if self.environment.is_const(_name):
+                call_env.define(_name, _value, is_const=True)
+        # Shared let variables are tracked in a module-level registry
+        for _name in getattr(self, '_shared_vars', set()):
+            try:
+                _value = self.environment.lookup(_name)
+                call_env.define(_name, _value, is_const=False)
+            except NameError:
+                pass
 
         # Bind parameters from agent's param declarations
         for param in agent.params:

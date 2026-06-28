@@ -71,22 +71,22 @@ agent TestAgent {
         assert "_buf" in str(scope_errors[0])
 
     def test_read_module_const_from_agent_main(self):
-        """Reading module-level const from agent main should be a compile error."""
+        """Reading module-level const from agent main is now OK (v1.10)."""
         source = """\
 const LIMIT = 100
 agent TestAgent {
     description "test"
     prompt "test"
     main {
-        let x = LIMIT  // ❌ const is also not visible
+        let x = LIMIT  // ✅ const is read-only shared across agents
     }
 }
 """
         errors = _analyze(source)
-        assert errors.has_errors
         scope_errors = [e for e in errors.errors
                         if e.code == ErrorCode.SCOPE_VIOLATION]
-        assert len(scope_errors) >= 1
+        assert len(scope_errors) == 0, \
+            f"const read should be OK in v1.10, got: {scope_errors}"
 
     def test_read_module_let_from_module_fn_is_ok(self):
         """Module-level fn CAN access module-level let — no error."""
@@ -196,7 +196,7 @@ agent QuestionRouter {
         msg = str(scope_errors[0])
         assert "agent scope isolation" in msg.lower()
         assert "_router_buf" in msg
-        assert "setter" in msg.lower() or "getter" in msg.lower() or "parameter" in msg.lower()
+        assert "shared let" in msg.lower() or "setter" in msg.lower() or "getter" in msg.lower() or "parameter" in msg.lower()
 
     def test_multiple_agents_each_isolated(self):
         """Each agent main is independently checked."""
@@ -225,3 +225,138 @@ agent AgentB {
         # and write to _a/_b (assignment).  2 agents × 2 = 4.
         assert len(scope_errors) == 4, \
             f"Expected 4 scope violations, got {len(scope_errors)}: {scope_errors}"
+
+    # ── P1: const read-only sharing ────────────────────────────────────
+
+    def test_const_read_from_agent_main_is_ok(self):
+        """Reading module-level const from agent main should be OK (v1.10)."""
+        source = """\
+const LIMIT = 100
+const NAME = "Helen"
+agent TestAgent {
+    description "test"
+    prompt "test"
+    main {
+        let x = LIMIT  // ✅ const is read-only shared
+        let y = NAME   // ✅ const is read-only shared
+    }
+}
+"""
+        errors = _analyze(source)
+        scope_errors = [e for e in errors.errors
+                        if e.code == ErrorCode.SCOPE_VIOLATION]
+        assert len(scope_errors) == 0, \
+            f"const read should be OK, got: {scope_errors}"
+
+    def test_const_write_from_agent_main_is_error(self):
+        """Writing to const from agent main should still be an error."""
+        source = """\
+const LIMIT = 100
+agent TestAgent {
+    description "test"
+    prompt "test"
+    main {
+        LIMIT = 200  // ❌ const is read-only
+    }
+}
+"""
+        errors = _analyze(source)
+        scope_errors = [e for e in errors.errors
+                        if e.code == ErrorCode.SCOPE_VIOLATION]
+        assert len(scope_errors) >= 1
+        assert "const" in str(scope_errors[0]).lower()
+
+    # ── P2: shared let ─────────────────────────────────────────────────
+
+    def test_shared_let_read_from_agent_main_is_ok(self):
+        """Reading shared let from agent main should be OK."""
+        source = """\
+shared let _buf = ""
+agent TestAgent {
+    description "test"
+    prompt "test"
+    main {
+        let x = _buf  // ✅ shared let is cross-agent visible
+    }
+}
+"""
+        errors = _analyze(source)
+        scope_errors = [e for e in errors.errors
+                        if e.code == ErrorCode.SCOPE_VIOLATION]
+        assert len(scope_errors) == 0, \
+            f"shared let read should be OK, got: {scope_errors}"
+
+    def test_shared_let_write_from_agent_main_is_ok(self):
+        """Writing to shared let from agent main should be OK."""
+        source = """\
+shared let _buf = ""
+agent TestAgent {
+    description "test"
+    prompt "test"
+    main {
+        _buf = "new"  // ✅ shared let is writable across agents
+    }
+}
+"""
+        errors = _analyze(source)
+        scope_errors = [e for e in errors.errors
+                        if e.code == ErrorCode.SCOPE_VIOLATION]
+        assert len(scope_errors) == 0, \
+            f"shared let write should be OK, got: {scope_errors}"
+
+    def test_shared_const_read_from_agent_main_is_ok(self):
+        """Reading shared const from agent main should be OK."""
+        source = """\
+shared const LIMIT = 100
+agent TestAgent {
+    description "test"
+    prompt "test"
+    main {
+        let x = LIMIT  // ✅ shared const is read-only shared
+    }
+}
+"""
+        errors = _analyze(source)
+        scope_errors = [e for e in errors.errors
+                        if e.code == ErrorCode.SCOPE_VIOLATION]
+        assert len(scope_errors) == 0
+
+    def test_plain_let_still_blocked(self):
+        """Plain let (not shared) should still be blocked from agent main."""
+        source = """\
+let _buf = ""
+agent TestAgent {
+    description "test"
+    prompt "test"
+    main {
+        let x = _buf  // ❌ plain let is not cross-agent
+    }
+}
+"""
+        errors = _analyze(source)
+        scope_errors = [e for e in errors.errors
+                        if e.code == ErrorCode.SCOPE_VIOLATION]
+        assert len(scope_errors) >= 1
+
+    # ── P3: closure callbacks ──────────────────────────────────────────
+
+    def test_closure_callback_in_agent_main(self):
+        """Closure (lambda) capturing agent-local variable should be OK."""
+        source = """\
+agent TestAgent {
+    description "test"
+    prompt "test"
+    main {
+        let buf = ""
+        let cb = fn(chunk) {
+            buf = buf + chunk
+        }
+        llm stream "hello" on_chunk cb
+    }
+}
+"""
+        errors = _analyze(source)
+        scope_errors = [e for e in errors.errors
+                        if e.code == ErrorCode.SCOPE_VIOLATION]
+        assert len(scope_errors) == 0, \
+            f"closure callback should be OK, got: {scope_errors}"
