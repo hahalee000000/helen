@@ -392,12 +392,15 @@ def test_command(argv: list[str]) -> int:
             # Auto-discover fn test_* functions and register them
             for func_name, func_node in interp._functions.items():
                 if func_name.startswith("test_"):
-                    # Create a wrapper that calls the function
-                    def make_wrapper(node):
+                    # Create a wrapper that calls the function.
+                    # IMPORTANT: capture `interp` by VALUE (via parameter) not by NAME (closure),
+                    # otherwise all wrappers end up referencing the LAST file's interpreter,
+                    # making helper functions from earlier files "not callable".
+                    def make_wrapper(interp_ref, node):
                         def wrapper():
-                            interp._call_function(node, [])
+                            interp_ref._call_function(node, [])
                         return wrapper
-                    _registry.register_test(func_name, make_wrapper(func_node))
+                    _registry.register_test(func_name, make_wrapper(interp, func_node))
 
         # Run tests with filters
         report = _registry.run_all(
