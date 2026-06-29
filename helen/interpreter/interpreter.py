@@ -1246,6 +1246,11 @@ class Interpreter(LlmMixin, Visitor[object]):
                         if isinstance(const_node, VarDeclNode) and const_node.initializer is not None:
                             value = const_node.initializer.accept(self)
                             self.environment.define(name, value)
+                            # v1.10: Track shared let from imported modules
+                            if const_node.shared:
+                                if not hasattr(self, '_shared_vars'):
+                                    self._shared_vars: set[str] = set()
+                                self._shared_vars.add(name)
         else:
             # Register data by user-specified alias (or filename if no alias)
             alias = node.alias if node.alias else os.path.splitext(os.path.basename(result.path))[0]
