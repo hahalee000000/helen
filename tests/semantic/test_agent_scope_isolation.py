@@ -360,3 +360,140 @@ agent TestAgent {
                         if e.code == ErrorCode.SCOPE_VIOLATION]
         assert len(scope_errors) == 0, \
             f"closure callback should be OK, got: {scope_errors}"
+
+    # ------------------------------------------------------------------
+    # Agent-local variables in nested control-flow blocks
+    # ------------------------------------------------------------------
+
+    def test_let_in_try_catch_inside_agent_main_is_local(self):
+        """let variable used in try-catch inside agent main is agent-local."""
+        source = """
+agent Test() {
+    main {
+        let result = ""
+        try {
+            result = "success"
+        } catch {
+            result = "failed"
+        }
+    }
+}
+"""
+        errors = _analyze(source)
+        scope_errors = [e for e in errors.errors
+                        if e.code == ErrorCode.SCOPE_VIOLATION]
+        assert len(scope_errors) == 0, \
+            f"let in try-catch should be local, got: {scope_errors}"
+
+    def test_let_in_if_inside_agent_main_is_local(self):
+        """let variable used in if block inside agent main is agent-local."""
+        source = """
+agent Test() {
+    main {
+        let x = 1
+        if true {
+            x = 2
+        }
+    }
+}
+"""
+        errors = _analyze(source)
+        scope_errors = [e for e in errors.errors
+                        if e.code == ErrorCode.SCOPE_VIOLATION]
+        assert len(scope_errors) == 0, \
+            f"let in if should be local, got: {scope_errors}"
+
+    def test_let_in_for_inside_agent_main_is_local(self):
+        """let variable used in for block inside agent main is agent-local."""
+        source = """
+agent Test() {
+    main {
+        let total = 0
+        for i in [1, 2, 3] {
+            total = total + i
+        }
+    }
+}
+"""
+        errors = _analyze(source)
+        scope_errors = [e for e in errors.errors
+                        if e.code == ErrorCode.SCOPE_VIOLATION]
+        assert len(scope_errors) == 0, \
+            f"let in for should be local, got: {scope_errors}"
+
+    def test_let_in_while_inside_agent_main_is_local(self):
+        """let variable used in while block inside agent main is agent-local."""
+        source = """
+agent Test() {
+    main {
+        let count = 0
+        while count < 5 {
+            count = count + 1
+        }
+    }
+}
+"""
+        errors = _analyze(source)
+        scope_errors = [e for e in errors.errors
+                        if e.code == ErrorCode.SCOPE_VIOLATION]
+        assert len(scope_errors) == 0, \
+            f"let in while should be local, got: {scope_errors}"
+
+    def test_let_in_match_inside_agent_main_is_local(self):
+        """let variable used in match block inside agent main is agent-local."""
+        source = """
+agent Test() {
+    main {
+        let x = 1
+        match x {
+            case 1 { x = 2 }
+            default { x = 3 }
+        }
+    }
+}
+"""
+        errors = _analyze(source)
+        scope_errors = [e for e in errors.errors
+                        if e.code == ErrorCode.SCOPE_VIOLATION]
+        assert len(scope_errors) == 0, \
+            f"let in match should be local, got: {scope_errors}"
+
+    # ------------------------------------------------------------------
+    # Agent parameters are visible inside main {}
+    # ------------------------------------------------------------------
+
+    def test_agent_params_visible_in_main(self):
+        """Agent parameters should be recognized inside agent main."""
+        source = """
+agent Doubler(x: num) {
+    main {
+        return x * 2
+    }
+}
+"""
+        errors = _analyze(source)
+        undeclared = [e for e in errors.errors
+                      if e.code == ErrorCode.UNDECLARED_VARIABLE]
+        assert len(undeclared) == 0, \
+            f"agent params should be visible, got: {undeclared}"
+
+    def test_agent_params_in_nested_blocks(self):
+        """Agent parameters should be visible in nested blocks inside main."""
+        source = """
+agent Classifier(x: num) {
+    main {
+        if x > 0 {
+            return "positive"
+        }
+    }
+}
+"""
+        errors = _analyze(source)
+        scope_errors = [e for e in errors.errors
+                        if e.code == ErrorCode.SCOPE_VIOLATION]
+        undeclared = [e for e in errors.errors
+                      if e.code == ErrorCode.UNDECLARED_VARIABLE]
+        assert len(scope_errors) == 0, \
+            f"agent param in if should be OK, got: {scope_errors}"
+        assert len(undeclared) == 0, \
+            f"agent param should not be undeclared, got: {undeclared}"

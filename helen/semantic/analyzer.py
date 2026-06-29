@@ -387,10 +387,10 @@ class SemanticAnalyzer(Visitor[None]):
             # Agent main {} runs in an isolated environment — module-level
             # let/const variables are NOT visible at runtime.  But variables
             # defined inside the agent main scope itself ARE fine.
-            # Check: if the variable resolves locally (in the current agent
-            # scope), it's agent-local and OK.  If it only resolves via
-            # parent scope, it's a module-level variable.
-            local_sym = self.symbols.resolve_local(node.name)
+            # Check: if the variable resolves in the agent's scope chain
+            # (not just the immediate scope), it's agent-local and OK.
+            # If it only resolves via global scope, it's a module-level variable.
+            local_sym = self.symbols.resolve_in_chain(node.name)
             if local_sym is None:
                 # v1.10: const and shared let are visible across agent boundaries
                 if sym.is_const:
@@ -526,7 +526,7 @@ class SemanticAnalyzer(Visitor[None]):
                 if self._in_agent:
                     sym = self.symbols.resolve(node.left.name)
                     if sym is not None and sym.kind == "variable":
-                        local_sym = self.symbols.resolve_local(node.left.name)
+                        local_sym = self.symbols.resolve_in_chain(node.left.name)
                         if local_sym is None:
                             # Not local — check if shared or const
                             if sym.is_const:
@@ -749,7 +749,24 @@ class SemanticAnalyzer(Visitor[None]):
             old_in_agent = self._in_agent
             old_boundary = self._agent_scope_boundary
             self._in_agent = True
+
+            # Enter agent scope so parameters are registered inside the
+            # agent's scope chain (not in global scope).  This lets
+            # resolve_in_chain() find agent params while still rejecting
+            # true module-level variable access.
+            self.symbols.enter_scope(f"agent:{node.name}", "agent")
             self._agent_scope_boundary = self.symbols.depth
+
+            # Register agent parameters so they are visible inside main {}
+            registered_params: list[str] = []
+            for param in node.params:
+                sym = Symbol(
+                    name=param.name,
+                    kind="variable",
+                    type_node=param.type_annotation,
+                )
+                self.symbols.define(param.name, sym)
+                registered_params.append(param.name)
 
             # Register agent-scoped functions before analyzing main
             # so forward references within the agent work correctly.
@@ -766,6 +783,9 @@ class SemanticAnalyzer(Visitor[None]):
                 # Clean up agent-scoped function registrations
                 for fname in registered_funcs:
                     self.symbols.undefine(fname)
+                for pname in registered_params:
+                    self.symbols.undefine(pname)
+                self.symbols.exit_scope()
                 self._in_agent = old_in_agent
                 self._agent_scope_boundary = old_boundary
 

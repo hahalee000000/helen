@@ -76,6 +76,24 @@ class Scope:
         """Resolve a name only in this scope (no upward search)."""
         return self.symbols.get(name)
 
+    def resolve_in_chain(self, name: str) -> Symbol | None:
+        """Resolve a name by walking up the scope chain, stopping at global.
+
+        Returns the first matching symbol found in the current scope or any
+        parent scope up to (but not including) the global scope. Returns None
+        if the symbol is only in the global scope or not found at all.
+
+        This is used to distinguish agent-local variables from module-level
+        variables when inside nested scopes (try, if, for, etc.) within an
+        agent main block.
+        """
+        scope: Scope | None = self
+        while scope is not None and scope.parent is not None:
+            if name in scope.symbols:
+                return scope.symbols[name]
+            scope = scope.parent
+        return None
+
     def undefine(self, name: str) -> Symbol | None:
         """Remove a symbol from this scope.
 
@@ -144,6 +162,10 @@ class SymbolTable:
     def resolve_local(self, name: str) -> Symbol | None:
         """Resolve a name only in the current scope."""
         return self.current_scope.resolve_local(name)
+
+    def resolve_in_chain(self, name: str) -> Symbol | None:
+        """Resolve a name walking up from current scope, stopping at global."""
+        return self.current_scope.resolve_in_chain(name)
 
     def undefine(self, name: str) -> Symbol | None:
         """Remove a symbol from the current scope.
