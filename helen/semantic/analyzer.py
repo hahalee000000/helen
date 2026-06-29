@@ -483,10 +483,10 @@ class SemanticAnalyzer(Visitor[None]):
         self._check_break_continue_position(node, "continue")
 
     def visit_return_stmt(self, node: ReturnStmtNode) -> None:
-        if self._in_function == 0:
+        if self._in_function == 0 and not self._in_agent:
             self.errors.error(
                 ErrorCode.RETURN_OUTSIDE_FUNCTION,
-                "return can only be used inside a function",
+                "return can only be used inside a function or agent main block",
                 node.span,
             )
         if node.value is not None:
@@ -1200,7 +1200,8 @@ class SemanticAnalyzer(Visitor[None]):
 
     def visit_llm_stream_stmt(self, node: LlmStreamStmtNode) -> None:
         """Visit llm stream statement: analyze prompt and optional callbacks."""
-        node.prompt.accept(self)
+        if node.prompt is not None:
+            node.prompt.accept(self)
         if node.on_chunk is not None:
             node.on_chunk.accept(self)
         if node.on_complete is not None:

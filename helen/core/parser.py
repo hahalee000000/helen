@@ -1123,17 +1123,22 @@ class Parser:
         self._consume(TokenType.STREAM, "Expected 'stream' after 'llm'.")
 
         # 检查是否有表达式（支持 bare form）
+        # on_chunk/on_complete are callback keywords, not prompt expressions
         if self._check(*BARE_FORM_TOKENS):
             prompt_expr = None
         elif self._current().line > start.line:
             # 换行边界
+            prompt_expr = None
+        elif (self._check(TokenType.IDENTIFIER)
+              and self._current().lexeme in ("on_chunk", "on_complete")):
+            # bare form with callbacks — on_chunk/on_complete are keywords, not prompt
             prompt_expr = None
         else:
             prompt_expr = self._expression()
 
         # 检查是否有 on_chunk 回调
         on_chunk_expr = None
-        if prompt_expr is not None and self._check(TokenType.IDENTIFIER) and self._current().lexeme == "on_chunk":
+        if self._check(TokenType.IDENTIFIER) and self._current().lexeme == "on_chunk":
             self._advance()  # consume 'on_chunk'
             on_chunk_expr = self._expression()
 

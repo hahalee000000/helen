@@ -80,6 +80,62 @@ class TestLlmStreamParsing:
         assert isinstance(stmt, LlmStreamStmtNode)
         assert stmt.prompt is None  # Bare form has no prompt
         assert stmt.on_chunk is None
+
+    def test_llm_stream_bare_form_with_on_chunk(self):
+        """llm stream on_chunk callback should work in bare form."""
+        source = 'llm stream on_chunk my_callback'
+        errors = ErrorReporter()
+        scanner = Scanner(source=source, file="<test>")
+        tokens = scanner.scan_all()
+        parser = Parser(tokens, errors=errors)
+        program = parser.parse()
+
+        assert not errors.has_errors, f"Parse errors: {_format_errors(errors)}"
+        assert len(program.statements) == 1
+
+        stmt = program.statements[0]
+        assert isinstance(stmt, LlmStreamStmtNode)
+        assert stmt.prompt is None  # Bare form
+        assert stmt.on_chunk is not None
+        assert isinstance(stmt.on_chunk, VariableNode)
+        assert stmt.on_chunk.name == "my_callback"
+
+    def test_llm_stream_bare_form_with_on_complete(self):
+        """llm stream on_complete callback should work in bare form."""
+        source = 'llm stream on_complete on_done'
+        errors = ErrorReporter()
+        scanner = Scanner(source=source, file="<test>")
+        tokens = scanner.scan_all()
+        parser = Parser(tokens, errors=errors)
+        program = parser.parse()
+
+        assert not errors.has_errors, f"Parse errors: {_format_errors(errors)}"
+        assert len(program.statements) == 1
+
+        stmt = program.statements[0]
+        assert isinstance(stmt, LlmStreamStmtNode)
+        assert stmt.prompt is None  # Bare form
+        assert stmt.on_complete is not None
+
+    def test_llm_stream_bare_form_with_both_callbacks(self):
+        """llm stream with both callbacks should work in bare form."""
+        source = 'llm stream on_chunk cb1 on_complete cb2'
+        errors = ErrorReporter()
+        scanner = Scanner(source=source, file="<test>")
+        tokens = scanner.scan_all()
+        parser = Parser(tokens, errors=errors)
+        program = parser.parse()
+
+        assert not errors.has_errors, f"Parse errors: {_format_errors(errors)}"
+        assert len(program.statements) == 1
+
+        stmt = program.statements[0]
+        assert isinstance(stmt, LlmStreamStmtNode)
+        assert stmt.prompt is None  # Bare form
+        assert stmt.on_chunk is not None
+        assert stmt.on_chunk.name == "cb1"
+        assert stmt.on_complete is not None
+        assert stmt.on_complete.name == "cb2"
     
     def test_llm_if_still_works(self):
         """llm if should still work after adding stream."""
