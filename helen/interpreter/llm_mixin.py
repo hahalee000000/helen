@@ -452,7 +452,8 @@ class LlmMixin:
             )
             self.observability.llm_audit.log(audit_entry)
 
-            return None
+            # Return the full accumulated response text
+            return full_text
         except Exception as e:
             # Log error to audit trail (P2)
             audit_duration = (time.time() - audit_start) * 1000

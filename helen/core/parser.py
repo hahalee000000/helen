@@ -174,8 +174,8 @@ class Parser:
         self._rules[TokenType.LEFT_BRACE].prefix = self._map_literal
         self._rules[TokenType.TEMPLATE_OPEN].prefix = self._template_ref
 
-        # llm act as expression: llm act <prompt_expr>
-        self._rules[TokenType.LLM].prefix = self._llm_act_expr
+        # llm act / llm stream as expression
+        self._rules[TokenType.LLM].prefix = self._llm_expr
 
         # async as expression: async Agent(...)
         self._rules[TokenType.ASYNC].prefix = self._async_call_expr
@@ -272,6 +272,28 @@ class Parser:
         prev = self._previous()
         return VariableNode(name=prev.lexeme, span=prev.span)
 
+    def _llm_expr(self) -> ExpressionNode:
+        """Parse an llm expression: llm act <expr>? or llm stream <expr>? [on_chunk <cb>] [on_complete <cb>].
+
+        Dispatches based on the keyword following 'llm'.
+        Supports bare form (no expression) inside an agent context.
+        """
+        start = self._previous()  # LLM token
+
+        if self._check(TokenType.ACT):
+            return self._llm_act_expr()
+        elif self._check(TokenType.STREAM):
+            return self._llm_stream_expr()
+        elif self._check(TokenType.IF):
+            self._error("'llm if' is not allowed in expression context; use as a statement.")
+            self._synchronize()
+            # Return a placeholder literal to avoid crashing
+            return LiteralNode(value=None, span=self._make_span(start, self._previous()))
+        else:
+            self._error("Expected 'act' or 'stream' after 'llm'.")
+            self._synchronize()
+            return LiteralNode(value=None, span=self._make_span(start, self._previous()))
+
     def _llm_act_expr(self) -> ExpressionNode:
         """Parse an llm act expression: llm act <expression>?
 
@@ -299,6 +321,46 @@ class Parser:
             prompt_expr = self._expression()
         return LlmActExprNode(
             prompt=prompt_expr,
+            span=self._make_span(start, self._previous())
+        )
+
+    def _llm_stream_expr(self) -> ExpressionNode:
+        """Parse an llm stream expression: llm stream <expr>? [on_chunk <cb>] [on_complete <cb>].
+
+        Same syntax as the stream statement, but usable in expression context.
+        Returns the full accumulated response text.
+        """
+        start = self._previous()  # LLM token
+        self._consume(TokenType.STREAM, "Expected 'stream' after 'llm'.")
+        stream_token = self._previous()
+
+        # Check for bare form
+        if self._check(*BARE_FORM_TOKENS):
+            prompt_expr = None
+        elif self._current().line > stream_token.line:
+            prompt_expr = None
+        elif (self._check(TokenType.IDENTIFIER)
+              and self._current().lexeme in ("on_chunk", "on_complete")):
+            prompt_expr = None
+        else:
+            prompt_expr = self._expression()
+
+        # Optional on_chunk callback
+        on_chunk_expr = None
+        if self._check(TokenType.IDENTIFIER) and self._current().lexeme == "on_chunk":
+            self._advance()
+            on_chunk_expr = self._expression()
+
+        # Optional on_complete callback
+        on_complete_expr = None
+        if self._check(TokenType.IDENTIFIER) and self._current().lexeme == "on_complete":
+            self._advance()
+            on_complete_expr = self._expression()
+
+        return LlmStreamStmtNode(
+            prompt=prompt_expr,
+            on_chunk=on_chunk_expr,
+            on_complete=on_complete_expr,
             span=self._make_span(start, self._previous())
         )
 
