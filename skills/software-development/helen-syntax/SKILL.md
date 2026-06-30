@@ -1,10 +1,10 @@
 ---
 name: helen-syntax
 description: "Helen 语言语法快速参考 — 关键字、类型、表达式、语句"
-version: 1.9.0
+version: 1.10.0
 author: Helen Team
 license: MIT
-tags: [helen, syntax, reference, language]
+tags: [helen, syntax, reference, language, chinese-punctuation, chinese-quotes]
 ---
 
 # Helen 语法参考
@@ -104,6 +104,7 @@ const LIMIT = 100
 ### 变量与函数
 - `let` — 可变变量
 - `const` — 常量
+- `shared let` / `shared const` — 跨 Agent 可见变量（v1.10）
 - `fn` — 函数声明
 - `import` — 模块导入
 - `as` — 导入别名
@@ -162,6 +163,76 @@ let not = !a
 let item = list[0]
 let value = map["key"]
 let length = len(str)
+```
+
+### 中文全角操作符（v1.10）
+
+Helen 支持中文全角标点符号作为 ASCII 操作符的等价替代，编程时无需切换中英文输入法：
+
+| ASCII | 全角 | 说明 |
+|-------|------|------|
+| `(` `)` | `（` `）` | 圆括号 |
+| `{` `}` | `｛` `｝` | 花括号 |
+| `[` `]` | `［` `］` | 方括号 |
+| `,` | `，` | 逗号 |
+| `.` | `．` | 点号 |
+| `:` | `：` | 冒号 |
+| `;` | `；` | 分号 |
+| `?` | `？` | 问号 |
+| `+` | `＋` | 加号 |
+| `-` | `－` | 减号 |
+| `*` | `＊` | 乘号 |
+| `/` | `／` | 除号 |
+| `%` | `％` | 取模 |
+| `!` | `！` | 逻辑非 / 不等 |
+| `=` | `＝` | 赋值 / 相等 |
+| `>` | `＞` | 大于 |
+| `<` | `＜` | 小于 |
+| `\|` | `｜` | 管道 |
+| `!=` | `！＝` | 不等于 |
+| `==` | `＝＝` | 等于 |
+| `>=` | `＞＝` | 大于等于 |
+| `<=` | `＜＝` | 小于等于 |
+| `&&` | `＆＆` | 逻辑与 |
+| `\|\|` | `｜｜` | 逻辑或 |
+| `\|>` | `｜＞` | 管道操作符 |
+| `->` | `－＞` | 箭头（返回类型） |
+| `..` | `．．` | 范围 |
+
+### 中文引号（v1.10）
+
+Helen 支持中文引号作为字符串分隔符，与 ASCII `"..."` 等价：
+
+| 引号 | Unicode | 类型 | 示例 |
+|------|---------|------|------|
+| `""` | U+201C / U+201D | 弯双引号 | `"你好世界"` |
+| `''` | U+2018 / U+2019 | 弯单引号 | `'你好世界'` |
+| `「」` | U+300C / U+300D | 直角引号 | `「你好世界」` |
+| `『』` | U+300E / U+300F | 双直角引号 | `『你好世界』` |
+| `＂` | U+FF02 | 全宽引号（对称） | `＂你好世界＂` |
+
+中文引号支持转义序列（`\n`、`\t`、`\\` 等），未闭合会报错。多行字符串仍使用 ASCII `"""..."""`。
+
+```helen
+// 纯中文代码，全程中文输入法
+让 x ＝ 10
+常量 Y ＝ 20
+函数 加（甲： int， 乙： int）： int ｛
+    返回 甲 ＋ 乙
+｝
+如果 x ＞ 0 ｛
+    让 结果 ＝ 加（x， Y）
+｝ 否则 ｛
+    让 结果 ＝ 0
+｝
+
+// 全角比较和逻辑
+如果 a ＞＝ 0 ＆＆ a ＜＝ 100 ｛
+    print（"在范围内"）
+｝
+
+// 全角管道
+让 result ＝ 5 ｜＞ double
 ```
 
 ## 语句
@@ -242,6 +313,63 @@ MyAgent("test")       // 推荐，更简洁
 
 **重要**：Helen 中 Agent 是一等公民，可以像函数一样调用。`call` 关键字在表达式位置（赋值、参数、返回值）会导致解析错误，仅用于语句位置（不接收返回值时）。
 
+### Agent 作用域隔离（v1.10）
+
+Agent `main {}` 运行在完全隔离的环境中（HLD 3.5.2），**不能**直接访问模块级的普通 `let` 变量。`helen check` 会在编译期检测并报 `SCOPE_VIOLATION` 错误。
+
+**三种跨 Agent 数据共享方式**（按推荐顺序）：
+
+#### 1. 闭包回调（最佳 — buffer 完全内部化）
+```helen
+agent Streamer {
+    main {
+        let buf = ""
+        let cb = fn(chunk) {
+            buf = buf + chunk   // ✅ 闭包捕获 agent 环境
+        }
+        llm stream "..." on_chunk cb
+    }
+}
+```
+
+#### 2. shared let（显式跨 Agent）
+```helen
+shared let _buf = ""    // 或：共享 让 _buf = ""
+agent Worker {
+    main {
+        _buf = "new"    // ✅ 读写都允许
+        let x = _buf    // ✅
+    }
+}
+```
+
+#### 3. const（只读共享配置）
+```helen
+const LIMIT = 100
+agent Worker {
+    main {
+        let x = LIMIT   // ✅ const 自动只读共享
+        LIMIT = 200     // ❌ 编译期错误：const is read-only
+    }
+}
+```
+
+**旧式规避方式**（仍可用）：通过 getter/setter 函数间接访问：
+```helen
+let _buf = ""
+fn _buf_reset() { _buf = "" }
+fn _buf_get(): str { return _buf }
+
+agent MyAgent {
+    main {
+        _buf_reset()        // ✅ 通过函数
+        let x = _buf_get()  // ✅ 通过函数
+    }
+}
+```
+
+模块级 `fn` 可以正常访问模块级 `let`，agent `main {}` 也可以调用模块级 `fn`——隔离边界只在变量直接访问。
+
 ### LLM 语句
 ```helen
 # llm act — 自主执行
@@ -298,12 +426,20 @@ main {
 ```helen
 try {
     risky_operation()
-} catch ValueError as e {
-    print("Invalid value: " + e.message)
-} catch NetworkError as e {
-    print("Network failed: " + e.message)
+} catch RuntimeError e {
+    print("Runtime error: " + e.message)
+} catch TimeoutError e {
+    print("Timeout: " + e.message)
 } finally {
     cleanup()
+}
+
+// 捕获标准库异常 (v1.9+)
+// 标准库函数抛出的 Python 异常自动包装为 RuntimeError
+try {
+    let x = len(42)        // Python TypeError
+} catch RuntimeError e {
+    print(e.message)       // "Python TypeError: object of type 'int' has no len()"
 }
 ```
 

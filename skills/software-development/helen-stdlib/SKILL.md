@@ -384,3 +384,23 @@ print(quality_report(source, "my_program.helen"))
 | 可维护性 | 10% | 长函数、高复杂度函数 |
 | 工程规范 | 10% | 命名规范、文件大小 |
 
+## 异常处理 (v1.9+)
+
+标准库函数调用时抛出的 Python 异常会自动包装为 `RuntimeError`，可通过 try-catch 捕获：
+
+```helen
+try {
+    let x = len(42)           // Python TypeError
+} catch RuntimeError err {
+    print(err.message)        // "Python TypeError: object of type 'int' has no len()"
+}
+
+try {
+    let data = read_file("/nonexistent")
+} catch RuntimeError err {
+    print(err.message)        // "Python FileNotFoundError: [Errno 2] ..."
+}
+```
+
+异常消息格式为 `"Python <类型名>: <原始消息>"`，可在 catch 块中通过消息前缀区分具体的 Python 异常类型。已存在的 Helen 异常（如 `TimeoutError`）保持原有类型不变。
+

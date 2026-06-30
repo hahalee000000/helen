@@ -553,7 +553,16 @@ class Interpreter(LlmMixin, Visitor[object]):
                     wrapped_args.append(make_wrapper(arg))
                 else:
                     wrapped_args.append(arg)
-            return callee(*wrapped_args)
+            try:
+                return callee(*wrapped_args)
+            except HelenRuntimeError:
+                raise  # Already a Helen exception, propagate as-is
+            except Exception as e:
+                # Wrap Python exceptions in RuntimeError so try-catch can catch them.
+                # Preserve the original Python exception type in the message
+                # so users can distinguish (e.g., "Python TypeError: ..." vs "Python ValueError: ...").
+                py_type = type(e).__name__
+                raise HelenRuntimeErrorClass(f"Python {py_type}: {e}", node.span) from e
 
         callee_str = callee_name if callee_name else type(callee).__name__
         self._runtime_error(node.span, f"'{callee_str}' is not callable")

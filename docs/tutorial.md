@@ -1244,6 +1244,27 @@ try {
 // 输出: Cannot divide: division by zero
 ```
 
+### 捕获标准库异常 (v1.9+)
+
+标准库函数抛出的 Python 异常（`TypeError`、`ValueError`、`FileNotFoundError` 等）会被自动包装为 `RuntimeError`，可用 try-catch 捕获：
+
+```helen
+try {
+    let x = len(42)        // Python TypeError
+} catch RuntimeError err {
+    print(err.message)     // "Python TypeError: object of type 'int' has no len()"
+}
+
+try {
+    let data = read_file("/nonexistent/path")
+} catch RuntimeError err {
+    // 通过 err.message 中的 "Python FileNotFoundError" 前缀区分异常类型
+    print("File error: " + err.message)
+}
+```
+
+异常消息格式为 `"Python <类型名>: <原始消息>"`，可在 catch 块中通过消息前缀区分具体的 Python 异常类型。
+
 ## 综合示例：FizzBuzz
 
 ```helen
