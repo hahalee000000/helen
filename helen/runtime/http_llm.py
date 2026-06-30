@@ -28,12 +28,14 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
-import urllib.request
-import urllib.error
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Any
+
+import httpx
 
 from helen.runtime.llm_runtime import LLMResponse, LLMRuntime
 
@@ -164,12 +166,14 @@ _MAX_TOOL_WORKERS = 8
 def _execute_tools_concurrent(
     tool_calls: list[dict[str, Any]],
     dispatch_fn,
+    executor: ThreadPoolExecutor | None = None,
 ) -> list[tuple[dict[str, Any], str]]:
     """Execute multiple tool calls concurrently using a thread pool.
 
     Args:
         tool_calls: List of tool call dicts from LLM response.
         dispatch_fn: Function(name, args) -> str result.
+        executor: Optional persistent ThreadPoolExecutor to reuse.
 
     Returns:
         List of (tool_call, result) tuples in original order.
@@ -199,10 +203,14 @@ def _execute_tools_concurrent(
 
     results: list[tuple[dict, str] | None] = [None] * len(parsed)
 
-    with ThreadPoolExecutor(max_workers=min(len(parsed), _MAX_TOOL_WORKERS)) as executor:
+    # Use persistent pool if provided, otherwise create temporary
+    own_pool = executor is None
+    pool = executor or ThreadPoolExecutor(max_workers=min(len(parsed), _MAX_TOOL_WORKERS))
+
+    try:
         future_to_idx = {}
         for idx, (tc, fn_name, fn_args) in enumerate(parsed):
-            future = executor.submit(dispatch_fn, fn_name, fn_args)
+            future = pool.submit(dispatch_fn, fn_name, fn_args)
             future_to_idx[future] = idx
 
         for future in as_completed(future_to_idx):
@@ -212,6 +220,9 @@ def _execute_tools_concurrent(
             except Exception as e:
                 result = json.dumps({"error": f"Tool execution failed: {e}"})
             results[idx] = (parsed[idx][0], result)
+    finally:
+        if own_pool:
+            pool.shutdown(wait=False)
 
     return [r for r in results if r is not None]
 
@@ -278,6 +289,9 @@ class HttpLLMRuntime(LLMRuntime):
     enable_message_sanitization: bool = True
     enable_tool_truncation: bool = True
     _last_error: str | None = field(default=None, repr=False)
+    _client: Any = field(default=None, repr=False, init=False)
+    _async_client: Any = field(default=None, repr=False, init=False)
+    _tool_pool: Any = field(default=None, repr=False, init=False)
 
     def __post_init__(self):
         """Auto-load configuration from Helen or Hermes config."""
@@ -289,6 +303,40 @@ class HttpLLMRuntime(LLMRuntime):
                 self.api_key = hermes_env.get("DASHSCOPE_API_KEY", "")
             if not self.default_model:
                 self.default_model = "qwen3.7-plus"
+
+        # Persistent HTTP client with connection pooling (keeps TCP+TLS alive)
+        self._client = httpx.Client(
+            timeout=httpx.Timeout(self.timeout, connect=30.0),
+            limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.api_key}",
+            },
+        )
+        # Persistent async client for true async support
+        self._async_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(self.timeout, connect=30.0),
+            limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.api_key}",
+            },
+        )
+        # Persistent thread pool for concurrent tool execution
+        self._tool_pool = ThreadPoolExecutor(max_workers=_MAX_TOOL_WORKERS)
+
+    def close(self):
+        """Close persistent HTTP clients and thread pool."""
+        if self._client is not None:
+            self._client.close()
+        if self._async_client is not None:
+            # httpx.AsyncClient uses aclose(), not close()
+            try:
+                self._async_client.aclose()
+            except Exception:
+                pass
+        if self._tool_pool is not None:
+            self._tool_pool.shutdown(wait=False)
 
     def route(
         self,
@@ -397,7 +445,9 @@ class HttpLLMRuntime(LLMRuntime):
 
                 # Execute tool calls (concurrently if enabled)
                 if self.enable_concurrent_tools and len(tool_calls) > 1:
-                    tool_results = _execute_tools_concurrent(tool_calls, _dispatch)
+                    tool_results = _execute_tools_concurrent(
+                        tool_calls, _dispatch, executor=self._tool_pool,
+                    )
                 else:
                     # Sequential execution
                     tool_results = []
@@ -471,7 +521,6 @@ class HttpLLMRuntime(LLMRuntime):
 
         Retries on transient errors (timeout, 5xx) with exponential backoff.
         """
-        import time
 
         for attempt in range(self.max_retries + 1):
             result = self._chat_with_messages(messages, model=model, temperature=temperature, tools=tools)
@@ -489,6 +538,7 @@ class HttpLLMRuntime(LLMRuntime):
                     or "503" in error
                     or "504" in error
                     or "429" in error  # rate limit
+                    or "connect" in error.lower()  # transient network errors
                 )
                 if is_retryable:
                     # Exponential backoff: 1s, 2s, 4s
@@ -562,43 +612,30 @@ class HttpLLMRuntime(LLMRuntime):
         if tools:
             payload["tools"] = tools
 
-        data = json.dumps(payload).encode("utf-8")
-
-        req = urllib.request.Request(
-            url,
-            data=data,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.api_key}",
-            },
-            method="POST",
-        )
-
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                result = json.loads(response.read().decode("utf-8"))
-                choices = result.get("choices", [])
-                if choices:
-                    return choices[0].get("message", {})
-                return {"content": ""}
+            response = self._client.post(url, json=payload)
+            response.raise_for_status()
+            result = response.json()
+            choices = result.get("choices", [])
+            if choices:
+                return choices[0].get("message", {})
+            return {"content": ""}
 
-        except urllib.error.HTTPError as e:
+        except httpx.HTTPStatusError as e:
             # Read the error body for structured API error messages
-            error_body = ""
             try:
-                error_body = e.read().decode("utf-8")
-                error_data = json.loads(error_body)
+                error_data = e.response.json()
                 api_error = error_data.get("error", {})
                 error_msg = api_error.get("message", str(e))
                 error_code = api_error.get("code", "")
-                self._last_error = f"API error ({e.code} {error_code}): {error_msg}"
+                self._last_error = f"API error ({e.response.status_code} {error_code}): {error_msg}"
             except Exception:
-                self._last_error = f"HTTP error {e.code}: {e.reason}"
+                self._last_error = f"HTTP error {e.response.status_code}: {e.response.reason_phrase}"
             return None
-        except urllib.error.URLError as e:
+        except (httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError) as e:
             self._last_error = f"HTTP request failed: {e}"
             return None
-        except TimeoutError:
+        except httpx.TimeoutException:
             self._last_error = f"Request timed out after {self.timeout}s"
             return None
         except json.JSONDecodeError as e:
@@ -684,32 +721,21 @@ class HttpLLMRuntime(LLMRuntime):
             if tools:
                 payload["tools"] = tools
 
-            data = json.dumps(payload).encode("utf-8")
-
-            req = urllib.request.Request(
-                url,
-                data=data,
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {self.api_key}",
-                },
-                method="POST",
-            )
-
             try:
                 # Collect streamed chunks with health checking
-                full_content = ""
+                # Use list+join (O(n)) instead of += (O(n²)) for long responses
+                full_chunks: list[str] = []
                 tool_calls_acc: dict[int, dict] = {}  # index -> {name, args_str, id}
                 usage_info: dict[str, int] = {}  # token usage from final chunk
                 last_chunk_time = 0.0
                 stale_threshold = 90.0  # seconds without data = stale
 
-                import time
                 stream_start = time.time()
 
-                with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                    for line_bytes in response:
-                        line = line_bytes.decode("utf-8").strip()
+                with self._client.stream("POST", url, json=payload, timeout=self.timeout) as response:
+                    response.raise_for_status()
+                    for line_bytes in response.iter_lines():
+                        line = line_bytes.strip()
                         if not line:
                             continue
 
@@ -748,7 +774,7 @@ class HttpLLMRuntime(LLMRuntime):
                                 # Text content chunk
                                 content = delta.get("content", "")
                                 if content:
-                                    full_content += content
+                                    full_chunks.append(content)
                                     yield {"type": "content", "content": content}
 
                                 # Tool call deltas (streaming accumulation)
@@ -778,6 +804,9 @@ class HttpLLMRuntime(LLMRuntime):
                 # Yield usage info at the end of this turn's stream
                 if usage_info:
                     yield {"type": "usage", "usage": usage_info}
+
+                # Build full_content from chunks (O(n) join instead of O(n²) +=)
+                full_content = "".join(full_chunks)
 
                 # After stream completes: check if we got tool calls
                 if tool_calls_acc:
@@ -809,7 +838,9 @@ class HttpLLMRuntime(LLMRuntime):
                     ]
 
                     if self.enable_concurrent_tools and len(tool_call_list) > 1:
-                        tool_results = _execute_tools_concurrent(tool_call_list, _dispatch)
+                        tool_results = _execute_tools_concurrent(
+                            tool_call_list, _dispatch, executor=self._tool_pool,
+                        )
                     else:
                         # Sequential execution
                         tool_results = []
@@ -875,27 +906,329 @@ class HttpLLMRuntime(LLMRuntime):
                     # Valid final response — already streamed
                     break
 
-            except urllib.error.HTTPError as e:
+            except httpx.HTTPStatusError as e:
                 # Read the error body for structured API error messages
-                error_body = ""
                 try:
-                    error_body = e.read().decode("utf-8")
-                    error_data = json.loads(error_body)
+                    error_data = e.response.json()
                     api_error = error_data.get("error", {})
                     error_msg = api_error.get("message", str(e))
                     error_code = api_error.get("code", "")
-                    yield {"type": "error", "message": f"API error ({e.code} {error_code}): {error_msg}"}
+                    yield {"type": "error", "message": f"API error ({e.response.status_code} {error_code}): {error_msg}"}
                 except Exception:
-                    yield {"type": "error", "message": f"HTTP error {e.code}: {e.reason}"}
+                    yield {"type": "error", "message": f"HTTP error {e.response.status_code}: {e.response.reason_phrase}"}
                 break
-            except urllib.error.URLError as e:
+            except (httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError) as e:
                 yield {"type": "error", "message": f"HTTP request failed: {e}"}
                 break
-            except TimeoutError:
+            except httpx.TimeoutException:
                 yield {"type": "error", "message": f"Request timed out after {self.timeout}s"}
                 break
             except Exception as e:
                 yield {"type": "error", "message": f"Unexpected error: {e}"}
+                break
+
+    # ------------------------------------------------------------------
+    # True async support (httpx.AsyncClient with connection pooling)
+    # ------------------------------------------------------------------
+
+    async def act_async(
+        self,
+        prompt: str,
+        tools: list[dict[str, Any]] | None = None,
+        model: str | None = None,
+        temperature: float = 1.0,
+        max_turns: int = 1,
+        history: list[dict[str, Any]] | None = None,
+        system_prompt: str | None = None,
+        dispatch_fn: Any = None,
+    ) -> LLMResponse:
+        """True async version of act() using httpx.AsyncClient.
+
+        Uses persistent connection pool — no TCP/TLS handshake per call.
+        Does NOT block the event loop (unlike the default sync fallback).
+        """
+        from helen.runtime.tools import dispatch_tool as default_dispatch
+
+        _dispatch = dispatch_fn if dispatch_fn is not None else default_dispatch
+
+        messages: list[dict[str, Any]] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        if history:
+            messages.extend(history)
+        messages.append({"role": "user", "content": prompt})
+
+        use_model = model or self.default_model or "default"
+        final_text = ""
+
+        budget = IterationBudget(max_total=max_turns + 2)
+        empty_response_retries = 0
+        max_empty_retries = 2
+
+        while budget.consume():
+            if self.enable_message_sanitization:
+                _sanitize_messages(messages)
+                _repair_message_sequence(messages)
+
+            payload = {
+                "model": use_model,
+                "messages": messages,
+                "temperature": temperature,
+            }
+            if tools:
+                payload["tools"] = tools
+
+            url = f"{self.base_url}/chat/completions"
+
+            try:
+                response = await self._async_client.post(url, json=payload)
+                response.raise_for_status()
+                result = response.json()
+                choices = result.get("choices", [])
+                response_msg = choices[0].get("message", {}) if choices else {"content": ""}
+            except Exception as e:
+                raise RuntimeError(f"Async LLM API call failed: {e}") from e
+
+            tool_calls = response_msg.get("tool_calls")
+            if tool_calls:
+                messages.append(response_msg)
+
+                if self.enable_concurrent_tools and len(tool_calls) > 1:
+                    tool_results = _execute_tools_concurrent(
+                        tool_calls, _dispatch, executor=self._tool_pool,
+                    )
+                else:
+                    tool_results = []
+                    for tc in tool_calls:
+                        fn_name = tc["function"]["name"]
+                        try:
+                            fn_args = json.loads(tc["function"].get("arguments", "{}"))
+                        except json.JSONDecodeError:
+                            fn_args = {}
+                        result = _dispatch(fn_name, fn_args)
+                        tool_results.append((tc, result))
+
+                for tc, result in tool_results:
+                    if self.enable_tool_truncation:
+                        result = _truncate_tool_result(result)
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc["id"],
+                        "content": result,
+                    })
+                empty_response_retries = 0
+                continue
+
+            else:
+                content = response_msg.get("content", "")
+                if not content or not content.strip():
+                    if empty_response_retries < max_empty_retries:
+                        empty_response_retries += 1
+                        messages.append(response_msg)
+                        messages.append({
+                            "role": "user",
+                            "content": "You returned an empty response. Please continue.",
+                        })
+                        continue
+                    else:
+                        break
+
+                final_text = content
+                break
+
+        return LLMResponse(text=final_text, model=use_model)
+
+    async def act_stream_async(
+        self,
+        prompt: str,
+        model: str | None = None,
+        temperature: float = 1.0,
+        system_prompt: str | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        max_turns: int = 5,
+        history: list[dict[str, Any]] | None = None,
+        dispatch_fn: Any = None,
+    ):
+        """True async streaming using httpx.AsyncClient.
+
+        Does NOT block the event loop. Yields the same event dicts as act_stream.
+        For use in multi-agent concurrent scenarios.
+        """
+        from helen.runtime.tools import dispatch_tool as default_dispatch
+
+        _dispatch = dispatch_fn if dispatch_fn is not None else default_dispatch
+
+        use_model = model or self.default_model or "default"
+
+        messages: list[dict[str, Any]] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        if history:
+            messages.extend(history)
+        messages.append({"role": "user", "content": prompt})
+
+        url = f"{self.base_url}/chat/completions"
+
+        budget = IterationBudget(max_total=max_turns + 2)
+        empty_response_retries = 0
+        max_empty_retries = 2
+
+        while budget.consume():
+            if self.enable_message_sanitization:
+                _sanitize_messages(messages)
+                _repair_message_sequence(messages)
+
+            payload = {
+                "model": use_model,
+                "messages": messages,
+                "temperature": temperature,
+                "stream": True,
+                "stream_options": {"include_usage": True},
+            }
+            if tools:
+                payload["tools"] = tools
+
+            try:
+                full_chunks: list[str] = []
+                tool_calls_acc: dict[int, dict] = {}
+                usage_info: dict[str, int] = {}
+
+                async with self._async_client.stream("POST", url, json=payload, timeout=self.timeout) as response:
+                    response.raise_for_status()
+                    async for line_bytes in response.aiter_lines():
+                        line = line_bytes.strip()
+                        if not line:
+                            continue
+
+                        if line.startswith("data: "):
+                            data_str = line[6:]
+                            if data_str == "[DONE]":
+                                break
+
+                            try:
+                                chunk_data = json.loads(data_str)
+
+                                chunk_usage = chunk_data.get("usage")
+                                if chunk_usage:
+                                    usage_info = chunk_usage
+
+                                choices = chunk_data.get("choices", [])
+                                if not choices:
+                                    continue
+
+                                delta = choices[0].get("delta", {})
+
+                                content = delta.get("content", "")
+                                if content:
+                                    full_chunks.append(content)
+                                    yield {"type": "content", "content": content}
+
+                                tc_deltas = delta.get("tool_calls")
+                                if tc_deltas:
+                                    for tc_delta in tc_deltas:
+                                        idx = tc_delta.get("index", 0)
+                                        if idx not in tool_calls_acc:
+                                            tool_calls_acc[idx] = {
+                                                "id": tc_delta.get("id", ""),
+                                                "name": "",
+                                                "args_str": "",
+                                            }
+                                        acc = tool_calls_acc[idx]
+                                        fn_delta = tc_delta.get("function", {})
+                                        if fn_delta.get("name"):
+                                            acc["name"] = fn_delta["name"]
+                                        if fn_delta.get("arguments"):
+                                            acc["args_str"] += fn_delta["arguments"]
+                                        if tc_delta.get("id"):
+                                            acc["id"] = tc_delta["id"]
+
+                            except json.JSONDecodeError:
+                                continue
+
+                if usage_info:
+                    yield {"type": "usage", "usage": usage_info}
+
+                full_content = "".join(full_chunks)
+
+                if tool_calls_acc:
+                    assistant_msg = {"role": "assistant", "content": full_content or None}
+                    assistant_msg["tool_calls"] = [
+                        {
+                            "id": tool_calls_acc[i]["id"],
+                            "type": "function",
+                            "function": {
+                                "name": tool_calls_acc[i]["name"],
+                                "arguments": tool_calls_acc[i]["args_str"],
+                            },
+                        }
+                        for i in sorted(tool_calls_acc.keys())
+                    ]
+                    messages.append(assistant_msg)
+
+                    tool_call_list = [
+                        {
+                            "id": tool_calls_acc[i]["id"],
+                            "function": {
+                                "name": tool_calls_acc[i]["name"],
+                                "arguments": tool_calls_acc[i]["args_str"],
+                            },
+                        }
+                        for i in sorted(tool_calls_acc.keys())
+                    ]
+
+                    if self.enable_concurrent_tools and len(tool_call_list) > 1:
+                        tool_results = _execute_tools_concurrent(
+                            tool_call_list, _dispatch, executor=self._tool_pool,
+                        )
+                    else:
+                        tool_results = []
+                        for tc in tool_call_list:
+                            fn_name = tc["function"]["name"]
+                            try:
+                                fn_args = json.loads(tc["function"].get("arguments", "{}"))
+                            except json.JSONDecodeError:
+                                fn_args = {}
+                            result = _dispatch(fn_name, fn_args)
+                            tool_results.append((tc, result))
+
+                    for tc, result in tool_results:
+                        fn_name = tc["function"]["name"]
+                        try:
+                            fn_args = json.loads(tc["function"].get("arguments", "{}"))
+                        except json.JSONDecodeError:
+                            fn_args = {}
+
+                        yield {"type": "tool_call", "name": fn_name, "args": fn_args}
+
+                        if self.enable_tool_truncation:
+                            result = _truncate_tool_result(result)
+
+                        yield {"type": "tool_result", "name": fn_name, "result": result}
+
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc["id"],
+                            "content": result,
+                        })
+                    empty_response_retries = 0
+                    continue
+
+                else:
+                    if not full_content or not full_content.strip():
+                        if empty_response_retries < max_empty_retries:
+                            empty_response_retries += 1
+                            messages.append({"role": "assistant", "content": ""})
+                            messages.append({
+                                "role": "user",
+                                "content": "You returned an empty response. Please continue.",
+                            })
+                            continue
+                        else:
+                            break
+                    break
+
+            except Exception as e:
+                yield {"type": "error", "message": str(e)}
                 break
 
     @property

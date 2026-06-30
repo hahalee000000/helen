@@ -16,6 +16,7 @@ The mixin expects the host class (Interpreter) to provide:
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from helen.core.ast import (
@@ -30,6 +31,9 @@ from helen.core.errors import ErrorCode
 from helen.interpreter.exceptions import HelenRuntimeError
 from helen.runtime.history import Message as HistoryMessage
 from helen.runtime.observability import LLMAuditEntry
+
+# Precompiled regex for prompt template rendering (avoids re.compile on every call)
+_PROMPT_VAR_RE = __import__('re').compile(r'\{\{(.+?)\}\}')
 
 
 class LlmMixin:
@@ -47,6 +51,10 @@ class LlmMixin:
     _current_agent: AgentDeclNode | None
     _history: list[HistoryMessage]
     _history_manager: Any
+
+    # Skill index cache (avoid rebuilding on every LLM call)
+    _skill_index_cache: str | None = None
+    _skill_index_mtime: float = 0.0
 
     # Note: _execute_stmts and _stringify are provided by the host class.
     # They are called via self but not declared here to avoid type conflicts.
@@ -683,14 +691,39 @@ class LlmMixin:
 
         Scans skill directories and formats as <available_skills> XML block.
         Returns empty string if no skills found.
+
+        Caching: uses max mtime across all skill base directories to detect
+        changes. Only rebuilds when skills are added/removed/modified.
         """
+        # Compute max mtime across all skill base directories
+        from helen.runtime.config import get_skill_dirs
+        try:
+            max_mtime = 0.0
+            for base in get_skill_dirs():
+                base_str = str(base)
+                if os.path.exists(base_str):
+                    for root, dirs, files in os.walk(base_str):
+                        if "SKILL.md" in files:
+                            skill_md = os.path.join(root, "SKILL.md")
+                            mtime = os.path.getmtime(skill_md)
+                            if mtime > max_mtime:
+                                max_mtime = mtime
+        except Exception:
+            max_mtime = 0.0
+
+        # Return cached index if mtime hasn't changed
+        if max_mtime == self._skill_index_mtime and self._skill_index_cache is not None:
+            return self._skill_index_cache
+
+        # Rebuild the index
         from helen.runtime import HelenHermesRuntime
 
         try:
-            # Create a temporary runtime instance to list skills
             runtime = HelenHermesRuntime()
             skills = runtime.list_skills()
             if not skills:
+                self._skill_index_cache = ""
+                self._skill_index_mtime = max_mtime
                 return ""
 
             # Group by category
@@ -713,9 +746,14 @@ class LlmMixin:
                     lines.append(f"    - {s.name}: {desc}")
 
             lines.append("</available_skills>")
-            return "\n".join(lines)
+            result = "\n".join(lines)
+            self._skill_index_cache = result
+            self._skill_index_mtime = max_mtime
+            return result
         except Exception:
             # If skill listing fails, silently continue without skills
+            self._skill_index_cache = ""
+            self._skill_index_mtime = max_mtime
             return ""
 
     def _render_prompt_template(self: Any, template: str) -> str:
@@ -723,8 +761,9 @@ class LlmMixin:
 
         Supports nested attribute access like {{settings.model}}.
         Single-pass rendering: rendered results are not re-rendered.
+        Uses precompiled regex (module-level _PROMPT_VAR_RE) to avoid
+        re-compilation on every call.
         """
-        import re
 
         def replace_var(match):
             var_path = match.group(1).strip()
@@ -742,7 +781,7 @@ class LlmMixin:
             if value is None:
                 return match.group(0)  # Keep original if not found
             return str(value)
-        return re.sub(r"\{\{(.+?)\}\}", replace_var, template)
+        return _PROMPT_VAR_RE.sub(replace_var, template)
 
     def _get_rendered_agent_prompt(self: Any) -> str | None:
         """Get the current agent's prompt field, rendered with environment variables.
