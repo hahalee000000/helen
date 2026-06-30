@@ -985,7 +985,7 @@ class TestVisitMethods:
         """DeclarationNode visit returns None."""
         decl = DeclarationNode(
             description=None, model=None, tools=None,
-            sub_agents=None, memory=None, temperature=None, max_turns=None,
+            memory=None, temperature=None, max_turns=None,
             span=_span(),
         )
         interp = Interpreter(ErrorReporter())

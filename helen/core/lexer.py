@@ -4,7 +4,7 @@ Implements a maximal-munch lexical analyser that converts source text
 into a stream of ``Token`` objects.  Handles:
 
 - Single- and multi-character operators
-- Keywords (including hyphenated keywords like ``sub-agents``, ``max-turns``)
+- Keywords (including hyphenated keywords like ``max-turns``)
 - Integer, floating-point, and exponential number literals
 - Single-quoted strings with escape sequences
 - Triple-quoted multi-line strings

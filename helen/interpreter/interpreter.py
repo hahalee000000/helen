@@ -319,7 +319,7 @@ class Interpreter(LlmMixin, Visitor[object]):
         """Evaluate a binary operation."""
         op = node.operator.type
 
-        # Assignment is special: do NOT evaluate the left-hand side
+        # Assignment: handle VariableNode, IndexNode, and AccessNode targets
         if op == TokenType.ASSIGN:
             right = node.right.accept(self)
             if isinstance(node.left, VariableNode):
@@ -329,6 +329,29 @@ class Interpreter(LlmMixin, Visitor[object]):
                     self.environment.assign(node.left.name, right)
                 except NameError:
                     self._runtime_error(node.span, f"Undefined variable '{node.left.name}'")
+                    return None
+                return right
+            if isinstance(node.left, IndexNode):
+                # arr[i] = value
+                target = node.left.target.accept(self)
+                index = node.left.index.accept(self)
+                try:
+                    target[index] = right
+                except (TypeError, IndexError, KeyError) as e:
+                    self._runtime_error(node.span, str(e))
+                    return None
+                return right
+            if isinstance(node.left, AccessNode):
+                # obj.field = value
+                target = node.left.target.accept(self)
+                prop = node.left.property
+                try:
+                    if isinstance(target, dict):
+                        target[prop] = right
+                    else:
+                        setattr(target, prop, right)
+                except (TypeError, AttributeError) as e:
+                    self._runtime_error(node.span, str(e))
                     return None
                 return right
             self._runtime_error(node.span, "Invalid assignment target")

@@ -80,11 +80,10 @@ class TokenType(Enum):
     DESCRIPTION = auto()
     MODEL = auto()
     TOOLS = auto()
-    SUB_AGENTS = auto()
-    MEMORY = auto()
+    STREAMING = auto()
     TEMPERATURE = auto()
     MAX_TURNS = auto()
-    STREAMING = auto()
+    MEMORY = auto()
     PROMPT = auto()
     LLM = auto()
     IMPORT = auto()
@@ -97,7 +96,6 @@ class TokenType(Enum):
     BREAK = auto()
     CONTINUE = auto()
     RETURN = auto()
-    CALL = auto()
     AWAIT = auto()
     ASYNC = auto()
     MATCH = auto()
@@ -135,11 +133,9 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "description": TokenType.DESCRIPTION,
     "model": TokenType.MODEL,
     "tools": TokenType.TOOLS,
-    "sub-agents": TokenType.SUB_AGENTS,
-    # "memory" removed from reserved words (v1.6) — now context keyword in agent blocks
+    "streaming": TokenType.STREAMING,
     "temperature": TokenType.TEMPERATURE,
     "max-turns": TokenType.MAX_TURNS,
-    "streaming": TokenType.STREAMING,
     "prompt": TokenType.PROMPT,
     "llm": TokenType.LLM,
     "import": TokenType.IMPORT,
@@ -152,7 +148,6 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "break": TokenType.BREAK,
     "continue": TokenType.CONTINUE,
     "return": TokenType.RETURN,
-    "call": TokenType.CALL,
     "await": TokenType.AWAIT,
     "async": TokenType.ASYNC,
     "match": TokenType.MATCH,
@@ -225,7 +220,6 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "作为": TokenType.AS,
     "协议": TokenType.PROTOCOL,
     "实现": TokenType.IMPL,
-    "调用": TokenType.CALL,
     "分支": TokenType.BRANCH,
     # v1.10: shared keyword
     "shared": TokenType.SHARED,

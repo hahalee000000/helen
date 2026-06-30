@@ -82,7 +82,6 @@ class TestTokenType:
             "DESCRIPTION",
             "MODEL",
             "TOOLS",
-            "SUB_AGENTS",
             "MEMORY",
             "TEMPERATURE",
             "MAX_TURNS",
@@ -98,7 +97,6 @@ class TestTokenType:
             "BREAK",
             "CONTINUE",
             "RETURN",
-            "CALL",
             "AWAIT",
             "ASYNC",
             "MATCH",
@@ -139,7 +137,7 @@ class TestKeywords:
     def test_keyword_count(self):
         """Test that the keyword map contains the expected number of entries."""
         kw = keywords()
-        assert len(kw) == 91  # 46 English + 45 Chinese keywords
+        assert len(kw) == 88  # 44 English + 44 Chinese keywords
 
     def test_all_keywords_map_to_token_types(self) -> None:
         """Every keyword value should be a TokenType member."""
@@ -157,7 +155,6 @@ class TestKeywords:
         assert kw["true"] == TokenType.TRUE
         assert kw["false"] == TokenType.FALSE
         assert kw["null"] == TokenType.NULL_KW
-        assert kw["sub-agents"] == TokenType.SUB_AGENTS
         assert kw["max-turns"] == TokenType.MAX_TURNS
 
     def test_immutability(self) -> None:

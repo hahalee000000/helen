@@ -63,8 +63,6 @@ class TestMemoryInAgentDeclaration:
             description=None,
             model=None,
             tools=None,
-
-            sub_agents=None,
             memory=_lit("./memory/data.json"),
             temperature=None,
             max_turns=None,
@@ -78,8 +76,6 @@ class TestMemoryInAgentDeclaration:
             description=None,
             model=None,
             tools=None,
-
-            sub_agents=None,
             memory=_lit("vector://knowledge-base"),
             temperature=None,
             max_turns=None,

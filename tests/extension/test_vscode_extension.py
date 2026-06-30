@@ -85,7 +85,7 @@ class TestKeywordCoverage:
 
     # All keywords from helen.core.tokens._KEYWORD_MAP
     HELLEN_KEYWORDS = {
-        "agent", "description", "model", "tools", "skills", "sub-agents",
+        "agent", "description", "model", "tools", "skills",
         "temperature", "max-turns", "prompt", "llm", "import",
         "let", "const", "if", "else", "for", "while", "break", "continue",
         "return", "call", "await", "async", "match", "case", "branch",

@@ -94,7 +94,7 @@ class Location:
 HELLEN_KEYWORDS = [
     # Agent keywords
     "agent", "main", "prompt", "description", "model", "temperature",
-    "max-turns", "tools", "sub-agents", "streaming",
+    "max-turns", "tools", "streaming",
     # Variable declarations
     "let", "const",
     # Control flow

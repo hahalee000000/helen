@@ -747,7 +747,7 @@ class Parser:
             elif self._check(
                 TokenType.DESCRIPTION, TokenType.MODEL, TokenType.TOOLS,
                 TokenType.MEMORY, TokenType.TEMPERATURE,
-                TokenType.MAX_TURNS, TokenType.SUB_AGENTS, TokenType.STREAMING,
+                TokenType.MAX_TURNS, TokenType.STREAMING,
             ) or self._is_context_keyword("memory"):
                 declarations.append(self._declaration_block())
             else:
@@ -807,7 +807,7 @@ class Parser:
                 value=value_tok.type == TokenType.TRUE, span=value_tok.span
             )
         elif self._check(TokenType.LEFT_BRACKET):
-            # tools/skills/sub_agents list: [ "a", "b" ]
+            # tools/skills list: [ "a", "b" ]
             self._advance()
             items: list[str] = []
             while not self._check(TokenType.RIGHT_BRACKET, TokenType.EOF):
@@ -833,7 +833,6 @@ class Parser:
             TokenType.DESCRIPTION: "description",
             TokenType.MODEL: "model",
             TokenType.TOOLS: "tools",
-            TokenType.SUB_AGENTS: "sub_agents",
             TokenType.MEMORY: "memory",
             TokenType.TEMPERATURE: "temperature",
             TokenType.MAX_TURNS: "max_turns",
@@ -849,7 +848,6 @@ class Parser:
             description=value if field_name == "description" else None,
             model=value if field_name == "model" else None,
             tools=value if field_name == "tools" else None,
-            sub_agents=value if field_name == "sub_agents" else None,
             memory=value if field_name == "memory" else None,
             temperature=value if field_name == "temperature" else None,
             max_turns=value if field_name == "max_turns" else None,
@@ -922,7 +920,7 @@ class Parser:
                               TokenType.PROMPT, TokenType.MAIN, TokenType.FN,
                               TokenType.DESCRIPTION, TokenType.MODEL, TokenType.TOOLS,
                               TokenType.MEMORY, TokenType.TEMPERATURE,
-                              TokenType.MAX_TURNS, TokenType.SUB_AGENTS):
+                              TokenType.MAX_TURNS):
             # Also check for context keyword "memory" (v1.6)
             if self._is_context_keyword("memory"):
                 break

@@ -622,7 +622,6 @@ class DeclarationNode(StatementNode):
     description: str | None
     model: str | None
     tools: list[str] | None
-    sub_agents: list[str] | None
     memory: str | None
     temperature: float | None
     max_turns: int | None

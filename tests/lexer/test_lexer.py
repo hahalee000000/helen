@@ -74,9 +74,9 @@ class TestKeywords:
         """All 40 keywords should be correctly identified."""
         all_kws = [
             "agent", "description", "model", "tools",
-            "sub-agents", "temperature", "max-turns",
+            "temperature", "max-turns",
             "prompt", "llm", "import", "let", "const", "if", "else",
-            "for", "while", "break", "continue", "return", "call",
+            "for", "while", "break", "continue", "return",
             "await", "async", "match", "case", "branch",
             "default", "act", "try", "catch", "finally",
             "fn", "as", "in", "functions", "main", "true", "false",
@@ -104,13 +104,6 @@ class TestKeywords:
         assert tokens[0].type == TokenType.IF
         assert tokens[1].type == TokenType.LEFT_PAREN
         assert tokens[2].type == TokenType.EOF
-
-    def test_hyphen_keyword_sub_agents(self) -> None:
-        """'sub-agents' should be recognised as the SUB_AGENTS keyword."""
-        tokens = _scan("sub-agents")
-        assert tokens[0].type == TokenType.SUB_AGENTS
-        assert tokens[0].lexeme == "sub-agents"
-        assert tokens[1].type == TokenType.EOF
 
     def test_hyphen_keyword_max_turns(self) -> None:
         """'max-turns' should be recognised as the MAX_TURNS keyword."""
