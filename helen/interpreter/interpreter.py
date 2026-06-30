@@ -334,6 +334,21 @@ class Interpreter(LlmMixin, Visitor[object]):
             self._runtime_error(node.span, "Invalid assignment target")
             return None
 
+        # Short-circuit evaluation for AND/OR (evaluate left first, skip right if result is determined)
+        if op == TokenType.AND:
+            left = node.left.accept(self)
+            if not self._truthy(left):
+                return False
+            right = node.right.accept(self)
+            return self._truthy(right)
+
+        if op == TokenType.OR:
+            left = node.left.accept(self)
+            if self._truthy(left):
+                return True
+            right = node.right.accept(self)
+            return self._truthy(right)
+
         left = node.left.accept(self)
         right = node.right.accept(self)
 
@@ -373,10 +388,6 @@ class Interpreter(LlmMixin, Visitor[object]):
         if op == TokenType.LESS_EQUAL:
             self._check_number(node.operator, left, right)
             return left <= right
-        if op == TokenType.AND:
-            return self._truthy(left) and self._truthy(right)
-        if op == TokenType.OR:
-            return self._truthy(left) or self._truthy(right)
 
         self._runtime_error(node.span, f"Unknown operator '{node.operator.lexeme}'")
         return None
