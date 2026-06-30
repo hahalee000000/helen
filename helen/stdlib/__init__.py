@@ -444,7 +444,11 @@ def _ceil(value: float) -> int:
 
 
 def _input(prompt: str = "") -> str:
-    """Read a line of input from the user."""
+    """Read a line of input from the user with readline support."""
+    try:
+        import readline  # noqa: F401  # enables cursor movement, history, etc.
+    except ImportError:
+        pass  # Windows may not have readline
     return __builtins__["input"](prompt) if hasattr(__builtins__, "get") else input(prompt)
 
 
