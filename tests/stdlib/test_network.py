@@ -146,17 +146,18 @@ class TestHttpDownload:
         """Test downloading a file."""
         from helen.stdlib import stdlib
         http_download = stdlib.lookup("http_download").fn
-        
+
         mock_response = Mock()
-        mock_response.read.return_value = b"File content"
-        
+        # Use side_effect to return data first, then empty bytes to exit loop
+        mock_response.read.side_effect = [b"File content", b""]
+
         with patch("urllib.request.urlopen") as mock_urlopen:
             mock_urlopen.return_value.__enter__ = Mock(return_value=mock_response)
             mock_urlopen.return_value.__exit__ = Mock(return_value=False)
-            
+
             with patch("builtins.open", create=True) as mock_open:
                 result = http_download("https://example.com/file.txt", "/tmp/test.txt")
-                
+
                 assert result == "/tmp/test.txt"
                 mock_open.assert_called_once()
 

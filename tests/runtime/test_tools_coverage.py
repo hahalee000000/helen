@@ -312,7 +312,7 @@ class TestShellExec:
         assert result["exit_code"] != 0
 
     def test_command_output_truncated(self):
-        result = json.loads(_shell_exec("yes | head -n 2000"))
+        result = json.loads(_shell_exec("yes | head -n 2000", shell=True))
         if "output" in result:
             assert len(result["output"]) <= 8020  # 8000 + truncation marker
 

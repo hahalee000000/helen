@@ -7,6 +7,7 @@ This module tests:
 4. Match statement supports range patterns and guard conditions
 """
 import pytest
+from typing import Tuple, List
 
 from helen.core.lexer import Scanner
 from helen.core.parser import Parser
@@ -14,7 +15,7 @@ from helen.core.errors import ErrorReporter
 from helen.interpreter.interpreter import Interpreter
 
 
-def run_helen(source: str) -> tuple[list[str], list[str]]:
+def run_helen(source: str) -> Tuple[List[str], List[str]]:
     """Run Helen source code and return (stdout_lines, errors)."""
     import io
     import sys

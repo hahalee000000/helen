@@ -154,7 +154,7 @@ class TestChineseKeywordsLexer:
         assert tokens[8].lexeme == "主"
 
     def test_other_keywords(self):
-        source = "导入 作为 协议 实现 调用 分支"
+        source = "导入 作为 协议 实现 分支 共享"
         tokens = self._scan(source)
         assert tokens[0].type == TokenType.IMPORT
         assert tokens[0].lexeme == "导入"
@@ -164,10 +164,10 @@ class TestChineseKeywordsLexer:
         assert tokens[2].lexeme == "协议"
         assert tokens[3].type == TokenType.IMPL
         assert tokens[3].lexeme == "实现"
-        assert tokens[4].type == TokenType.CALL
-        assert tokens[4].lexeme == "调用"
-        assert tokens[5].type == TokenType.BRANCH
-        assert tokens[5].lexeme == "分支"
+        assert tokens[4].type == TokenType.BRANCH
+        assert tokens[4].lexeme == "分支"
+        assert tokens[5].type == TokenType.SHARED
+        assert tokens[5].lexeme == "共享"
 
     def test_chinese_identifiers(self):
         """Chinese characters not in keyword map should be IDENTIFIER."""
@@ -195,11 +195,11 @@ class TestChineseKeywordsLexer:
         assert return_token.lexeme == "返回"
 
     def test_all_44_chinese_keywords_registered(self):
-        """Verify exactly 45 Chinese keywords are in the keyword map (v1.10 added 共享)."""
+        """Verify exactly 44 Chinese keywords are in the keyword map (v1.10 added 共享)."""
         kw = keywords()
         chinese = {k: v for k, v in kw.items()
                    if any('\u4e00' <= c <= '\u9fff' for c in k)}
-        assert len(chinese) == 45, f"Expected 45, got {len(chinese)}: {sorted(chinese.keys())}"
+        assert len(chinese) == 44, f"Expected 44, got {len(chinese)}: {sorted(chinese.keys())}"
 
     def test_no_lexer_errors(self):
         """Full Chinese program should produce zero lexer errors."""
