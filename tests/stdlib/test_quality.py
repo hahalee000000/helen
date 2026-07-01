@@ -172,6 +172,70 @@ fn test() {
 
         assert metrics.dead_code_lines >= 1
 
+    def test_protocol_declarations_no_crash(self):
+        """Regression: protocol method declarations (no body) must not crash
+        the analyzer with IndexError. See helenagent issue #3."""
+        source = """
+protocol ContractorContract {
+    fn design_contract(requirement: str, context: str): map
+}
+
+protocol ChatAgentContract {
+    fn chat(user_input: str): str
+}
+
+protocol ConversationManagerContract {
+    fn add_message(session_id: str, role: str, content: str): map
+    fn get_history(session_id: str, max_turns: int): list
+    fn clear_history(session_id: str): map
+    fn format_history(session_id: str, max_turns: int): str
+}
+"""
+        analyzer = HelenCodeAnalyzer(source, "contracts.helen")
+        metrics = analyzer.analyze()
+
+        # Each protocol method is treated as a 1-line "function"
+        assert metrics.function_count == 6
+        # All should be 1-line declarations
+        for fn in metrics.functions:
+            assert fn.line_count == 1
+            assert fn.complexity == 1  # no branches in a signature
+
+    def test_mixed_functions_and_protocols(self):
+        """Analyzer handles files mixing real functions and protocol declarations."""
+        source = """
+fn helper(x: int): int {
+    if x > 0 {
+        return x * 2
+    }
+    return 0
+}
+
+protocol Service {
+    fn call(arg: str): str
+}
+
+fn another(): str {
+    return "hi"
+}
+"""
+        analyzer = HelenCodeAnalyzer(source, "mixed.helen")
+        metrics = analyzer.analyze()
+
+        assert metrics.function_count == 3
+        # helper: 5 lines, complexity 2 (base + if)
+        helper = metrics.functions[0]
+        assert helper.name == "helper"
+        assert helper.complexity == 2
+        # protocol method: 1 line, complexity 1
+        call_fn = metrics.functions[1]
+        assert call_fn.name == "call"
+        assert call_fn.line_count == 1
+        # another: 3 lines, complexity 1
+        another_fn = metrics.functions[2]
+        assert another_fn.name == "another"
+        assert another_fn.complexity == 1
+
 
 class TestSecurityAnalyzer:
     """Tests for SecurityAnalyzer."""

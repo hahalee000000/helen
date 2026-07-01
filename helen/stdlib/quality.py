@@ -221,25 +221,40 @@ class HelenCodeAnalyzer:
                 params_text, param_end_line = self._extract_params(i)
                 param_count = self._count_params(params_text)
 
-                # Find function end (matching brace)
+                # Find function end (matching brace).
+                # Start scanning for the opening brace AFTER the signature
+                # (the `fn name(...)` possibly with a return type annotation)
+                # ends. Bounding the scan to a few lines past the signature
+                # prevents crossing into subsequent sibling declarations
+                # (e.g. protocol methods on consecutive lines).
                 start_line = i
-                brace_count = 0
-                j = i
+                sig_end = max(param_end_line, start_line)
+                search_limit = min(sig_end + 3, len(self.lines))
 
-                # Find opening brace
-                while j < len(self.lines):
+                brace_count = 0
+                j = start_line
+                while j < search_limit:
                     brace_count += self._count_braces_outside_strings(self.lines[j])
                     if brace_count > 0:
                         break
                     j += 1
 
-                # Now find matching closing brace
-                while j < len(self.lines) and brace_count > 0:
-                    j += 1
-                    if j < len(self.lines):
-                        brace_count += self._count_braces_outside_strings(self.lines[j])
+                if brace_count <= 0:
+                    # No opening brace found near the signature — this is a
+                    # declaration without a body (e.g. protocol method
+                    # signature). Treat the single declaration line as the
+                    # whole "function".
+                    end_line = start_line
+                    j = start_line  # advance past this line only
+                else:
+                    # Now find matching closing brace
+                    while j < len(self.lines) and brace_count > 0:
+                        j += 1
+                        if j < len(self.lines):
+                            brace_count += self._count_braces_outside_strings(self.lines[j])
 
-                end_line = j
+                    # Clamp to valid range (handles unterminated function body)
+                    end_line = min(j, len(self.lines) - 1)
                 line_count = end_line - start_line + 1
 
                 # Check for docstring
