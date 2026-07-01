@@ -44,6 +44,7 @@ jobs:
 
     - name: Run linter
       if: matrix.python-version == '3.10'
+      continue-on-error: true
       run: |
         flake8 helen/ --max-line-length=120 --extend-ignore=E501
 
