@@ -352,7 +352,34 @@ class HelenCodeAnalyzer:
         return count
 
     def _has_docstring(self, start: int, end: int) -> bool:
-        """Check if function has a docstring (comment after opening brace)."""
+        """Check if function has a docstring.
+
+        Recognizes two conventional placements (both count):
+        1. A block comment ``/** ... */`` or consecutive ``//`` line comments
+           immediately **before** the function definition (industry convention:
+           Javadoc / JSDoc / Doxygen style).
+        2. A ``//`` or ``/* */`` comment as the first non-blank line(s) inside
+           the function body (legacy Helen convention — kept for backward
+           compatibility).
+        """
+        # ── Check BEFORE the function definition (industry convention) ──
+        # Walk backward from the line above `start`, skipping blank lines.
+        # If we hit a block-comment end (`*/`) or a `//` line, it counts.
+        j = start - 1
+        # Skip blank lines between the comment and the `fn` line
+        while j >= 0 and self.lines[j].strip() == "":
+            j -= 1
+
+        if j >= 0:
+            line_above = self.lines[j].strip()
+            # Case A: line above ends a block comment (`*/` or `/** ... */`)
+            if line_above.endswith("*/") or line_above.startswith("/*"):
+                return True
+            # Case B: consecutive `//` line comments immediately before fn
+            if line_above.startswith("//"):
+                return True
+
+        # ── Check INSIDE the function body (legacy Helen convention) ──
         for i in range(start + 1, min(start + 4, end + 1)):
             if i < len(self.lines):
                 stripped = self.lines[i].strip()
@@ -462,11 +489,15 @@ class SecurityAnalyzer:
         (r'\beval\s*\(', 'high', 'eval()', 'eval() can execute arbitrary code'),
         (r'\bexec\s*\(', 'high', 'exec()', 'exec() can execute arbitrary code'),
         (r'shell\s*=\s*true', 'high', 'shell=true', 'shell=true enables command injection'),
-        (r'shell_exec\s*\([^)]*\+', 'high', 'shell_exec concat', 'shell_exec with concatenated input allows command injection'),
         (r'\bimport\s+["\']os["\']', 'high', 'FFI os import', 'FFI import of os module enables system access'),
         (r'\bimport\s+["\']subprocess["\']', 'high', 'FFI subprocess import', 'FFI import of subprocess enables command execution'),
 
         # Medium severity
+        # NOTE: `shell_exec` with concatenation is MEDIUM (same as assigning
+        # the concatenated string to a variable first and then calling
+        # `shell_exec(var)`). Both forms carry the same real risk; the tool
+        # should not penalize one over the other. See helenagent issue #6.
+        (r'shell_exec\s*\([^)]*\+', 'medium', 'shell_exec concat', 'shell_exec with concatenated input — validate arguments to prevent command injection'),
         (r'shell_exec\s*\(', 'medium', 'shell_exec()', 'shell_exec can execute system commands'),
         (r'\bopen\s*\([^)]*["\']w', 'medium', 'file write', 'file write without path validation'),
         (r'http_get\s*\([^)]*\+', 'medium', 'URL concatenation', 'URL built from user input may allow SSRF'),
@@ -479,29 +510,291 @@ class SecurityAnalyzer:
         (r'llm\s+act\b', 'low', 'LLM act', 'LLM output should be validated before use in critical operations'),
     ]
 
+    # Patterns that indicate safety measures are in place. If any of these
+    # appear in the surrounding context (enclosing function or nearby lines)
+    # of a `shell_exec` / `open` / path-concat call, the issue is downgraded
+    # from MEDIUM → LOW. Helen is an AI-native language where shell_exec is
+    # a primary tool; penalizing every call equally would produce noise and
+    # unfairly punish code that already validates inputs / paths.
+    SAFETY_PATTERNS = re.compile(
+        r'|'.join([
+            # Path validation / containment
+            r'\b(is_file|is_dir|exists|file_exists|dir_exists)\s*\(',
+            r'\b(validate_path|path_validate|safe_path|allowed_path|check_path)\s*\(',
+            r'\b(resolve|realpath|normalize|canonicalize)\s*\(',
+            r'\b(allowed_dir|base_dir|sandbox|chroot|allowed_root)\b',
+            r'\b(starts_with|startswith|endswith|contains)\s*\([^)]*(dir|path|root|base)',
+            # Input / argument sanitization
+            r'\b(sanitize|escape|shlex\.quote|shlex_quote|shell_quote)\s*\(',
+            r'\b(validate|check|verify|assert_safe)\s*\([^)]*(input|arg|param|cmd|command|path)',
+            # Command / argument whitelisting
+            r'\b(whitelist|allowlist|allowed_commands|safe_commands|permitted)\b',
+            # Try/catch around the call (error handling as partial mitigation)
+            r'\btry\s*\{',
+        ]),
+        re.IGNORECASE,
+    )
+
+    # Names of the patterns whose severity can be downgraded when safety
+    # measures are detected. Other patterns (high-severity ones, eval/exec,
+    # FFI os imports, etc.) are NOT downgraded — they represent risks that
+    # surrounding validation cannot fully mitigate.
+    DOWNGRADABLE_PATTERNS = frozenset({
+        'shell_exec concat',
+        'shell_exec()',
+        'file write',
+        'URL concatenation',
+        'path concatenation',
+    })
+
     def __init__(self, source: str) -> None:
         self.source = source
         self.lines = source.splitlines()
 
     def analyze(self) -> list[SecurityIssue]:
-        """Find security issues."""
+        """Find security issues.
+
+        Skips content inside:
+        - single-line comments (``// ...``)
+        - multi-line strings (``triple-quoted``) — Helen v1.8.1+
+        - block comments (``/* ... */``)
+
+        For downgradable patterns (shell_exec, file write, URL/path
+        concatenation), the analyzer looks for safety measures in the
+        surrounding context — if validation / sanitization / containment is
+        detected, the issue is downgraded from MEDIUM → LOW instead of
+        producing a false positive on already-hardened code.
+        """
         issues = []
+        in_multiline_string = False
+        in_block_comment = False
 
         for i, line in enumerate(self.lines, 1):
-            # Skip comments
+            stripped = line.strip()
+
+            # ── Track multi-line block comments /* ... */ ──
+            if in_block_comment:
+                if '*/' in line:
+                    in_block_comment = False
+                continue
+            if stripped.startswith('/*'):
+                if '*/' not in line[2:]:
+                    in_block_comment = True
+                continue
+
+            # ── Track multi-line strings """ ... """ ──
+            # Count the number of `"""` occurrences on this line to
+            # correctly handle open/close on the same line.
+            if in_multiline_string:
+                # Look for the closing `"""`
+                close_idx = line.find('"""')
+                if close_idx != -1:
+                    in_multiline_string = False
+                    # The rest of the line after the closing `"""` is code.
+                    # Replace the consumed part so the code below only
+                    # analyzes the real code portion.
+                    line = line[close_idx + 3:]
+                    # Fall through to analyze the remainder as code
+                else:
+                    continue  # entire line is inside a multi-line string
+
+            # Count `"""` on the remaining line to detect opening
+            # (also catches open+close on the same line).
+            triple_count = line.count('"""')
+            if triple_count % 2 == 1:
+                # Odd number of `"""` → opens (or opens AND closes, but
+                # if it closes on the same line we need to strip the tail).
+                open_idx = line.find('"""')
+                # If it also closes on this line, strip the quoted region
+                close_idx = line.find('"""', open_idx + 3)
+                if close_idx != -1:
+                    # Remove the quoted region and keep scanning for more
+                    line = line[:open_idx] + line[close_idx + 3:]
+                    # There may be more `"""` pairs — keep stripping
+                    while '"""' in line:
+                        o = line.find('"""')
+                        c = line.find('"""', o + 3)
+                        if c != -1:
+                            line = line[:o] + line[c + 3:]
+                        else:
+                            in_multiline_string = True
+                            line = line[:o]
+                            break
+                else:
+                    in_multiline_string = True
+                    line = line[:open_idx]
+
+            # Skip single-line comments
             if line.strip().startswith('//'):
                 continue
 
+            # Strip inline comments for pattern matching
+            code_part = self._strip_inline_comment(line)
+
             for pattern, severity, name, message in self.DANGEROUS_PATTERNS:
-                if re.search(pattern, line, re.IGNORECASE):
+                if re.search(pattern, code_part, re.IGNORECASE):
+                    effective_severity = severity
+                    # Downgrade to LOW when safety measures are detected in
+                    # the surrounding context. This prevents the analyzer
+                    # from flagging every shell_exec call in AI-native Helen
+                    # programs that already validate / sanitize inputs.
+                    if (
+                        severity == 'medium'
+                        and name in self.DOWNGRADABLE_PATTERNS
+                        and self._has_safety_context(i - 1)
+                    ):
+                        effective_severity = 'low'
+                        message = message + ' (downgraded: safety measures detected nearby)'
                     issues.append(SecurityIssue(
                         line=i,
-                        severity=severity,
+                        severity=effective_severity,
                         pattern=name,
                         message=message,
                     ))
 
         return issues
+
+    def _has_safety_context(self, line_idx: int, window: int = 15) -> bool:
+        """Return True if safety measures appear near ``line_idx``.
+
+        Searches in scopes that lexically surround the issue, any of which
+        is sufficient:
+
+        1. *Enclosing function / agent block*: the innermost ``fn`` or
+           ``agent`` whose body contains ``line_idx`` — all lines of that
+           block are scanned.
+        2. *Parent agent scope*: if the enclosing block is a ``fn`` nested
+           inside an ``agent``, also scan the agent-level lines between the
+           agent header and the fn header. Whitelists / allowed dirs /
+           validation helpers declared at agent scope protect every method
+           inside it.
+        3. *Linear window (in-block only)*: the ``window`` lines immediately
+           before ``line_idx``, bounded by the enclosing block's start — so
+           top-level calls after a guarded function are NOT falsely
+           downgraded.
+        """
+        # ── 1. Innermost enclosing block ──
+        inner_start = self._find_enclosing_block_start(line_idx)
+        if inner_start is not None:
+            inner_end = self._find_block_end(inner_start)
+            for j in range(inner_start, inner_end + 1):
+                if j == line_idx:
+                    continue
+                if self.SAFETY_PATTERNS.search(self.lines[j]):
+                    return True
+
+            # ── 2. Parent agent scope (when inner is a fn inside agent) ──
+            inner_stripped = self.lines[inner_start].strip()
+            if re.match(r'fn\b', inner_stripped):
+                agent_start = self._find_enclosing_block_start(inner_start - 1)
+                if agent_start is not None:
+                    agent_stripped = self.lines[agent_start].strip()
+                    if re.match(r'agent\b', agent_stripped):
+                        # Scan agent-level lines up to the fn start
+                        for j in range(agent_start, inner_start):
+                            if self.SAFETY_PATTERNS.search(self.lines[j]):
+                                return True
+
+            # ── 3. Linear window within the enclosing block ──
+            lo = max(inner_start, line_idx - window)
+            for j in range(lo, line_idx):
+                if self.SAFETY_PATTERNS.search(self.lines[j]):
+                    return True
+
+        # Top-level calls with no enclosing block: no downgrade.
+        return False
+
+    def _find_enclosing_block_start(self, line_idx: int) -> int | None:
+        """Walk backward from ``line_idx`` to find the enclosing fn/agent.
+
+        Only returns a header if ``line_idx`` actually lies inside its body
+        (between the header line and its matching closing ``}``). A top-level
+        line that merely sits after a function must NOT be considered
+        "enclosed" by that function — otherwise safety patterns inside the
+        function would incorrectly downgrade free-standing calls.
+        """
+        for j in range(line_idx, -1, -1):
+            stripped = self.lines[j].strip()
+            if re.match(r'\b(fn|agent)\b', stripped):
+                block_end = self._find_block_end(j)
+                if j < line_idx <= block_end:
+                    return j
+                # This fn/agent doesn't enclose line_idx; keep searching
+                # upward in case there's a genuinely enclosing outer agent.
+        return None
+
+    def _find_block_end(self, start: int) -> int:
+        """Return the line index of the closing ``}`` for a block opened at
+        ``start``.
+
+        Walks forward counting braces. Falls back to ``start + 50`` if the
+        block is unbalanced (defensive — shouldn't happen on well-formed
+        Helen programs, but the analyzer must not crash).
+        """
+        depth = 0
+        found_open = False
+        for j in range(start, min(start + 200, len(self.lines))):
+            code = self._strip_inline_comment(self.lines[j])
+            # Don't count braces inside strings
+            code = self._strip_strings(code)
+            for ch in code:
+                if ch == '{':
+                    depth += 1
+                    found_open = True
+                elif ch == '}':
+                    depth -= 1
+                    if found_open and depth == 0:
+                        return j
+        # Fallback: conservative upper bound
+        return min(start + 50, len(self.lines) - 1)
+
+    @staticmethod
+    def _strip_strings(line: str) -> str:
+        """Remove string literal contents so braces inside strings aren't
+        counted when tracking block depth."""
+        out = []
+        in_str = False
+        str_char = None
+        i = 0
+        while i < len(line):
+            ch = line[i]
+            if in_str:
+                if ch == '\\' and i + 1 < len(line):
+                    i += 2
+                    continue
+                if ch == str_char:
+                    in_str = False
+            else:
+                if ch in ('"', "'"):
+                    in_str = True
+                    str_char = ch
+                else:
+                    out.append(ch)
+            i += 1
+        return ''.join(out)
+
+    @staticmethod
+    def _strip_inline_comment(line: str) -> str:
+        """Remove inline ``// ...`` from a line, respecting string literals."""
+        in_string = False
+        string_char = None
+        i = 0
+        while i < len(line):
+            ch = line[i]
+            if in_string:
+                if ch == '\\':
+                    i += 2
+                    continue
+                if ch == string_char:
+                    in_string = False
+            else:
+                if ch in ('"', "'"):
+                    in_string = True
+                    string_char = ch
+                elif ch == '/' and i + 1 < len(line) and line[i + 1] == '/':
+                    return line[:i]
+            i += 1
+        return line
 
 
 # ── Quality Scorer ────────────────────────────────────────────
@@ -584,25 +877,60 @@ class QualityScorer:
 
         return max(0.0, min(10.0, score))
 
-    def score_test_coverage(self, file_path: str) -> float:
-        """Score test coverage (15% weight)."""
+    def score_test_coverage(self, file_path: str, source: str = "") -> float:
+        """Score test coverage (15% weight).
+
+        Detection strategy (highest score wins):
+        1. ``// @test-location: <path>`` annotation in source → 8.0
+           (lets agent programs point at external test suites)
+        2. Co-located ``<name>_test.helen`` or ``test_<name>.helen`` → 8.0
+        3. ``tests/`` sub-directory next to the file (any *.helen OR *.py
+           test files) → 6.0
+        4. Parent-level ``tests/`` directory containing *.py files that
+           reference the source file's stem (e.g. ``~/helen/tests/agents/
+           test_helen_programmer.py``) → 7.0
+        5. No tests found → 2.0
+        """
         if not file_path:
             return 5.0  # Unknown
 
-        # Check if test file exists
+        # ── 1. Explicit annotation ──────────────────────────────────
+        if source:
+            m = re.search(r'//\s*@test-location:\s*(\S+)', source)
+            if m:
+                loc = Path(m.group(1)).expanduser()
+                if loc.exists():
+                    return 8.0
+
         path = Path(file_path)
+
+        # ── 2. Co-located test file ─────────────────────────────────
         test_file = path.with_name(path.stem + '_test.helen')
         test_file2 = path.with_name('test_' + path.name)
-
         if test_file.exists() or test_file2.exists():
             return 8.0
 
-        # Check for tests directory
+        # ── 3. tests/ sub-directory next to the file ────────────────
         tests_dir = path.parent / 'tests'
         if tests_dir.exists():
-            test_files = list(tests_dir.glob('*.helen'))
-            if test_files:
+            helen_tests = list(tests_dir.glob('*.helen'))
+            py_tests = list(tests_dir.glob('*.py')) + \
+                        list(tests_dir.glob('test_*.py')) + \
+                        list(tests_dir.glob('*_test.py'))
+            if helen_tests or py_tests:
                 return 6.0
+
+        # ── 4. Parent-level tests/ directory with matching *.py ─────
+        # Walk up at most 3 levels looking for a `tests/` directory that
+        # contains Python test files whose name matches the source stem.
+        stem = path.stem
+        for parent in [path.parent] + list(path.parents)[:3]:
+            candidate = parent / 'tests'
+            if candidate.exists() and candidate.is_dir():
+                # Match any *.py whose filename contains the source stem
+                for py_file in candidate.rglob('*.py'):
+                    if stem in py_file.stem:
+                        return 7.0
 
         return 2.0  # No tests found
 
@@ -777,7 +1105,7 @@ def _quality_score(source: str, file_path: str = "") -> dict[str, Any]:
         architecture=scorer.score_architecture(metrics),
         code_quality=scorer.score_code_quality(metrics),
         security=scorer.score_security(security_issues),
-        test_coverage=scorer.score_test_coverage(file_path),
+        test_coverage=scorer.score_test_coverage(file_path, source=source),
         documentation=scorer.score_documentation(metrics),
         maintainability=scorer.score_maintainability(metrics),
         engineering=scorer.score_engineering(metrics),
@@ -825,7 +1153,7 @@ def _quality_report(source: str, filename: str = "<unknown>", file_path: str = "
         architecture=scorer.score_architecture(metrics),
         code_quality=scorer.score_code_quality(metrics),
         security=scorer.score_security(security_issues),
-        test_coverage=scorer.score_test_coverage(effective_path),
+        test_coverage=scorer.score_test_coverage(effective_path, source=source),
         documentation=scorer.score_documentation(metrics),
         maintainability=scorer.score_maintainability(metrics),
         engineering=scorer.score_engineering(metrics),
