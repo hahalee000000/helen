@@ -1,0 +1,244 @@
+# 语法规范 (Grammar)
+
+> 模块 M2 | `helen/core/parser.py` | 测试: `tests/parser/`
+
+---
+
+## 概述
+
+Helen Parser 使用 **Pratt Parsing**（10 级优先级表）+ 递归下降，将 Token 流转换为 AST。
+
+---
+
+## EBNF 完整语法
+
+### 程序与块
+
+```ebnf
+program       → declaration* main_block?
+declaration   → agent_decl | fn_decl | import_stmt
+main_block    → "main" "{" statement* "}"
+```
+
+### Agent 声明
+
+```ebnf
+agent_decl    → "agent" IDENTIFIER "{" agent_body "}"
+agent_body    → agent_setting* prompt_def? functions_block?
+agent_setting → "description" string
+              | "model" string
+              | "tools" "[" string ("," string)* "]"
+              | "sub-agents" "{" agent_param* "}"
+              | "memory" string
+              | "temperature" NUMBER
+              | "max-turns" NUMBER
+agent_param   → IDENTIFIER ":" type?
+prompt_def    → "prompt" string
+functions_block → "functions" "{" (var_decl | fn_decl)* "}"
+var_decl      → ("let" | "const") IDENTIFIER ("=" expression)?
+```
+
+### 函数声明
+
+```ebnf
+fn_decl       → "fn" IDENTIFIER "(" fn_params? ")" fn_body
+fn_params     → fn_param ("," fn_param)*
+fn_param      → IDENTIFIER (":" type)?
+fn_body       → "{" statement* "}"
+```
+
+### 导入
+
+```ebnf
+import_stmt   → "import" string ("as" IDENTIFIER)?
+```
+
+### 语句
+
+```ebnf
+statement     → var_decl
+              | expr_stmt
+              | if_stmt
+              | for_stmt
+              | while_stmt
+              | match_stmt
+              | try_stmt
+              | throw_stmt
+              | llm_stmt
+              | call_stmt
+              | async_call_stmt
+              | return_stmt
+              | break_stmt
+              | continue_stmt
+
+var_decl      → ("let" | "const") IDENTIFIER ("=" expression)?
+expr_stmt     → expression
+```
+
+### 控制流
+
+```ebnf
+if_stmt       → "if" "(" expression ")" "{" statement* "}" ("else" ("if" expression "{" statement* "}")?)?
+for_stmt      → "for" IDENTIFIER "in" expression "{" statement* "}"
+while_stmt    → "while" "(" expression ")" "{" statement* "}"
+break_stmt    → "break"
+continue_stmt → "continue"
+return_stmt   → "return" expression?
+```
+
+### 模式匹配
+
+```ebnf
+match_stmt    → "match" expression "{" case+ default? "}"
+case          → "case" pattern guard? "{" statement* "}"
+pattern       → expression | range_pattern | wildcard_pattern | variable_pattern | type_pattern
+range_pattern → expression ".." expression
+wildcard_pattern → "_"
+variable_pattern → IDENTIFIER
+type_pattern  → "is" IDENTIFIER IDENTIFIER?
+guard         → "if" expression
+default       → "default" "{" statement* "}"
+```
+
+**v1.8 模式匹配增强**：
+- **通配符模式**: `case _ { }` 匹配任何值（可作为默认分支）
+- **变量绑定**: `case x { }` 绑定匹配值到变量
+- **类型模式**: `case is Type { }` 检查值的类型
+- **类型模式带绑定**: `case is Type name { }` 检查类型并绑定到变量
+
+### 异常处理
+
+```ebnf
+try_stmt      → "try" "{" statement* "}" (catch_clause+ catch_all? | catch_all) finally_block?
+catch_clause  → "catch" type IDENTIFIER "{" statement* "}"
+catch_all     → "catch" "{" statement* "}"
+finally_block → "finally" "{" statement* "}"
+throw_stmt    → "throw" type ("(" expression ")")? ";"?
+```
+
+### LLM 语句
+
+```ebnf
+llm_stmt      → llm_act | llm_if
+
+llm_act       → "llm" "act" act_target act_args? string
+act_target    → IDENTIFIER | expression
+act_args      → "(" named_arg ("," named_arg)* ")"
+named_arg     → IDENTIFIER "=" expression
+
+llm_if        → "llm" "if" expression "{" llm_branch+ "}"
+llm_branch    → "branch" string "{" statement* "}"
+              | "default" "{" statement* "}"
+```
+
+### 调用
+
+```ebnf
+call_stmt     → "call" IDENTIFIER "(" call_args? ")"
+call_args     → expression ("," expression)*
+async_call_stmt → "async" call_stmt
+```
+
+### 表达式（Pratt 11 级优先级）
+
+```ebnf
+expression    → assignment
+
+assignment    → IDENTIFIER "=" assignment | pipe
+pipe          → pipe "|>" equality | equality
+equality      → comparison ("==" | "!=") comparison
+comparison    → term (">" | ">=" | "<" | "<=") term
+term          → factor ("+" | "-") factor
+factor        → unary ("*" | "/" | "%") unary
+unary         → ("!" | "-") unary | call
+call          → primary ("(" args ")")* ("[" expression "]")* ("." IDENTIFIER)*
+primary       → NUMBER | STRING | "true" | "false" | "null"
+              | IDENTIFIER | "(" expression ")"
+              | list_literal | map_literal
+list_literal  → "[" (expression ("," expression)*)? "]"
+map_literal   → "{" (map_entry ("," map_entry)*)? "}"
+map_entry     → expression ":" expression
+```
+
+**v1.8 管道操作符**：
+- `value |> fn` 等价于 `fn(value)`
+- 左结合，低优先级（优先级 2）
+- 支持链式调用：`value |> fn1 |> fn2`
+
+---
+
+## Pratt Parsing 优先级表
+
+| 优先级 | 运算符 | 结合性 | 示例 |
+|---|---|---|---|
+| 1 | `=` | Right | `x = y = 0` |
+| 2 | `\|>` | Left | `value \|> fn1 \|> fn2` |
+| 3 | `\|\|` | Left | `a \|\| b \|\| c` |
+| 4 | `&&` | Left | `a && b && c` |
+| 5 | `==` `!=` | Left | `a == b != c` |
+| 6 | `>` `>=` `<` `<=` | Left | `a > b >= c` |
+| 7 | `+` `-` | Left | `a + b - c` |
+| 8 | `*` `/` `%` | Left | `a * b / c` |
+| 9 | `!` `-` (unary) | Right | `!-x` |
+| 10 | `()` `[]` `.` | Left | `f(a)[0].x` |
+| 11 | `async` `await` | Prefix | `async call f()` |
+
+---
+
+## `llm` 上下文关键字消歧
+
+`llm` 既是关键字，又可能作为标识符。Parser 通过 **peek 逻辑** 消歧：
+
+```python
+# peek 看到 "llm" 时，检查下一个 token
+if peek() == "act":     → parse_llm_act()
+elif peek() == "if":    → parse_llm_if()
+else:                   → 作为标识符处理
+```
+
+---
+
+## `async` 前缀处理
+
+`async` 修饰符仅作用于 `call` 语句：
+
+```python
+if peek() == "async":
+    consume(ASYNC)
+    if peek() != "call":
+        error("async must precede call")
+    parse_async_call()
+```
+
+---
+
+## Panic Mode 错误恢复
+
+当 Parser 遇到意外 Token 时，进入 panic mode 并同步到语句边界：
+
+```python
+def _synchronize(self):
+    self.advance()
+    while not self.is_at_end():
+        if self.previous().type == SEMICOLON:
+            return
+        if self.peek().type in (AGENT, FN, LET, CONST, IF, FOR, WHILE, RETURN, IMPORT, LLM):
+            return
+        self.advance()
+```
+
+同步点：分号 `;` 和 语句起始关键字。
+
+---
+
+## 测试覆盖
+
+- ✅ Agent 声明与参数
+- ✅ 函数声明与调用
+- ✅ 控制流 (if/for/while/match)
+- ✅ 异常处理 (try/catch/finally/throw)
+- ✅ LLM 语句 (act/if/choose)
+- ✅ 异步调用 (async/await)
+- ✅ 表达式优先级
+- ✅ Panic mode 恢复
+- ✅ 类型注解解析
