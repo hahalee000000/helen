@@ -235,8 +235,8 @@ class ImportResolver:
                 self._agents[stmt.name] = stmt
             elif isinstance(stmt, FunctionDeclNode):
                 self._functions[stmt.name] = stmt
-            elif isinstance(stmt, VarDeclNode) and not stmt.mutable:
-                # Register const declarations
+            elif isinstance(stmt, VarDeclNode) and (not stmt.mutable or stmt.shared):
+                # Register const declarations and shared let (v1.10)
                 # Store the VarDeclNode so we can evaluate it later
                 self._data[stmt.name] = stmt
             elif isinstance(stmt, ImportStmtNode):

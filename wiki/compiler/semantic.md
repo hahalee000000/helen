@@ -70,6 +70,104 @@ class SymbolTable:
 
 **跨 Agent 变量引用检测**：如果 Agent A 内部引用了 Agent B 的局部变量，报 `SCOPE_VIOLATION`。
 
+### v1.10 Agent 作用域隔离
+
+`agent main {}` 在**完全隔离的环境**中运行，语义分析器强制以下规则：
+
+#### 可见性规则
+
+| 变量类型 | 在 agent main 中可见？ | 说明 |
+|---------|---------------------|------|
+| 模块级 `let` | ❌ 不可见 | 编译时错误 |
+| 模块级 `const` | ✅ 可见 | 只读访问 |
+| `shared let` | ✅ 可见 | 可读写 |
+| agent 局部变量 | ✅ 可见 | agent 作用域内 |
+| agent main 局部变量 | ✅ 可见 | main 作用域内 |
+
+#### 示例
+
+```helen
+// 模块级变量
+let moduleVar = "模块级"      // ❌ agent main 中不可见
+const MODULE_CONST = "常量"   // ✅ 只读可见
+shared let sharedVar = 0      // ✅ 可读写
+
+agent MyAgent {
+  let agentVar = "agent 级"   // ✅ agent 作用域
+  
+  main {
+    // moduleVar              // ❌ E0350 SCOPE_VIOLATION
+    let x = MODULE_CONST      // ✅ 只读访问
+    sharedVar += 1            // ✅ 可修改
+    
+    let localVar = "局部"     // ✅ main 作用域
+    
+    fn closure() {
+      // 闭包可以捕获局部变量
+      print(localVar)         // ✅
+    }
+  }
+}
+```
+
+#### 语义分析实现
+
+```python
+def visit_agent_main(self, node):
+    self.symbols.enter_scope(ScopeType.AGENT_MAIN)
+    
+    # 标记模块级 let 为不可见
+    for symbol in self.global_scope_lets:
+        symbol.visible_in_agent_main = False
+    
+    # 分析 main 块
+    for stmt in node.statements:
+        self.analyze(stmt)
+    
+    self.symbols.exit_scope()
+```
+
+### v1.10 shared let 语义
+
+`shared let` 声明跨 agent 可见的可变变量：
+
+#### 符号表处理
+
+```python
+def visit_var_decl(self, node):
+    if node.is_shared:  # shared let
+        symbol = Symbol(
+            name=node.name,
+            type=self.infer_type(node.value),
+            scope=ScopeType.GLOBAL,
+            shared=True,
+            mutable=True
+        )
+        # shared let 在所有 agent main 中可见
+        self.global_shared_vars.append(symbol)
+    else:
+        # 普通 let/const
+        ...
+```
+
+#### 导入跟踪
+
+导入的 `shared let` 被正确跟踪：
+
+```helen
+// module_a.helen
+shared let counter = 0
+
+// module_b.helen
+import "./module_a.helen"
+
+agent Worker {
+  main {
+    counter += 1  // ✅ 可以访问导入的 shared let
+  }
+}
+```
+
 ---
 
 ## 类型检查
@@ -116,6 +214,9 @@ let result = ...          # 可以赋值给任何类型
 | const 不可重新赋值 | E0346 | `const x = 1; x = 2` |
 | Agent 参数数量必须匹配 | E0347 | `call Agent(1,2,3)` 参数过多 |
 | import 路径必须存在 | E0341 | `import "./nonexistent"` |
+| 模块级 let 在 agent main 中不可见 | E0350 | `let x = 1; agent A { main { x } }` |
+| shared let 必须在模块级声明 | E0351 | `agent A { shared let x = 1 }` |
+| 子脚本赋值目标必须是可变的 | E0352 | `const arr = [1,2]; arr[0] = 3` |
 
 ---
 

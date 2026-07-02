@@ -66,6 +66,157 @@ def _env_delete(key: str) -> str:
     return f"Variable {key} not found"
 
 
+# ── CLI argument operations ────────────────────────────────────
+
+# Module-level storage for CLI arguments, set by the Interpreter on init.
+_cli_args: list[str] = []
+
+
+def _set_cli_args(args: list[str]) -> None:
+    """Set the CLI arguments (called by the Interpreter during init).
+
+    This is an internal function — not exposed as a Helen builtin.
+
+    Args:
+        args: List of CLI argument strings.
+    """
+    global _cli_args
+    _cli_args = list(args)
+
+
+def _get_cli_args() -> list[str]:
+    """Get CLI arguments passed to the Helen program.
+
+    Returns a list of string arguments that were passed after the
+    filename on the command line.
+
+    Returns:
+        List of CLI argument strings (empty list if none).
+
+    Example:
+        // Given: helen my_tool.helen --verbose --output=json
+        let args = get_cli_args()  // ["--verbose", "--output=json"]
+    """
+    return list(_cli_args)
+
+
+def _parse_cli_args(spec: dict | None = None) -> dict[str, Any]:
+    """Parse CLI arguments into a structured map.
+
+    Without a spec, automatically parses arguments:
+    - Flags (--verbose, -v) → true/false
+    - Key-value (--output=json, --port=8080) → string values
+    - Positional arguments → list under key "_positional"
+
+    With a spec dict, validates and applies defaults:
+    - {"verbose": {"type": "flag", "default": false}}
+    - {"output": {"type": "string", "default": "text"}}
+    - {"count": {"type": "int", "default": 1}}
+
+    Args:
+        spec: Optional specification for expected arguments.
+
+    Returns:
+        Dict mapping argument names to their parsed values.
+        Always includes "_positional" key with list of positional args.
+    """
+    args = list(_cli_args)
+    result: dict[str, Any] = {"_positional": []}
+
+    if spec is None:
+        # Auto-parse mode
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg.startswith("--"):
+                if "=" in arg:
+                    key, _, value = arg[2:].partition("=")
+                    result[key] = value
+                else:
+                    key = arg[2:]
+                    # Check if next arg is a value (not a flag)
+                    if i + 1 < len(args) and not args[i + 1].startswith("-"):
+                        result[key] = args[i + 1]
+                        i += 1
+                    else:
+                        result[key] = True
+            elif arg.startswith("-") and len(arg) == 2:
+                # Short flag: -v, -q, etc.
+                result[arg[1:]] = True
+            else:
+                result["_positional"].append(arg)
+            i += 1
+    else:
+        # Spec-driven parse mode: apply defaults first
+        for name, cfg in spec.items():
+            if isinstance(cfg, dict):
+                default = cfg.get("default", None)
+            else:
+                default = None
+            result[name] = default
+
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg.startswith("--"):
+                if "=" in arg:
+                    key, _, value = arg[2:].partition("=")
+                    if key in spec:
+                        cfg = spec[key]
+                        if isinstance(cfg, dict) and cfg.get("type") == "int":
+                            try:
+                                result[key] = int(value)
+                            except ValueError:
+                                result[key] = value
+                        elif isinstance(cfg, dict) and cfg.get("type") == "float":
+                            try:
+                                result[key] = float(value)
+                            except ValueError:
+                                result[key] = value
+                        else:
+                            result[key] = value
+                    else:
+                        result[key] = value
+                else:
+                    key = arg[2:]
+                    if key in spec:
+                        cfg = spec[key]
+                        if isinstance(cfg, dict) and cfg.get("type") == "flag":
+                            result[key] = True
+                        elif i + 1 < len(args) and not args[i + 1].startswith("-"):
+                            i += 1
+                            val = args[i]
+                            if isinstance(cfg, dict) and cfg.get("type") == "int":
+                                try:
+                                    result[key] = int(val)
+                                except ValueError:
+                                    result[key] = val
+                            elif isinstance(cfg, dict) and cfg.get("type") == "float":
+                                try:
+                                    result[key] = float(val)
+                                except ValueError:
+                                    result[key] = val
+                            else:
+                                result[key] = val
+                        else:
+                            result[key] = True if isinstance(cfg, dict) and cfg.get("type") == "flag" else None
+                    else:
+                        # Unknown flag — treat as flag
+                        result[key] = True
+            elif arg.startswith("-") and len(arg) >= 2:
+                # Short flag(s): -v or -abc (multiple short flags)
+                for ch in arg[1:]:
+                    if ch in spec:
+                        result[ch] = True
+                    else:
+                        result[ch] = True
+            else:
+                result["_positional"].append(arg)
+            i += 1
+
+    return result
+
+
 # ── Process operations ─────────────────────────────────────────
 
 

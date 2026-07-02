@@ -218,7 +218,7 @@ def _execute_tools_concurrent(
             try:
                 result = future.result(timeout=300)  # 5 min per tool
             except Exception as e:
-                result = json.dumps({"error": f"Tool execution failed: {e}"})
+                result = json.dumps({"error": f"Tool execution failed: {e}"}, ensure_ascii=False)
             results[idx] = (parsed[idx][0], result)
     finally:
         if own_pool:

@@ -19,10 +19,14 @@ from helen.cli.docgen import generate_cli as docgen_cli
 from helen.runtime.http_llm import HttpLLMRuntime
 
 
-def run_command(file: str) -> int:
+def run_command(file: str, program_args: list[str] | None = None) -> int:
     """Run a Helen program (HLD 5.2 Phase 6).
 
     Pipeline: Lexer → Parser → Analyzer → Interpreter
+
+    Args:
+        file: Path to the Helen source file.
+        program_args: Extra CLI arguments to pass to the program as `argv`.
 
     Returns:
         0 on success, 1 on syntax error, 2 on semantic error, 3 on runtime error.
@@ -73,7 +77,12 @@ def run_command(file: str) -> int:
     from helen.runtime.import_resolver import ImportResolver
     source_dir = str(source_path.parent.absolute()) if source_path.parent else os.getcwd()
     import_resolver = ImportResolver(base_dir=source_dir)
-    interp = Interpreter(errors=errors, llm_runtime=llm_runtime, import_resolver=import_resolver)
+    interp = Interpreter(
+        errors=errors,
+        llm_runtime=llm_runtime,
+        import_resolver=import_resolver,
+        program_args=program_args,
+    )
     try:
         interp.interpret(program)
     except Exception as e:
@@ -87,7 +96,7 @@ def run_command(file: str) -> int:
     return 0
 
 
-def check_command(file: str) -> int:
+def check_command(file: str, program_args: list[str] | None = None) -> int:
     """Check a Helen program without executing (HLD 5.2 Phase 6).
 
     Pipeline: Lexer → Parser → Analyzer
@@ -164,7 +173,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if len(argv) < 2:
                 print("Error: 'check' requires a file argument", file=sys.stderr)
                 return 1
-            return check_command(argv[1])
+            return check_command(argv[1], program_args=argv[2:])
         elif first == "repl":
             return repl_command()
         elif first == "doc":
@@ -181,8 +190,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         _print_help()
         return 0
     else:
-        # Default: treat first argument as a file to run
-        return run_command(first)
+        # Default: treat first argument as a file to run,
+        # remaining arguments become the program's `argv`.
+        return run_command(first, program_args=argv[1:])
 
     _print_help()
     return 1
@@ -669,14 +679,25 @@ def _print_help() -> None:
     print("""helen — Helen Agent Programming Language
 
 Usage:
-  helen                     Interactive REPL (default)
-  helen <file>              Run a Helen program
-  helen check <file>        Check without executing
-  helen test <file> [opts]  Run Helen test file(s)
-  helen quality <file>      Run 7-dimension quality assessment
-  helen doc [files]         Generate API documentation
-  helen init                Initialize Helen configuration
-  helen lsp                 Start Language Server (LSP) for IDE support
+  helen                          Interactive REPL (default)
+  helen <file> [args...]         Run a Helen program (args become `argv`)
+  helen check <file> [args...]   Check without executing
+  helen test <file> [opts]       Run Helen test file(s)
+  helen quality <file>           Run 7-dimension quality assessment
+  helen doc [files]              Generate API documentation
+  helen init                     Initialize Helen configuration
+  helen lsp                      Start Language Server (LSP) for IDE support
+
+Program Arguments:
+  Arguments after the filename are passed to the Helen program as `argv`.
+  Inside the program, access them via:
+    argv               Pre-defined const list<string> of CLI arguments
+    get_cli_args()     Stdlib function returning the same list
+    parse_cli_args()   Structured parsing of flags and options
+
+  Example:
+    helen my_tool.helen --verbose --output=json
+    # Inside my_tool.helen: argv == ["--verbose", "--output=json"]
 
 Test Options:
   --json                    Output results as JSON

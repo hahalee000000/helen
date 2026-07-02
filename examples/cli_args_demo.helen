@@ -1,0 +1,37 @@
+// Example: CLI tool using argv and parse_cli_args()
+// Run with: helen examples/cli_args_demo.helen --verbose --output=json --port=8080 input.txt
+
+// 1. Access raw arguments via the `argv` const
+print("=== Raw argv ===")
+print(argv)
+print("Number of args: " + str(len(argv)))
+print()
+
+// 2. Access same args via get_cli_args()
+print("=== get_cli_args() ===")
+print(get_cli_args())
+print()
+
+// 3. Auto-parse arguments
+print("=== Auto-parse ===")
+let parsed = parse_cli_args()
+print(parsed)
+print()
+
+// 4. Structured parsing with a spec
+print("=== Spec-driven parse ===")
+let spec = {
+    "verbose": {"type": "flag", "default": false} ,
+    "output": {"type": "string", "default": "text"},
+    "port": {"type": "int", "default": 3000}
+}
+let config = parse_cli_args(spec)
+print("verbose: " + str(config["verbose"]))
+print("output: " + str(config["output"]))
+print("port: " + str(config["port"]))
+print("files: " + str(config["_positional"]))
+
+// 5. Use parsed config
+if config["verbose"] {
+    print("\n[VERBOSE MODE] Running with output=" + config["output"] + " on port " + str(config["port"]))
+}

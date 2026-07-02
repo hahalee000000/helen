@@ -105,13 +105,14 @@ class AsyncLLMInterpreter(Interpreter, AsyncInterpreterContract):
         """
         from helen.core.ast import LlmActExprNode, LlmIfStmtNode
 
-        if isinstance(stmt, LlmActExprNode):
-            return await self.visit_llm_act_expr_async(stmt)
-        elif isinstance(stmt, LlmIfStmtNode):
-            return await self.visit_llm_if_stmt_async(stmt)
-        else:
-            # Non-LLM statements execute synchronously
-            return stmt.accept(self)
+        match stmt:
+            case LlmActExprNode():
+                return await self.visit_llm_act_expr_async(stmt)
+            case LlmIfStmtNode():
+                return await self.visit_llm_if_stmt_async(stmt)
+            case _:
+                # Non-LLM statements execute synchronously
+                return stmt.accept(self)
 
     async def execute_stmts_async(self, stmts: list[StatementNode]) -> Any:
         """Execute a list of statements asynchronously.

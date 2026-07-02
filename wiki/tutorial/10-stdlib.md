@@ -1,10 +1,10 @@
 # 教程 10: 标准库参考
 
-> 186 个内置函数，覆盖 AI 应用开发的所有核心需求
+> 195 个内置函数，覆盖 AI 应用开发的所有核心需求
 
 ## 概览
 
-Helen 标准库提供 186 个内置函数，分为 9 大类别：
+Helen 标准库提供 195 个内置函数，分为 9 大类别：
 
 | 类别 | 函数数 | 功能 |
 |------|--------|------|
@@ -16,7 +16,7 @@ Helen 标准库提供 186 个内置函数，分为 9 大类别：
 | **Time** | 13 | 日期时间、格式化、运算 |
 | **Math** | 15 | 数学运算、统计分析 |
 | **File** | 16 | 文件读写、目录操作、临时文件 |
-| **System** | 16 | 环境变量、进程管理、日志 |
+| **System** | 18 | 环境变量、CLI 参数、进程管理、日志 |
 | **Crypto** | 11 | 哈希、随机数 |
 | **IO** | 5 | 流式输出控制 |
 
@@ -264,6 +264,83 @@ toml_stringify({"name": "Alice"})
 toml_save("config.toml", data)
 let loaded = toml_load("config.toml")
 ```
+
+## CLI 参数（System 模块）
+
+Helen 程序可以直接访问命令行参数。文件名之后的所有参数会传递给程序：
+
+```bash
+$ helen my_tool.helen --verbose --output=json --port=8080 input.txt
+```
+
+### argv 预定义常量
+
+`argv` 是预定义的 `const list<str>`，包含所有命令行参数：
+
+```helen
+// 直接访问
+print(argv)  // ["--verbose", "--output=json", "--port=8080", "input.txt"]
+print(len(argv))  // 4
+
+// 检查特定参数
+if contains(argv, "--verbose") {
+    print("详细模式已开启")
+}
+
+// 遍历所有参数
+for arg in argv {
+    print("参数: " + arg)
+}
+```
+
+`argv` 是 `const`，不可重新赋值。它在 agent 作用域中自动可见（通过 const 只读共享机制）。
+
+### get_cli_args() 函数
+
+与 `argv` 等价的标准库函数形式：
+
+```helen
+let args = get_cli_args()  // 与 argv 相同
+```
+
+### parse_cli_args() 结构化解析
+
+**自动模式**（无需参数）—— 自动识别各类参数：
+
+```helen
+let parsed = parse_cli_args()
+// 输入: --verbose --output=json --port 8080 input.txt
+// 结果: {
+//   verbose: true,
+//   output: "json",
+//   port: "8080",
+//   _positional: ["input.txt"]
+// }
+```
+
+支持的参数格式：
+- `--flag` → 布尔值 `true`
+- `--key=value` → 字符串值（在第一个 `=` 处分割）
+- `--key value` → 字符串值（空格分隔）
+- `-v` → 短标志，布尔值 `true`
+- 其他 → 位置参数（收集到 `_positional`）
+
+**Spec 模式**（传入规格 map）—— 带类型转换和默认值：
+
+```helen
+let spec = {
+    "verbose": {"type": "flag", "default": false},
+    "output": {"type": "string", "default": "text"},
+    "port": {"type": "int", "default": 3000}
+}
+let config = parse_cli_args(spec)
+// port 自动转为 int 类型
+print(type(config["port"]))  // "int"
+```
+
+支持的 spec 类型：`flag`、`string`、`int`、`float`。
+
+> **注意**：嵌套 map 字面量中 `}}` 会被词法分析器识别为模板引用关闭符。需要在两个 `}` 之间加空格：`} }`。
 
 ## 异常处理 (v1.9+)
 

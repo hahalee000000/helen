@@ -13,6 +13,34 @@ class Interpreter(Visitor[object]):
     """每个 visit 方法返回节点的计算值，或控制流 Sentinel。"""
 ```
 
+### 构造函数
+
+```python
+def __init__(self, errors=None, llm_runtime=None,
+             import_resolver=None, program_args=None)
+```
+
+`program_args` 参数接收 CLI 传入的参数列表（来自 `helen <file> [args...]`），被定义为全局 Environment 中的预定义 `const argv`。
+
+### 预定义变量
+
+| 变量 | 类型 | 说明 |
+|------|------|------|
+| `argv` | `const list<str>` | 命令行参数（`helen <file>` 后的所有参数） |
+
+`argv` 在 Interpreter 初始化时通过 `environment.define("argv", program_args, is_const=True)` 注入全局作用域。因为是 `const`，它会自动通过 `_call_agent()` 的 const 注入机制传播到 agent 隔离作用域中。
+
+语义分析器在 `_register_stdlib()` 中将 `argv` 注册为 `kind="const"` 的符号，因此程序中使用 `argv` 不会触发 `UNDECLARED_VARIABLE` 错误。重新赋值 `argv` 会在语义分析阶段报 "cannot assign to const variable" 错误。
+
+```helen
+// 命令行: helen tool.helen --verbose --output=json
+print(argv)          // ["--verbose", "--output=json"]
+print(len(argv))     // 2
+print(argv[0])       // "--verbose"
+
+// argv = []          // ❌ 语义错误: cannot assign to const variable
+```
+
 ---
 
 ## Environment 作用域链
@@ -44,6 +72,118 @@ env_A (x=1, y=2)
 def _call_agent(self, node: AgentDeclNode, args: dict) -> object:
     isolated_env = Environment()  # 无 parent，完全隔离
     # ... 在 isolated_env 中执行 Agent 逻辑
+```
+
+### v1.10 Agent Main 作用域隔离
+
+`agent main {}` 在完全隔离的环境中执行，模块级 `let` 不可见：
+
+```python
+def visit_agent_main(self, node: MainBlockNode):
+    # 创建新的根环境（无 parent）
+    main_env = Environment()
+    
+    # 只导入模块级 const（只读）
+    for name, symbol in self.global_env.constants.items():
+        main_env.define(name, symbol.value)
+    
+    # 导入 shared let（可读写）
+    for name, symbol in self.global_env.shared_vars.items():
+        main_env.define(name, symbol)
+    
+    # 注意：模块级 let 不会被导入
+    
+    # 在 main_env 中执行 main 块
+    for stmt in node.statements:
+        stmt.accept(self, env=main_env)
+```
+
+**示例**:
+
+```helen
+let moduleVar = "模块级"      // ❌ main 中不可见
+const MODULE_CONST = "常量"   // ✅ 只读可见
+shared let sharedVar = 0      // ✅ 可读写
+
+agent MyAgent {
+  main {
+    // moduleVar              // ❌ NameError
+    let x = MODULE_CONST      // ✅ "常量"
+    sharedVar += 1            // ✅ 1
+  }
+}
+```
+
+### v1.10 模块函数作用域解析
+
+导入模块的函数调用时，使用模块级 `Environment` 作为父作用域，确保能访问模块自身的 `const` 和 `shared let`：
+
+```python
+def _create_module_object(self, result):
+    module = { "__type__": "module", ... }
+    # 创建模块级 Environment，parent 为调用方环境（可访问 stdlib）
+    module_env = Environment(parent=self.environment)
+    for name, data in self.import_resolver.data.items():
+        if isinstance(data, VarDeclNode) and (not data.mutable or data.shared):
+            value = data.initializer.accept(self)
+            module_env.define(name, value, is_const=not data.mutable)
+    module["__env__"] = module_env
+    return module
+
+def _call_function(self, func, args, parent_env=None):
+    # 模块函数传入 parent_env = module["__env__"]
+    if parent_env is not None:
+        call_env = Environment(parent=parent_env)  # 模块作用域
+    else:
+        call_env = self.environment.enter_scope()  # 普通调用
+    # ... 绑定参数、执行函数体
+```
+
+**作用域链**：
+
+```
+函数局部作用域
+    └─ 模块 Environment（const + shared let）
+        └─ 调用方全局 Environment（stdlib + 其他全局变量）
+```
+
+### v1.10 子脚本/字段赋值执行
+
+赋值语句现在支持索引和字段访问：
+
+```python
+def visit_assignment(self, node: AssignmentNode):
+    if isinstance(node.target, IndexNode):
+        # arr[i] = value
+        obj = node.target.object.accept(self)
+        index = node.target.index.accept(self)
+        value = node.value.accept(self)
+        obj[index] = value
+        return value
+    
+    elif isinstance(node.target, AccessNode):
+        # obj.field = value
+        obj = node.target.object.accept(self)
+        field = node.target.field
+        value = node.value.accept(self)
+        setattr(obj, field, value)
+        return value
+    
+    else:
+        # IDENTIFIER = value
+        value = node.value.accept(self)
+        self.env.assign(node.target.name, value)
+        return value
+```
+
+**示例**:
+
+```helen
+let arr = [1, 2, 3]
+arr[0] = 10  // ✅ arr 变为 [10, 2, 3]
+
+let obj = { name: "Alice", age: 30 }
+obj.name = "Bob"  // ✅ obj 变为 {name: "Bob", age: 30}
 ```
 
 ---
@@ -131,6 +271,57 @@ AnyError (根)
 ---
 
 ## 表达式求值
+
+### v1.10 短路求值
+
+`&&` 和 `||` 运算符支持短路求值，避免不必要的计算：
+
+```python
+def visit_binary_op(self, node: BinaryOpNode) -> object:
+    op = node.operator.type
+    
+    # && 短路求值
+    if op == TokenType.AND:
+        left = node.left.accept(self)
+        if not self._truthy(left):
+            return False  # 短路：不计算 right
+        right = node.right.accept(self)
+        return self._truthy(right)
+    
+    # || 短路求值
+    if op == TokenType.OR:
+        left = node.left.accept(self)
+        if self._truthy(left):
+            return True  # 短路：不计算 right
+        right = node.right.accept(self)
+        return self._truthy(right)
+    
+    # 其他运算符正常求值
+    left = node.left.accept(self)
+    right = node.right.accept(self)
+    # ...
+```
+
+**示例**:
+
+```helen
+// && 短路
+let x = false && expensiveCall()  // expensiveCall() 不会执行
+let y = true && expensiveCall()   // expensiveCall() 会执行
+
+// || 短路
+let a = true || expensiveCall()   // expensiveCall() 不会执行
+let b = false || expensiveCall()  // expensiveCall() 会执行
+
+// 实际应用
+let user = get_user() || create_default_user()
+let valid = user != null && user.is_active()
+```
+
+**优先级**:
+- `||` 优先级 3（左结合）
+- `&&` 优先级 4（左结合）
+- `&&` 优先级高于 `||`
 
 ### 二元运算
 

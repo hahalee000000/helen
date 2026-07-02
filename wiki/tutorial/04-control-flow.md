@@ -34,6 +34,61 @@ if "hello" { print("会执行") }    // 非空字符串 → true
 if [1] { print("会执行") }        // 非空列表 → true
 ```
 
+### 短路求值 (v1.10)
+
+`&&` 和 `||` 运算符支持**短路求值**，避免不必要的计算：
+
+#### && 短路
+
+```helen
+// 如果左侧为 false，右侧不会执行
+let result = false && expensiveFunction()  // expensiveFunction() 不会执行
+
+// 实际应用：安全访问
+let user = getUser()
+let name = user != null && user.getName()  // 如果 user 为 null，不会调用 getName()
+
+// 条件执行
+let valid = isValid() && processData()  // 只在 valid 时处理
+```
+
+#### || 短路
+
+```helen
+// 如果左侧为 true，右侧不会执行
+let result = true || expensiveFunction()  // expensiveFunction() 不会执行
+
+// 实际应用：默认值
+let config = loadConfig() || defaultConfig()  // 只在加载失败时使用默认值
+
+let user = getUser() || createDefaultUser()  // 如果获取失败，创建默认用户
+```
+
+#### 优先级
+
+```helen
+// && 优先级高于 ||
+let result = a || b && c  // 等价于 a || (b && c)
+
+// 使用括号明确意图
+let result = (a || b) && c  // 明确分组
+```
+
+#### 实际示例
+
+```helen
+// 安全的列表访问
+let items = [1, 2, 3]
+let first = len(items) > 0 && items[0]  // 避免空列表错误
+
+// 缓存检查
+let cached = cache.get(key)
+let result = cached != null || computeExpensive()
+
+// 权限检查
+let canAccess = isLoggedIn() && hasPermission("admin")
+```
+
 ## 循环
 
 ### for ... in

@@ -573,29 +573,32 @@ def _safe_serialize(obj: Any, max_depth: int = 3) -> Any:
         if depth > max_depth:
             return "<max depth>"
 
-        if o is None or isinstance(o, (bool, int, float, str)):
-            return o
+        # Note: bool() must precede int() because bool is a subclass of int
+        match o:
+            case None | bool() | int() | float() | str():
+                return o
 
-        if isinstance(o, (list, tuple)):
-            if len(o) > 50:
-                return [_serialize(item, depth + 1) for item in o[:50]] + [f"... ({len(o)} items)"]
-            return [_serialize(item, depth + 1) for item in o]
+            case list() | tuple():
+                if len(o) > 50:
+                    return [_serialize(item, depth + 1) for item in o[:50]] + [f"... ({len(o)} items)"]
+                return [_serialize(item, depth + 1) for item in o]
 
-        if isinstance(o, dict):
-            result = {}
-            items = list(o.items())[:50]
-            for k, v in items:
-                key_str = str(k)
-                result[key_str] = _serialize(v, depth + 1)
-            if len(o) > 50:
-                result["..."] = f"({len(o)} keys total)"
-            return result
+            case dict():
+                result = {}
+                items = list(o.items())[:50]
+                for k, v in items:
+                    key_str = str(k)
+                    result[key_str] = _serialize(v, depth + 1)
+                if len(o) > 50:
+                    result["..."] = f"({len(o)} keys total)"
+                return result
 
-        # For other types, use repr
-        try:
-            return repr(o)
-        except Exception:
-            return f"<{type(o).__name__}>"
+            case _:
+                # For other types, use repr
+                try:
+                    return repr(o)
+                except Exception:
+                    return f"<{type(o).__name__}>"
 
     return _serialize(obj, 0)
 
@@ -609,21 +612,24 @@ def _truncate(s: str, max_len: int) -> str:
 
 def _format_value(value: Any) -> str:
     """Format a value for display."""
-    if value is None:
-        return "null"
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, str):
-        if len(value) > 50:
-            return f'"{value[:50]}..."'
-        return f'"{value}"'
-    if isinstance(value, (list, tuple)):
-        if len(value) > 5:
-            return f"[{', '.join(_format_value(v) for v in value[:5])}, ... ({len(value)} items)]"
-        return f"[{', '.join(_format_value(v) for v in value)}]"
-    if isinstance(value, dict):
-        if len(value) > 5:
-            items = list(value.items())[:5]
-            return "{" + ", ".join(f"{k}: {_format_value(v)}" for k, v in items) + ", ...}"
-        return "{" + ", ".join(f"{k}: {_format_value(v)}" for k, v in value.items()) + "}"
-    return str(value)
+    # Note: bool() must precede int() because bool is a subclass of int
+    match value:
+        case None:
+            return "null"
+        case bool():
+            return "true" if value else "false"
+        case str():
+            if len(value) > 50:
+                return f'"{value[:50]}..."'
+            return f'"{value}"'
+        case list() | tuple():
+            if len(value) > 5:
+                return f"[{', '.join(_format_value(v) for v in value[:5])}, ... ({len(value)} items)]"
+            return f"[{', '.join(_format_value(v) for v in value)}]"
+        case dict():
+            if len(value) > 5:
+                items = list(value.items())[:5]
+                return "{" + ", ".join(f"{k}: {_format_value(v)}" for k, v in items) + ", ...}"
+            return "{" + ", ".join(f"{k}: {_format_value(v)}" for k, v in value.items()) + "}"
+        case _:
+            return str(value)

@@ -79,6 +79,8 @@ from helen.stdlib.file_advanced import (
 from helen.stdlib.system import (
     # Env
     _env_get, _env_set, _env_list, _env_delete,
+    # CLI args
+    _get_cli_args, _parse_cli_args,
     # Process
     _exec, _exec_async, _pid, _exit, _kill,
     # Log
@@ -452,6 +454,31 @@ def _input(prompt: str = "") -> str:
     return __builtins__["input"](prompt) if hasattr(__builtins__, "get") else input(prompt)
 
 
+def _multiline_input(prompt: str = "") -> str:
+    """Read multiple lines of input. Empty line terminates.
+
+    First line uses *prompt*, continuation lines use '... '.
+    Returns all lines joined by newlines (trailing empty line excluded).
+    """
+    try:
+        import readline  # noqa: F401
+    except ImportError:
+        pass
+    _read = __builtins__["input"] if hasattr(__builtins__, "get") else input
+    lines = []
+    current_prompt = prompt
+    while True:
+        try:
+            line = _read(current_prompt)
+        except EOFError:
+            break
+        if line == "":
+            break
+        lines.append(line)
+        current_prompt = "... "
+    return "\n".join(lines)
+
+
 def _read_file(path: str) -> str:
     """Read the entire content of a text file."""
     import pathlib  # noqa: PLC0415
@@ -649,6 +676,7 @@ def _register_builtins() -> None:
         BuiltinFunction("floor", "Floor value", "floor(value)", _floor, "math"),
         BuiltinFunction("ceil", "Ceiling value", "ceil(value)", _ceil, "math"),
         BuiltinFunction("input", "Read line from stdin", "input(prompt?)", _input, "core"),
+        BuiltinFunction("multiline_input", "Read multiple lines (empty line ends)", "multiline_input(prompt?)", _multiline_input, "core"),
         BuiltinFunction("read_file", "Read file content", "read_file(path)", _read_file, "core"),
         BuiltinFunction("write_file", "Write to file", "write_file(path, content)", _write_file, "io"),
         BuiltinFunction("append_file", "Append to file", "append_file(path, content)", _append_file, "io"),
@@ -803,6 +831,10 @@ def _register_builtins() -> None:
         BuiltinFunction("env_set", "Set environment variable", "env_set(key, value)", _env_set, "system"),
         BuiltinFunction("env_list", "List all environment variables", "env_list()", _env_list, "system"),
         BuiltinFunction("env_delete", "Delete environment variable", "env_delete(key)", _env_delete, "system"),
+
+        # System CLI argument operations
+        BuiltinFunction("get_cli_args", "Get CLI arguments", "get_cli_args()", _get_cli_args, "system"),
+        BuiltinFunction("parse_cli_args", "Parse CLI arguments", "parse_cli_args(spec?)", _parse_cli_args, "system"),
 
         # System process operations
         BuiltinFunction("exec", "Execute command", "exec(command, shell?, timeout?)", _exec, "system"),

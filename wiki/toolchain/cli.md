@@ -7,14 +7,14 @@
 ## 子命令
 
 ```bash
-$ helen <file>         # 编译 + 执行
-$ helen check <file>     # 仅验证 (Lex + Parse + Analyze)
-$ helen repl             # 交互式解释器
-$ helen doc <files...>   # 生成文档
-$ helen init             # 初始化配置目录
-$ helen lsp              # 启动 Language Server (LSP)
-$ helen test <file>      # 运行测试
-$ helen quality <file>   # 7维质量评估
+$ helen <file> [args...]  # 编译 + 执行（args 传入程序作为 argv）
+$ helen check <file>       # 仅验证 (Lex + Parse + Analyze)
+$ helen repl               # 交互式解释器
+$ helen doc <files...>     # 生成文档
+$ helen init               # 初始化配置目录
+$ helen lsp                # 启动 Language Server (LSP)
+$ helen test <file>        # 运行测试
+$ helen quality <file>     # 7维质量评估
 ```
 
 ---
@@ -113,6 +113,7 @@ HELEN_MODEL=qwen3.7-plus
 
 ```
 $ helen main.helen
+$ helen main.helen --verbose --output=json --port=8080 input.txt
 ```
 
 执行完整编译链：
@@ -122,6 +123,46 @@ $ helen main.helen
 4. Interpreter → 解释执行
 
 退出码：`0`=成功 `1`=词法错误 `2`=语法错误 `3`=语义/运行时错误
+
+### 程序参数（argv）
+
+文件名之后的所有参数会传递给 Helen 程序，在程序中可通过三种方式访问：
+
+| 访问方式 | 类型 | 说明 |
+|---------|------|------|
+| `argv` | `const list<str>` | 预定义常量，包含所有命令行参数 |
+| `get_cli_args()` | `list<str>` | 标准库函数，返回与 argv 相同的列表 |
+| `parse_cli_args(spec?)` | `map` | 结构化解析（支持 flag、key=value、位置参数） |
+
+**示例**：
+
+```bash
+$ helen my_tool.helen --verbose --output=json --port=8080 input.txt
+```
+
+```helen
+// my_tool.helen
+
+// 1. 直接访问 argv
+print(argv)  // ["--verbose", "--output=json", "--port=8080", "input.txt"]
+
+// 2. 自动解析
+let parsed = parse_cli_args()
+// {verbose: true, output: "json", port: "8080", _positional: ["input.txt"]}
+
+// 3. 结构化解析（带类型和默认值）
+let spec = {
+    "verbose": {"type": "flag", "default": false},
+    "output": {"type": "string", "default": "text"},
+    "port": {"type": "int", "default": 3000}
+}
+let config = parse_cli_args(spec)
+// {verbose: true, output: "json", port: 8080, _positional: ["input.txt"]}
+```
+
+> **注意**：`argv` 是 `const`，不可重新赋值。它在 agent 作用域中自动可见（通过 const 只读共享机制）。
+
+> **注意**：嵌套 map 字面量中的 `}}` 会被词法分析器识别为模板引用关闭符（`TEMPLATE_CLOSE`），需要在两个 `}` 之间加空格：`} }`。
 
 ---
 
@@ -136,6 +177,13 @@ $ helen check main.helen
 1. Lexer → 词法分析
 2. Parser → 语法分析
 3. SemanticAnalyzer → 语义分析
+
+`check` 也支持传入程序参数（用于验证使用了 `argv` 的程序）：
+
+```
+$ helen check main.helen --verbose --output=json
+✓ main.helen: OK
+```
 
 用于 CI/CD 中的代码质量检查。
 

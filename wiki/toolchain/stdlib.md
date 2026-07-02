@@ -1,6 +1,6 @@
 # 标准库 (Stdlib)
 
-> 模块 M15 | `helen/stdlib/__init__.py` | **193 builtins** | 测试: `tests/stdlib/`
+> 模块 M15 | `helen/stdlib/__init__.py` | **195 builtins** | 测试: `tests/stdlib/`
 
 ---
 
@@ -46,12 +46,12 @@ class BuiltinFunction:
 | **Time** | 13 | `time.py` |
 | **Math** | 15 | `math_stats.py` |
 | **File** | 16 | `file_advanced.py` |
-| **System** | 16 | `system.py` |
+| **System** | 18 | `system.py` |
 | **Crypto** | 11 | `crypto.py` |
 | **Test** | 14 | `test.py` |
 | **Quality** | 4 | `quality.py` |
 | **IO** | 5 | `__init__.py` |
-| **总计** | **193** | - |
+| **总计** | **195** | - |
 
 ---
 
@@ -362,7 +362,7 @@ class BuiltinFunction:
 
 ---
 
-## System (16)
+## System (18)
 
 ### 环境变量 (4)
 
@@ -372,6 +372,20 @@ class BuiltinFunction:
 | `env_set` | `env_set(key, value)` → str | 设置环境变量 |
 | `env_list` | `env_list()` → dict | 列出所有 |
 | `env_delete` | `env_delete(key)` → str | 删除环境变量 |
+
+### CLI 参数 (2)
+
+| 函数 | 签名 | 说明 |
+|---|---|---|
+| `get_cli_args` | `get_cli_args()` → list[str] | 获取命令行参数（与 `argv` 相同） |
+| `parse_cli_args` | `parse_cli_args(spec?)` → map | 结构化解析 CLI 参数 |
+
+`parse_cli_args()` 支持两种模式：
+
+- **自动模式**（无参数）：自动识别 `--flag`、`--key=value`、`--key value`、`-v` 短标志、位置参数（收集到 `_positional` 键）
+- **Spec 模式**（传入 spec map）：按类型（`flag`/`string`/`int`/`float`）转换并应用默认值
+
+> 另见：`argv` 预定义常量（[[toolchain/cli|CLI 文档]]）。
 
 ### 进程管理 (5)
 
@@ -441,7 +455,7 @@ def _register_builtins():
     """import helen.stdlib 时自动执行。"""
     registry = StdlibRegistry
     registry.register(BuiltinFunction("print", "...", "print(*args)", _print, "core"))
-    # ... 注册全部 185 个函数
+    # ... 注册全部 195 个函数
 ```
 
 ---
@@ -511,6 +525,11 @@ main {
     // System
     let path = env_get("PATH")
     log_info("Processing started")
+    
+    // CLI 参数
+    let args = argv                       // 预定义 const list<str>
+    let parsed = parse_cli_args()         // 自动解析
+    // 或带 spec: parse_cli_args({"verbose": {"type": "flag", "default": false} })
     
     // Crypto
     let hash = sha256("hello")

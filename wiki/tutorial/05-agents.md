@@ -1408,3 +1408,239 @@ main {
 3. 导入 `os.path` 模块，提取文件路径的目录和文件名
 4. 创建一个 Agent，使用 Python 的 `math` 模块进行复杂计算
 
+
+---
+
+## v1.10 Agent 作用域隔离
+
+### 概述
+
+v1.10 引入了 **Agent 作用域隔离**，`agent main {}` 在完全隔离的环境中运行，模块级变量的可见性受到严格控制。
+
+### 可见性规则
+
+| 变量类型 | 在 agent main 中可见？ | 可修改？ | 说明 |
+|---------|---------------------|---------|------|
+| 模块级 `let` | ❌ 不可见 | - | 编译时错误 |
+| 模块级 `const` | ✅ 可见 | ❌ 只读 | 自动可见 |
+| `shared let` | ✅ 可见 | ✅ 可读写 | 显式声明 |
+| agent 局部变量 | ✅ 可见 | ✅ 可读写 | agent 作用域 |
+| main 局部变量 | ✅ 可见 | ✅ 可读写 | main 作用域 |
+
+### 示例
+
+```helen
+// 模块级变量
+let moduleVar = "模块级"      // ❌ agent main 中不可见
+const MODULE_CONST = "常量"   // ✅ 只读可见
+shared let sharedVar = 0      // ✅ 可读写
+
+agent MyAgent {
+  main {
+    // moduleVar              // ❌ E0350 SCOPE_VIOLATION
+    let x = MODULE_CONST      // ✅ "常量"（只读）
+    sharedVar += 1            // ✅ 1（可修改）
+    
+    let localVar = "局部"     // ✅ main 作用域
+    print(localVar)
+  }
+}
+```
+
+### 为什么需要作用域隔离？
+
+**问题**: 在没有隔离的情况下，agent 可以随意访问和修改模块级变量，导致：
+
+1. **难以追踪的副作用**: agent 修改了全局状态，其他地方难以发现
+2. **并发问题**: 多个 agent 同时修改同一个变量
+3. **测试困难**: agent 的行为依赖于外部状态
+
+**解决方案**: 强制使用 `shared let` 显式声明共享变量
+
+```helen
+// ❌ 旧方式：隐式共享
+let counter = 0
+agent Worker {
+  main {
+    counter += 1  // 难以追踪谁修改了 counter
+  }
+}
+
+// ✅ 新方式：显式共享
+shared let counter = 0
+agent Worker {
+  main {
+    counter += 1  // 明确知道这是共享状态
+  }
+}
+```
+
+### shared let 最佳实践
+
+#### 1. 命名约定
+
+```helen
+// 使用 SHARED_ 前缀表示共享变量
+shared let SHARED_COUNTER = 0
+shared let SHARED_CONFIG = { "debug": true }
+```
+
+#### 2. 线程安全
+
+多个 agent 同时修改 shared let 时需要小心：
+
+```helen
+shared let counter = 0
+
+agent Worker {
+  main {
+    // 简单递增是安全的（GIL 保护）
+    counter += 1
+  }
+}
+
+// 复杂操作需要额外同步
+agent SafeWorker {
+  main {
+    // 读取-修改-写入可能不安全
+    let temp = counter
+    // ... 复杂计算 ...
+    counter = temp + 1
+  }
+}
+```
+
+#### 3. 最小化共享状态
+
+```helen
+// ❌ 共享过多状态
+shared let user_data = {}
+shared let session_id = ""
+shared let config = {}
+
+// ✅ 只共享必要的状态
+shared let SHARED_COUNTER = 0
+// 其他状态通过参数传递
+```
+
+### 闭包捕获
+
+Agent main 中的闭包可以捕获局部变量：
+
+```helen
+agent MyAgent {
+  main {
+    let localVar = "局部"
+    
+    fn closure() {
+      print(localVar)  // ✅ 可以捕获局部变量
+    }
+    
+    closure()
+  }
+}
+```
+
+### 错误示例
+
+```helen
+let moduleVar = "模块级"
+
+agent MyAgent {
+  main {
+    // ❌ 错误：模块级 let 不可见
+    print(moduleVar)  // E0350 SCOPE_VIOLATION
+  }
+}
+
+// ✅ 修正：使用 shared let
+shared let moduleVar = "模块级"
+
+agent MyAgent {
+  main {
+    print(moduleVar)  // ✅ 可以访问
+  }
+}
+```
+
+---
+
+## v1.10 shared let 完整示例
+
+### 计数器示例
+
+```helen
+// 共享计数器
+shared let SHARED_COUNTER = 0
+
+agent Counter {
+  main {
+    SHARED_COUNTER += 1
+    print("Count: " + str(SHARED_COUNTER))
+  }
+}
+
+// 主程序
+main {
+  async call Counter()
+  async call Counter()
+  async call Counter()
+  
+  // 等待所有 agent 完成
+  // SHARED_COUNTER 现在是 3
+}
+```
+
+### 配置共享示例
+
+```helen
+// 共享配置
+shared let SHARED_CONFIG = {
+  "max_retries": 3,
+  "timeout": 5000,
+  "debug": true
+}
+
+agent Worker {
+  main {
+    let retries = SHARED_CONFIG["max_retries"]
+    let timeout = SHARED_CONFIG["timeout"]
+    
+    // 使用配置执行任务
+    print("Retries: " + str(retries))
+    print("Timeout: " + str(timeout))
+  }
+}
+```
+
+### 状态聚合示例
+
+```helen
+// 共享结果收集器
+shared let SHARED_RESULTS = []
+
+agent DataProcessor {
+  main {
+    // 处理数据
+    let result = process_data()
+    
+    // 添加到共享列表
+    SHARED_RESULTS.push(result)
+  }
+}
+
+main {
+  // 并发处理多个数据源
+  async call DataProcessor()
+  async call DataProcessor()
+  async call DataProcessor()
+  
+  // SHARED_RESULTS 现在包含所有结果
+  print("Total results: " + str(len(SHARED_RESULTS)))
+}
+```
+
+---
+
+**最后更新**: 2026-07-01  
+**版本**: v1.10

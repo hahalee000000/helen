@@ -318,14 +318,17 @@ def type_of_literal(value: Any) -> Type:
     Returns:
         The corresponding Helen Type instance.
     """
-    if value is None:
-        return NULL_TYPE
-    if isinstance(value, bool):
-        return BOOL_TYPE
-    if isinstance(value, int):
-        return INT_TYPE
-    if isinstance(value, float):
-        return FLOAT_TYPE
-    if isinstance(value, str):
-        return STRING_TYPE
-    return ANY_TYPE
+    # Note: bool() must precede int() because bool is a subclass of int
+    match value:
+        case None:
+            return NULL_TYPE
+        case bool():
+            return BOOL_TYPE
+        case int():
+            return INT_TYPE
+        case float():
+            return FLOAT_TYPE
+        case str():
+            return STRING_TYPE
+        case _:
+            return ANY_TYPE

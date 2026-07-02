@@ -134,3 +134,176 @@ try {
 | E0342 INVALID_CATCH_TYPE | — | catch 类型非预定义 |
 | E0343 CATCH_ALL_NOT_LAST | — | catch-all 不在最后 |
 | E0346 CONST_ASSIGNMENT | ConstAssignmentError | 常量重新赋值 |
+
+---
+
+## v1.10 异常增强
+
+### RuntimeError 包装 stdlib 异常
+
+v1.10 增强了异常处理，将 Python 标准库异常包装为 Helen 的 `RuntimeError`，使得在 Helen 代码中可以统一处理所有异常。
+
+#### 包装机制
+
+```python
+def _wrap_python_exception(self, exc: Exception) -> RuntimeError:
+    """将 Python stdlib 异常包装为 Helen RuntimeError"""
+    return RuntimeError(
+        message=f"{type(exc).__name__}: {str(exc)}",
+        original_exception=exc
+    )
+```
+
+#### 示例
+
+```helen
+// Python stdlib 异常被包装为 RuntimeError
+try {
+  let result = int("not a number")  // Python ValueError
+} catch RuntimeError as e {
+  print("Error: " + e.message)
+  // 输出: "Error: ValueError: invalid literal for int() with base 10: 'not a number'"
+}
+
+// 文件操作异常
+try {
+  let content = read_file("/nonexistent/file.txt")  // Python FileNotFoundError
+} catch RuntimeError as e {
+  print("File error: " + e.message)
+  // 输出: "File error: FileNotFoundError: [Errno 2] No such file or directory..."
+}
+
+// 网络请求异常
+try {
+  let response = http_get("https://invalid-url.example")  // Python ConnectionError
+} catch RuntimeError as e {
+  print("Network error: " + e.message)
+}
+```
+
+#### 异常层次更新
+
+```
+Exception
+├── HelenRuntimeError           # 运行时错误基类
+│   ├── TimeoutError             # LLM 超时
+│   ├── ModelError               # LLM 模型错误
+│   ├── ToolError                # 工具调用错误
+│   ├── RuntimeError             # 通用运行时错误（v1.10: 包装 stdlib 异常）
+│   ├── AssertionError           # assert 语句失败
+│   └── ScopeViolationError      # v1.10: 作用域违规（新增）
+└── AnyError                     # 异常基类（catch-all）
+```
+
+### v1.10 新增异常
+
+#### ScopeViolationError
+
+当 agent main 访问不可见的模块级 let 时抛出：
+
+```python
+class ScopeViolationError(HelenRuntimeError):
+    """Agent main 试图访问不可见的模块级变量"""
+    def __init__(self, var_name: str, agent_name: str):
+        self.var_name = var_name
+        self.agent_name = agent_name
+        super().__init__(
+            f"Module-level let '{var_name}' is not visible in agent '{agent_name}' main. "
+            f"Use 'shared let' to make it accessible."
+        )
+```
+
+**示例**:
+
+```helen
+let moduleVar = "模块级"
+
+agent MyAgent {
+  main {
+    // 在语义分析阶段就会报错（E0350）
+    // 如果绕过语义分析，运行时抛出 ScopeViolationError
+    print(moduleVar)  // ❌ ScopeViolationError
+  }
+}
+
+// ✅ 修正
+shared let moduleVar = "模块级"
+
+agent MyAgent {
+  main {
+    print(moduleVar)  // ✅ 可以访问
+  }
+}
+```
+
+### 异常处理最佳实践
+
+#### 1. 捕获具体异常
+
+```helen
+// ❌ 过于宽泛
+try {
+  risky_operation()
+} catch {
+  print("Something went wrong")
+}
+
+// ✅ 具体异常
+try {
+  risky_operation()
+} catch TimeoutError as e {
+  print("Timeout: " + e.message)
+} catch RuntimeError as e {
+  print("Runtime error: " + e.message)
+} catch {
+  print("Unknown error")
+}
+```
+
+#### 2. 处理 stdlib 异常
+
+```helen
+try {
+  let num = int(user_input)
+} catch RuntimeError as e {
+  // 检查是否是 ValueError
+  if "ValueError" in e.message {
+    print("Invalid number format")
+  } else {
+    print("Other error: " + e.message)
+  }
+}
+```
+
+#### 3. 重新抛出异常
+
+```helen
+fn process_data(data: str) {
+  try {
+    let parsed = json_parse(data)
+    validate(parsed)
+  } catch RuntimeError as e {
+    // 添加上下文信息
+    throw RuntimeError("Failed to process data: " + e.message)
+  }
+}
+```
+
+### 错误消息改进
+
+v1.10 改进了错误消息，包含更多信息：
+
+```helen
+try {
+  let result = 1 / 0
+} catch RuntimeError as e {
+  print(e.message)
+  // 输出: "ZeroDivisionError: division by zero"
+  // 包含原始 Python 异常类型和消息
+}
+```
+
+---
+
+**最后更新**: 2026-07-01  
+**版本**: v1.10

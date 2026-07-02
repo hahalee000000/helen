@@ -1,10 +1,165 @@
 # 版本历史
 
-> Helen v1.9 | Phase 0-10 全部实现 + 中文语法
+> Helen v1.10 | Agent 作用域隔离 + shared let + 异步 HTTP + CLI 参数支持
 
 ---
 
-## v1.9: 中文语法支持 (当前)
+## v1.10: CLI 参数支持 (当前)
+
+| 改进 | 说明 | 状态 |
+|------|------|------|
+| `argv` 预定义常量 | `const list<str>`，包含命令行参数 | ✅ |
+| `get_cli_args()` | 标准库函数，返回与 argv 相同的列表 | ✅ |
+| `parse_cli_args()` | 结构化解析 CLI 参数（自动模式 + spec 模式） | ✅ |
+| CLI 参数传递 | `helen <file> [args...]` 传递参数给程序 | ✅ |
+| Agent 作用域传播 | `argv` 作为 const 自动在 agent 隔离环境中可见 | ✅ |
+| shared let 跨模块访问 | 导入模块的函数可访问其自身模块的 const 和 shared let | ✅ |
+| 模块级 Environment | 每个导入模块拥有独立作用域链 | ✅ |
+
+### shared let 跨模块访问修复
+
+**问题**：导入模块（尤其是别名导入 `import "x.helen" as m`）的函数无法访问其模块自身定义的 `const` 和 `shared let`，导致 `Undefined variable` 运行时错误。
+
+**根因**：
+1. `import_resolver._register_helen()` 的过滤条件 `not stmt.mutable` 排除了 `shared let`（mutable=True）
+2. 别名导入路径未注册 shared let 到当前环境
+3. `visit_access` 对 `__data__` 中存储的 AST 节点未求值
+4. 模块函数调用使用调用方环境作为父作用域，无法看到模块级变量
+
+**修复**：
+- `import_resolver.py`：过滤条件改为 `not stmt.mutable or stmt.shared`
+- `interpreter.py`：为每个导入模块创建独立的模块级 `Environment`，在调用模块函数时作为父作用域传入
+- `analyzer.py`：语义分析阶段也注册 `shared let` 到符号表
+
+**示例**：
+
+```helen
+// output.helen
+const LEVEL = 1
+shared let _use_colors = true
+fn colorize(t: str): str {
+    if _use_colors { return "[C]" + t }
+    return t
+}
+
+// main.helen
+import "output.helen" as output
+main {
+    output.colorize("hi")   // ✅ 现在正常工作
+}
+```
+
+**用法**：
+
+```bash
+$ helen my_tool.helen --verbose --output=json --port=8080 input.txt
+```
+
+```helen
+// 1. 直接访问 argv
+print(argv)  // ["--verbose", "--output=json", "--port=8080", "input.txt"]
+
+// 2. 自动解析
+let parsed = parse_cli_args()
+// {verbose: true, output: "json", port: "8080", _positional: ["input.txt"]}
+
+// 3. 结构化解析（带类型和默认值）
+let spec = {
+    "verbose": {"type": "flag", "default": false},
+    "output": {"type": "string", "default": "text"},
+    "port": {"type": "int", "default": 3000}
+}
+let config = parse_cli_args(spec)
+// {verbose: true, output: "json", port: 8080, _positional: ["input.txt"]}
+```
+
+**实现细节**：
+- CLI 层 (`cli/__main__.py`)：`main()` 将 `argv[1:]` 传递给 `run_command()` → `Interpreter(program_args=...)`
+- 解释器层：`argv` 作为 `const` 注入全局 Environment，自动传播到 agent 隔离作用域
+- 语义分析层：`argv` 注册为 `kind="const"` 符号，重赋值在分析阶段报错
+- 标准库层：`get_cli_args()` / `parse_cli_args()` 通过模块级 `_cli_args` 存储访问参数
+
+**新增 stdlib 函数**：2 个（`get_cli_args`, `parse_cli_args`），总计 **195** 个内置函数
+
+**质量**: 71 个新测试（41 execution + 30 stdlib），2211+ 测试通过，0 regression
+
+---
+
+## v1.10: Agent 作用域隔离
+
+| 改进 | 说明 | 状态 |
+|------|------|------|
+| `shared` 关键字 | 跨 agent 可见变量 (`shared` / `共享`) | ✅ |
+| Agent 作用域隔离 | `agent main {}` 在隔离环境中运行 | ✅ |
+| 子脚本/字段赋值 | `arr[i] = x` 和 `obj.field = x` | ✅ |
+| 短路求值 | `&&` 和 `\|\|` 短路求值 | ✅ |
+| 返回类型语法 | 仅支持 `:` 语法，移除 `->` | ✅ |
+| 异常包装 | RuntimeError 包装 stdlib Python 异常 | ✅ |
+| 异步 HTTP | `act_async()` / `act_stream_async()` | ✅ |
+| 导入跟踪 | 导入的 `shared let` 被正确跟踪 | ✅ |
+| List 拼接 | `list + list` 支持（`_add()` 新增 list 分支） | ✅ |
+| Agent 函数返回值 | `functions {}` 中 return 正确解包给 LLM | ✅ |
+| 工具输出 Unicode | 工具返回 JSON 正确显示中文（`ensure_ascii=False`） | ✅ |
+
+**Agent 作用域隔离规则**:
+- 模块级 `let` 在 agent main 中**不可见**（编译时错误）
+- 模块级 `const` 自动可见（只读共享）
+- 使用 `shared let` 显式声明跨 agent 可见的可变变量
+- Agent main 中的闭包可以捕获局部变量
+
+**示例**:
+
+```helen
+shared let counter = 0
+const CONFIG = { "debug": true }
+
+agent Worker {
+  main {
+    // let moduleVar  // ❌ 编译错误
+    CONFIG  // ✅ 只读访问
+    counter += 1  // ✅ 可读写 shared let
+  }
+}
+
+// 子脚本/字段赋值
+let arr = [1, 2, 3]
+arr[0] = 10  // ✅
+
+let obj = { name: "Alice" }
+obj.name = "Bob"  // ✅
+
+// 短路求值
+let x = false && expensiveCall()  // 不会执行
+let y = true || expensiveCall()   // 不会执行
+
+// 返回类型注解
+fn add(a: int, b: int): int {  // ✅ 仅支持此语法
+  return a + b
+}
+
+// 异步 HTTP
+agent AsyncAgent {
+  main {
+    await llm act_async "task"
+  }
+}
+
+// List 拼接（v1.10 修复）
+let items = []
+items = items + ["a", "b"]        // ✅ 之前报 "Cannot add list and list"
+let merged = [1, 2] + [3, 4]      // ✅ [1, 2, 3, 4]
+```
+
+**Bug 修复**:
+- **List 拼接**：`_add()` 新增 `list + list` 分支，之前 `arr = arr + [item]` 会报 `RuntimeError: Cannot add list and list`
+- **Agent 函数返回值**：`_execute_agent_function()` 现在会解包 `ReturnSentinel`，LLM 工具调用结果不再显示 `ReturnSentinel(...)` 字符串
+- **工具 Unicode 输出**：27 处 `json.dumps()` 全部加上 `ensure_ascii=False`，工具返回的中文不再显示为 `\uXXXX` 转义
+
+**质量**: 1500+ 测试通过
+
+---
+
+## v1.9: 中文语法支持
 
 | 改进 | 说明 | 状态 |
 |------|------|------|

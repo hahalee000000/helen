@@ -98,5 +98,5 @@ Both layers are needed: AST-level catches semantic analysis phase, environment-l
 - `_truthy(value)`: None/False/0/""/[]/{} → False, everything else → True
 - `_equal(a, b)`: None-safe equality
 - `_check_number(op, *values)`: Raises HellenRuntimeError if any value isn't int/float
-- `_add(left, right)`: Supports string concatenation AND numeric addition (auto-convert non-strings)
+- `_add(left, right)`: Supports string concatenation, numeric addition, AND list concatenation (auto-convert non-strings)
 - `_stringify(value)`: Human-readable representation for all Hellen types

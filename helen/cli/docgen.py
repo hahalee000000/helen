@@ -203,10 +203,11 @@ def generate_docs(
             continue
 
         for stmt in program.statements:
-            if isinstance(stmt, AgentDeclNode):
-                agents.append(extract_agent_doc(stmt, str(file_path)))
-            elif isinstance(stmt, FunctionDeclNode):
-                functions.append(extract_function_doc(stmt, str(file_path)))
+            match stmt:
+                case AgentDeclNode():
+                    agents.append(extract_agent_doc(stmt, str(file_path)))
+                case FunctionDeclNode():
+                    functions.append(extract_function_doc(stmt, str(file_path)))
 
     result: dict[str, Any] = {
         "agents": [a.to_dict() for a in agents],

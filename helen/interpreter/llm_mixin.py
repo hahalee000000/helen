@@ -28,7 +28,7 @@ from helen.core.ast import (
     LiteralNode,
 )
 from helen.core.errors import ErrorCode
-from helen.interpreter.exceptions import HelenRuntimeError
+from helen.interpreter.exceptions import HelenRuntimeError, ReturnSentinel
 from helen.runtime.history import Message as HistoryMessage
 from helen.runtime.observability import LLMAuditEntry
 
@@ -646,7 +646,7 @@ class LlmMixin:
                                 return result
                             return json.dumps(result, ensure_ascii=False, default=str)
                         except Exception as e:
-                            return json.dumps({"error": f"Helen function '{name}' failed: {e}"})
+                            return json.dumps({"error": f"Helen function '{name}' failed: {e}"}, ensure_ascii=False)
 
             # Fall back to Python tool dispatch
             return default_dispatch(name, args)
@@ -681,6 +681,8 @@ class LlmMixin:
 
             # Execute function body
             result = fn_decl.body.accept(self)
+            if isinstance(result, ReturnSentinel):
+                return result.value
             return result
         finally:
             # Restore environment

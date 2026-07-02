@@ -113,6 +113,42 @@ $ helen hello.helen
 Hello, World!
 ```
 
+### 传递命令行参数
+
+文件名之后的参数会传递给 Helen 程序，通过预定义常量 `argv` 访问：
+
+```bash
+$ helen greet.helen Alice Bob
+```
+
+```helen
+// greet.helen
+for name in argv {
+    print("Hello, " + name + "!")
+}
+```
+
+```
+Hello, Alice!
+Hello, Bob!
+```
+
+也可以使用 `parse_cli_args()` 进行结构化解析：
+
+```helen
+// tool.helen — 运行: helen tool.helen --verbose --output=json file.txt
+let config = parse_cli_args({
+    "verbose": {"type": "flag", "default": false},
+    "output": {"type": "string", "default": "text"}
+})
+
+if config["verbose"] {
+    print("Verbose mode on, output=" + config["output"])
+}
+```
+
+详见 [[toolchain/cli|CLI 文档]] 和 [[toolchain/stdlib|标准库 System 章节]]。
+
 ---
 
 ## VS Code 集成

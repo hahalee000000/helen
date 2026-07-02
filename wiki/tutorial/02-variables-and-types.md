@@ -200,6 +200,23 @@ unsorted.reverse()        // [5, 4, 3, 1, 1]
 let copy = items.copy()   // 浅拷贝
 ```
 
+### 列表拼接
+
+使用 `+` 操作符可以拼接两个列表，返回一个新列表（原列表不变）：
+
+```helen
+let a = [1, 2]
+let b = [3, 4]
+let c = a + b             // [1, 2, 3, 4]
+
+// 常用于增量构建
+let items = []
+items = items + ["a"]     // ["a"]
+items = items + ["b", "c"]  // ["a", "b", "c"]
+```
+
+> 注意：`+` 返回新列表，不修改原列表。如需原地修改，使用 `append()` 或 `extend()`。
+
 **可用方法列表**：
 | 方法 | 说明 |
 |------|------|
@@ -220,6 +237,72 @@ let copy = items.copy()   // 浅拷贝
 ```helen
 let person = {"name": "Alice", "age": 30}
 let name = person["name"]  // "Alice"
+```
+
+### 子脚本/字段赋值 (v1.10)
+
+v1.10 添加了**子脚本赋值**和**字段赋值**支持，可以直接修改数组元素和对象字段：
+
+#### 数组索引赋值
+
+```helen
+let arr = [1, 2, 3]
+arr[0] = 10  // ✅ arr 变为 [10, 2, 3]
+arr[1] = 20  // ✅ arr 变为 [10, 20, 3]
+
+// 动态索引
+let i = 2
+arr[i] = 30  // ✅ arr 变为 [10, 20, 30]
+```
+
+#### 对象字段赋值
+
+```helen
+let person = {"name": "Alice", "age": 30}
+person["age"] = 31  // ✅ person 变为 {"name": "Alice", "age": 31}
+person.name = "Bob"  // ✅ person 变为 {"name": "Bob", "age": 31}
+```
+
+#### 嵌套访问
+
+```helen
+let matrix = [[1, 2], [3, 4]]
+matrix[0][1] = 99  // ✅ matrix 变为 [[1, 99], [3, 4]]
+
+let data = {"users": [{"name": "Alice"}, {"name": "Bob"}]}
+data["users"][0]["name"] = "Charlie"  // ✅ 嵌套修改
+```
+
+#### 错误示例
+
+```helen
+const arr = [1, 2, 3]
+arr[0] = 10  // ❌ E0346 CONST_ASSIGNMENT: const 不可修改
+
+const obj = {"name": "Alice"}
+obj.name = "Bob"  // ❌ E0346 CONST_ASSIGNMENT: const 不可修改
+```
+
+#### 实际示例
+
+```helen
+// 更新数组中的记录
+let users = [
+  {"name": "Alice", "score": 85},
+  {"name": "Bob", "score": 90}
+]
+
+// 更新第一个用户的分数
+users[0]["score"] = 95
+
+// 添加新字段
+users[1]["grade"] = "A"
+
+print(users)
+// [
+//   {"name": "Alice", "score": 95},
+//   {"name": "Bob", "score": 90, "grade": "A"}
+// ]
 ```
 
 ## 类型检查

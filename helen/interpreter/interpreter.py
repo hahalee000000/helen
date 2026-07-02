@@ -157,7 +157,8 @@ class Interpreter(LlmMixin, Visitor[object]):
 
     def __init__(self, errors: ErrorReporter | None = None,
                  llm_runtime: LLMRuntime | None = None,
-                 import_resolver: ImportResolver | None = None) -> None:
+                 import_resolver: ImportResolver | None = None,
+                 program_args: list[str] | None = None) -> None:
         self.errors = errors or ErrorReporter()
         self.environment = Environment()
         self._functions: dict[str, FunctionDeclNode] = {}
@@ -165,6 +166,7 @@ class Interpreter(LlmMixin, Visitor[object]):
         self.llm_runtime = llm_runtime or MockLLMRuntime()
         self._current_agent: AgentDeclNode | None = None
         self.import_resolver = import_resolver or ImportResolver()
+        self._program_args: list[str] = list(program_args) if program_args else []
         # AI-native observability (P0-P3)
         self.observability = ObservabilityManager()
         # Merge imported agents/functions into local registries
@@ -177,6 +179,11 @@ class Interpreter(LlmMixin, Visitor[object]):
         self._history_manager = HistoryManager()
         # Register stdlib builtins in global environment (HLD M15)
         self._register_stdlib()
+        # Set CLI args in the stdlib module (for get_cli_args/parse_cli_args)
+        from helen.stdlib.system import _set_cli_args
+        _set_cli_args(self._program_args)
+        # Define `argv` as a pre-defined const (CLI arguments after the filename)
+        self.environment.define("argv", self._program_args, is_const=True)
 
     def _register_stdlib(self) -> None:
         """Inject all stdlib functions into the global environment.
@@ -293,9 +300,13 @@ class Interpreter(LlmMixin, Visitor[object]):
             if node.name in self._functions:
                 func_node = self._functions[node.name]
                 # Return a callable wrapper so functions can be used as first-class values
+                # v1.10: Pass module env for imported functions
+                _parent_env = None
+                if hasattr(self, '_function_module_envs'):
+                    _parent_env = self._function_module_envs.get(node.name)
 
                 def _function_wrapper(*args):
-                    return self._call_function(func_node, list(args))
+                    return self._call_function(func_node, list(args), parent_env=_parent_env)
                 return _function_wrapper
             # Fallback: check if it's a user-defined agent name
             if node.name in self._agents:
@@ -429,7 +440,10 @@ class Interpreter(LlmMixin, Visitor[object]):
         # Check if it's a registered function
         if func_name is not None and func_name in self._functions:
             func = self._functions[func_name]
-            return self._call_function(func, [value])
+            _penv = None
+            if hasattr(self, '_function_module_envs'):
+                _penv = self._function_module_envs.get(func_name)
+            return self._call_function(func, [value], parent_env=_penv)
 
         # Check if it's a registered agent
         if func_name is not None and func_name in self._agents:
@@ -443,18 +457,15 @@ class Interpreter(LlmMixin, Visitor[object]):
         # Otherwise evaluate as expression and try to call
         func = node.function.accept(self)
 
-        # Closure call
-        if isinstance(func, Closure):
-            return self._call_closure(func, [value])
-
-        # Python FFI
+        # Closure / FFI / callable dispatch
         from helen.ffi.python_object import WrappedPythonObject
-        if isinstance(func, WrappedPythonObject):
-            return func.call(value)
-
-        # Stdlib builtin or any other callable
-        if callable(func):
-            return func(value)
+        match func:
+            case Closure():
+                return self._call_closure(func, [value])
+            case WrappedPythonObject():
+                return func.call(value)
+            case _ if callable(func):
+                return func(value)
 
         func_str = func_name if func_name else type(func).__name__
         self._runtime_error(node.span, f"'{func_str}' is not callable")
@@ -496,7 +507,12 @@ class Interpreter(LlmMixin, Visitor[object]):
         if callee_name is not None and callee_name in self._functions:
             func = self._functions[callee_name]
             args = [arg.value.accept(self) for arg in node.arguments]
-            return self._call_function(func, args)
+            # v1.10: Pass module env for imported functions so they can
+            # access their module's consts and shared let
+            parent_env = None
+            if hasattr(self, '_function_module_envs'):
+                parent_env = self._function_module_envs.get(callee_name)
+            return self._call_function(func, args, parent_env=parent_env)
 
         # Check if callee matches a registered agent (HLD 3.5.2: isolated env)
         if callee_name is not None and callee_name in self._agents:
@@ -526,43 +542,41 @@ class Interpreter(LlmMixin, Visitor[object]):
         for arg in node.arguments:
             args.append(arg.value.accept(self))
 
-        # Function call (if callee was a function node directly)
-        if isinstance(callee, FunctionDeclNode):
-            return self._call_function(callee, args)
-
-        # Closure call (lambda expression)
-        if isinstance(callee, Closure):
-            return self._call_closure(callee, args)
-
-        # Check if callee is a Python FFI object
+        # Function/Closure/FFI/builtin dispatch
         from helen.ffi.python_object import WrappedPythonObject
-        if isinstance(callee, WrappedPythonObject):
-            return callee.call(*args)
+        match callee:
+            case FunctionDeclNode():
+                return self._call_function(callee, args)
 
-        # Check if callee is a stdlib builtin function (HLD M15)
-        if callable(callee):
-            # Wrap Closure arguments as Python callables for stdlib functions
-            wrapped_args = []
-            for arg in args:
-                if isinstance(arg, Closure):
-                    # Create a Python wrapper that calls the closure
-                    def make_wrapper(closure_obj):
-                        def wrapper(*py_args):
-                            return self._call_closure(closure_obj, list(py_args))
-                        return wrapper
-                    wrapped_args.append(make_wrapper(arg))
-                else:
-                    wrapped_args.append(arg)
-            try:
-                return callee(*wrapped_args)
-            except HelenRuntimeError:
-                raise  # Already a Helen exception, propagate as-is
-            except Exception as e:
-                # Wrap Python exceptions in RuntimeError so try-catch can catch them.
-                # Preserve the original Python exception type in the message
-                # so users can distinguish (e.g., "Python TypeError: ..." vs "Python ValueError: ...").
-                py_type = type(e).__name__
-                raise HelenRuntimeErrorClass(f"Python {py_type}: {e}", node.span) from e
+            case Closure():
+                return self._call_closure(callee, args)
+
+            case WrappedPythonObject():
+                return callee.call(*args)
+
+            case _ if callable(callee):
+                # stdlib builtin function (HLD M15)
+                # Wrap Closure arguments as Python callables for stdlib functions
+                wrapped_args = []
+                for arg in args:
+                    match arg:
+                        case Closure() as closure_obj:
+                            # Create a Python wrapper that calls the closure
+                            def wrapper(*py_args, _c=closure_obj):
+                                return self._call_closure(_c, list(py_args))
+                            wrapped_args.append(wrapper)
+                        case _:
+                            wrapped_args.append(arg)
+                try:
+                    return callee(*wrapped_args)
+                except HelenRuntimeError:
+                    raise  # Already a Helen exception, propagate as-is
+                except Exception as e:
+                    # Wrap Python exceptions in RuntimeError so try-catch can catch them.
+                    # Preserve the original Python exception type in the message
+                    # so users can distinguish (e.g., "Python TypeError: ..." vs "Python ValueError: ...").
+                    py_type = type(e).__name__
+                    raise HelenRuntimeErrorClass(f"Python {py_type}: {e}", node.span) from e
 
         callee_str = callee_name if callee_name else type(callee).__name__
         self._runtime_error(node.span, f"'{callee_str}' is not callable")
@@ -608,7 +622,14 @@ class Interpreter(LlmMixin, Visitor[object]):
                         # Return a callable wrapper for the agent
                         return self._create_module_agent_wrapper(agent_node, target)
                     elif prop in target.get("__data__", {}):
-                        return target["__data__"][prop]
+                        data_val = target["__data__"][prop]
+                        # v1.10: Evaluate VarDeclNode (const/shared let) on access
+                        from helen.core.ast import VarDeclNode as _VDN
+                        if isinstance(data_val, _VDN) and data_val.initializer is not None:
+                            evaluated = data_val.initializer.accept(self)
+                            target["__data__"][prop] = evaluated  # cache for future access
+                            return evaluated
+                        return data_val
                     else:
                         # Fall back to regular dict access
                         return target[prop]
@@ -623,10 +644,15 @@ class Interpreter(LlmMixin, Visitor[object]):
             return None
 
     def _create_module_function_wrapper(self, func_node, module: dict):
-        """Create a callable wrapper for a module function (v1.6)."""
+        """Create a callable wrapper for a module function (v1.6).
+
+        v1.10: The wrapper passes the module's environment as parent scope,
+        so module functions can access their own module's consts and shared let.
+        """
+        module_env = module.get("__env__")
+
         def wrapper(*args, **kwargs):
-            # Call the function with the provided arguments
-            return self._call_function(func_node, list(args))
+            return self._call_function(func_node, list(args), parent_env=module_env)
         return wrapper
 
     def _create_module_agent_wrapper(self, agent_node, module: dict):
@@ -926,28 +952,29 @@ class Interpreter(LlmMixin, Visitor[object]):
             bindings = {}  # Variable bindings for this case
 
             # Handle different pattern types
-            if isinstance(pattern_node, WildcardPatternNode):
-                # Wildcard matches anything
-                matched = True
-            elif isinstance(pattern_node, VariablePatternNode):
-                # Variable binding: bind subject to variable name
-                matched = True
-                bindings[pattern_node.name] = subject
-            elif isinstance(pattern_node, TypePatternNode):
-                # Type pattern: check if subject is of the specified type
-                matched = self._check_type(subject, pattern_node.type_name)
-                if matched and pattern_node.binding_name:
-                    bindings[pattern_node.binding_name] = subject
-            else:
-                # Evaluate pattern (for range, literal, etc.)
-                pattern = pattern_node.accept(self)
-                # Check if pattern is a range pattern
-                if isinstance(pattern, tuple) and len(pattern) == 3 and pattern[0] == "__range__":
-                    _, start, end = pattern
-                    if isinstance(subject, (int, float)) and isinstance(start, (int, float)) and isinstance(end, (int, float)):
-                        matched = start <= subject <= end
-                else:
-                    matched = self._equal(subject, pattern)
+            match pattern_node:
+                case WildcardPatternNode():
+                    # Wildcard matches anything
+                    matched = True
+                case VariablePatternNode():
+                    # Variable binding: bind subject to variable name
+                    matched = True
+                    bindings[pattern_node.name] = subject
+                case TypePatternNode():
+                    # Type pattern: check if subject is of the specified type
+                    matched = self._check_type(subject, pattern_node.type_name)
+                    if matched and pattern_node.binding_name:
+                        bindings[pattern_node.binding_name] = subject
+                case _:
+                    # Evaluate pattern (for range, literal, etc.)
+                    pattern = pattern_node.accept(self)
+                    # Check if pattern is a range pattern
+                    if isinstance(pattern, tuple) and len(pattern) == 3 and pattern[0] == "__range__":
+                        _, start, end = pattern
+                        if isinstance(subject, (int, float)) and isinstance(start, (int, float)) and isinstance(end, (int, float)):
+                            matched = start <= subject <= end
+                    else:
+                        matched = self._equal(subject, pattern)
 
             # Check guard condition if present
             if matched and case.guard is not None:
@@ -995,23 +1022,24 @@ class Interpreter(LlmMixin, Visitor[object]):
             matched = False
             bindings = {}
 
-            if isinstance(pattern_node, WildcardPatternNode):
-                matched = True
-            elif isinstance(pattern_node, VariablePatternNode):
-                matched = True
-                bindings[pattern_node.name] = subject
-            elif isinstance(pattern_node, TypePatternNode):
-                matched = self._check_type(subject, pattern_node.type_name)
-                if matched and pattern_node.binding_name:
-                    bindings[pattern_node.binding_name] = subject
-            else:
-                pattern = pattern_node.accept(self)
-                if isinstance(pattern, tuple) and len(pattern) == 3 and pattern[0] == "__range__":
-                    _, start, end = pattern
-                    if isinstance(subject, (int, float)) and isinstance(start, (int, float)) and isinstance(end, (int, float)):
-                        matched = start <= subject <= end
-                else:
-                    matched = self._equal(subject, pattern)
+            match pattern_node:
+                case WildcardPatternNode():
+                    matched = True
+                case VariablePatternNode():
+                    matched = True
+                    bindings[pattern_node.name] = subject
+                case TypePatternNode():
+                    matched = self._check_type(subject, pattern_node.type_name)
+                    if matched and pattern_node.binding_name:
+                        bindings[pattern_node.binding_name] = subject
+                case _:
+                    pattern = pattern_node.accept(self)
+                    if isinstance(pattern, tuple) and len(pattern) == 3 and pattern[0] == "__range__":
+                        _, start, end = pattern
+                        if isinstance(subject, (int, float)) and isinstance(start, (int, float)) and isinstance(end, (int, float)):
+                            matched = start <= subject <= end
+                    else:
+                        matched = self._equal(subject, pattern)
 
             if matched and case.guard is not None:
                 old_env = self.environment
@@ -1265,35 +1293,47 @@ class Interpreter(LlmMixin, Visitor[object]):
 
         # Register imported content into the interpreter's namespaces
         if result.format == "helen":
+            # v1.10: Evaluate shared let variables from the imported module
+            # and define them in the current environment. This is needed for
+            # BOTH aliased and non-aliased imports so that the imported module's
+            # functions can access shared let via the scope chain.
+            self._register_imported_shared_vars()
+
             # v1.6: If alias is provided, create a module object for function/agent access
             if node.alias:
                 module_obj = self._create_module_object(result)
                 self.environment.define(node.alias, module_obj)
             else:
                 # No alias: register agents/functions/constants directly to global namespace
+                # v1.10: Create a module env for imported functions so they can
+                # access their own module's consts and shared let.
+                from helen.core.ast import VarDeclNode as _VDN
+                module_env = Environment(parent=self.environment)
+                for name, data in self.import_resolver.data.items():
+                    if isinstance(data, _VDN) and (not data.mutable or data.shared):
+                        if data.initializer is not None:
+                            old_env = self.environment
+                            self.environment = module_env
+                            try:
+                                value = data.initializer.accept(self)
+                            finally:
+                                self.environment = old_env
+                        else:
+                            value = None
+                        module_env.define(name, value, is_const=not data.mutable)
+
                 for name, agent in self.import_resolver.agents.items():
                     if name not in self._agents:
                         self._agents[name] = agent
                 for name, func in self.import_resolver.functions.items():
                     if name not in self._functions:
                         self._functions[name] = func
+                        # v1.10: Track module env for this function
+                        if not hasattr(self, '_function_module_envs'):
+                            self._function_module_envs: dict[str, Environment] = {}
+                        self._function_module_envs[name] = module_env
                 # Register constants by evaluating their initializers
-                for name, const_node in self.import_resolver.data.items():
-                    # Check if already defined in environment
-                    try:
-                        self.environment.lookup(name)
-                        # Already defined, skip
-                    except NameError:
-                        # Not defined, evaluate and define it
-                        from helen.core.ast import VarDeclNode
-                        if isinstance(const_node, VarDeclNode) and const_node.initializer is not None:
-                            value = const_node.initializer.accept(self)
-                            self.environment.define(name, value)
-                            # v1.10: Track shared let from imported modules
-                            if const_node.shared:
-                                if not hasattr(self, '_shared_vars'):
-                                    self._shared_vars: set[str] = set()
-                                self._shared_vars.add(name)
+                self._register_imported_consts_and_shared()
         else:
             # Register data by user-specified alias (or filename if no alias)
             alias = node.alias if node.alias else os.path.splitext(os.path.basename(result.path))[0]
@@ -1302,8 +1342,62 @@ class Interpreter(LlmMixin, Visitor[object]):
 
         return None
 
+    def _register_imported_shared_vars(self) -> None:
+        """Evaluate shared let variables from imported modules and define them.
+
+        v1.10: Imported shared let must be available in the importing
+        interpreter's environment so the imported module's functions
+        can access them through the scope chain.
+
+        Called for BOTH aliased and non-aliased .helen imports.
+        """
+        from helen.core.ast import VarDeclNode  # noqa: PLC0415
+        for name, var_node in self.import_resolver.data.items():
+            if not isinstance(var_node, VarDeclNode):
+                continue
+            if not var_node.shared:
+                continue
+            # Only define if not already in environment
+            try:
+                self.environment.lookup(name)
+            except NameError:
+                if var_node.initializer is not None:
+                    value = var_node.initializer.accept(self)
+                    self.environment.define(name, value)
+                else:
+                    self.environment.define(name, None)
+                if not hasattr(self, '_shared_vars'):
+                    self._shared_vars: set[str] = set()
+                self._shared_vars.add(name)
+
+    def _register_imported_consts_and_shared(self) -> None:
+        """Evaluate const and shared let from imported modules into the environment.
+
+        Used by the non-aliased import path to register all constants and
+        shared variables into the global namespace.
+        """
+        from helen.core.ast import VarDeclNode  # noqa: PLC0415
+        for name, const_node in self.import_resolver.data.items():
+            try:
+                self.environment.lookup(name)
+                # Already defined, skip
+            except NameError:
+                if isinstance(const_node, VarDeclNode) and const_node.initializer is not None:
+                    value = const_node.initializer.accept(self)
+                    self.environment.define(name, value)
+                    if const_node.shared:
+                        if not hasattr(self, '_shared_vars'):
+                            self._shared_vars: set[str] = set()
+                        self._shared_vars.add(name)
+
     def _create_module_object(self, result: ImportResult) -> dict:
-        """Create a module object containing agents and functions from imported .helen file (v1.6)."""
+        """Create a module object containing agents and functions from imported .helen file (v1.6).
+
+        v1.10: Also creates a module-level Environment that captures the module's
+        consts and shared let. This env is used as the parent scope when calling
+        module functions, so they can access their own module's variables.
+        """
+        from helen.core.ast import VarDeclNode  # noqa: PLC0415
         module = {
             "__type__": "module",
             "__path__": result.path,
@@ -1311,6 +1405,25 @@ class Interpreter(LlmMixin, Visitor[object]):
             "__functions__": {},
             "__data__": {}
         }
+
+        # v1.10: Create module-level environment for function scope resolution.
+        # Parent is the current (caller's) environment so stdlib is accessible.
+        module_env = Environment(parent=self.environment)
+        for name, data in self.import_resolver.data.items():
+            if isinstance(data, VarDeclNode) and (not data.mutable or data.shared):
+                # Evaluate const and shared let initializers in the module env
+                if data.initializer is not None:
+                    # Temporarily use module_env for evaluation so const refs resolve
+                    old_env = self.environment
+                    self.environment = module_env
+                    try:
+                        value = data.initializer.accept(self)
+                    finally:
+                        self.environment = old_env
+                else:
+                    value = None
+                module_env.define(name, value, is_const=not data.mutable)
+        module["__env__"] = module_env
 
         # Collect agents
         for name, agent in self.import_resolver.agents.items():
@@ -1483,11 +1596,19 @@ class Interpreter(LlmMixin, Visitor[object]):
         from helen.semantic.type_utils import type_from_typenode
         return type_from_typenode(type_node)
 
-    def _call_function(self, func: FunctionDeclNode, args: list[object]) -> object:
+    def _call_function(self, func: FunctionDeclNode, args: list[object], parent_env: Environment | None = None) -> object:
         """Call a function with the given arguments.
 
         Creates a new environment scope, binds parameters, and executes
         the function body.
+
+        Args:
+            func: The function declaration node.
+            args: The positional arguments.
+            parent_env: Optional parent environment for the call scope.
+                If None, uses the current environment. Module functions
+                pass their module's environment here so they can access
+                module-local consts and shared let.
         """
         # Runtime parameter type checking
         for i, param in enumerate(func.params):
@@ -1511,15 +1632,26 @@ class Interpreter(LlmMixin, Visitor[object]):
         self.observability.call_stack.push(func.name, func.span, call_args)
         self.observability.tracer.trace("call", func.span, {"function": func.name, "args": call_args})
 
-        call_env = self.environment.enter_scope()
+        # v1.10: Use provided parent_env (for module functions) or current env
+        if parent_env is not None:
+            call_env = Environment(parent=parent_env)
+        else:
+            call_env = self.environment.enter_scope()
 
         # Bind parameters
+        # v1.10: For module functions, evaluate defaults in the module env
+        default_eval_env = parent_env if parent_env is not None else self.environment
         for i, param in enumerate(func.params):
             if i < len(args):
                 call_env.define(param.name, args[i])
             elif param.default_value is not None:
-                # Evaluate default in caller's environment
-                default_val = param.default_value.accept(self)
+                # Evaluate default in the appropriate environment
+                old_env_for_default = self.environment
+                self.environment = default_eval_env
+                try:
+                    default_val = param.default_value.accept(self)
+                finally:
+                    self.environment = old_env_for_default
                 call_env.define(param.name, default_val)
             else:
                 # Too few arguments — use None

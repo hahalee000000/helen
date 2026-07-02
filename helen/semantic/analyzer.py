@@ -141,6 +141,9 @@ class SemanticAnalyzer(Visitor[None]):
         for name in stdlib.names:
             sym = Symbol(name, kind="builtin", is_const=True)
             self.symbols.define(name, sym)
+        # Pre-defined const variable: argv (CLI arguments after the filename)
+        argv_sym = Symbol("argv", kind="const", is_const=True)
+        self.symbols.define("argv", argv_sym)
 
     def analyze(self, program: "ProgramNode") -> None:
         """Run semantic analysis on a full program.
@@ -277,10 +280,11 @@ class SemanticAnalyzer(Visitor[None]):
         # Two-pass analysis for forward references (v1.6)
         # Pass 1: Collect all function and agent declarations (register names only)
         for stmt in node.statements:
-            if isinstance(stmt, FunctionDeclNode):
-                self._register_function_signature(stmt)
-            elif isinstance(stmt, AgentDeclNode):
-                self._register_agent_signature(stmt)
+            match stmt:
+                case FunctionDeclNode():
+                    self._register_function_signature(stmt)
+                case AgentDeclNode():
+                    self._register_agent_signature(stmt)
 
         # Pass 2: Full analysis (including function bodies)
         for stmt in node.statements:
@@ -1046,31 +1050,32 @@ class SemanticAnalyzer(Visitor[None]):
                 # Register all functions from imported file
                 # Also recursively process imports in the imported file
                 for stmt in imported_program.statements:
-                    if isinstance(stmt, FunctionDeclNode):
-                        # Register function in current symbol table
-                        from helen.semantic.symbols import Symbol
-                        sym = Symbol(stmt.name, kind="function", is_const=True)
-                        self.symbols.define(stmt.name, sym)
-                        
-                        # Store parameter types for compile-time checking
-                        self._function_param_types[stmt.name] = [p.type_annotation for p in stmt.params]
-                    
-                    elif isinstance(stmt, AgentDeclNode):
-                        # Register agent in current symbol table
-                        from helen.semantic.symbols import Symbol
-                        sym = Symbol(stmt.name, kind="agent", is_const=True)
-                        self.symbols.define(stmt.name, sym)
-                        self._agent_names[stmt.name] = stmt
-                    
-                    elif isinstance(stmt, VarDeclNode) and stmt.mutable == False:
-                        # Register const declarations
-                        from helen.semantic.symbols import Symbol
-                        sym = Symbol(stmt.name, kind="const", is_const=True)
-                        self.symbols.define(stmt.name, sym)
-                    
-                    elif isinstance(stmt, ImportStmtNode):
-                        # Recursively process imports in the imported file
-                        stmt.accept(self)
+                    match stmt:
+                        case FunctionDeclNode():
+                            # Register function in current symbol table
+                            from helen.semantic.symbols import Symbol
+                            sym = Symbol(stmt.name, kind="function", is_const=True)
+                            self.symbols.define(stmt.name, sym)
+                            # Store parameter types for compile-time checking
+                            self._function_param_types[stmt.name] = [p.type_annotation for p in stmt.params]
+
+                        case AgentDeclNode():
+                            # Register agent in current symbol table
+                            from helen.semantic.symbols import Symbol
+                            sym = Symbol(stmt.name, kind="agent", is_const=True)
+                            self.symbols.define(stmt.name, sym)
+                            self._agent_names[stmt.name] = stmt
+
+                        case VarDeclNode() if not stmt.mutable or stmt.shared:
+                            # Register const and shared let declarations
+                            # v1.10: shared let (mutable=True, shared=True) also imported
+                            from helen.semantic.symbols import Symbol
+                            sym = Symbol(stmt.name, kind="const" if not stmt.mutable else "shared", is_const=not stmt.mutable)
+                            self.symbols.define(stmt.name, sym)
+
+                        case ImportStmtNode():
+                            # Recursively process imports in the imported file
+                            stmt.accept(self)
                 
                 # If alias is provided, register it as a module reference
                 if node.alias:

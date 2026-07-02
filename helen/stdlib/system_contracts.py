@@ -59,6 +59,34 @@ class EnvContract:
         ...
 
 
+class CliArgsContract:
+    """Contract for CLI argument operations."""
+
+    @staticmethod
+    def get_cli_args() -> list[str]:
+        """Get CLI arguments passed to the Helen program.
+
+        Returns:
+            List of CLI argument strings (empty list if none).
+        """
+        ...
+
+    @staticmethod
+    def parse_cli_args(spec: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Parse CLI arguments into a structured map.
+
+        Args:
+            spec: Optional specification for expected arguments.
+                  Keys are argument names, values are dicts with
+                  'type' ('flag', 'string', 'int', 'float') and 'default'.
+
+        Returns:
+            Dict mapping argument names to parsed values.
+            Always includes '_positional' key with list of positional args.
+        """
+        ...
+
+
 class ProcessContract:
     """Contract for process operations."""
 

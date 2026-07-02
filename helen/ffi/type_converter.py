@@ -28,26 +28,21 @@ class DefaultTypeConverter:
         Returns:
             Python-compatible value
         """
-        # Primitive types pass through
-        if value is None:
-            return None
-        if isinstance(value, (int, float, str, bool)):
-            return value
-
-        # Lists convert recursively
-        if isinstance(value, list):
-            return [self.helen_to_python(item) for item in value]
-
-        # Dicts convert recursively
-        if isinstance(value, dict):
-            return {k: self.helen_to_python(v) for k, v in value.items()}
-
-        # Wrapped objects unwrap
-        if hasattr(value, 'unwrap'):
-            return value.unwrap()
-
-        # Everything else passes through
-        return value
+        match value:
+            case None:
+                return None
+            case int() | float() | str() | bool():
+                return value
+            case list():
+                return [self.helen_to_python(item) for item in value]
+            case dict():
+                return {k: self.helen_to_python(v) for k, v in value.items()}
+            case _:
+                # Wrapped objects unwrap
+                if hasattr(value, 'unwrap'):
+                    return value.unwrap()
+                # Everything else passes through
+                return value
 
     def python_to_helen(self, value: Any) -> Any:
         """Convert a Python value to Helen.
@@ -58,27 +53,19 @@ class DefaultTypeConverter:
         Returns:
             Helen-compatible value (wraps complex objects as PythonObject)
         """
-        # None -> null
-        if value is None:
-            return None
-
-        # Primitive types pass through
-        if isinstance(value, (int, float, str, bool)):
-            return value
-
-        # Tuples convert to lists
-        if isinstance(value, tuple):
-            return [self.python_to_helen(item) for item in value]
-
-        # Lists convert recursively
-        if isinstance(value, list):
-            return [self.python_to_helen(item) for item in value]
-
-        # Dicts convert recursively
-        if isinstance(value, dict):
-            return {k: self.python_to_helen(v) for k, v in value.items()}
-
-        # Complex objects are wrapped
-        # Import here to avoid circular dependency
-        from helen.ffi.python_object import WrappedPythonObject
-        return WrappedPythonObject(value)
+        match value:
+            case None:
+                return None
+            case int() | float() | str() | bool():
+                return value
+            case tuple():
+                return [self.python_to_helen(item) for item in value]
+            case list():
+                return [self.python_to_helen(item) for item in value]
+            case dict():
+                return {k: self.python_to_helen(v) for k, v in value.items()}
+            case _:
+                # Complex objects are wrapped
+                # Import here to avoid circular dependency
+                from helen.ffi.python_object import WrappedPythonObject
+                return WrappedPythonObject(value)

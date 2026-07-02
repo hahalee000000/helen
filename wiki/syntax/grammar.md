@@ -35,8 +35,13 @@ agent_setting → "description" string
 agent_param   → IDENTIFIER ":" type?
 prompt_def    → "prompt" string
 functions_block → "functions" "{" (var_decl | fn_decl)* "}"
-var_decl      → ("let" | "const") IDENTIFIER ("=" expression)?
+var_decl      → ("let" | "const" | "shared" "let") IDENTIFIER ("=" expression)?
 ```
+
+**v1.10 shared let**:
+- `shared let` 声明跨 agent 可见的可变变量
+- 模块级 `let` 在 agent main 中不可见（编译时错误）
+- 模块级 `const` 自动可见（只读共享）
 
 ### 函数声明
 
@@ -71,9 +76,11 @@ statement     → var_decl
               | break_stmt
               | continue_stmt
 
-var_decl      → ("let" | "const") IDENTIFIER ("=" expression)?
+var_decl      → ("let" | "const" | "shared" "let") IDENTIFIER ("=" expression)?
 expr_stmt     → expression
 ```
+
+**v1.10 shared let**: 在顶层声明中可用，用于跨 agent 共享可变状态。
 
 ### 控制流
 
@@ -242,3 +249,66 @@ def _synchronize(self):
 - ✅ 表达式优先级
 - ✅ Panic mode 恢复
 - ✅ 类型注解解析
+
+### v1.10 语法更新
+
+#### 1. 子脚本/字段赋值 (v1.10)
+
+赋值语句的左侧现在支持索引访问和字段访问：
+
+```helen
+// 数组索引赋值
+let arr = [1, 2, 3]
+arr[0] = 10  // ✅ 合法
+
+// 对象字段赋值
+let obj = { name: "Alice", age: 30 }
+obj.name = "Bob"  // ✅ 合法
+obj["age"] = 31   // ✅ 也合法
+```
+
+**EBNF 更新**:
+```ebnf
+assignment → (call | IDENTIFIER) "=" assignment | pipe
+```
+
+其中 `call` 包含索引访问 (`[i]`) 和字段访问 (`.field`)。
+
+#### 2. 短路求值 (v1.10)
+
+`&&` 和 `||` 运算符现在支持短路求值：
+
+```helen
+// && 短路
+let x = false && expensiveCall()  // expensiveCall() 不会执行
+let y = true && expensiveCall()   // expensiveCall() 会执行
+
+// || 短路
+let a = true || expensiveCall()   // expensiveCall() 不会执行
+let b = false || expensiveCall()  // expensiveCall() 会执行
+```
+
+**优先级表**:
+- `||` 优先级 3（左结合）
+- `&&` 优先级 4（左结合）
+- `&&` 优先级高于 `||`
+
+#### 3. 返回类型注解语法 (v1.10)
+
+仅支持 `:` 语法，`->` 语法已移除：
+
+```helen
+// ✅ 正确语法
+fn add(a: int, b: int): int {
+  return a + b
+}
+
+// ❌ 已移除
+// fn add(a: int, b: int) -> int { ... }
+```
+
+**EBNF 更新**:
+```ebnf
+fn_decl → "fn" IDENTIFIER "(" fn_params? ")" (":" type)? fn_body
+```
+

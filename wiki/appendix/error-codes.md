@@ -1,6 +1,6 @@
 # 错误码参考
 
-> 42 ErrorCode | `helen/core/errors.py`
+> 45 ErrorCode | `helen/core/errors.py`
 
 ---
 
@@ -35,7 +35,7 @@
 | E0319 | INVALID_AGENT_PARAM | 无效 Agent 参数 |
 | E0320 | UNTERMINATED_BLOCK | 块未闭合 |
 
-## 语义错误 (E0330-E0350)
+## 语义错误 (E0330-E0352)
 
 | 代码 | 名称 | 触发条件 |
 |---|---|---|
@@ -59,4 +59,138 @@
 | E0347 | AGENT_PARAM_MISMATCH | Agent 参数不匹配 |
 | E0348 | INVALID_AGENT_NAME | 无效 Agent 名 |
 | E0349 | MISSING_DEFAULT_BRANCH | 缺少默认分支 |
-| E0350 | SCOPE_VIOLATION | 跨 Agent 变量引用 |
+| E0350 | SCOPE_VIOLATION | 跨 Agent 变量引用 (v1.10: 模块级 let 在 agent main 中不可见) |
+| E0351 | SHARED_NOT_MODULE_LEVEL | shared let 不在模块级声明 (v1.10) |
+| E0352 | IMMUTABLE_ASSIGNMENT | 子脚本/字段赋值目标不可变 (v1.10) |
+
+---
+
+## v1.10 新增错误码详解
+
+### E0350: SCOPE_VIOLATION — 模块级 let 在 agent main 中不可见
+
+**触发条件**: Agent main 试图访问模块级 let 变量
+
+**示例**:
+```helen
+let moduleVar = "模块级"
+
+agent MyAgent {
+  main {
+    print(moduleVar)  // ❌ E0350 SCOPE_VIOLATION
+  }
+}
+```
+
+**错误消息**:
+```
+Error at line 6: Module-level let 'moduleVar' is not visible in agent 'MyAgent' main.
+Use 'shared let' to make it accessible.
+```
+
+**修正方法**:
+```helen
+// 方法 1: 使用 shared let
+shared let moduleVar = "模块级"
+
+agent MyAgent {
+  main {
+    print(moduleVar)  // ✅ 可以访问
+  }
+}
+
+// 方法 2: 使用 const（只读）
+const MODULE_CONST = "常量"
+
+agent MyAgent {
+  main {
+    print(MODULE_CONST)  // ✅ 只读访问
+  }
+}
+```
+
+### E0351: SHARED_NOT_MODULE_LEVEL — shared let 不在模块级声明
+
+**触发条件**: `shared let` 在非模块级作用域中声明
+
+**示例**:
+```helen
+agent MyAgent {
+  shared let agentShared = 0  // ❌ E0351 SHARED_NOT_MODULE_LEVEL
+  
+  main {
+    // ...
+  }
+}
+
+fn myFunction() {
+  shared let fnShared = 0  // ❌ E0351 SHARED_NOT_MODULE_LEVEL
+}
+```
+
+**错误消息**:
+```
+Error at line 2: 'shared let' must be declared at module level, not inside agent or function.
+```
+
+**修正方法**:
+```helen
+// shared let 必须在模块级声明
+shared let SHARED_VAR = 0
+
+agent MyAgent {
+  main {
+    SHARED_VAR += 1  // ✅ 可以访问
+  }
+}
+```
+
+### E0352: IMMUTABLE_ASSIGNMENT — 子脚本/字段赋值目标不可变
+
+**触发条件**: 试图修改 const 变量的元素或字段
+
+**示例**:
+```helen
+const arr = [1, 2, 3]
+arr[0] = 10  // ❌ E0352 IMMUTABLE_ASSIGNMENT
+
+const obj = {"name": "Alice"}
+obj.name = "Bob"  // ❌ E0352 IMMUTABLE_ASSIGNMENT
+```
+
+**错误消息**:
+```
+Error at line 2: Cannot modify element of const variable 'arr'.
+```
+
+**修正方法**:
+```helen
+// 使用 let 声明可变变量
+let arr = [1, 2, 3]
+arr[0] = 10  // ✅ 可以修改
+
+let obj = {"name": "Alice"}
+obj.name = "Bob"  // ✅ 可以修改
+```
+
+---
+
+## 错误码统计
+
+| 类别 | 范围 | 数量 |
+|------|------|------|
+| 词法错误 | E0300-E0309 | 10 |
+| 语法错误 | E0310-E0320 | 11 |
+| 语义错误 | E0330-E0352 | 23 |
+| **总计** | | **45** |
+
+### v1.10 新增
+
+- E0350: SCOPE_VIOLATION（更新说明）
+- E0351: SHARED_NOT_MODULE_LEVEL
+- E0352: IMMUTABLE_ASSIGNMENT
+
+---
+
+**最后更新**: 2026-07-01  
+**版本**: v1.10
