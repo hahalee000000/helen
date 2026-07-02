@@ -1293,16 +1293,12 @@ class Interpreter(LlmMixin, Visitor[object]):
 
         # Register imported content into the interpreter's namespaces
         if result.format == "helen":
-            # v1.10: Evaluate shared let variables from the imported module
-            # and define them in the current environment. This is needed for
-            # BOTH aliased and non-aliased imports so that the imported module's
-            # functions can access shared let via the scope chain.
-            self._register_imported_shared_vars()
-
             # v1.6: If alias is provided, create a module object for function/agent access
             if node.alias:
                 module_obj = self._create_module_object(result)
                 self.environment.define(node.alias, module_obj)
+                # v1.10: Also register shared let for aliased imports
+                self._register_imported_shared_vars()
             else:
                 # No alias: register agents/functions/constants directly to global namespace
                 # v1.10: Create a module env for imported functions so they can
@@ -1332,8 +1328,9 @@ class Interpreter(LlmMixin, Visitor[object]):
                         if not hasattr(self, '_function_module_envs'):
                             self._function_module_envs: dict[str, Environment] = {}
                         self._function_module_envs[name] = module_env
-                # Register constants by evaluating their initializers
-                self._register_imported_consts_and_shared()
+                # Register constants and shared let by evaluating their initializers
+                # Pass module_env so initializers can reference other consts in the same module
+                self._register_imported_consts_and_shared(module_env)
         else:
             # Register data by user-specified alias (or filename if no alias)
             alias = node.alias if node.alias else os.path.splitext(os.path.basename(result.path))[0]
@@ -1370,11 +1367,16 @@ class Interpreter(LlmMixin, Visitor[object]):
                     self._shared_vars: set[str] = set()
                 self._shared_vars.add(name)
 
-    def _register_imported_consts_and_shared(self) -> None:
+    def _register_imported_consts_and_shared(self, module_env: Environment | None = None) -> None:
         """Evaluate const and shared let from imported modules into the environment.
 
         Used by the non-aliased import path to register all constants and
         shared variables into the global namespace.
+
+        Args:
+            module_env: The module-level environment where consts are already defined.
+                       If provided, use it for evaluating initializers so that
+                       shared let can reference consts from the same module.
         """
         from helen.core.ast import VarDeclNode  # noqa: PLC0415
         for name, const_node in self.import_resolver.data.items():
@@ -1383,7 +1385,20 @@ class Interpreter(LlmMixin, Visitor[object]):
                 # Already defined, skip
             except NameError:
                 if isinstance(const_node, VarDeclNode) and const_node.initializer is not None:
-                    value = const_node.initializer.accept(self)
+                    # If module_env is provided and contains the value, use it
+                    if module_env is not None:
+                        try:
+                            value = module_env.lookup(name)
+                        except NameError:
+                            # Not in module_env yet, evaluate initializer in module_env
+                            old_env = self.environment
+                            self.environment = module_env
+                            try:
+                                value = const_node.initializer.accept(self)
+                            finally:
+                                self.environment = old_env
+                    else:
+                        value = const_node.initializer.accept(self)
                     self.environment.define(name, value)
                     if const_node.shared:
                         if not hasattr(self, '_shared_vars'):

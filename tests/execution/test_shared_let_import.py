@@ -355,3 +355,81 @@ class TestMultipleSharedLet:
         """
         result, _ = _run_file(main, {"mod.helen": module})
         assert result == 142
+
+
+# ─── shared let initialization with const reference (Issue #10) ────────────────
+
+
+class TestSharedLetInitWithConst:
+    """Issue #10: shared let can reference const during initialization.
+
+    When a shared let variable is initialized with an expression that references
+    a const from the same module, the const must be resolvable during import.
+    """
+
+    def test_shared_let_init_with_const_non_aliased(self):
+        """shared let can reference const in non-aliased import."""
+        module = """
+        const MY_CONST = 42
+        shared let my_var = MY_CONST
+        fn get_var(): int { return my_var }
+        """
+        main = """
+        import "mod.helen"
+        main {
+            get_var()
+        }
+        """
+        result, _ = _run_file(main, {"mod.helen": module})
+        assert result == 42
+
+    def test_shared_let_init_with_const_aliased(self):
+        """shared let can reference const in aliased import."""
+        module = """
+        const OUTPUT_NORMAL = 1
+        const OUTPUT_VERBOSE = 2
+        shared let _output_level = OUTPUT_NORMAL
+        fn get_level(): int { return _output_level }
+        """
+        main = """
+        import "output.helen" as output
+        main {
+            output.get_level()
+        }
+        """
+        result, _ = _run_file(main, {"output.helen": module})
+        assert result == 1
+
+    def test_shared_let_init_with_const_expression(self):
+        """shared let can use expression with multiple consts."""
+        module = """
+        const BASE = 10
+        const OFFSET = 5
+        shared let total = BASE + OFFSET
+        fn get_total(): int { return total }
+        """
+        main = """
+        import "mod.helen"
+        main {
+            get_total()
+        }
+        """
+        result, _ = _run_file(main, {"mod.helen": module})
+        assert result == 15
+
+    def test_shared_let_init_chain(self):
+        """shared let can reference another shared let initialized with const."""
+        module = """
+        const BASE = 100
+        shared let level1 = BASE
+        shared let level2 = level1 + 10
+        fn get_level2(): int { return level2 }
+        """
+        main = """
+        import "mod.helen"
+        main {
+            get_level2()
+        }
+        """
+        result, _ = _run_file(main, {"mod.helen": module})
+        assert result == 110

@@ -15,6 +15,41 @@
 | Agent 作用域传播 | `argv` 作为 const 自动在 agent 隔离环境中可见 | ✅ |
 | shared let 跨模块访问 | 导入模块的函数可访问其自身模块的 const 和 shared let | ✅ |
 | 模块级 Environment | 每个导入模块拥有独立作用域链 | ✅ |
+| shared let 初始化引用 const | shared let 可以在初始化时引用同模块的 const 常量 | ✅ |
+
+### shared let 初始化引用 const 修复 (Issue #10)
+
+**问题**：在模块中定义 `const` 常量后，`shared let` 初始化时引用该常量会报错 `Undefined variable`。
+
+```helen
+const OUTPUT_NORMAL = 1
+shared let _output_level = OUTPUT_NORMAL  // ❌ 编译期错误
+```
+
+**根因**：`_register_imported_shared_vars()` 方法在创建 `module_env` 之前就被调用，导致在求值 `shared let` 初始化表达式时，`const` 常量还没有被定义到任何环境中。
+
+**修复**：
+- 调整调用顺序：将 `_register_imported_shared_vars()` 的调用移到创建 `module_env` 之后
+- 修改 `_register_imported_consts_and_shared()` 方法接受 `module_env` 参数，在求值初始化表达式时使用 `module_env` 作为上下文环境
+- 对于别名导入，也确保在创建 `module_env` 之后再注册 shared let
+
+**示例**：
+```helen
+// output.helen
+const OUTPUT_NORMAL = 1
+const OUTPUT_VERBOSE = 2
+shared let _output_level = OUTPUT_NORMAL  // ✅ 现在可以正常工作
+
+fn get_level(): int { return _output_level }
+
+// main.helen
+import "output.helen" as output
+main {
+    print(output.get_level())  // 输出: 1
+}
+```
+
+**质量**: 4 个新测试用例，2250+ 测试通过，0 regression
 
 ### shared let 跨模块访问修复
 
