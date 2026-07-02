@@ -1441,10 +1441,12 @@ class Interpreter(LlmMixin, Visitor[object]):
 
     @staticmethod
     def _add(left: object, right: object) -> object:
-        """Addition with string concatenation support."""
+        """Addition with string concatenation and list concatenation support."""
         if isinstance(left, str) or isinstance(right, str):
             return str(left) + str(right)
         if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+            return left + right
+        if isinstance(left, list) and isinstance(right, list):
             return left + right
         raise HelenRuntimeError(
             f"Cannot add {type(left).__name__} and {type(right).__name__}"
@@ -1793,14 +1795,13 @@ class Interpreter(LlmMixin, Visitor[object]):
             AggregateError if any task in a list fails.
         """
         # Check if we're already in a running event loop (e.g., in REPL)
-        # Use a safer approach that works in all contexts
+        # Use asyncio.get_running_loop() which raises RuntimeError if no loop is running
         in_event_loop = False
         try:
-            _loop = asyncio.get_event_loop()
-            if _loop.is_running():
-                in_event_loop = True
-        except Exception:
-            # No event loop or can't determine
+            _loop = asyncio.get_running_loop()
+            in_event_loop = True
+        except RuntimeError:
+            # No running event loop
             in_event_loop = False
 
         if isinstance(tasks, Task):

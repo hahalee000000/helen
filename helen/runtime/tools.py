@@ -81,11 +81,11 @@ def dispatch_tool(name: str, args: dict[str, Any]) -> str:
     """
     tool = _tools.get(name)
     if tool is None:
-        return json.dumps({"error": f"Unknown tool: {name}"})
+        return json.dumps({"error": f"Unknown tool: {name}"}, ensure_ascii=False)
     try:
         return tool.handler(**args)
     except Exception as e:
-        return json.dumps({"error": f"Tool '{name}' failed: {type(e).__name__}: {e}"})
+        return json.dumps({"error": f"Tool '{name}' failed: {type(e).__name__}: {e}"}, ensure_ascii=False)
 
 
 # ── Built-in Tool Implementations ──────────────────────────────
@@ -147,8 +147,8 @@ def _web_search(query: str, num_results: int = 3) -> str:
         logging.debug("Wikipedia search API failed for query %r: %s", query, e)
 
     if not results:
-        return json.dumps({"results": [], "message": f"No results found for '{query}'."})
-    return json.dumps({"results": results[:num_results]})
+        return json.dumps({"results": [], "message": f"No results found for '{query}'."}, ensure_ascii=False)
+    return json.dumps({"results": results[:num_results]}, ensure_ascii=False)
 
 
 def _web_fetch(url: str) -> str:
@@ -168,9 +168,9 @@ def _web_fetch(url: str) -> str:
         # Truncate to reasonable length
         if len(text) > 8000:
             text = text[:8000] + "... [truncated]"
-        return json.dumps({"url": url, "content": text})
+        return json.dumps({"url": url, "content": text}, ensure_ascii=False)
     except Exception as e:
-        return json.dumps({"error": f"Fetch failed: {e}"})
+        return json.dumps({"error": f"Fetch failed: {e}"}, ensure_ascii=False)
 
 
 def _read_file(path: str) -> str:
@@ -180,9 +180,9 @@ def _read_file(path: str) -> str:
         content = Path(path).read_text(encoding="utf-8")
         if len(content) > 16000:
             content = content[:16000] + "\n... [truncated]"
-        return json.dumps({"path": path, "content": content})
+        return json.dumps({"path": path, "content": content}, ensure_ascii=False)
     except Exception as e:
-        return json.dumps({"error": f"Read failed: {e}"})
+        return json.dumps({"error": f"Read failed: {e}"}, ensure_ascii=False)
 
 
 def _write_file(path: str, content: str) -> str:
@@ -191,9 +191,9 @@ def _write_file(path: str, content: str) -> str:
         from pathlib import Path
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         Path(path).write_text(content, encoding="utf-8")
-        return json.dumps({"path": path, "bytes_written": len(content), "status": "ok"})
+        return json.dumps({"path": path, "bytes_written": len(content), "status": "ok"}, ensure_ascii=False)
     except Exception as e:
-        return json.dumps({"error": f"Write failed: {e}"})
+        return json.dumps({"error": f"Write failed: {e}"}, ensure_ascii=False)
 
 
 def _shell_exec(command: str, timeout: int = 30, shell: bool = False) -> str:
@@ -222,11 +222,11 @@ def _shell_exec(command: str, timeout: int = 30, shell: bool = False) -> str:
             "command": command,
             "exit_code": result.returncode,
             "output": output,
-        })
+        }, ensure_ascii=False)
     except subprocess.TimeoutExpired:
-        return json.dumps({"error": f"Command timed out after {timeout}s"})
+        return json.dumps({"error": f"Command timed out after {timeout}s"}, ensure_ascii=False)
     except Exception as e:
-        return json.dumps({"error": f"Exec failed: {e}"})
+        return json.dumps({"error": f"Exec failed: {e}"}, ensure_ascii=False)
 
 
 def _calculate(expression: str) -> str:
@@ -238,21 +238,21 @@ def _calculate(expression: str) -> str:
         tree = ast.parse(expression, mode='eval')
         # Walk the AST to ensure no dangerous nodes
         allowed_types = (
-            ast.Expression, ast.BinOp, ast.UnaryOp, ast.Constant, ast.Num,
+            ast.Expression, ast.BinOp, ast.UnaryOp, ast.Constant,
             ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv,
             ast.Mod, ast.Pow, ast.USub, ast.UAdd,
             ast.Call, ast.Name, ast.Attribute, ast.Load,
         )
         for node in ast.walk(tree):
             if not isinstance(node, allowed_types):
-                return json.dumps({"error": f"Unsafe expression node: {type(node).__name__}"})
+                return json.dumps({"error": f"Unsafe expression node: {type(node).__name__}"}, ensure_ascii=False)
             # Block imports and other dangerous names
             if isinstance(node, ast.Name) and node.id not in (
                 'math', 'sqrt', 'abs', 'round', 'sin', 'cos', 'tan',
                 'log', 'log10', 'pi', 'e', 'pow', 'ceil', 'floor',
                 'exp', 'asin', 'acos', 'atan', 'degrees', 'radians',
             ):
-                return json.dumps({"error": f"Unsafe name: {node.id}"})
+                return json.dumps({"error": f"Unsafe name: {node.id}"}, ensure_ascii=False)
         # Provide safe math namespace
         safe_ns = {"__builtins__": {}, "math": math,
                    "sqrt": math.sqrt, "abs": abs, "round": round,
@@ -262,9 +262,9 @@ def _calculate(expression: str) -> str:
                    "exp": math.exp, "asin": math.asin, "acos": math.acos,
                    "atan": math.atan, "degrees": math.degrees, "radians": math.radians}
         result = eval(compile(tree, '<expr>', 'eval'), safe_ns)
-        return json.dumps({"expression": expression, "result": result})
+        return json.dumps({"expression": expression, "result": result}, ensure_ascii=False)
     except Exception as e:
-        return json.dumps({"error": f"Calculation failed: {e}"})
+        return json.dumps({"error": f"Calculation failed: {e}"}, ensure_ascii=False)
 
 
 def _patch_file(path: str, old_string: str, new_string: str, replace_all: bool = False) -> str:
@@ -285,7 +285,7 @@ def _patch_file(path: str, old_string: str, new_string: str, replace_all: bool =
     try:
         file_path = Path(path)
         if not file_path.exists():
-            return json.dumps({"error": f"File not found: {path}"})
+            return json.dumps({"error": f"File not found: {path}"}, ensure_ascii=False)
 
         content = file_path.read_text(encoding="utf-8")
         # Strip UTF-8 BOM if present
@@ -303,10 +303,10 @@ def _patch_file(path: str, old_string: str, new_string: str, replace_all: bool =
         if error:
             # Generate helpful hint
             hint = format_no_match_hint(error, match_count, old_string, content)
-            return json.dumps({"error": error, "hint": hint})
+            return json.dumps({"error": error, "hint": hint}, ensure_ascii=False)
 
         if match_count == 0:
-            return json.dumps({"error": "No matches found"})
+            return json.dumps({"error": "No matches found"}, ensure_ascii=False)
 
         # Write the patched content
         file_path.write_text(new_content, encoding="utf-8")
@@ -330,10 +330,10 @@ def _patch_file(path: str, old_string: str, new_string: str, replace_all: bool =
             "matches": match_count,
             "strategy": strategy,
             "diff": diff,
-        })
+        }, ensure_ascii=False)
 
     except Exception as e:
-        return json.dumps({"error": f"Patch failed: {e}"})
+        return json.dumps({"error": f"Patch failed: {e}"}, ensure_ascii=False)
 
 
 def _load_skill(name: str) -> str:
@@ -369,12 +369,12 @@ def _load_skill(name: str) -> str:
                         "name": name,
                         "path": skill_path,
                         "content": content,
-                    })
+                    }, ensure_ascii=False)
 
-        return json.dumps({"error": f"Skill '{name}' not found in any skill directory"})
+        return json.dumps({"error": f"Skill '{name}' not found in any skill directory"}, ensure_ascii=False)
 
     except Exception as e:
-        return json.dumps({"error": f"Load skill failed: {e}"})
+        return json.dumps({"error": f"Load skill failed: {e}"}, ensure_ascii=False)
 
 
 # ── Register all built-in tools ────────────────────────────────

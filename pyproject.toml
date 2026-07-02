@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "helen"
 version = "0.1.0"
 description = "Helen — A Prompt-first Agent Programming Language"
-requires-python = ">=3.8"
+requires-python = ">=3.12"
 dependencies = [
     "pyyaml>=6.0",
     "toml>=0.10",
