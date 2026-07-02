@@ -1462,7 +1462,8 @@ agent CodeAnalyzer {
     
     main {
         // LLM 可以调用 functions 块中的函数
-        llm stream
+        fn print_chunk(chunk: str) { stream_print(chunk) }
+        llm stream on_chunk print_chunk
     }
 }
 ```
@@ -1490,7 +1491,8 @@ agent HybridAgent {
     tools ["web_search", "calculate"]
     
     prompt "..."
-    main { llm stream }
+    fn print_chunk(chunk: str) { stream_print(chunk) }
+    main { llm stream on_chunk print_chunk }
 }
 ```
 
@@ -1864,12 +1866,16 @@ print("Mood: " + mood)
 `llm stream` 逐 chunk 流式输出 LLM 响应，适用于长文本生成场景：
 
 ```helen
+fn print_chunk(chunk: str) {
+    stream_print(chunk)
+}
+
 main {
-    llm stream "Write a short poem about programming"
+    llm stream "Write a short poem about programming" on_chunk print_chunk
 }
 ```
 
-默认行为：每个 chunk 到达时立即打印到终端（使用 `stream_print`），无需等待完整响应。
+默认行为：`llm stream` 不会自动输出，需要提供 `on_chunk` 回调函数处理每个 chunk。
 
 ### 带回调函数
 
@@ -1919,7 +1925,8 @@ agent Poet(topic: str) {
     """
 
     main {
-        llm stream    // bare form：使用渲染后的 prompt
+        fn print_chunk(chunk: str) { stream_print(chunk) }
+        llm stream on_chunk print_chunk    // bare form：使用渲染后的 prompt
     }
 }
 ```
@@ -1927,9 +1934,13 @@ agent Poet(topic: str) {
 ### 动态 prompt
 
 ```helen
+fn print_chunk(chunk: str) {
+    stream_print(chunk)
+}
+
 main {
     let topic = "the beauty of recursion"
-    llm stream "Write a haiku about " + topic
+    llm stream "Write a haiku about " + topic on_chunk print_chunk
 }
 ```
 

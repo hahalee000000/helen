@@ -247,14 +247,18 @@ agent DataAggregator {
 
 **场景**：实时输出 LLM 响应，改善用户体验
 
-#### 方式 A：使用 `llm stream`（自动输出到终端）
+#### 方式 A：使用 `llm stream` + `on_chunk` 回调
 
 ```helen
+fn print_chunk(chunk: str) {
+    stream_print(chunk)
+}
+
 agent StreamingWriter(topic: str) {
     description "Write content with streaming output"
     
     main {
-        llm stream "Write a detailed article about " + topic
+        llm stream "Write a detailed article about " + topic on_chunk print_chunk
     }
 }
 
@@ -262,11 +266,11 @@ agent StreamingWriter(topic: str) {
 StreamingWriter("The future of AI")
 ```
 
-带回调的流式输出：
+带完整回调的流式输出：
 
 ```helen
-fn on_chunk(chunk) {
-    print(chunk, end="")
+fn on_chunk(chunk: str) {
+    stream_print(chunk)
 }
 
 fn on_complete() {

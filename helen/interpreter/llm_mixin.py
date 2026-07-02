@@ -267,7 +267,7 @@ class LlmMixin:
         """Execute llm stream statement: stream LLM response chunk by chunk.
 
         If on_chunk callback is provided, call it for each chunk.
-        Otherwise, use stream_print to output chunks to stdout.
+        Otherwise, no output is produced - data is only recorded in history.
 
         Supports bare form (no prompt) inside agent main blocks.
         """
@@ -319,12 +319,9 @@ class LlmMixin:
                 system_prompt=system_prompt,
             )
             if response and response.text:
-                # Use stream_print for output
-                from helen.stdlib import stdlib
-                stream_print_fn = stdlib.lookup("stream_print")
-                if stream_print_fn:
-                    stream_print_fn.fn(response.text)
-                    print()  # Add newline at end
+                # Call on_chunk callback if provided
+                if on_chunk_fn is not None:
+                    on_chunk_fn(response.text)
                 self._add_to_history("assistant", response.text)
             return None
 
@@ -385,33 +382,25 @@ class LlmMixin:
                         full_response.append(content)
                         if on_chunk_fn is not None:
                             on_chunk_fn(content)
-                        else:
-                            from helen.stdlib import stdlib
-                            stream_print_fn = stdlib.lookup("stream_print")
-                            if stream_print_fn:
-                                stream_print_fn.fn(content)
 
                 elif event_type == "tool_call":
                     fn_name = event.get("name", "")
                     fn_args = event.get("args", {})
                     tool_calls_log.append({"name": fn_name, "args": fn_args})
-                    # Display tool call progress
-                    args_str = ", ".join(f"{k}={v!r}" for k, v in fn_args.items())
-                    progress = f"\n🔧 Calling {fn_name}({args_str})...\n"
-                    if on_chunk_fn is None:
-                        print(progress, end="", flush=True)
-                    else:
+                    # Notify tool call progress via callback if provided
+                    if on_chunk_fn is not None:
+                        args_str = ", ".join(f"{k}={v!r}" for k, v in fn_args.items())
+                        progress = f"\n🔧 Calling {fn_name}({args_str})...\n"
                         on_chunk_fn(progress)
 
                 elif event_type == "tool_result":
                     fn_name = event.get("name", "")
                     result = event.get("result", "")
-                    # Truncate long results for display
-                    display_result = result if len(result) <= 200 else result[:200] + "..."
-                    result_msg = f"✅ {fn_name} returned: {display_result}\n"
-                    if on_chunk_fn is None:
-                        print(result_msg, end="", flush=True)
-                    else:
+                    # Notify tool result via callback if provided
+                    if on_chunk_fn is not None:
+                        # Truncate long results for display
+                        display_result = result if len(result) <= 200 else result[:200] + "..."
+                        result_msg = f"✅ {fn_name} returned: {display_result}\n"
                         on_chunk_fn(result_msg)
 
                 elif event_type == "usage":
@@ -428,10 +417,6 @@ class LlmMixin:
                         node.span,
                     )
                     break
-
-            # Add newline at end if using auto-output
-            if on_chunk_fn is None:
-                print()
 
             # Call on_complete callback if provided
             if on_complete_fn is not None:

@@ -107,7 +107,7 @@ class TestListDir:
     def test_not_directory(self):
         with tempfile.NamedTemporaryFile(delete=False) as f:
             path = f.name
-        
+
         try:
             with pytest.raises(NotADirectoryError):
                 _list_dir(path)

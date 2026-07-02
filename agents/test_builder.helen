@@ -15,7 +15,7 @@ agent TestBuilder(source_path: str, contract_path: str) {
     工作流程:
     1. 调用 read_source() 读取源码
     2. 调用 read_contract() 读取契约
-    3. 调用 get_existing_tests() 了解已有测试
+    3. 调用 get_existing_tests() 或 get_existing_tests(path) 了解已有测试
     4. 为契约中的每个函数生成测试，覆盖:
        - 正常情况（success）
        - 错误情况（各种 error_code）
@@ -48,13 +48,20 @@ agent TestBuilder(source_path: str, contract_path: str) {
             return read_file(contract_path)
         }
 
-        fn get_existing_tests(): list {
+        fn get_existing_tests(path: str = "."): list {
             let test_files = []
-            let files = list_dir(".")
-            for file in files {
-                if startswith(file, "test_") && endswith(file, ".helen") {
-                    test_files.append(file)
+            if !path_exists(path) {
+                return test_files
+            }
+            try {
+                let files = list_dir(path)
+                for file in files {
+                    if startswith(file, "test_") && endswith(file, ".helen") {
+                        test_files.append(file)
+                    }
                 }
+            } catch {
+                // list_dir 失败（权限问题等），返回空列表
             }
             return test_files
         }
