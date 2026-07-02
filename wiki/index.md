@@ -1,7 +1,7 @@
 # Helen 语言 Wiki 索引
 
 > **Helen** — A Prompt-first Agent Programming Language
-> 版本: v1.9 | 状态: Phase 0-10 全部实现 + 中文语法 | 测试: 1500+ passed
+> 版本: v1.10 | 状态: Phase 0-10 全部实现 + 中文语法 + Agent 作用域隔离 | 测试: 1500+ passed
 
 ---
 
@@ -36,7 +36,7 @@
 - [[runtime/skills|技能系统]] — 三层搜索架构、两层披露机制
 
 ### 六、工具链
-- [[toolchain/cli|命令行工具]] — `helen run/check/test/quality/repl/doc/init/lsp`
+- [[toolchain/cli|命令行工具]] — `helen <file>/check/test/quality/repl/doc/init/lsp`
 - [[toolchain/testing|测试框架]] — TDD 支持、断言 API、`--watch` 监听
 - [[toolchain/quality|质量评估]] — 7 维框架、安全评分、CI 集成
 - [[toolchain/lsp|语言服务器]] — `helen lsp`、JSON-RPC 2.0、诊断/补全/跳转

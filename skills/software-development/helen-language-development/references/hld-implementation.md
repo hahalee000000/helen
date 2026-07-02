@@ -98,7 +98,7 @@ class HermesCLILLMRuntime(LLMRuntime):
 | Scenario | Runtime |
 |----------|---------|
 | REPL interactive use | HttpLLMRuntime (fast) |
-| Script execution (`helen run`) | MockLLMRuntime (deterministic) |
+| Script execution (`helen <file>`) | MockLLMRuntime (deterministic) |
 | No HTTP API available | HermesCLILLMRuntime (fallback) |
 | Need hermes skills/tools | HermesCLILLMRuntime (has full hermes context) |
 

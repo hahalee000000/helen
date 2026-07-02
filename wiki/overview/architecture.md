@@ -177,7 +177,7 @@ LLM 通过 OpenAI function calling 协议调用工具，支持多轮循环 + nud
 ### CLI (helen)
 
 ```
-$ helen run main.helen    # 编译 + 执行
+$ helen main.helen      # 编译 + 执行
 $ helen check main.helen  # 仅验证 (Lex + Parse + Analyze)
 $ helen repl               # 交互式解释器
 $ helen doc main.helen    # 生成文档 (markdown/json)

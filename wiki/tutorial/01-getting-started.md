@@ -109,7 +109,7 @@ main {
 运行:
 
 ```bash
-$ helen run hello.helen
+$ helen hello.helen
 Hello, World!
 ```
 

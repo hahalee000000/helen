@@ -209,7 +209,7 @@ $ helen check customer-service/main.helen
 ✓ customer-service/main.helen: OK
 
 # 运行
-$ helen run customer-service/main.helen
+$ helen customer-service/main.helen
 🔧 Technical question
 
 

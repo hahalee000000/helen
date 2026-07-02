@@ -1,7 +1,7 @@
 # Helen 语言完整教程
 
 > **Helen** — A Prompt-first Agent Programming Language
-> 版本: v1.9 | 状态: Phase 0-10 + 中文语法 | 测试: 1500+ passed
+> 版本: v1.10 | 状态: Phase 0-10 + 中文语法 + Agent 作用域隔离 | 测试: 1500+ passed
 
 ---
 
@@ -10,13 +10,13 @@
 | 章节 | 主题 |
 |------|------|
 | [01](#教程-01-入门指南) | 安装、配置、Hello World、REPL、中文编程(v1.9)、代码验证、文档生成 |
-| [02](#教程-02-变量与类型) | let/const、数据类型、类型注解、运算、集合操作 |
+| [02](#教程-02-变量与类型) | let/const/shared let(v1.10)、数据类型、类型注解、运算、集合操作、子脚本/字段赋值(v1.10) |
 | [03](#教程-03-函数) | fn 声明、参数、返回值、递归、Agent 内部函数、作用域、闭包(v1.7) |
-| [04](#教程-04-控制流) | if/for/while/match、break/continue、try-catch、管道操作符(v1.8)、模式匹配增强(v1.8) |
-| [05](#教程-05-agent-编程) | agent 声明、配置、参数、调用、协议(v1.7) |
-| [06](#教程-06-llm-语句) | llm act/if/stream、对话历史、流式输出 |
-| [07](#教程-07-异步编程) | async、await、并发 Agent 调用 |
-| [08](#教程-08-模块与导入) | import、多格式、跨文件复用、路径安全 |
+| [04](#教程-04-控制流) | if/for/while/match、break/continue、try-catch、管道操作符(v1.8)、模式匹配增强(v1.8)、短路求值(v1.10) |
+| [05](#教程-05-agent-编程) | agent 声明、配置、参数、调用、协议(v1.7)、作用域隔离(v1.10) |
+| [06](#教程-06-llm-语句) | llm act/if/stream、对话历史、流式输出、异步 HTTP(v1.10) |
+| [07](#教程-07-异步编程) | async、await、并发 Agent 调用、HTTP 异步方法(v1.10) |
+| [08](#教程-08-模块与导入) | import、多格式、跨文件复用、路径安全、shared let 导入(v1.10) |
 | [09](#教程-09-python-ffi) | Python 库导入、类型转换、调用 Python 函数 |
 | [10](#教程-10-标准库参考) | 186 个内置函数，覆盖 AI 应用开发所有核心需求 |
 | [11](#教程-11-构建多-agent-系统) | 多 Agent 协作、工具调用、Agent 模式 |
@@ -130,7 +130,7 @@ main {
 运行:
 
 ```bash
-$ helen run hello.helen
+$ helen hello.helen
 Hello, World!
 ```
 
@@ -3806,7 +3806,7 @@ $ helen check customer-service/main.helen
 ✓ customer-service/main.helen: OK
 
 # 运行
-$ helen run customer-service/main.helen
+$ helen customer-service/main.helen
 🔧 Technical question
 
 
@@ -5159,3 +5159,385 @@ Helen 质量评估提供：
 5. ✅ **CI 集成** — 阈值检查 + JSON 输出
 6. ✅ **编程接口** — 可在 Helen 代码中调用
 
+
+---
+
+# v1.10 新特性总结
+
+> 本章节总结 Helen v1.10 的所有新特性和改进
+
+## 概述
+
+Helen v1.10 引入了 **Agent 作用域隔离**、**shared let**、**子脚本/字段赋值**、**短路求值**、**异步 HTTP** 等重要特性，进一步增强了语言的表达能力和安全性。
+
+---
+
+## 1. shared let — 跨 agent 可见变量
+
+### 语法
+
+```helen
+shared let counter = 0
+shared let SHARED_CONFIG = {"debug": true}
+```
+
+### 中文关键字
+
+```helen
+共享 let counter = 0
+```
+
+### 作用域规则
+
+| 变量类型 | 在 agent main 中可见？ | 可修改？ |
+|---------|---------------------|---------|
+| 模块级 `let` | ❌ 不可见 | - |
+| 模块级 `const` | ✅ 可见 | ❌ 只读 |
+| `shared let` | ✅ 可见 | ✅ 可读写 |
+
+### 示例
+
+```helen
+shared let SHARED_COUNTER = 0
+const MODULE_CONST = "常量"
+let moduleVar = "模块级"  // agent main 中不可见
+
+agent Worker {
+  main {
+    // moduleVar        // ❌ E0350 SCOPE_VIOLATION
+    MODULE_CONST       // ✅ 只读
+    SHARED_COUNTER += 1  // ✅ 可读写
+  }
+}
+```
+
+---
+
+## 2. Agent 作用域隔离
+
+### 规则
+
+- `agent main {}` 在**完全隔离的环境**中运行
+- 模块级 `let` 不可见（编译时错误）
+- 模块级 `const` 自动可见（只读）
+- 使用 `shared let` 显式声明跨 agent 可见的可变变量
+- Agent main 中的闭包可以捕获局部变量
+
+### 为什么需要？
+
+1. **避免隐式副作用**: agent 不能随意修改全局状态
+2. **提高代码可读性**: 共享状态必须显式声明
+3. **便于测试**: agent 的行为不依赖外部状态
+
+### 最佳实践
+
+1. 使用 `SHARED_` 前缀命名共享变量
+2. 最小化共享状态
+3. 小心并发修改（线程安全）
+
+---
+
+## 3. 子脚本/字段赋值
+
+### 语法
+
+```helen
+// 数组索引赋值
+let arr = [1, 2, 3]
+arr[0] = 10  // [10, 2, 3]
+
+// 对象字段赋值
+let obj = {"name": "Alice"}
+obj.name = "Bob"  // {"name": "Bob"}
+obj["age"] = 30   // {"name": "Bob", "age": 30}
+
+// 嵌套访问
+let matrix = [[1, 2], [3, 4]]
+matrix[0][1] = 99  // [[1, 99], [3, 4]]
+```
+
+### 错误示例
+
+```helen
+const arr = [1, 2, 3]
+arr[0] = 10  // ❌ E0352 IMMUTABLE_ASSIGNMENT
+```
+
+---
+
+## 4. 短路求值
+
+### && 短路
+
+```helen
+// 如果左侧为 false，右侧不会执行
+let result = false && expensiveCall()  // 不执行
+
+// 安全访问
+let user = getUser()
+let name = user != null && user.getName()
+```
+
+### || 短路
+
+```helen
+// 如果左侧为 true，右侧不会执行
+let result = true || expensiveCall()  // 不执行
+
+// 默认值
+let config = loadConfig() || defaultConfig()
+```
+
+### 优先级
+
+- `||` 优先级 3（左结合）
+- `&&` 优先级 4（左结合）
+- `&&` 优先级高于 `||`
+
+---
+
+## 5. 返回类型注解语法变化
+
+### 新语法（仅支持）
+
+```helen
+fn add(a: int, b: int): int {
+  return a + b
+}
+```
+
+### 旧语法（已移除）
+
+```helen
+// ❌ 不再支持
+fn add(a: int, b: int) -> int {
+  return a + b
+}
+```
+
+---
+
+## 6. 异常处理增强
+
+### RuntimeError 包装 stdlib 异常
+
+```helen
+try {
+  let result = int("not a number")  // Python ValueError
+} catch RuntimeError as e {
+  print("Error: " + e.message)
+  // "ValueError: invalid literal for int()..."
+}
+```
+
+### 新增异常
+
+- `ScopeViolationError` — agent main 访问不可见的模块级变量
+
+---
+
+## 7. 异步 HTTP 支持
+
+### 异步方法
+
+```helen
+// 单次异步
+let result = await llm act_async Task "Task"
+
+// 并发异步
+let [r1, r2, r3] = await [
+  llm act_async Task1 "First",
+  llm act_async Task2 "Second",
+  llm act_async Task3 "Third"
+]
+
+// 异步流式
+let full_text = await llm act_stream_async WriteStory "A cat"
+```
+
+### 性能提升
+
+| 场景 | 同步 | 异步 | 提升 |
+|------|------|------|------|
+| 单次调用 | 1.5s | 1.5s | 0% |
+| 3 次并发 | 4.5s | 1.6s | **65%** |
+| 10 次并发 | 15s | 2.1s | **86%** |
+
+---
+
+## 8. 导入跟踪
+
+### shared let 导入
+
+```helen
+// module_a.helen
+shared let counter = 0
+
+// module_b.helen
+import "./module_a.helen"
+
+agent Worker {
+  main {
+    counter += 1  // ✅ 可以访问导入的 shared let
+  }
+}
+```
+
+---
+
+## 9. 新增错误码
+
+| 代码 | 名称 | 触发条件 |
+|------|------|---------|
+| E0350 | SCOPE_VIOLATION | 模块级 let 在 agent main 中不可见 |
+| E0351 | SHARED_NOT_MODULE_LEVEL | shared let 不在模块级声明 |
+| E0352 | IMMUTABLE_ASSIGNMENT | 子脚本/字段赋值目标不可变 |
+
+---
+
+## 10. 完整示例
+
+### 并发数据处理系统
+
+```helen
+// 共享状态
+shared let SHARED_RESULTS = []
+shared let SHARED_COUNTER = 0
+
+// 配置
+const CONFIG = {
+  "max_retries": 3,
+  "timeout": 5000
+}
+
+// 数据处理 agent
+agent DataProcessor {
+  description "Process data concurrently"
+  
+  main {
+    // 递增共享计数器
+    SHARED_COUNTER += 1
+    
+    // 处理数据
+    let data = fetch_data()
+    let processed = process(data)
+    
+    // 添加到共享结果
+    SHARED_RESULTS.push(processed)
+    
+    // 使用短路求值安全访问
+    let first_result = len(SHARED_RESULTS) > 0 && SHARED_RESULTS[0]
+    
+    print("Processed: " + str(SHARED_COUNTER))
+  }
+}
+
+// 主程序
+main {
+  // 并发处理 5 个数据源
+  async call DataProcessor()
+  async call DataProcessor()
+  async call DataProcessor()
+  async call DataProcessor()
+  async call DataProcessor()
+  
+  // 等待完成
+  // SHARED_COUNTER 现在是 5
+  // SHARED_RESULTS 包含 5 个结果
+  
+  // 子脚本赋值
+  if len(SHARED_RESULTS) > 0 {
+    SHARED_RESULTS[0]["processed"] = true
+  }
+  
+  print("Total: " + str(SHARED_COUNTER))
+}
+```
+
+---
+
+## 迁移指南
+
+### 从 v1.9 迁移到 v1.10
+
+#### 1. 检查模块级变量
+
+```helen
+// v1.9: 可以访问
+let x = 1
+agent A {
+  main {
+    print(x)  // v1.9 可以，v1.10 报错
+  }
+}
+
+// v1.10: 使用 shared let
+shared let x = 1
+agent A {
+  main {
+    print(x)  // ✅ 可以访问
+  }
+}
+```
+
+#### 2. 更新返回类型语法
+
+```helen
+// v1.9
+fn add(a, b) -> int { return a + b }
+
+// v1.10
+fn add(a: int, b: int): int { return a + b }
+```
+
+#### 3. 利用短路求值
+
+```helen
+// 旧方式
+let user = getUser()
+if user != null {
+  let name = user.getName()
+}
+
+// 新方式（短路）
+let user = getUser()
+let name = user != null && user.getName()
+```
+
+#### 4. 使用异步 HTTP
+
+```helen
+// 同步（慢）
+let results = []
+for item in items {
+  results.push(llm act Process(item))
+}
+
+// 异步（快）
+let tasks = []
+for item in items {
+  tasks.push(llm act_async Process(item))
+}
+let results = await tasks
+```
+
+---
+
+## 总结
+
+Helen v1.10 的主要改进：
+
+1. **安全性**: Agent 作用域隔离防止隐式副作用
+2. **表达力**: 子脚本/字段赋值、短路求值
+3. **性能**: 异步 HTTP 支持并发调用
+4. **一致性**: 统一的异常处理、明确的共享状态
+5. **可维护性**: 显式声明共享变量，代码更清晰
+
+**迁移成本**: 低（主要是 shared let 和返回类型语法）
+
+**建议**: 新项目直接使用 v1.10 语法，旧项目逐步迁移
+
+---
+
+**最后更新**: 2026-07-01  
+**版本**: v1.10

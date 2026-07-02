@@ -318,7 +318,7 @@ HELEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 ```
 
 **注意：**
-- 脚本执行（`helen run`）和 REPL 均直接使用 `HttpLLMRuntime` 调用真实 LLM
+- 脚本执行（`helen <file>`）和 REPL 均直接使用 `HttpLLMRuntime` 调用真实 LLM
 - 向后兼容 `~/.hermes/.env` 配置
 
 ---

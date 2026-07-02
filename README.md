@@ -23,7 +23,7 @@ main {
 ```
 
 ```bash
-$ helen run hello.helen
+$ helen hello.helen
 Hello, World!
 ```
 
@@ -32,7 +32,7 @@ Hello, World!
 | Command | Description |
 |---------|-------------|
 | `helen init` | Initialize `~/.helen/` config directory |
-| `helen run <file>` | Execute a Helen program |
+| `helen <file>` | Execute a Helen program |
 | `helen check <file>` | Validate syntax and semantics without executing |
 | `helen repl` | Start the interactive REPL |
 | `helen doc <file>` | Generate documentation |

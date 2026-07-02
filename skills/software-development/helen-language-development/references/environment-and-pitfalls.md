@@ -540,7 +540,7 @@ The test expects this block to fail, but it actually parses and runs fine. **Whe
 
 ### Stale `.pyc` Cache After Source Edits
 
-**Pitfall**: After editing Helen source files (especially removing debug prints or changing behavior), the REPL or `helen run` may still exhibit the OLD behavior. This is caused by stale Python bytecode cache (`.pyc` files in `__pycache__/` directories).
+**Pitfall**: After editing Helen source files (especially removing debug prints or changing behavior), the REPL or `helen <file>` may still exhibit the OLD behavior. This is caused by stale Python bytecode cache (`.pyc` files in `__pycache__/` directories).
 
 **Symptom**: User reports a bug is still present after you fixed the source. `grep` confirms the source is clean, but the behavior persists.
 
@@ -559,9 +559,9 @@ The file `helen/interpreter/interpreter.py` contained Unicode arrow characters `
 
 ### REPL Must Include SemanticAnalyzer
 
-**Critical pitfall**: The REPL's `_execute_input()` originally went Lexer → Parser → Interpreter, completely bypassing `SemanticAnalyzer`. This means **type checking, scope validation, and all semantic analysis were silently skipped in REPL mode** — they only worked in `helen run <file>` (which has the full pipeline in `__main__.py`).
+**Critical pitfall**: The REPL's `_execute_input()` originally went Lexer → Parser → Interpreter, completely bypassing `SemanticAnalyzer`. This means **type checking, scope validation, and all semantic analysis were silently skipped in REPL mode** — they only worked in `helen <file>` (which has the full pipeline in `__main__.py`).
 
-Symptom: `let email: str = "hello"; email = false` silently accepted in REPL, but `helen run` would have caught it.
+Symptom: `let email: str = "hello"; email = false` silently accepted in REPL, but `helen <file>` would have caught it.
 
 Fix in `helen/cli/repl.py`:
 - Create persistent `SemanticAnalyzer` at REPL startup (shares `SymbolTable` with `Interpreter`)
@@ -572,12 +572,12 @@ This is a pattern to watch for: **any interactive/REPL mode must run the full co
 
 ### REPL and Script Mode Both Use Real LLM Runtime
 
-**Updated 2026-06**: Both REPL and script mode (`helen run`) now use `HttpLLMRuntime` for real LLM calls.
+**Updated 2026-06**: Both REPL and script mode (`helen <file>`) now use `HttpLLMRuntime` for real LLM calls.
 
 | Mode | Runtime | Speed | Notes |
 |------|---------|-------|-------|
 | **REPL** (`helen`) | HttpLLMRuntime | 7-11s/call | Direct HTTP to OpenAI-compatible API |
-| **Script** (`helen run`) | HttpLLMRuntime | 7-11s/call | Same as REPL (was MockLLMRuntime before fix) |
+| **Script** (`helen <file>`) | HttpLLMRuntime | 7-11s/call | Same as REPL (was MockLLMRuntime before fix) |
 | HermesCLILLMRuntime | fallback | 15-17s/call | Spawns `hermes -z` subprocess |
 
 **Lesson**: `MockLLMRuntime` is only for unit tests. Production code (both REPL and script) must use `HttpLLMRuntime`.

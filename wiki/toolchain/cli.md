@@ -7,7 +7,7 @@
 ## 子命令
 
 ```bash
-$ helen run <file>       # 编译 + 执行
+$ helen <file>         # 编译 + 执行
 $ helen check <file>     # 仅验证 (Lex + Parse + Analyze)
 $ helen repl             # 交互式解释器
 $ helen doc <files...>   # 生成文档
@@ -109,10 +109,10 @@ HELEN_MODEL=qwen3.7-plus
 
 ---
 
-## helen run
+## helen <file>
 
 ```
-$ helen run main.helen
+$ helen main.helen
 ```
 
 执行完整编译链：

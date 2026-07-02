@@ -1,9 +1,9 @@
 """CLI entry point for the Helen language (HLD 5.2 Phase 6).
 
 Commands:
-    helen run <file>      — Full compile + execute
-    helen check <file>    — Frontend validation only (lex + parse + analyze)
-    helen repl            — Interactive read-eval-print loop
+    helen <file>        — Full compile + execute
+    helen check <file>  — Frontend validation only (lex + parse + analyze)
+    helen repl          — Interactive read-eval-print loop
 """
 
 from __future__ import annotations
@@ -596,7 +596,7 @@ def quality_command(argv: list[str]) -> int:
             architecture=scorer.score_architecture(metrics),
             code_quality=scorer.score_code_quality(metrics),
             security=scorer.score_security(security_issues),
-            test_coverage=scorer.score_test_coverage(file),
+            test_coverage=scorer.score_test_coverage(file, source=source_text),
             documentation=scorer.score_documentation(metrics),
             maintainability=scorer.score_maintainability(metrics),
             engineering=scorer.score_engineering(metrics),
