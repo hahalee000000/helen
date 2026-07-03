@@ -8,6 +8,38 @@
 
 技能（Skill）是模块化的知识单元，以 Markdown 文件形式存在。它们让 LLM 在需要时加载特定领域的知识，而不是把所有知识塞进 system prompt。
 
+## Agent vs Skill：本质区别
+
+> **Agent 是"谁来做"，Skill 是"怎么做"的知识。**
+
+| 维度 | Agent（智能体） | Skill（技能） |
+|------|----------------|--------------|
+| **本质** | 运行时实体 | 静态文档 |
+| **语言级别** | 一等公民（语法支持） | 外部概念（纯 Markdown） |
+| **可调用** | ✅ `Agent()` 像函数调用 | ❌ 不可调用 |
+| **有状态** | ✅ 维护对话/工具状态 | ❌ 无状态 |
+| **执行逻辑** | ✅ `main { }` 块 | ❌ 无执行逻辑 |
+| **用途** | **执行**任务 | **指导**如何执行 |
+
+**Agent 是执行者**：有 model、temperature、tools，可被调用、组合，实际执行 LLM 调用和工具操作。像**员工**。
+
+**Skill 是知识库**：纯 Markdown 文档，提供模式、最佳实践、API 用法，被 Agent 读取作为上下文。像**手册**。
+
+**用 Agent** 当你需要实际执行操作、维护状态、被代码调用。  
+**用 Skill** 当你需要提供知识、文档化工作流、让多个 Agent 共享知识。
+
+**实际关系**：Agent 可以加载 Skill 作为知识源：
+
+```helen
+agent Developer {
+    tools ["load_skill"]
+    main {
+        let guide = load_skill("helen-testing")
+        return llm act "Follow: " + guide
+    }
+}
+```
+
 ## 技能目录结构
 
 ```
