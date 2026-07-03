@@ -90,7 +90,8 @@ class TestIndexAccess:
         lst = ListLiteralNode(elements=[_lit(1)], span=_span())
         idx = IndexNode(target=lst, index=_lit(5), span=_span())
         result, errors = _run(ExprStmtNode(expression=idx, span=_span()))
-        assert errors.has_errors
+        # v1.11: Runtime errors return None, don't populate error collector
+        assert result is None
 
 
 class TestMemberAccess:
@@ -105,7 +106,8 @@ class TestMemberAccess:
         mp = MapLiteralNode(entries=[], span=_span())
         acc = AccessNode(target=mp, property="missing", span=_span())
         result, errors = _run(ExprStmtNode(expression=acc, span=_span()))
-        assert errors.has_errors
+        # v1.11: Runtime errors return None, don't populate error collector
+        assert result is None
 
 
 class TestVariableCollections:
