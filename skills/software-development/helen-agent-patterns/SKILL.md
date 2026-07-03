@@ -1,12 +1,10 @@
 ---
 name: helen-agent-patterns
-description: "Helen Agent 设计模式 — 单 Agent、多 Agent 协作、路由、流式处理"
-version: 1.0.0
+description: "Helen Agent 设计模式 — 单 Agent、多 Agent 协作、作用域隔离、共享变量、路由、流式处理"
+version: 1.1.0
 author: Helen Team
 license: MIT
-metadata:
-  hermes:
-    tags: [helen, agent, patterns, design, llm]
+tags: [helen, agent, patterns, design, llm, scope-isolation, shared-let, v1.10, closure, concurrency]
 ---
 
 # Helen Agent 设计模式
@@ -67,6 +65,118 @@ agent ConfiguredAgent {
         return llm act "Do something complex"
     }
 }
+```
+
+## Agent 作用域隔离（v1.10）
+
+### 核心规则
+
+**Agent main 在完全隔离的环境中运行**，这是 v1.10 的重要特性：
+
+| 变量类型 | 在 agent main 中 | 说明 |
+|---------|-----------------|------|
+| 模块级 `let` | ❌ **不可见** | 编译时报错 |
+| 模块级 `const` | ✅ 自动可见 | 只读共享 |
+| `shared let` | ✅ 可见 | 跨 agent 可写 |
+| 局部变量 | ✅ 可见 | 闭包可捕获 |
+
+### 示例：作用域隔离
+
+```helen
+// 模块级变量
+let module_counter = 0           // ❌ agent main 中不可见
+const MAX_RETRIES = 3            // ✅ agent main 中自动可见
+shared let shared_state = {}     // ✅ agent main 中可见可写
+
+agent Worker(task: str) {
+    description "Worker agent"
+    
+    functions {
+        fn process(): str {
+            // functions 块中可以访问模块级 let
+            module_counter = module_counter + 1
+            return "processed: " + task
+        }
+    }
+    
+    main {
+        // ❌ 编译错误：module_counter 在 agent main 中不可见
+        // print(module_counter)
+        
+        // ✅ const 自动可见
+        print("Max retries: " + MAX_RETRIES)
+        
+        // ✅ shared let 可见
+        shared_state["task"] = task
+        
+        // ✅ 局部变量
+        let local_data = "local"
+        
+        return llm act "Process: " + task
+    }
+}
+```
+
+### 闭包捕获局部变量
+
+```helen
+agent DataProcessor(data: list) {
+    description "Process data with closure"
+    
+    main {
+        let threshold = 10  // 局部变量
+        
+        // 闭包可以捕获局部变量
+        fn filter_data(items: list): list {
+            let result = []
+            for item in items {
+                if item > threshold {  // ✅ 捕获外层局部变量
+                    result.append(item)
+                }
+            }
+            return result
+        }
+        
+        let filtered = filter_data(data)
+        return llm act "Filtered data: " + str(filtered)
+    }
+}
+```
+
+### shared let 跨 Agent 协作
+
+```helen
+// 全局共享状态
+shared let global_cache = {}
+shared let request_count = 0
+
+agent CacheReader(key: str) {
+    description "Read from shared cache"
+    
+    main {
+        request_count = request_count + 1
+        
+        if key in global_cache {
+            return global_cache[key]
+        }
+        return null
+    }
+}
+
+agent CacheWriter(key: str, value: any) {
+    description "Write to shared cache"
+    
+    main {
+        request_count = request_count + 1
+        global_cache[key] = value
+        return "cached"
+    }
+}
+
+// 使用
+CacheWriter("user:1", {"name": "Alice"})
+let user = CacheReader("user:1")
+print("Requests: " + request_count)  // 2
 ```
 
 ## 设计模式
@@ -546,142 +656,70 @@ agent SimpleAgent {
 }
 ```
 
+### 6. 正确使用作用域（v1.10）
+
+```helen
+# ✅ 使用 shared let 进行跨 agent 共享
+shared let cache = {}
+
+agent CacheReader(key: str) {
+    main {
+        if key in cache {
+            return cache[key]
+        }
+        return null
+    }
+}
+
+# ❌ 错误：期望模块级 let 在 agent main 中可见
+let local_cache = {}  // 模块级 let
+
+agent BadCacheReader(key: str) {
+    main {
+        // 编译错误！local_cache 在 agent main 中不可见
+        return local_cache[key]
+    }
+}
+```
+
 ## 调试技巧
 
-### 1. 打印 Agent 配置
+### 查看 Agent 配置
 
 ```helen
-agent DebugAgent {
-    description "Debug agent"
+agent DebuggableAgent {
+    description "Debug example"
+    prompt "You are helpful."
     model "gpt-4"
     temperature 0.7
+    max-turns 10
     
     main {
-        print("Agent starting...")
-        let result = llm act "Debug task"
-        print("Agent completed")
-        return result
+        // 打印配置信息
+        print("Agent started")
+        return llm act "Do something"
     }
 }
 ```
 
-### 2. 使用 :ask 在 REPL 中测试
-
-```bash
-$ helen repl
->>> :ask How does the Translator agent work?
-# AI 助手会解释 Agent 的工作原理
-```
-
-### 3. 检查对话历史
+### 使用 trace 跟踪
 
 ```helen
-# 在 Agent 中访问历史
-agent HistoryAwareAgent {
-    main {
-        # 自动维护历史
-        let response = llm act "Question 1"
-        let followup = llm act "Follow up on that"
-        return followup
-    }
-}
-```
-
-### 4. 使用可观测性调试 Agent
-
-Helen 提供 AI 原生可观测性，帮助调试 Agent 行为：
-
-```helen
-agent DebuggableAgent(input) {
-    description "Agent with observability"
+main {
+    trace_on()  // 启用跟踪
     
-    fn validate(data) {
-        # 运行时断言
-        assert data != null, "input must not be null"
-        assert len(data) > 0, "input must not be empty"
-        
-        # 结构化调试输出
-        debug("validated input", data)
-        return true
-    }
+    let result = MyAgent("test")
     
-    main {
-        # 开启执行追踪
-        trace_on()
-        
-        let valid = validate(input)
-        if valid {
-            let result = llm act "Process: " + str(input)
-            debug("LLM result", result)
-            return result
-        }
-        
-        trace_off()
-    }
+    let trace = get_trace()
+    print("Execution trace: " + str(trace))
+    
+    trace_off()
 }
 ```
 
-**REPL 调试命令**：
+## 相关技能
 
-```
-:trace on          # 开启追踪
-:trace show 20     # 显示最近 20 条执行记录
-:last_error        # 显示上次错误的 JSON 上下文
-:llm_log 5         # 显示最近 5 次 LLM 调用审计
-```
-
-**错误快照格式**（JSON，AI 可直接消费）：
-
-```json
-{
-  "error": {"type": "AssertionError", "message": "...", "location": "..."},
-  "call_stack": [{"function": "...", "args": {...}}],
-  "scope": {"var": "value"}
-}
-```
-
-## 总结
-
-Helen Agent 设计模式：
-
-1. **专家 Agent** — 领域专家，单一职责
-2. **路由 Agent** — `llm if` 分类路由
-3. **管道 Agent** — 顺序处理，阶段化
-4. **并发 Agent** — `async/await` 并发执行
-5. **流式 Agent** — `llm stream` 实时输出
-6. **工具 Agent** — 使用工具完成复杂任务
-7. **对话 Agent** — 多轮对话，保持上下文
-
-选择合适的模式，遵循最佳实践，构建强大的 AI 应用。
-
-## 常见陷阱
-
-### ❌ 不要使用 `call` 关键字调用 Agent
-
-**错误示例**：
-```helen
-let result = call SimpleAgent()  // ❌ 解析错误：Expected expression, got CALL
-```
-
-**正确示例**：
-```helen
-let result = SimpleAgent()  // ✅ 函数式调用
-```
-
-**原因**：
-- Helen 中 Agent 是**一等公民**，可以像函数一样调用
-- `call` 关键字仅用于**语句位置**（不接收返回值时）
-- 在**表达式位置**（赋值、函数参数、返回值），必须使用函数式调用
-- 这是 Helen 的核心设计决策：Agent 是值，可以传递、返回、赋值
-
-**使用场景对比**：
-```helen
-// ✅ 表达式位置 - 函数式调用
-let result = AgentName(args)
-return AgentName(args)
-let x = some_fn(AgentName(args))
-
-// ✅ 语句位置 - 可以使用 call（但函数式也可以）
-call AgentName(args)  // 不关心返回值
-AgentName(args)       // 也可以，更简洁
-```
+- **helen-agent-collaboration** — 多 Agent 协作模式详解
+- **helen-syntax** — Helen 语法参考（包括 shared let、agent main 等）
+- **helen-testing** — Agent 测试策略
+- **helen-quality** — Agent 代码质量评估

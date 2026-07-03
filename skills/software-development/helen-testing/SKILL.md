@@ -1,19 +1,17 @@
 ---
 name: helen-testing
-description: "Helen 测试框架使用指南 — TDD 工作流、断言 API、CLI 选项"
-version: 1.0.0
+description: "Helen 测试框架使用指南 — TDD 工作流、断言 API、CLI 选项、Agent 测试、v1.10 异常处理"
+version: 1.1.0
 author: Helen Team
 license: MIT
-metadata:
-  hermes:
-    tags: [helen, testing, tdd, assertions, cli]
+tags: [helen, testing, tdd, assertions, cli, agent-testing, exception-handling, v1.10]
 ---
 
 # Helen 测试框架
 
 ## 概述
 
-Helen 内置完整的测试框架，支持 TDD 开发模式。
+Helen 内置完整的测试框架，支持 TDD 开发模式。v1.10 增强了异常处理和 Agent 测试支持。
 
 ## 快速开始
 
@@ -67,7 +65,7 @@ helen test calculator_test.helen
 | `assert_true(condition)` | 断言条件为真 |
 | `assert_equal(actual, expected)` | 断言相等 |
 | `assert_not_equal(a, b)` | 断言不等 |
-| `assert_contains(haystack, needle)` | 断言容器包含元素（新增） |
+| `assert_contains(haystack, needle)` | 断言容器包含元素 |
 | `assert_throws(fn)` | 断言抛出异常 |
 
 **assert_contains 示例：**
@@ -98,203 +96,448 @@ expect(value)
     .toStartWith(prefix)      // 以...开头
     .toEndWith(suffix)        // 以...结尾
     .toHaveLength(n)          // 长度
-    .toBeEmpty()              // 为空
-    .toBeTruthy()             // 为真
-    .toBeFalsy()              // 为假
-    .toBeType("str")          // 类型检查
+    .toHaveProperty(key)      // 属性存在
     .toThrow()                // 抛出异常
-    .not_.toBe(x)             // 否定
 ```
 
-### 示例
+**示例：**
 
 ```helen
-fn test_expect() {
-    // 相等
+fn test_expect_api() {
     expect(42).toBe(42)
-    
-    // 包含
-    expect("hello world").toContain("world")
     expect([1, 2, 3]).toContain(2)
-    
-    // 比较
-    expect(10).toBeGreaterThan(5)
-    
-    // 字符串
-    expect("test123").toMatch("[0-9]+")
-    
-    // 否定
-    expect(5).not_.toBe(6)
-    
-    // 链式
-    expect("hello world")
-        .toContain("hello")
-        .toStartWith("hello")
+    expect("hello").toStartWith("he")
+    expect({"a": 1}).toHaveProperty("a")
 }
 ```
 
-## 测试组织
-
-### 方式 1：简单注册（推荐）
+### 异常测试（v1.10 增强）
 
 ```helen
-test_suite("Math")
-test_case("adds", test_add)
-test_case("subtracts", test_subtract)
-test_end_suite()
-
-test_suite("String")
-test_case("uppercases", test_upper)
-test_end_suite()
+fn test_exceptions() {
+    // 基础异常测试
+    assert_throws(fn() {
+        throw RuntimeError("error")
+    })
+    
+    // 特定异常类型（v1.10）
+    expect(fn() {
+        throw LLMError("API failed")
+    }).toThrow()
+    
+    // 检查异常消息
+    try {
+        throw RuntimeError("specific error")
+    } catch RuntimeError as e {
+        assert_contains(e.message, "specific")
+    }
+}
 ```
 
-### 方式 2：钩子函数
+### v1.10 异常层级
 
-```helen
-fn setup() {
-    // 每个测试前运行
-}
+Helen v1.10 增强了异常处理，所有 Python stdlib 异常都被包装为 `RuntimeError`：
 
-fn teardown() {
-    // 每个测试后运行
-}
-
-test_suite("With hooks")
-before_each(setup)
-after_each(teardown)
-test_case("test1", test_something)
-test_end_suite()
+```
+AnyError
+├── LLMError
+│   ├── TimeoutError
+│   └── ModelError
+├── ToolError
+├── RuntimeError          // 包含所有 stdlib Python 异常
+│   ├── ValueError
+│   ├── TypeError
+│   ├── KeyError
+│   └── ...
+├── AssertionError
+└── AggregateError        // 并发任务错误聚合
 ```
 
-### 跳过测试
+**测试异常示例：**
 
 ```helen
-test_case_skip("not ready", test_wip)
+fn test_runtime_errors() {
+    // stdlib 异常被包装为 RuntimeError
+    expect(fn() {
+        let x = int("not a number")  // 会抛出 RuntimeError
+    }).toThrow()
+    
+    // 捕获并检查
+    try {
+        let arr = [1, 2, 3]
+        let x = arr[10]  // 索引越界
+    } catch RuntimeError as e {
+        assert_contains(e.message, "index")
+    }
+}
+```
+
+## 测试 Agent
+
+### 测试简单 Agent
+
+```helen
+agent Adder(a: int, b: int) {
+    description "Add two numbers"
+    
+    main {
+        return a + b
+    }
+}
+
+fn test_adder_agent() {
+    let result = Adder(2, 3)
+    assert_equal(result, 5)
+}
+```
+
+### 测试带工具的 Agent
+
+```helen
+agent FileProcessor(path: str) {
+    description "Process a file"
+    tools ["read_file"]
+    
+    main {
+        let content = read_file(path)
+        return len(content)
+    }
+}
+
+fn test_file_processor() {
+    // 准备测试文件
+    write_file("test_input.txt", "hello world")
+    
+    // 测试
+    let result = FileProcessor("test_input.txt")
+    assert_equal(result, 11)
+    
+    // 清理
+    delete_file("test_input.txt")
+}
+```
+
+### 测试 Agent 作用域隔离（v1.10）
+
+```helen
+shared let shared_counter = 0
+const MAX_VALUE = 100
+
+agent CounterAgent {
+    description "Test scope isolation"
+    
+    main {
+        // ✅ const 可见
+        assert_true(MAX_VALUE > 0)
+        
+        // ✅ shared let 可见
+        shared_counter = shared_counter + 1
+        return shared_counter
+    }
+}
+
+fn test_agent_scope_isolation() {
+    shared_counter = 0  // 重置
+    
+    let r1 = CounterAgent()
+    assert_equal(r1, 1)
+    
+    let r2 = CounterAgent()
+    assert_equal(r2, 2)
+    
+    assert_equal(shared_counter, 2)
+}
+```
+
+### 测试并发 Agent
+
+```helen
+agent SlowWorker(id: str, delay: int) {
+    description "Worker with delay"
+    
+    main {
+        sleep(delay)
+        return "done: " + id
+    }
+}
+
+fn test_concurrent_agents() {
+    let start = timestamp()
+    
+    let t1 = async SlowWorker("A", 1)
+    let t2 = async SlowWorker("B", 1)
+    let t3 = async SlowWorker("C", 1)
+    
+    let results = await [t1, t2, t3]
+    
+    let elapsed = timestamp() - start
+    
+    // 应该并发执行，总时间约 1 秒
+    assert_true(elapsed < 2)
+    assert_equal(len(results), 3)
+}
+```
+
+### 测试 Agent 错误处理
+
+```helen
+agent FailingAgent(task: str) {
+    description "Agent that may fail"
+    
+    main {
+        if task == "fail" {
+            throw RuntimeError("Intentional failure")
+        }
+        return "success: " + task
+    }
+}
+
+fn test_agent_error_handling() {
+    // 正常情况
+    let result = FailingAgent("ok")
+    assert_equal(result, "success: ok")
+    
+    // 异常情况
+    expect(fn() {
+        FailingAgent("fail")
+    }).toThrow()
+}
+```
+
+## 测试套件组织
+
+### 使用 before_each / after_each
+
+```helen
+before_each(fn() {
+    // 每个测试前执行
+    write_file("test_data.txt", "initial")
+})
+
+after_each(fn() {
+    // 每个测试后执行
+    delete_file("test_data.txt")
+})
+
+fn test_read_data() {
+    let content = read_file("test_data.txt")
+    assert_equal(content, "initial")
+}
+
+fn test_modify_data() {
+    write_file("test_data.txt", "modified")
+    let content = read_file("test_data.txt")
+    assert_equal(content, "modified")
+}
+```
+
+### 嵌套测试套件
+
+```helen
+test_suite("Math", fn() {
+    test_suite("Addition", fn() {
+        test_case("positive numbers", fn() {
+            assert_equal(2 + 3, 5)
+        })
+        test_case("negative numbers", fn() {
+            assert_equal(-1 + -2, -3)
+        })
+    })
+    
+    test_suite("Multiplication", fn() {
+        test_case("positive numbers", fn() {
+            assert_equal(2 * 3, 6)
+        })
+        test_case("with zero", fn() {
+            assert_equal(5 * 0, 0)
+        })
+    })
+})
+
+run_tests()
 ```
 
 ## CLI 选项
 
-### 过滤
+### 基本用法
 
 ```bash
-# 运行单个测试
-helen test file.helen --only "adds numbers"
+# 运行所有测试
+helen test my_test.helen
 
-# 运行单个 suite
-helen test file.helen --suite "Calculator"
+# 运行特定测试套件
+helen test my_test.helen --suite "Math"
 
-# 按模式过滤（正则）
-helen test file.helen --filter "add|subtract"
+# 运行特定测试用例
+helen test my_test.helen --only "adds numbers"
+
+# JSON 输出
+helen test my_test.helen --json
+
+# 详细输出
+helen test my_test.helen --verbose
+
+# Watch 模式（文件变化自动重跑）
+helen test my_test.helen --watch
 ```
 
-### 输出
+### 过滤测试
 
 ```bash
-# JSON 格式（CI 集成）
-helen test file.helen --json
+# 只运行匹配的测试
+helen test my_test.helen --only "test_add"
 
-# 覆盖率提示
-helen test file.helen --coverage
+# 排除匹配的测试
+helen test my_test.helen --skip "slow_tests"
+
+# 组合过滤
+helen test my_test.helen --suite "Math" --only "addition"
 ```
 
-### 监听模式（TDD）
+## 测试最佳实践
 
-```bash
-# 文件变更自动重跑
-helen test file.helen --watch
-
-# 监听 + 过滤
-helen test file.helen --watch --filter "add"
-```
-
-## TDD 工作流
-
-### 1. RED — 写失败的测试
+### 1. 测试命名规范
 
 ```helen
-// my_feature_test.helen
-import "my_feature" as feature
+// ✅ 清晰的测试命名
+fn test_add_positive_numbers() { ... }
+fn test_add_negative_numbers() { ... }
+fn test_add_zero() { ... }
 
-fn test_new_feature() {
-    assert_equal(feature.do_something(), expected_result)
+// ❌ 模糊的命名
+fn test_add() { ... }
+fn test1() { ... }
+```
+
+### 2. 独立测试
+
+```helen
+// ✅ 每个测试独立
+fn test_feature_a() {
+    let data = setup_data()
+    assert_equal(process(data), expected_a)
 }
 
-test_suite("New Feature")
-test_case("does something", test_new_feature)
-test_end_suite()
+fn test_feature_b() {
+    let data = setup_data()  // 重新设置
+    assert_equal(process(data), expected_b)
+}
 
-run_tests()
+// ❌ 测试间依赖
+fn test_feature_a() {
+    global_data = setup_data()
+    assert_equal(process(global_data), expected_a)
+}
+
+fn test_feature_b() {
+    // 依赖 test_feature_a 的结果
+    assert_equal(process(global_data), expected_b)
+}
 ```
+
+### 3. 测试边界条件
+
+```helen
+fn test_edge_cases() {
+    // 空输入
+    assert_equal(process([]), [])
+    
+    // 单元素
+    assert_equal(process([1]), [1])
+    
+    // 最大值
+    assert_equal(process([MAX_INT]), [MAX_INT])
+    
+    // 边界值
+    assert_equal(process([0]), [0])
+    assert_equal(process([-1]), [-1])
+}
+```
+
+### 4. 使用 mock 数据
+
+```helen
+fn test_with_mock_data() {
+    // 准备 mock 数据
+    let mock_user = {
+        "id": 1,
+        "name": "Test User",
+        "email": "test@example.com"
+    }
+    
+    // 测试
+    let result = format_user(mock_user)
+    assert_equal(result, "Test User (test@example.com)")
+}
+```
+
+## 持续集成
+
+### GitHub Actions 示例
+
+```yaml
+name: Helen Tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Helen
+        run: pip install -e .
+      - name: Run tests
+        run: helen test tests/*.helen --json > results.json
+      - name: Check results
+        run: |
+          if [ $(jq '.failed' results.json) -gt 0 ]; then
+            exit 1
+          fi
+```
+
+### 测试覆盖率
 
 ```bash
-helen test my_feature_test.helen --watch
+# 生成覆盖率报告（需要额外工具）
+helen test tests/*.helen --coverage --output coverage.html
 ```
 
-### 2. GREEN — 实现功能
+## 调试测试
+
+### 使用 debug() 函数
 
 ```helen
-// my_feature.helen
-fn do_something() {
-    return expected_result
+fn test_complex_logic() {
+    let input = [1, 2, 3, 4, 5]
+    
+    debug("Input: " + str(input))
+    
+    let result = process(input)
+    
+    debug("Result: " + str(result))
+    
+    assert_equal(result, [2, 4, 6, 8, 10])
 }
 ```
 
-保存文件 → 测试自动重跑 → 看到通过！
-
-### 3. REFACTOR — 重构
-
-改进代码，保持测试通过。
-
-## 输出示例
-
-```
-============================================================
-  HELEN TEST RESULTS
-============================================================
-
-  Calculator
-    ✓ adds numbers (0.1ms)
-    ✓ subtracts numbers (0.0ms)
-    ○ skipped test (skipped)
-
-------------------------------------------------------------
-  2 passed, 0 failed, 1 skipped (3 total)
-  Duration: 0.5ms
-============================================================
-  ✓ ALL TESTS PASSED
-============================================================
-```
-
-## 完整示例
+### 使用 trace
 
 ```helen
-// string_utils_test.helen
-
-fn test_reverse() {
-    assert_equal(reverse("hello"), "olleh")
-    assert_equal(reverse(""), "")
+fn test_with_trace() {
+    trace_on()
+    
+    let result = complex_function()
+    
+    let trace_log = get_trace()
+    print("Execution trace: " + str(trace_log))
+    
+    trace_off()
+    
+    assert_true(result > 0)
 }
-
-fn test_uppercase() {
-    expect(upper("hello")).toBe("HELLO")
-}
-
-fn test_contains() {
-    expect("hello world").toContain("world")
-    expect("hello world").not_.toContain("xyz")
-}
-
-test_suite("String Utils")
-test_case("reverse", test_reverse)
-test_case("uppercase", test_uppercase)
-test_case("contains", test_contains)
-test_end_suite()
-
-run_tests()
 ```
 
-## 相关文档
+## 相关技能
 
-- [教程](../../docs/tutorial.md#测试框架)
-- [Wiki](../../../wiki/helen/toolchain/testing.md)
-- [示例](../../examples/test_example.helen)
+- **test-driven-development** — TDD 方法论详解
+- **helen-agent-patterns** — Agent 设计模式
+- **debugging** — 调试方法论
