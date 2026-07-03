@@ -20,6 +20,99 @@ Helen 标准库提供 195 个内置函数，分为 9 大类别：
 | **Crypto** | 11 | 哈希、随机数 |
 | **IO** | 5 | 流式输出控制 |
 
+## 多语言 stdlib (v1.10)
+
+Helen 的 stdlib 支持多语言函数名。每个 stdlib 函数都有英文 canonical 名和本地化别名，启动时全量加载，可按需使用。
+
+### 中文 stdlib 别名
+
+Helen 内置 230+ 个中文别名，覆盖全部 stdlib 分类。例如：
+
+| 英文 | 中文 | 类别 |
+|------|------|------|
+| `len` | `长度` | Core |
+| `print` | `打印` | Core |
+| `sort` | `排序` | Collection |
+| `filter` | `过滤` | Collection |
+| `json_parse` | `json解析` | Data |
+| `http_get` | `http获取` | Network |
+| `regex_match` | `正则匹配` | String |
+| `sha256` | `sha256` | Crypto |
+| `date_format` | `日期格式化` | Time |
+
+完整列表见 `helen/stdlib/locales/zh.py`。
+
+### 使用示例
+
+```helen
+// 直接用中文 stdlib 函数名（不需要任何 import 或 alias）
+函数 数据处理() {
+    让 原始数据 = [3, 1, 4, 1, 5, 9, 2, 6]
+    让 排序后 = 排序(原始数据)
+    让 去重后 = 去重(排序后)
+    返回 长度(去重后)
+}
+
+// 中英混用也完全合法
+函数 混合使用() {
+    let data = [1, 2, 3]
+    let sorted = 排序(data)     // 英文变量 + 中文函数
+    return len(sorted)          // 切回英文
+}
+
+// 处理网络数据
+函数 获取数据() {
+    让 响应 = http获取("https://api.example.com/data")
+    让 解析后 = json解析(响应)
+    返回 解析后["name"]
+}
+```
+
+### 自定义别名
+
+如果需要给自己的函数或 stdlib 函数起额外的别名，使用 `alias` 语句：
+
+```helen
+// 给 stdlib 函数起自定义别名
+alias len as 我的长度
+alias print as 输出
+
+// 给用户函数起别名
+函数 greet(name: str): str {
+    返回 "Hello, " + name
+}
+alias greet as 打招呼
+```
+
+中文关键字 `别名` 等价：
+
+```helen
+别名 len as 长度
+```
+
+### 设计原则
+
+- **一套机制**：stdlib 别名和用户 `alias` 使用相同的 Environment binding，行为完全一致
+- **全量加载**：所有 locale 的别名表启动时全部注册，不按 locale 过滤
+- **locale 只影响展示**：`~/.helen/config.yaml` 中的 `locale: zh` 只影响 docs/LSP/错误消息的语言，不影响运行时可用的名字
+- **向后兼容**：英文 canonical 名永远可用
+
+### 扩展新语言
+
+添加新语言的 stdlib 别名只需创建一个新文件，不需要改语法/解析器/解释器：
+
+```python
+# helen/stdlib/locales/ja.py
+ALIASES = {
+    "長さ": "len",
+    "表示": "print",
+    "ソート": "sort",
+    # ...
+}
+```
+
+启动时自动加载所有 `helen/stdlib/locales/*.py` 文件中的别名。
+
 ## Core 函数 (11)
 
 ### 类型转换

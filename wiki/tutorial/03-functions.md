@@ -258,6 +258,81 @@ print(result)  // [20, 40]
 - 匿名函数可以访问定义时的所有外部变量
 - 闭包可以用于创建工厂函数、回调函数等模式
 
+## 函数别名 (v1.10)
+
+`alias` 语句可以给现有的函数（stdlib 或用户定义）创建额外的名字。
+
+### 基本语法
+
+```helen
+alias <canonical> as <alias_name>
+```
+
+### 给 stdlib 起别名
+
+Helen 的 stdlib 已经内置 230+ 个中文别名（`长度`、`打印`、`排序` 等），可以直接使用。也可以用 `alias` 添加自定义别名：
+
+```helen
+alias len as 我的长度
+alias print as 输出
+
+主函 {
+    我的长度([1, 2, 3])   // 3
+    输出("hello")
+}
+```
+
+### 给用户函数起别名
+
+```helen
+函数 greet(name: str): str {
+    返回 "Hello, " + name
+}
+
+alias greet as 打招呼
+alias greet as say_hello
+
+主函 {
+    打招呼("Helen")       // "Hello, Helen"
+    say_hello("World")    // "Hello, World"
+}
+```
+
+### 中文关键字 `别名`
+
+`alias` 的中文等价形式：
+
+```helen
+别名 len as 长度
+别名 greet as 打招呼
+```
+
+### 作用域
+
+别名遵守正常的变量作用域规则：
+- 顶层 alias 在整个模块可见
+- 块内的 alias 只在该块及其嵌套作用域可见
+- 别名是快照绑定：`alias f as g` 时 g 指向当时的 f，后续重新定义 f 不影响 g
+
+```helen
+函数 foo() { 返回 1 }
+alias foo as bar
+函数 foo() { 返回 2 }   // 重新定义 foo
+
+主函 {
+    foo()   // 2 - 使用新的 foo
+    bar()   // 1 - bar 仍指向旧的 foo
+}
+```
+
+### 错误处理
+
+给不存在的名字起别名会在语义分析阶段报错：
+
+```helen
+alias nonexistent as foo   // ❌ Error: cannot alias 'nonexistent': name not found
+```
+
 ## 练习
 
 1. 编写一个计算斐波那契数列的递归函数

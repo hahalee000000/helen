@@ -945,6 +945,27 @@ print(result)  // [20, 40]
 - 匿名函数可以访问定义时的所有外部变量
 - 闭包可以用于创建工厂函数、回调函数等模式
 
+## 函数别名 (v1.10)
+
+`alias` 语句可以给现有的函数（stdlib 或用户定义）创建额外的名字。
+
+```helen
+// 给 stdlib 起自定义别名
+alias len as 我的长度
+alias print as 输出
+
+// 给用户函数起别名
+函数 greet(name: str): str {
+    返回 "Hello, " + name
+}
+alias greet as 打招呼
+
+// 中文关键字 `别名` 等价
+别名 sort as 排序
+```
+
+Helen 的 stdlib 已内置 230+ 个中文别名（`长度`、`打印`、`排序` 等），启动时自动加载，可以直接使用。所有 locale 的别名表启动时全量加载，无论 locale 设置。详见 [教程 10: 标准库参考](#教程-10-标准库参考)。
+
 ## 练习
 
 1. 编写一个计算斐波那契数列的递归函数
@@ -2868,6 +2889,68 @@ Helen 标准库提供 186 个内置函数，分为 9 大类别：
 | **System** | 16 | 环境变量、进程管理、日志 |
 | **Crypto** | 11 | 哈希、随机数 |
 | **IO** | 5 | 流式输出控制 |
+
+## 多语言 stdlib (v1.10)
+
+Helen 的 stdlib 支持多语言函数名。每个 stdlib 函数都有英文 canonical 名和本地化别名，启动时全量加载。
+
+### 中文 stdlib 别名
+
+Helen 内置 230+ 个中文别名，覆盖全部 stdlib 分类。例如：
+
+| 英文 | 中文 | 类别 |
+|------|------|------|
+| `len` | `长度` | Core |
+| `print` | `打印` | Core |
+| `sort` | `排序` | Collection |
+| `filter` | `过滤` | Collection |
+| `json_parse` | `json解析` | Data |
+| `http_get` | `http获取` | Network |
+| `regex_match` | `正则匹配` | String |
+| `sha256` | `sha256` | Crypto |
+
+完整列表见 `helen/stdlib/locales/zh.py`。
+
+### 使用示例
+
+```helen
+// 直接用中文 stdlib 函数名（不需要任何 import 或 alias）
+函数 数据处理() {
+    让 原始数据 = [3, 1, 4, 1, 5, 9, 2, 6]
+    让 排序后 = 排序(原始数据)
+    让 去重后 = 去重(排序后)
+    返回 长度(去重后)
+}
+
+// 中英混用也完全合法
+函数 混合使用() {
+    let data = [1, 2, 3]
+    let sorted = 排序(data)     // 英文变量 + 中文函数
+    return len(sorted)
+}
+```
+
+### 自定义别名
+
+如果需要给 stdlib 函数起额外的别名，使用 `alias` 语句：
+
+```helen
+alias len as 我的长度
+alias print as 输出
+```
+
+中文关键字 `别名` 等价：
+
+```helen
+别名 len as 长度
+```
+
+### 设计原则
+
+- **一套机制**：stdlib 别名和用户 `alias` 使用相同的 Environment binding
+- **全量加载**：所有 locale 的别名表启动时全部注册，不按 locale 过滤
+- **locale 只影响展示**：`~/.helen/config.yaml` 中的 `locale: zh` 只影响 docs/LSP/错误消息的语言，不影响运行时可用的名字
+- **扩展新语言**：添加新语言的 stdlib 别名只需创建 `helen/stdlib/locales/<code>.py`
 
 ## Core 函数 (11)
 

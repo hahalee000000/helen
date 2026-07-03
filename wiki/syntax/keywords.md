@@ -438,6 +438,38 @@ fn double(x) {
 import "./lib" as utils
 ```
 
+### `alias` (v1.10)
+函数/变量别名。为现有函数或 stdlib 函数创建额外的名字。
+
+```helen
+// 给 stdlib 函数起别名
+alias len as 长度
+alias print as 打印
+
+// 给用户函数起别名
+函数 greet(name: str): str { 返回 "Hello, " + name }
+alias greet as 打招呼
+```
+
+中文关键字 `别名` 等价：
+
+```helen
+别名 len as 我的长度
+主函 { 我的长度([1, 2, 3]) }
+```
+
+Helen 的 stdlib 内置 230+ 个中文别名，启动时自动加载，不需要手动 alias：
+
+```helen
+// 直接用中文 stdlib 函数名
+函数 测试() {
+    让 数据 = [3, 1, 4, 1, 5]
+    返回 长度(排序(数据))   // 长度 = len, 排序 = sort
+}
+```
+
+所有 locale 的别名表启动时全量加载，无论 locale 设置是什么。locale 配置只影响 docs/LSP/错误消息的展示语言，不影响可用的名字。
+
 ### `functions`
 Agent 内部函数块。
 
