@@ -54,6 +54,7 @@ ALIASES: dict[str, str] = {
     "去后缀": "trim_suffix",
     "子串": "substring",
     "插值": "interpolate",
+    "格式化浮点": "format_float",
 
     # ── Regex (正则) ─────────────────────────────────────────────
     "正则匹配": "regex_match",

@@ -12,6 +12,37 @@ import string as _string_module
 from typing import Any
 
 
+# ── Float formatting ───────────────────────────────────────────
+
+
+def _format_float(value: float, decimals: int) -> str:
+    """Format float to string with specified decimal places.
+
+    Args:
+        value: Float value to format
+        decimals: Number of decimal places (must be >= 0)
+
+    Returns:
+        Formatted string with exactly `decimals` decimal places
+
+    Raises:
+        ValueError: If decimals is negative
+
+    Example:
+        format_float(8.5, 1)      // → "8.5"
+        format_float(7.857, 2)    // → "7.86"
+        format_float(9.0, 1)      // → "9.0"
+        format_float(3.14159, 3)  // → "3.142"
+        format_float(100, 0)      // → "100"
+    """
+    if decimals < 0:
+        raise ValueError(f"decimals must be non-negative, got {decimals}")
+
+    # Use Python's format specification
+    format_spec = f".{decimals}f"
+    return format(value, format_spec)
+
+
 # ── Regex operations ───────────────────────────────────────────
 
 

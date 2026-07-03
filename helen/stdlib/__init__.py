@@ -28,6 +28,8 @@ from helen.stdlib.string import (
     _base64_encode, _base64_decode, _html_escape, _html_unescape,
     # String ops
     _repeat, _reverse, _pad_left, _pad_right, _center, _count, _index, _contains,
+    # Float formatting
+    _format_float,
 )
 
 # Import data functions
@@ -793,6 +795,9 @@ def _register_builtins() -> None:
         BuiltinFunction("center", "Center string", "center(s, width, char?)", _center, "string"),
         BuiltinFunction("count", "Count substring", "count(s, sub)", _count, "string"),
         BuiltinFunction("index", "Find substring index", "index(s, sub)", _index, "string"),
+
+        # Float formatting
+        BuiltinFunction("format_float", "Format float with decimals", "format_float(value, decimals)", _format_float, "string"),
 
         # Data JSON operations
         BuiltinFunction("json_parse", "Parse JSON", "json_parse(text)", _json_parse, "data"),
