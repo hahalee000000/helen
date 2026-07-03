@@ -22,7 +22,33 @@ def _map(lst: list[Any], fn: Callable[[Any], Any]) -> list[Any]:
     Returns:
         New list with transformed elements
     """
-    return [fn(item) for item in lst]
+    from helen.interpreter.exceptions import HelenRuntimeError, RuntimeError as HelenRuntimeErrorClass, RuntimeError as HelenRuntimeErrorClass
+
+    result = []
+    for i, item in enumerate(lst):
+        try:
+            result.append(fn(item))
+        except Exception as e:
+            # 提供更详细的错误上下文
+            error_msg = f"map operation failed at index {i}"
+            if hasattr(e, 'message'):
+                error_msg += f": {e.message}"
+            else:
+                error_msg += f": {str(e)}"
+
+            # 尝试获取元素的字符串表示（避免过长的输出）
+            item_repr = repr(item)
+            if len(item_repr) > 100:
+                item_repr = item_repr[:100] + "...(truncated)"
+            error_msg += f" (element: {item_repr})"
+
+            # 如果是HelenRuntimeError，保留span信息；否则创建新的RuntimeError
+            if isinstance(e, HelenRuntimeError):
+                raise HelenRuntimeErrorClass(error_msg, e.span)
+            else:
+                # 使用Helen的RuntimeError而不是Python的RuntimeError
+                raise HelenRuntimeErrorClass(error_msg)
+    return result
 
 
 def _filter(lst: list[Any], fn: Callable[[Any], bool]) -> list[Any]:
@@ -35,7 +61,30 @@ def _filter(lst: list[Any], fn: Callable[[Any], bool]) -> list[Any]:
     Returns:
         New list with elements that satisfy predicate
     """
-    return [item for item in lst if fn(item)]
+    from helen.interpreter.exceptions import HelenRuntimeError, RuntimeError as HelenRuntimeErrorClass
+
+    result = []
+    for i, item in enumerate(lst):
+        try:
+            if fn(item):
+                result.append(item)
+        except Exception as e:
+            error_msg = f"filter operation failed at index {i}"
+            if hasattr(e, 'message'):
+                error_msg += f": {e.message}"
+            else:
+                error_msg += f": {str(e)}"
+
+            item_repr = repr(item)
+            if len(item_repr) > 100:
+                item_repr = item_repr[:100] + "...(truncated)"
+            error_msg += f" (element: {item_repr})"
+
+            if isinstance(e, HelenRuntimeError):
+                raise HelenRuntimeErrorClass(error_msg, e.span)
+            else:
+                raise HelenRuntimeErrorClass(error_msg)
+    return result
 
 
 def _reduce(lst: list[Any], fn: Callable[[Any, Any], Any], initial: Any = None) -> Any:
@@ -49,9 +98,23 @@ def _reduce(lst: list[Any], fn: Callable[[Any, Any], Any], initial: Any = None) 
     Returns:
         Reduced value
     """
-    if initial is None:
-        return _reduce_builtin(fn, lst)
-    return _reduce_builtin(fn, lst, initial)
+    from helen.interpreter.exceptions import HelenRuntimeError, RuntimeError as HelenRuntimeErrorClass
+
+    try:
+        if initial is None:
+            return _reduce_builtin(fn, lst)
+        return _reduce_builtin(fn, lst, initial)
+    except Exception as e:
+        error_msg = f"reduce operation failed"
+        if hasattr(e, 'message'):
+            error_msg += f": {e.message}"
+        else:
+            error_msg += f": {str(e)}"
+
+        if isinstance(e, HelenRuntimeError):
+            raise HelenRuntimeErrorClass(error_msg, e.span)
+        else:
+            raise HelenRuntimeErrorClass(error_msg)
 
 
 def _find(lst: list[Any], fn: Callable[[Any], bool]) -> Any | None:
@@ -64,9 +127,28 @@ def _find(lst: list[Any], fn: Callable[[Any], bool]) -> Any | None:
     Returns:
         First matching element or None
     """
-    for item in lst:
-        if fn(item):
-            return item
+    from helen.interpreter.exceptions import HelenRuntimeError, RuntimeError as HelenRuntimeErrorClass
+
+    for i, item in enumerate(lst):
+        try:
+            if fn(item):
+                return item
+        except Exception as e:
+            error_msg = f"find operation failed at index {i}"
+            if hasattr(e, 'message'):
+                error_msg += f": {e.message}"
+            else:
+                error_msg += f": {str(e)}"
+
+            item_repr = repr(item)
+            if len(item_repr) > 100:
+                item_repr = item_repr[:100] + "...(truncated)"
+            error_msg += f" (element: {item_repr})"
+
+            if isinstance(e, HelenRuntimeError):
+                raise HelenRuntimeErrorClass(error_msg, e.span)
+            else:
+                raise HelenRuntimeErrorClass(error_msg)
     return None
 
 
@@ -80,7 +162,29 @@ def _every(lst: list[Any], fn: Callable[[Any], bool]) -> bool:
     Returns:
         True if all elements satisfy predicate
     """
-    return all(fn(item) for item in lst)
+    from helen.interpreter.exceptions import HelenRuntimeError, RuntimeError as HelenRuntimeErrorClass
+
+    for i, item in enumerate(lst):
+        try:
+            if not fn(item):
+                return False
+        except Exception as e:
+            error_msg = f"every operation failed at index {i}"
+            if hasattr(e, 'message'):
+                error_msg += f": {e.message}"
+            else:
+                error_msg += f": {str(e)}"
+
+            item_repr = repr(item)
+            if len(item_repr) > 100:
+                item_repr = item_repr[:100] + "...(truncated)"
+            error_msg += f" (element: {item_repr})"
+
+            if isinstance(e, HelenRuntimeError):
+                raise HelenRuntimeErrorClass(error_msg, e.span)
+            else:
+                raise HelenRuntimeErrorClass(error_msg)
+    return True
 
 
 def _some(lst: list[Any], fn: Callable[[Any], bool]) -> bool:
@@ -93,7 +197,29 @@ def _some(lst: list[Any], fn: Callable[[Any], bool]) -> bool:
     Returns:
         True if at least one element satisfies predicate
     """
-    return any(fn(item) for item in lst)
+    from helen.interpreter.exceptions import HelenRuntimeError, RuntimeError as HelenRuntimeErrorClass
+
+    for i, item in enumerate(lst):
+        try:
+            if fn(item):
+                return True
+        except Exception as e:
+            error_msg = f"some operation failed at index {i}"
+            if hasattr(e, 'message'):
+                error_msg += f": {e.message}"
+            else:
+                error_msg += f": {str(e)}"
+
+            item_repr = repr(item)
+            if len(item_repr) > 100:
+                item_repr = item_repr[:100] + "...(truncated)"
+            error_msg += f" (element: {item_repr})"
+
+            if isinstance(e, HelenRuntimeError):
+                raise HelenRuntimeErrorClass(error_msg, e.span)
+            else:
+                raise HelenRuntimeErrorClass(error_msg)
+    return False
 
 
 def _sort(lst: list[Any], compare: Callable[[Any, Any], int] | None = None) -> list[Any]:
