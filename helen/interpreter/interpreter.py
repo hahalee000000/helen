@@ -1444,7 +1444,7 @@ class Interpreter(LlmMixin, Visitor[object]):
                                 self.environment = old_env
                     else:
                         value = const_node.initializer.accept(self)
-                    self.environment.define(name, value)
+                    self.environment.define(name, value, is_const=not const_node.mutable)
                     if const_node.shared:
                         if not hasattr(self, '_shared_vars'):
                             self._shared_vars: set[str] = set()

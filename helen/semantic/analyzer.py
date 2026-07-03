@@ -782,6 +782,33 @@ class SemanticAnalyzer(Visitor[None]):
                 self.symbols.define(func_node.name, sym)
                 registered_funcs.append(func_node.name)
 
+            # Analyze agent functions {} block bodies
+            # These functions run in the agent's isolated environment and can:
+            # - Access agent parameters
+            # - Call other agent functions (forward references)
+            # - Access module-level const (read-only shared)
+            # - NOT access module-level let (agent scope isolation)
+            for func_node in node.functions:
+                # Save previous return type context
+                prev_return_type = self._current_return_type
+                self._current_return_type = self._type_from_typenode(func_node.return_type)
+
+                # Function body gets its own scope (inside agent scope)
+                self._in_function += 1
+                self.symbols.enter_scope(f"agent_fn:{func_node.name}", "function")
+                try:
+                    # Bind function parameters in function scope
+                    for param in func_node.params:
+                        sym = Symbol(name=param.name, kind="param",
+                                    type_node=param.type_annotation)
+                        self.symbols.define(param.name, sym)
+                    # Visit function body
+                    func_node.body.accept(self)
+                finally:
+                    self.symbols.exit_scope()
+                    self._in_function -= 1
+                    self._current_return_type = prev_return_type
+
             try:
                 node.logic.accept(self)
             finally:
