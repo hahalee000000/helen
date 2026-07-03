@@ -1895,9 +1895,19 @@ class Interpreter(LlmMixin, Visitor[object]):
         # const values are immutable by definition, so sharing them across
         # agent boundaries is safe — no state corruption risk.
         # Also inject shared let variables (explicitly declared cross-agent).
-        for _name, _value in self.environment._store.items():
-            if self.environment.is_const(_name):
-                call_env.define(_name, _value, is_const=True)
+        # v1.11: Walk the entire scope chain to find all consts, not just
+        # the current scope. This fixes the issue where imported consts
+        # (defined in parent scopes) were not visible in agent functions{}.
+        current_env = self.environment
+        while current_env is not None:
+            for _name, _value in current_env._store.items():
+                if current_env.is_const(_name):
+                    # Only define if not already defined (inner scope takes precedence)
+                    try:
+                        call_env.lookup(_name)
+                    except NameError:
+                        call_env.define(_name, _value, is_const=True)
+            current_env = current_env.parent
         # Shared let variables are tracked in a module-level registry
         for _name in getattr(self, '_shared_vars', set()):
             try:
