@@ -433,3 +433,113 @@ class TestSharedLetInitWithConst:
         """
         result, _ = _run_file(main, {"mod.helen": module})
         assert result == 110
+
+
+# ─── Issue #10b regression: transitive aliased import ─────────────────
+
+
+class TestSharedLetInitWithConstTransitive:
+    """Issue #10b regression: aliased import of module A that itself imports
+    module B where B has `shared let x = CONST` must not emit a spurious
+    'Undefined variable CONST' error.
+
+    Root cause was _register_imported_shared_vars() (called for aliased
+    imports) evaluating shared let initializers in the global env instead
+    of the module env, so consts from the imported module were invisible.
+    """
+
+    def test_aliased_transitive_import_no_error(self):
+        """Aliased import of A that imports B with shared let = CONST.
+
+        Verifies no spurious UNDECLARED_VARIABLE error is emitted during
+        the aliased-import path's _register_imported_shared_vars call.
+        """
+        mod_b = """
+        const LEVEL_NORMAL = 1
+        const LEVEL_VERBOSE = 2
+        shared let _level = LEVEL_NORMAL
+        fn get_level(): int { return _level }
+        """
+        mod_a = """
+        import "b.helen"
+        fn identity(): int { return 42 }
+        """
+        # main does both aliased (a) and non-aliased (b) imports so b's
+        # functions are accessible. The aliased import of a triggers the
+        # transitive import of b which exposes the regression.
+        main = """
+        import "a.helen" as a
+        import "b.helen"
+        main {
+            get_level()
+        }
+        """
+        result, interp = _run_file(main, {"a.helen": mod_a, "b.helen": mod_b})
+        assert result == 1
+        # Critical: no spurious UNDECLARED_VARIABLE errors accumulated
+        from helen.core.errors import ErrorCode
+        undeclared = [
+            e for e in interp.errors.errors
+            if e.code == ErrorCode.UNDECLARED_VARIABLE
+        ]
+        assert undeclared == [], f"spurious errors: {[str(e.message) for e in undeclared]}"
+
+    def test_aliased_transitive_import_multiple_shared_let(self):
+        """Multiple shared let with const refs across transitive aliased import."""
+        mod_b = """
+        const QUIET = 0
+        const NORMAL = 1
+        const VERBOSE = 2
+        shared let _level = NORMAL
+        shared let _use_colors = true
+        shared let _prefix = "log"
+        fn status(): int { return _level }
+        """
+        mod_a = """
+        import "b.helen"
+        fn wrapper(): int { return 7 }
+        """
+        main = """
+        import "a.helen" as a
+        import "b.helen"
+        main {
+            status()
+        }
+        """
+        result, interp = _run_file(main, {"a.helen": mod_a, "b.helen": mod_b})
+        assert result == 1
+        from helen.core.errors import ErrorCode
+        undeclared = [
+            e for e in interp.errors.errors
+            if e.code == ErrorCode.UNDECLARED_VARIABLE
+        ]
+        assert undeclared == [], f"spurious errors: {[str(e.message) for e in undeclared]}"
+
+    def test_mixed_aliased_then_non_aliased_no_error(self):
+        """Reproduces chat.helen pattern: aliased import of A (which imports B),
+        then non-aliased import of B. shared let in B references B's const."""
+        mod_b = """
+        const NORMAL = 1
+        shared let _level = NORMAL
+        fn get_level(): int { return _level }
+        """
+        mod_a = """
+        import "b.helen"
+        fn do_stuff(): int { return 99 }
+        """
+        main = """
+        import "a.helen" as a
+        import "b.helen"
+        main {
+            get_level()
+        }
+        """
+        result, interp = _run_file(main, {"a.helen": mod_a, "b.helen": mod_b})
+        assert result == 1
+        from helen.core.errors import ErrorCode
+        undeclared = [
+            e for e in interp.errors.errors
+            if e.code == ErrorCode.UNDECLARED_VARIABLE
+        ]
+        assert undeclared == [], f"spurious errors: {[str(e.message) for e in undeclared]}"
+

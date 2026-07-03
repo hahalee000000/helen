@@ -1297,8 +1297,10 @@ class Interpreter(LlmMixin, Visitor[object]):
             if node.alias:
                 module_obj = self._create_module_object(result)
                 self.environment.define(node.alias, module_obj)
-                # v1.10: Also register shared let for aliased imports
-                self._register_imported_shared_vars()
+                # v1.10: Also register shared let for aliased imports.
+                # Pass the module env so initializers can reference consts
+                # from the imported module (fixes Issue #10b regression).
+                self._register_imported_shared_vars(module_obj.get("__env__"))
             else:
                 # No alias: register agents/functions/constants directly to global namespace
                 # v1.10: Create a module env for imported functions so they can
@@ -1339,7 +1341,7 @@ class Interpreter(LlmMixin, Visitor[object]):
 
         return None
 
-    def _register_imported_shared_vars(self) -> None:
+    def _register_imported_shared_vars(self, module_env: Environment | None = None) -> None:
         """Evaluate shared let variables from imported modules and define them.
 
         v1.10: Imported shared let must be available in the importing
@@ -1347,6 +1349,13 @@ class Interpreter(LlmMixin, Visitor[object]):
         can access them through the scope chain.
 
         Called for BOTH aliased and non-aliased .helen imports.
+
+        Args:
+            module_env: The module-level environment where consts and shared
+                       let have already been evaluated (by _create_module_object
+                       or the non-aliased import path). If provided, use it to
+                       look up already-evaluated values so shared let
+                       initializers can reference consts from the same module.
         """
         from helen.core.ast import VarDeclNode  # noqa: PLC0415
         for name, var_node in self.import_resolver.data.items():
@@ -1358,11 +1367,32 @@ class Interpreter(LlmMixin, Visitor[object]):
             try:
                 self.environment.lookup(name)
             except NameError:
-                if var_node.initializer is not None:
-                    value = var_node.initializer.accept(self)
-                    self.environment.define(name, value)
-                else:
-                    self.environment.define(name, None)
+                value = None
+                resolved = False
+                # Prefer the already-evaluated value in module_env
+                # (_create_module_object evaluated all consts/shared let there)
+                if module_env is not None:
+                    try:
+                        value = module_env.lookup(name)
+                        resolved = True
+                    except NameError:
+                        pass
+                if not resolved and var_node.initializer is not None:
+                    # Fall back to evaluating the initializer. Use module_env
+                    # as context so const references from the same module resolve.
+                    if module_env is not None:
+                        old_env = self.environment
+                        self.environment = module_env
+                        try:
+                            value = var_node.initializer.accept(self)
+                        finally:
+                            self.environment = old_env
+                    else:
+                        value = var_node.initializer.accept(self)
+                    resolved = True
+                if not resolved:
+                    value = None
+                self.environment.define(name, value)
                 if not hasattr(self, '_shared_vars'):
                     self._shared_vars: set[str] = set()
                 self._shared_vars.add(name)

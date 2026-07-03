@@ -62,6 +62,11 @@ class ImportResolver:
         self.errors = error_reporter or ErrorReporter()
         # Track resolved paths to detect circular imports
         self._loaded: set[str] = set()
+        # Cache of ImportResult per loaded helen file path, so that
+        # repeated imports of a helen file (e.g. transitively loaded
+        # via another module, then imported directly) return a valid
+        # result instead of None. Fixes Issue #10b.
+        self._cached_results: dict[str, ImportResult] = {}
         # Registry for imported agents/functions
         self._agents: dict[str, Any] = {}  # name -> AgentDeclNode
         self._functions: dict[str, Any] = {}  # name -> FunctionDeclNode
@@ -95,8 +100,15 @@ class ImportResolver:
         # Circular import detection
         abs_resolved = os.path.abspath(resolved)
         if abs_resolved in self._loaded:
-            # Circular import — return cached result if available
-            # Try both filename-based alias and check if data exists
+            # Already loaded (possibly transitively). Return the cached
+            # ImportResult if we have one — this is critical for helen files
+            # that were loaded via _register_helen recursion, so a subsequent
+            # direct import can still go through the non-aliased path in the
+            # interpreter and register functions/consts properly.
+            if abs_resolved in self._cached_results:
+                return self._cached_results[abs_resolved]
+            # Fall back to filename-alias lookup (works for data files
+            # stored in _data under their alias).
             filename_alias = os.path.splitext(os.path.basename(resolved))[0]
             if filename_alias in self._data:
                 return ImportResult(
@@ -122,7 +134,10 @@ class ImportResolver:
         else:
             self._data[alias] = content
 
-        return ImportResult(path=abs_resolved, content=content, format=fmt)
+        result = ImportResult(path=abs_resolved, content=content, format=fmt)
+        if fmt == "helen":
+            self._cached_results[abs_resolved] = result
+        return result
 
     def _resolve_path(self, import_path: str, from_file: str | None) -> str | None:
         """Resolve an import path to an absolute filesystem path.
@@ -264,6 +279,7 @@ class ImportResolver:
     def reset(self) -> None:
         """Clear all loaded paths and registered content."""
         self._loaded.clear()
+        self._cached_results.clear()
         self._agents.clear()
         self._functions.clear()
         self._data.clear()
