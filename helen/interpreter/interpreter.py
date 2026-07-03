@@ -598,10 +598,24 @@ class Interpreter(LlmMixin, Visitor[object]):
                 self._runtime_error(node.span, f"List index must be integer, got {type(index).__name__}")
                 return None
             if isinstance(target, dict):
-                return target[index]
+                try:
+                    return target[index]
+                except KeyError:
+                    # v1.11: Provide more detailed error message for map key access
+                    # Include available keys to help debugging
+                    available_keys = list(target.keys())
+                    if len(available_keys) > 10:
+                        keys_str = str(available_keys[:10])[:-1] + ", ...]"
+                    else:
+                        keys_str = str(available_keys)
+                    self._runtime_error(
+                        node.span,
+                        f"Map key {index!r} not found. Available keys: {keys_str}"
+                    )
+                    return None
             self._runtime_error(node.span, f"Type {type(target).__name__} does not support indexing")
             return None
-        except (KeyError, IndexError, TypeError) as e:
+        except (IndexError, TypeError) as e:
             self._runtime_error(node.span, str(e))
             return None
 
@@ -2139,6 +2153,9 @@ class Interpreter(LlmMixin, Visitor[object]):
         return error_matches(exc, type_name)
 
     def _runtime_error(self, span: SourceSpan | None, message: str) -> None:
-        """Report a runtime error and raise an exception."""
-        self.errors.error(ErrorCode.RUNTIME_ERROR, message, span)
+        """Report a runtime error and raise an exception.
+
+        v1.11: Don't report to error collector. Runtime errors propagate
+        via exception and are caught by try-catch. If uncaught, CLI handles it.
+        """
         raise HelenRuntimeErrorClass(message, span)

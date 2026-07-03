@@ -247,7 +247,9 @@ class TestForLoopExecution:
         """for over non-iterable reports error."""
         stmt = ForStmtNode(iterator=_var("x"), iterable=_lit(42), body=ExprStmtNode(expression=_var("x"), span=_span()), span=_span())
         result, interp, errors = _run(stmt)
-        assert errors.has_errors
+        # v1.11: Runtime errors return None and don't populate error collector
+        # (they propagate via exception which _run catches)
+        assert result is None
 
     def test_for_with_return(self):
         """for loop with early return."""
@@ -588,12 +590,9 @@ class TestImportExecution:
         """import nonexistent module reports error."""
         imp = ImportStmtNode(module_path="nonexistent_module_xyz", alias=None, span=_span())
         interp = Interpreter(ErrorReporter())
-        # The import may raise an exception or report an error
-        try:
+        # v1.11: Import errors propagate via exception
+        with pytest.raises((HelenRuntimeExc, HelenRuntimeError)):
             interp._execute(imp)
-        except (HelenRuntimeExc, HelenRuntimeError):
-            pass
-        assert interp.errors.has_errors
 
 
 # ===========================================================================
@@ -615,20 +614,23 @@ class TestIndexAccess:
         mp = MapLiteralNode(entries=[e], span=_span())
         idx = IndexNode(target=mp, index=_lit("b"), span=_span())
         result, interp, errors = _run(ExprStmtNode(expression=idx, span=_span()))
-        assert errors.has_errors
+        # v1.11: Runtime errors return None, don't populate error collector
+        assert result is None
 
     def test_index_non_indexable_type(self):
         """Indexing a non-indexable type reports error."""
         idx = IndexNode(target=_lit(42), index=_lit(0), span=_span())
         result, interp, errors = _run(ExprStmtNode(expression=idx, span=_span()))
-        assert errors.has_errors
+        # v1.11: Runtime errors return None, don't populate error collector
+        assert result is None
 
     def test_index_list_with_non_int(self):
         """Indexing list with non-integer reports error."""
         lst = ListLiteralNode(elements=[_lit(1)], span=_span())
         idx = IndexNode(target=lst, index=_lit("key"), span=_span())
         result, interp, errors = _run(ExprStmtNode(expression=idx, span=_span()))
-        assert errors.has_errors
+        # v1.11: Runtime errors return None, don't populate error collector
+        assert result is None
 
     def test_index_tuple(self):
         """Index access on tuple (via variable)."""
@@ -735,7 +737,8 @@ class TestAgentCallNamedArgs:
             span=_span(),
         )
         result, interp, errors = _run(agent, ExprStmtNode(expression=call, span=_span()))
-        assert errors.has_errors
+        # v1.11: Runtime errors return None, don't populate error collector
+        assert result is None
 
     def test_agent_call_no_logic(self):
         """Agent with no logic returns None."""
@@ -762,13 +765,15 @@ class TestDivisionByZero:
         """1 / 0 reports division by zero error."""
         div = BinaryOpNode(left=_lit(1), operator=_tok("SLASH", "/"), right=_lit(0), span=_span())
         result, interp, errors = _run(ExprStmtNode(expression=div, span=_span()))
-        assert errors.has_errors
+        # v1.11: Runtime errors return None, don't populate error collector
+        assert result is None
 
     def test_float_division_by_zero(self):
         """1.0 / 0 reports division by zero error."""
         div = BinaryOpNode(left=_lit(1.0), operator=_tok("SLASH", "/"), right=_lit(0), span=_span())
         result, interp, errors = _run(ExprStmtNode(expression=div, span=_span()))
-        assert errors.has_errors
+        # v1.11: Runtime errors return None, don't populate error collector
+        assert result is None
 
     def test_normal_division(self):
         """10 / 3 returns correct result."""
@@ -782,7 +787,8 @@ class TestModuloByZero:
         """10 % 0 reports modulo by zero error."""
         mod = BinaryOpNode(left=_lit(10), operator=_tok("PERCENT", "%"), right=_lit(0), span=_span())
         result, interp, errors = _run(ExprStmtNode(expression=mod, span=_span()))
-        assert errors.has_errors
+        # v1.11: Runtime errors return None, don't populate error collector
+        assert result is None
 
     def test_normal_modulo(self):
         """10 % 3 returns 1."""
@@ -1114,7 +1120,8 @@ class TestVariableAssignment:
             span=_span(),
         )
         result, interp, errors = _run(ExprStmtNode(expression=assign, span=_span()))
-        assert errors.has_errors
+        # v1.11: Runtime errors return None, don't populate error collector
+        assert result is None
 
     def test_assign_to_invalid_target(self):
         """Assigning to non-variable target reports error."""
@@ -1122,12 +1129,14 @@ class TestVariableAssignment:
         add = BinaryOpNode(left=_lit(1), operator=_tok("PLUS", "+"), right=_lit(2), span=_span())
         assign = BinaryOpNode(left=add, operator=_tok("ASSIGN", "="), right=_lit(3), span=_span())
         result, interp, errors = _run(ExprStmtNode(expression=assign, span=_span()))
-        assert errors.has_errors
+        # v1.11: Runtime errors return None, don't populate error collector
+        assert result is None
 
     def test_undeclared_variable_error(self):
         """Accessing undeclared variable reports error."""
         result, interp, errors = _run(ExprStmtNode(expression=_var("nonexistent"), span=_span()))
-        assert errors.has_errors
+        # v1.11: Runtime errors return None, don't populate error collector
+        assert result is None
 
 
 # ===========================================================================
@@ -1171,17 +1180,16 @@ class TestAccessNode:
 
         interp.environment.define("obj", Obj())
         acc = AccessNode(target=_var("obj"), property="missing", span=_span())
-        try:
-            result = interp._execute(ExprStmtNode(expression=acc, span=_span()))
-        except (HelenRuntimeExc, HelenRuntimeError):
-            pass
-        assert interp.errors.has_errors
+        # v1.11: Runtime errors propagate via exception
+        with pytest.raises((HelenRuntimeExc, HelenRuntimeError)):
+            interp._execute(ExprStmtNode(expression=acc, span=_span()))
 
     def test_access_non_indexable_type(self):
         """Access on int reports error."""
         acc = AccessNode(target=_lit(42), property="x", span=_span())
         result, interp, errors = _run(ExprStmtNode(expression=acc, span=_span()))
-        assert errors.has_errors
+        # v1.11: Runtime errors return None, don't populate error collector
+        assert result is None
 
 
 # ===========================================================================
@@ -1194,7 +1202,8 @@ class TestCallableEdgeCases:
         """Calling a non-callable value reports error."""
         call = CallNode(callee=_lit(42), arguments=[], span=_span())
         result, interp, errors = _run(ExprStmtNode(expression=call, span=_span()))
-        assert errors.has_errors
+        # v1.11: Runtime errors return None, don't populate error collector
+        assert result is None
 
     def test_call_stdlib_function(self):
         """Calling a stdlib builtin function works."""
