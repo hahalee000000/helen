@@ -214,7 +214,7 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "温度": TokenType.TEMPERATURE,
     "最大轮次": TokenType.MAX_TURNS,
     "函数区": TokenType.FUNCTIONS,
-    "主": TokenType.MAIN,
+    "主函": TokenType.MAIN,
     # Other
     "导入": TokenType.IMPORT,
     "作为": TokenType.AS,

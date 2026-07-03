@@ -1,24 +1,15 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working in the **Helen** repo.
+For the broader multi-project layout, see `../CLAUDE.md`.
 
 ## Overview
 
-This is **Helen** — a prompt-first Agent programming language (AI-native DSL).
-This CLAUDE.md lives inside the Helen repo root. Related projects on this machine:
+**Helen** — a prompt-first Agent programming language (AI-native DSL).
+Combines deterministic constructs (variables, functions, control flow) with
+first-class LLM primitives (`llm act`, `llm if`, `llm stream`).
 
-| Project | Path | Description |
-|---------|------|-------------|
-| **Helen** | `./` (current) | Prompt-first Agent programming language (AI-native DSL) |
-| **Hermes** | `../work/hermes/` | Self-improving AI agent platform (Docker-deployed) |
-| **CoPaw** | `../.copaw/` | Persistent AI agent with memory and personality |
-| **Helen Design** | `../project/helen/` | Early design docs and HLD specs for Helen |
-
-## Helen — Primary Project
-
-Helen is a prompt-first DSL for building Agent workflows. It combines deterministic constructs (variables, functions, control flow) with first-class LLM primitives (`llm act`, `llm if`, `llm stream`).
-
-### Development Commands
+## Development Commands
 
 ```bash
 uv pip install -e .                 # Install in editable mode (Python 3.12+, using uv)
@@ -33,7 +24,7 @@ helen check <file.helen>        # Validate syntax/semantics without executing
 helen repl                      # Interactive REPL
 
 # Testing
-pytest                              # Run all 1850+ tests
+pytest                              # Run all 2200+ tests
 pytest tests/core/                  # Run tests for a specific module
 pytest tests/execution/test_functions.py::test_function_call -v  # Single test
 helen test <file.helen>             # Run Helen's built-in test framework
@@ -47,7 +38,7 @@ helen lsp                           # Start Language Server (JSON-RPC over stdio
 helen init                          # Initialize ~/.helen/ config directory
 ```
 
-### Architecture (3-layer pipeline)
+## Architecture (3-layer pipeline)
 
 ```
 Layer 1: Helen Core (pure language)
@@ -69,7 +60,7 @@ Layer 3: Toolchain
   VS Code Extension (syntax highlighting + LSP)
 ```
 
-### Key Source Layout
+## Key Source Layout
 
 ```
 helen/
@@ -84,7 +75,7 @@ helen/
 └── agent/         # Helen assistant program
 ```
 
-### Language Concepts
+## Language Concepts
 
 - **Agent declarations**: First-class `agent` blocks with description, model, temperature, tools, prompt template (`{{var}}`), `functions {}` block (becomes LLM-callable tools), and `main {}` logic
 - **Agent scope isolation (v1.10)**: `agent main {}` runs in a fully isolated environment. Module-level `let` is **not** visible inside agent main (compile-time error). Module-level `const` is auto-visible (read-only sharing). Use `shared let` for cross-agent visible mutable variables. Closures in agent main can capture local variables.
@@ -98,7 +89,7 @@ helen/
 - **Chinese support**: 91 keywords with bilingual Chinese/English support (CJK identifiers, fullwidth punctuation since v1.10)
 - **Subscript/field assignment (v1.10)**: `arr[i] = x` and `obj.field = x` are supported as assignment targets
 
-### Configuration
+## Configuration
 
 Helen uses `~/.helen/config.yaml`:
 ```yaml
@@ -109,7 +100,7 @@ llm:
 ```
 Also supports `.env` format and falls back to `~/.hermes/.env`.
 
-### Testing Architecture
+## Testing Architecture
 
 Tests in `tests/` mirror the source structure:
 - `core/` — Lexer, parser, AST, tokens, errors
@@ -124,26 +115,3 @@ Tests in `tests/` mirror the source structure:
 - `lsp/` — Language Server
 
 Helen also has a built-in test framework (`helen/stdlib/test.py`) with `test()`, `assert_equal()`, `assert_true()`, `assert_throws()`, suites, filtering, JSON output, and watch mode.
-
-## Hermes (Docker-deployed)
-
-Hermes Agent (by Nous Research) runs in Docker at `work/hermes/`. Key commands:
-
-```bash
-cd ../work/hermes
-./deploy.sh                                          # Start container
-docker exec -it hermes-agent /bin/bash               # Enter container
-docker exec hermes-agent supervisorctl status        # Check services
-docker exec hermes-agent tail -f /var/log/supervisor/hermes-gateway.log  # Gateway logs
-```
-
-Helen's runtime layer has backward compatibility with Hermes: fallback to `~/.hermes/.env`, fuzzy matching from Hermes (9 strategies), and `hermes_cli_llm.py` for Hermes-compatible LLM interface.
-
-## Environment
-
-- **Python**: 3.12.13 (Helen requires 3.12+)
-- **Package Manager**: uv 0.11.26 (10-100x faster than pip)
-- **Node.js**: v24.1.0 (via nvm)
-- **Rust**: stable-aarch64-unknown-linux-gnu
-- **Docker**: Required for Hermes services
-- **Platform**: Ubuntu/Kylin ARM64 (aarch64)

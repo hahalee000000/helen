@@ -4,6 +4,31 @@
 
 ---
 
+## [2026-07-03] update | 中文类型别名 + main 关键字变更
+
+**操作**: 添加 `列表`/`映射` 类型别名，`主` 改为 `主函`
+**执行时间**: 2026-07-03
+**状态**: ✅ 完成
+
+### 变更内容
+
+1. **类型别名 (helen/semantic/type_utils.py)**
+   - `list` → 现在也接受 `列表`
+   - `map` → 现在也接受 `映射`
+
+2. **关键字变更 (helen/core/tokens.py)**
+   - `main` 的中文关键字从 `主` 改为 `主函`（避免歧义）
+
+3. **文档更新**
+   - `wiki/syntax/keywords.md` — 关键字映射表更新
+   - `wiki/tutorial/01-getting-started.md` — 中文示例更新
+   - `wiki/tutorial/02-variables-and-types.md` — 添加中文类型别名说明
+   - `docs/tutorial.md` — 同步更新
+   - `tests/lexer/test_chinese_keywords.py` — 测试更新
+   - `tests/lexer/test_chinese_punctuation.py` — 测试更新
+
+---
+
 ## [2026-07-01] update | Phase 6 docs/ 和 skills/ 同步
 
 **操作**: 同步教程和技能文档  

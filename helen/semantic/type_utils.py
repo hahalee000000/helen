@@ -64,9 +64,9 @@ def type_from_typenode(type_node: TypeNode | None) -> Type:
         return NullType()
     if name == "any":
         return AnyType()
-    if name == "list":
+    if name in ("list", "列表"):
         return ListType(AnyType())
-    if name == "map":
+    if name in ("map", "映射"):
         return MapType(AnyType(), AnyType())
     # Unknown type names → AnyType (v1 lenient)
     return AnyType()

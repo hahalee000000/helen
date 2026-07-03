@@ -82,6 +82,20 @@ let mixed = [1, "two", true]                // list<any>
 let person = {"name": "Alice", "age": 30}   // map<str, any>
 ```
 
+### 中文类型名 (v1.10)
+
+`list` 和 `map` 支持中文别名：`列表`、`映射`。
+
+```helen
+函数 获取列表(): 列表 {
+    返回 [1, 2, 3]
+}
+
+函数 获取映射(): 映射 {
+    返回 {"a": 1}
+}
+```
+
 ## 类型注解
 
 ```helen

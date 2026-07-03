@@ -367,7 +367,7 @@ class TestChinesePunctuationLexer:
 智能体 翻译器 ｛
     描述 \u300c翻译文本\u300d
     提示 \u300c你是专业翻译，请将输入翻译成中文\u300d
-    主 ｛
+    主函 ｛
         返回 \u300c完成\u300d
     ｝
 ｝

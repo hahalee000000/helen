@@ -132,7 +132,7 @@ class TestChineseKeywordsLexer:
         assert tokens[5].lexeme == "等待"
 
     def test_agent_decl_keywords(self):
-        source = "提示 描述 模型 工具 流式输出 温度 最大轮次 函数区 主"
+        source = "提示 描述 模型 工具 流式输出 温度 最大轮次 函数区 主函"
         tokens = self._scan(source)
         assert tokens[0].type == TokenType.PROMPT
         assert tokens[0].lexeme == "提示"
@@ -151,7 +151,7 @@ class TestChineseKeywordsLexer:
         assert tokens[7].type == TokenType.FUNCTIONS
         assert tokens[7].lexeme == "函数区"
         assert tokens[8].type == TokenType.MAIN
-        assert tokens[8].lexeme == "主"
+        assert tokens[8].lexeme == "主函"
 
     def test_other_keywords(self):
         source = "导入 作为 协议 实现 分支 共享"
@@ -310,7 +310,7 @@ class TestChineseKeywordsParser:
     提示 "你是专业翻译"
     模型 "gpt-4"
     温度 0.3
-    主 {
+    主函 {
         返回 "done"
     }
 }
