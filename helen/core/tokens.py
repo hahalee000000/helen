@@ -119,6 +119,7 @@ class TokenType(Enum):
     IS = auto()        # v1.8: type pattern in match
     WILDCARD = auto()  # v1.8: wildcard pattern `_` in match
     SHARED = auto()    # v1.10: shared let — cross-agent visible variable
+    ALIAS = auto()     # v1.10: function alias statement (alias X as Y)
 
     # === Special ===
     EOF = auto()
@@ -166,6 +167,7 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "in": TokenType.IN,
     "functions": TokenType.FUNCTIONS,
     "main": TokenType.MAIN,
+    "alias": TokenType.ALIAS,
     "protocol": TokenType.PROTOCOL,  # v1.7
     "impl": TokenType.IMPL,          # v1.7
     "is": TokenType.IS,              # v1.8
@@ -224,6 +226,8 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     # v1.10: shared keyword
     "shared": TokenType.SHARED,
     "共享": TokenType.SHARED,
+    # v1.10: alias keyword (function name aliasing)
+    "别名": TokenType.ALIAS,
 }
 
 

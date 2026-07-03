@@ -17,6 +17,7 @@ from helen.core.ast import (
     AccessNode,
     AgentDeclNode,
     AgentParamNode,
+    AliasStmtNode,
     AssertStmtNode,
     AsyncCallExprNode,
     AsyncCallStmtNode,
@@ -1514,6 +1515,91 @@ class Interpreter(LlmMixin, Visitor[object]):
         except ImportError as e:
             self._runtime_error(node.span, f"Cannot import Python module '{module_name}': {e}")
             return None
+
+        return None
+
+    def visit_alias_stmt(self, node: AliasStmtNode) -> object:
+        """Execute alias statement: alias <canonical> as <alias_name>.
+
+        Looks up the canonical name in the environment, functions registry,
+        agents registry, or stdlib. Then defines the alias name pointing
+        to the same callable/value. Supports stdlib functions, user-defined
+        functions, agents, and variables.
+        """
+        canonical = node.canonical
+        alias_name = node.alias_name
+
+        # Priority order for lookup:
+        # 1. Environment (variables, closures, stdlib-in-env)
+        # 2. User-defined functions
+        # 3. User-defined agents
+        # 4. Stdlib builtin (fallback for names not in env)
+        value = None
+        found = False
+
+        # Try environment first
+        try:
+            value = self.environment.lookup(canonical)
+            found = True
+        except NameError:
+            pass
+
+        # Try user-defined functions
+        if not found and canonical in self._functions:
+            # Create a closure-like callable wrapper for the function
+            func_node = self._functions[canonical]
+
+            def _make_alias_callable(fn_node):
+                def alias_callable(*args, **kwargs):
+                    return self._call_function(fn_node, list(args))
+                return alias_callable
+
+            value = _make_alias_callable(func_node)
+            found = True
+
+        # Try user-defined agents
+        if not found and canonical in self._agents:
+            agent_node = self._agents[canonical]
+
+            def _make_alias_agent_callable(ag_node):
+                def alias_callable(*args, **kwargs):
+                    # Convert args to dict format for agent call
+                    arg_names = [p.name for p in ag_node.params]
+                    arg_dict = dict(zip(arg_names, args))
+                    return self._call_agent(ag_node, arg_dict)
+                return alias_callable
+
+            value = _make_alias_agent_callable(agent_node)
+            found = True
+
+        # Fall back to stdlib
+        if not found:
+            from helen.stdlib import stdlib
+            builtin = stdlib.lookup(canonical)
+            if builtin is not None:
+                value = builtin.fn
+                found = True
+
+        if not found:
+            self._runtime_error(
+                node.span,
+                f"Cannot alias '{canonical}': name not found"
+            )
+            return None
+
+        # Define the alias in the current environment
+        self.environment.define(alias_name, value)
+
+        # Also register in the functions/agents registry if applicable
+        # so the alias can be called like a normal function/agent
+        if canonical in self._functions:
+            self._functions[alias_name] = self._functions[canonical]
+        if canonical in self._agents:
+            self._agents[alias_name] = self._agents[canonical]
+
+        # Also register in stdlib alias map for introspection
+        from helen.stdlib import stdlib
+        stdlib.register_alias(alias_name, canonical)
 
         return None
 

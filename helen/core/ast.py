@@ -124,6 +124,10 @@ class Visitor(ABC, Generic[R]):
         """Visit an ImportStmtNode."""
 
     @abstractmethod
+    def visit_alias_stmt(self, node: AliasStmtNode) -> R:
+        """Visit an AliasStmtNode."""
+
+    @abstractmethod
     def visit_type(self, node: TypeNode) -> R:
         """Visit a TypeNode."""
 
@@ -769,6 +773,28 @@ class ImportStmtNode(StatementNode):
 
 
 @dataclass(frozen=True)
+class AliasStmtNode(StatementNode):
+    """Alias statement: alias <canonical> as <alias_name>.
+
+    Creates an additional name for an existing function/agent in the
+    current scope. Both stdlib and user-defined functions can be
+    aliased. The alias behaves identically to the canonical name —
+    same callable, same scope, same shadowing semantics.
+
+    Example:
+        alias len as 长度
+        alias my_func as 我的函数
+    """
+    canonical: str     # The existing name being aliased
+    alias_name: str    # The new alias to create
+    span: SourceSpan
+
+    def accept(self, visitor: Visitor[R]) -> R:
+        """Dispatch to the visitor."""
+        return visitor.visit_alias_stmt(self)
+
+
+@dataclass(frozen=True)
 class AsyncCallStmtNode(StatementNode):
     """Async call statement."""
     call: CallNode
@@ -1209,6 +1235,10 @@ class ASTPrinter(Visitor[str]):
     def visit_import_stmt(self, node: ImportStmtNode) -> str:
         """Visit an ImportStmtNode."""
         return self._parenthesize("import", node.module_path)
+
+    def visit_alias_stmt(self, node: AliasStmtNode) -> str:
+        """Visit an AliasStmtNode."""
+        return self._parenthesize("alias", node.canonical, node.alias_name)
 
     def visit_type(self, node: TypeNode) -> str:
         """Visit a TypeNode."""

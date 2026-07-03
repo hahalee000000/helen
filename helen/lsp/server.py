@@ -290,6 +290,8 @@ class HelenLanguageServer:
         # Add built-in function completions from stdlib
         try:
             from helen.stdlib import stdlib  # noqa: PLC0415
+            # Include both canonical names and aliases in completion
+            seen_labels: set[str] = set()
             for func in stdlib.list_all():
                 items.append(
                     CompletionItem(
@@ -299,6 +301,19 @@ class HelenLanguageServer:
                         insert_text=f"{func.name}(",
                     ).to_dict()
                 )
+                seen_labels.add(func.name)
+            # Add aliases (these resolve to the same canonical function)
+            for alias, canonical in stdlib.aliases.items():
+                if alias not in seen_labels:
+                    items.append(
+                        CompletionItem(
+                            label=alias,
+                            kind=3,  # Function
+                            detail=f"alias of {canonical}",
+                            insert_text=f"{alias}(",
+                        ).to_dict()
+                    )
+                    seen_labels.add(alias)
         except ImportError:
             pass
 

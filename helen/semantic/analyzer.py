@@ -22,6 +22,7 @@ from helen.core.ast import (
     AccessNode,
     AgentDeclNode,
     AgentParamNode,
+    AliasStmtNode,
     AssertStmtNode,
     AsyncCallStmtNode,
     BinaryOpNode,
@@ -1089,6 +1090,64 @@ class SemanticAnalyzer(Visitor[None]):
                     f"failed to parse imported file '{path}': {str(e)}",
                     node.span,
                 )
+
+    # ------------------------------------------------------------------
+    # Alias statement
+    # ------------------------------------------------------------------
+
+    def visit_alias_stmt(self, node: AliasStmtNode) -> None:
+        """Analyze an alias statement: alias <canonical> as <alias_name>.
+
+        Verifies that the canonical name is defined in the current scope
+        (function, agent, variable, or stdlib builtin), then registers
+        the alias_name as an additional binding pointing to the same
+        callable/value.
+        """
+        from helen.semantic.symbols import Symbol
+
+        canonical = node.canonical
+        alias_name = node.alias_name
+
+        # Check canonical name exists in the current scope
+        sym = self.symbols.resolve(canonical)
+        if sym is None:
+            # Also check stdlib for aliases of builtin functions
+            from helen.stdlib import stdlib
+            if stdlib.lookup(canonical) is None:
+                self.errors.error(
+                    ErrorCode.UNDECLARED_VARIABLE,
+                    f"cannot alias '{canonical}': name not found",
+                    node.span,
+                )
+                return
+
+        # Check alias_name doesn't already exist in current scope
+        # (allow shadowing from outer scopes, but not in same scope)
+        existing = self.symbols.resolve_local(alias_name)
+        if existing is not None:
+            # Allow re-aliasing the same canonical (no-op)
+            # Reject if alias exists for a different canonical
+            from helen.stdlib import stdlib
+            existing_canonical = stdlib.canonical_name(alias_name)
+            if existing_canonical != canonical and alias_name in stdlib.aliases:
+                self.errors.error(
+                    ErrorCode.DUPLICATE_SYMBOL,
+                    f"alias name '{alias_name}' already defined in current scope",
+                    node.span,
+                )
+                return
+            # If alias already exists for the same canonical, it's a no-op
+            if alias_name in stdlib.aliases:
+                return
+
+        # Register the alias as a new symbol pointing to the same kind
+        new_sym = Symbol(
+            name=alias_name,
+            kind=sym.kind if sym else "function",
+            type_node=sym.type_node if sym else None,
+            is_const=sym.is_const if sym else True,
+        )
+        self.symbols.define(alias_name, new_sym)
 
     # ------------------------------------------------------------------
     # Async call

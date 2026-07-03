@@ -180,6 +180,10 @@ class MockVisitor(Visitor[str]):
         self.calls.append("visit_import_stmt")
         return "<import>"
 
+    def visit_alias_stmt(self, node) -> str:
+        self.calls.append("visit_alias_stmt")
+        return "<alias>"
+
     def visit_type(self, node) -> str:
         self.calls.append("visit_type")
         return "<type>"

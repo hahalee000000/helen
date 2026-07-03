@@ -4,6 +4,53 @@
 
 ---
 
+## [2026-07-03] update | 多语言 stdlib 别名 + alias 语句
+
+**操作**: 添加 stdlib 多语言别名支持 + `alias`/`别名` 语句
+**执行时间**: 2026-07-03
+**状态**: ✅ 完成
+
+### 变更内容
+
+1. **stdlib 别名框架 (helen/stdlib/__init__.py)**
+   - `StdlibRegistry` 增加 `_aliases`、`_canonical_names` 字段
+   - 新增 `register_alias()`、`is_alias()`、`canonical_name()` 方法
+   - 所有 locale 的别名表启动时全量加载，不按 locale 过滤
+
+2. **中文别名表 (helen/stdlib/locales/zh.py)**
+   - 230 个中文 stdlib 别名（长度、打印、排序、json解析...）
+   - 覆盖所有 stdlib 分类：core/string/regex/data/collection/time/crypto 等
+
+3. **locale 配置 (helen/runtime/config.py)**
+   - `get_locale()` 返回当前 locale（默认 zh）
+   - `get_locale_aliases()` 返回当前 locale 的别名表
+   - 支持 `config.yaml` 中 `locale: zh` 配置
+
+4. **`alias`/`别名` 语句**
+   - 新增 `alias`/`别名` 关键字（TokenType.ALIAS）
+   - 语法：`alias <canonical> as <alias_name>`
+   - 支持 stdlib 函数、用户函数、agent、变量
+   - 关键字总数：90（45 英文 + 45 中文）
+
+5. **工具链适配**
+   - `helen doc --with-builtins` 显示每个函数的别名
+   - LSP 补全包含所有 stdlib 别名
+   - 错误消息中显示 canonical 名
+
+6. **文档更新**
+   - wiki/syntax/keywords.md — 关键字表更新到 90 个
+   - wiki/overview/language-spec.md — 关键字计数更新
+   - skills/software-development/helen-syntax/SKILL.md — 同步更新
+
+### 设计原则
+
+- **一套机制**：stdlib 和用户函数使用相同的 Environment 别名机制
+- **全量加载**：所有 locale 的别名启动时全部注册，locale 只影响展示
+- **canonical 优先**：工具链（doc/LSP）始终显示 canonical 名
+- **向后兼容**：英文 canonical 名永远可用
+
+---
+
 ## [2026-07-03] update | 中文类型别名 + main 关键字变更
 
 **操作**: 添加 `列表`/`映射` 类型别名，`主` 改为 `主函`
@@ -367,7 +414,7 @@
 
 2. **wiki/overview/language-spec.md**
    - 版本号: v1.9 → v1.10
-   - 关键字计数: 89 → 88 (44 英文 + 44 中文)
+   - 关键字计数: 89 → 90 (45 英文 + 45 中文)
    - Token 类型: 78 → 83
    - AST 节点: 50 → 63
    - Visitor 方法: 47 → 58

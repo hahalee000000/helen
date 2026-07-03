@@ -10,6 +10,7 @@ from .ast import (
     ASTNode,
     AgentDeclNode,
     AgentParamNode,
+    AliasStmtNode,
     AssertStmtNode,
     AsyncCallStmtNode,
     BreakStmtNode,
@@ -537,6 +538,8 @@ class Parser:
             return self._main_block()
         if self._match(TokenType.IMPORT):
             return self._import_stmt()
+        if self._match(TokenType.ALIAS):
+            return self._alias_stmt()
         if self._match(TokenType.AGENT):
             return self._agent_decl()
         if self._match(TokenType.TRY):
@@ -1065,6 +1068,29 @@ class Parser:
         end = self._previous()
         return ImportStmtNode(module_path=path_tok.literal or path_tok.lexeme, alias=alias,
                               span=self._make_span(start, end))
+
+    def _alias_stmt(self) -> AliasStmtNode:
+        """Parse an alias statement: alias <canonical> as <alias_name>.
+
+        Creates an additional name for an existing function/agent/variable.
+        Both names work identically after this statement executes.
+        """
+        start = self._previous()
+        canonical_tok = self._consume(
+            TokenType.IDENTIFIER,
+            "Expected canonical name after 'alias'."
+        )
+        self._consume(TokenType.AS, "Expected 'as' in alias statement.")
+        alias_tok = self._consume(
+            TokenType.IDENTIFIER,
+            "Expected alias name after 'as'."
+        )
+        end = self._previous()
+        return AliasStmtNode(
+            canonical=canonical_tok.lexeme,
+            alias_name=alias_tok.lexeme,
+            span=self._make_span(start, end),
+        )
 
     def _parse_type(self) -> TypeNode:
         """Parse a type: T?, A|B, Literal[...]."""

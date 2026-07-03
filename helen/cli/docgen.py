@@ -89,6 +89,7 @@ class FunctionDoc:
 
 
 @dataclass
+@dataclass
 class BuiltinDoc:
     """Documentation for a built-in function."""
 
@@ -96,14 +97,18 @@ class BuiltinDoc:
     description: str
     signature: str
     category: str
+    aliases: list[str] | None = None  # Localized alias names
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        result: dict[str, Any] = {
             "name": self.name,
             "description": self.description,
             "signature": self.signature,
             "category": self.category,
         }
+        if self.aliases:
+            result["aliases"] = self.aliases
+        return result
 
 
 def extract_agent_doc(node: AgentDeclNode, source_file: str = "") -> AgentDoc:
@@ -217,12 +222,18 @@ def generate_docs(
     if include_builtins:
         try:
             from helen.stdlib import stdlib  # noqa: PLC0415
+            # Build reverse alias map: canonical → [aliases]
+            reverse_aliases: dict[str, list[str]] = {}
+            for alias, canonical in stdlib.aliases.items():
+                reverse_aliases.setdefault(canonical, []).append(alias)
+
             result["builtins"] = [
                 BuiltinDoc(
                     name=f.name,
                     description=f.description,
                     signature=f.signature,
                     category=f.category,
+                    aliases=sorted(reverse_aliases.get(f.name, [])),
                 ).to_dict()
                 for f in stdlib.list_all()
             ]
@@ -289,8 +300,17 @@ def format_markdown(docs: dict[str, Any]) -> str:
             lines.append("| Function | Signature | Description |")
             lines.append("|----------|-----------|-------------|")
             for b in sorted(categories[cat_name], key=lambda x: x["name"]):
+                name_cell = f"`{b['name']}`"
+                aliases = b.get("aliases", [])
+                if aliases:
+                    # Show first 3 aliases, then "..." if more
+                    shown = aliases[:3]
+                    alias_str = ", ".join(f"`{a}`" for a in shown)
+                    if len(aliases) > 3:
+                        alias_str += f" +{len(aliases) - 3} more"
+                    name_cell += f" <br><sup>aka {alias_str}</sup>"
                 lines.append(
-                    f"| `{b['name']}` | `{b['signature']}` | {b['description']} |"
+                    f"| {name_cell} | `{b['signature']}` | {b['description']} |"
                 )
             lines.append("")
 

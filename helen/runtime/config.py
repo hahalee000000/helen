@@ -92,6 +92,47 @@ def get_skill_dirs() -> list[Path]:
     return dirs
 
 
+def get_locale() -> str:
+    """Get the configured locale for stdlib aliases and error messages.
+
+    Returns the locale code (e.g., "zh", "en", "ja"). Defaults to "zh"
+    if not configured. The locale affects:
+    - Which stdlib aliases are prioritized in docs/LSP completions
+    - Error message language
+    - Template generation in `helen init`
+
+    Note: stdlib aliases are always loaded regardless of locale — the
+    locale only affects presentation, not capability.
+    """
+    config = load_config()
+    locale = config.get("locale")
+    if locale and isinstance(locale, str):
+        return locale
+    # Default locale: use environment LANG if available, otherwise zh
+    import os
+    lang = os.environ.get("LANG", "")
+    if lang.startswith("zh"):
+        return "zh"
+    if lang.startswith("ja"):
+        return "ja"
+    if lang.startswith("ko"):
+        return "ko"
+    # Default to Chinese (Helen's primary audience)
+    return "zh"
+
+
+def get_locale_aliases() -> dict[str, str]:
+    """Get the alias table for the configured locale.
+
+    Returns:
+        Dict mapping alias names to canonical stdlib names.
+    """
+    from helen.stdlib.locales import all_aliases
+    locale = get_locale()
+    all_locales = all_aliases()
+    return all_locales.get(locale, {})
+
+
 def load_config() -> dict[str, Any]:
     """Load Helen configuration.
 
@@ -153,6 +194,9 @@ def _load_yaml_config(path: Path) -> dict[str, Any]:
                 config["temperature"] = float(llm["temperature"])
             if "timeout" in llm:
                 config["timeout"] = int(llm["timeout"])
+        # Locale setting (top-level)
+        if "locale" in data:
+            config["locale"] = str(data["locale"])
     except ImportError:
         # PyYAML not installed, try simple parsing
         config.update(_parse_yaml_simple(path))

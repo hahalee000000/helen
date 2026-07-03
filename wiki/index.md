@@ -9,7 +9,7 @@
 
 ### 一、语言概述
 - [[overview/design-philosophy|设计哲学]] — 为什么需要 Agent 编程语言
-- [[overview/language-spec|语言规格]] — 89 关键字 (45 英文 + 44 中文)、Token、AST 节点一览
+- [[overview/language-spec|语言规格]] — 90 关键字 (45 英文 + 45 中文)、Token、AST 节点一览
 - [[overview/architecture|整体架构]] — 3 层架构 (Core / Runtime / Toolchain)
 
 ### 二、前端编译

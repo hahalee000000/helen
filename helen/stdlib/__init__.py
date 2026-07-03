@@ -145,30 +145,89 @@ class StdlibRegistry:
     """Registry of all built-in functions.
 
     Provides lookup by name and listing by category.
+
+    Supports multi-language aliases: each alias is an additional name
+    pointing to the same canonical BuiltinFunction. All aliases are
+    loaded at startup regardless of user locale (locale only affects
+    presentation in docs/LSP/error messages).
+
+    Attributes:
+        _builtins: Canonical name → BuiltinFunction mapping.
+        _aliases: Alias name → canonical name mapping.
+        _canonical_names: Set of all canonical names (for tooling/docs).
     """
 
     _builtins: dict[str, BuiltinFunction] = field(default_factory=dict)
+    _aliases: dict[str, str] = field(default_factory=dict)
+    _canonical_names: set[str] = field(default_factory=set)
 
     def register(self, func: BuiltinFunction) -> None:
-        """Register a built-in function."""
+        """Register a built-in function under its canonical name."""
         self._builtins[func.name] = func
+        self._canonical_names.add(func.name)
+
+    def register_alias(self, alias: str, canonical: str) -> bool:
+        """Register a localized alias for a canonical builtin name.
+
+        Args:
+            alias: The alias name (e.g. "长度" for "len").
+            canonical: The canonical function name (e.g. "len").
+
+        Returns:
+            True if registered, False if canonical name not found
+            or alias already registered to a different canonical.
+        """
+        if canonical not in self._canonical_names:
+            return False
+        if alias in self._aliases and self._aliases[alias] != canonical:
+            return False
+        self._aliases[alias] = canonical
+        return True
 
     def lookup(self, name: str) -> BuiltinFunction | None:
-        """Look up a built-in function by name."""
-        return self._builtins.get(name)
+        """Look up a built-in function by name or alias."""
+        func = self._builtins.get(name)
+        if func is not None:
+            return func
+        # Fall back to alias lookup
+        canonical = self._aliases.get(name)
+        if canonical is not None:
+            return self._builtins.get(canonical)
+        return None
+
+    def is_alias(self, name: str) -> bool:
+        """Check if a name is an alias (not canonical)."""
+        return name in self._aliases
+
+    def canonical_name(self, name: str) -> str:
+        """Return the canonical name for a name or alias.
+
+        Returns the input unchanged if it's already canonical or unknown.
+        """
+        return self._aliases.get(name, name)
 
     def list_by_category(self, category: str) -> list[BuiltinFunction]:
         """List all builtins in a category."""
         return [f for f in self._builtins.values() if f.category == category]
 
     def list_all(self) -> list[BuiltinFunction]:
-        """List all built-in functions."""
+        """List all built-in functions (canonical only, no aliases)."""
         return list(self._builtins.values())
 
     @property
     def names(self) -> list[str]:
-        """All registered builtin names."""
-        return list(self._builtins.keys())
+        """All registered names (canonical + aliases)."""
+        return list(self._builtins.keys()) + list(self._aliases.keys())
+
+    @property
+    def canonical_names(self) -> set[str]:
+        """All canonical (non-alias) names."""
+        return set(self._canonical_names)
+
+    @property
+    def aliases(self) -> dict[str, str]:
+        """All registered aliases (alias → canonical)."""
+        return dict(self._aliases)
 
 
 # Global stdlib instance
@@ -944,3 +1003,8 @@ def _register_builtins() -> None:
 
 # Auto-register on import
 _register_builtins()
+
+# Register locale aliases (all locales, unconditionally).
+# Must run after _register_builtins() so canonical names exist.
+from helen.stdlib.locales import register_all_aliases as _register_all_aliases
+_register_all_aliases()
