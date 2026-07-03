@@ -1,7 +1,7 @@
 ---
 name: helen-stdlib
-description: "Helen 标准库使用指南 — 195 个内置函数的分类参考与示例"
-version: 1.3.0
+description: "Helen 标准库使用指南 — 196 个内置函数的分类参考与示例"
+version: 1.4.0
 author: Helen Team
 license: MIT
 metadata:
@@ -11,14 +11,14 @@ metadata:
 
 # Helen 标准库参考
 
-Helen 标准库提供 **195 个内置函数**，覆盖 AI 应用开发的所有核心需求。
+Helen 标准库提供 **196 个内置函数**，覆盖 AI 应用开发的所有核心需求。
 
 ## 分类概览
 
 | 类别 | 数量 | 代表函数 |
 |------|------|----------|
 | **Core** | 11 | `print`, `len`, `str`, `int`, `float`, `abs`, `min`, `max`, `range`, `type`, `isinstance` |
-| **String** | 36 | `upper`, `lower`, `strip`, `split`, `join`, `replace`, `find`, `reverse`, `repeat`, `regex_match`, `regex_replace` |
+| **String** | 37 | `upper`, `lower`, `strip`, `split`, `join`, `replace`, `find`, `reverse`, `repeat`, `regex_match`, `regex_replace`, `format_float` |
 | **Data** | 25 | `json_parse`, `json_stringify`, `yaml_parse`, `toml_parse`, `csv_parse`, `xml_parse`, `html_escape`, `url_encode`, `base64_encode` |
 | **Collection** | 22 | `sort`, `reverse`, `unique`, `flatten`, `zip`, `map`, `filter`, `reduce`, `group_by`, `chunk`, `intersection` |
 | **Network** | 9 | `http_get`, `http_post`, `http_put`, `http_delete`, `http_download`, `url_parse` |
@@ -52,6 +52,7 @@ Helen 内置 230+ 个中文别名，覆盖全部 stdlib 分类。常用示例：
 | `http_get` | `http获取` | Network |
 | `regex_match` | `正则匹配` | String |
 | `regex_replace` | `正则替换` | String |
+| `format_float` | `格式化浮点` | String |
 | `date_format` | `日期格式化` | Time |
 | `read_file` | `读文件` | File |
 | `write_file` | `写文件` | File |
@@ -143,6 +144,15 @@ let cleaned = regex_replace("a1b2c3", r"\d", "")  # "abc"
 # 空白处理
 let trimmed = strip("  hello  ")  # "hello"
 let padded = pad_start("42", 5, "0")  # "00042"
+
+# 浮点数格式化
+let formatted1 = format_float(8.5, 1)      # "8.5"
+let formatted2 = format_float(7.857, 2)    # "7.86" (四舍五入)
+let formatted3 = format_float(3.14159, 3)  # "3.142"
+let formatted4 = format_float(100, 0)      # "100"
+
+# 中文别名
+let formatted = 格式化浮点(8.5, 1)  # "8.5"
 ```
 
 ### Data（数据格式）
