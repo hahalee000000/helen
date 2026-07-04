@@ -16,6 +16,11 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
+def _log(msg: str) -> None:
+    """Log to stderr — visible in VS Code's 'Helen Language Server' output panel."""
+    print(f"[helen-lsp] {msg}", file=sys.stderr, flush=True)
+
+
 @dataclass
 class Position:
     """LSP Position (0-based line and character)."""
@@ -96,12 +101,12 @@ HELLEN_KEYWORDS = [
     "agent", "main", "prompt", "description", "model", "temperature",
     "max-turns", "tools", "streaming",
     # Variable declarations
-    "let", "const",
+    "let", "const", "shared",
     # Control flow
     "if", "else", "for", "in", "while",
     "break", "continue", "return",
     # Functions
-    "fn", "call",
+    "fn", "call", "alias",
     # Error handling
     "try", "catch", "finally", "throw", "assert",
     # Pattern matching
@@ -118,9 +123,27 @@ HELLEN_KEYWORDS = [
     "functions",
     # Literals
     "true", "false", "null",
+    # Chinese keywords (v1.10 — bilingual support)
+    "让", "常量", "函数", "返回",       # let, const, fn, return
+    "如果", "否则", "对于", "属于", "当",  # if, else, for, in, while
+    "中断", "继续",                     # break, continue
+    "匹配", "情况", "默认", "分支",       # match, case, default, branch
+    "尝试", "捕获", "最终", "抛出", "断言",  # try, catch, finally, throw, assert
+    "真", "假", "空", "是",             # true, false, null, is
+    "智能体", "大模型", "执行", "流式执行",  # agent, llm, act, stream
+    "异步", "等待",                     # async, await
+    "提示", "描述", "模型", "工具",       # prompt, description, model, tools
+    "流式输出", "温度", "最大轮次",        # streaming, temperature, max-turns
+    "函数区", "主函",                   # functions, main
+    "导入", "作为",                     # import, as
+    "协议", "实现",                     # protocol, impl
+    "共享", "别名",                     # shared, alias
 ]
 
-HELLEN_TYPES = ["string", "int", "float", "bool", "list", "dict", "any", "number"]
+HELLEN_TYPES = [
+    "str", "int", "float", "bool", "list", "dict", "map",
+    "any", "void", "number",
+]
 
 
 # ── LSP Server ─────────────────────────────────────────────────
@@ -209,11 +232,12 @@ class HelenLanguageServer:
 
     def _initialize(self, params: dict[str, Any]) -> dict[str, Any]:
         """Handle initialize request."""
+        _log(f"initialize — helen-lsp 1.10.0, pid={__import__('os').getpid()}")
         return {
             "capabilities": self.capabilities,
             "serverInfo": {
                 "name": "helen-lsp",
-                "version": "0.1.0",
+                "version": "1.10.0",
             },
         }
 
@@ -224,6 +248,7 @@ class HelenLanguageServer:
         content = doc.get("text", "")
         version = doc.get("version", 0)
 
+        _log(f"didOpen: {uri} ({len(content)} chars, version={version})")
         self.documents[uri] = DocumentState(
             uri=uri, content=content, version=version
         )
@@ -326,14 +351,15 @@ class HelenLanguageServer:
 
         doc = self.documents.get(uri)
         if doc is None:
+            _log(f"definition: doc not found for {uri}")
             return []
 
-        # Simple implementation: scan for identifiers at position
-        # A full implementation would use the parser to find declarations
-        line_num = position.get("line", 0) + 1  # 1-based for parser
+        line_num = position.get("line", 0) + 1  # 1-based
         char_num = position.get("character", 0) + 1
 
-        return self._find_definition_at(doc.content, uri, line_num, char_num)
+        result = self._find_definition_at(doc.content, uri, line_num, char_num)
+        _log(f"definition: line={line_num} col={char_num} → {result}")
+        return result
 
     def _find_definition_at(
         self, content: str, uri: str, line: int, col: int
@@ -364,10 +390,11 @@ class HelenLanguageServer:
                 return []
 
             # Search for declaration in the document
+            # \w in Python 3 matches Unicode word chars (incl. CJK) by default
             patterns = [
-                rf'agent\s+({target})\s*[\({{]',  # agent declaration
-                rf'fn\s+({target})\s*\(',          # function declaration
-                rf'(?:let|const)\s+({target})\s*=',  # variable declaration
+                rf'agent\s+({target})\s*[\({{{{]',                   # agent decl
+                rf'fn\s+({target})\s*\(',                            # function decl
+                rf'(?:shared\s+)?(?:let|const|让|常量)\s+({target})\s*=',  # variable decl
             ]
 
             for i, file_line in enumerate(lines):
@@ -405,7 +432,11 @@ class HelenLanguageServer:
         if doc is None:
             return
 
-        diagnostics = self._analyze(doc.content)
+        try:
+            diagnostics = self._analyze(doc.content)
+        except Exception as e:
+            _log(f"analysis error for {uri}: {e!r}")
+            diagnostics = []
         doc.diagnostics = diagnostics
 
         # Send publishDiagnostics notification

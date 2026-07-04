@@ -1416,13 +1416,13 @@ Agent 可以声明使用哪些内置工具，LLM 会在 `llm act` 时通过 func
 ```helen
 agent Researcher {
     description "Research assistant"
-    tools ["web_search", "web_fetch", "read_file"]
+    tools = ["web_search", "web_fetch", "read_file"]
     prompt "Research the given topic thoroughly."
 }
 
 agent Coder {
     description "Code writer"
-    tools ["write_file", "shell_exec", "calculate"]
+    tools = ["write_file", "shell_exec", "calculate"]
     prompt "Write and execute code."
 }
 ```
@@ -1438,17 +1438,15 @@ agent Coder {
 | `shell_exec` | 执行 shell 命令 | `command: str` |
 | `calculate` | 数学计算 | `expression: str` |
 
-## functions 块作为 LLM 工具（新架构）
+## functions 块与 tools 白名单（两层授权模型）
 
-**重要更新**：Agent 的 `functions` 块中定义的函数现在**自动成为 LLM 可调用的工具**。LLM 在推理时可以直接调用这些函数，无需额外的 `tools` 声明。
+Agent 的能力管理采用**两层授权**：
 
-### 工作原理
+- `functions {}` 块声明 agent 的**全部能力**——`main {}` 的 Helen 代码可以调用其中任意函数。
+- `tools = [...]` 是 **LLM 可见性的唯一白名单**——只有列表中的名字对 LLM 可见，可以被 LLM 在 `llm act` 中自主调用。
+- **不写 `tools`** 时，LLM 没有任何工具可用（除内置的 `load_skill`）。
 
-当 agent 包含 `functions` 块时：
-1. 解释器扫描所有函数声明
-2. 为每个函数生成 OpenAI tool schema（基于参数类型注解）
-3. LLM 在 `llm act` 或 `llm stream` 时可以通过 function calling 调用这些函数
-4. 调用时，解释器在 agent 的 scope 中执行函数并返回结果
+`tools` 里的名字**统一解析**：先在 `functions {}` 块里查（Helen 函数），找不到再查 Python 工具注册表（`web_search`、`read_file` 等）。
 
 ### 示例
 
@@ -1457,7 +1455,10 @@ agent CodeAnalyzer {
     description "Analyze code quality"
     model "gpt-4"
     
-    // functions 块中的函数自动成为 LLM 工具
+    // 白名单：LLM 可以调用这 3 个函数
+    tools = ["count_lines", "find_todos", "calculate_complexity"]
+    
+    // 全部能力：functions 块还可以放 main 内部使用的私有函数
     functions {
         fn count_lines(code: str): int {
             return len(split(code, "\n"))
@@ -1475,7 +1476,6 @@ agent CodeAnalyzer {
         }
         
         fn calculate_complexity(code: str): int {
-            // 简单的复杂度估算：统计控制流关键字
             let keywords = ["if", "for", "while", "match"]
             var complexity = 0
             for kw in keywords {
@@ -1483,6 +1483,9 @@ agent CodeAnalyzer {
             }
             return complexity
         }
+        
+        // 私有函数：main 可以调，LLM 看不到（没列在 tools 里）
+        fn internal_helper() { ... }
     }
     
     prompt """
@@ -1496,38 +1499,34 @@ agent CodeAnalyzer {
     """
     
     main {
-        // LLM 可以调用 functions 块中的函数
-        fn print_chunk(chunk: str) { stream_print(chunk) }
-        llm stream on_chunk print_chunk
+        // main 可以调用 functions 里任意函数（不受 tools 限制）
+        internal_helper()
+        llm act "..."
     }
 }
 ```
 
-### 与 tools 声明的关系
+### 混合使用 Helen 函数与 Python 工具
 
-- `tools` 声明用于引用 **Python 内置工具**（如 `web_search`, `read_file`）
-- `functions` 块中的函数是 **Helen 自定义工具**
-- 两者可以共存：`functions` 块中的函数优先，`tools` 声明补充 Python 工具
+`tools` 白名单可以同时包含 Helen 函数和 Python 工具：
 
 ```helen
 agent HybridAgent {
     description "Hybrid agent with both Helen and Python tools"
     
-    // Helen 自定义工具（自动暴露给 LLM）
+    // 统一白名单：Helen 函数 + Python 工具
+    tools = ["search_local_docs", "web_search", "calculate"]
+    
     functions {
+        // Helen 自定义工具（LLM 可见，因为在 tools 里）
         fn search_local_docs(query: str): str {
-            // 自定义搜索逻辑
             let results = read_file("docs/index.txt")
             return filter(results, fn(line) { return contains(line, query) })
         }
     }
     
-    // Python 内置工具（补充）
-    tools ["web_search", "calculate"]
-    
     prompt "..."
-    fn print_chunk(chunk: str) { stream_print(chunk) }
-    main { llm stream on_chunk print_chunk }
+    main { llm act "..." }
 }
 ```
 
@@ -2025,7 +2024,7 @@ main {
 ```helen
 agent Researcher(topic) {
     description "Research assistant"
-    tools ["web_search", "read_file"]
+    tools = ["web_search", "read_file"]
     main {
         return llm act "Research about: " + topic
     }

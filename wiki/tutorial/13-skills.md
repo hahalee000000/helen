@@ -32,7 +32,7 @@
 
 ```helen
 agent Developer {
-    tools ["load_skill"]
+    tools = ["load_skill"]
     main {
         let guide = load_skill("helen-testing")
         return llm act "Follow: " + guide

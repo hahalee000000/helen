@@ -1284,19 +1284,19 @@ helen/interpreter/interpreter.py — _build_tools_list() reads agent tools decla
 - `load_skill(name)` — Load full SKILL.md content by name (Tier 2 of two-phase skill disclosure)
 
 **Function calling flow**:
-1. `_build_tools_list()` collects tool schemas: always includes `load_skill` (via `get_tool_schemas(["load_skill"])`) + agent-declared tools (or defaults if none declared). Checks for duplicates to avoid adding `load_skill` twice.
+1. `_build_tools_list()` collects tool schemas from the `tools = [...]` allowlist only (two-layer authorization: `functions {}` declares capability, `tools` decides LLM visibility). Always includes `load_skill`. If `tools` is not declared, LLM gets no tools except `load_skill`. Names are resolved first in `functions {}` (Helen functions), then in the Python tool registry.
 2. `HttpLLMRuntime.act()` enters loop: sends messages with tools → LLM returns `tool_calls` → `dispatch_tool()` executes → results fed back → repeat until text response or turns exhausted
 3. On last tool turn, a "nudge" message is appended + one extra iteration for final text response
 
 **Agent tools declaration**:
 ```helen
 agent Researcher(query: str) {
-    tools ["web_search", "calculate"]  // explicit — only these tools
+    tools = ["web_search", "calculate"]  // explicit — LLM can only use these (+ load_skill)
     main { return llm act query }
 }
 
 agent SimpleAgent(text: str) {
-    // no tools declaration — gets default set (web_search, web_fetch, read_file, write_file, patch_file, calculate)
+    // no tools declaration — LLM has NO tools (only load_skill)
     main { return llm act text }
 }
 ```

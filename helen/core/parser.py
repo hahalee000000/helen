@@ -789,6 +789,9 @@ class Parser:
         if token_type == TokenType.IDENTIFIER and start.lexeme == "memory":
             token_type = TokenType.MEMORY
 
+        # Accept optional '=' between keyword and value (e.g. tools = [...], model = "...")
+        self._match(TokenType.ASSIGN)
+
         # Parse the value
         if self._check(TokenType.STRING, TokenType.TRIPLE_QUOTE_STRING):
             self._advance()

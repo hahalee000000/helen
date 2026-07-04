@@ -314,7 +314,7 @@ agent Translator {
     prompt "You are a professional translator."
     model "gpt-4"
     temperature 0.3
-    tools ["web_search"]
+    tools = ["web_search"]
     
     main {
         return llm act "Translate: Hello"

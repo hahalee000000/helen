@@ -59,7 +59,7 @@ agent ConfiguredAgent {
     temperature 0.7            # 创造性 (0.0-1.0)
     max-turns 10               # 最大工具调用轮次
     streaming true             # 启用流式响应（返回 StreamingResponse）
-    tools ["web_search", "read_file", "write_file"]  # 可用工具
+    tools = ["web_search", "read_file", "write_file"]  # 可用工具
     
     main {
         return llm act "Do something complex"
@@ -91,7 +91,7 @@ agent ConfiguredAgent {
 
 ```helen
 agent Developer {
-    tools ["load_skill"]
+    tools = ["load_skill"]
     main {
         let guide = load_skill("helen-testing")
         return llm act "Follow: " + guide
@@ -225,7 +225,7 @@ agent CodeExpert {
     You provide clear, concise, and correct code solutions.
     Always explain your reasoning.
     """
-    tools ["read_file", "write_file", "shell_exec"]
+    tools = ["read_file", "write_file", "shell_exec"]
     
     main {
         return llm act "Review this code and suggest improvements"
@@ -304,7 +304,7 @@ let response = SupportRouter("I can't login to my account")
 ```helen
 agent Researcher(topic: str) {
     description "Research specialist"
-    tools ["web_search", "web_fetch"]
+    tools = ["web_search", "web_fetch"]
     
     main {
         return llm act "Research this topic and provide key findings: " + topic
@@ -360,7 +360,7 @@ let article = ContentPipeline("Helen programming language")
 ```helen
 agent DataFetcher(source: str) {
     description "Fetch data from a source"
-    tools ["http_get"]
+    tools = ["http_get"]
     
     main {
         return llm act "Fetch data from: " + source
@@ -481,7 +481,7 @@ agent CodeAssistant {
     
     Always explain your changes before making them.
     """
-    tools ["read_file", "write_file", "patch_file", "shell_exec", "web_search"]
+    tools = ["read_file", "write_file", "patch_file", "shell_exec", "web_search"]
     max-turns 15  # 允许多轮工具调用
     
     main {
@@ -555,7 +555,7 @@ agent BaseAgent {
 # 组合多个 Agent 的能力
 agent MultiSkillAgent(task: str) {
     description "Agent that can use multiple skills"
-    tools ["web_search", "read_file", "write_file", "shell_exec"]
+    tools = ["web_search", "read_file", "write_file", "shell_exec"]
     
     main {
         # 根据任务动态选择策略
@@ -679,12 +679,12 @@ agent ComplexSolver {
 ```helen
 # ✅ 只授予需要的工具
 agent FileReader {
-    tools ["read_file"]  # 只需要读取
+    tools = ["read_file"]  # 只需要读取
 }
 
 # ❌ 授予过多工具
 agent SimpleAgent {
-    tools ["read_file", "write_file", "shell_exec", "web_search"]  # 太多
+    tools = ["read_file", "write_file", "shell_exec", "web_search"]  # 太多
 }
 ```
 

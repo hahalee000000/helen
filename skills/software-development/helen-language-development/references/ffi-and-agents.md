@@ -55,7 +55,7 @@ agent MyAgent(input: str) {
     description "Agent purpose"
     prompt """System prompt with instructions..."""
     
-    tools ["web_search", "read_file", "write_file", "shell_exec"]
+    tools = ["web_search", "read_file", "write_file", "shell_exec"]
     model "qwen3.7-plus"
     max-turns 10
     temperature 0.7
@@ -71,7 +71,7 @@ agent MyAgent(input: str) {
 
 ### Key Patterns
 
-- **Tool declaration**: List tool names in `tools [...]` — automatically included in `llm stream` and `llm act` calls
+- **Tool declaration**: `tools = [...]` is the LLM's only visibility allowlist (two-layer authorization: `functions {}` declares capability, `tools` decides what the LLM can invoke). Listed tools are included in `llm stream` and `llm act` calls.
 - **Prefer `llm stream`**: Supports tool calling AND provides real-time streaming output; use `llm act` only when you need the return value
 - **Memory via markdown files**: Store knowledge in `memory/*.md` files, read at start of each task
 - **Memory injection**: Load memory content and prepend to user prompt before `llm stream`
@@ -85,7 +85,7 @@ agent MyAgent(input: str) {
 ```helen
 agent SmartAgent(user_input: str) {
     prompt "You are an assistant with persistent memory..."
-    tools ["read_file", "write_file", "web_search"]
+    tools = ["read_file", "write_file", "web_search"]
     
     main {
         // Use stdlib functions — no Python FFI needed

@@ -334,12 +334,12 @@ HELEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 
 ## Function Calling（工具调用）
 
-当 Agent 配置了 `tools` 时，`llm act` 会自动进入 function calling 循环：
+当 Agent 配置了 `tools = [...]` 时，`llm act` 会自动进入 function calling 循环：
 
 ```helen
 agent Researcher(topic) {
     description "Research assistant"
-    tools ["web_search", "read_file"]
+    tools = ["web_search", "read_file"]
     main {
         return llm act "Research about: " + topic
     }

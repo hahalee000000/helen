@@ -1,10 +1,48 @@
 # 版本历史
 
-> Helen v1.10 | Agent 作用域隔离 + shared let + 异步 HTTP + CLI 参数支持
+> Helen v1.10 | Agent 作用域隔离 + shared let + 异步 HTTP + CLI 参数支持 + 两层工具授权
 
 ---
 
-## v1.10: CLI 参数支持 (当前)
+## v1.10: 两层工具授权模型 (当前)
+
+| 改动 | 说明 | 状态 |
+|------|------|------|
+| 两层授权模型 | `functions {}` 声明能力；`tools = [...]` 是 LLM 可见的唯一白名单 | ✅ |
+| 不写 tools = 无工具 | Agent 不声明 `tools` 时，LLM 没有任何工具（仅 `load_skill`） | ✅ |
+| tools 统一命名空间 | `tools` 列表同时支持 Helen 函数（来自 `functions {}`）和 Python 工具（来自 `runtime/tools.py`）| ✅ |
+| 解析器接受 `=` | Agent 属性现在支持 `description = "..."` / `tools = [...]` 语法 | ✅ |
+
+### 两层授权（Breaking Change）
+
+**之前**：`functions {}` 里的函数自动暴露给 LLM，不写 `tools` 时默认注入 `web_search`/`read_file` 等 6 个内建工具。
+
+**现在**：
+- `functions {}` 块声明 agent 的**全部能力**——`main {}` 的 Helen 代码可以调用其中任意函数，但 LLM 看不到它们，除非在 `tools = [...]` 里显式列出。
+- `tools = [...]` 是 **LLM 可见性的唯一白名单**。名字先在 `functions {}` 里查，找不到再查 Python 工具注册表。
+- 不写 `tools` 时，LLM 没有任何工具可用（除始终包含的 `load_skill`）。
+- 解析器现在接受 `description = "..."`、`tools = [...]` 等带 `=` 的写法（之前只支持无 `=` 形式）。
+
+```helen
+agent Assistant {
+    description "Helpful assistant"
+    tools = ["web_search", "summarize"]     // LLM 可以调用这两个
+    functions {
+        fn summarize(text: str): str { ... }   // LLM 可见（在 tools 里）
+        fn internal_helper(): str { ... }      // LLM 不可见（不在 tools 里）
+    }
+    main {
+        internal_helper()                       // ✅ main 可以调
+        return llm act "..."                    // LLM 只能调 web_search/summarize
+    }
+}
+```
+
+**迁移指南**：老代码里 `functions {}` 块中希望 LLM 调用的函数，需要显式加到 `tools = [...]` 里。
+
+---
+
+## v1.10: CLI 参数支持
 
 | 改进 | 说明 | 状态 |
 |------|------|------|

@@ -83,14 +83,18 @@ class TestTextMateGrammar:
 class TestKeywordCoverage:
     """Test that all Helen keywords are covered by the TextMate grammar."""
 
-    # All keywords from helen.core.tokens._KEYWORD_MAP
+    # All keywords from helen.core.tokens._KEYWORD_MAP (v1.10)
     HELLEN_KEYWORDS = {
-        "agent", "description", "model", "tools", "skills",
+        "agent", "description", "model", "tools",
         "temperature", "max-turns", "prompt", "llm", "import",
-        "let", "const", "if", "else", "for", "while", "break", "continue",
-        "return", "call", "await", "async", "match", "case", "branch",
-        "default", "act", "try", "catch", "finally",
-        "fn", "as", "in", "functions", "main", "true", "false", "null",
+        "let", "const", "shared", "if", "else", "for", "while", "break", "continue",
+        "return", "await", "async", "match", "case", "branch",
+        "default", "act", "stream", "try", "catch", "finally",
+        "throw", "assert",
+        "fn", "as", "in", "functions", "main", "alias",
+        "protocol", "impl", "is",
+        "streaming",
+        "true", "false", "null",
     }
 
     def setup_method(self):

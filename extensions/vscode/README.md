@@ -1,7 +1,7 @@
 # Helen Language VS Code Extension
 
-[![Version](https://img.shields.io/badge/version-1.8.0-blue.svg)](https://github.com/hahalee00000/helen)
-[![Helen](https://img.shields.io/badge/Helen-v1.8-green.svg)](https://github.com/hahalee00000/helen)
+[![Version](https://img.shields.io/badge/version-1.10.0-blue.svg)](https://github.com/hahalee00000/helen)
+[![Helen](https://img.shields.io/badge/Helen-v1.10-green.svg)](https://github.com/hahalee00000/helen)
 
 VS Code extension for the [Helen Agent Programming Language](https://github.com/hahalee00000/helen) - a domain-specific language for building AI agents.
 
@@ -9,15 +9,15 @@ VS Code extension for the [Helen Agent Programming Language](https://github.com/
 
 ### 🎨 Syntax Highlighting
 - Full syntax highlighting for `.helen` files
-- Keywords, types, strings, numbers, comments
+- English and Chinese keyword support (91 bilingual keywords)
+- CJK identifier support
 - Agent declarations and function definitions
 - String interpolation support
 
 ### 🔍 Language Server (LSP)
 - **Real-time diagnostics** - Syntax and semantic errors as you type
-- **Code completion** - Keywords, types, and stdlib functions
-- **Go-to-definition** - Jump to agent/function/variable declarations
-- **Hover information** - Type and documentation on hover
+- **Code completion** - Keywords (English + Chinese), types, and stdlib functions
+- **Go-to-definition** - Jump to agent/function/variable declarations (including `shared let`)
 
 ### ⚡ Quick Actions
 - Restart Language Server command
@@ -100,7 +100,7 @@ agent code_reviewer {
     temperature = 0.3
     
     functions {
-        fn review(code: string) -> dict {
+        fn review(code: str): dict {
             let issues = []
             // Analysis logic...
             return {"issues": issues, "score": 85}
@@ -109,7 +109,7 @@ agent code_reviewer {
 }
 
 // Pattern matching
-fn categorize(error: dict) -> string {
+fn categorize(error: dict): str {
     let code = error["code"] ?? 0
     return match code {
         case 1..100 { "error-patterns" }
@@ -120,8 +120,11 @@ fn categorize(error: dict) -> string {
 
 // Protocol (interface)
 protocol Validator {
-    fn validate(data: any) -> bool
+    fn validate(data: any): bool
 }
+
+// Shared variable (v1.10)
+shared let counter = 0
 
 // Main entry point
 fn main() {
@@ -184,7 +187,7 @@ npm run compile
 
 ```bash
 npx vsce package
-# Creates helen-language-1.8.0.vsix
+# Creates helen-language-1.10.0.vsix
 ```
 
 ### Testing
@@ -202,9 +205,11 @@ For complete Helen language documentation, see:
 
 ### Key Features
 
-- **Agent declarations** with LLM configuration
+- **Agent declarations** with LLM configuration and `functions {}` blocks
+- **Bilingual keywords** — full Chinese/English support (91 keywords)
 - **Pattern matching** with `match/case`
 - **Protocols** (interfaces) with `protocol/impl`
+- **Shared variables** with `shared let` for cross-agent state
 - **Error handling** with `try/catch/finally`
 - **Async/await** for concurrent operations
 - **Standard library** with common utilities

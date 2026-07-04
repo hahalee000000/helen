@@ -217,7 +217,7 @@ shared let pipeline_data = {}
 
 agent DataCollector(source: str) {
     description "阶段 1: 数据收集"
-    tools ["web_search", "web_fetch"]
+    tools = ["web_search", "web_fetch"]
     
     main {
         let raw_data = llm act "Collect data from: " + source
@@ -387,7 +387,7 @@ agent Architect(analysis: str) {
 
 agent FrontendDev(arch: str) {
     description "前端开发"
-    tools ["write_file"]
+    tools = ["write_file"]
     main {
         return llm act "实现前端: " + arch
     }
@@ -395,7 +395,7 @@ agent FrontendDev(arch: str) {
 
 agent BackendDev(arch: str) {
     description "后端开发"
-    tools ["write_file"]
+    tools = ["write_file"]
     main {
         return llm act "实现后端: " + arch
     }

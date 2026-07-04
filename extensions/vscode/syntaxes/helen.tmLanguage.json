@@ -107,19 +107,19 @@
       "patterns": [
         {
           "name": "keyword.control.helen",
-          "match": "\\b(if|else|for|in|while|break|continue|return|match|case|branch|default|try|catch|finally|throw|assert)\\b"
+          "match": "(?:\\b(?:if|else|for|in|while|break|continue|return|match|case|branch|default|try|catch|finally|throw|assert)\\b|如果|否则|对于|属于|当|中断|继续|匹配|情况|分支|默认|尝试|捕获|最终|抛出|断言)"
         },
         {
           "name": "keyword.declaration.helen",
-          "match": "\\b(let|const|fn|agent|protocol|impl|functions|main)\\b"
+          "match": "(?:\\b(?:let|const|shared|fn|agent|protocol|impl|functions|main|alias)\\b|让|常量|共享|函数|智能体|协议|实现|函数区|主函|别名)"
         },
         {
           "name": "keyword.other.helen",
-          "match": "\\b(import|as|call|await|async|llm|act|stream|is)\\b"
+          "match": "(?:\\b(?:import|as|call|await|async|llm|act|stream|is)\\b|导入|作为|等待|异步|大模型|执行|流式执行|是)"
         },
         {
           "name": "keyword.agent.property.helen",
-          "match": "\\b(description|model|tools|skills|sub-agents|temperature|max-turns|streaming|prompt)\\b"
+          "match": "(?:\\b(?:description|model|tools|temperature|max-turns|streaming|prompt)\\b|描述|模型|工具|温度|最大轮次|流式输出|提示)"
         }
       ]
     },
@@ -127,7 +127,7 @@
       "patterns": [
         {
           "name": "support.type.helen",
-          "match": "\\b(string|int|float|bool|list|dict|any|number|void)\\b"
+          "match": "\\b(?:str|int|float|bool|list|dict|map|any|void|number)\\b"
         }
       ]
     },
@@ -135,15 +135,15 @@
       "patterns": [
         {
           "name": "constant.language.boolean.true.helen",
-          "match": "\\btrue\\b"
+          "match": "(?:\\btrue\\b|真)"
         },
         {
           "name": "constant.language.boolean.false.helen",
-          "match": "\\bfalse\\b"
+          "match": "(?:\\bfalse\\b|假)"
         },
         {
           "name": "constant.language.null.helen",
-          "match": "\\bnull\\b"
+          "match": "(?:\\bnull\\b|空)"
         }
       ]
     },
@@ -151,10 +151,12 @@
       "patterns": [
         {
           "name": "meta.agent.helen",
-          "begin": "\\b(agent)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+          "begin": "(?:\\b(agent)\\s+([a-zA-Z_][a-zA-Z0-9_]*)|智能体\\s+([a-zA-Z_\\u4e00-\\u9fff][a-zA-Z0-9_\\u4e00-\\u9fff]*))",
           "beginCaptures": {
             "1": { "name": "keyword.declaration.agent.helen" },
-            "2": { "name": "entity.name.type.agent.helen" }
+            "2": { "name": "entity.name.type.agent.helen" },
+            "3": { "name": "keyword.declaration.agent.helen" },
+            "4": { "name": "entity.name.type.agent.helen" }
           },
           "end": "(?=\\{)",
           "patterns": [
@@ -167,10 +169,12 @@
       "patterns": [
         {
           "name": "meta.function.helen",
-          "begin": "\\b(fn)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(",
+          "begin": "(?:\\b(fn)\\s+([a-zA-Z_][a-zA-Z0-9_]*)|函数\\s+([a-zA-Z_\\u4e00-\\u9fff][a-zA-Z0-9_\\u4e00-\\u9fff]*))\\s*\\(",
           "beginCaptures": {
             "1": { "name": "keyword.declaration.function.helen" },
-            "2": { "name": "entity.name.function.helen" }
+            "2": { "name": "entity.name.function.helen" },
+            "3": { "name": "keyword.declaration.function.helen" },
+            "4": { "name": "entity.name.function.helen" }
           },
           "end": "\\)",
           "patterns": [
@@ -179,7 +183,7 @@
         },
         {
           "name": "meta.function.call.helen",
-          "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(",
+          "match": "\\b([a-zA-Z_\\u4e00-\\u9fff][a-zA-Z0-9_\\u4e00-\\u9fff]*)\\s*\\(",
           "captures": {
             "1": { "name": "entity.name.function.call.helen" }
           }
@@ -189,7 +193,7 @@
     "parameters": {
       "patterns": [
         {
-          "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=:)",
+          "match": "\\b([a-zA-Z_\\u4e00-\\u9fff][a-zA-Z0-9_\\u4e00-\\u9fff]*)\\s*(?=:)",
           "captures": {
             "1": { "name": "variable.parameter.helen" }
           }
@@ -200,10 +204,12 @@
     "variables": {
       "patterns": [
         {
-          "match": "\\b(let|const)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+          "match": "(?:\\b(shared\\s+)?(let|const)\\b|(共享)\\s*(让|常量))\\s+([a-zA-Z_\\u4e00-\\u9fff][a-zA-Z0-9_\\u4e00-\\u9fff]*)",
           "captures": {
-            "1": { "name": "keyword.declaration.variable.helen" },
-            "2": { "name": "variable.other.constant.helen" }
+            "2": { "name": "keyword.declaration.variable.helen" },
+            "3": { "name": "keyword.declaration.variable.helen" },
+            "4": { "name": "keyword.declaration.variable.helen" },
+            "5": { "name": "variable.other.constant.helen" }
           }
         }
       ]
@@ -279,7 +285,7 @@
           "match": ":"
         },
         {
-          "name": "punctuation.definition.arrow.helen",
+          "name": "keyword.operator.arrow-return.helen",
           "match": "->"
         }
       ]

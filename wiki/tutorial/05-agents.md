@@ -78,25 +78,39 @@ agent Interviewer {
 }
 ```
 
-### tools — 内置工具
+### tools — LLM 可见的工具白名单
 
-Agent 可以声明使用哪些内置工具，LLM 会在 `llm act` 时通过 function calling 调用：
+`tools = [...]` 是 **LLM 可见性的唯一白名单**（两层授权模型）。
+
+**两层授权：**
+
+- `functions {}` 块声明 agent 的**全部能力**——`main {}` 的 Helen 代码可以调用其中任意函数，但 LLM 默认看不到它们。
+- `tools = [...]` 从中挑选**允许 LLM 自主决定调用**的部分。
+- **不写 `tools`** 时，LLM 没有任何工具可用（除内置的 `load_skill`）。
 
 ```helen
-agent Researcher {
-    description "Research assistant"
-    tools ["web_search", "web_fetch", "read_file"]
-    prompt "Research the given topic thoroughly."
-}
-
-agent Coder {
-    description "Code writer"
-    tools ["write_file", "shell_exec", "calculate"]
-    prompt "Write and execute code."
+agent Assistant {
+    description "Helpful assistant"
+    tools = ["web_search", "read_file"]   // LLM 可以自主调用这两个
+    functions {
+        fn fetch_summary(url: str): str {  // 在 functions 里声明
+            let content = read_file(url)
+            return summarize(content)
+        }
+        fn dangerous_op() { ... }          // LLM 看不到
+    }
+    main {
+        // main 可以调用 functions 里任意函数（不受 tools 限制）
+        let summary = fetch_summary("http://example.com")
+        dangerous_op()                      // ✅ main 可以调
+        return llm act "..."                // LLM 只能调 web_search/read_file/fetch_summary
+    }
 }
 ```
 
-**可用工具：**
+`tools` 里的名字先查 `functions {}` 块（Helen 函数），再查 Python 工具注册表（`web_search`、`read_file` 等）。同名时 Helen 函数优先。
+
+**可用内建工具：**
 
 | 工具 | 功能 | 参数 |
 |------|------|------|
@@ -567,7 +581,7 @@ main {
 ```helen
 agent Researcher(topic) {
     description "Research assistant"
-    tools ["web_search", "read_file"]
+    tools = ["web_search", "read_file"]
     main {
         return llm act "Research about: " + topic
     }

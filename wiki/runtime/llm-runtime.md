@@ -227,7 +227,7 @@ Agent 通过 `tools` 配置声明可用工具：
 ```helen
 agent Researcher(topic) {
     description "Research assistant"
-    tools ["web_search", "web_fetch", "read_file"]
+    tools = ["web_search", "web_fetch", "read_file"]
     main {
         return llm act "Research: " + topic
     }

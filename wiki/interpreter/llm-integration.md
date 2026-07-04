@@ -36,7 +36,7 @@ class Interpreter(LlmMixin):
 agent Translator {
     description "Translate text between languages"
     prompt """You are a professional translator."""
-    tools ["web_search"]
+    tools = ["web_search"]
     main {
         return llm act "Translate: Hello"
     }
@@ -46,7 +46,7 @@ agent Translator {
 **执行流程**：
 1. 渲染 Agent `prompt` 模板（`{{var}}` 替换为 Environment 中的变量值）
 2. 构建 System Prompt：`description` + `Skill Index (Tier 1)` + `渲染后的 prompt`
-3. 构建工具列表：Agent `tools` 配置的工具 + `load_skill` 工具
+3. 构建工具列表（两层授权）：只包含 `tools = [...]` 中列出的名字（先查 `functions {}` 块，再查 Python 工具注册表）+ 始终包含的 `load_skill`。不写 `tools` 则 LLM 无工具可用。
 4. 调用 `runtime.act(user_prompt, tools, model, temperature, max_turns, system_prompt=渲染后的prompt)`
 5. **Function Calling 循环**：
    - LLM 返回工具调用 → 执行工具 → 结果返回 LLM → 循环

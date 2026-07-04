@@ -196,7 +196,7 @@ fn test_adder_agent() {
 ```helen
 agent FileProcessor(path: str) {
     description "Process a file"
-    tools ["read_file"]
+    tools = ["read_file"]
     
     main {
         let content = read_file(path)

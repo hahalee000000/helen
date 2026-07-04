@@ -1,0 +1,11 @@
+# Development files not needed in the packaged extension
+.gitignore
+src/**
+tsconfig.json
+**/*.map
+node_modules/**/typings/
+node_modules/**/*.d.ts
+node_modules/**/*.md
+node_modules/**/.github/
+node_modules/**/test/
+node_modules/**/tests/

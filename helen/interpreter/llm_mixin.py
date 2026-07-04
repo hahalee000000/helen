@@ -499,52 +499,60 @@ class LlmMixin:
     def _build_tools_list(self: Any) -> list[dict[str, Any]]:
         """Build the tools list for llm act from agent declarations.
 
-        Two sources of tools:
-        1. functions { } block — Helen functions become LLM-callable tools
-        2. tools ["web_search", ...] — Python tools from Helen tool registry
-
-        Always includes load_skill (HLD 3.6.5) for Tier 2 skill disclosure.
+        Two-layer authorization model (HLD):
+        - functions { } block declares the agent's full capability set
+          (callable from main {} by Helen code, but NOT auto-exposed to LLM)
+        - tools = [...] is the LLM allowlist — only names listed here are
+          visible to the LLM for autonomous invocation. Each name can refer
+          to either a Helen function (from functions {}) or a Python tool
+          (from the runtime registry).
+        - load_skill is always included for Tier 2 skill disclosure (HLD 3.6.5)
+        - If tools is not declared, the LLM has NO tools (except load_skill)
         """
         from helen.runtime.tools import get_tool_schemas
 
         tools: list[dict[str, Any]] = []
         tool_names: set[str] = set()
 
-        # 1. Scan functions block — Helen functions become tools
-        if self._current_agent is not None and self._current_agent.functions:
-            for fn_decl in self._current_agent.functions:
-                schema = self._function_to_tool_schema(fn_decl)
-                if schema and schema["function"]["name"] not in tool_names:
-                    tools.append(schema)
-                    tool_names.add(schema["function"]["name"])
-
-        # 2. Check if agent declared specific Python tools
+        # 1. Read declared tools allowlist
         declared_tools: list[str] | None = None
         if self._current_agent is not None:
             for decl in self._current_agent.declarations:
                 if decl.tools is not None:
-                    # decl.tools is a LiteralNode wrapping a list[str]
                     tools_node = decl.tools
                     if isinstance(tools_node, LiteralNode) and isinstance(tools_node.value, list):
                         declared_tools = tools_node.value
                     break
 
-        if declared_tools is not None:
-            # Agent explicitly declared tools — add those not already covered
-            for schema in get_tool_schemas(declared_tools):
-                if schema["function"]["name"] not in tool_names:
-                    tools.append(schema)
-                    tool_names.add(schema["function"]["name"])
-        elif not tools:
-            # No functions block and no explicit tools — include default useful tools
-            default_tools = ["web_search", "web_fetch", "read_file",
-                             "write_file", "patch_file", "calculate"]
-            for schema in get_tool_schemas(default_tools):
+        # 2. If no tools declared → LLM gets nothing (load_skill added below)
+        if declared_tools is None:
+            tools.extend(get_tool_schemas(["load_skill"]))
+            return tools
+
+        # 3. For each name in the allowlist, resolve to Helen fn or Python tool
+        for name in declared_tools:
+            # 3a. Try Helen function in functions {} block
+            fn_schema = None
+            if self._current_agent is not None and self._current_agent.functions:
+                for fn_decl in self._current_agent.functions:
+                    if fn_decl.name == name:
+                        fn_schema = self._function_to_tool_schema(fn_decl)
+                        break
+
+            if fn_schema is not None:
+                if name not in tool_names:
+                    tools.append(fn_schema)
+                    tool_names.add(name)
+                continue
+
+            # 3b. Try Python tool in runtime registry
+            py_schemas = get_tool_schemas([name])
+            for schema in py_schemas:
                 if schema["function"]["name"] not in tool_names:
                     tools.append(schema)
                     tool_names.add(schema["function"]["name"])
 
-        # Always include load_skill for Tier 2 skill disclosure (HLD 3.6.5)
+        # 4. Always include load_skill for Tier 2 skill disclosure (HLD 3.6.5)
         if "load_skill" not in tool_names:
             tools.extend(get_tool_schemas(["load_skill"]))
 
