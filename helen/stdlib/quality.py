@@ -887,8 +887,7 @@ class QualityScorer:
         3. ``tests/`` sub-directory next to the file (any *.helen OR *.py
            test files) → 6.0
         4. Parent-level ``tests/`` directory containing *.py files that
-           reference the source file's stem (e.g. ``~/helen/tests/agents/
-           test_helen_programmer.py``) → 7.0
+           reference the source file's stem → 7.0
         5. No tests found → 2.0
         """
         if not file_path:
