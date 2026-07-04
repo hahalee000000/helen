@@ -177,8 +177,15 @@ class Interpreter(LlmMixin, Visitor[object]):
         for name, func in self.import_resolver.functions.items():
             self._functions[name] = func
         # Conversation history for LLM context (HLD 3.6.6, 3.12)
+        # Initialize HistoryManager with model-aware context window
         self._history: list[HistoryMessage] = []
-        self._history_manager = HistoryManager()
+        try:
+            from helen.runtime.config import load_config
+            config = load_config()
+            model = config.get("model")
+        except Exception:
+            model = None
+        self._history_manager = HistoryManager(model=model)
         # Register stdlib builtins in global environment (HLD M15)
         self._register_stdlib()
         # Set CLI args in the stdlib module (for get_cli_args/parse_cli_args)

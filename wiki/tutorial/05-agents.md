@@ -606,7 +606,29 @@ main {
 }
 ```
 
-历史上限 **4096 tokens**，自动截断最旧消息。
+### 上下文窗口保护 (HLD 3.12)
+
+对话历史**会自动裁剪后传给 LLM**，所以多轮 `llm act` 能看到之前的上下文。保护机制：
+
+| 保护 | 行为 |
+|---|---|
+| Model-aware context window | 根据模型自动选择 context window 大小（如 qwen3.7-plus = 131072 tokens）|
+| 自动裁剪 | 每次 LLM 调用前计算预算，删除最旧的非系统消息 |
+| 自动压缩 | 历史超过 context window 80% 时，旧消息压缩成 `[Previous conversation summary]` |
+| 工具结果上限 | 单次工具循环最多 10 个结果（`MAX_TOOL_RESULTS_PER_TURN`）|
+| 上下文超限恢复 | API 返回 context-too-large 错误时，自动删除最老消息并重试 |
+
+```helen
+// 多轮对话 LLM 能看到之前的上下文
+agent Chat {
+    main {
+        llm act "记住：我的名字是 Alice"   // 写入 history
+        llm act "我叫什么名字？"           // LLM 能看到上一轮，回答 "Alice"
+    }
+}
+```
+
+Token 估算使用字符类型感知（CJK 字符 1.2 字符/token，拉丁字符 4 字符/token），比简单的 `len(text)//4` 准确得多。
 
 ## Function Calling（工具调用）
 

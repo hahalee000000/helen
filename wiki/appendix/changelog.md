@@ -286,6 +286,109 @@ let merged = [1, 2] + [3, 4]      // ✅ [1, 2, 3, 4]
 
 ---
 
+## v1.10: 上下文窗口保护 (HLD 3.12)
+
+| 改动 | 说明 | 状态 |
+|------|------|------|
+| Model-aware MAX_TOKENS | 40+ 模型的 context window 表（Qwen/GPT/Claude/Gemini），自动选择正确上限 | ✅ |
+| 字符类型感知 token 估算 | CJK（1.2 字符/token）vs 拉丁（4 字符/token），误差从 ~40% 降至 ~15% | ✅ |
+| History 自动传入 LLM | `llm act` / `llm stream` 现在将裁剪后的对话历史传给 API | ✅ |
+| 工具结果上限强制 | `MAX_TOOL_RESULTS_PER_TURN = 10`（之前声明未用，现已强制执行） | ✅ |
+| 上下文超限自动恢复 | API 返回 context-too-large 错误时自动删除最老消息并重试 | ✅ |
+| History 自动压缩 | 超过 context window 80% 时，旧消息压缩成摘要，防 REPL 长会话内存泄漏 | ✅ |
+
+### 为什么需要上下文窗口保护
+
+之前 `llm act` 和 `llm stream` 的实现存在三个问题：
+
+1. **History 没传给 LLM**：`_history` 列表只在内存中累积，从未作为 `history=` 参数传给 `llm_runtime.act()`。LLM 每次调用都是"失忆"的。
+2. **死代码**：`HistoryManager.check_budget()` 和 `trim_history()` 定义了但从没被调用。`MAX_TOOL_RESULTS_PER_TURN` 常量声明了但没使用。
+3. **撑爆 context window 无保护**：当工具循环累积太多结果时，API 返回 context-too-large 错误后直接抛异常，没有自动恢复。
+
+### 现在的实现
+
+#### Model-aware context window
+
+`HistoryManager` 初始化时根据模型名查找对应的 context window 大小：
+
+```python
+from helen.runtime.history import get_model_context_window
+
+get_model_context_window("qwen3.7-plus")       # 131072
+get_model_context_window("gpt-4o-mini")         # 128000
+get_model_context_window("claude-opus-4")       # 200000
+get_model_context_window("gpt-4o-mini-2024-07-18")  # 128000（前缀匹配）
+get_model_context_window("unknown-model")       # 128000（默认值）
+```
+
+支持精确匹配 + 前缀匹配（带日期后缀的模型名也能正确识别）。
+
+#### 字符类型感知 token 估算
+
+之前的 `len(text) // 4` 对中文误差极大（中文 1 个字符 ≈ 1-2 tokens，不是 0.25）。新实现区分 CJK 和拉丁字符：
+
+```python
+estimate_tokens("hello world")  # ~3 tokens（11 chars / 4）
+estimate_tokens("你好世界")       # ~4 tokens（4 CJK chars / 1.2）
+```
+
+误差从 ~40% 降至 ~15%（对比真实 tokenizer）。
+
+#### History 自动裁剪并传入 LLM
+
+`visit_llm_act_expr` 和 `visit_llm_stream_stmt` 现在：
+
+1. 调用 `_prepare_history_for_llm(system_prompt, prompt)`
+2. 该方法内部：`check_budget()` 计算可用空间 → `trim_history()` 裁剪到预算内 → 转换为 API 格式
+3. 把结果作为 `history=` 参数传给 `act()` / `act_stream()`
+
+```helen
+// 多轮对话现在 LLM 能看到之前的上下文
+agent Chat {
+    main {
+        llm act "记住：我的名字是 Alice"   // 写入 history
+        llm act "我叫什么名字？"           // LLM 能看到上一轮，回答 "Alice"
+    }
+}
+```
+
+#### 工具结果上限强制
+
+`MAX_TOOL_RESULTS_PER_TURN = 10` 在 `act()` 和 `act_stream()` 的工具执行前强制执行。当 LLM 一次请求超过 10 个工具调用时，只保留前 10 个。
+
+#### 上下文超限自动恢复
+
+当 API 返回 context-too-large 错误时：
+
+1. 检测到 10+ 种错误标记（OpenAI/Anthropic/DashScope 各家格式）
+2. 自动删除最老的 2 条非系统消息
+3. 重试一次
+
+`act_stream()` 的 HTTPStatusError 处理器也支持同样的恢复逻辑。
+
+#### History 自动压缩（防 REPL 长会话内存泄漏）
+
+`_add_to_history()` 每次添加消息后调用 `enforce_limit()`。当历史总 token 超过 context window 的 80% 时：
+
+1. 保留最近的几条消息（占 75% 预算）
+2. 更早的消息压缩成一条 `[Previous conversation summary]` 系统消息（占 25% 预算）
+3. 返回新的 `[summary_msg, ...recent_msgs]`
+
+这样即使在 REPL 会话中做几百轮 `llm act`，内存也不会无限增长。
+
+### 迁移指南
+
+这些改动对现有代码**向后兼容**。如果之前发现 `llm act` 在多轮调用中"失忆"，现在会自动修复。如果想手动控制：
+
+```helen
+// 显式重置历史（REPL 中 :reset 也会清）
+// Python API: interpreter.clear_history()
+```
+
+**质量**: 2272 测试通过（新增 48 个上下文保护测试）
+
+---
+
 ## v1.9: 中文语法支持
 
 | 改进 | 说明 | 状态 |

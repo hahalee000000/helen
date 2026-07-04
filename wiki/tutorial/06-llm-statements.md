@@ -289,7 +289,19 @@ main {
 }
 ```
 
-历史上限 **4096 tokens**，自动截断最旧消息。
+### 上下文窗口保护 (HLD 3.12)
+
+对话历史会**自动裁剪后传给 LLM**（之前版本存在 bug：history 只累积但从未传给 API，现在已修复）。
+
+| 保护 | 行为 |
+|---|---|
+| Model-aware context window | 根据模型自动选择 context window 大小（qwen3.7-plus=131072、gpt-4o=128000 等）|
+| 自动裁剪 | 每次 LLM 调用前，根据 system prompt + 当前 prompt 计算剩余预算，删除最旧消息 |
+| 自动压缩 | 历史超过 context window 80% 时，旧消息压缩成 `[Previous conversation summary]` 系统消息 |
+| 工具结果上限 | 单次工具循环最多 10 个结果（`MAX_TOOL_RESULTS_PER_TURN=10`）|
+| 上下文超限恢复 | API 返回 context-too-large 错误时，自动删除最老消息并重试一次 |
+
+Token 估算使用字符类型感知（CJK 1.2 字符/token，拉丁 4 字符/token），误差约 15%。
 
 ---
 

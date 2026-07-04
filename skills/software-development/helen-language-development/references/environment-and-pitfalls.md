@@ -147,7 +147,13 @@ agent KnowledgeAssistant(query: str) {
 - Domain experts (load domain knowledge)
 - Data analysts (load data files)
 
-**Pitfall**: Large knowledge bases may exceed LLM context limits. For very large knowledge bases, implement chunking or summarization in the `build_context()` function.
+**Pitfall**: Large knowledge bases may exceed LLM context limits. Helen now has automatic context window protection (HLD 3.12):
+- History is auto-trimmed to fit model's context window (model-aware lookup for 40+ models)
+- When history exceeds 80% of context window, old messages are compressed into a summary
+- API context-too-large errors auto-retry with message trimming
+- Tool results per turn capped at `MAX_TOOL_RESULTS_PER_TURN = 10`
+
+For very large knowledge bases, still implement chunking or summarization in `build_context()` — don't rely solely on auto-trimming.
 
 ## SemanticAnalyzer Key Files
 

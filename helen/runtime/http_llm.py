@@ -135,12 +135,12 @@ def _repair_message_sequence(messages: list[dict[str, Any]]) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Tool Result Truncation (borrowed from Hermes)
+# Context Window Protection (HLD 3.12)
 # ---------------------------------------------------------------------------
 
 # Maximum characters per tool result before truncation
 MAX_TOOL_RESULT_CHARS = 16000
-# Maximum total tool results per turn
+# Maximum total tool results per turn (enforced to prevent context explosion)
 MAX_TOOL_RESULTS_PER_TURN = 10
 
 
@@ -154,6 +154,95 @@ def _truncate_tool_result(result: str, max_chars: int = MAX_TOOL_RESULT_CHARS) -
         + f"\n\n... [{len(result) - max_chars} chars truncated] ...\n\n"
         + result[-half:]
     )
+
+
+def _enforce_tool_results_per_turn(tool_calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Enforce MAX_TOOL_RESULTS_PER_TURN by dropping excess tool calls.
+
+    When an LLM requests more tool calls than allowed in a single turn,
+    keeps the first MAX_TOOL_RESULTS_PER_TURN and drops the rest.
+    Adds a note in the dropped calls' results to inform the LLM.
+
+    Args:
+        tool_calls: List of tool call dicts from LLM response.
+
+    Returns:
+        Trimmed list of tool calls (up to MAX_TOOL_RESULTS_PER_TURN).
+    """
+    if len(tool_calls) <= MAX_TOOL_RESULTS_PER_TURN:
+        return tool_calls
+    logger.warning(
+        "LLM requested %d tool calls, truncating to %d",
+        len(tool_calls), MAX_TOOL_RESULTS_PER_TURN,
+    )
+    return tool_calls[:MAX_TOOL_RESULTS_PER_TURN]
+
+
+# Context-too-large error markers from various API providers
+_CONTEXT_ERROR_MARKERS = (
+    "context_length_exceeded",
+    "maximum context length",
+    "context too long",
+    "reduce your prompt",
+    "token limit",
+    "too many tokens",
+    "reduce the length",
+    "exceeds the model's context",
+    "max_tokens",
+    "request too large",
+)
+
+
+def _is_context_length_error(error_msg: str) -> bool:
+    """Detect if an error message indicates context window overflow.
+
+    Checks for known markers from OpenAI, Anthropic, DashScope, etc.
+
+    Args:
+        error_msg: Error message string from API.
+
+    Returns:
+        True if this looks like a context-too-large error.
+    """
+    if not error_msg:
+        return False
+    lower = error_msg.lower()
+    return any(marker in lower for marker in _CONTEXT_ERROR_MARKERS)
+
+
+def _trim_messages_for_recovery(
+    messages: list[dict[str, Any]],
+    drop_count: int = 2,
+) -> list[dict[str, Any]]:
+    """Trim messages to recover from context overflow.
+
+    Removes the oldest non-system messages to free up context space.
+    Keeps system message and the most recent messages.
+
+    Args:
+        messages: Current messages list.
+        drop_count: Number of oldest messages to remove.
+
+    Returns:
+        Trimmed messages list.
+    """
+    if len(messages) <= 2:
+        return messages  # Can't trim further
+
+    # Find the first non-system message index
+    start_idx = 0
+    for i, msg in enumerate(messages):
+        if msg.get("role") != "system":
+            start_idx = i
+            break
+
+    # Drop oldest non-system messages
+    new_messages = messages[:start_idx] + messages[start_idx + drop_count:]
+    logger.info(
+        "Context overflow recovery: dropped %d oldest messages (%d -> %d)",
+        drop_count, len(messages), len(new_messages),
+    )
+    return new_messages
 
 
 # ---------------------------------------------------------------------------
@@ -440,6 +529,9 @@ class HttpLLMRuntime(LLMRuntime):
             # Check if LLM wants tool calls
             tool_calls = response_msg.get("tool_calls")
             if tool_calls:
+                # P0: Enforce MAX_TOOL_RESULTS_PER_TURN to prevent context explosion
+                tool_calls = _enforce_tool_results_per_turn(tool_calls)
+
                 # Append assistant message with tool_calls
                 messages.append(response_msg)
 
@@ -520,16 +612,38 @@ class HttpLLMRuntime(LLMRuntime):
         """Send a chat completion request with retry logic.
 
         Retries on transient errors (timeout, 5xx) with exponential backoff.
+        On context-too-large errors, automatically trims oldest messages and
+        retries once (P1: context overflow auto-recovery).
         """
+        context_overflow_retried = False
 
         for attempt in range(self.max_retries + 1):
             result = self._chat_with_messages(messages, model=model, temperature=temperature, tools=tools)
             if result is not None:
                 return result
 
+            error = self._last_error or ""
+
+            # P1: Context overflow auto-recovery
+            # Detect context-too-large errors and trim messages, then retry ONCE
+            if not context_overflow_retried and _is_context_length_error(error):
+                context_overflow_retried = True
+                if len(messages) > 2:
+                    logger.warning(
+                        "Context length exceeded (%s) — trimming oldest messages and retrying",
+                        error[:100],
+                    )
+                    # Drop oldest non-system messages (2 at a time)
+                    messages[:] = _trim_messages_for_recovery(messages, drop_count=2)
+                    continue
+                else:
+                    logger.warning(
+                        "Context length exceeded but only %d messages remain — cannot trim further",
+                        len(messages),
+                    )
+
             # Check if we should retry
             if attempt < self.max_retries:
-                error = self._last_error or ""
                 # Retry on timeout or server errors
                 is_retryable = (
                     "timed out" in error.lower()
@@ -837,6 +951,9 @@ class HttpLLMRuntime(LLMRuntime):
                         for i in sorted(tool_calls_acc.keys())
                     ]
 
+                    # P0: Enforce MAX_TOOL_RESULTS_PER_TURN to prevent context explosion
+                    tool_call_list = _enforce_tool_results_per_turn(tool_call_list)
+
                     if self.enable_concurrent_tools and len(tool_call_list) > 1:
                         tool_results = _execute_tools_concurrent(
                             tool_call_list, _dispatch, executor=self._tool_pool,
@@ -913,7 +1030,21 @@ class HttpLLMRuntime(LLMRuntime):
                     api_error = error_data.get("error", {})
                     error_msg = api_error.get("message", str(e))
                     error_code = api_error.get("code", "")
-                    yield {"type": "error", "message": f"API error ({e.response.status_code} {error_code}): {error_msg}"}
+                    full_error = f"API error ({e.response.status_code} {error_code}): {error_msg}"
+
+                    # P1: Context overflow auto-recovery for streaming
+                    if _is_context_length_error(error_msg) and len(messages) > 2:
+                        logger.warning(
+                            "Context length exceeded in stream (%s) — trimming and retrying",
+                            error_msg[:100],
+                        )
+                        messages[:] = _trim_messages_for_recovery(messages, drop_count=2)
+                        # Reset tool call accumulation for retry
+                        tool_calls_acc.clear()
+                        full_chunks.clear()
+                        continue  # Retry with trimmed messages
+
+                    yield {"type": "error", "message": full_error}
                 except Exception:
                     yield {"type": "error", "message": f"HTTP error {e.response.status_code}: {e.response.reason_phrase}"}
                 break

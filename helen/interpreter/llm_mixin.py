@@ -178,6 +178,10 @@ class LlmMixin:
         temperature = float(self._get_agent_setting("temperature", 1.0))
         max_turns = int(self._get_agent_setting("max-turns", 1))
 
+        # P2: Update history manager's model for model-aware context window
+        if model:
+            self._history_manager.set_model(model)
+
         # Build tools list: always include load_skill + agent-declared tools
         tools = self._build_tools_list()
 
@@ -196,6 +200,9 @@ class LlmMixin:
         # Record user message to history
         self._add_to_history("user", prompt)
 
+        # P0: Prepare history for LLM call (trim to fit context window)
+        history_for_llm = self._prepare_history_for_llm(system_prompt, prompt)
+
         # Audit log entry (P2: LLM call audit)
         import time
         audit_start = time.time()
@@ -209,6 +216,7 @@ class LlmMixin:
                 prompt, tools=tools, model=model,
                 temperature=temperature, max_turns=max_turns,
                 system_prompt=system_prompt,
+                history=history_for_llm,  # P0: pass trimmed history
                 dispatch_fn=dispatch_fn,
             )
             audit_duration = (time.time() - audit_start) * 1000
@@ -291,6 +299,10 @@ class LlmMixin:
         model = self._get_agent_setting("model")
         temperature = float(self._get_agent_setting("temperature", 1.0))
 
+        # P2: Update history manager's model for model-aware context window
+        if model:
+            self._history_manager.set_model(model)
+
         # Get rendered agent prompt as system_prompt (only if prompt was explicit)
         if node.prompt is not None:
             system_prompt = self._get_rendered_agent_prompt()
@@ -306,6 +318,9 @@ class LlmMixin:
         # Record user message to history
         self._add_to_history("user", prompt)
 
+        # P0: Prepare history for LLM call (trim to fit context window)
+        history_for_llm = self._prepare_history_for_llm(system_prompt, prompt)
+
         # Check if LLM runtime supports streaming
         if not hasattr(self.llm_runtime, 'act_stream'):
             # Fallback to non-streaming if not supported
@@ -317,6 +332,7 @@ class LlmMixin:
             response = self.llm_runtime.act(
                 prompt, model=model, temperature=temperature,
                 system_prompt=system_prompt,
+                history=history_for_llm,  # P0: pass trimmed history
             )
             if response and response.text:
                 # Call on_chunk callback if provided
@@ -372,6 +388,7 @@ class LlmMixin:
                 prompt, model=model, temperature=temperature,
                 system_prompt=system_prompt, tools=tools,
                 max_turns=max_turns,
+                history=history_for_llm,  # P0: pass trimmed history
                 dispatch_fn=dispatch_fn,
             ):
                 event_type = event.get("type", "content")
@@ -821,11 +838,40 @@ class LlmMixin:
     def _add_to_history(self: Any, role: str, content: str) -> None:
         """Add a message to the conversation history.
 
-        Args:
-            role: Message role ("user", "assistant", "system", "tool").
-            content: Message content string.
+        P2: After adding, enforce history size limit to prevent unbounded
+        memory growth in long REPL sessions.
         """
         self._history.append(HistoryMessage(role=role, content=content))
+
+        # P2: Enforce history size limit after each addition
+        # This prevents unbounded memory growth in long REPL sessions.
+        trimmed = self._history_manager.enforce_limit(self._history)
+        if len(trimmed) < len(self._history):
+            self._history[:] = trimmed
+
+    def _prepare_history_for_llm(
+        self: Any,
+        system_prompt: str | None,
+        current_prompt: str,
+    ) -> list[dict[str, Any]] | None:
+        """Prepare conversation history for an LLM API call.
+
+        Uses HistoryManager to calculate budget, trim to fit context window,
+        and convert to OpenAI messages format.
+
+        Args:
+            system_prompt: System prompt text (for budget calculation).
+            current_prompt: Current instruction text (for budget calculation).
+
+        Returns:
+            List of message dicts for API, or None if history is empty.
+        """
+        if not self._history:
+            return None
+
+        return self._history_manager.prepare_for_llm(
+            self._history, system_prompt, current_prompt
+        )
 
     @property
     def history(self: Any) -> list[HistoryMessage]:
