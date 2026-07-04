@@ -506,5 +506,111 @@ try {
 
 ---
 
-**最后更新**: 2026-07-01  
-**版本**: v1.10
+**最后更新**: 2026-07-04  
+**版本**: v1.11
+
+---
+
+## P4 历史管理增强（v1.11 新增）
+
+> v1.11 引入了完整的历史持久化、检索和上下文可视化功能。
+
+### 历史持久化
+
+跨会话保留对话连续性：
+
+```helen
+agent PersistentAgent {
+    main {
+        // 保存当前历史到 JSON 文件
+        save_history("./session.json")
+        
+        // 从文件加载历史（下次启动时）
+        let loaded = load_history("./session.json")
+        print("Loaded " + str(loaded) + " messages")
+    }
+}
+```
+
+**JSON 格式**：
+```json
+{
+  "version": 1,
+  "model": "qwen3.7-plus",
+  "saved_at": "2026-07-04T12:00:00Z",
+  "messages": [
+    {"role": "user", "content": "..."},
+    {"role": "assistant", "content": "..."}
+  ]
+}
+```
+
+### 历史检索
+
+Agent 可以查询历史中的特定信息：
+
+```helen
+agent SmartResearcher {
+    tools ["web_search", "load_skill"]
+    main {
+        // 搜索之前的工具调用
+        let past_searches = search_history(tool_name="web_search")
+        
+        // 按角色过滤
+        let user_questions = search_history(role="user")
+        
+        // 文本搜索（大小写不敏感）
+        let mentions = search_history(query="Python")
+        
+        // 获取工具调用历史
+        let tool_log = get_tool_history("web_search")
+        
+        return llm act "Continue research..."
+    }
+}
+```
+
+### 上下文使用可视化
+
+REPL 中用 `:stats` 命令查看上下文使用统计：
+
+```
+> :stats
+╔══════════════════════════════════════╗
+║       Context Usage Statistics        ║
+╠══════════════════════════════════════╣
+║ ✅ ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  12.3%            ║
+║ Tokens:   15,984 /  131,072              ║
+║ Model:  qwen3.7-plus                  ║
+║ Messages: 8                           ║
+╠──────────────────────────────────────╣
+║  User             3,200 tokens        ║
+║  Assistant        8,500 tokens        ║
+║  System_prompt    2,100 tokens        ║
+║  System           2,184 tokens        ║
+╚══════════════════════════════════════╝
+```
+
+### Token 估算增强
+
+v1.11 支持可选的 tiktoken 精确计数（安装 `helen[accurate-tokens]`），否则使用字符级启发式（~15% 精度）：
+
+```bash
+# 安装精确 token 计数
+pip install "helen[accurate-tokens]"
+```
+
+### History 压缩策略
+
+v1.11 提供三种压缩模式：
+
+| 模式 | 说明 | 使用场景 |
+|------|------|---------|
+| `summarize`（默认） | 三层压缩：recent → middle → oldest | 长对话保持上下文 |
+| `truncate` | 直接丢弃旧消息 | 简洁场景 |
+| `none` | 不压缩（可能超出上下文限制） | 短对话/测试 |
+
+```python
+# 动态切换压缩模式
+interpreter._history_manager.set_compression_mode("truncate")
+```

@@ -1,10 +1,10 @@
 ---
 name: helen-agent-patterns
-description: "Helen Agent 设计模式 — 单 Agent、多 Agent 协作、作用域隔离、共享变量、路由、流式处理"
-version: 1.1.0
+description: "Helen Agent 设计模式 — 单 Agent、多 Agent 协作、作用域隔离、共享变量、路由、流式处理、历史管理"
+version: 1.12.0
 author: Helen Team
 license: MIT
-tags: [helen, agent, patterns, design, llm, scope-isolation, shared-let, v1.10, closure, concurrency]
+tags: [helen, agent, patterns, design, llm, scope-isolation, shared-let, v1.12, closure, concurrency, history, persistence, context-window]
 ---
 
 # Helen Agent 设计模式
@@ -785,6 +785,123 @@ main {
     trace_off()
 }
 ```
+
+## 历史管理（v1.12 新增）
+
+### 设计模式：持久化 Agent
+
+跨会话保留对话连续性：
+
+```helen
+agent PersistentAssistant {
+    description "Assistant with persistent history"
+    
+    main {
+        // 启动时加载历史
+        let loaded = load_history("./session.json")
+        if loaded > 0 {
+            print("Resumed session with " + str(loaded) + " messages")
+        }
+        
+        // 执行任务
+        let result = llm act "Continue our previous conversation"
+        
+        // 退出时保存历史
+        save_history("./session.json")
+        return result
+    }
+}
+```
+
+### 设计模式：智能研究 Agent
+
+利用历史检索避免重复工具调用：
+
+```helen
+agent SmartResearcher {
+    tools ["web_search", "web_fetch"]
+    
+    main {
+        // 搜索之前的工具调用
+        let past_searches = search_history(tool_name="web_search")
+        
+        if len(past_searches) > 0 {
+            // 引用之前的搜索结果
+            return llm act "Based on my previous research: " + str(past_searches[0])
+        }
+        
+        // 首次搜索
+        let info = web_search("Helen programming language")
+        return llm act "Analyzed: " + info
+    }
+}
+```
+
+### 设计模式：上下文感知 Agent
+
+使用上下文统计优化 token 使用：
+
+```helen
+agent ContextAwareAgent {
+    description "Agent that monitors its own context usage"
+    model "qwen3.7-plus"
+    
+    main {
+        // 获取上下文统计
+        let stats = get_context_stats()
+        let usage = stats["usage_percent"]
+        
+        if usage > 80 {
+            // 上下文快满了，切换压缩模式
+            // 或提前结束对话
+            print("Warning: context usage at " + str(usage) + "%")
+        }
+        
+        return llm act "Continue work..."
+    }
+}
+```
+
+### REPL 调试
+
+在 REPL 中使用 `:stats` 命令查看上下文使用情况：
+
+```
+> :stats
+╔══════════════════════════════════════╗
+║       Context Usage Statistics        ║
+╠══════════════════════════════════════╣
+║ ✅ ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  12.3%            ║
+║ Tokens:   15,984 /  131,072              ║
+║ Model:  qwen3.7-plus                  ║
+║ Messages: 8                           ║
+╚══════════════════════════════════════╝
+```
+
+### History 压缩策略
+
+三种压缩模式：
+
+| 模式 | 行为 | 使用场景 |
+|------|------|---------|
+| `summarize`（默认） | 三层：recent→middle→oldest | 长对话保持上下文 |
+| `truncate` | 直接丢弃旧消息 | 简洁场景 |
+| `none` | 不压缩 | 短对话/测试 |
+
+```python
+# Python API 动态切换
+interpreter._history_manager.set_compression_mode("truncate")
+```
+
+### Token 精确计数
+
+安装 `tiktoken` 获得精确 token 计数：
+
+```bash
+pip install "helen[accurate-tokens]"
+```
+
+未安装时使用字符级启发式（~15% 精度）。
 
 ## 相关技能
 

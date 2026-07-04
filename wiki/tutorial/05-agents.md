@@ -1791,5 +1791,110 @@ main {
 
 ---
 
-**最后更新**: 2026-07-01  
-**版本**: v1.10
+**最后更新**: 2026-07-04  
+**版本**: v1.12
+
+---
+
+## v1.12 新增：历史管理功能
+
+### Agent 中的历史持久化
+
+跨会话保留对话连续性：
+
+```helen
+agent PersistentAssistant {
+    description "Assistant with persistent history"
+    
+    main {
+        // 保存当前对话历史
+        save_history("./my_session.json")
+        print("History saved!")
+        
+        // 下次启动时加载之前的对话
+        let count = load_history("./my_session.json")
+        print("Loaded " + str(count) + " messages")
+        
+        return llm act "Continue our previous conversation"
+    }
+}
+```
+
+### 历史检索
+
+Agent 可以查询历史中的工具调用和消息：
+
+```helen
+agent SmartResearcher {
+    tools ["web_search"]
+    
+    main {
+        // 搜索之前的 web_search 调用
+        let past = search_history(tool_name="web_search")
+        
+        if len(past) > 0 {
+            // 引用之前的搜索结果
+            return llm act "Based on my previous search: " + str(past[0])
+        }
+        
+        // 首次搜索
+        return llm act "Search for information about Helen language"
+    }
+}
+```
+
+**search_history 参数**：
+- `query`: 文本搜索（大小写不敏感）
+- `role`: 角色过滤（"user"/"assistant"/"system"/"tool"）
+- `tool_name`: 工具名过滤
+- `limit`: 最大返回数（默认 20）
+
+### REPL 上下文统计
+
+在 REPL 中使用 `:stats` 命令查看上下文使用情况：
+
+```
+> :stats
+╔══════════════════════════════════════╗
+║       Context Usage Statistics        ║
+╠══════════════════════════════════════╣
+║ ✅ ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  12.3%            ║
+║ Tokens:   15,984 /  131,072              ║
+║ Model:  qwen3.7-plus                  ║
+║ Messages: 8                           ║
+╚══════════════════════════════════════╝
+```
+
+### Token 精确计数（可选）
+
+安装 `tiktoken` 获得精确 token 计数：
+
+```bash
+pip install "helen[accurate-tokens]"
+```
+
+未安装时使用字符级启发式（~15% 精度）。
+
+### History 压缩模式
+
+三种压缩模式可选：
+
+| 模式 | 说明 | 使用场景 |
+|------|------|---------|
+| `summarize`（默认） | 三层压缩：保留最近消息 + 摘要旧消息 | 长对话 |
+| `truncate` | 直接丢弃旧消息 | 简洁场景 |
+| `none` | 不压缩 | 短对话 |
+
+```python
+# 动态切换（Python API）
+interpreter._history_manager.set_compression_mode("truncate")
+```
+
+---
+
+## 练习
+
+1. 创建一个 Agent，使用 `save_history` 保存对话，重启后使用 `load_history` 恢复
+2. 创建一个研究 Agent，使用 `search_history` 避免重复搜索
+3. 在 REPL 中执行几个 LLM 调用后，运行 `:stats` 查看上下文使用
+4. 尝试不同的 `search_history` 参数组合

@@ -232,6 +232,7 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
         print("  :trace show [n]   Show last n trace entries (default 50)")
         print("  :last_error [-v]  Show structured context of last error (-v for trace)")
         print("  :llm_log [n] [-v] Show last n LLM calls (-v for verbose)")
+        print("  :stats            Show context window usage statistics (P4)")
         print("  exit              Exit the REPL")
         return True
 
@@ -358,6 +359,17 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
                         print(f"      🔧 {len(entry.tool_calls)} tool call(s)")
                     if entry.error:
                         print(f"      ❗ {entry.error}")
+        return True
+
+    # P4: Context usage statistics
+    if cmd == ":stats":
+        try:
+            formatted = interp.format_context_stats()
+            print(formatted)
+        except AttributeError:
+            print("Context stats not available (interpreter too old?)")
+        except Exception as e:
+            print(f"Error getting stats: {e}")
         return True
 
     print(f"Unknown command: {cmd}. Type :help for available commands.")

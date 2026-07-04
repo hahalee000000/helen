@@ -1,10 +1,69 @@
 # 版本历史
 
-> Helen v1.11 | shared let 写回 + 异常层级修复 + 上下文窗口保护
+> Helen v1.12 | 上下文管理全面优化 — 修复消息重复 + tool calling 可见 + 历史持久化/检索/可视化
 
 ---
 
-## v1.11: shared let 写回 + 异常层级修复 (当前)
+## v1.12: 上下文管理全面优化 (当前)
+
+| 改动 | 说明 | 优先级 | 状态 |
+|------|------|--------|------|
+| user 消息去重 | 修复 `act()` 重复追加 user 消息的代码味道 | P0 | ✅ |
+| bare form system_prompt 修复 | 不再将 prompt 模板同时放入 system 和 user message | P0 | ✅ |
+| Tool calling 上下文可见 | `_history` 记录 tool 调用摘要，后续 `llm act` 可引用 | P1 | ✅ |
+| act_stream 网络重试 | 流式调用增加指数退避重试（5xx/429/网络错误） | P2 | ✅ |
+| PromptBuilder 统一 | 单一来源：嵌套访问 + mtime 缓存 + 描述截断 | P2 | ✅ |
+| Token 估算改进 | 可选 tiktoken 精确计数（`pip install helen[accurate-tokens]`） | P3 | ✅ |
+| History 压缩优化 | 三种压缩模式（summarize/truncate/none）+ 三层压缩策略 | P3 | ✅ |
+| History 持久化 | `save_history()` / `load_history()` 跨会话保留对话 | P4 | ✅ |
+| History 检索 | `search_history()` / `get_tool_history()` 多条件查询 | P4 | ✅ |
+| 上下文可视化 | REPL `:stats` 命令 + 进度条 + 角色分布 | P4 | ✅ |
+
+### Bug 修复：user 消息重复追加
+
+**问题**：`_add_to_history("user", prompt)` 和 `act()` 内部的 `messages.append({"role": "user", ...})` 都追加了 user 消息，依赖 `_repair_message_sequence` 修复——代码味道。
+
+**修复**：`act()`/`act_stream()`/`act_async()`/`act_stream_async()` 检查最后一条消息是否已是相同 user 消息，避免重复追加。
+
+### 新功能：Tool calling 上下文可见
+
+**问题**：全局 `_history` 不记录中间 tool_call/tool_result，后续 `llm act` 看不到之前的工具执行信息。
+
+**修复**：`act()` 收集 tool_calls_log（工具名、参数、结果截断到 500 字符），`_record_llm_response_to_history()` 记录结构化摘要 `[tool_name(args) → result]` 到 history。
+
+### 新功能：History 持久化
+
+```helen
+agent PersistentAgent {
+    main {
+        save_history("./session.json")   // 保存
+        load_history("./session.json")   // 加载
+    }
+}
+```
+
+### 新功能：History 检索
+
+```helen
+// 搜索之前的工具调用
+let past_searches = search_history(tool_name="web_search")
+// 按角色过滤
+let user_questions = search_history(role="user")
+// 文本搜索
+let mentions = search_history(query="Python")
+```
+
+### 新功能：上下文可视化
+
+REPL 中 `:stats` 命令显示：
+- Token 使用进度条（百分比 + 当前/总量）
+- 角色分布（user/assistant/system/system_prompt）
+- 压缩状态（摘要消息数）
+- 模型信息
+
+---
+
+## v1.11: shared let 写回 + 异常层级修复
 
 | 改动 | 说明 | 状态 |
 |------|------|------|
