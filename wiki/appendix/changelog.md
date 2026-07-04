@@ -11,7 +11,12 @@
 | 两层授权模型 | `functions {}` 声明能力；`tools = [...]` 是 LLM 可见的唯一白名单 | ✅ |
 | 不写 tools = 无工具 | Agent 不声明 `tools` 时，LLM 没有任何工具（仅 `load_skill`） | ✅ |
 | tools 统一命名空间 | `tools` 列表同时支持 Helen 函数（来自 `functions {}`）和 Python 工具（来自 `runtime/tools.py`）| ✅ |
+| tools = CONST_NAME | tools 可引用模块级 const（静态可审计，安全边界清晰）| ✅ |
+| 禁止重复 tools 声明 | 重复 tools 编译期报错（之前静默只取第一个）| ✅ |
 | 解析器接受 `=` | Agent 属性现在支持 `description = "..."` / `tools = [...]` 语法 | ✅ |
+| AgentError 异常 | agent 调用失败抛出 `AgentError`（携带 agent_name/args/cause）| ✅ |
+| AgentError 继承 LLMError | `catch LLMError` 一并捕获 agent 失败 | ✅ |
+| 嵌套 AgentError 透传 | 嵌套 agent 失败不双层包装，保留最内层完整上下文 | ✅ |
 
 ### 两层授权（Breaking Change）
 
@@ -39,6 +44,55 @@ agent Assistant {
 ```
 
 **迁移指南**：老代码里 `functions {}` 块中希望 LLM 调用的函数，需要显式加到 `tools = [...]` 里。
+
+### tools = CONST_NAME
+
+`tools` 可引用模块级 const，工具集**静态可审计**（安全边界清晰）：
+
+```helen
+// 项目顶部定义一次
+const FILE_TOOLS = ["read_file", "write_file", "path_exists"]
+const RESEARCH_TOOLS = ["web_search", "web_fetch", "read_file"]
+
+agent Contractor {
+    tools = FILE_TOOLS                  // ✅ 复用
+    ...
+}
+
+agent Researcher {
+    tools = RESEARCH_TOOLS              // ✅ 复用
+    ...
+}
+```
+
+**严格校验**（编译期）：
+- ✅ `tools = CONST_NAME` — 模块级 const
+- ✅ `tools = ["...", ...]` — 字面量列表
+- ❌ `tools = my_var` — 可变变量
+- ❌ `tools = my_fn` — 函数
+- ❌ `tools = OtherAgent` — agent
+- ❌ `tools = UNKNOWN` — 未定义标识符
+- ❌ 两次 `tools = ...` — 重复声明
+
+### AgentError
+
+Agent 调用失败抛出 `AgentError`，携带结构化上下文：
+
+```helen
+try {
+    let result = Contractor(req, dir)
+} catch AgentError err {
+    // err.message    — "Agent 'Contractor' failed: ..."
+    // err.agent_name — "Contractor"
+    // err.agent_args — {req: "...", dir: "..."}
+    // err.cause      — 底层异常
+    error("契约设计失败: " + err.message)
+} catch LLMError err {
+    // 也可用 catch LLMError 一并捕获（AgentError 继承 LLMError）
+}
+```
+
+嵌套 agent 调用时，内层 AgentError 透传不双层包装，保留最内层完整上下文。
 
 ---
 

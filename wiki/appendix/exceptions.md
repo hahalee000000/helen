@@ -9,8 +9,10 @@
 ```
 Exception
 ├── HelenRuntimeError           # 运行时错误基类
-│   ├── TimeoutError             # LLM 超时 (HLD 3.6.4)
-│   ├── ModelError               # LLM 模型错误
+│   ├── LLMError                 # LLM 相关错误基类
+│   │   ├── TimeoutError          # LLM 超时 (HLD 3.6.4)
+│   │   ├── ModelError            # LLM 模型错误
+│   │   └── AgentError            # Agent 调用失败（携带 agent_name/agent_args/cause）
 │   ├── ToolError                # 工具调用错误
 │   ├── RuntimeError             # 通用运行时错误
 │   └── AssertionError           # assert 语句失败 (Phase 10)
@@ -257,6 +259,54 @@ try {
   print("Runtime error: " + e.message)
 } catch {
   print("Unknown error")
+}
+```
+
+#### 1.5. Agent 调用失败 — AgentError
+
+Agent 调用失败时抛出 `AgentError`，携带 agent 名称、调用参数和原始异常：
+
+```python
+class AgentError(LLMError):
+    """Agent 调用失败 — 包装底层异常，携带 agent 上下文。"""
+    agent_name: str      # 失败的 agent 名称
+    agent_args: dict     # 调用时传入的参数
+    cause: Exception     # 底层异常
+```
+
+**继承 `LLMError`**：`catch LLMError` 能同时捕获 LLM 直调和 agent 调用的失败。
+
+```helen
+agent Contractor(req: str, dir: str) {
+    main {
+        // 如果 LLM 调用失败，或内部逻辑抛出异常，
+        // 都会被包装为 AgentError 抛给调用方
+        ...
+    }
+}
+
+main {
+    try {
+        let result = Contractor("build auth module", "/tmp/project")
+        // 这里 result 一定是成功值
+    } catch AgentError err {
+        // err.message    — "Agent 'Contractor' failed: ..."
+        // err.agent_name — "Contractor"
+        // err.agent_args — {"req": "build auth module", "dir": "/tmp/project"}
+        // err.cause      — 底层异常
+        error("契约设计失败: " + err.message)
+    }
+}
+```
+
+**嵌套 agent 调用**：如果 agent A 调用 agent B，B 失败抛出的 `AgentError` 会被 A 透传（不双层包装），保留最内层的完整上下文。
+
+```helen
+try {
+    Planner("design system")   // 内部调用 Contractor 失败
+} catch AgentError err {
+    // err.agent_name 是失败的最内层 agent 名称
+    print(err.agent_name + " failed: " + err.message)
 }
 ```
 

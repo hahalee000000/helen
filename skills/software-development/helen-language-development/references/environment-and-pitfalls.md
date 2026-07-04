@@ -1290,8 +1290,10 @@ helen/interpreter/interpreter.py — _build_tools_list() reads agent tools decla
 
 **Agent tools declaration**:
 ```helen
+const FILE_TOOLS = ["read_file", "write_file"]
+
 agent Researcher(query: str) {
-    tools = ["web_search", "calculate"]  // explicit — LLM can only use these (+ load_skill)
+    tools = FILE_TOOLS                    // 引用模块级 const（静态可审计）
     main { return llm act query }
 }
 
@@ -1301,11 +1303,7 @@ agent SimpleAgent(text: str) {
 }
 ```
 
-**Pitfall**: `decl.tools` in the AST is a `LiteralNode` wrapping `list[str]`, not a plain list. Must unwrap:
-```python
-if isinstance(tools_node, LiteralNode) and isinstance(tools_node.value, list):
-    declared_tools = tools_node.value
-```
+**Pitfall**: `tools` 严格校验——只接受模块级 const 引用或字面量列表。拒绝可变变量、函数、agent、未定义标识符、重复声明。这是**安全设计**，工具边界必须静态可追踪。
 
 **Pitfall**: `max_turns` defaults to 1, but function calling needs at least 3 turns (tool call + tool result + final response). The interpreter auto-bumps `max_turns` to 3 when tools are present.
 

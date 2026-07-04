@@ -59,13 +59,32 @@ agent ConfiguredAgent {
     temperature 0.7            # 创造性 (0.0-1.0)
     max-turns 10               # 最大工具调用轮次
     streaming true             # 启用流式响应（返回 StreamingResponse）
-    tools = ["web_search", "read_file", "write_file"]  # 可用工具
+    tools = ["web_search", "read_file", "write_file"]  # 可用工具（字面量列表）
     
     main {
         return llm act "Do something complex"
     }
 }
 ```
+
+#### tools = CONST_NAME（复用工具集）
+
+`tools` 可引用**模块级 const**，减少重复并保持工具集**静态可审计**（安全边界清晰）：
+
+```helen
+const FILE_TOOLS = ["read_file", "write_file", "path_exists"]
+const RESEARCH_TOOLS = ["web_search", "web_fetch", "read_file"]
+
+agent Contractor {
+    tools = FILE_TOOLS            # 复用 const
+    ...
+}
+```
+
+**严格校验**：
+- ✅ 模块级 const 引用 + 字面量列表
+- ❌ 可变变量、函数、agent、未定义标识符、重复声明
+- ❌ 表达式拼接（`A + B`）— 安全设计，工具边界必须静态可追踪
 
 ## Agent vs Skill：本质区别
 
@@ -600,6 +619,24 @@ agent RobustAgent(task: str) {
     }
 }
 ```
+
+#### Agent 调用失败 — AgentError
+
+Agent 调用失败时抛出 `AgentError`，携带结构化上下文（agent_name、agent_args、cause）：
+
+```helen
+try {
+    let result = Contractor(req, dir)
+} catch AgentError err {
+    # err.message    — "Agent 'Contractor' failed: ..."
+    # err.agent_name — "Contractor"
+    # err.agent_args — {req: "...", dir: "..."}
+    # err.cause      — 底层异常
+    error("失败: " + err.message)
+}
+```
+
+`AgentError` 继承 `LLMError`，因此 `catch LLMError` 一并捕获 agent 失败。嵌套 agent 调用时，内层 AgentError 透传不双层包装。
 
 ## 最佳实践
 

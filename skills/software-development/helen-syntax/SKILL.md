@@ -321,6 +321,17 @@ agent Translator {
     }
 }
 
+// tools = CONST_NAME — 复用工具集（静态可审计，安全边界清晰）
+const FILE_TOOLS = ["read_file", "write_file", "path_exists"]
+agent Builder {
+    tools = FILE_TOOLS           // 引用模块级 const
+    main { ... }
+}
+
+// 严格校验：
+// ✅ 模块级 const 引用 + 字面量列表
+// ❌ 可变变量、函数、agent、未定义标识符、重复声明、表达式拼接
+
 // Agent functions 块支持变量定义
 agent MyAgent {
     description "Example agent"
@@ -485,6 +496,15 @@ try {
 } finally {
     cleanup()
 }
+
+// Agent 调用失败 — AgentError (v1.10)
+// 携带 agent_name、agent_args、cause 字段
+try {
+    let result = Contractor(req, dir)
+} catch AgentError e {
+    print("Agent failed: " + e.agent_name + " — " + e.message)
+}
+// AgentError 继承 LLMError，catch LLMError 也能捕获
 
 // 捕获标准库异常 (v1.9+)
 // 标准库函数抛出的 Python 异常自动包装为 RuntimeError

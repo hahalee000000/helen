@@ -110,6 +110,40 @@ agent Assistant {
 
 `tools` 里的名字先查 `functions {}` 块（Helen 函数），再查 Python 工具注册表（`web_search`、`read_file` 等）。同名时 Helen 函数优先。
 
+#### tools = CONST_NAME（复用工具集）
+
+`tools` 可以引用**模块级 const**，减少重复声明，并保持工具集**静态可审计**（安全边界清晰）：
+
+```helen
+// 项目顶部定义一次
+const FILE_TOOLS = ["read_file", "write_file", "path_exists"]
+const RESEARCH_TOOLS = ["web_search", "web_fetch", "read_file"]
+
+agent Contractor {
+    tools = FILE_TOOLS                // ✅ 复用 const
+    ...
+}
+
+agent Researcher {
+    tools = RESEARCH_TOOLS            // ✅ 复用 const
+    ...
+}
+```
+
+**严格校验**（编译期）：
+
+| 写法 | 是否允许 | 原因 |
+|------|---------|------|
+| `tools = CONST_NAME` | ✅ | 模块级 const，静态可追踪 |
+| `tools = ["...", ...]` | ✅ | 字面量列表，静态 |
+| `tools = my_var` | ❌ | 可变变量，动态 |
+| `tools = my_fn` | ❌ | 函数，不是列表 |
+| `tools = OtherAgent` | ❌ | agent，不是列表 |
+| `tools = UNKNOWN` | ❌ | 未定义 |
+| 两次 `tools = ...` | ❌ | 重复声明，语义不明 |
+
+> ⚠️ 不支持 agent 内部 const、不支持表达式拼接（如 `A + B`）——这是**安全设计**，不是缺陷。工具是 LLM 的能力边界，必须静态可审计。
+
 **可用内建工具：**
 
 | 工具 | 功能 | 参数 |
@@ -1393,6 +1427,46 @@ main {
     } catch RuntimeError err {
         print("Error: " + err.message)
     }
+}
+```
+
+### Agent 调用失败 — AgentError
+
+Agent 调用失败时抛出 `AgentError`，携带 agent 名称、调用参数和原始异常：
+
+```helen
+agent Contractor(req: str, dir: str) {
+    main {
+        // 如果 LLM 调用失败，或内部逻辑抛出异常，
+        // 都会被包装为 AgentError 抛给调用方
+        ...
+    }
+}
+
+main {
+    try {
+        let result = Contractor("build auth module", "/tmp/project")
+        // 这里 result 一定是成功值
+    } catch AgentError err {
+        // err.message    — "Agent 'Contractor' failed: ..."
+        // err.agent_name — "Contractor"
+        // err.agent_args — {"req": "build auth module", "dir": "/tmp/project"}
+        // err.cause      — 底层异常
+        error("契约设计失败: " + err.message)
+    }
+}
+```
+
+**继承关系**：`AgentError` 继承 `LLMError`，因此 `catch LLMError` 能同时捕获 LLM 直调和 agent 调用的失败。
+
+**嵌套 agent 调用**：如果 agent A 调用 agent B，B 失败抛出的 `AgentError` 会被 A 透传（不双层包装），保留最内层的完整上下文。
+
+```helen
+try {
+    Planner("design system")   // 内部调用 Contractor 失败
+} catch AgentError err {
+    // err.agent_name 是失败的最内层 agent 名称
+    print(err.agent_name + " failed: " + err.message)
 }
 ```
 
