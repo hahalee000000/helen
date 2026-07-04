@@ -65,7 +65,7 @@ When given a complex task:
 5. Save any important findings to memory
 """
 
-    tools ["web_search", "web_fetch", "read_file", "write_file", "shell_exec", "calculate", "patch_file", "load_skill"]
+    tools = ["web_search", "web_fetch", "read_file", "write_file", "shell_exec", "calculate", "patch_file", "load_skill"]
     model "qwen3.7-plus"
     max-turns 10
     temperature 0.7
@@ -84,7 +84,7 @@ When given a complex task:
             let full_prompt = memory_context + "\n## User Request\n" + user_input
         }
 
-        // Execute with LLM using streaming (tools are auto-included from agent declaration)
+        // Execute with LLM using streaming (tools from the tools = [...] allowlist)
         llm stream full_prompt
     }
 }
