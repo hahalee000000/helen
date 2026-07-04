@@ -506,9 +506,11 @@ class LlmMixin:
           visible to the LLM for autonomous invocation. Each name can refer
           to either a Helen function (from functions {}) or a Python tool
           (from the runtime registry).
+        - tools = CONST_NAME references a module-level const that holds a list.
         - load_skill is always included for Tier 2 skill disclosure (HLD 3.6.5)
         - If tools is not declared, the LLM has NO tools (except load_skill)
         """
+        from helen.core.ast import VariableNode
         from helen.runtime.tools import get_tool_schemas
 
         tools: list[dict[str, Any]] = []
@@ -521,7 +523,18 @@ class LlmMixin:
                 if decl.tools is not None:
                     tools_node = decl.tools
                     if isinstance(tools_node, LiteralNode) and isinstance(tools_node.value, list):
+                        # tools = ["web_search", "read_file", ...]
                         declared_tools = tools_node.value
+                    elif isinstance(tools_node, VariableNode):
+                        # tools = CONST_NAME — look up the const value
+                        try:
+                            const_value = self.environment.lookup(tools_node.name)
+                            if isinstance(const_value, list):
+                                declared_tools = [str(x) for x in const_value]
+                            else:
+                                declared_tools = []
+                        except NameError:
+                            declared_tools = []
                     break
 
         # 2. If no tools declared → LLM gets nothing (load_skill added below)

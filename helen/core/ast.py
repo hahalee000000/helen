@@ -625,7 +625,7 @@ class DeclarationNode(StatementNode):
     """Agent declaration config block."""
     description: str | None
     model: str | None
-    tools: list[str] | None
+    tools: "ExpressionNode | None"  # LiteralNode (string list) or VariableNode (const ref)
     memory: str | None
     temperature: float | None
     max_turns: int | None

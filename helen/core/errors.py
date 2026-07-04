@@ -72,6 +72,7 @@ class ErrorCode(Enum):
     SCOPE_VIOLATION = 350
     RUNTIME_ERROR = 351
     IMPORT_ERROR = 352
+    INVALID_TOOLS_DECLARATION = 353
 
 
 @dataclass

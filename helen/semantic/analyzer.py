@@ -710,6 +710,48 @@ class SemanticAnalyzer(Visitor[None]):
         # Check if already registered in pass 1 (forward reference support, v1.6)
         already_registered = node.name in self._agent_names
 
+        # ── Validate tools declarations (HLD 3.5) ──────────────────
+        # 1. tools must be declared at most once
+        # 2. If tools references an identifier, it must be a module-level const
+        from helen.core.ast import VariableNode
+        tools_count = 0
+        for decl in node.declarations:
+            if decl.tools is not None:
+                tools_count += 1
+                if tools_count > 1:
+                    self.errors.error(
+                        ErrorCode.INVALID_TOOLS_DECLARATION,
+                        f"duplicate 'tools' declaration in agent '{node.name}'; "
+                        f"use a const to combine tool lists",
+                        decl.span,
+                    )
+                # If tools references an identifier, verify it's a module-level const
+                if isinstance(decl.tools, VariableNode):
+                    const_name = decl.tools.name
+                    sym = self.symbols.resolve(const_name)
+                    if sym is None:
+                        self.errors.error(
+                            ErrorCode.UNDECLARED_VARIABLE,
+                            f"undefined const '{const_name}' in tools declaration",
+                            decl.tools.span,
+                        )
+                    elif sym.kind not in ("variable", "const"):
+                        # Reject references to non-const symbols (functions, agents, etc.)
+                        self.errors.error(
+                            ErrorCode.INVALID_TOOLS_DECLARATION,
+                            f"tools must reference a const list, "
+                            f"but '{const_name}' is a {sym.kind}",
+                            decl.tools.span,
+                        )
+                    elif not sym.is_const:
+                        # It's a variable kind, but mutable (let, not const)
+                        self.errors.error(
+                            ErrorCode.INVALID_TOOLS_DECLARATION,
+                            f"tools must reference a const, "
+                            f"but '{const_name}' is a mutable variable",
+                            decl.tools.span,
+                        )
+
         # Check for duplicate param names in agent
         seen_params: set[str] = set()
         for param in node.params:

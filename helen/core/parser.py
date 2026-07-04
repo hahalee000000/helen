@@ -827,6 +827,10 @@ class Parser:
             if self._check(TokenType.RIGHT_BRACKET):
                 self._advance()
             value = LiteralNode(value=items, span=self._make_span(start, self._previous()))
+        elif token_type == TokenType.TOOLS and self._check(TokenType.IDENTIFIER):
+            # tools = CONST_NAME — reference to a module-level const list
+            name_tok = self._advance()
+            value = VariableNode(name=name_tok.lexeme, span=name_tok.span)
         else:
             self._error(f"Expected value after '{start.lexeme}'.")
             value = LiteralNode(value=None, span=start.span)

@@ -11,6 +11,8 @@ from helen.core.ast import (
     VarDeclNode,
 )
 from helen.core.errors import ErrorReporter
+from helen.core.lexer import Scanner
+from helen.core.parser import Parser
 from helen.core.source import SourceSpan
 from helen.interpreter.interpreter import Interpreter
 
@@ -282,3 +284,140 @@ class TestAgentError:
             # Should be the inner AgentError, not re-wrapped
             assert e.agent_name == "InnerAgent"
             assert e.agent_args == {"q": "test"}
+
+
+class TestToolsConstReference:
+    """Test that tools = CONST_NAME references a module-level const."""
+
+    def test_tools_accepts_const_reference(self):
+        """tools = CONST_NAME should parse without error."""
+        from helen.core.ast import AgentDeclNode, VariableNode
+        code = """
+const FILE_TOOLS = ["read_file", "write_file"]
+agent A {
+    tools = FILE_TOOLS
+    main { }
+}
+"""
+        errors = ErrorReporter()
+        scanner = Scanner(source=code, file="<test>")
+        tokens = scanner.scan_all()
+        parser = Parser(tokens, errors=errors)
+        program = parser.parse()
+        from helen.semantic.analyzer import SemanticAnalyzer
+        analyzer = SemanticAnalyzer(errors)
+        analyzer.analyze(program)
+        assert not errors.errors, [e.message for e in errors.errors]
+
+        # Verify AST: tools should be a VariableNode
+        for node in program.statements:
+            if isinstance(node, AgentDeclNode):
+                tools_node = node.declarations[0].tools
+                assert isinstance(tools_node, VariableNode)
+                assert tools_node.name == "FILE_TOOLS"
+
+    def test_duplicate_tools_declaration_rejected(self):
+        """Duplicate tools declarations should fail semantic analysis."""
+        code = """
+agent A {
+    tools = ["read_file"]
+    tools = ["write_file"]
+    main { }
+}
+"""
+        errors = ErrorReporter()
+        scanner = Scanner(source=code, file="<test>")
+        tokens = scanner.scan_all()
+        parser = Parser(tokens, errors=errors)
+        program = parser.parse()
+        from helen.semantic.analyzer import SemanticAnalyzer
+        analyzer = SemanticAnalyzer(errors)
+        analyzer.analyze(program)
+        assert len(errors.errors) == 1
+        assert "duplicate" in errors.errors[0].message.lower()
+
+    def test_tools_mutable_variable_rejected(self):
+        """tools referencing a mutable variable should fail."""
+        code = """
+let my_tools = ["read_file"]
+agent A {
+    tools = my_tools
+    main { }
+}
+"""
+        errors = ErrorReporter()
+        scanner = Scanner(source=code, file="<test>")
+        tokens = scanner.scan_all()
+        parser = Parser(tokens, errors=errors)
+        program = parser.parse()
+        from helen.semantic.analyzer import SemanticAnalyzer
+        analyzer = SemanticAnalyzer(errors)
+        analyzer.analyze(program)
+        assert len(errors.errors) == 1
+        assert "const" in errors.errors[0].message.lower()
+
+    def test_tools_undefined_identifier_rejected(self):
+        """tools referencing undefined identifier should fail."""
+        code = """
+agent A {
+    tools = NONEXISTENT
+    main { }
+}
+"""
+        errors = ErrorReporter()
+        scanner = Scanner(source=code, file="<test>")
+        tokens = scanner.scan_all()
+        parser = Parser(tokens, errors=errors)
+        program = parser.parse()
+        from helen.semantic.analyzer import SemanticAnalyzer
+        analyzer = SemanticAnalyzer(errors)
+        analyzer.analyze(program)
+        assert len(errors.errors) == 1
+
+    def test_tools_function_name_rejected(self):
+        """tools referencing a function should fail."""
+        code = """
+fn my_fn(): str { return "" }
+agent A {
+    tools = my_fn
+    main { }
+}
+"""
+        errors = ErrorReporter()
+        scanner = Scanner(source=code, file="<test>")
+        tokens = scanner.scan_all()
+        parser = Parser(tokens, errors=errors)
+        program = parser.parse()
+        from helen.semantic.analyzer import SemanticAnalyzer
+        analyzer = SemanticAnalyzer(errors)
+        analyzer.analyze(program)
+        assert len(errors.errors) == 1
+        assert "function" in errors.errors[0].message.lower()
+
+    def test_tools_const_runtime_resolution(self):
+        """At runtime, tools = CONST should resolve to the const's list value."""
+        from helen.core.ast import AgentDeclNode
+        code = """
+const FILE_TOOLS = ["read_file", "write_file"]
+agent A {
+    tools = FILE_TOOLS
+    main { }
+}
+"""
+        errors = ErrorReporter()
+        scanner = Scanner(source=code, file="<test>")
+        tokens = scanner.scan_all()
+        parser = Parser(tokens, errors=errors)
+        program = parser.parse()
+        interp = Interpreter(errors=errors)
+        interp.interpret(program)
+
+        for node in program.statements:
+            if isinstance(node, AgentDeclNode):
+                interp._current_agent = node
+                tools = interp._build_tools_list()
+                names = [t["function"]["name"] for t in tools]
+                # FILE_TOOLS + load_skill (always included)
+                assert "read_file" in names
+                assert "write_file" in names
+                assert "load_skill" in names
