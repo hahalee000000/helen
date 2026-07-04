@@ -189,8 +189,16 @@ class LlmMixin:
         if tools and max_turns < 3:
             max_turns = 3
 
-        # Use cached rendered agent prompt as system_prompt (P1 optimization)
-        system_prompt = rendered_prompt_cache
+        # P0 fix: In bare form (no explicit prompt expression), use agent description
+        # as system_prompt and rendered prompt template as user message.
+        # Previously, the rendered prompt was used as BOTH system_prompt and user message,
+        # causing the LLM to see the same content twice (wasting tokens and potentially
+        # confusing the model). Now consistent with visit_llm_stream_stmt behavior.
+        if node.prompt is not None:
+            system_prompt = rendered_prompt_cache
+        else:
+            # Bare form: use agent description as system_prompt
+            system_prompt = self._get_agent_setting("description")
 
         # Inject skill index into system prompt
         skill_index = self._build_skill_index()

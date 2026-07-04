@@ -497,7 +497,13 @@ class HttpLLMRuntime(LLMRuntime):
             messages.append({"role": "system", "content": system_prompt})
         if history:
             messages.extend(history)
-        messages.append({"role": "user", "content": prompt})
+        # P0 fix: Only append user message if not already the last message in history.
+        # The caller (llm_mixin) records the user prompt to history before calling act(),
+        # and _prepare_history_for_llm includes it in the returned list.
+        # Without this check, the user message would appear twice (repaired by
+        # _repair_message_sequence, but that's a code smell we're eliminating).
+        if not messages or messages[-1].get("role") != "user" or messages[-1].get("content") != prompt:
+            messages.append({"role": "user", "content": prompt})
 
         use_model = model or self.default_model or "default"
         final_text = ""
@@ -805,7 +811,10 @@ class HttpLLMRuntime(LLMRuntime):
             messages.append({"role": "system", "content": system_prompt})
         if history:
             messages.extend(history)
-        messages.append({"role": "user", "content": prompt})
+        # P0 fix: Only append user message if not already the last message in history.
+        # See act() for detailed rationale.
+        if not messages or messages[-1].get("role") != "user" or messages[-1].get("content") != prompt:
+            messages.append({"role": "user", "content": prompt})
 
         url = f"{self.base_url}/chat/completions"
 
@@ -1087,7 +1096,9 @@ class HttpLLMRuntime(LLMRuntime):
             messages.append({"role": "system", "content": system_prompt})
         if history:
             messages.extend(history)
-        messages.append({"role": "user", "content": prompt})
+        # P0 fix: Only append user message if not already the last message in history.
+        if not messages or messages[-1].get("role") != "user" or messages[-1].get("content") != prompt:
+            messages.append({"role": "user", "content": prompt})
 
         use_model = model or self.default_model or "default"
         final_text = ""
@@ -1196,7 +1207,9 @@ class HttpLLMRuntime(LLMRuntime):
             messages.append({"role": "system", "content": system_prompt})
         if history:
             messages.extend(history)
-        messages.append({"role": "user", "content": prompt})
+        # P0 fix: Only append user message if not already the last message in history.
+        if not messages or messages[-1].get("role") != "user" or messages[-1].get("content") != prompt:
+            messages.append({"role": "user", "content": prompt})
 
         url = f"{self.base_url}/chat/completions"
 
