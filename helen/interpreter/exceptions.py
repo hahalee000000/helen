@@ -78,7 +78,8 @@ class ReturnSentinel:
 # AnyError (root, catch-all internal use)
 # ├── LLMError
 # │   ├── TimeoutError        (LLM call timeout)
-# │   └── ModelError          (model unavailable, quota exhausted, etc.)
+# │   ├── ModelError          (model unavailable, quota exhausted, etc.)
+# │   └── AgentError          (agent call failure — wraps underlying cause)
 # ├── ToolError               (tool call failure)
 # └── RuntimeError            (interpreter runtime errors)
 # ---------------------------------------------------------------------------
@@ -117,6 +118,44 @@ class ModelError(LLMError):
 
     def __init__(self, message: str = "model error", span: SourceSpan | None = None) -> None:
         super().__init__(message, span)
+
+
+@dataclass
+class AgentError(LLMError):
+    """Agent call failed — wraps underlying cause with agent context.
+
+    Inherits from LLMError so that ``catch LLMError`` also catches agent
+    failures (most agent failures are LLM failures under the hood).
+
+    Attributes:
+        agent_name: Name of the agent that failed.
+        agent_args: Arguments passed to the agent call.
+        cause: The underlying exception that triggered this failure.
+    """
+
+    agent_name: str = ""
+    agent_args: dict[str, Any] | None = None
+    cause: Exception | None = None
+
+    def __init__(
+        self,
+        agent_name: str = "",
+        agent_args: dict[str, Any] | None = None,
+        cause: Exception | None = None,
+        message: str | None = None,
+        span: SourceSpan | None = None,
+    ) -> None:
+        self.agent_name = agent_name
+        self.agent_args = agent_args or {}
+        self.cause = cause
+        if message is None:
+            cause_desc = f": {cause}" if cause is not None else ""
+            message = f"Agent '{agent_name}' failed{cause_desc}"
+        super().__init__(message, span)
+
+    def __str__(self) -> str:
+        loc = f" at {self.span}" if self.span else ""
+        return f"AgentError:{loc} {self.message}"
 
 
 @dataclass
@@ -176,6 +215,7 @@ _PREDEFINED_EXCEPTIONS: dict[str, type[HelenRuntimeError]] = {
     "LLMError": LLMError,
     "TimeoutError": TimeoutError,
     "ModelError": ModelError,
+    "AgentError": AgentError,
     "ToolError": ToolError,
     "RuntimeError": RuntimeError,
     "AssertionError": AssertionError,

@@ -79,6 +79,7 @@ from helen.core.tokens import TokenType
 from helen.interpreter.environment import Environment
 from helen.interpreter.exceptions import (
     AggregateError,
+    AgentError,
     AssertionError as HelenAssertionError,
     BreakSentinel,
     ConstAssignmentError,
@@ -1991,6 +1992,20 @@ class Interpreter(LlmMixin, Visitor[object]):
                         return self.llm_runtime.act(rendered_prompt)
                 return None
             return None
+        except AgentError:
+            # Already wrapped (e.g. from a nested agent call) — re-raise as-is.
+            # Still capture observability for the outer call frame.
+            scope_vars = {}
+            for k in args.keys():
+                try:
+                    scope_vars[k] = call_env.lookup(k)
+                except NameError:
+                    pass
+            self.observability.capture_error(
+                "AgentError", f"Agent '{agent.name}' propagated failure", agent.span,
+                scope=scope_vars,
+            )
+            raise
         except Exception as e:
             # Capture error snapshot with call stack
             scope_vars = {}
@@ -2003,7 +2018,12 @@ class Interpreter(LlmMixin, Visitor[object]):
                 type(e).__name__, str(e), agent.span,
                 scope=scope_vars
             )
-            raise
+            # Wrap as AgentError with agent context for try-catch handling
+            raise AgentError(
+                agent_name=agent.name,
+                agent_args=dict(args),
+                cause=e,
+            ) from e
         finally:
             self.environment = old_env
             self._current_agent = old_agent

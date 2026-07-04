@@ -176,3 +176,109 @@ class TestAgentDeclarations:
         )
         assert agent.logic is not None
         assert len(agent.logic.body) == 1
+
+
+class TestAgentError:
+    """Test that agent failures raise AgentError with context."""
+
+    def test_agent_error_raised_on_failure(self):
+        """Agent call that raises internally gets wrapped as AgentError."""
+        from helen.core.ast import ExprStmtNode
+        from helen.interpreter.exceptions import AgentError
+
+        # Agent whose main block raises a RuntimeError
+        class FailingMain:
+            def accept(self, visitor):
+                from helen.interpreter.exceptions import RuntimeError as HelenRuntimeError
+                raise HelenRuntimeError("boom")
+
+        agent = AgentDeclNode(
+            name="FailAgent",
+            params=[],
+            declarations=[],
+            prompt=None,
+            logic=FailingMain(),
+            span=_span(),
+        )
+        prog = ProgramNode(statements=[agent], span=_span())
+        interp = Interpreter(ErrorReporter())
+        interp.interpret(prog)
+
+        # Calling the agent should raise AgentError
+        from helen.core.ast import CallNode, VariableNode
+        call = CallNode(
+            callee=VariableNode(name="FailAgent", span=_span()),
+            arguments=[],
+            span=_span(),
+        )
+        try:
+            call.accept(interp)
+            assert False, "Expected AgentError"
+        except AgentError as e:
+            assert e.agent_name == "FailAgent"
+            assert "boom" in str(e.cause)
+
+    def test_agent_error_inherits_from_llm_error(self):
+        """AgentError is a subclass of LLMError — catch LLMError catches agent failures."""
+        from helen.interpreter.exceptions import AgentError, LLMError
+        assert issubclass(AgentError, LLMError)
+
+    def test_agent_error_registered_in_predefined(self):
+        """AgentError is in the predefined exception map for catch resolution."""
+        from helen.interpreter.exceptions import _PREDEFINED_EXCEPTIONS, AgentError
+        assert "AgentError" in _PREDEFINED_EXCEPTIONS
+        assert _PREDEFINED_EXCEPTIONS["AgentError"] is AgentError
+
+    def test_agent_error_has_context_fields(self):
+        """AgentError carries agent_name, agent_args, and cause."""
+        from helen.interpreter.exceptions import AgentError
+        cause = ValueError("inner")
+        err = AgentError(
+            agent_name="MyAgent",
+            agent_args={"x": 1, "y": "hello"},
+            cause=cause,
+        )
+        assert err.agent_name == "MyAgent"
+        assert err.agent_args == {"x": 1, "y": "hello"}
+        assert err.cause is cause
+        assert "MyAgent" in str(err)
+        assert "inner" in str(err)
+
+    def test_nested_agent_error_not_double_wrapped(self):
+        """AgentError from an inner agent is not re-wrapped by outer agent."""
+        from helen.interpreter.exceptions import AgentError
+
+        # Inner agent raises AgentError directly
+        class InnerFailingMain:
+            def accept(self, visitor):
+                raise AgentError(
+                    agent_name="InnerAgent",
+                    agent_args={"q": "test"},
+                    cause=ValueError("root cause"),
+                )
+
+        inner = AgentDeclNode(
+            name="InnerAgent",
+            params=[],
+            declarations=[],
+            prompt=None,
+            logic=InnerFailingMain(),
+            span=_span(),
+        )
+        prog = ProgramNode(statements=[inner], span=_span())
+        interp = Interpreter(ErrorReporter())
+        interp.interpret(prog)
+
+        from helen.core.ast import CallNode, VariableNode
+        call = CallNode(
+            callee=VariableNode(name="InnerAgent", span=_span()),
+            arguments=[],
+            span=_span(),
+        )
+        try:
+            call.accept(interp)
+            assert False, "Expected AgentError"
+        except AgentError as e:
+            # Should be the inner AgentError, not re-wrapped
+            assert e.agent_name == "InnerAgent"
+            assert e.agent_args == {"q": "test"}
