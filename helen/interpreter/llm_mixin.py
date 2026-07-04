@@ -244,9 +244,11 @@ class LlmMixin:
             )
             self.observability.llm_audit.log(audit_entry)
 
-            # Record assistant response to history
-            if response and response.text:
-                self._add_to_history("assistant", response.text)
+            # P1: Record tool calls + final response to history
+            # This makes tool calling context visible to subsequent llm act calls,
+            # preventing redundant tool executions (e.g., repeated web searches).
+            if response:
+                self._record_llm_response_to_history(response)
             return response.text if response else None
         except HelenRuntimeError as e:
             audit_duration = (time.time() - audit_start) * 1000
@@ -447,10 +449,16 @@ class LlmMixin:
             if on_complete_fn is not None:
                 on_complete_fn()
 
-            # Record assistant response to history
+            # P1: Record tool calls + final response to history
             full_text = "".join(full_response)
-            if full_text:
-                self._add_to_history("assistant", full_text)
+            if full_text or tool_calls_log:
+                # Build a pseudo-response for unified history recording
+                class _StreamResponse:
+                    pass
+                stream_resp = _StreamResponse()
+                stream_resp.text = full_text
+                stream_resp.tool_calls = tool_calls_log
+                self._record_llm_response_to_history(stream_resp)
 
             # Log to audit trail (P2)
             audit_duration = (time.time() - audit_start) * 1000
@@ -856,6 +864,58 @@ class LlmMixin:
         trimmed = self._history_manager.enforce_limit(self._history)
         if len(trimmed) < len(self._history):
             self._history[:] = trimmed
+
+    def _record_llm_response_to_history(self: Any, response: Any) -> None:
+        """Record LLM response (with tool calls) to conversation history.
+
+        P1: Makes tool calling context visible to subsequent llm act calls.
+        Records a structured summary of tool calls followed by the final response,
+        so that future LLM calls can reference what tools were called and what
+        they returned, preventing redundant tool executions.
+
+        Args:
+            response: LLMResponse-like object with .text and .tool_calls attributes.
+        """
+        tool_calls = getattr(response, 'tool_calls', None) or []
+        text = getattr(response, 'text', None) or ""
+
+        if tool_calls:
+            # Build a compact summary of tool calls for history
+            parts = []
+            for tc in tool_calls:
+                name = tc.get("name", "unknown")
+                args_raw = tc.get("args", "{}")
+                # Parse args for compact display
+                try:
+                    if isinstance(args_raw, str):
+                        import json as _json
+                        args = _json.loads(args_raw)
+                    else:
+                        args = args_raw
+                except Exception:
+                    args = {}
+                # Compact args: show key values, truncate long strings
+                args_parts = []
+                for k, v in (args.items() if isinstance(args, dict) else []):
+                    v_str = str(v)
+                    if len(v_str) > 100:
+                        v_str = v_str[:97] + "..."
+                    args_parts.append(f"{k}={v_str!r}")
+                args_display = ", ".join(args_parts)
+
+                # Truncate result for display
+                result = tc.get("result", "")
+                if len(result) > 200:
+                    result = result[:197] + "..."
+
+                parts.append(f"[{name}({args_display}) → {result}]")
+
+            tool_summary = "Tool calls: " + " | ".join(parts)
+            self._add_to_history("assistant", tool_summary)
+
+        # Record the final text response
+        if text:
+            self._add_to_history("assistant", text)
 
     def _prepare_history_for_llm(
         self: Any,

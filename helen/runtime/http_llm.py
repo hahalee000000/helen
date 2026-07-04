@@ -507,6 +507,8 @@ class HttpLLMRuntime(LLMRuntime):
 
         use_model = model or self.default_model or "default"
         final_text = ""
+        # P1: Track tool calls for history recording by caller
+        tool_calls_log: list[dict[str, Any]] = []
 
         # Iteration budget: prevent infinite loops
         budget = IterationBudget(max_total=max_turns + 2)  # +2 for nudge retries
@@ -567,6 +569,12 @@ class HttpLLMRuntime(LLMRuntime):
                         "tool_call_id": tc["id"],
                         "content": result,
                     })
+                    # P1: Log tool call for history recording by caller
+                    tool_calls_log.append({
+                        "name": tc["function"]["name"],
+                        "args": tc["function"].get("arguments", "{}"),
+                        "result": result[:500] if len(result) > 500 else result,
+                    })
 
                 # Reset empty response counter after successful tool execution
                 empty_response_retries = 0
@@ -606,6 +614,7 @@ class HttpLLMRuntime(LLMRuntime):
         return LLMResponse(
             text=final_text,
             model=use_model,
+            tool_calls=tool_calls_log,  # P1: expose tool calls for history recording
         )
 
     def _chat_with_messages_retry(
