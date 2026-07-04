@@ -875,8 +875,12 @@ class LlmMixin:
 
         P2: After adding, enforce history size limit to prevent unbounded
         memory growth in long REPL sessions.
+        P3: Sets model on message for accurate token counting.
         """
-        self._history.append(HistoryMessage(role=role, content=content))
+        # P3: Set model on message for tiktoken encoding selection
+        model = getattr(self._history_manager, '_model', None)
+        msg = HistoryMessage(role=role, content=content, _model=model)
+        self._history.append(msg)
 
         # P2: Enforce history size limit after each addition
         # This prevents unbounded memory growth in long REPL sessions.

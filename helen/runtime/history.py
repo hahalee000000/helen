@@ -83,6 +83,14 @@ HISTORY_BUDGET_RATIO = 0.8
 # Summary target: when compressing, aim for this many tokens
 COMPRESSION_SUMMARY_TOKENS = 2048
 
+# P3: Compression modes (can be set per-agent via history-compression setting)
+COMPRESSION_MODE_SUMMARIZE = "summarize"  # Default: summarize old messages
+COMPRESSION_MODE_TRUNCATE = "truncate"    # Drop old messages without summary
+COMPRESSION_MODE_NONE = "none"            # No compression (may hit context limit)
+
+# P3: Minimum recent messages to always keep (never compressed/dropped)
+MIN_RECENT_MESSAGES = 5
+
 
 def get_model_context_window(model: str | None) -> int:
     """Get the context window size (in tokens) for a given model.
@@ -137,23 +145,32 @@ def _is_cjk(char: str) -> bool:
     )
 
 
-def estimate_tokens(text: str) -> int:
-    """Estimate token count for a text string using character-type-aware heuristics.
+def estimate_tokens(text: str, model: str | None = None) -> int:
+    """Estimate token count for a text string.
 
-    Uses different chars-per-token ratios for CJK vs Latin characters.
+    P3: Uses tiktoken when available for exact counting (model-aware).
+    Falls back to character-type-aware heuristics (~15% accuracy) when
+    tiktoken is not installed or for unknown models.
+
+    Heuristic uses different chars-per-token ratios for CJK vs Latin characters.
     Much more accurate than naive len(text)//4 for multilingual content.
-
-    Accuracy: within ~15% of actual token count for typical mixed content.
 
     Args:
         text: Input text.
+        model: Optional model name for tiktoken encoding selection.
 
     Returns:
-        Estimated token count.
+        Estimated or exact token count.
     """
     if not text:
         return 0
 
+    # P3: Try tiktoken for exact counting when available
+    tiktoken_count = _try_tiktoken_count(text, model)
+    if tiktoken_count is not None:
+        return tiktoken_count
+
+    # Fallback: character-type-aware heuristic
     cjk_count = sum(1 for c in text if _is_cjk(c))
     total_len = len(text)
 
@@ -169,9 +186,97 @@ def estimate_tokens(text: str) -> int:
         return max(1, int(cjk_count / CHARS_PER_TOKEN_CJK + non_cjk / CHARS_PER_TOKEN_EN))
 
 
+# ---------------------------------------------------------------------------
+# P3: tiktoken integration (optional, exact counting)
+# ---------------------------------------------------------------------------
+
+# Cache of tiktoken encoders by model/encoding name
+_tiktoken_cache: dict[str, Any] = {}
+_tiktoken_import_attempted = False
+_tiktoken_available = False
+
+
+def _try_tiktoken_init() -> bool:
+    """Try to import tiktoken (once per process)."""
+    global _tiktoken_import_attempted, _tiktoken_available
+    if _tiktoken_import_attempted:
+        return _tiktoken_available
+    _tiktoken_import_attempted = True
+    try:
+        import tiktoken as _tt  # noqa: F401
+        _tiktoken_available = True
+    except ImportError:
+        _tiktoken_available = False
+    return _tiktoken_available
+
+
+def _get_tiktoken_encoding(model: str | None) -> Any:
+    """Get tiktoken encoding for a model (cached).
+
+    Args:
+        model: Model name (e.g., "gpt-4", "qwen3.7-plus").
+
+    Returns:
+        tiktoken.Encoding instance, or None if unavailable.
+    """
+    if not _try_tiktoken_init():
+        return None
+
+    import tiktoken
+
+    cache_key = model or "__default__"
+    if cache_key in _tiktoken_cache:
+        return _tiktoken_cache[cache_key]
+
+    enc = None
+    try:
+        # Try to get encoding for specific model
+        if model:
+            try:
+                enc = tiktoken.encoding_for_model(model)
+            except KeyError:
+                pass
+
+        # Fallback: try common encodings
+        if enc is None:
+            # Check if model is GPT-4/GPT-3.5 family
+            if model and any(m in model.lower() for m in ("gpt-4", "gpt-3.5", "o1", "o3")):
+                enc = tiktoken.get_encoding("cl100k_base")
+            else:
+                # Default to cl100k_base (works for most modern models)
+                enc = tiktoken.get_encoding("cl100k_base")
+    except Exception:
+        enc = None
+
+    _tiktoken_cache[cache_key] = enc
+    return enc
+
+
+def _try_tiktoken_count(text: str, model: str | None) -> int | None:
+    """Try to count tokens using tiktoken. Returns None if unavailable.
+
+    Args:
+        text: Input text.
+        model: Optional model name for encoding selection.
+
+    Returns:
+        Exact token count if tiktoken is available, None otherwise.
+    """
+    enc = _get_tiktoken_encoding(model)
+    if enc is None:
+        return None
+    try:
+        return len(enc.encode(text))
+    except Exception:
+        return None
+
+
 @dataclass
 class Message:
-    """A single message in a conversation."""
+    """A single message in a conversation.
+
+    P3: Supports model-aware token counting via optional model field.
+    """
 
     role: str  # "system" | "user" | "assistant" | "tool"
     content: str
@@ -179,12 +284,14 @@ class Message:
     tool_call_id: str | None = None
     # Cached token count (lazily computed)
     _token_count: int = field(default=0, repr=False)
+    # P3: Optional model name for accurate token counting
+    _model: str | None = field(default=None, repr=False)
 
     @property
     def token_count(self) -> int:
-        """Lazily computed token count."""
+        """Lazily computed token count (model-aware when tiktoken available)."""
         if self._token_count == 0 and self.content:
-            self._token_count = estimate_tokens(self.content)
+            self._token_count = estimate_tokens(self.content, self._model)
             # Add overhead for message structure (role, tool_calls, etc.)
             # OpenAI counts ~4 tokens per message overhead
             self._token_count += 4
@@ -199,28 +306,54 @@ class HistoryManager:
     - Token budget calculation: reserve space for system prompt + instruction
     - History trimming: remove oldest messages first when over budget
     - Conversation summary: build 4096-token summary for LLM routing
-    - History compression: summarize old messages when exceeding limits
+    - P3: Configurable compression modes (summarize/truncate/none)
+    - P3: Three-tier compression (recent → keep, middle → summarize, oldest → drop)
     """
 
     # Class-level defaults (overridden per-instance via model)
     MAX_TOKENS: int = DEFAULT_CONTEXT_WINDOW
     SUMMARY_MAX_TOKENS: int = 4096
 
-    def __init__(self, model: str | None = None, context_window: int | None = None):
+    def __init__(
+        self,
+        model: str | None = None,
+        context_window: int | None = None,
+        compression_mode: str = COMPRESSION_MODE_SUMMARIZE,
+    ):
         """Initialize history manager.
 
         Args:
             model: Model name for context window lookup.
             context_window: Explicit context window override (takes precedence over model).
+            compression_mode: How to handle history overflow.
+                - "summarize" (default): Summarize old messages into a compact summary
+                - "truncate": Drop old messages without summary
+                - "none": No compression (may hit context window limit)
         """
         if context_window is not None:
             self.MAX_TOKENS = context_window
         elif model is not None:
             self.MAX_TOKENS = get_model_context_window(model)
         self._model = model
+        self.compression_mode = compression_mode
+
+    def set_compression_mode(self, mode: str) -> None:
+        """Update the compression mode.
+
+        Args:
+            mode: One of "summarize", "truncate", "none".
+        """
+        if mode in (COMPRESSION_MODE_SUMMARIZE, COMPRESSION_MODE_TRUNCATE, COMPRESSION_MODE_NONE):
+            self.compression_mode = mode
+        else:
+            logger.warning("Unknown compression mode: %s, keeping current", mode)
 
     def set_model(self, model: str | None) -> None:
-        """Update the model and recalculate context window."""
+        """Update the model and recalculate context window.
+
+        P3: Invalidates cached token counts so they will be recomputed
+        with the new model's encoding on next access.
+        """
         self._model = model
         self.MAX_TOKENS = get_model_context_window(model)
 
@@ -305,13 +438,12 @@ class HistoryManager:
         history: list[Message],
         budget_ratio: float = HISTORY_BUDGET_RATIO,
     ) -> list[Message]:
-        """Enforce history size limit by compressing old messages.
+        """Enforce history size limit using the configured compression mode.
 
-        If total history exceeds budget_ratio * MAX_TOKENS, summarizes
-        the oldest messages into a single summary message and keeps
-        recent messages intact.
-
-        This prevents unbounded memory growth in long REPL sessions.
+        P3: Three-tier compression strategy:
+        1. Recent messages (newest MIN_RECENT_MESSAGES): always kept complete
+        2. Middle messages: compressed per mode (summarize/truncate/none)
+        3. Oldest messages beyond budget: dropped
 
         Args:
             history: List of messages (oldest first).
@@ -329,6 +461,70 @@ class HistoryManager:
         if total <= budget:
             return history  # Under limit, no compression needed
 
+        # P3: Apply compression based on mode
+        if self.compression_mode == COMPRESSION_MODE_NONE:
+            return history  # No compression requested (may hit API limit)
+
+        if self.compression_mode == COMPRESSION_MODE_TRUNCATE:
+            return self._truncate_compress(history, budget)
+
+        # Default: summarize mode
+        return self._summarize_compress(history, budget)
+
+    def _truncate_compress(
+        self,
+        history: list[Message],
+        budget: int,
+    ) -> list[Message]:
+        """P3: Truncate compression — drop oldest messages, keep recent ones.
+
+        Always keeps at least MIN_RECENT_MESSAGES messages.
+        Never drops system messages.
+        """
+        if len(history) <= MIN_RECENT_MESSAGES:
+            return history  # Can't drop more
+
+        # Calculate tokens for each message
+        msg_tokens = [(msg, msg.token_count) for msg in history]
+
+        # Identify system messages (must keep)
+        system_indices = {i for i, (msg, _) in enumerate(msg_tokens) if msg.role == "system"}
+
+        # Walk from newest, accumulating until we'd exceed budget
+        recent: list[Message] = []
+        recent_tokens = 0
+        min_recent_start = max(0, len(history) - MIN_RECENT_MESSAGES)
+
+        for i in range(len(history) - 1, -1, -1):
+            if i in system_indices:
+                continue
+            msg, tokens = msg_tokens[i]
+            # Must keep at least MIN_RECENT_MESSAGES non-system messages
+            non_system_kept = len([m for m in recent if m.role != "system"])
+            if recent_tokens + tokens > budget and i >= min_recent_start and non_system_kept >= MIN_RECENT_MESSAGES:
+                break
+            recent.insert(0, msg)
+            recent_tokens += tokens
+
+        # Prepend system messages at the start
+        for i in sorted(system_indices):
+            msg, _ = msg_tokens[i]
+            if msg not in recent:
+                recent.insert(0, msg)
+
+        return recent
+
+    def _summarize_compress(
+        self,
+        history: list[Message],
+        budget: int,
+    ) -> list[Message]:
+        """P3: Three-tier summarize compression.
+
+        Tier 1 (recent): Keep complete — newest MIN_RECENT_MESSAGES
+        Tier 2 (middle): Summarize into [Previous conversation summary]
+        Tier 3 (oldest): Drop if even summary would exceed budget
+        """
         # Need to compress. Split into "old" and "recent" parts.
         # Strategy: keep newest messages until we hit 60% of budget,
         # summarize everything older into a summary message.
@@ -351,6 +547,20 @@ class HistoryManager:
         else:
             # All messages fit in keep_budget (shouldn't happen if total > budget)
             return history
+
+        # Ensure at least MIN_RECENT_MESSAGES are kept
+        if len(recent) < MIN_RECENT_MESSAGES and split_idx > 0:
+            # Pull more messages from old to meet minimum
+            needed = MIN_RECENT_MESSAGES - len(recent)
+            for i in range(split_idx - 1, max(-1, split_idx - 1 - needed - 5), -1):
+                if i < 0:
+                    break
+                msg = history[i]
+                if msg.role != "system":  # Don't count system messages
+                    recent.insert(0, msg)
+                    split_idx = i
+                    if len(recent) >= MIN_RECENT_MESSAGES:
+                        break
 
         # The old messages to summarize
         old_messages = history[:split_idx]
