@@ -1557,6 +1557,45 @@ agent MyAgent {
 }
 ```
 
+**shared let 修改写回（v1.11）**：Agent 内部对 `shared let` 的修改在 agent 返回后对调用者可见：
+
+```helen
+shared let counter = 0
+
+agent ModifyShared() {
+    main {
+        counter = 999  // agent 内部修改
+        return "done"
+    }
+}
+
+main {
+    counter = 100
+    ModifyShared()
+    print(counter)  // ✅ 输出 999（修改已写回）
+}
+```
+
+多个 agent 顺序调用时，每次调用都能看到前一次调用留下的最新值：
+
+```helen
+shared let counter = 0
+
+agent Incr() {
+    main {
+        counter = counter + 1
+        return counter
+    }
+}
+
+main {
+    Incr()  // counter → 1
+    Incr()  // counter → 2
+    Incr()  // counter → 3
+    print(counter)  // ✅ 输出 3
+}
+```
+
 ### 为什么需要作用域隔离？
 
 **问题**: 在没有隔离的情况下，agent 可以随意访问和修改模块级变量，导致：

@@ -1,10 +1,73 @@
 # 版本历史
 
-> Helen v1.10 | Agent 作用域隔离 + shared let + 异步 HTTP + CLI 参数支持 + 两层工具授权
+> Helen v1.11 | shared let 写回 + 异常层级修复 + 上下文窗口保护
 
 ---
 
-## v1.10: 两层工具授权模型 (当前)
+## v1.11: shared let 写回 + 异常层级修复 (当前)
+
+| 改动 | 说明 | 状态 |
+|------|------|------|
+| shared let 写回 | Agent 内部修改 `shared let` 后，调用者可见修改后的值 | ✅ |
+| 异常层级修复 | `LLMError`/`RuntimeError`/`ToolError`/`AssertionError`/`AggregateError` 统一继承 `AnyError` | ✅ |
+| catch AnyError | `catch AnyError` 现在可以捕获所有 Helen 异常类型 | ✅ |
+| 异常路径写回 | agent 抛异常时，shared let 修改仍通过 `finally` 写回 | ✅ |
+
+### Bug 修复：shared let 写回
+
+**问题**：Agent 内部对 `shared let` 变量的修改不影响外部。Agent 调用结束后，shared let 恢复原值。
+
+**根因**：Agent 隔离 Environment 在创建时，将 shared let 的**值拷贝**到自己的 `_store`。Agent 内部的赋值只修改本地副本，返回时没有写回 caller。
+
+**修复**：在 `_call_agent()` 的 `finally` 块中，遍历 `_shared_vars`，将 agent 环境中修改过的 shared let 值写回到调用者的作用域链。
+
+```helen
+shared let counter = 0
+
+agent ModifyShared() {
+    main {
+        counter = 999  // agent 内部修改
+        return "done"
+    }
+}
+
+main {
+    counter = 100
+    ModifyShared()
+    print(counter)  // ✅ 输出 999（之前是 100）
+}
+```
+
+**嵌套 agent 也正确工作**：内层 agent 修改 shared let → 写回到外层 agent 环境 → 外层 agent 返回时再写回到模块级环境。
+
+**异常路径**：即使 agent 抛出异常，`finally` 块中的写回逻辑仍会执行，确保已完成的修改不会丢失。
+
+**质量**: 11 个新测试（基础写回、累加、嵌套、字典修改、异常路径、隔离保持等）
+
+### Bug 修复：异常层级
+
+**问题**：`catch AnyError` 无法捕获 `AgentError`、`RuntimeError`、`ToolError` 等异常。文档说 `AnyError` 是 catch-all，但实际这些异常类直接继承 `HelenRuntimeError`，跳过了 `AnyError`。
+
+**修复**：所有 Helen 可捕获异常统一继承 `AnyError`：
+
+```
+HelenRuntimeError (Python 基类, visit_try_stmt 捕获)
+└── AnyError (Helen catch-all)
+    ├── LLMError
+    │   ├── TimeoutError
+    │   ├── ModelError
+    │   └── AgentError
+    ├── ToolError
+    ├── RuntimeError
+    ├── AssertionError
+    └── AggregateError
+```
+
+`catch AnyError` 现在可以捕获所有 Helen 异常，符合文档承诺。
+
+---
+
+## v1.10: 上下文窗口保护 (HLD 3.12)
 
 | 改动 | 说明 | 状态 |
 |------|------|------|

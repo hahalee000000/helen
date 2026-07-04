@@ -97,7 +97,7 @@ class AnyError(HelenRuntimeError):
 
 
 @dataclass
-class LLMError(HelenRuntimeError):
+class LLMError(AnyError):
     """Base class for LLM-related runtime errors."""
 
     def __init__(self, message: str = "LLM error", span: SourceSpan | None = None) -> None:
@@ -159,7 +159,7 @@ class AgentError(LLMError):
 
 
 @dataclass
-class ToolError(HelenRuntimeError):
+class ToolError(AnyError):
     """Tool call failed."""
 
     def __init__(self, message: str = "tool error", span: SourceSpan | None = None) -> None:
@@ -167,7 +167,7 @@ class ToolError(HelenRuntimeError):
 
 
 @dataclass
-class RuntimeError(HelenRuntimeError):
+class RuntimeError(AnyError):
     """Interpreter runtime error (division by zero, type errors, etc.)."""
 
     def __init__(self, message: str = "runtime error", span: SourceSpan | None = None) -> None:
@@ -175,7 +175,7 @@ class RuntimeError(HelenRuntimeError):
 
 
 @dataclass
-class AssertionError(HelenRuntimeError):
+class AssertionError(AnyError):
     """Assertion failed (P3: AI-native observability).
 
     Raised when an assert statement's condition evaluates to false.
@@ -187,7 +187,7 @@ class AssertionError(HelenRuntimeError):
 
 
 @dataclass
-class AggregateError(HelenRuntimeError):
+class AggregateError(AnyError):
     """Collects multiple exceptions from await [list] (HLD 3.6.7).
 
     When await [task1, task2, ...] has multiple failures, this error

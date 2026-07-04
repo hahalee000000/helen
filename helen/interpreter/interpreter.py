@@ -2032,6 +2032,16 @@ class Interpreter(LlmMixin, Visitor[object]):
                 cause=e,
             ) from e
         finally:
+            # Write back shared let modifications from agent to caller (v1.11 fix).
+            # Agent's call_env has its own copies of shared let values; any
+            # mutations must be propagated back to the caller's scope chain
+            # so that subsequent reads see the updated values.
+            for _name in getattr(self, '_shared_vars', set()):
+                if _name in call_env._store:
+                    try:
+                        old_env.assign(_name, call_env._store[_name])
+                    except NameError:
+                        pass
             self.environment = old_env
             self._current_agent = old_agent
             self.observability.call_stack.pop()
