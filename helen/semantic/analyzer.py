@@ -97,6 +97,7 @@ _PREDEFINED_EXCEPTIONS = frozenset({
     "LLMError",
     "TimeoutError",
     "ModelError",
+    "AgentError",
     "ToolError",
     "RuntimeError",
     "AggregateError",
