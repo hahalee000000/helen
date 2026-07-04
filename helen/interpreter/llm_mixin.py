@@ -972,3 +972,56 @@ class LlmMixin:
     def clear_history(self: Any) -> None:
         """Clear the conversation history."""
         self._history.clear()
+
+    # ------------------------------------------------------------------
+    # P4: History Persistence, Search, Visualization (delegated to HistoryManager)
+    # ------------------------------------------------------------------
+
+    def save_history(self: Any, filepath: str) -> None:
+        """Save conversation history to a JSON file.
+
+        P4: Enables cross-session history persistence.
+        """
+        self._history_manager.save_to_file(self._history, filepath)
+
+    def load_history(self: Any, filepath: str) -> int:
+        """Load conversation history from a JSON file.
+
+        P4: Restores history from a previously saved file.
+        Returns the number of messages loaded.
+        """
+        loaded = self._history_manager.load_from_file(filepath)
+        if loaded:
+            self._history.extend(loaded)
+        return len(loaded)
+
+    def search_history(
+        self: Any,
+        query: str | None = None,
+        role: str | None = None,
+        tool_name: str | None = None,
+        limit: int = 20,
+    ) -> list[HistoryMessage]:
+        """Search conversation history for matching messages.
+
+        P4: Enables agents to query historical context.
+        """
+        return self._history_manager.search(
+            self._history, query=query, role=role,
+            tool_name=tool_name, limit=limit,
+        )
+
+    def get_context_stats(self: Any, system_prompt: str | None = None) -> dict:
+        """Get context usage statistics.
+
+        P4: Returns detailed context window usage information.
+        """
+        return self._history_manager.get_usage_stats(self._history, system_prompt)
+
+    def format_context_stats(self: Any, system_prompt: str | None = None) -> str:
+        """Get formatted context usage string for display.
+
+        P4: Returns human-readable context stats for REPL/debug output.
+        """
+        stats = self._history_manager.get_usage_stats(self._history, system_prompt)
+        return self._history_manager.format_usage_stats(stats)

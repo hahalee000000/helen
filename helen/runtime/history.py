@@ -713,3 +713,284 @@ class HistoryManager:
             messages.append(api_msg)
 
         return messages
+
+    # ------------------------------------------------------------------
+    # P4: History Persistence (save/load to JSON)
+    # ------------------------------------------------------------------
+
+    def save_to_file(self, history: list[Message], filepath: str) -> None:
+        """Save conversation history to a JSON file.
+
+        P4: Enables cross-session history persistence. Saved format:
+        {
+            "version": 1,
+            "model": "qwen3.7-plus",
+            "saved_at": "2026-07-04T12:00:00Z",
+            "messages": [
+                {"role": "user", "content": "..."},
+                {"role": "assistant", "content": "..."}
+            ]
+        }
+
+        Args:
+            history: List of messages to save.
+            filepath: Path to the output JSON file.
+        """
+        import json
+        from datetime import datetime
+
+        data = {
+            "version": 1,
+            "model": self._model,
+            "saved_at": datetime.utcnow().isoformat() + "Z",
+            "messages": [
+                {
+                    "role": msg.role,
+                    "content": msg.content,
+                    "tool_calls": msg.tool_calls,
+                    "tool_call_id": msg.tool_call_id,
+                }
+                for msg in history
+            ],
+        }
+
+        try:
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            logger.info("History saved to %s (%d messages)", filepath, len(history))
+        except Exception as e:
+            logger.warning("Failed to save history to %s: %s", filepath, e)
+
+    def load_from_file(self, filepath: str) -> list[Message]:
+        """Load conversation history from a JSON file.
+
+        P4: Restores history from a previously saved file.
+
+        Args:
+            filepath: Path to the input JSON file.
+
+        Returns:
+            List of Message objects loaded from file.
+        """
+        import json
+
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            messages = []
+            for msg_data in data.get("messages", []):
+                msg = Message(
+                    role=msg_data.get("role", "user"),
+                    content=msg_data.get("content", ""),
+                    tool_calls=msg_data.get("tool_calls", []),
+                    tool_call_id=msg_data.get("tool_call_id"),
+                    _model=self._model,
+                )
+                messages.append(msg)
+
+            logger.info("History loaded from %s (%d messages)", filepath, len(messages))
+            return messages
+        except FileNotFoundError:
+            logger.info("History file not found: %s", filepath)
+            return []
+        except Exception as e:
+            logger.warning("Failed to load history from %s: %s", filepath, e)
+            return []
+
+    # ------------------------------------------------------------------
+    # P4: History Search / Retrieval
+    # ------------------------------------------------------------------
+
+    def search(
+        self,
+        history: list[Message],
+        query: str | None = None,
+        role: str | None = None,
+        tool_name: str | None = None,
+        limit: int = 20,
+    ) -> list[Message]:
+        """Search history for messages matching criteria.
+
+        P4: Enables agents to query historical context for specific
+        information, tool calls, or message types.
+
+        Args:
+            history: List of messages to search.
+            query: Optional text to search for in message content (case-insensitive).
+            role: Optional role filter ("user", "assistant", "system", "tool").
+            tool_name: Optional tool name filter (searches in tool_calls).
+            limit: Maximum number of results to return (default 20).
+
+        Returns:
+            List of matching messages (newest first, up to limit).
+        """
+        results: list[Message] = []
+
+        for msg in reversed(history):  # Newest first
+            if len(results) >= limit:
+                break
+
+            # Role filter
+            if role and msg.role != role:
+                continue
+
+            # Text search (case-insensitive)
+            if query and query.lower() not in msg.content.lower():
+                # Also check tool results
+                if not any(query.lower() in tc.get("result", "").lower()
+                          for tc in getattr(msg, 'tool_calls', [])):
+                    continue
+
+            # Tool name filter
+            if tool_name:
+                if not any(tool_name.lower() in tc.get("name", "").lower()
+                          for tc in getattr(msg, 'tool_calls', [])):
+                    # Also check content for tool summaries
+                    if tool_name.lower() not in msg.content.lower():
+                        continue
+
+            results.append(msg)
+
+        return results
+
+    def get_tool_history(
+        self,
+        history: list[Message],
+        tool_name: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Extract tool call history for review.
+
+        P4: Returns a list of tool calls with their results, optionally
+        filtered by tool name.
+
+        Args:
+            history: List of messages to extract from.
+            tool_name: Optional filter for specific tool name.
+
+        Returns:
+            List of dicts with keys: name, args, result, timestamp (if available).
+        """
+        tool_calls = []
+
+        for msg in history:
+            for tc in getattr(msg, 'tool_calls', []):
+                name = tc.get("name", "unknown")
+                if tool_name and name.lower() != tool_name.lower():
+                    continue
+                tool_calls.append({
+                    "name": name,
+                    "args": tc.get("args", {}),
+                    "result": tc.get("result", ""),
+                    "role": msg.role,
+                })
+
+        return tool_calls
+
+    # ------------------------------------------------------------------
+    # P4: Context Usage Visualization
+    # ------------------------------------------------------------------
+
+    def get_usage_stats(
+        self,
+        history: list[Message],
+        system_prompt: str | None = None,
+    ) -> dict[str, Any]:
+        """Get context usage statistics for visualization.
+
+        P4: Returns a dict with detailed context window usage information,
+        suitable for display in REPL or debug output.
+
+        Args:
+            history: List of messages to analyze.
+            system_prompt: Optional system prompt (for token counting).
+
+        Returns:
+            Dict with keys:
+            - total_tokens: Total tokens used
+            - context_window: Model's context window size
+            - usage_percent: Percentage of context window used
+            - message_count: Number of messages
+            - by_role: Token count breakdown by role
+            - compressed: Whether history has been compressed
+            - summary_count: Number of summary messages
+        """
+        # Calculate tokens
+        msg_tokens = sum(msg.token_count for msg in history)
+        system_tokens = estimate_tokens(system_prompt, self._model) if system_prompt else 0
+        total_tokens = msg_tokens + system_tokens
+
+        # Breakdown by role
+        by_role: dict[str, int] = {}
+        for msg in history:
+            by_role[msg.role] = by_role.get(msg.role, 0) + msg.token_count
+        if system_tokens:
+            by_role["system_prompt"] = system_tokens
+
+        # Check for compression
+        summary_count = sum(1 for msg in history
+                          if msg.role == "system" and msg.content.startswith("[Previous conversation summary]"))
+
+        usage_percent = (total_tokens / self.MAX_TOKENS * 100) if self.MAX_TOKENS > 0 else 0
+
+        return {
+            "total_tokens": total_tokens,
+            "context_window": self.MAX_TOKENS,
+            "usage_percent": round(usage_percent, 1),
+            "message_count": len(history),
+            "by_role": by_role,
+            "compressed": summary_count > 0,
+            "summary_count": summary_count,
+            "model": self._model,
+            "compression_mode": self.compression_mode,
+        }
+
+    def format_usage_stats(self, stats: dict[str, Any]) -> str:
+        """Format usage stats as human-readable string for REPL display.
+
+        P4: Produces a concise, aligned text output.
+
+        Args:
+            stats: Dict from get_usage_stats().
+
+        Returns:
+            Multi-line string with formatted stats.
+        """
+        lines = [
+            "╔══════════════════════════════════════╗",
+            "║       Context Usage Statistics        ║",
+            "╠══════════════════════════════════════╣",
+        ]
+
+        total = stats["total_tokens"]
+        window = stats["context_window"]
+        percent = stats["usage_percent"]
+        model = stats.get("model", "unknown")
+
+        # Progress bar (40 chars wide)
+        bar_width = 40
+        filled = int(bar_width * percent / 100)
+        bar = "█" * filled + "░" * (bar_width - filled)
+        status = "⚠️ " if percent > 80 else "✅ "
+
+        lines.append(f"║ {status} {bar} {percent:5.1f}%            ║")
+        lines.append(f"║ Tokens: {total:>8,} / {window:>8,}              ║")
+        lines.append(f"║ Model:  {model:<30} ║")
+        lines.append(f"║ Messages: {stats['message_count']:<27} ║")
+
+        # By-role breakdown
+        by_role = stats["by_role"]
+        if by_role:
+            lines.append("╠──────────────────────────────────────╣")
+            for role, tokens in sorted(by_role.items()):
+                role_label = role.capitalize()[:15]
+                lines.append(f"║  {role_label:<16} {tokens:>8,} tokens        ║")
+
+        # Compression info
+        if stats["compressed"]:
+            lines.append("╠──────────────────────────────────────╣")
+            lines.append(f"║  📦 Compressed: {stats['summary_count']} summary message(s)   ║")
+            lines.append(f"║  Mode: {stats['compression_mode']:<31} ║")
+
+        lines.append("╚══════════════════════════════════════╝")
+        return "\n".join(lines)
