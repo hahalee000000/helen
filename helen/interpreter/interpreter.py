@@ -186,6 +186,18 @@ class Interpreter(LlmMixin, Visitor[object]):
         except Exception:
             model = None
         self._history_manager = HistoryManager(model=model)
+        # P2: Initialize PromptBuilder for unified prompt construction
+        from helen.runtime.prompt_builder import PromptBuilder
+        self._prompt_builder = PromptBuilder()
+        # Configure skill directories for mtime-based caching
+        try:
+            from helen.runtime.config import get_skill_dirs
+            self._prompt_builder.set_skill_dirs([str(d) for d in get_skill_dirs()])
+            # Set runtime for skill listing
+            from helen.runtime import HelenHermesRuntime
+            self._prompt_builder._runtime = HelenHermesRuntime()
+        except Exception:
+            pass
         # Register stdlib builtins in global environment (HLD M15)
         self._register_stdlib()
         # Set CLI args in the stdlib module (for get_cli_args/parse_cli_args)

@@ -51,6 +51,7 @@ class LlmMixin:
     _current_agent: AgentDeclNode | None
     _history: list[HistoryMessage]
     _history_manager: Any
+    _prompt_builder: Any  # P2: PromptBuilder instance (from interpreter init)
 
     # Skill index cache (avoid rebuilding on every LLM call)
     _skill_index_cache: str | None = None
@@ -730,11 +731,20 @@ class LlmMixin:
     def _build_skill_index(self: Any) -> str:
         """Build the Tier 1 Skill Index for system prompt injection.
 
-        Scans skill directories and formats as <available_skills> XML block.
-        Returns empty string if no skills found.
+        P2: Delegates to PromptBuilder for unified implementation.
+        Uses mtime-based caching to avoid rebuilding on every LLM call.
+        """
+        if hasattr(self, '_prompt_builder') and self._prompt_builder is not None:
+            return self._prompt_builder.build_skill_index()
 
-        Caching: uses max mtime across all skill base directories to detect
-        changes. Only rebuilds when skills are added/removed/modified.
+        # Fallback: legacy inline implementation (should not reach here normally)
+        return self._build_skill_index_legacy()
+
+    def _build_skill_index_legacy(self: Any) -> str:
+        """Legacy skill index builder (fallback if PromptBuilder is not available).
+
+        This is kept for backward compatibility and should be removed after
+        the PromptBuilder migration is fully validated.
         """
         # Compute max mtime across all skill base directories
         from helen.runtime.config import get_skill_dirs
@@ -800,12 +810,21 @@ class LlmMixin:
     def _render_prompt_template(self: Any, template: str) -> str:
         """Render a prompt template by replacing {{var}} with environment values.
 
+        P2: Delegates to PromptBuilder for unified implementation.
         Supports nested attribute access like {{settings.model}}.
         Single-pass rendering: rendered results are not re-rendered.
-        Uses precompiled regex (module-level _PROMPT_VAR_RE) to avoid
-        re-compilation on every call.
         """
+        if hasattr(self, '_prompt_builder') and self._prompt_builder is not None:
+            return self._prompt_builder.render(template, self.environment)
 
+        # Fallback: legacy inline implementation
+        return self._render_prompt_template_legacy(template)
+
+    def _render_prompt_template_legacy(self: Any, template: str) -> str:
+        """Legacy template renderer (fallback if PromptBuilder is not available).
+
+        Kept for backward compatibility.
+        """
         def replace_var(match):
             var_path = match.group(1).strip()
             parts = var_path.split(".")

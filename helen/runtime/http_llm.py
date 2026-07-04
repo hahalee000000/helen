@@ -831,6 +831,10 @@ class HttpLLMRuntime(LLMRuntime):
         budget = IterationBudget(max_total=max_turns + 2)
         empty_response_retries = 0
         max_empty_retries = 2
+        # P2: Stream network retry (separate from iteration budget)
+        # Only retries transient errors BEFORE stream is established
+        stream_retry = 0
+        max_stream_retries = self.max_retries  # Same as non-streaming (default 3)
 
         while budget.consume():
             # Message sanitization before each API call
@@ -1012,6 +1016,7 @@ class HttpLLMRuntime(LLMRuntime):
 
                     # Reset empty response counter after successful tool execution
                     empty_response_retries = 0
+                    stream_retry = 0  # P2: Reset stream retry counter
                     continue  # Next turn: stream again with tool results
 
                 else:
@@ -1039,6 +1044,7 @@ class HttpLLMRuntime(LLMRuntime):
                             break
 
                     # Valid final response — already streamed
+                    stream_retry = 0  # P2: Reset stream retry counter
                     break
 
             except httpx.HTTPStatusError as e:
@@ -1060,16 +1066,58 @@ class HttpLLMRuntime(LLMRuntime):
                         # Reset tool call accumulation for retry
                         tool_calls_acc.clear()
                         full_chunks.clear()
+                        stream_retry = 0  # Reset stream retry counter
                         continue  # Retry with trimmed messages
+
+                    # P2: Retry on 5xx and 429 rate limit errors
+                    is_retryable_status = (
+                        e.response.status_code >= 500
+                        or e.response.status_code == 429
+                    )
+                    if is_retryable_status and stream_retry < max_stream_retries:
+                        wait_time = min(2 ** stream_retry, 10)
+                        logger.info(
+                            "Stream API error (%s) — retrying in %ds (%d/%d)",
+                            full_error[:80], wait_time, stream_retry + 1, max_stream_retries,
+                        )
+                        time.sleep(wait_time)
+                        stream_retry += 1
+                        tool_calls_acc.clear()
+                        full_chunks.clear()
+                        continue
 
                     yield {"type": "error", "message": full_error}
                 except Exception:
                     yield {"type": "error", "message": f"HTTP error {e.response.status_code}: {e.response.reason_phrase}"}
                 break
             except (httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError) as e:
+                # P2: Retry on transient network errors
+                if stream_retry < max_stream_retries:
+                    wait_time = min(2 ** stream_retry, 10)
+                    logger.info(
+                        "Stream network error (%s) — retrying in %ds (%d/%d)",
+                        str(e)[:80], wait_time, stream_retry + 1, max_stream_retries,
+                    )
+                    time.sleep(wait_time)
+                    stream_retry += 1
+                    tool_calls_acc.clear()
+                    full_chunks.clear()
+                    continue
                 yield {"type": "error", "message": f"HTTP request failed: {e}"}
                 break
             except httpx.TimeoutException:
+                # P2: Retry on timeout
+                if stream_retry < max_stream_retries:
+                    wait_time = min(2 ** stream_retry, 10)
+                    logger.info(
+                        "Stream timeout — retrying in %ds (%d/%d)",
+                        wait_time, stream_retry + 1, max_stream_retries,
+                    )
+                    time.sleep(wait_time)
+                    stream_retry += 1
+                    tool_calls_acc.clear()
+                    full_chunks.clear()
+                    continue
                 yield {"type": "error", "message": f"Request timed out after {self.timeout}s"}
                 break
             except Exception as e:

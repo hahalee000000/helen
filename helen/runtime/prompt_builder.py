@@ -2,58 +2,124 @@
 
 Handles template rendering, Skill Index injection (Tier 1), and
 System/User prompt construction for LLM calls.
+
+P2 unification: This module is now the single source of truth for
+prompt construction. LlmMixin uses PromptBuilder for:
+- Template rendering (with nested variable access)
+- Skill Index construction (with mtime-based caching)
+- System/User prompt assembly
+
+Previously, llm_mixin.py had its own inline implementations of these
+features. They are now consolidated here for maintainability.
 """
 
 from __future__ import annotations
 
+import os
 import re
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from helen.runtime import Runtime, SkillMeta
     from helen.core.ast import AgentDeclNode
 
 
-# Regex to match {{var_name}} templates
-_TEMPLATE_RE = re.compile(r"\{\{\s*(\w+)\s*\}\}")
+# Regex to match {{var_name}} or {{var.path}} templates (supports nested access)
+_TEMPLATE_RE = re.compile(r"\{\{\s*(\w+(?:\.\w+)*)\s*\}\}")
+
+# Max description length in skill index (tokens are limited)
+_SKILL_DESC_MAX_LEN = 100
 
 
 class PromptBuilder:
     """Build and render prompts for LLM calls (HLD 3.7).
 
     Features:
-    - Single-pass template rendering ({{var}} substitution in prompt blocks)
-    - Skill Index Tier 1 injection (lightweight name + description)
+    - Single-pass template rendering ({{var}} and {{a.b.c}} substitution)
+    - Skill Index Tier 1 injection (lightweight name + description + tags)
     - System/User prompt assembly from AgentDeclNode
+    - mtime-based Skill Index caching (avoid rebuilding on every call)
     """
 
-    def __init__(self, runtime: "Runtime") -> None:
+    def __init__(self, runtime: "Runtime | None" = None) -> None:
         self._runtime = runtime
+        # Skill index cache (mtime-based)
+        self._skill_index_cache: str | None = None
+        self._skill_index_mtime: float = 0.0
+        self._skill_dirs: list[str] = []
 
-    def render(self, template: str, env: dict[str, object]) -> str:
+    def set_skill_dirs(self, dirs: list[str]) -> None:
+        """Set skill directories for mtime-based cache invalidation.
+
+        Args:
+            dirs: List of skill directory paths to monitor.
+        """
+        self._skill_dirs = dirs
+
+    def render(self, template: str, env: dict[str, Any] | Any = None) -> str:
         """Render {{var}} placeholders in a template string (single pass).
 
-        Only renders in prompt blocks — plain strings with {{}} are left
-        untouched to prevent accidental template injection.
+        Supports nested attribute access: {{settings.model}} looks up
+        env["settings"]["model"] or env.settings.model.
 
         Per HLD 3.7.2:
-        - {{var}} rendering only applies in prompt triple-quote blocks
+        - {{var}} rendering only applies in prompt blocks
         - Template rendering is one-time; rendered {{...}} is NOT re-rendered
         - Undefined variables: keep original placeholder text
+
+        Args:
+            template: Template string with {{var}} placeholders.
+            env: Dict-like object or object with attribute access for variable lookup.
+                 Can be a plain dict, an Environment object, or any object supporting
+                 key/attribute access.
+
+        Returns:
+            Rendered template string.
         """
         def _replacer(match: re.Match) -> str:
-            var_name = match.group(1)
-            if var_name in env:
-                value = env[var_name]
-                # Convert value to string without re-rendering
-                if value is None:
-                    return "null"
-                if isinstance(value, bool):
-                    return "true" if value else "false"
-                return str(value)
-            # Undefined: keep original placeholder
-            return match.group(0)
+            var_path = match.group(1).strip()
+            parts = var_path.split(".")
+            # Lookup the first part
+            try:
+                if isinstance(env, dict):
+                    value = env.get(parts[0])
+                elif env is not None:
+                    # Support Environment.lookup() method (Helen interpreter)
+                    if hasattr(env, 'lookup') and callable(env.lookup):
+                        try:
+                            value = env.lookup(parts[0])
+                        except (NameError, KeyError):
+                            return match.group(0)
+                    elif hasattr(env, '__getitem__'):
+                        try:
+                            value = env[parts[0]]
+                        except (KeyError, TypeError):
+                            return match.group(0)
+                    else:
+                        value = getattr(env, parts[0], None)
+                else:
+                    return match.group(0)
+            except Exception:
+                return match.group(0)
+
+            # Navigate nested attributes
+            for part in parts[1:]:
+                if isinstance(value, dict):
+                    value = value.get(part)
+                elif hasattr(value, part):
+                    value = getattr(value, part)
+                else:
+                    value = None
+                    break
+
+            if value is None:
+                return match.group(0)  # Keep original if not found
+
+            # Convert to string
+            if isinstance(value, bool):
+                return "true" if value else "false"
+            return str(value)
 
         return _TEMPLATE_RE.sub(_replacer, template)
 
@@ -149,28 +215,83 @@ class PromptBuilder:
     def build_skill_index(self) -> str:
         """Build the Tier 1 Skill Index for System Prompt injection.
 
-        Scans skills via runtime.list_skills() and formats as
-        <available_skills> XML block with name + description + category + tags.
+        Scans skills and formats as <available_skills> XML block with
+        name + description + category + tags.
+
+        Caching: Uses max mtime across all skill directories to detect
+        changes. Only rebuilds when skills are added/removed/modified.
         """
-        skills = self._runtime.list_skills()
-        if not skills:
+        if not self._runtime:
+            return self._skill_index_cache or ""
+
+        # Compute max mtime across all skill directories
+        max_mtime = self._compute_skill_mtime()
+
+        # Return cached index if mtime hasn't changed
+        if max_mtime == self._skill_index_mtime and self._skill_index_cache is not None:
+            return self._skill_index_cache
+
+        # Rebuild the index
+        try:
+            skills = self._runtime.list_skills()
+            if not skills:
+                self._skill_index_cache = ""
+                self._skill_index_mtime = max_mtime
+                return ""
+
+            # Group by category
+            by_category: dict[str, list] = {}
+            for s in skills:
+                by_category.setdefault(s.category or "uncategorized", []).append(s)
+
+            lines = ["<available_skills>"]
+            lines.append("Before replying, scan skills below. If relevant,")
+            lines.append("use load_skill tool to load full content.")
+            lines.append("")
+
+            for category, skill_list in sorted(by_category.items()):
+                lines.append(f"  {category}:")
+                for s in skill_list:
+                    # Truncate long descriptions (save tokens)
+                    desc = s.description
+                    if len(desc) > _SKILL_DESC_MAX_LEN:
+                        desc = desc[:_SKILL_DESC_MAX_LEN - 3] + "..."
+                    tag_str = f" (tags: {', '.join(s.tags)})" if s.tags else ""
+                    lines.append(f"    - {s.name}: {desc}{tag_str}")
+
+            lines.append("</available_skills>")
+            result = "\n".join(lines)
+            self._skill_index_cache = result
+            self._skill_index_mtime = max_mtime
+            return result
+        except Exception:
+            # If skill listing fails, silently continue without skills
+            self._skill_index_cache = ""
+            self._skill_index_mtime = max_mtime
             return ""
 
-        # Group by category
-        by_category: dict[str, list[SkillMeta]] = {}
-        for s in skills:
-            by_category.setdefault(s.category or "uncategorized", []).append(s)
+    def _compute_skill_mtime(self) -> float:
+        """Compute max mtime across all skill directories.
 
-        lines = ["<available_skills>"]
-        lines.append("Before replying, scan skills below. If relevant,")
-        lines.append("use load_skill tool to load full content.")
-        lines.append("")
+        Returns:
+            Maximum modification time of any SKILL.md file, or 0.0 if none found.
+        """
+        max_mtime = 0.0
+        for base in self._skill_dirs:
+            base_str = str(base)
+            if os.path.exists(base_str):
+                try:
+                    for root, dirs, files in os.walk(base_str):
+                        if "SKILL.md" in files:
+                            skill_md = os.path.join(root, "SKILL.md")
+                            mtime = os.path.getmtime(skill_md)
+                            if mtime > max_mtime:
+                                max_mtime = mtime
+                except Exception:
+                    pass
+        return max_mtime
 
-        for category, skill_list in sorted(by_category.items()):
-            lines.append(f"  {category}:")
-            for s in skill_list:
-                tag_str = f" (tags: {', '.join(s.tags)})" if s.tags else ""
-                lines.append(f"    - {s.name}: {s.description}{tag_str}")
-
-        lines.append("</available_skills>")
-        return "\n".join(lines)
+    def invalidate_skill_cache(self) -> None:
+        """Force rebuild of skill index on next call."""
+        self._skill_index_cache = None
+        self._skill_index_mtime = 0.0
