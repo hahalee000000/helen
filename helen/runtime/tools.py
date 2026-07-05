@@ -480,13 +480,13 @@ def _register_builtin_tools() -> None:
 
     register_tool(
         name="shell_exec",
-        description="Execute a command and return stdout/stderr output. Uses safe mode (shell=False) by default.",
+        description="Execute a shell command with full bash syntax support (&&, ||, |, {}, etc.).",
         parameters={
             "type": "object",
             "properties": {
                 "command": {"type": "string", "description": "Command to execute"},
                 "timeout": {"type": "integer", "description": "Timeout in seconds (default 30)", "default": 30},
-                "shell": {"type": "boolean", "description": "Use shell execution (default: false for safety)", "default": False},
+                "shell": {"type": "boolean", "description": "Use shell execution (default: true for full shell syntax)", "default": True},
             },
             "required": ["command"],
         },
