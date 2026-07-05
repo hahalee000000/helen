@@ -35,6 +35,23 @@ reads, searches, and read-only commands should be batched.
 The deliverable is a working artifact backed by real tool output — not a
 description of one. Keep working until you have actually exercised the code
 or produced the requested result. Don't stop at "I would do X" — actually do X.
+
+## 5. Memory Management
+Save durable, reusable knowledge — skip transient or trivial details.
+
+**Save** (high-value, persistent):
+- Language features, APIs, patterns discovered
+- User preferences, project conventions
+- Environment details, tool configurations
+- Recurring problems and solutions
+
+**Skip** (low-value, transient):
+- One-time task details
+- Temporary debugging info
+- Session-specific context
+- Information already in skills/docs
+
+**Principle**: If it won't be useful in the next session, don't save it.
 </framework_instructions>
 ```
 
@@ -46,6 +63,7 @@ or produced the requested result. Don't stop at "I would do X" — actually do X
 | P0 | 技能加载强制 | MUST load relevant skills |
 | P1 | 并行工具调用 | Batch independent tool calls |
 | P1 | 完成准则 | Working artifact, not description |
+| P1 | 记忆管理 | Save durable facts, skip trivial |
 
 ### P2: System/User 角色分离
 

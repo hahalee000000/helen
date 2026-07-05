@@ -177,6 +177,7 @@ class PromptBuilder:
         - P0: Skill loading enforcement (MUST load relevant skills)
         - P1: Parallel tool calls (batch independent calls)
         - P1: Completion criteria (working artifact, not description)
+        - P1: Memory management (save durable facts, skip trivial)
 
         Inspired by Hermes system prompt patterns.
         """
@@ -202,6 +203,23 @@ reads, searches, and read-only commands should be batched.
 The deliverable is a working artifact backed by real tool output — not a
 description of one. Keep working until you have actually exercised the code
 or produced the requested result. Don't stop at "I would do X" — actually do X.
+
+## 5. Memory Management
+Save durable, reusable knowledge — skip transient or trivial details.
+
+**Save** (high-value, persistent):
+- Language features, APIs, patterns discovered
+- User preferences, project conventions
+- Environment details, tool configurations
+- Recurring problems and solutions
+
+**Skip** (low-value, transient):
+- One-time task details
+- Temporary debugging info
+- Session-specific context
+- Information already in skills/docs
+
+**Principle**: If it won't be useful in the next session, don't save it.
 </framework_instructions>"""
 
     def _build_helen_conventions(self) -> str:

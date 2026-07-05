@@ -82,6 +82,33 @@ or produced the requested result. Don't stop at "I would do X" — actually do X
 
 **效果**：Agent 会持续工作直到产出实际结果，而不是停留在计划阶段。
 
+#### 5. 记忆管理
+
+**问题**：Agent 可能会保存太多琐碎信息（memory bloat），或忘记保存重要发现。
+
+**解决方案**：在框架指令中添加记忆管理指导（参考 Hermes 的 "save durable facts, skip trivial"）：
+
+```
+## 5. Memory Management
+Save durable, reusable knowledge — skip transient or trivial details.
+
+**Save** (high-value, persistent):
+- Language features, APIs, patterns discovered
+- User preferences, project conventions
+- Environment details, tool configurations
+- Recurring problems and solutions
+
+**Skip** (low-value, transient):
+- One-time task details
+- Temporary debugging info
+- Session-specific context
+- Information already in skills/docs
+
+**Principle**: If it won't be useful in the next session, don't save it.
+```
+
+**效果**：Agent 会智能地管理记忆，保存有价值的持久知识，跳过临时信息，防止记忆膨胀。
+
 ---
 
 ## 技术实现
@@ -208,11 +235,11 @@ Agent 行为（预期）:
 
 | 组件 | Token 数量 | 占比 |
 |------|-----------|------|
-| 框架指令 | ~250 tokens | 2.5% |
+| 框架指令 | ~350 tokens | 3.5% |
 | Helen 语言规范 | ~800 tokens | 8% |
 | Agent 描述 | ~50 tokens | 0.5% |
 | 技能索引 | ~200 tokens | 2% |
-| **总计** | **~1300 tokens** | **13%** |
+| **总计** | **~1400 tokens** | **14%** |
 
 **结论**：在典型 32k-128k 上下文窗口中，系统提示词占比 <5%，完全可接受。
 
@@ -226,6 +253,7 @@ Agent 行为（预期）:
 | 技能加载强制 | ✅ MUST load skills | ✅ MUST load skills |
 | 并行工具调用 | ✅ batch independent | ✅ batch independent |
 | 完成准则 | ✅ working artifact | ✅ working artifact |
+| 记忆管理 | ✅ save durable facts | ✅ save durable facts |
 | 框架指令层 | ✅ persona.md | ✅ _framework_instructions |
 | 语言规范 | ❌ 无 | ✅ _helen_conventions |
 | 技能索引 | ✅ <available_skills> | ✅ <available_skills> |
@@ -258,6 +286,7 @@ Agent 行为（预期）:
 - 技能加载强制指令
 - 并行工具调用指导
 - 完成准则
+- 记忆管理（save durable facts, skip trivial）
 
 ✅ **所有测试通过**
 - 956 个测试无回归
@@ -268,6 +297,7 @@ Agent 行为（预期）:
 - Agent 会主动加载技能
 - Agent 会批量调用工具
 - Agent 会持续工作到完成
+- Agent 会智能管理记忆，保存有价值的知识
 
 **实施时间**：约 1 小时
 **代码改动**：~85 行
