@@ -1,10 +1,43 @@
 # 版本历史
 
-> Helen v1.12 | 上下文管理全面优化 — 修复消息重复 + tool calling 可见 + 历史持久化/检索/可视化
+> Helen v1.14 | 合并 llm stream 到 llm act — 消除冗余 LLM 调用模式
 
 ---
 
-## v1.12: 上下文管理全面优化 (当前)
+## v1.14: 合并 llm stream 到 llm act (当前)
+
+**Breaking change**: `llm stream` 关键字已删除，流式功能合并到 `llm act`。
+
+### 语言表面简化
+
+| 改动 | 说明 |
+|------|------|
+| `llm stream` 删除 | 流式功能合并到 `llm act` |
+| `llm act` 增加回调 | 支持可选 `on_chunk`/`on_complete` 参数 |
+| 关键字减少 | 94 → 92（46 英文 + 46 中文） |
+| `stream`/`流式执行` 关键字删除 | 不再是语言关键字 |
+
+### 迁移指南
+
+```helen
+// 旧语法（v1.13 及以前）
+llm stream "写一首诗"
+llm stream "写长文" on_chunk handle_chunk
+
+// 新语法（v1.14+）
+llm act "写一首诗"
+llm act "写长文" on_chunk handle_chunk
+```
+
+### 实现变更
+
+- `LlmStreamStmtNode` 删除，`LlmActExprNode` 增加 `on_chunk`/`on_complete` 字段
+- `visit_llm_stream_stmt` 删除，`visit_llm_act_expr` 分叉为同步/流式路径
+- `STREAM` TokenType 删除
+
+---
+
+## v1.12: 上下文管理全面优化
 
 | 改动 | 说明 | 优先级 | 状态 |
 |------|------|--------|------|

@@ -11,9 +11,8 @@ LLM 相关的解释器方法已拆分为 `LlmMixin` 类（`helen/interpreter/llm
 ```python
 class LlmMixin:
     """LLM 语句执行 mixin — 从 Interpreter 拆分的 LLM 相关方法。"""
-    def visit_llm_act_expr(node)    # llm act 执行
+    def visit_llm_act_expr(node)    # llm act 执行（含流式 on_chunk/on_complete）
     def visit_llm_if_stmt(node)     # llm if 路由
-    def visit_llm_stream_stmt(node) # llm stream 流式输出
     def _build_tools_list()         # 构建工具列表（含 load_skill）
     def _render_prompt_template()   # {{var}} 模板渲染
     def _get_context()              # 对话历史摘要（4096 token 预算）
@@ -28,7 +27,7 @@ class Interpreter(LlmMixin):
 
 ---
 
-## 三种 LLM 语句
+## 两种 LLM 语句
 
 ### 1. `llm act` — 自主执行
 

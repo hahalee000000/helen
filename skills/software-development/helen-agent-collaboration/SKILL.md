@@ -1,7 +1,7 @@
 ---
 name: helen-agent-collaboration
 description: "Helen Agent 协作模式 — 多 Agent 协作、编排、分工、数据流、共享状态、作用域隔离"
-version: 1.2.0
+version: 1.14.0
 author: Helen Team
 license: MIT
 tags: [helen, agent, collaboration, orchestration, workflow, multi-agent, shared-let, scope-isolation, v1.12, read-only-params]
@@ -31,7 +31,7 @@ agent MyAgent(input: str) {
     }
     
     main {
-        llm stream
+        llm act
     }
 }
 

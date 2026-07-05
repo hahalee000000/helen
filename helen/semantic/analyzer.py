@@ -52,7 +52,6 @@ from helen.core.ast import (
     LlmActExprNode,
     LlmBranchNode,
     LlmIfStmtNode,
-    LlmStreamStmtNode,
     MainBlockNode,
     MapEntryNode,
     MapLiteralNode,
@@ -1642,12 +1641,7 @@ class SemanticAnalyzer(Visitor[None]):
             self.symbols.exit_scope()
 
     def visit_llm_act_expr(self, node: LlmActExprNode) -> None:
-        """Visit llm act expression: analyze the prompt expression."""
-        if node.prompt is not None:
-            node.prompt.accept(self)
-
-    def visit_llm_stream_stmt(self, node: LlmStreamStmtNode) -> None:
-        """Visit llm stream statement: analyze prompt and optional callbacks."""
+        """Visit llm act expression: analyze prompt and optional callbacks."""
         if node.prompt is not None:
             node.prompt.accept(self)
         if node.on_chunk is not None:

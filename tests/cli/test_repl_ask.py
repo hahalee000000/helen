@@ -60,7 +60,7 @@ class TestREPLAskCommand:
                 mock_print.assert_called()
 
     def test_ask_command_streams_response(self):
-        """:ask should stream response via llm stream (output during execution)."""
+        """:ask should stream response via llm act on_chunk (output during execution)."""
         errors = ErrorReporter()
         interp = Interpreter(errors=errors)
         analyzer = SemanticAnalyzer(errors)

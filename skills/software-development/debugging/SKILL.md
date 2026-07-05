@@ -273,7 +273,7 @@ let trace = get_trace(10)
 
 ### LLM Audit Log
 
-All `llm act` / `llm stream` calls are automatically logged:
+All `llm act` calls are automatically logged:
 - timestamp, call_type, agent_name, model
 - prompt, response, tokens_in/out, duration_ms
 - tool_calls list (for stream mode)

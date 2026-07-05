@@ -36,7 +36,6 @@ from .ast import (
     LlmActExprNode,
     LlmBranchNode,
     LlmIfStmtNode,
-    LlmStreamStmtNode,
     LiteralNode,
     MainBlockNode,
     MapEntryNode,
@@ -73,7 +72,7 @@ from .errors import ErrorCode, ErrorReporter
 from .tokens import Token, TokenType
 
 # Tokens that indicate the end of an expression (for bare form detection)
-# Used in llm act/llm if/llm stream to detect when no prompt expression follows
+# Used in llm act/llm if to detect when no prompt expression follows
 BARE_FORM_TOKENS = (
     TokenType.RIGHT_BRACE, TokenType.SEMICOLON, TokenType.EOF,
     # Statement keywords that indicate the current statement has ended
@@ -175,7 +174,7 @@ class Parser:
         self._rules[TokenType.LEFT_BRACE].prefix = self._map_literal
         self._rules[TokenType.TEMPLATE_OPEN].prefix = self._template_ref
 
-        # llm act / llm stream as expression
+        # llm act as expression
         self._rules[TokenType.LLM].prefix = self._llm_expr
 
         # async as expression: async Agent(...)
@@ -274,7 +273,7 @@ class Parser:
         return VariableNode(name=prev.lexeme, span=prev.span)
 
     def _llm_expr(self) -> ExpressionNode:
-        """Parse an llm expression: llm act <expr>? or llm stream <expr>? [on_chunk <cb>] [on_complete <cb>].
+        """Parse an llm expression: llm act <expr>? [on_chunk <cb>] [on_complete <cb>].
 
         Dispatches based on the keyword following 'llm'.
         Supports bare form (no expression) inside an agent context.
@@ -283,28 +282,30 @@ class Parser:
 
         if self._check(TokenType.ACT):
             return self._llm_act_expr()
-        elif self._check(TokenType.STREAM):
-            return self._llm_stream_expr()
         elif self._check(TokenType.IF):
             self._error("'llm if' is not allowed in expression context; use as a statement.")
             self._synchronize()
             # Return a placeholder literal to avoid crashing
             return LiteralNode(value=None, span=self._make_span(start, self._previous()))
         else:
-            self._error("Expected 'act' or 'stream' after 'llm'.")
+            self._error("Expected 'act' after 'llm'.")
             self._synchronize()
             return LiteralNode(value=None, span=self._make_span(start, self._previous()))
 
     def _llm_act_expr(self) -> ExpressionNode:
-        """Parse an llm act expression: llm act <expression>?
+        """Parse an llm act expression: llm act <expression>? [on_chunk <cb>] [on_complete <cb>].
 
         Supports bare ``llm act`` (no expression) inside an agent context,
         where the agent's rendered prompt template is used automatically.
+
+        With optional on_chunk/on_complete callbacks, the LLM response is streamed
+        chunk by chunk. Without callbacks, the call is synchronous.
 
         Bare form detection:
         - Statement terminators: }, ;, EOF
         - Statement keywords: return, let, if, for, etc.
         - Newline: if the next token is on a different line than 'act'
+        - Callback keywords: on_chunk, on_complete (bare form with callbacks)
         """
         start = self._previous()  # LLM token
         self._consume(TokenType.ACT, "Expected 'act' after 'llm'.")
@@ -318,28 +319,7 @@ class Parser:
         # This handles: let result = llm act\nprint(...)
         elif self._current().line > act_token.line:
             prompt_expr = None
-        else:
-            prompt_expr = self._expression()
-        return LlmActExprNode(
-            prompt=prompt_expr,
-            span=self._make_span(start, self._previous())
-        )
-
-    def _llm_stream_expr(self) -> ExpressionNode:
-        """Parse an llm stream expression: llm stream <expr>? [on_chunk <cb>] [on_complete <cb>].
-
-        Same syntax as the stream statement, but usable in expression context.
-        Returns the full accumulated response text.
-        """
-        start = self._previous()  # LLM token
-        self._consume(TokenType.STREAM, "Expected 'stream' after 'llm'.")
-        stream_token = self._previous()
-
-        # Check for bare form
-        if self._check(*BARE_FORM_TOKENS):
-            prompt_expr = None
-        elif self._current().line > stream_token.line:
-            prompt_expr = None
+        # Bare form with callbacks: on_chunk/on_complete are keywords, not prompt
         elif (self._check(TokenType.IDENTIFIER)
               and self._current().lexeme in ("on_chunk", "on_complete")):
             prompt_expr = None
@@ -358,7 +338,7 @@ class Parser:
             self._advance()
             on_complete_expr = self._expression()
 
-        return LlmStreamStmtNode(
+        return LlmActExprNode(
             prompt=prompt_expr,
             on_chunk=on_chunk_expr,
             on_complete=on_complete_expr,
@@ -625,16 +605,14 @@ class Parser:
         return "standard"
 
     def _llm_stmt(self) -> StatementNode:
-        """Parse an llm statement: dispatch based on the next token (llm if / llm act / llm stream)."""
+        """Parse an llm statement: dispatch based on the next token (llm if / llm act)."""
         self._advance()  # consume LLM
         if self._check(TokenType.IF):
             return self._llm_if_stmt()
         elif self._check(TokenType.ACT):
             return self._llm_act_stmt()
-        elif self._check(TokenType.STREAM):
-            return self._llm_stream_stmt()
         else:
-            self._error("Expected 'if', 'act', or 'stream' after 'llm'.")
+            self._error("Expected 'if' or 'act' after 'llm'.")
             self._synchronize()
             return None
 
@@ -1289,16 +1267,19 @@ class Parser:
                              span=self._make_span(start, self._previous()))
 
     def _llm_act_stmt(self) -> StatementNode:
-        """Parse an llm act statement: only supports expression form.
+        """Parse an llm act statement.
 
-        Syntax: llm act <expr>?
-        - llm act "prompt" — direct LLM invocation
-        - llm act — bare form, automatically uses the rendered prompt inside an agent
+        Syntax:
+        - llm act "prompt"                         — direct LLM invocation (sync)
+        - llm act                                  — bare form, uses rendered agent prompt
+        - llm act "prompt" on_chunk callback       — streaming with chunk callback
+        - llm act "prompt" on_complete callback    — streaming with completion callback
 
         Note: The statement form `llm act Agent(args) "desc"` is deprecated; use `call Agent(args)` instead.
         """
         start = self._previous()  # LLM token
         self._consume(TokenType.ACT, "Expected 'act' after 'llm'.")
+        act_token = self._previous()
 
         # 检查是否误用语句形式：llm act Agent(args) "desc"
         # 如果下一个 token 是 IDENTIFIER 且后面跟着 ( 或 STRING，报错
@@ -1316,35 +1297,7 @@ class Parser:
         # 检查是否有表达式
         if self._check(*BARE_FORM_TOKENS):
             prompt_expr = None
-        elif self._current().line > start.line:
-            # 换行边界
-            prompt_expr = None
-        else:
-            prompt_expr = self._expression()
-
-        return ExprStmtNode(
-            expression=LlmActExprNode(prompt=prompt_expr,
-                                      span=self._make_span(start, self._previous())),
-            span=self._make_span(start, self._previous())
-        )
-
-    def _llm_stream_stmt(self) -> LlmStreamStmtNode:
-        """Parse an llm stream statement: streaming LLM call.
-
-        Syntax:
-        - llm stream                             # bare form, automatically uses the rendered prompt inside an agent
-        - llm stream "prompt"                    # automatically outputs to stdout
-        - llm stream "prompt" on_chunk callback  # invokes callback(chunk)
-        - llm stream "prompt" on_complete callback  # invokes callback() after streaming completes
-        """
-        start = self._previous()  # LLM token
-        self._consume(TokenType.STREAM, "Expected 'stream' after 'llm'.")
-
-        # 检查是否有表达式（支持 bare form）
-        # on_chunk/on_complete are callback keywords, not prompt expressions
-        if self._check(*BARE_FORM_TOKENS):
-            prompt_expr = None
-        elif self._current().line > start.line:
+        elif self._current().line > act_token.line:
             # 换行边界
             prompt_expr = None
         elif (self._check(TokenType.IDENTIFIER)
@@ -1354,22 +1307,23 @@ class Parser:
         else:
             prompt_expr = self._expression()
 
-        # 检查是否有 on_chunk 回调
+        # Optional on_chunk callback
         on_chunk_expr = None
         if self._check(TokenType.IDENTIFIER) and self._current().lexeme == "on_chunk":
             self._advance()  # consume 'on_chunk'
             on_chunk_expr = self._expression()
 
-        # 检查是否有 on_complete 回调
+        # Optional on_complete callback
         on_complete_expr = None
         if self._check(TokenType.IDENTIFIER) and self._current().lexeme == "on_complete":
             self._advance()  # consume 'on_complete'
             on_complete_expr = self._expression()
 
-        return LlmStreamStmtNode(
-            prompt=prompt_expr,
-            on_chunk=on_chunk_expr,
-            on_complete=on_complete_expr,
+        return ExprStmtNode(
+            expression=LlmActExprNode(prompt=prompt_expr,
+                                      on_chunk=on_chunk_expr,
+                                      on_complete=on_complete_expr,
+                                      span=self._make_span(start, self._previous())),
             span=self._make_span(start, self._previous())
         )
 

@@ -14,7 +14,7 @@
 | [03](#教程-03-函数) | fn 声明、参数、返回值、递归、Agent 内部函数、作用域、闭包(v1.7) |
 | [04](#教程-04-控制流) | if/for/while/match、break/continue、try-catch、管道操作符(v1.8)、模式匹配增强(v1.8)、短路求值(v1.10) |
 | [05](#教程-05-agent-编程) | agent 声明、配置、参数、调用、协议(v1.7)、作用域隔离(v1.10) |
-| [06](#教程-06-llm-语句) | llm act/if/stream、对话历史、流式输出、异步 HTTP(v1.10) |
+| [06](#教程-06-llm-语句) | llm act/if、对话历史、流式输出（on_chunk/on_complete 回调）、异步 HTTP(v1.10) |
 | [07](#教程-07-异步编程) | async、await、并发 Agent 调用、HTTP 异步方法(v1.10) |
 | [08](#教程-08-模块与导入) | import、多格式、跨文件复用、路径安全、shared let 导入(v1.10) |
 | [09](#教程-09-python-ffi) | Python 库导入、类型转换、调用 Python 函数 |
@@ -374,7 +374,7 @@ main {
 
 助手会加载 Helen 文档并生成详细的回答，包括代码示例和语法说明。
 
-**流式输出**：助手使用 `llm stream` 流式输出回答，内容逐 chunk 实时显示，无需等待完整响应。
+**流式输出**：助手使用 `llm act` 的 `on_chunk` 回调流式输出回答，内容逐 chunk 实时显示，无需等待完整响应。
 
 **助手能力：**
 - ✅ 解释 Helen 语法和语义
@@ -1893,11 +1893,13 @@ let mood = llm if text + "反映的情绪" {
 print("Mood: " + mood)
 ```
 
-## llm stream — 流式输出
+## llm act 流式输出 — on_chunk / on_complete 回调
+
+`llm act` 支持可选的 `on_chunk` 和 `on_complete` 回调，实现流式输出，适用于长文本生成场景。
 
 ### 基本用法
 
-`llm stream` 逐 chunk 流式输出 LLM 响应，适用于长文本生成场景：
+通过 `on_chunk` 回调逐 chunk 处理 LLM 响应：
 
 ```helen
 fn print_chunk(chunk: str) {
@@ -1905,11 +1907,11 @@ fn print_chunk(chunk: str) {
 }
 
 main {
-    llm stream "Write a short poem about programming" on_chunk print_chunk
+    llm act "Write a short poem about programming" on_chunk print_chunk
 }
 ```
 
-默认行为：`llm stream` 不会自动输出，需要提供 `on_chunk` 回调函数处理每个 chunk。
+默认行为：不提供 `on_chunk` 时，`llm act` 等待完成后返回完整文本；提供 `on_chunk` 后，每个 chunk 实时传递给回调函数。
 
 ### 带回调函数
 
@@ -1921,7 +1923,7 @@ fn handle_chunk(chunk) {
 }
 
 main {
-    llm stream "Explain recursion in one paragraph" on_chunk handle_chunk
+    llm act "Explain recursion in one paragraph" on_chunk handle_chunk
 }
 ```
 
@@ -1937,7 +1939,7 @@ fn on_complete() {
 }
 
 main {
-    llm stream "Write a short story" on_chunk handle_chunk on_complete on_complete
+    llm act "Write a short story" on_chunk handle_chunk on_complete on_complete
 }
 ```
 
@@ -1948,7 +1950,7 @@ main {
 
 ### 在 agent 中使用
 
-`llm stream` 在 agent 内自动使用 agent 的配置（model、temperature、prompt）：
+在 agent 内，`llm act` 自动使用 agent 的配置（model、temperature、prompt），配合回调实现流式输出：
 
 ```helen
 agent Poet(topic: str) {
@@ -1960,7 +1962,7 @@ agent Poet(topic: str) {
 
     main {
         fn print_chunk(chunk: str) { stream_print(chunk) }
-        llm stream on_chunk print_chunk    // bare form：使用渲染后的 prompt
+        llm act on_chunk print_chunk    // bare form：使用渲染后的 prompt
     }
 }
 ```
@@ -1974,7 +1976,7 @@ fn print_chunk(chunk: str) {
 
 main {
     let topic = "the beauty of recursion"
-    llm stream "Write a haiku about " + topic on_chunk print_chunk
+    llm act "Write a haiku about " + topic on_chunk print_chunk
 }
 ```
 
@@ -1982,9 +1984,8 @@ main {
 
 | 语句 | 用途 | 输出方式 |
 |------|------|----------|
-| `llm act` | 获取完整响应文本 | 等待完成后返回 |
+| `llm act` | 让 LLM 执行任务 | 等待完成后返回（或通过 on_chunk 流式输出） |
 | `llm if` | LLM 分类路由 | 等待完成后执行分支 |
-| `llm stream` | 流式输出生成内容 | 逐 chunk 实时输出 |
 
 ## 对比：何时使用哪个？
 
@@ -1993,7 +1994,7 @@ main {
 | 需要 LLM 返回文本 | `llm act` |
 | 需要 LLM 做分类决策 | `llm if` |
 | 需要 LLM 从选项中选择并执行代码 | `llm if` + `branch` |
-| 需要实时输出生成过程 | `llm stream` |
+| 需要实时输出生成过程 | `llm act` + `on_chunk` 回调 |
 | 多步骤决策 | 嵌套 `llm if` |
 | 需要结果变量 | `llm if` 或 `llm act` |
 
@@ -4217,9 +4218,9 @@ LLM 会：
 
 ## 在 LLM 语句中使用技能
 
-### `llm act` 和 `llm stream`
+### `llm act`（含流式回调）
 
-当你在 Helen 代码中使用 `llm act` 或 `llm stream` 时，技能索引会自动注入到 system prompt 中：
+当你在 Helen 代码中使用 `llm act` 时（无论是否带 `on_chunk`/`on_complete` 回调），技能索引会自动注入到 system prompt 中：
 
 ```helen
 agent Researcher {
@@ -4321,7 +4322,7 @@ Helen 自带 13 个内置技能，覆盖常见任务：
 1. 在 `~/.helen/skills/` 下创建一个 `greeting` 技能，让 LLM 用特定格式打招呼
 2. 为当前项目创建 `.helen/skills/` 目录，添加一个项目规范技能
 3. 在 REPL 中用 `:ask` 测试你的技能是否被正确感知
-4. 编写一个 Helen 程序，使用 `llm stream` 调用一个会参考技能的 Agent
+4. 编写一个 Helen 程序，使用 `llm act` 的 `on_chunk` 回调调用一个会参考技能的 Agent
 
 ## 总结
 
@@ -4568,7 +4569,7 @@ AI Agent 可以直接解析 JSON 错误快照，提取：
 
 ## LLM 调用审计日志
 
-所有 `llm act` 和 `llm stream` 调用自动记录到审计日志。
+所有 `llm act` 调用（含流式回调）自动记录到审计日志。
 
 ### REPL 命令
 
@@ -4584,15 +4585,15 @@ AI Agent 可以直接解析 JSON 错误快照，提取：
 | 字段 | 说明 |
 |------|------|
 | `timestamp` | 调用时间 |
-| `call_type` | `act` 或 `stream` |
+| `call_type` | `act`（普通）或 `act_stream`（带 on_chunk 回调） |
 | `agent_name` | 调用的 Agent 名称 |
 | `model` | 使用的模型 |
 | `prompt` | 输入的 prompt |
-| `response` | 返回的文本（act）或 null（stream） |
+| `response` | 返回的文本（普通 act）或 null（act_stream 回调模式） |
 | `tokens_in` | 输入 token 数 |
 | `tokens_out` | 输出 token 数 |
 | `duration_ms` | 耗时（毫秒） |
-| `tool_calls` | 工具调用列表（stream 模式） |
+| `tool_calls` | 工具调用列表（act_stream 模式） |
 | `error` | 错误信息（如果有） |
 
 ### 审计日志示例
@@ -4613,7 +4614,7 @@ AI Agent 可以直接解析 JSON 错误快照，提取：
   },
   {
     "timestamp": 1718812805.0,
-    "call_type": "stream",
+    "call_type": "act_stream",
     "agent_name": "Researcher",
     "model": "qwen3.7-plus",
     "prompt": "search for Helen language",
@@ -4725,7 +4726,7 @@ main {
 
 >>> :llm_log 3
 [LLM] act Translator "translate Hello" → "你好" (1200ms)
-[LLM] stream Researcher "search..." → 2 tool calls (3500ms)
+[LLM] act_stream Researcher "search..." → 2 tool calls (3500ms)
 
 >>> :last_error
 Error: RuntimeError: division by zero

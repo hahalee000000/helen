@@ -97,7 +97,7 @@ Helen is an AI-native DSL being developed at `/home/admin/helen/`. All 966 tests
 **Benefits**:
 1. Demonstrates Helen's real-world capability
 2. Uses Helen's stdlib (`read_file`, string operations)
-3. Uses Helen's LLM integration (`llm stream` for streaming output with tool support)
+3. Uses Helen's LLM integration (`llm act` with `on_chunk` callback for streaming output with tool support)
 4. Python code is minimal (just loading/executing the Helen program)
 
 **When to use**: Any feature where the core logic can be expressed in Helen (knowledge bases, data processing, LLM workflows, etc.). Reserve Python for true infrastructure (REPL event loop, CLI parsing, system integration).
@@ -847,7 +847,7 @@ catch RuntimeError as err { ... } // ❌ not supported
 
 **Inheritance matching**: `catch LLMError err` also catches `TimeoutError` and `ModelError` (via `error_matches()` using `isinstance()`).
 
-**Keywords count**: 41 (was 43 before `throw` was added, then `choose` and `option` removed in 2026-06 when `llm choose` was merged into `llm if`).
+**Keywords count**: 41 (was 43 before `throw` was added, then `choose` and `option` removed in 2026-06 when `llm choose` was merged into `llm if`; `stream` removed in v1.14 when merged into `act`)
 
 ### `llm act` Can Run Independently (Not Just in Agents)
 
@@ -1746,7 +1746,7 @@ Critical pitfalls:
 Helen now supports streaming LLM output through three mechanisms:
 
 1. **Standard library**: `stream_print()`, `stream_clear()`, `progress_bar()`, cursor movement
-2. **Syntax**: `llm stream "prompt" [on_chunk callback]`
+2. **Syntax**: `llm act "prompt" [on_chunk callback] [on_complete callback]`
 3. **Async iterators**: `StreamingResponse` wrapper for `for await` patterns
 
 See `references/streaming-implementation.md` for complete implementation guide.

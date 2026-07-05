@@ -7,7 +7,7 @@ For the broader multi-project layout, see `../CLAUDE.md`.
 
 **Helen** — a prompt-first Agent programming language (AI-native DSL).
 Combines deterministic constructs (variables, functions, control flow) with
-first-class LLM primitives (`llm act`, `llm if`, `llm stream`).
+first-class LLM primitives (`llm act`, `llm if`).
 
 ## Development Commands
 
@@ -79,7 +79,7 @@ helen/
 
 - **Agent declarations**: First-class `agent` blocks with description, model, temperature, tools, prompt template (`{{var}}`), `functions {}` block (becomes LLM-callable tools), and `main {}` logic
 - **Agent scope isolation (v1.10)**: `agent main {}` runs in a fully isolated environment. Module-level `let` is **not** visible inside agent main (compile-time error). Module-level `const` is auto-visible (read-only sharing). Use `shared let` for cross-agent visible mutable variables. Closures in agent main can capture local variables.
-- **LLM primitives**: `llm act` (tool-calling loop, also usable as expression since v1.10), `llm if` (LLM-routed branching), `llm stream` (chunked responses, also usable as expression returning full text since v1.10)
+- **LLM primitives**: `llm act` (tool-calling loop + optional streaming via on_chunk/on_complete callbacks, usable as expression since v1.10), `llm if` (LLM-routed branching)
 - **Async/await**: `async call` for concurrent agent execution, `await [list]` for Promise.all. HTTP layer also has async support: `act_async()` / `act_stream_async()` via `httpx.AsyncClient` (v1.10)
 - **Short-circuit evaluation (v1.10)**: `&&` and `||` short-circuit
 - **Type system**: 14 types including Optional (`str?`), Union (`int | str`), Protocol, Agent, Literal. Return type annotation uses `:` syntax only (`fn foo(): int {}`); `->` syntax removed (v1.10)

@@ -115,7 +115,7 @@
         },
         {
           "name": "keyword.other.helen",
-          "match": "(?:\\b(?:import|as|call|await|async|llm|act|stream|is)\\b|导入|作为|等待|异步|大模型|执行|流式执行|是)"
+          "match": "(?:\\b(?:import|as|call|await|async|llm|act|is)\\b|导入|作为|等待|异步|大模型|执行|是)"
         },
         {
           "name": "keyword.agent.property.helen",

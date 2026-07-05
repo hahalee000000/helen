@@ -507,7 +507,7 @@ def _collect_variable_refs(node: object, bound: set[str], used: set[str]) -> Non
         TemplateRefNode, AssertStmtNode, AsyncCallExprNode,
         AsyncCallStmtNode, ForAwaitStmtNode, TryStmtNode,
         CatchClauseNode, FinallyBlockNode, CaseNode,
-        LlmActExprNode, LlmStreamStmtNode,
+        LlmActExprNode,
         MatchExprNode,
     )
 
@@ -684,10 +684,14 @@ def _collect_variable_refs(node: object, bound: set[str], used: set[str]) -> Non
         _collect_variable_refs(node.body, bound, used)
         return
 
-    if isinstance(node, (LlmActExprNode, LlmStreamStmtNode)):
-        # LLM nodes: traverse their expressions
+    if isinstance(node, LlmActExprNode):
+        # LLM act node: traverse prompt and callback expressions
         if hasattr(node, 'prompt'):
             _collect_variable_refs(node.prompt, bound, used)
+        if hasattr(node, 'on_chunk'):
+            _collect_variable_refs(node.on_chunk, bound, used)
+        if hasattr(node, 'on_complete'):
+            _collect_variable_refs(node.on_complete, bound, used)
         if hasattr(node, 'options'):
             _collect_variable_refs(node.options, bound, used)
         if hasattr(node, 'tools'):

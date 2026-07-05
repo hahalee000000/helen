@@ -1,7 +1,7 @@
 ---
 name: helen-agent-patterns
 description: "Helen Agent 设计模式 — 单 Agent、多 Agent 协作、作用域隔离、共享变量、路由、流式处理、历史管理"
-version: 1.12.0
+version: 1.14.0
 author: Helen Team
 license: MIT
 tags: [helen, agent, patterns, design, llm, scope-isolation, shared-let, v1.12, closure, concurrency, history, persistence, context-window]
@@ -518,11 +518,11 @@ agent DataAggregator {
 }
 ```
 
-### 模式 5: 流式 Agent（llm stream / streaming true + for await）
+### 模式 5: 流式 Agent（llm act + on_chunk 回调 / streaming true + for await）
 
 **场景**：实时输出 LLM 响应，改善用户体验
 
-#### 方式 A：使用 `llm stream` + `on_chunk` 回调
+#### 方式 A：使用 `llm act` + `on_chunk` 回调
 
 ```helen
 fn print_chunk(chunk: str) {
@@ -533,7 +533,7 @@ agent StreamingWriter(topic: str) {
     description "Write content with streaming output"
     
     main {
-        llm stream "Write a detailed article about " + topic on_chunk print_chunk
+        llm act "Write a detailed article about " + topic on_chunk print_chunk
     }
 }
 
@@ -556,7 +556,7 @@ agent StreamingWriter(topic: str) {
     description "Write content with streaming output"
     
     main {
-        llm stream "Write a detailed article about " + topic on_chunk on_chunk on_complete on_complete
+        llm act "Write a detailed article about " + topic on_chunk on_chunk on_complete on_complete
     }
 }
 ```

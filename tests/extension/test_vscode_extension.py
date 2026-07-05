@@ -83,13 +83,13 @@ class TestTextMateGrammar:
 class TestKeywordCoverage:
     """Test that all Helen keywords are covered by the TextMate grammar."""
 
-    # All keywords from helen.core.tokens._KEYWORD_MAP (v1.10)
+    # All keywords from helen.core.tokens._KEYWORD_MAP (v1.14: removed 'stream', merged into llm act)
     HELLEN_KEYWORDS = {
         "agent", "description", "model", "tools",
         "temperature", "max-turns", "prompt", "llm", "import",
         "let", "const", "shared", "if", "else", "for", "while", "break", "continue",
         "return", "await", "async", "match", "case", "branch",
-        "default", "act", "stream", "try", "catch", "finally",
+        "default", "act", "try", "catch", "finally",
         "throw", "assert",
         "fn", "as", "in", "functions", "main", "alias",
         "protocol", "impl", "is",

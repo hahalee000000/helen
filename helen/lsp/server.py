@@ -114,7 +114,7 @@ HELLEN_KEYWORDS = [
     # Imports
     "import", "as",
     # LLM keywords
-    "llm", "act", "stream",
+    "llm", "act",
     # Async
     "async", "await",
     # Protocol/Interface (v1.7)
@@ -130,7 +130,7 @@ HELLEN_KEYWORDS = [
     "匹配", "情况", "默认", "分支",       # match, case, default, branch
     "尝试", "捕获", "最终", "抛出", "断言",  # try, catch, finally, throw, assert
     "真", "假", "空", "是",             # true, false, null, is
-    "智能体", "大模型", "执行", "流式执行",  # agent, llm, act, stream
+    "智能体", "大模型", "执行",               # agent, llm, act
     "异步", "等待",                     # async, await
     "提示", "描述", "模型", "工具",       # prompt, description, model, tools
     "流式输出", "温度", "最大轮次",        # streaming, temperature, max-turns

@@ -61,20 +61,20 @@ agent MyAgent(input: str) {
     temperature 0.7
     
     main {
-        // Use llm stream for real-time output (supports tool calling!)
-        llm stream input
+        // Use llm act with on_chunk callback for real-time output (supports tool calling!)
+        llm act input
     }
 }
 ```
 
-**Important**: Use `llm stream` instead of `llm act` for agent responses. `llm stream` supports tool calling AND provides real-time streaming output, while `llm act` waits for the complete response before displaying.
+**Important**: Use `llm act` with `on_chunk` callback for agent responses. `llm act` supports tool calling AND provides real-time streaming output via callbacks.
 
 ### Key Patterns
 
-- **Tool declaration**: `tools = [...]` is the LLM's only visibility allowlist (two-layer authorization: `functions {}` declares capability, `tools` decides what the LLM can invoke). Listed tools are included in `llm stream` and `llm act` calls.
-- **Prefer `llm stream`**: Supports tool calling AND provides real-time streaming output; use `llm act` only when you need the return value
+- **Tool declaration**: `tools = [...]` is the LLM's only visibility allowlist (two-layer authorization: `functions {}` declares capability, `tools` decides what the LLM can invoke). Listed tools are included in `llm act` calls.
+- **Prefer `llm act` with `on_chunk`**: Supports tool calling AND provides real-time streaming output via callbacks
 - **Memory via markdown files**: Store knowledge in `memory/*.md` files, read at start of each task
-- **Memory injection**: Load memory content and prepend to user prompt before `llm stream`
+- **Memory injection**: Load memory content and prepend to user prompt before `llm act`
 - **Interactive loops**: Use `while (true)` with `input()` for continuous conversation
 - **Special commands**: Handle `/quit`, `/memory`, `/remember`, `/plan` in main loop before calling agent
 - **Skill loading**: `load_skill` tool is auto-included for Tier 2 skill disclosure
@@ -96,7 +96,7 @@ agent SmartAgent(user_input: str) {
         } else {
             let full_prompt = user_input
         }
-        llm stream full_prompt  // streaming output with tool support
+        llm act full_prompt  // streaming output with tool support via on_chunk callback
     }
 }
 ```

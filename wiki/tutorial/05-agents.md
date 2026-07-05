@@ -493,15 +493,15 @@ let mood = llm if text + "反映的情绪" {
 print("Mood: " + mood)
 ```
 
-## llm stream — 流式输出
+## llm act 流式输出（on_chunk / on_complete）
+
+`llm act` 支持可选的 `on_chunk` 和 `on_complete` 回调，用于逐 chunk 流式输出 LLM 响应，适用于长文本生成场景。
 
 ### 基本用法
 
-`llm stream` 逐 chunk 流式输出 LLM 响应，适用于长文本生成场景：
-
 ```helen
 main {
-    llm stream "Write a short poem about programming"
+    llm act "Write a short poem about programming"
 }
 ```
 
@@ -517,7 +517,7 @@ fn handle_chunk(chunk) {
 }
 
 main {
-    llm stream "Explain recursion in one paragraph" on_chunk handle_chunk
+    llm act "Explain recursion in one paragraph" on_chunk handle_chunk
 }
 ```
 
@@ -533,7 +533,7 @@ fn on_done() {
 }
 
 main {
-    llm stream "Write a short story" on_chunk handle_chunk on_complete on_done
+    llm act "Write a short story" on_chunk handle_chunk on_complete on_done
 }
 ```
 
@@ -544,7 +544,7 @@ main {
 
 ### 在 agent 中使用
 
-`llm stream` 在 agent 内自动使用 agent 的配置（model、temperature、prompt）：
+`llm act` 的流式回调在 agent 内自动使用 agent 的配置（model、temperature、prompt）：
 
 ```helen
 agent Poet(topic: str) {
@@ -555,7 +555,7 @@ agent Poet(topic: str) {
     """
 
     main {
-        llm stream    // bare form：使用渲染后的 prompt
+        llm act    // bare form：使用渲染后的 prompt
     }
 }
 ```
@@ -565,7 +565,7 @@ agent Poet(topic: str) {
 ```helen
 main {
     let topic = "the beauty of recursion"
-    llm stream "Write a haiku about " + topic
+    llm act "Write a haiku about " + topic
 }
 ```
 
@@ -573,9 +573,8 @@ main {
 
 | 语句 | 用途 | 输出方式 |
 |------|------|----------|
-| `llm act` | 获取完整响应文本 | 等待完成后返回 |
+| `llm act` | 获取完整响应文本（可选流式回调） | 等待完成后返回，或通过 on_chunk 逐 chunk 输出 |
 | `llm if` | LLM 分类路由 | 等待完成后执行分支 |
-| `llm stream` | 流式输出生成内容 | 逐 chunk 实时输出 |
 
 ## 对比：何时使用哪个？
 
@@ -584,7 +583,7 @@ main {
 | 需要 LLM 返回文本 | `llm act` |
 | 需要 LLM 做分类决策 | `llm if` |
 | 需要 LLM 从选项中选择并执行代码 | `llm if` + `branch` |
-| 需要实时输出生成过程 | `llm stream` |
+| 需要实时输出生成过程 | `llm act` + `on_chunk` 回调 |
 | 多步骤决策 | 嵌套 `llm if` |
 | 需要结果变量 | `llm if` 或 `llm act` |
 

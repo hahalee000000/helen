@@ -220,10 +220,6 @@ class Visitor(ABC, Generic[R]):
         """Visit a LlmActExprNode."""
 
     @abstractmethod
-    def visit_llm_stream_stmt(self, node: LlmStreamStmtNode) -> R:
-        """Visit a LlmStreamStmtNode."""
-
-    @abstractmethod
     def visit_match_stmt(self, node: MatchStmtNode) -> R:
         """Visit a MatchStmtNode."""
 
@@ -1053,43 +1049,30 @@ class LlmIfStmtNode(StatementNode):
 
 @dataclass(frozen=True)
 class LlmActExprNode(ExpressionNode):
-    """LLM act as an expression: llm act <prompt_expr>? Returns the LLM response text.
+    """LLM act as an expression: llm act <prompt_expr>? [on_chunk <cb>] [on_complete <cb>].
+
+    Without callbacks: synchronous LLM call, returns response text.
+    With callbacks: streaming LLM call, calls on_chunk for each chunk,
+    on_complete when done, returns full accumulated response text.
 
     When prompt is None (bare ``llm act``), the agent's rendered prompt template
     is used as the user message automatically (HLD 3.6.5).
+
+    Syntax:
+        llm act                                  # Bare form (in agent main)
+        llm act "prompt"                         # Sync, returns text
+        llm act "prompt" on_chunk callback       # Streaming with chunk callback
+        llm act "prompt" on_complete callback    # Streaming with completion callback
+        let result = llm act "prompt"            # Capture full response
     """
     prompt: ExpressionNode | None
-    span: SourceSpan
+    on_chunk: ExpressionNode | None = None
+    on_complete: ExpressionNode | None = None
+    span: SourceSpan = None  # type: ignore[assignment]
 
     def accept(self, visitor: Visitor[R]) -> R:
         """Dispatch to the visitor."""
         return visitor.visit_llm_act_expr(self)
-
-
-@dataclass(frozen=True)
-class LlmStreamStmtNode(ExpressionNode):
-    """LLM stream expression: llm stream <prompt_expr>? [on_chunk <callback>] [on_complete <callback>].
-
-    Streams LLM response chunk by chunk, optionally calling a callback for each chunk.
-    If no callback is provided, chunks are printed to stdout using stream_print.
-    After streaming completes, on_complete callback is called if provided.
-    Returns the full accumulated response text (can be assigned to a variable).
-
-    Syntax:
-        llm stream                             # Bare form (in agent main, uses rendered prompt)
-        llm stream "prompt"                    # Auto-print chunks
-        llm stream "prompt" on_chunk callback  # Call callback(chunk) for each chunk
-        llm stream "prompt" on_complete callback  # Call callback() after streaming completes
-        let result = llm stream "prompt"       # Capture full response
-    """
-    prompt: ExpressionNode | None  # None = bare form (use agent's rendered prompt)
-    on_chunk: ExpressionNode | None  # Optional callback function for each chunk
-    on_complete: ExpressionNode | None  # Optional callback function when streaming completes
-    span: SourceSpan
-
-    def accept(self, visitor: Visitor[R]) -> R:
-        """Dispatch to the visitor."""
-        return visitor.visit_llm_stream_stmt(self)
 
 
 @dataclass(frozen=True)
@@ -1412,11 +1395,7 @@ class ASTPrinter(Visitor[str]):
 
     def visit_llm_act_expr(self, node: LlmActExprNode) -> str:
         """Visit a LlmActExprNode."""
-        return self._parenthesize("llm-act-expr", node.prompt)
-
-    def visit_llm_stream_stmt(self, node: LlmStreamStmtNode) -> str:
-        """Print llm stream statement."""
-        return self._parenthesize("llm-stream", node.prompt, node.on_chunk, node.on_complete)
+        return self._parenthesize("llm-act", node.prompt, node.on_chunk, node.on_complete)
 
     def visit_match_stmt(self, node: MatchStmtNode) -> str:
         """Visit a MatchStmtNode."""

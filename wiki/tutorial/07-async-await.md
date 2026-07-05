@@ -231,7 +231,7 @@ v1.10 添加了异步 HTTP 方法，支持并发 LLM 调用，基于 `httpx.Asyn
 ```helen
 // 同步方法（已有）
 llm act target "description"
-llm stream target "description"
+llm act target "description" on_chunk handle_chunk   // 流式回调
 
 // 异步方法（v1.10 新增）
 await llm act_async target "description"

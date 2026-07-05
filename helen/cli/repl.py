@@ -200,7 +200,7 @@ def _run_helen_assistant(question: str) -> bool:
 
     try:
         interp.interpret(program)
-        # With llm stream, output is already printed to stdout.
+        # With llm act on_chunk, output is already printed to stdout.
         # If there were errors during execution, report them.
         if errors.has_errors:
             msgs = [format_error(err) for err in errors.errors]
@@ -274,7 +274,7 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
 
         print("\n🤔 Thinking...\n")
         _run_helen_assistant(arg)
-        # Output is streamed directly to stdout by llm stream
+        # Output is streamed directly to stdout by llm act on_chunk
         print()  # Final newline after streaming completes
         return True
 

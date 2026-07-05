@@ -104,7 +104,6 @@ class TokenType(Enum):
     BRANCH = auto()
     DEFAULT = auto()
     ACT = auto()
-    STREAM = auto()
     TRY = auto()
     CATCH = auto()
     FINALLY = auto()
@@ -159,7 +158,6 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "branch": TokenType.BRANCH,
     "default": TokenType.DEFAULT,
     "act": TokenType.ACT,
-    "stream": TokenType.STREAM,
     "try": TokenType.TRY,
     "catch": TokenType.CATCH,
     "finally": TokenType.FINALLY,
@@ -212,7 +210,6 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "智能体": TokenType.AGENT,
     "大模型": TokenType.LLM,
     "执行": TokenType.ACT,
-    "流式执行": TokenType.STREAM,
     "异步": TokenType.ASYNC,
     "等待": TokenType.AWAIT,
     "提示": TokenType.PROMPT,

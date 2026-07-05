@@ -4,6 +4,54 @@
 
 ---
 
+## [2026-07-05] refactor | v1.14 — 合并 llm stream 到 llm act
+
+**操作**: 合并 `llm stream` 到 `llm act`，消除冗余 LLM 调用模式
+**执行时间**: 2026-07-05
+**状态**: ✅ 完成
+
+### 变更内容
+
+1. **语言表面简化**
+   - `llm stream` 被删除，流式功能合并到 `llm act`
+   - `llm act` 现在支持可选的 `on_chunk`/`on_complete` 回调参数
+   - 有回调 → 流式执行；无回调 → 同步执行
+   - 关键字从 94 个减至 92 个（46 英文 + 46 中文）
+
+2. **删除的内容**
+   - `LlmStreamStmtNode` AST 节点
+   - `visit_llm_stream_stmt` visitor 方法
+   - `STREAM` TokenType + `stream`/`流式执行` 关键字
+   - `_llm_stream_expr()`/`_llm_stream_stmt()` 解析方法
+
+3. **新增/修改**
+   - `LlmActExprNode` 增加 `on_chunk`/`on_complete` 字段
+   - `visit_llm_act_expr` 分叉为同步路径和流式路径
+   - 解析器支持 `llm act "prompt" on_chunk cb on_complete cb`
+
+4. **文档更新**
+   - wiki/tutorial/ — 全部更新
+   - wiki/interpreter/ — 更新
+   - wiki/syntax/keywords.md — 更新
+   - wiki/overview/language-spec.md — 更新
+   - skills/ — 全部更新
+   - docs/tutorial.md — 更新
+
+### 新语法
+
+```helen
+// 同步（和之前一样）
+let result = llm act "写一首诗"
+
+// 流式（之前用 llm stream，现在用 llm act）
+llm act "写一篇长文" on_chunk fn(chunk) { print(chunk, end="") }
+
+// 流式 + 完成回调
+llm act "写报告" on_chunk handle_chunk on_complete handle_done
+```
+
+---
+
 ## [2026-07-05] feat | v1.13 — Channel 通道 + 中文关键字补全
 
 **操作**: 实现 Channel 机制 + 补全 `store` 中文关键字

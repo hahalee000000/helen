@@ -24,7 +24,6 @@ from helen.core.ast import (
     LlmActExprNode,
     LlmBranchNode,
     LlmIfStmtNode,
-    LlmStreamStmtNode,
     LiteralNode,
 )
 from helen.core.errors import ErrorCode
@@ -144,22 +143,16 @@ class LlmMixin:
         return self._execute_stmts(node.body)
 
     def visit_llm_act_expr(self: Any, node: LlmActExprNode) -> object:
-        """Execute llm act as an expression: llm act <prompt_expr>?
+        """Execute llm act expression: llm act <prompt_expr>? [on_chunk <cb>] [on_complete <cb>].
 
-        Evaluates the prompt expression and calls the LLM runtime.
-        Returns the LLM response text.
-        If inside an agent with a prompt field, uses it as system_prompt.
+        Without callbacks: synchronous LLM call, returns response text.
+        With callbacks: streaming LLM call, calls on_chunk for each chunk,
+        on_complete when done, returns full accumulated response text.
 
         Bare form (``llm act`` with no expression, or ``llm act ""``):
         When inside an agent context, the agent's rendered prompt template
-        is used as the user message automatically. This avoids redundant
-        repetition when the agent's prompt already contains all necessary
-        information (HLD 3.6.5).
+        is used as the user message automatically (HLD 3.6.5).
         """
-        # P1 optimization: Cache rendered prompt for this LLM call
-        # Avoids multiple _render_prompt_template calls during single llm act
-        rendered_prompt_cache = self._get_rendered_agent_prompt()
-        
         # Evaluate the prompt expression
         if node.prompt is not None:
             prompt = node.prompt.accept(self)
@@ -171,8 +164,9 @@ class LlmMixin:
         # Bare form: if prompt is empty and we're inside an agent,
         # use the rendered agent prompt as the user message
         if not prompt and self._current_agent is not None:
-            if rendered_prompt_cache:
-                prompt = rendered_prompt_cache
+            rendered = self._get_rendered_agent_prompt()
+            if rendered:
+                prompt = rendered
 
         # Extract agent settings if inside an agent context
         model = self._get_agent_setting("model")
@@ -190,13 +184,9 @@ class LlmMixin:
         if tools and max_turns < 3:
             max_turns = 3
 
-        # P0 fix: In bare form (no explicit prompt expression), use agent description
-        # as system_prompt and rendered prompt template as user message.
-        # Previously, the rendered prompt was used as BOTH system_prompt and user message,
-        # causing the LLM to see the same content twice (wasting tokens and potentially
-        # confusing the model). Now consistent with visit_llm_stream_stmt behavior.
+        # System prompt: explicit prompt → rendered agent prompt; bare → agent description
         if node.prompt is not None:
-            system_prompt = rendered_prompt_cache
+            system_prompt = self._get_rendered_agent_prompt()
         else:
             # Bare form: use agent description as system_prompt
             system_prompt = self._get_agent_setting("description")
@@ -212,7 +202,20 @@ class LlmMixin:
         # P0: Prepare history for LLM call (trim to fit context window)
         history_for_llm = self._prepare_history_for_llm(system_prompt, prompt)
 
-        # Audit log entry (P2: LLM call audit)
+        # Determine streaming vs synchronous path
+        has_streaming = node.on_chunk is not None or node.on_complete is not None
+
+        if has_streaming:
+            return self._visit_llm_act_streaming(node, prompt, model, temperature, max_turns,
+                                                   tools, system_prompt, history_for_llm)
+        else:
+            return self._visit_llm_act_sync(node, prompt, model, temperature, max_turns,
+                                            tools, system_prompt, history_for_llm)
+
+    def _visit_llm_act_sync(self: Any, node: LlmActExprNode, prompt: str,
+                            model: str, temperature: float, max_turns: int,
+                            tools: list, system_prompt: str, history_for_llm: list) -> object:
+        """Synchronous llm act: call act() and return response text."""
         import time
         audit_start = time.time()
         agent_name = self._current_agent.name if self._current_agent else None
@@ -225,7 +228,7 @@ class LlmMixin:
                 prompt, tools=tools, model=model,
                 temperature=temperature, max_turns=max_turns,
                 system_prompt=system_prompt,
-                history=history_for_llm,  # P0: pass trimmed history
+                history=history_for_llm,
                 dispatch_fn=dispatch_fn,
             )
             audit_duration = (time.time() - audit_start) * 1000
@@ -246,8 +249,6 @@ class LlmMixin:
             self.observability.llm_audit.log(audit_entry)
 
             # P1: Record tool calls + final response to history
-            # This makes tool calling context visible to subsequent llm act calls,
-            # preventing redundant tool executions (e.g., repeated web searches).
             if response:
                 self._record_llm_response_to_history(response)
             return response.text if response else None
@@ -282,81 +283,30 @@ class LlmMixin:
             self.observability.llm_audit.log(audit_entry)
             raise HelenRuntimeError(str(e), node.span) from e
 
-    def visit_llm_stream_stmt(self: Any, node: LlmStreamStmtNode) -> object:
-        """Execute llm stream statement: stream LLM response chunk by chunk.
-
-        If on_chunk callback is provided, call it for each chunk.
-        Otherwise, no output is produced - data is only recorded in history.
-
-        Supports bare form (no prompt) inside agent main blocks.
-        """
-        # Evaluate the prompt expression (or use rendered agent prompt for bare form)
-        if node.prompt is not None:
-            prompt = node.prompt.accept(self)
-            if not isinstance(prompt, str):
-                prompt = self._stringify(prompt)
-        else:
-            # Bare form: use rendered agent prompt as user message
-            prompt = self._get_rendered_agent_prompt()
-            if not prompt:
-                self.errors.error(
-                    ErrorCode.RUNTIME_ERROR,
-                    "llm stream (bare form) requires an agent context with a prompt",
-                    node.span,
-                )
-                return None
-
-        # Extract agent settings if inside an agent context
-        model = self._get_agent_setting("model")
-        temperature = float(self._get_agent_setting("temperature", 1.0))
-
-        # P2: Update history manager's model for model-aware context window
-        if model:
-            self._history_manager.set_model(model)
-
-        # Get rendered agent prompt as system_prompt (only if prompt was explicit)
-        if node.prompt is not None:
-            system_prompt = self._get_rendered_agent_prompt()
-        else:
-            # Bare form: system_prompt is the agent description
-            system_prompt = self._get_agent_setting("description")
-
-        # Inject skill index into system prompt
-        skill_index = self._build_skill_index()
-        if skill_index:
-            system_prompt = (system_prompt or "") + "\n\n" + skill_index
-
-        # Record user message to history
-        self._add_to_history("user", prompt)
-
-        # P0: Prepare history for LLM call (trim to fit context window)
-        history_for_llm = self._prepare_history_for_llm(system_prompt, prompt)
-
+    def _visit_llm_act_streaming(self: Any, node: LlmActExprNode, prompt: str,
+                                 model: str, temperature: float, max_turns: int,
+                                 tools: list, system_prompt: str, history_for_llm: list) -> object:
+        """Streaming llm act: call act_stream() and dispatch chunks via callbacks."""
         # Check if LLM runtime supports streaming
         if not hasattr(self.llm_runtime, 'act_stream'):
-            # Fallback to non-streaming if not supported
             self.errors.error(
                 ErrorCode.RUNTIME_ERROR,
                 "LLM runtime does not support streaming. Using fallback.",
                 node.span,
             )
+            # Fallback to non-streaming
             response = self.llm_runtime.act(
                 prompt, model=model, temperature=temperature,
                 system_prompt=system_prompt,
-                history=history_for_llm,  # P0: pass trimmed history
+                history=history_for_llm,
             )
             if response and response.text:
-                # Call on_chunk callback if provided
-                if on_chunk_fn is not None:
-                    on_chunk_fn(response.text)
+                if node.on_chunk is not None:
+                    on_chunk_fn = node.on_chunk.accept(self)
+                    if callable(on_chunk_fn):
+                        on_chunk_fn(response.text)
                 self._add_to_history("assistant", response.text)
-            return None
-
-        # Build tools list from agent declarations
-        tools = self._build_tools_list()
-        max_turns = int(self._get_agent_setting("max-turns", 1))
-        if tools and max_turns < 3:
-            max_turns = 3
+            return response.text if response else None
 
         # Evaluate on_chunk callback if provided
         on_chunk_fn = None
@@ -382,7 +332,7 @@ class LlmMixin:
                 )
                 return None
 
-        # Audit log entry (P2: LLM call audit)
+        # Audit log entry
         import time
         audit_start = time.time()
         agent_name = self._current_agent.name if self._current_agent else None
@@ -399,7 +349,7 @@ class LlmMixin:
                 prompt, model=model, temperature=temperature,
                 system_prompt=system_prompt, tools=tools,
                 max_turns=max_turns,
-                history=history_for_llm,  # P0: pass trimmed history
+                history=history_for_llm,
                 dispatch_fn=dispatch_fn,
             ):
                 event_type = event.get("type", "content")
@@ -415,7 +365,6 @@ class LlmMixin:
                     fn_name = event.get("name", "")
                     fn_args = event.get("args", {})
                     tool_calls_log.append({"name": fn_name, "args": fn_args})
-                    # Notify tool call progress via callback if provided
                     if on_chunk_fn is not None:
                         args_str = ", ".join(f"{k}={v!r}" for k, v in fn_args.items())
                         progress = f"\n🔧 Calling {fn_name}({args_str})...\n"
@@ -424,15 +373,12 @@ class LlmMixin:
                 elif event_type == "tool_result":
                     fn_name = event.get("name", "")
                     result = event.get("result", "")
-                    # Notify tool result via callback if provided
                     if on_chunk_fn is not None:
-                        # Truncate long results for display
                         display_result = result if len(result) <= 200 else result[:200] + "..."
                         result_msg = f"✅ {fn_name} returned: {display_result}\n"
                         on_chunk_fn(result_msg)
 
                 elif event_type == "usage":
-                    # Accumulate usage across multiple turns (tool-calling loop)
                     u = event.get("usage", {})
                     stream_usage["prompt_tokens"] = stream_usage.get("prompt_tokens", 0) + u.get("prompt_tokens", 0)
                     stream_usage["completion_tokens"] = stream_usage.get("completion_tokens", 0) + u.get("completion_tokens", 0)
@@ -450,10 +396,9 @@ class LlmMixin:
             if on_complete_fn is not None:
                 on_complete_fn()
 
-            # P1: Record tool calls + final response to history
+            # Record tool calls + final response to history
             full_text = "".join(full_response)
             if full_text or tool_calls_log:
-                # Build a pseudo-response for unified history recording
                 class _StreamResponse:
                     pass
                 stream_resp = _StreamResponse()
@@ -461,13 +406,12 @@ class LlmMixin:
                 stream_resp.tool_calls = tool_calls_log
                 self._record_llm_response_to_history(stream_resp)
 
-            # Log to audit trail (P2)
+            # Log to audit trail
             audit_duration = (time.time() - audit_start) * 1000
-            # Use actual model name (from runtime if not specified)
             actual_model = model or getattr(self.llm_runtime, 'default_model', None) or 'default'
             audit_entry = LLMAuditEntry(
                 timestamp=audit_start,
-                call_type="stream",
+                call_type="act_stream",
                 agent_name=agent_name,
                 model=actual_model,
                 prompt=prompt,
@@ -479,15 +423,13 @@ class LlmMixin:
             )
             self.observability.llm_audit.log(audit_entry)
 
-            # Return the full accumulated response text
             return full_text
         except Exception as e:
-            # Log error to audit trail (P2)
             audit_duration = (time.time() - audit_start) * 1000
             actual_model = model or getattr(self.llm_runtime, 'default_model', None) or 'default'
             audit_entry = LLMAuditEntry(
                 timestamp=audit_start,
-                call_type="stream",
+                call_type="act_stream",
                 agent_name=agent_name,
                 model=actual_model,
                 prompt=prompt,

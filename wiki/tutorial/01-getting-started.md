@@ -346,7 +346,7 @@ An `agent` is a first-class language construct...
 [详细的回答和代码示例]
 ```
 
-**流式输出**：助手使用 `llm stream` 流式输出回答，内容逐 chunk 实时显示，无需等待完整响应。
+**流式输出**：助手使用 `llm act`（带 `on_chunk` 回调）流式输出回答，内容逐 chunk 实时显示，无需等待完整响应。
 
 助手会加载 Helen 文档，生成包含代码示例的详细回答。
 

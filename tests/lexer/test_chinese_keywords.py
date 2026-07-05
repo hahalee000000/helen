@@ -116,7 +116,7 @@ class TestChineseKeywordsLexer:
         assert is_token.lexeme == "是"
 
     def test_agent_keywords(self):
-        source = "智能体 大模型 执行 流式执行 异步 等待"
+        source = "智能体 大模型 执行 异步 等待"
         tokens = self._scan(source)
         assert tokens[0].type == TokenType.AGENT
         assert tokens[0].lexeme == "智能体"
@@ -124,12 +124,10 @@ class TestChineseKeywordsLexer:
         assert tokens[1].lexeme == "大模型"
         assert tokens[2].type == TokenType.ACT
         assert tokens[2].lexeme == "执行"
-        assert tokens[3].type == TokenType.STREAM
-        assert tokens[3].lexeme == "流式执行"
-        assert tokens[4].type == TokenType.ASYNC
-        assert tokens[4].lexeme == "异步"
-        assert tokens[5].type == TokenType.AWAIT
-        assert tokens[5].lexeme == "等待"
+        assert tokens[3].type == TokenType.ASYNC
+        assert tokens[3].lexeme == "异步"
+        assert tokens[4].type == TokenType.AWAIT
+        assert tokens[4].lexeme == "等待"
 
     def test_agent_decl_keywords(self):
         source = "提示 描述 模型 工具 流式输出 温度 最大轮次 函数区 主函"
@@ -194,12 +192,12 @@ class TestChineseKeywordsLexer:
         return_token = next(t for t in tokens if t.type == TokenType.RETURN)
         assert return_token.lexeme == "返回"
 
-    def test_all_47_chinese_keywords_registered(self):
-        """Verify exactly 47 Chinese keywords are in the keyword map (v1.13 added 仓库 and 通道)."""
+    def test_all_46_chinese_keywords_registered(self):
+        """Verify exactly 46 Chinese keywords are in the keyword map (v1.14 removed 流式执行)."""
         kw = keywords()
         chinese = {k: v for k, v in kw.items()
                    if any('\u4e00' <= c <= '\u9fff' for c in k)}
-        assert len(chinese) == 47, f"Expected 47, got {len(chinese)}: {sorted(chinese.keys())}"
+        assert len(chinese) == 46, f"Expected 46, got {len(chinese)}: {sorted(chinese.keys())}"
 
     def test_no_lexer_errors(self):
         """Full Chinese program should produce zero lexer errors."""

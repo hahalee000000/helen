@@ -351,7 +351,7 @@ agent TestAgent {
         let cb = fn(chunk) {
             buf = buf + chunk
         }
-        llm stream "hello" on_chunk cb
+        llm act "hello" on_chunk cb
     }
 }
 """

@@ -423,8 +423,7 @@ class ObservabilityManager:
 | `_call_function()` | push/pop 调用栈帧，trace call/return |
 | `_call_agent()` | push/pop 调用栈帧，trace call/return |
 | 异常处理 | `capture_error()` 生成 ErrorSnapshot |
-| `visit_llm_act_expr()` | 记录 LLMAuditEntry |
-| `visit_llm_stream_stmt()` | 记录 LLMAuditEntry（含 tool_calls） |
+| `visit_llm_act_expr()` | 记录 LLMAuditEntry（含流式 tool_calls） |
 | `visit_assert_stmt()` | 条件为 false 时捕获错误上下文 |
 
 ### 零开销设计

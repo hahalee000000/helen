@@ -1,7 +1,7 @@
 ---
 name: helen-stdlib
 description: "Helen 标准库使用指南 — 196 个内置函数的分类参考与示例"
-version: 1.4.0
+version: 1.14.0
 author: Helen Team
 license: MIT
 metadata:
@@ -390,7 +390,7 @@ try {
 - **零开销默认**：追踪关闭时无性能影响
 - **JSON 结构化**：所有输出都是 AI 可消费的格式
 - **自动上下文**：错误/断言失败自动捕获调用栈 + 作用域变量
-- **LLM 审计**：`llm act` / `llm stream` 自动记录调用详情
+- **LLM 审计**：`llm act` 自动记录调用详情
 
 ## Test（测试框架）
 
