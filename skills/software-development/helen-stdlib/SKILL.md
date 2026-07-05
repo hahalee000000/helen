@@ -305,9 +305,19 @@ let spec = {
 }
 let config = parse_cli_args(spec)       # 结构化解析（带类型+默认值）
 
-# Shell 命令
-let result = shell_exec(["ls", "-la"])
-print(result["stdout"])
+# Shell 命令（v1.15+ 智能检测 shell 语法）
+# 简单命令（自动使用 shell=False，更安全）
+let result = shell_exec("ls -la")
+print(result["output"])
+
+# 复合命令（自动检测 &&、|、> 等，启用 shell=True）
+let result = shell_exec("mkdir -p ~/project && cd ~/project && pwd")
+let result = shell_exec("cat file.txt | grep pattern | wc -l")
+let result = shell_exec("echo 'hello' > output.txt")
+
+# 显式控制 shell 模式
+let result = shell_exec("command", shell=true)   # 强制 shell 模式
+let result = shell_exec("command", shell=false)  # 强制非 shell 模式
 
 # 系统信息
 let pid = process_id()
@@ -318,6 +328,11 @@ let host = hostname()
 log_info("Application started")
 log_error("Something went wrong", category="app")
 ```
+
+**shell_exec 智能检测规则**：
+- 包含 `&&`、`||`、`|`、`>`、`<`、`>>`、`<<`、`;`、`$(`、`` ` ``、`\n` → 自动启用 `shell=True`
+- 简单命令（如 `ls -la`、`pwd`）→ 使用 `shell=False`（更安全）
+- 返回结果包含 `shell_mode` 字段，指示实际使用的模式
 
 ### Crypto（加密哈希）
 
