@@ -1,10 +1,127 @@
 # 版本历史
 
-> Helen v1.14 | 合并 llm stream 到 llm act — 消除冗余 LLM 调用模式
+> Helen v1.15 | 系统提示词增强 — P0+P1 框架指令 + P2 角色分离
 
 ---
 
-## v1.14: 合并 llm stream 到 llm act (当前)
+## v1.15: 系统提示词增强 (当前)
+
+参考 Claude Code 和 Hermes 的系统提示词设计，全面提升 LLM agent 的行为指导和执行质量。
+
+### P0+P1: 框架指令 (Framework Instructions)
+
+新增 `<framework_instructions>` 块，在所有 agent 的系统提示词中自动注入行为规则：
+
+```xml
+<framework_instructions>
+You are a Helen agent with tools and skills available. Follow these rules:
+
+## 1. Tool Use (CRITICAL)
+You MUST use your tools to take action — do not describe what you would do
+without actually doing it. When tools are available, use them instead of
+telling the user what you would do. Execute, don't describe.
+
+## 2. Skills (CRITICAL)
+Before replying, scan <available_skills> below. If any skill matches or is
+even partially relevant to your task, you MUST load it with load_skill and
+follow its instructions. Err on the side of loading.
+
+## 3. Parallel Tool Calls
+When you need multiple independent pieces of information, request them
+together in a single response instead of one tool call per turn. Independent
+reads, searches, and read-only commands should be batched.
+
+## 4. Completion Criteria
+The deliverable is a working artifact backed by real tool output — not a
+description of one. Keep working until you have actually exercised the code
+or produced the requested result. Don't stop at "I would do X" — actually do X.
+</framework_instructions>
+```
+
+**改进内容**:
+
+| 优先级 | 改进项 | 说明 |
+|--------|--------|------|
+| P0 | 工具使用强制 | MUST use tools, not describe |
+| P0 | 技能加载强制 | MUST load relevant skills |
+| P1 | 并行工具调用 | Batch independent tool calls |
+| P1 | 完成准则 | Working artifact, not description |
+
+### P2: System/User 角色分离
+
+重构提示词架构，实现 system prompt 和 user prompt 的清晰分离：
+
+**改进前**:
+```
+System: framework + conventions + [agent prompt] ❌ + skill_index
+User:   llm act expression
+
+问题：Agent prompt 被错误地放在 system 中，角色混乱
+```
+
+**改进后**:
+```
+System: framework + conventions + description + skill_index ✅
+User:   [agent prompt] + llm act expression ✅
+
+效果：角色清晰，符合 LLM 最佳实践
+```
+
+**System Prompt 结构**:
+1. Framework Instructions (P0+P1 行为规则)
+2. Helen Language Conventions (语言规范)
+3. Agent Description (角色定义)
+4. Skill Index (技能索引 + 使用指令)
+
+**User Prompt 结构**:
+1. Rendered Agent Prompt (任务描述，如果存在)
+2. LLM Act Expression (实际查询)
+
+### 技能索引强化
+
+强化 `<available_skills>` 的使用指令：
+
+```
+Before replying, scan skills below. If a skill matches or is
+even partially relevant to your task, you MUST load it with
+load_skill and follow its instructions. Err on the side of loading.
+```
+
+### 工具改进
+
+**web_search**:
+- 从 Wikipedia API 切换到 Bing.com 搜索
+- 支持中国网络环境（无需翻墙）
+- 支持通用网页搜索（不仅限于 Wikipedia）
+- 支持 gzip/deflate 内容解压
+
+**web_fetch**:
+- 支持 gzip/deflate 内容解压
+- 修复访问压缩网站时的乱码问题
+- Python.org 等网站正常显示
+
+### 实现变更
+
+- `prompt_builder.py`: 新增 `_build_framework_instructions()` 方法
+- `llm_mixin.py`: 重构 `visit_llm_act_expr` 的提示词构建逻辑
+- `tools.py`: 改进 `web_search` (Bing) 和 `web_fetch` (gzip 支持)
+- 测试：2384 个测试全部通过，无回归
+
+### Token 预算
+
+| 组件 | Token 数量 | 占比 |
+|------|-----------|------|
+| Framework Instructions | ~250 | 2.5% |
+| Helen Conventions | ~800 | 8% |
+| Agent Description | ~50 | 0.5% |
+| Skill Index | ~200 | 2% |
+| **总计** | **~1300** | **13%** |
+
+在典型 32k-128k 上下文窗口中，系统提示词占比 <5%，完全可接受。
+
+---
+
+## v1.14: 合并 llm stream 到 llm act
 
 **Breaking change**: `llm stream` 关键字已删除，流式功能合并到 `llm act`。
 

@@ -97,8 +97,9 @@ tags: [web, search, research]
 
 ```
 <available_skills>
-Before replying, scan skills below. If relevant,
-use load_skill tool to load full content.
+Before replying, scan skills below. If a skill matches or is
+even partially relevant to your task, you MUST load it with
+load_skill and follow its instructions. Err on the side of loading.
 
   research:
     - web-search: Search the web for information (tags: web, search, research)
@@ -106,6 +107,8 @@ use load_skill tool to load full content.
     - code-review: Review code for quality and security (tags: review, security, quality)
 </available_skills>
 ```
+
+**v1.15 强化**：技能索引现在包含 **MUST load** 强制指令，要求 LLM 在技能相关时必须加载，而不是可选的。这确保 agent 在生成代码前主动学习相关技能，避免猜测 API 和语法。
 
 **tags 字段**是提升技能命中率的关键。LLM 根据标签中的关键词匹配用户意图，比仅靠 description 文字匹配更准确。建议使用统一的命名规范（小写、英文关键词）。
 

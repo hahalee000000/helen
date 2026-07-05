@@ -126,11 +126,16 @@ class PromptBuilder:
     def build_system_prompt(self, agent_decl: "AgentDeclNode") -> str:
         """Build the System Prompt for an agent (HLD 3.7.1).
 
+        P2: System/User role separation.
+        System prompt contains: framework instructions, Helen conventions,
+        agent description, and skill index. Agent's prompt field is NOT
+        included here — it's used as user prompt (task description).
+
         Components:
-        1. Helen language conventions and best practices
-        2. Agent description
-        3. Skill Index Tier 1 (<available_skills>)
-        4. Tool schemas (including load_skill)
+        1. Framework instructions (tool use, skills, parallel calls, completion)
+        2. Helen language conventions and best practices
+        3. Agent description (role definition)
+        4. Skill Index Tier 1 (<available_skills>)
 
         Per HLD 3.7.1 progressive disclosure:
         - Tier 1: Skill Index (lightweight) in System Prompt
@@ -138,12 +143,17 @@ class PromptBuilder:
         """
         parts = []
 
-        # 1. Helen language conventions (always included)
+        # 1. Framework instructions (P0+P1: tool use, skills, parallel, completion)
+        framework = self._build_framework_instructions()
+        if framework:
+            parts.append(framework)
+
+        # 2. Helen language conventions (always included)
         helen_conventions = self._build_helen_conventions()
         if helen_conventions:
             parts.append(helen_conventions)
 
-        # 2. Agent description
+        # 3. Agent description (role definition, NOT the prompt field)
         for decl in agent_decl.declarations:
             if decl.description is not None:
                 from helen.core.ast import LiteralNode
@@ -151,12 +161,48 @@ class PromptBuilder:
                     parts.append(decl.description.value)
                     break
 
-        # 3. Skill Index (Tier 1)
+        # 4. Skill Index (Tier 1)
         skill_index = self.build_skill_index()
         if skill_index:
             parts.append(skill_index)
 
         return "\n\n".join(parts)
+
+    def _build_framework_instructions(self) -> str:
+        """Build framework-level behavioral instructions (P0+P1).
+
+        These instructions are injected before agent-specific content and
+        provide foundational behavioral guidance for all agents:
+        - P0: Tool use enforcement (MUST use tools, not describe)
+        - P0: Skill loading enforcement (MUST load relevant skills)
+        - P1: Parallel tool calls (batch independent calls)
+        - P1: Completion criteria (working artifact, not description)
+
+        Inspired by Hermes system prompt patterns.
+        """
+        return """<framework_instructions>
+You are a Helen agent with tools and skills available. Follow these rules:
+
+## 1. Tool Use (CRITICAL)
+You MUST use your tools to take action — do not describe what you would do
+without actually doing it. When tools are available, use them instead of
+telling the user what you would do. Execute, don't describe.
+
+## 2. Skills (CRITICAL)
+Before replying, scan <available_skills> below. If any skill matches or is
+even partially relevant to your task, you MUST load it with load_skill and
+follow its instructions. Err on the side of loading.
+
+## 3. Parallel Tool Calls
+When you need multiple independent pieces of information, request them
+together in a single response instead of one tool call per turn. Independent
+reads, searches, and read-only commands should be batched.
+
+## 4. Completion Criteria
+The deliverable is a working artifact backed by real tool output — not a
+description of one. Keep working until you have actually exercised the code
+or produced the requested result. Don't stop at "I would do X" — actually do X.
+</framework_instructions>"""
 
     def _build_helen_conventions(self) -> str:
         """Build Helen language conventions and best practices section.
@@ -327,9 +373,9 @@ agent MyAgent(input: str) {
                 by_category.setdefault(s.category or "uncategorized", []).append(s)
 
             lines = ["<available_skills>"]
-            lines.append("Before replying — and especially before writing code —")
-            lines.append("scan the skills below. If any skill is relevant, use the")
-            lines.append("load_skill tool to load its full instructions before proceeding.")
+            lines.append("Before replying, scan skills below. If a skill matches or is")
+            lines.append("even partially relevant to your task, you MUST load it with")
+            lines.append("load_skill and follow its instructions. Err on the side of loading.")
             lines.append("")
 
             for category, skill_list in sorted(by_category.items()):

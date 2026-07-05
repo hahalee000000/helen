@@ -148,12 +148,114 @@ agent Researcher {
 
 | 工具 | 功能 | 参数 |
 |------|------|------|
-| `web_search` | 搜索 Wikipedia | `query: str` |
+| `web_search` | 搜索网页（Bing） | `query: str` |
 | `web_fetch` | 获取网页内容 | `url: str` |
 | `read_file` | 读取文件 | `path: str` |
 | `write_file` | 写入文件 | `path: str, content: str` |
 | `shell_exec` | 执行 shell 命令 | `command: str` |
 | `calculate` | 数学计算 | `expression: str` |
+| `load_skill` | 加载技能文档 | `name: str` |
+
+> **注意**：`load_skill` 总是可用（即使不在 `tools` 列表中），用于加载技能文档。
+
+## Agent 系统提示词架构（v1.15+）
+
+Helen v1.15 引入了清晰的 System/User 角色分离，使 agent 的提示词架构符合 LLM 最佳实践。
+
+### System Prompt（行为规则层）
+
+System prompt 自动注入以下内容，定义 agent 的行为规则和能力边界：
+
+```
+1. Framework Instructions (P0+P1 框架指令)
+   - Tool Use (CRITICAL): MUST use tools, not describe
+   - Skills (CRITICAL): MUST load relevant skills
+   - Parallel Tool Calls: batch independent calls
+   - Completion Criteria: working artifact, not description
+
+2. Helen Language Conventions (语言规范)
+   - Core Principles (agent-centric design)
+   - Skill-Driven Development (load skills before coding)
+   - Code Generation Best Practices
+   - Common Pitfalls to Avoid
+   - Quick Reference (testing syntax, agent structure)
+
+3. Agent Description (角色定义)
+   - 来自 agent 的 description 字段
+
+4. Skill Index (技能索引)
+   - <available_skills> 列表
+   - MUST load 指令
+```
+
+### User Prompt（任务层）
+
+User prompt 包含具体的任务描述和查询：
+
+```
+1. Rendered Agent Prompt (任务描述)
+   - 来自 agent 的 prompt 字段（渲染后）
+   - 如果 prompt 包含 {{var}}，会被替换为实际值
+
+2. LLM Act Expression (实际查询)
+   - 来自 llm act 后面的表达式
+   - 例如：llm act "How do I sort a list?"
+```
+
+### 示例
+
+```helen
+agent CodingAgent {
+    description "A coding assistant"
+    prompt "You are a Python expert. Help me with coding."
+    tools ["read_file", "write_file"]
+    
+    main {
+        llm act "How do I sort a list?"
+    }
+}
+```
+
+**LLM 看到的消息结构**：
+
+```
+System: <framework_instructions>
+        You MUST use your tools to take action...
+        You MUST load relevant skills...
+        </framework_instructions>
+        
+        <helen_conventions>
+        Helen language rules and best practices...
+        </helen_conventions>
+        
+        A coding assistant                    ← description
+        
+        <available_skills>
+        Before replying, scan skills below...
+        You MUST load relevant skills...
+        </available_skills>
+
+User:   You are a Python expert.             ← prompt (任务描述)
+        Help me with coding.
+        
+        How do I sort a list?                ← llm act expression (查询)
+```
+
+### 设计原则
+
+| 原则 | 说明 |
+|------|------|
+| **角色清晰** | System = 行为规则，User = 具体任务 |
+| **自动注入** | Framework 和 Conventions 对所有 agent 自动生效 |
+| **技能驱动** | 强制要求加载相关技能再生成代码 |
+| **执行导向** | 强制要求使用工具执行，而不是描述 |
+| **向后兼容** | 所有现有 agent 定义继续工作 |
+
+### Token 预算
+
+系统提示词约占 1300 tokens（~13%），在典型 32k-128k 上下文窗口中完全可接受。
+
+---
 
 ## Agent main 块
 

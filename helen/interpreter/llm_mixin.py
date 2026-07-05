@@ -184,37 +184,62 @@ class LlmMixin:
         if tools and max_turns < 3:
             max_turns = 3
 
-        # System prompt: explicit prompt → rendered agent prompt; bare → agent description
-        if node.prompt is not None:
-            system_prompt = self._get_rendered_agent_prompt()
-        else:
-            # Bare form: use agent description as system_prompt
-            system_prompt = self._get_agent_setting("description")
+        # P2: System/User prompt role separation
+        # System prompt: framework + helen_conventions + description + skill_index
+        # User prompt: rendered agent prompt (task description) + llm act expression (query)
+        system_prompt_parts = []
 
-        # Inject Helen language conventions (always included)
+        # 1. Framework instructions (P0+P1: tool use, skills, parallel, completion)
+        framework = self._build_framework_instructions()
+        if framework:
+            system_prompt_parts.append(framework)
+
+        # 2. Helen language conventions (always included)
         helen_conventions = self._build_helen_conventions()
         if helen_conventions:
-            system_prompt = helen_conventions + ("\n\n" + system_prompt if system_prompt else "")
+            system_prompt_parts.append(helen_conventions)
 
-        # Inject skill index into system prompt
+        # 3. Agent description (role definition)
+        description = self._get_agent_setting("description")
+        if description:
+            system_prompt_parts.append(description)
+
+        # 4. Skill Index (Tier 1)
         skill_index = self._build_skill_index()
         if skill_index:
-            system_prompt = (system_prompt or "") + "\n\n" + skill_index
+            system_prompt_parts.append(skill_index)
+
+        system_prompt = "\n\n".join(system_prompt_parts) if system_prompt_parts else None
+
+        # User prompt: rendered agent prompt (task description) + llm act expression (query)
+        user_prompt_parts = []
+
+        # If agent has a prompt field, render it as task description
+        if node.prompt is not None:
+            rendered_agent_prompt = self._get_rendered_agent_prompt()
+            if rendered_agent_prompt:
+                user_prompt_parts.append(rendered_agent_prompt)
+
+        # The llm act expression is the actual query
+        if prompt:
+            user_prompt_parts.append(prompt)
+
+        user_prompt = "\n\n".join(user_prompt_parts) if user_prompt_parts else prompt
 
         # Record user message to history
-        self._add_to_history("user", prompt)
+        self._add_to_history("user", user_prompt)
 
         # P0: Prepare history for LLM call (trim to fit context window)
-        history_for_llm = self._prepare_history_for_llm(system_prompt, prompt)
+        history_for_llm = self._prepare_history_for_llm(system_prompt, user_prompt)
 
         # Determine streaming vs synchronous path
         has_streaming = node.on_chunk is not None or node.on_complete is not None
 
         if has_streaming:
-            return self._visit_llm_act_streaming(node, prompt, model, temperature, max_turns,
+            return self._visit_llm_act_streaming(node, user_prompt, model, temperature, max_turns,
                                                    tools, system_prompt, history_for_llm)
         else:
-            return self._visit_llm_act_sync(node, prompt, model, temperature, max_turns,
+            return self._visit_llm_act_sync(node, user_prompt, model, temperature, max_turns,
                                             tools, system_prompt, history_for_llm)
 
     def _visit_llm_act_sync(self: Any, node: LlmActExprNode, prompt: str,
@@ -685,6 +710,22 @@ class LlmMixin:
             # Restore environment
             self.environment = old_env
 
+    def _build_framework_instructions(self: Any) -> str:
+        """Build framework-level behavioral instructions (P0+P1).
+
+        P2: Delegates to PromptBuilder for unified implementation.
+        Provides foundational behavioral guidance for all agents:
+        - P0: Tool use enforcement (MUST use tools, not describe)
+        - P0: Skill loading enforcement (MUST load relevant skills)
+        - P1: Parallel tool calls (batch independent calls)
+        - P1: Completion criteria (working artifact, not description)
+        """
+        if hasattr(self, '_prompt_builder') and self._prompt_builder is not None:
+            return self._prompt_builder._build_framework_instructions()
+
+        # Fallback: return empty string (should not reach here normally)
+        return ""
+
     def _build_helen_conventions(self: Any) -> str:
         """Build Helen language conventions section for system prompt.
 
@@ -752,9 +793,9 @@ class LlmMixin:
                 by_category.setdefault(s.category or "uncategorized", []).append(s)
 
             lines = ["<available_skills>"]
-            lines.append("Before replying — and especially before writing code —")
-            lines.append("scan the skills below. If any skill is relevant, use the")
-            lines.append("load_skill tool to load its full instructions before proceeding.")
+            lines.append("Before replying, scan skills below. If a skill matches or is")
+            lines.append("even partially relevant to your task, you MUST load it with")
+            lines.append("load_skill and follow its instructions. Err on the side of loading.")
             lines.append("")
 
             for category, skill_list in sorted(by_category.items()):
