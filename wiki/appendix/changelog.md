@@ -118,12 +118,47 @@ load_skill and follow its instructions. Err on the side of loading.
 - 修复访问压缩网站时的乱码问题
 - Python.org 等网站正常显示
 
+**shell_exec**:
+- 默认 `shell=True`，支持完整 shell 语法（`&&`、`||`、`|`、`>`、`<`、`;`、`$()` 等）
+- 简化实现：移除智能检测逻辑，代码从 15 行减少到 5 行
+- 提供 `shell=False` 选项用于安全敏感场景
+
+### stdlib 新增：上下文管理 (v1.15)
+
+新增 2 个上下文管理函数，用于长对话 agent 的上下文控制：
+
+**clear_context()** — 清空当前对话上下文
+```helen
+let result = clear_context()
+// 返回: {"status": "ok", "cleared_messages": 5, "cleared_tokens": 1200}
+```
+
+**compress_context(strategy)** — 压缩当前对话上下文
+```helen
+let result = compress_context("auto")
+// 策略: "auto" | "summarize" | "truncate" | "none"
+// 返回: {"status": "ok", "original_tokens": 2000, "compressed_tokens": 1000}
+```
+
+**使用场景**:
+- 长对话 agent 定期压缩上下文（避免 token 超限）
+- 用户要求"重新开始"时清空上下文
+- 错误恢复时重置上下文
+
+**实现细节**:
+- 通过 `_set_interpreter_context()` 注入解释器的 `_history` 和 `_history_manager`
+- `clear_context()` 直接清空 `_history` 列表
+- `compress_context()` 调用 `HistoryManager` 的压缩方法
+- 11 个单元测试全部通过
+
 ### 实现变更
 
 - `prompt_builder.py`: 新增 `_build_framework_instructions()` 方法
 - `llm_mixin.py`: 重构 `visit_llm_act_expr` 的提示词构建逻辑
-- `tools.py`: 改进 `web_search` (Bing) 和 `web_fetch` (gzip 支持)
-- 测试：2384 个测试全部通过，无回归
+- `tools.py`: 改进 `web_search` (Bing)、`web_fetch` (gzip 支持)、`shell_exec` (默认 shell=True)
+- `stdlib/context.py`: 新增上下文管理模块（`clear_context`、`compress_context`）
+- `interpreter.py`: 注入解释器上下文到 stdlib（`_set_interpreter_context`）
+- 测试：2395 个测试全部通过（新增 11 个上下文管理测试），无回归
 
 ### Token 预算
 

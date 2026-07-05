@@ -792,13 +792,16 @@ class Interpreter(LlmMixin, Visitor[object]):
         Loads the Helen stdlib module and registers all builtin functions
         (e.g., print, len, type, debug_*) into the global environment.
         Also connects the observability manager to stdlib debug functions.
-        
+
         Called during initialization and after reset_definitions().
         """
         from helen.stdlib import stdlib  # noqa: PLC0415
         from helen.stdlib import _set_interpreter_observability  # noqa: PLC0415
+        from helen.stdlib import _set_interpreter_context  # noqa: PLC0415
         # Connect observability manager to stdlib debug functions
         _set_interpreter_observability(self.observability)
+        # Connect history to stdlib context management functions
+        _set_interpreter_context(self._history, self._history_manager)
         for name in stdlib.names:
             builtin = stdlib.lookup(name)
             if builtin is not None:

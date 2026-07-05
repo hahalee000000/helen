@@ -1,10 +1,10 @@
 # 教程 10: 标准库参考
 
-> 195 个内置函数，覆盖 AI 应用开发的所有核心需求
+> 198 个内置函数，覆盖 AI 应用开发的所有核心需求
 
 ## 概览
 
-Helen 标准库提供 195 个内置函数，分为 9 大类别：
+Helen 标准库提供 198 个内置函数，分为 10 大类别：
 
 | 类别 | 函数数 | 功能 |
 |------|--------|------|
@@ -19,6 +19,7 @@ Helen 标准库提供 195 个内置函数，分为 9 大类别：
 | **System** | 18 | 环境变量、CLI 参数、进程管理、日志 |
 | **Crypto** | 11 | 哈希、随机数 |
 | **IO** | 5 | 流式输出控制 |
+| **Context** | 2 | 上下文管理（v1.15 新增） |
 
 ## 多语言 stdlib (v1.10)
 
@@ -434,6 +435,78 @@ print(type(config["port"]))  // "int"
 支持的 spec 类型：`flag`、`string`、`int`、`float`。
 
 > **注意**：嵌套 map 字面量中 `}}` 会被词法分析器识别为模板引用关闭符。需要在两个 `}` 之间加空格：`} }`。
+
+## Context 函数 (2) (v1.15)
+
+上下文管理函数，用于控制 LLM 对话上下文的生命周期。
+
+### 清空上下文
+
+```helen
+// 清空当前对话历史
+let result = clear_context()
+print("已清空 " + str(result["cleared_messages"]) + " 条消息")
+print("释放约 " + str(result["cleared_tokens"]) + " tokens")
+// 返回: {"status": "ok", "cleared_messages": 5, "cleared_tokens": 1200, "warning": "..."}
+```
+
+**使用场景**：
+- 用户要求"重新开始"对话
+- 错误恢复时重置上下文
+- 长对话 agent 定期清理
+
+### 压缩上下文
+
+```helen
+// 自动压缩（基于 token 阈值）
+let result = compress_context("auto")
+print("从 " + str(result["original_tokens"]) + " 压缩到 " + str(result["compressed_tokens"]))
+// 返回: {"status": "ok", "original_messages": 10, "compressed_messages": 5, ...}
+
+// 强制使用 LLM 摘要压缩
+compress_context("summarize")
+
+// 截断保留最近 10 条消息
+compress_context("truncate")
+```
+
+**压缩策略**：
+- `"auto"`：自动选择（默认，仅在 token 超过阈值时压缩）
+- `"summarize"`：使用 LLM 生成摘要（慢但保留上下文）
+- `"truncate"`：截断旧消息（快但丢失上下文）
+- `"none"`：不压缩（no-op）
+
+**长对话 agent 示例**：
+
+```helen
+agent ChatBot {
+    main {
+        let message_count = 0
+        while true {
+            let input = prompt("you> ")
+            let response = llm act { ... }
+            
+            message_count += 1
+            
+            // 每 10 轮对话自动压缩
+            if message_count % 10 == 0 {
+                let result = compress_context("auto")
+                if result["status"] == "ok" {
+                    print("已压缩上下文，节省 " + 
+                          str(result["original_tokens"] - result["compressed_tokens"]) + 
+                          " tokens")
+                }
+            }
+            
+            // 用户命令：/clear 清空上下文
+            if input == "/clear" {
+                clear_context()
+                print("上下文已清空")
+            }
+        }
+    }
+}
+```
 
 ## 异常处理 (v1.9+)
 

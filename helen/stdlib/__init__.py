@@ -130,6 +130,11 @@ from helen.stdlib.tools import (
     _shell_exec, _calculate, _patch_file, _load_skill,
 )
 
+# Import context management functions
+from helen.stdlib.context import (
+    _clear_context, _compress_context, _set_interpreter_context,
+)
+
 
 @dataclass
 class BuiltinFunction:
@@ -331,6 +336,13 @@ def _set_interpreter_observability(obs):
     """Set the interpreter's observability manager for debug builtins."""
     global _interpreter_observability
     _interpreter_observability = obs
+
+
+# ── Context Management builtins (v1.15) ──────────────────────
+
+# Global reference to interpreter's history (set by interpreter)
+_interpreter_history = None
+_interpreter_history_manager = None
 
 
 def _debug(message: str, data: Any = None) -> str:
@@ -1003,6 +1015,10 @@ def _register_builtins() -> None:
         BuiltinFunction("calculate", "Evaluate math expression", "calculate(expression)", _calculate, "tools"),
         BuiltinFunction("patch_file", "Patch a file", "patch_file(path, old_string, new_string, replace_all?)", _patch_file, "tools"),
         BuiltinFunction("load_skill", "Load a skill by name", "load_skill(name)", _load_skill, "tools"),
+
+        # Context management (v1.15)
+        BuiltinFunction("clear_context", "Clear conversation context", "clear_context()", _clear_context, "context"),
+        BuiltinFunction("compress_context", "Compress conversation context", "compress_context(strategy?)", _compress_context, "context"),
     ]
 
     for func in builtins:
