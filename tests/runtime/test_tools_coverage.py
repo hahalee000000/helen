@@ -348,6 +348,20 @@ class TestShellExec:
         assert result["exit_code"] == 0
         assert "hello" in result["output"]
 
+    def test_brace_expansion(self):
+        """Test bash brace expansion works with default shell=True"""
+        import tempfile
+        import os
+        with tempfile.TemporaryDirectory() as tmpdir:
+            test_dir = os.path.join(tmpdir, "test_brace")
+            result = json.loads(_shell_exec(f"mkdir -p {test_dir}/{{a,b,c}}"))
+            assert result["exit_code"] == 0
+            # Should create three separate directories, not one literal {a,b,c}
+            assert os.path.exists(os.path.join(test_dir, "a"))
+            assert os.path.exists(os.path.join(test_dir, "b"))
+            assert os.path.exists(os.path.join(test_dir, "c"))
+            assert not os.path.exists(os.path.join(test_dir, "{a,b,c}"))
+
 
 # ── Patch File ────────────────────────────────────────────────
 

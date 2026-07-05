@@ -119,7 +119,8 @@ load_skill and follow its instructions. Err on the side of loading.
 - Python.org 等网站正常显示
 
 **shell_exec**:
-- 默认 `shell=True`，支持完整 shell 语法（`&&`、`||`、`|`、`>`、`<`、`;`、`$()` 等）
+- 默认 `shell=True`，支持完整 shell 语法（`&&`、`||`、`|`、`>`、`<`、`;`、`$()`、`{}` 等）
+- 使用 `/bin/bash` 执行（而非 `/bin/sh`），支持 brace expansion
 - 简化实现：移除智能检测逻辑，代码从 15 行减少到 5 行
 - 提供 `shell=False` 选项用于安全敏感场景
 

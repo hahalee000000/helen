@@ -250,9 +250,10 @@ def _shell_exec(command: str, timeout: int = 30, shell: bool = True) -> str:
 
     try:
         cmd = command if shell else shlex.split(command)
+        # Use bash instead of sh to support brace expansion and other bash features
         result = subprocess.run(
             cmd, shell=shell, capture_output=True, text=True,
-            timeout=timeout,
+            timeout=timeout, executable='/bin/bash' if shell else None,
         )
         output = result.stdout
         if result.stderr:

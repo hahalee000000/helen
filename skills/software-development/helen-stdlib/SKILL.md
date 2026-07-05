@@ -307,9 +307,10 @@ let spec = {
 let config = parse_cli_args(spec)       # 结构化解析（带类型+默认值）
 
 # Shell 命令（默认 shell=True，支持完整 shell 语法）
-# 所有 shell 语法都支持：&&、||、|、>、<、;、$() 等
+# 使用 /bin/bash 执行，支持 brace expansion 等 bash 特性
+# 所有 shell 语法都支持：&&、||、|、>、<、;、$()、{} 等
 let result = shell_exec("ls -la")
-let result = shell_exec("mkdir -p ~/project && cd ~/project && pwd")
+let result = shell_exec("mkdir -p ~/project/{src,tests,contracts}")  # 创建三个目录
 let result = shell_exec("cat file.txt | grep pattern | wc -l")
 let result = shell_exec("echo 'hello' > output.txt")
 print(result["output"])
