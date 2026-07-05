@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import asyncio
 import concurrent.futures
+import copy
 import types
 from typing import Callable, Mapping
 from helen.core.ast import (
@@ -146,6 +147,374 @@ class Closure:
 
     def __repr__(self):
         return f"<closure with {len(self.lambda_node.params)} params>"
+
+
+class ReadOnlyView:
+    """Read-only wrapper for mutable types (list, dict) passed to agents.
+
+    v1.12: Agent isolation improvement. When a reference type (list, dict)
+    is passed as a parameter to an agent, it is wrapped in a ReadOnlyView
+    to prevent the agent from modifying the caller's data.
+
+    The wrapper supports read operations (iteration, indexing, len) but
+    raises an error on mutation attempts.
+    """
+    def __init__(self, data):
+        self._data = data
+
+    def __getitem__(self, key):
+        value = self._data[key]
+        # Wrap nested mutable types as well
+        if isinstance(value, (list, dict)):
+            return ReadOnlyView(value)
+        return value
+
+    def __len__(self):
+        return len(self._data)
+
+    def __iter__(self):
+        return iter(self._data)
+
+    def __contains__(self, item):
+        return item in self._data
+
+    def __repr__(self):
+        return f"ReadOnly({self._data!r})"
+
+    def __eq__(self, other):
+        if isinstance(other, ReadOnlyView):
+            return self._data == other._data
+        return self._data == other
+
+    def __hash__(self):
+        return hash(self._data) if not isinstance(self._data, (list, dict)) else id(self)
+
+    def keys(self):
+        """Dict-like keys() method."""
+        if hasattr(self._data, 'keys'):
+            return self._data.keys()
+        raise AttributeError("ReadOnly list has no keys() method")
+
+    def values(self):
+        """Dict-like values() method — returns ReadOnlyView for mutable values."""
+        if hasattr(self._data, 'values'):
+            return [ReadOnlyView(v) if isinstance(v, (list, dict)) else v
+                    for v in self._data.values()]
+        raise AttributeError("ReadOnly list has no values() method")
+
+    def items(self):
+        """Dict-like items() method."""
+        if hasattr(self._data, 'items'):
+            return self._data.items()
+        raise AttributeError("ReadOnly list has no items() method")
+
+    def get(self, key, default=None):
+        """Dict-like get() method."""
+        if hasattr(self._data, 'get'):
+            value = self._data.get(key, default)
+            if isinstance(value, (list, dict)):
+                return ReadOnlyView(value)
+            return value
+        raise AttributeError("ReadOnly list has no get() method")
+
+    def _mutate_error(self, *args, **kwargs):
+        """Raise error for any mutation attempt."""
+        from helen.interpreter.exceptions import ScopeViolationError
+        raise ScopeViolationError(
+            "cannot modify read-only parameter in agent scope. "
+            "Parameters are passed as read-only views to prevent "
+            "accidental modification of caller's data. "
+            "Create a local copy with `let copy = list(param)` if you need to modify."
+        )
+
+    # Block all mutation methods
+    __setitem__ = _mutate_error
+    __delitem__ = _mutate_error
+    append = _mutate_error
+    extend = _mutate_error
+    insert = _mutate_error
+    remove = _mutate_error
+    pop = _mutate_error
+    clear = _mutate_error
+    sort = _mutate_error
+    reverse = _mutate_error
+    update = _mutate_error
+    setdefault = _mutate_error
+    popitem = _mutate_error
+
+    def unwrap(self):
+        """Get the underlying data (for internal use only)."""
+        return self._data
+
+
+def _is_mutable_type(value: object) -> bool:
+    """Check if a value is a mutable reference type."""
+    return isinstance(value, (list, dict))
+
+
+def _compute_free_variables(lambda_node: LambdaNode) -> set[str]:
+    """Compute the free variables used in a lambda body.
+
+    Free variables are variables that are:
+    - Used in the lambda body
+    - NOT bound by the lambda's own parameters
+    - NOT defined locally within the lambda body
+
+    This is used for closure value capture (v1.12) — we only capture
+    the values of variables that are actually needed by the closure.
+
+    Args:
+        lambda_node: The lambda AST node to analyze.
+
+    Returns:
+        Set of variable names that are free (need to be captured).
+    """
+    # Variables bound by lambda parameters
+    bound_vars = {p.name for p in lambda_node.params}
+
+    # Collect all variable references in the body
+    used_vars: set[str] = set()
+    _collect_variable_refs(lambda_node.body, bound_vars, used_vars)
+
+    # Free variables = used - bound
+    return used_vars - bound_vars
+
+
+def _collect_variable_refs(node: object, bound: set[str], used: set[str]) -> None:
+    """Recursively collect variable references from an AST node.
+
+    Args:
+        node: The AST node to traverse.
+        bound: Variables that are bound (params, local lets) — these don't count as free.
+        used: Accumulator for variable names that are referenced.
+    """
+    if node is None:
+        return
+
+    # Import here to avoid circular imports at module load
+    from helen.core.ast import (
+        VariableNode, BinaryOpNode, UnaryOpNode, CallNode, CallArgNode,
+        IfStmtNode, ForStmtNode, WhileStmtNode, ReturnStmtNode, ExprStmtNode,
+        VarDeclNode, FnBlockNode, MatchStmtNode, LambdaNode, IndexNode,
+        AccessNode, GroupingNode, PipeExprNode, ListLiteralNode, MapLiteralNode,
+        TemplateRefNode, AssertStmtNode, AsyncCallExprNode,
+        AsyncCallStmtNode, ForAwaitStmtNode, TryStmtNode,
+        CatchClauseNode, FinallyBlockNode, CaseNode,
+        LlmActExprNode, LlmStreamStmtNode,
+        MatchExprNode,
+    )
+
+    # Skip if already a primitive or None
+    if not hasattr(node, '__dict__') and not isinstance(node, (list, tuple)):
+        return
+
+    if isinstance(node, VariableNode):
+        if node.name not in bound:
+            used.add(node.name)
+        return
+
+    if isinstance(node, (list, tuple)):
+        for item in node:
+            _collect_variable_refs(item, bound, used)
+        return
+
+    # Handle specific node types
+    if isinstance(node, VarDeclNode):
+        # Variable declaration: the variable being declared is now bound
+        if node.initializer is not None:
+            _collect_variable_refs(node.initializer, bound, used)
+        # After this declaration, the variable is bound for subsequent code
+        # (handled by caller adding to bound set)
+        return
+
+    if isinstance(node, FnBlockNode):
+        # Function body: traverse statements
+        for stmt in node.body:
+            _collect_variable_refs(stmt, bound, used)
+        return
+
+    if isinstance(node, BinaryOpNode):
+        _collect_variable_refs(node.left, bound, used)
+        _collect_variable_refs(node.right, bound, used)
+        return
+
+    if isinstance(node, UnaryOpNode):
+        _collect_variable_refs(node.operand, bound, used)
+        return
+
+    if isinstance(node, CallNode):
+        _collect_variable_refs(node.callee, bound, used)
+        for arg in node.arguments:
+            _collect_variable_refs(arg, bound, used)
+        return
+
+    if isinstance(node, CallArgNode):
+        _collect_variable_refs(node.value, bound, used)
+        return
+
+    if isinstance(node, IfStmtNode):
+        _collect_variable_refs(node.condition, bound, used)
+        _collect_variable_refs(node.then_branch, bound, used)
+        if node.else_branch is not None:
+            _collect_variable_refs(node.else_branch, bound, used)
+        return
+
+    if isinstance(node, ForStmtNode):
+        # For loop: iterator variable is bound in body
+        _collect_variable_refs(node.iterable, bound, used)
+        body_bound = bound | {node.variable}
+        _collect_variable_refs(node.body, body_bound, used)
+        return
+
+    if isinstance(node, ForAwaitStmtNode):
+        _collect_variable_refs(node.iterable, bound, used)
+        body_bound = bound | {node.variable}
+        _collect_variable_refs(node.body, body_bound, used)
+        return
+
+    if isinstance(node, WhileStmtNode):
+        _collect_variable_refs(node.condition, bound, used)
+        _collect_variable_refs(node.body, bound, used)
+        return
+
+    if isinstance(node, ReturnStmtNode):
+        if node.value is not None:
+            _collect_variable_refs(node.value, bound, used)
+        return
+
+    if isinstance(node, ExprStmtNode):
+        _collect_variable_refs(node.expression, bound, used)
+        return
+
+    if isinstance(node, MatchStmtNode):
+        _collect_variable_refs(node.subject, bound, used)
+        for case in node.cases:
+            _collect_variable_refs(case, bound, used)
+        if node.default is not None:
+            _collect_variable_refs(node.default, bound, used)
+        return
+
+    if isinstance(node, CaseNode):
+        # Case pattern may bind variables
+        case_bound = bound.copy()
+        _collect_pattern_bindings(node.pattern, case_bound)
+        _collect_variable_refs(node.body, case_bound, used)
+        if node.guard is not None:
+            _collect_variable_refs(node.guard, case_bound, used)
+        return
+
+    if isinstance(node, LambdaNode):
+        # Nested lambda: its parameters are bound in its body
+        inner_bound = bound | {p.name for p in node.params}
+        _collect_variable_refs(node.body, inner_bound, used)
+        return
+
+    if isinstance(node, IndexNode):
+        _collect_variable_refs(node.target, bound, used)
+        _collect_variable_refs(node.index, bound, used)
+        return
+
+    if isinstance(node, AccessNode):
+        _collect_variable_refs(node.target, bound, used)
+        return
+
+    if isinstance(node, GroupingNode):
+        _collect_variable_refs(node.expression, bound, used)
+        return
+
+    if isinstance(node, PipeExprNode):
+        _collect_variable_refs(node.value, bound, used)
+        _collect_variable_refs(node.function, bound, used)
+        return
+
+    if isinstance(node, ListLiteralNode):
+        for elem in node.elements:
+            _collect_variable_refs(elem, bound, used)
+        return
+
+    if isinstance(node, MapLiteralNode):
+        for entry in node.entries:
+            _collect_variable_refs(entry, bound, used)
+        return
+
+    if hasattr(node, 'key') and hasattr(node, 'value'):
+        # MapEntryNode or similar
+        _collect_variable_refs(node.key, bound, used)
+        _collect_variable_refs(node.value, bound, used)
+        return
+
+    if isinstance(node, TemplateRefNode):
+        for part in node.parts:
+            _collect_variable_refs(part, bound, used)
+        return
+
+    if isinstance(node, AssertStmtNode):
+        _collect_variable_refs(node.condition, bound, used)
+        if node.message is not None:
+            _collect_variable_refs(node.message, bound, used)
+        return
+
+    if isinstance(node, (AsyncCallExprNode, AsyncCallStmtNode)):
+        _collect_variable_refs(node.call, bound, used)
+        return
+
+    if isinstance(node, TryStmtNode):
+        _collect_variable_refs(node.body, bound, used)
+        for catch in node.catches:
+            _collect_variable_refs(catch, bound, used)
+        if node.finally_block is not None:
+            _collect_variable_refs(node.finally_block, bound, used)
+        return
+
+    if isinstance(node, CatchClauseNode):
+        catch_bound = bound.copy()
+        if node.variable:
+            catch_bound.add(node.variable)
+        _collect_variable_refs(node.body, catch_bound, used)
+        return
+
+    if isinstance(node, FinallyBlockNode):
+        _collect_variable_refs(node.body, bound, used)
+        return
+
+    if isinstance(node, (LlmActExprNode, LlmStreamStmtNode)):
+        # LLM nodes: traverse their expressions
+        if hasattr(node, 'prompt'):
+            _collect_variable_refs(node.prompt, bound, used)
+        if hasattr(node, 'options'):
+            _collect_variable_refs(node.options, bound, used)
+        if hasattr(node, 'tools'):
+            _collect_variable_refs(node.tools, bound, used)
+        return
+
+    if isinstance(node, MatchExprNode):
+        _collect_variable_refs(node.subject, bound, used)
+        for case in node.cases:
+            _collect_variable_refs(case, bound, used)
+        return
+
+    # For any other node type, try to traverse its attributes
+    if hasattr(node, '__dict__'):
+        for attr_name, attr_value in vars(node).items():
+            if attr_name.startswith('_'):
+                continue
+            if attr_name in ('span',):
+                continue
+            _collect_variable_refs(attr_value, bound, used)
+
+
+def _collect_pattern_bindings(pattern: object, bound: set[str]) -> None:
+    """Collect variable names bound by a match pattern.
+
+    Args:
+        pattern: The pattern AST node.
+        bound: Set to add bound variable names to.
+    """
+    from helen.core.ast import VariablePatternNode, WildcardPatternNode
+    if isinstance(pattern, VariablePatternNode):
+        bound.add(pattern.name)
+    # WildcardPatternNode doesn't bind anything
+    # Other patterns (literal, range) don't bind variables either
 
 
 class Interpreter(LlmMixin, Visitor[object]):
@@ -900,10 +1269,28 @@ class Interpreter(LlmMixin, Visitor[object]):
     def visit_lambda(self, node: LambdaNode) -> object:
         """Create a closure from a lambda expression.
 
-        The closure captures the current environment, allowing the lambda
-        to access variables from its defining scope.
+        v1.12: Closure value capture. Instead of capturing the entire environment
+        by reference (which can cause agent environment leaks), we capture only
+        the values of free variables used by the lambda. This provides:
+        - Isolation: closures don't hold references to agent environments
+        - Memory efficiency: only captured values are retained, not entire scopes
+        - Predictability: captured values are snapshots, immune to later mutations
         """
-        return Closure(lambda_node=node, captured_env=self.environment)
+        # Compute free variables used in the lambda body
+        free_vars = _compute_free_variables(node)
+
+        # Create a snapshot environment with only the captured values
+        captured_env = Environment()
+        for var_name in free_vars:
+            try:
+                value = self.environment.lookup(var_name)
+                captured_env.define(var_name, value)
+            except NameError:
+                # Variable not found in current scope — skip
+                # (will be caught at call time if actually used)
+                pass
+
+        return Closure(lambda_node=node, captured_env=captured_env)
 
     def visit_protocol_decl(self, node: ProtocolDeclNode) -> object:
         """Register a protocol declaration (do not execute).
@@ -1943,19 +2330,40 @@ class Interpreter(LlmMixin, Visitor[object]):
                         call_env.define(_name, _value, is_const=True)
             current_env = current_env.parent
         # Shared let variables are tracked in a module-level registry
+        # v1.12: Deep copy shared let values to prevent accidental sharing
+        # of mutable objects. Note: shared let is now restricted to value types
+        # (int, float, str, bool), so deep copy is mostly a no-op for these
+        # immutable types. This is for safety and future-proofing.
         for _name in getattr(self, '_shared_vars', set()):
             try:
                 _value = self.environment.lookup(_name)
+                # Deep copy for mutable types (shouldn't happen with value type restriction)
+                if _is_mutable_type(_value):
+                    _value = copy.deepcopy(_value)
                 call_env.define(_name, _value, is_const=False)
             except NameError:
                 pass
 
+        # v1.12: Switch to agent environment BEFORE evaluating defaults
+        # and function_vars initializers. This ensures isolation — defaults
+        # and initializers are evaluated in the agent's isolated env, not
+        # the caller's env. Module-level `let` variables are not visible.
+        old_env = self.environment
+        self.environment = call_env
+
         # Bind parameters from agent's param declarations
+        # v1.12: Wrap mutable reference types (list, dict) in ReadOnlyView
+        # to prevent agent from modifying caller's data.
         for param in agent.params:
             if param.name in args:
-                call_env.define(param.name, args[param.name])
+                value = args[param.name]
+                if _is_mutable_type(value):
+                    value = ReadOnlyView(value)
+                call_env.define(param.name, value)
             elif param.default_value is not None:
-                # Evaluate default in caller's environment (parent interpreter)
+                # v1.12: Evaluate default in agent's isolated environment.
+                # If the default references a module-level let, it will
+                # raise NameError at runtime — this is correct behavior.
                 default_val = param.default_value.accept(self)
                 call_env.define(param.name, default_val)
             else:
@@ -1975,6 +2383,8 @@ class Interpreter(LlmMixin, Visitor[object]):
             registered_names.append(func_node.name)
 
         # Define variables from functions { } block (let/const declarations)
+        # v1.12: Initializers are evaluated in agent's isolated environment.
+        # Variables can reference earlier function_vars (sequential evaluation).
         for var_node in agent.function_vars:
             value = None
             if var_node.initializer is not None:
@@ -1983,8 +2393,7 @@ class Interpreter(LlmMixin, Visitor[object]):
             call_env.define(var_node.name, value, is_const=is_const)
 
         # Execute the agent's logic (main block)
-        old_env = self.environment
-        self.environment = call_env
+        # Note: self.environment is already set to call_env above
         try:
             if agent.logic is not None:
                 result = agent.logic.accept(self)
@@ -2048,10 +2457,14 @@ class Interpreter(LlmMixin, Visitor[object]):
             # Agent's call_env has its own copies of shared let values; any
             # mutations must be propagated back to the caller's scope chain
             # so that subsequent reads see the updated values.
+            # v1.12: Deep copy values on writeback for safety (same rationale as injection).
             for _name in getattr(self, '_shared_vars', set()):
                 if _name in call_env._store:
+                    _value = call_env._store[_name]
+                    if _is_mutable_type(_value):
+                        _value = copy.deepcopy(_value)
                     try:
-                        old_env.assign(_name, call_env._store[_name])
+                        old_env.assign(_name, _value)
                     except NameError:
                         pass
             self.environment = old_env

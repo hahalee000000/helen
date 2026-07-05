@@ -670,10 +670,13 @@ let greeting = "Hello, {{name}}!"  # 模板变量替换
 
 ### 1. shared let — 跨 agent 可见变量
 
+**v1.12 更新**: `shared let` 只允许值类型（int, float, str, bool）。
+
 ```helen
-// 声明
+// 声明（v1.12: 只允许值类型）
 shared let counter = 0
-shared let SHARED_CONFIG = {"debug": true}
+shared let SHARED_NAME = "default"
+shared let rate = 3.14
 
 // 中文
 共享 let counter = 0
@@ -684,12 +687,29 @@ agent Worker {
     counter += 1  // ✅ 可以访问和修改
   }
 }
+
+// ❌ v1.12 起禁止：引用类型不能放在 shared let 中
+// shared let config = {"debug": true}  // 语义错误！
+// shared let items = []               // 语义错误！
 ```
 
 **作用域规则**:
 - 模块级 `let` 在 agent main 中**不可见**（编译时错误）
 - 模块级 `const` 自动可见（只读）
-- `shared let` 显式声明跨 agent 可见的可变变量
+- `shared let` 显式声明跨 agent 可见的可变变量（v1.12: 只限值类型）
+
+**引用类型共享**: 通过 agent 参数传递引用类型（v1.12 起参数自动只读）：
+
+```helen
+agent Worker(items: list) {
+  main {
+    // items 是只读视图
+    let copy = list(items)  // 创建副本后可修改
+    copy.append(4)
+    return copy
+  }
+}
+```
 
 ### 2. 子脚本/字段赋值
 

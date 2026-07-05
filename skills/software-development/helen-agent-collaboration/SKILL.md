@@ -1,15 +1,15 @@
 ---
 name: helen-agent-collaboration
 description: "Helen Agent 协作模式 — 多 Agent 协作、编排、分工、数据流、共享状态、作用域隔离"
-version: 1.1.0
+version: 1.2.0
 author: Helen Team
 license: MIT
-tags: [helen, agent, collaboration, orchestration, workflow, multi-agent, shared-let, scope-isolation, v1.10]
+tags: [helen, agent, collaboration, orchestration, workflow, multi-agent, shared-let, scope-isolation, v1.12, read-only-params]
 ---
 
 # Helen Agent 协作模式
 
-本技能描述 Helen 语言中多 Agent 协作的模式和最佳实践（v1.10 更新）。
+本技能描述 Helen 语言中多 Agent 协作的模式和最佳实践（v1.12 更新）。
 
 ## 核心概念
 
@@ -40,7 +40,7 @@ let result = MyAgent("hello")
 print(result)
 ```
 
-### Agent 作用域隔离（v1.10）
+### Agent 作用域隔离（v1.10/v1.12）
 
 **重要**：Agent main 在完全隔离的环境中运行。
 
@@ -48,55 +48,71 @@ print(result)
 |---------|-----------------|---------|
 | 模块级 `let` | ❌ 不可见 | 仅在 functions 块中使用 |
 | 模块级 `const` | ✅ 只读 | 全局常量配置 |
-| `shared let` | ✅ 可读写 | 跨 Agent 共享状态 |
+| `shared let`（值类型） | ✅ 可读写 | 跨 Agent 共享简单状态 |
 | 局部变量 | ✅ 可见 | 闭包可捕获 |
+
+**v1.12 重要变更**：
+- `shared let` **只允许值类型**（int, float, str, bool）
+- 引用类型（list, dict）通过**参数传递**，自动只读包装
+- 需要共享可变引用类型时，使用返回值或显式副本
 
 ### 协作中的状态管理
 
+**v1.12 推荐模式**：使用值类型计数器 + 引用类型通过参数传递
+
 ```helen
-// ✅ 正确：使用 shared let 进行跨 Agent 共享
-shared let task_queue = []
-shared let completed_tasks = {}
+// ✅ v1.12: shared let 只用于值类型
+shared let task_count = 0
+shared let completed_count = 0
 const MAX_CONCURRENT = 5
 
-agent TaskProducer(tasks: list) {
+// 引用类型通过参数传递
+agent TaskProducer(tasks: list, queue: list) {
     description "Produce tasks to queue"
     
     main {
+        // 创建副本后修改（参数是只读的）
+        let my_queue = list(queue)
         for task in tasks {
-            task_queue.append(task)
+            my_queue.append(task)
+            task_count = task_count + 1
         }
-        print("Queued " + str(len(tasks)) + " tasks")
+        print("Queued " + str(task_count) + " tasks")
+        return my_queue
     }
 }
 
-agent TaskWorker(worker_id: str) {
+agent TaskWorker(worker_id: str, queue: list, completed: map) {
     description "Process tasks from queue"
     
     main {
-        while len(task_queue) > 0 {
-            let task = task_queue.pop(0)
+        let my_queue = list(queue)
+        let my_completed = dict(completed)
+        
+        while len(my_queue) > 0 {
+            let task = my_queue.pop(0)
             print("Worker " + worker_id + " processing: " + task)
             
             // 模拟处理
             let result = llm act "Process: " + task
             
             // 记录完成
-            completed_tasks[task] = {
-                "worker": worker_id,
-                "result": result,
-                "status": "done"
-            }
+            my_completed[task] = "done by " + worker_id
+            completed_count = completed_count + 1
         }
+        
+        return { "queue": my_queue, "completed": my_completed }
     }
 }
 
 // 协作流程
-TaskProducer(["task1", "task2", "task3"])
-let w1 = async TaskWorker("W1")
-let w2 = async TaskWorker("W2")
+let initial_queue = []
+let queue = TaskProducer(["task1", "task2", "task3"], initial_queue)
+let w1 = async TaskWorker("W1", queue, {})
+let w2 = async TaskWorker("W2", queue, {})
 await [w1, w2]
-print("Completed: " + str(len(completed_tasks)))
+print("Completed: " + str(completed_count))
+```
 ```
 
 ## 协作模式
@@ -164,8 +180,23 @@ agent WorkflowOrchestrator(requirement: str) {
 同时调用多个 Agent 处理不同的子任务，然后汇总结果。
 
 ```helen
-// 共享状态用于结果收集
-shared let analysis_results = {}
+// v1.12: 结果通过返回值传递，不用 shared let
+shared let completed_count = 0
+
+agent CodeAnalyzer(path: str) {
+    description "分析代码文件"
+    main {
+        completed_count = completed_count + 1
+        return { "path": path, "status": "ok", "issues": 0 }
+    }
+}
+
+agent ResultSummarizer(results: list) {
+    description "汇总结果"
+    main {
+        return { "total": len(results), "status": "done" }
+    }
+}
 
 agent ParallelOrchestrator(file_paths: list) {
     description "并行编排器 - 扇出模式"
@@ -199,6 +230,7 @@ agent ParallelOrchestrator(file_paths: list) {
     main {
         let result = analyze_files_parallel(file_paths)
         print("分析完成，共 " + str(len(result["individual"])) + " 个文件")
+        print("完成计数: " + str(completed_count))
     }
 }
 ```
@@ -213,7 +245,8 @@ agent ParallelOrchestrator(file_paths: list) {
 多个 Agent 组成处理管道，每个阶段处理特定方面。
 
 ```helen
-shared let pipeline_data = {}
+// v1.12: 使用值类型计数器跟踪进度
+shared let pipeline_stage = 0
 
 agent DataCollector(source: str) {
     description "阶段 1: 数据收集"
@@ -221,9 +254,9 @@ agent DataCollector(source: str) {
     
     main {
         let raw_data = llm act "Collect data from: " + source
-        pipeline_data["raw"] = raw_data
+        pipeline_stage = 1
         print("✅ 数据收集完成")
-        return raw_data
+        return raw_data  // 通过返回值传递
     }
 }
 
@@ -232,7 +265,7 @@ agent DataCleaner(data: str) {
     
     main {
         let cleaned = llm act "Clean this data: " + data
-        pipeline_data["cleaned"] = cleaned
+        pipeline_stage = 2
         print("✅ 数据清洗完成")
         return cleaned
     }
@@ -243,7 +276,7 @@ agent DataAnalyzer(data: str) {
     
     main {
         let analysis = llm act "Analyze: " + data
-        pipeline_data["analysis"] = analysis
+        pipeline_stage = 3
         print("✅ 数据分析完成")
         return analysis
     }
@@ -254,6 +287,7 @@ agent DataReporter(analysis: str) {
     
     main {
         let report = llm act "Generate report from: " + analysis
+        pipeline_stage = 4
         print("✅ 报告生成完成")
         return report
     }
@@ -337,35 +371,34 @@ agent SupportRouter(query: str) {
 主 Agent 协调多个子 Agent，子 Agent 可以继续分解任务。
 
 ```helen
-shared let project_status = {
-    "phase": "init",
-    "progress": 0
-}
+// v1.12: 使用值类型跟踪状态
+shared let project_phase = "init"
+shared let project_progress = 0
 
 agent ProjectManager(requirement: str) {
     description "项目经理 - 总体协调"
     
     main {
-        project_status["phase"] = "planning"
+        project_phase = "planning"
         
         // 阶段 1: 需求分析
         let analysis = RequirementAnalyst(requirement)
-        project_status["progress"] = 25
+        project_progress = 25
         
         // 阶段 2: 架构设计
         let architecture = Architect(analysis)
-        project_status["progress"] = 50
+        project_progress = 50
         
         // 阶段 3: 并行开发
         let frontend_task = async FrontendDev(architecture)
         let backend_task = async BackendDev(architecture)
         let dev_results = await [frontend_task, backend_task]
-        project_status["progress"] = 80
+        project_progress = 80
         
         // 阶段 4: 集成测试
         let integration = IntegrationTester(dev_results)
-        project_status["progress"] = 100
-        project_status["phase"] = "complete"
+        project_progress = 100
+        project_phase = "complete"
         
         return integration
     }
@@ -463,26 +496,36 @@ agent SolutionSelector(problem: str) {
 
 ## 共享状态最佳实践
 
-### 1. 使用 shared let 进行跨 Agent 通信
+### 1. 使用 shared let 进行跨 Agent 通信（v1.12）
+
+**v1.12 更新**: `shared let` 只允许值类型。引用类型通过参数传递。
 
 ```helen
-// ✅ 正确：使用 shared let
-shared let message_queue = []
+// ✅ v1.12 正确：shared let 只用于值类型
+shared let message_count = 0
+shared let last_message = ""
 
 agent Producer(msg: str) {
     main {
-        message_queue.append(msg)
+        message_count = message_count + 1
+        last_message = msg
+        // 引用类型通过返回值传递
+        return [msg]
     }
 }
 
-agent Consumer {
+agent Consumer(messages: list) {
     main {
-        while len(message_queue) > 0 {
-            let msg = message_queue.pop(0)
+        for msg in messages {
             print("消费: " + msg)
         }
+        print("总计: " + str(message_count) + " 条消息")
     }
 }
+
+// 使用
+let msgs = Producer("hello")
+Consumer(msgs)
 ```
 
 ### 2. 使用 const 进行只读配置共享
@@ -587,27 +630,43 @@ agent BatchProcessor(items: list) {
 }
 ```
 
-### 2. 使用缓存减少重复计算
+### 2. 使用缓存减少重复计算（v1.12）
+
+**v1.12 模式**: 缓存通过参数传递，使用返回值返回更新后的缓存。
 
 ```helen
-shared let cache = {}
+// v1.12: 用值类型跟踪缓存统计
+shared let cache_hits = 0
+shared let cache_misses = 0
 
-agent CachedWorker(task_id: str) {
+agent CachedWorker(task_id: str, cache: map) {
     main {
-        // 检查缓存
+        // 检查缓存（cache 是只读视图）
         if task_id in cache {
-            return cache[task_id]
+            cache_hits = cache_hits + 1
+            return { "result": cache[task_id], "cache": cache }
         }
+        
+        cache_misses = cache_misses + 1
         
         // 执行计算
         let result = llm act "处理任务: " + task_id
         
-        // 存入缓存
-        cache[task_id] = result
+        // 创建更新后的缓存副本
+        let updated_cache = dict(cache)
+        updated_cache[task_id] = result
         
-        return result
+        return { "result": result, "cache": updated_cache }
     }
 }
+
+// 使用
+let my_cache = {}
+let r1 = CachedWorker("task1", my_cache)
+let r2 = CachedWorker("task2", r1["cache"])
+let r3 = CachedWorker("task1", r2["cache"])  // 命中缓存
+print("缓存命中: " + str(cache_hits))
+print("缓存未命中: " + str(cache_misses))
 ```
 
 ## 相关技能

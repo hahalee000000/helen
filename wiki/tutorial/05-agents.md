@@ -1631,8 +1631,10 @@ agent Worker {
 ```helen
 // 使用 SHARED_ 前缀表示共享变量
 shared let SHARED_COUNTER = 0
-shared let SHARED_CONFIG = { "debug": true }
+shared let SHARED_NAME = "default"
 ```
+
+> **注意（v1.12）**：`shared let` 只能使用值类型（int、float、str、bool）。如需共享引用类型（list、dict），请通过 agent 参数传递或等待未来的 `shared store` 特性。
 
 #### 2. 线程安全
 
@@ -1663,14 +1665,16 @@ agent SafeWorker {
 
 ```helen
 // ❌ 共享过多状态
-shared let user_data = {}
-shared let session_id = ""
-shared let config = {}
+shared let SHARED_USER_ID = ""
+shared let SHARED_SESSION_ACTIVE = false
+shared let SHARED_DEBUG_MODE = false
 
 // ✅ 只共享必要的状态
 shared let SHARED_COUNTER = 0
 // 其他状态通过参数传递
 ```
+
+> **v1.12 更新**：引用类型（如用户数据、配置对象）不能放在 `shared let` 中，需要通过参数传递给 agent。
 
 ### 闭包捕获
 
@@ -1709,6 +1713,165 @@ agent MyAgent {
   main {
     print(moduleVar)  // ✅ 可以访问
   }
+}
+```
+
+---
+
+## v1.12 Agent 隔离增强
+
+v1.12 对 agent 隔离进行了多项增强，堵住了之前版本中的隐式泄漏漏洞。
+
+### 1. 参数默认值求值环境修复
+
+**v1.11 及之前**：agent 参数默认值在**调用者环境**中求值，可能绕过隔离。
+
+```helen
+// ❌ v1.11：默认值可以访问模块级 let
+let _secret = "module-value"
+
+agent Worker(x = _secret) {
+    main {
+        print(x)  // 输出 "module-value"（隔离漏洞！）
+    }
+}
+```
+
+**v1.12**：默认值在 **agent 的隔离环境**中求值。如果默认值引用了模块级 `let`，会抛出 `NameError`。
+
+```helen
+// ✅ v1.12：默认值只能引用 agent 可见的变量
+const DEFAULT_NAME = "default"
+
+agent Worker(name = DEFAULT_NAME) {
+    main {
+        print(name)  // ✅ "default"
+    }
+}
+
+// ❌ 错误：默认值引用模块级 let
+let _secret = "hidden"
+agent BadAgent(x = _secret) {  // NameError at runtime
+    main { ... }
+}
+```
+
+### 2. functions {} 块变量求值环境修复
+
+同理，`functions {}` 块中的 `let` 初始化现在也在 agent 的隔离环境中求值：
+
+```helen
+// ✅ v1.12：functions {} 变量可以互相引用（顺序求值）
+agent Worker() {
+    functions {
+        let base = 10
+        let derived = base * 2  // ✅ 可以引用前面的变量
+        
+        fn helper(): int {
+            return derived
+        }
+    }
+    main {
+        print(helper())  // ✅ 20
+    }
+}
+```
+
+### 3. 引用类型参数只读包装
+
+当 list、dict 等引用类型作为参数传入 agent 时，会被自动包装为**只读视图**（`ReadOnlyView`），防止 agent 意外修改调用者的数据：
+
+```helen
+agent ProcessData(items: list<int>) {
+    main {
+        // ✅ 可以读取
+        let first = items[0]
+        let count = len(items)
+        
+        // ❌ 不能修改（抛出 ScopeViolationError）
+        items[0] = 999          // 错误！
+        items.append(100)       // 错误！
+    }
+}
+
+main {
+    let data = [1, 2, 3]
+    ProcessData(items=data)
+    // data 仍然是 [1, 2, 3]，没有被修改
+}
+```
+
+**如果需要修改参数**，创建局部副本：
+
+```helen
+agent ProcessData(items: list<int>) {
+    main {
+        let my_items = list(items)  // 创建副本
+        my_items.append(100)        // ✅ 可以修改副本
+        return my_items
+    }
+}
+```
+
+### 4. shared let 限制为值类型
+
+v1.12 起，`shared let` 只能声明**值类型**（int、float、str、bool）：
+
+```helen
+// ✅ 允许：值类型
+shared let counter = 0
+shared let name = "hello"
+shared let rate = 3.14
+shared let flag = true
+
+// ❌ 禁止：引用类型（编译时错误）
+shared let items = []              // 语义错误
+shared let config = {"key": "value"}  // 语义错误
+```
+
+**错误信息**：
+```
+shared let 'items' must have a value type (int, float, str, bool).
+Reference types (list, map) are not allowed in shared let.
+Use 'shared store' for sharing mutable reference types across agents.
+```
+
+> **设计理由**：引用类型通过 shared let 共享时，agent 和调用者可能同时持有同一个可变对象的引用，导致难以追踪的竞态条件和数据损坏。未来的 `shared store` 特性将为引用类型提供安全的共享方式。
+
+### 5. 闭包值捕获（替代环境引用）
+
+v1.12 起，闭包采用**值捕获**而非环境引用。闭包只捕获实际使用的变量的**值快照**，而不是持有整个环境的引用：
+
+```helen
+agent Worker() {
+    main {
+        let secret = "agent-internal"
+        
+        // 闭包只捕获 secret 的值，不持有 agent 环境引用
+        let cb = fn() { return secret }
+        
+        // 即使闭包逃逸出 agent，也看不到 agent 的其他内部状态
+        return cb
+    }
+}
+```
+
+这带来两个好处：
+1. **更好的隔离**：闭包不会无意中携带 agent 的内部环境
+2. **内存效率**：只有被捕获的值被保留，不会持有整个作用域
+
+### 6. 复合赋值隔离检查
+
+v1.12 修复了 `arr[i] = x` 和 `obj.field = x` 绕过隔离检查的问题：
+
+```helen
+let module_arr = [1, 2, 3]
+
+agent Worker() {
+    main {
+        // ❌ v1.12 起会报错（之前版本绕过检查）
+        module_arr[0] = 999  // E0350 SCOPE_VIOLATION
+    }
 }
 ```
 

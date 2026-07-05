@@ -235,6 +235,34 @@ class SemanticAnalyzer(Visitor[None]):
                 span,
             )
 
+    def _is_value_type(self, type_obj: "Type") -> bool:
+        """Check if a type is a value type (safe for shared let).
+
+        Value types: int, float, str, bool, null, and Optional of value types.
+        Reference types: list, map, agent, union (may contain reference types).
+
+        v1.12: shared let is restricted to value types to prevent implicit
+        sharing of mutable objects across agent boundaries.
+        """
+        from helen.semantic.types import (
+            BoolType, NumberType, StringType, NullType, OptionalType,
+            ListType, MapType, AgentType, AnyType,
+        )
+        # Value types
+        if isinstance(type_obj, (BoolType, NumberType, StringType, NullType)):
+            return True
+        # Optional of value type is also a value type
+        if isinstance(type_obj, OptionalType):
+            return self._is_value_type(type_obj.inner)
+        # AnyType is allowed (runtime will check actual value type)
+        if isinstance(type_obj, AnyType):
+            return True
+        # Reference types
+        if isinstance(type_obj, (ListType, MapType, AgentType)):
+            return False
+        # For other types (UnionType, etc.), be conservative and reject
+        return False
+
     def _check_branch_completeness(self, has_default: bool, span, stmt_type: str) -> None:
         """Report error if llm-if or match has no default branch."""
         if not has_default:
@@ -379,6 +407,24 @@ class SemanticAnalyzer(Visitor[None]):
 
         # v1.10: Track shared let variable names for cross-agent visibility
         if node.shared:
+            # v1.12: Restrict shared let to value types only.
+            # Reference types (list, dict, struct) must use shared store (future).
+            # This prevents implicit sharing of mutable objects across agent boundaries.
+            declared_type = None
+            if node.type_annotation is not None:
+                declared_type = self._type_from_typenode(node.type_annotation)
+            elif node.initializer is not None:
+                declared_type = self._infer_type(node.initializer)
+
+            if declared_type is not None and not self._is_value_type(declared_type):
+                self.errors.error(
+                    ErrorCode.SEMANTIC_TYPE_ERROR,
+                    f"shared let '{node.name}' must have a value type (int, float, str, bool). "
+                    f"Reference types (list, map) are not allowed in shared let. "
+                    f"Use 'shared store' for sharing mutable reference types across agents.",
+                    node.span,
+                )
+
             self._shared_var_names.add(node.name)
 
     def visit_variable(self, node: VariableNode) -> None:
@@ -524,26 +570,30 @@ class SemanticAnalyzer(Visitor[None]):
         # Const assignment protection: x = value where x is const
         from helen.core.tokens import TokenType
         if node.operator.type == TokenType.ASSIGN:
-            if isinstance(node.left, VariableNode):
-                self._check_const_assignment(node.left.name, node.span)
+            # v1.12: Extract the base variable name from any assignment target.
+            # This handles simple variables (x = v), subscript (arr[i] = v),
+            # and member access (obj.field = v).
+            target_var_name = self._extract_assignment_target(node.left)
+            if target_var_name is not None:
+                self._check_const_assignment(target_var_name, node.span)
                 # Agent scope isolation: writing to module-level variable
                 # from agent main {} is not allowed at runtime.
                 # v1.10: shared let variables are writable across agent boundaries.
                 if self._in_agent:
-                    sym = self.symbols.resolve(node.left.name)
+                    sym = self.symbols.resolve(target_var_name)
                     if sym is not None and sym.kind == "variable":
-                        local_sym = self.symbols.resolve_in_chain(node.left.name)
+                        local_sym = self.symbols.resolve_in_chain(target_var_name)
                         if local_sym is None:
                             # Not local — check if shared or const
                             if sym.is_const:
                                 self.errors.error(
                                     ErrorCode.SCOPE_VIOLATION,
                                     f"agent scope isolation: cannot assign to const "
-                                    f"'{node.left.name}' from agent main {{}}. "
+                                    f"'{target_var_name}' from agent main {{}}. "
                                     f"const is read-only shared across agents.",
                                     node.span,
                                 )
-                            elif node.left.name not in self._shared_var_names:
+                            elif target_var_name not in self._shared_var_names:
                                 # v1.10: Inside a closure, the variable is captured
                                 # from the agent's environment at runtime.
                                 if self._in_closure > 0:
@@ -552,22 +602,43 @@ class SemanticAnalyzer(Visitor[None]):
                                     self.errors.error(
                                         ErrorCode.SCOPE_VIOLATION,
                                         f"agent scope isolation: cannot assign to module-level "
-                                        f"variable '{node.left.name}' from agent main {{}}. "
+                                        f"variable '{target_var_name}' from agent main {{}}. "
                                         f"Agent main runs in an isolated environment. "
                                         f"Use 'shared let' or a setter function instead.",
                                         node.span,
                                     )
                 # Type check on reassignment: declared type must be compatible with new value
-                sym = self.symbols.resolve(node.left.name)
-                if sym is not None and sym.type_node is not None:
-                    expected = self._type_from_typenode(sym.type_node)
-                    actual = self._infer_type(node.right)
-                    if not type_compatible(actual, expected):
-                        self.errors.error(
-                            ErrorCode.SEMANTIC_TYPE_ERROR,
-                            f"cannot assign {actual.name} to '{node.left.name}' of type {expected.name}",
-                            node.span,
-                        )
+                # (Only for simple variable assignments, not subscript/member access)
+                if isinstance(node.left, VariableNode):
+                    sym = self.symbols.resolve(node.left.name)
+                    if sym is not None and sym.type_node is not None:
+                        expected = self._type_from_typenode(sym.type_node)
+                        actual = self._infer_type(node.right)
+                        if not type_compatible(actual, expected):
+                            self.errors.error(
+                                ErrorCode.SEMANTIC_TYPE_ERROR,
+                                f"cannot assign {actual.name} to '{node.left.name}' of type {expected.name}",
+                                node.span,
+                            )
+
+    def _extract_assignment_target(self, node: ExpressionNode) -> str | None:
+        """Extract the base variable name from an assignment target.
+
+        Handles:
+        - VariableNode: x = v → 'x'
+        - IndexNode: arr[i] = v → 'arr'
+        - AccessNode: obj.field = v → 'obj'
+
+        Returns None if the target is not a valid assignment target.
+        """
+        from helen.core.ast import VariableNode, IndexNode, AccessNode
+        if isinstance(node, VariableNode):
+            return node.name
+        if isinstance(node, IndexNode):
+            return self._extract_assignment_target(node.target)
+        if isinstance(node, AccessNode):
+            return self._extract_assignment_target(node.target)
+        return None
 
     def visit_pipe_expr(self, node: PipeExprNode) -> None:
         """Analyze a pipe expression: value |> fn."""
@@ -825,6 +896,39 @@ class SemanticAnalyzer(Visitor[None]):
                 self.symbols.define(func_node.name, sym)
                 registered_funcs.append(func_node.name)
 
+            # v1.12: Register and analyze function_vars (let/const in functions {} block)
+            # These variables are in the agent's scope and can be referenced by
+            # agent functions and the main block.
+            registered_fvars: list[str] = []
+            for var_node in node.function_vars:
+                # Register the variable in agent scope
+                sym = Symbol(
+                    name=var_node.name,
+                    kind="variable",
+                    type_node=var_node.type_annotation,
+                )
+                if not var_node.mutable:
+                    sym.is_const = True
+                self.symbols.define(var_node.name, sym)
+                registered_fvars.append(var_node.name)
+
+                # Analyze the initializer (if any) in agent scope
+                # This allows checking for scope violations (e.g., referencing
+                # module-level let from function_vars initializer)
+                if var_node.initializer is not None:
+                    var_node.initializer.accept(self)
+
+                # Type check: initializer type must match declared type
+                if var_node.type_annotation is not None and var_node.initializer is not None:
+                    expected = self._type_from_typenode(var_node.type_annotation)
+                    actual = self._infer_type(var_node.initializer)
+                    if not type_compatible(actual, expected):
+                        self.errors.error(
+                            ErrorCode.SEMANTIC_TYPE_ERROR,
+                            f"cannot assign {actual.name} to '{var_node.name}' of type {expected.name}",
+                            var_node.span,
+                        )
+
             # Analyze agent functions {} block bodies
             # These functions run in the agent's isolated environment and can:
             # - Access agent parameters
@@ -855,9 +959,11 @@ class SemanticAnalyzer(Visitor[None]):
             try:
                 node.logic.accept(self)
             finally:
-                # Clean up agent-scoped function registrations
+                # Clean up agent-scoped registrations
                 for fname in registered_funcs:
                     self.symbols.undefine(fname)
+                for vname in registered_fvars:
+                    self.symbols.undefine(vname)
                 for pname in registered_params:
                     self.symbols.undefine(pname)
                 self.symbols.exit_scope()

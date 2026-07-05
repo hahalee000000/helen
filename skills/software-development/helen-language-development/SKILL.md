@@ -152,13 +152,14 @@ def snapshot(self) -> Environment:
 
 **Pitfall**: Environment snapshot must be taken BEFORE `async` expression evaluates. Otherwise, mutations between `async` and `await` corrupt the snapshot.
 
-### 5. Agent Scope Isolation (v1.10)
+### 5. Agent Scope Isolation (v1.10/v1.12)
 
 **Rules**:
 - Module-level `let` is NOT visible in `agent main {}`
 - Module-level `const` is auto-visible (read-only)
-- `shared let` is visible and writable in `agent main {}`
-- Closures in `agent main {}` can capture local variables
+- `shared let` is visible and writable in `agent main {}` (v1.12: **value types only**)
+- Closures in `agent main {}` use value capture (v1.12)
+- Parameters of reference type (list/dict) are wrapped in ReadOnlyView (v1.12)
 
 **Implementation**:
 
@@ -173,15 +174,46 @@ def visit_agent_decl(self, node: AgentDeclNode):
         if name in module_level_lets:
             raise SemanticError(f"'{name}' is not visible in agent main")
     
+    # v1.12: Also check function_vars initializers
+    for var in node.function_vars:
+        self._check_initializer_in_agent_scope(var.initializer)
+    
+    # v1.12: shared let must be value type
+    for var in shared_let_declarations:
+        if not self._is_value_type(var.type):
+            raise SemanticError(f"shared let must be value type")
+    
     # Allow: const and shared let
     self._check_body(node.main_body)
     
     self.env.end_scope()
+
+# In Interpreter._call_agent
+def _call_agent(self, agent, args):
+    call_env = Environment()
+    
+    # v1.12: Wrap mutable params in ReadOnlyView
+    for param in agent.params:
+        value = args.get(param.name)
+        if isinstance(value, (list, dict)):
+            value = ReadOnlyView(value)
+        call_env.define(param.name, value)
+    
+    # v1.12: Evaluate defaults in agent env, not caller env
+    old_env = self.environment
+    self.environment = call_env
+    try:
+        # ... evaluate defaults and function_vars
+    finally:
+        self.environment = old_env
 ```
 
-**Pitfall**: Forgetting to isolate agent main scope causes module-level `let` to leak into agent context.
+**Pitfalls**:
+- Forgetting to isolate agent main scope causes module-level `let` to leak
+- v1.11 bug: defaults evaluated in caller env (fixed in v1.12)
+- v1.11 bug: closures captured entire env (fixed in v1.12 with value capture)
 
-### 6. Shared Let Tracking (v1.10)
+### 6. Shared Let Tracking (v1.10/v1.12)
 
 **Implementation**:
 

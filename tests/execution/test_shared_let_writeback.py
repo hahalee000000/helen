@@ -144,7 +144,12 @@ main {
         assert interp.environment.lookup("b") == 1
 
     def test_dict_mutation_through_shared_let(self):
-        """Dict mutations through shared let propagate to caller."""
+        """v1.12: Dict in shared let is now forbidden (must use shared store).
+
+        This test verifies that shared let with reference types (dict, list)
+        is rejected at semantic analysis time. The correct way to share
+        mutable reference types across agents is via shared store (future).
+        """
         source = """
 shared let state = {"count": 0}
 
@@ -160,9 +165,19 @@ main {
     UpdateState()
 }
 """
-        interp = _run(source)
-        state = interp.environment.lookup("state")
-        assert state["count"] == 2
+        errors = ErrorReporter()
+        scanner = Scanner(source=source, file="<test>")
+        tokens = scanner.scan_all()
+        parser = Parser(tokens, errors=errors)
+        program = parser.parse()
+        assert not errors.has_errors
+
+        analyzer = SemanticAnalyzer(errors)
+        analyzer.analyze(program)
+
+        # v1.12: shared let with reference type should produce an error
+        assert errors.has_errors
+        assert any("value type" in e.message for e in errors.errors)
 
     def test_writeback_on_exception(self):
         """Shared let modifications are written back even when agent throws."""

@@ -39,6 +39,20 @@ class ConstAssignmentError(HelenRuntimeError):
 
 
 @dataclass
+class ScopeViolationError(HelenRuntimeError):
+    """Raised when code violates scope isolation rules.
+
+    v1.12: Agent isolation improvement. This error is raised when:
+    - An agent tries to modify a read-only parameter
+    - An agent tries to access module-level variables
+    - Any other scope boundary violation
+    """
+
+    def __init__(self, message: str, span: SourceSpan | None = None) -> None:
+        super().__init__(message, span)
+
+
+@dataclass
 class BreakSentinel:
     """Signal object returned from body execution to break out of a loop."""
 

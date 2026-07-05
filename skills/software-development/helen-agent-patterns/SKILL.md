@@ -118,18 +118,24 @@ agent Developer {
 }
 ```
 
-## Agent 作用域隔离（v1.10）
+## Agent 作用域隔离（v1.10/v1.12）
 
 ### 核心规则
 
-**Agent main 在完全隔离的环境中运行**，这是 v1.10 的重要特性：
+**Agent main 在完全隔离的环境中运行**，这是 v1.10 的重要特性，v1.12 进一步增强：
 
 | 变量类型 | 在 agent main 中 | 说明 |
 |---------|-----------------|------|
 | 模块级 `let` | ❌ **不可见** | 编译时报错 |
 | 模块级 `const` | ✅ 自动可见 | 只读共享 |
-| `shared let` | ✅ 可见 | 跨 agent 可写 |
-| 局部变量 | ✅ 可见 | 闭包可捕获 |
+| `shared let`（值类型） | ✅ 可见 | 跨 agent 可写 |
+| 局部变量 | ✅ 可见 | 闭包值捕获 |
+
+**v1.12 新增**：
+- `shared let` 只允许值类型（int/float/str/bool），引用类型（list/dict）禁止
+- 参数中的引用类型（list/dict）自动包装为只读视图（`ReadOnlyView`）
+- 闭包采用值捕获，不持有整个环境引用
+- `arr[i] = x` 和 `obj.field = x` 也受隔离检查约束
 
 ### 示例：作用域隔离
 
@@ -137,7 +143,7 @@ agent Developer {
 // 模块级变量
 let module_counter = 0           // ❌ agent main 中不可见
 const MAX_RETRIES = 3            // ✅ agent main 中自动可见
-shared let shared_state = {}     // ✅ agent main 中可见可写
+shared let shared_count = 0      // ✅ agent main 中可见可写（v1.12: 值类型）
 
 agent Worker(task: str) {
     description "Worker agent"
@@ -157,13 +163,33 @@ agent Worker(task: str) {
         // ✅ const 自动可见
         print("Max retries: " + MAX_RETRIES)
         
-        // ✅ shared let 可见
-        shared_state["task"] = task
+        // ✅ shared let 可见（v1.12: 只允许值类型）
+        shared_count = shared_count + 1
         
         // ✅ 局部变量
         let local_data = "local"
         
         return llm act "Process: " + task
+    }
+}
+```
+
+**v1.12 参数只读**：引用类型参数自动包装为只读视图
+
+```helen
+agent ProcessItems(items: list<int>) {
+    main {
+        // ✅ 可以读取
+        let first = items[0]
+        let count = len(items)
+        
+        // ❌ 不能修改（v1.12 起自动只读包装）
+        // items[0] = 999  // ScopeViolationError
+        
+        // 如需修改，创建副本
+        let my_items = list(items)
+        my_items.append(100)
+        return my_items
     }
 }
 ```
@@ -196,38 +222,40 @@ agent DataProcessor(data: list) {
 
 ### shared let 跨 Agent 协作
 
-```helen
-// 全局共享状态
-shared let global_cache = {}
-shared let request_count = 0
+**v1.12 更新**：`shared let` 只能使用值类型。需要共享引用类型时，通过参数传递。
 
-agent CacheReader(key: str) {
-    description "Read from shared cache"
+```helen
+// v1.12: shared let 只允许值类型
+shared let request_count = 0
+shared let last_request_time = ""
+
+agent RequestCounter() {
+    description "Count requests"
     
     main {
         request_count = request_count + 1
-        
-        if key in global_cache {
-            return global_cache[key]
-        }
-        return null
+        last_request_time = "2024-01-01"  // str 是值类型
+        return request_count
     }
 }
 
-agent CacheWriter(key: str, value: any) {
-    description "Write to shared cache"
+// 引用类型通过参数传递
+agent CacheWriter(cache: map, key: str, value: any) {
+    description "Write to cache (passed as parameter)"
     
     main {
-        request_count = request_count + 1
-        global_cache[key] = value
-        return "cached"
+        // v1.12: cache 是只读视图，创建副本修改
+        let my_cache = dict(cache)
+        my_cache[key] = value
+        return my_cache
     }
 }
 
 // 使用
-CacheWriter("user:1", {"name": "Alice"})
-let user = CacheReader("user:1")
-print("Requests: " + request_count)  // 2
+let my_cache = {}
+let updated = CacheWriter(my_cache, "user:1", "Alice")
+RequestCounter()
+print("Requests: " + request_count)  // 1
 ```
 
 ## 设计模式
@@ -725,30 +753,36 @@ agent SimpleAgent {
 }
 ```
 
-### 6. 正确使用作用域（v1.10）
+### 6. 正确使用作用域（v1.10/v1.12）
 
 ```helen
-# ✅ 使用 shared let 进行跨 agent 共享
-shared let cache = {}
+# ✅ 使用 shared let 进行跨 agent 共享（v1.12: 只允许值类型）
+shared let cache_hits = 0
+shared let cache_misses = 0
 
-agent CacheReader(key: str) {
+agent CacheReader(key: str, cache: map) {
     main {
         if key in cache {
+            cache_hits = cache_hits + 1
             return cache[key]
         }
+        cache_misses = cache_misses + 1
         return null
     }
 }
 
-# ❌ 错误：期望模块级 let 在 agent main 中可见
+# ❌ 错误 v1：期望模块级 let 在 agent main 中可见
 let local_cache = {}  // 模块级 let
 
 agent BadCacheReader(key: str) {
     main {
-        // 编译错误！local_cache 在 agent main 中不可见
+        # 编译错误！local_cache 在 agent main 中不可见
         return local_cache[key]
     }
 }
+
+# ❌ 错误 v2：v1.12 起 shared let 不能使用引用类型
+# shared let bad_cache = {}  # 语义错误！
 ```
 
 ## 调试技巧

@@ -4,6 +4,33 @@
 
 ---
 
+## [2026-07-05] update | v1.12 Agent 隔离增强
+
+**操作**: 更新 agent 隔离文档，记录 v1.12 的隔离增强改进
+**执行时间**: 2026-07-05
+**状态**: ✅ 完成
+
+### 变更内容
+
+1. **wiki/tutorial/05-agents.md**
+   - 新增 "v1.12 Agent 隔离增强" 章节
+   - 记录 6 项隔离改进：
+     - 参数默认值求值环境修复
+     - `functions {}` 块变量求值环境修复
+     - 引用类型参数只读包装 (`ReadOnlyView`)
+     - `shared let` 限制为值类型
+     - 闭包值捕获（替代环境引用）
+     - 复合赋值隔离检查
+   - 更新 shared let 最佳实践，反映值类型限制
+
+### 相关代码变更
+
+- `helen/interpreter/interpreter.py`: `_call_agent()` 求值环境修复、`ReadOnlyView` 类、`_compute_free_variables()`
+- `helen/semantic/analyzer.py`: `function_vars` 分析、`_is_value_type()`、`_extract_assignment_target()`
+- `helen/interpreter/exceptions.py`: 新增 `ScopeViolationError`
+
+---
+
 ## [2026-07-03] update | 多语言 stdlib 别名 + alias 语句
 
 **操作**: 添加 stdlib 多语言别名支持 + `alias`/`别名` 语句
