@@ -1412,6 +1412,46 @@ class Interpreter(LlmMixin, Visitor[object]):
 
         return store
 
+    def visit_channel_decl(self, node: "ChannelDeclNode") -> object:
+        """Execute a channel declaration.
+
+        v1.13: Channels are structurally identical to shared stores at runtime.
+        They create a SharedStore instance with private fields and public methods,
+        protected by an internal lock for thread safety.
+
+        The semantic difference is that channels represent communication endpoints
+        between agents, while shared stores represent shared mutable state.
+        """
+        from helen.core.ast import ChannelDeclNode
+        if not isinstance(node, ChannelDeclNode):
+            return None
+
+        # Initialize field values
+        fields: dict[str, object] = {}
+        for field_node in node.fields:
+            value = None
+            if field_node.initializer is not None:
+                value = field_node.initializer.accept(self)
+            fields[field_node.name] = value
+
+        # Create channel instance (uses SharedStore at runtime)
+        channel = SharedStore(node.name, fields, {})
+
+        # Create method implementations that have access to channel fields
+        for method_node in node.methods:
+            method_name = method_node.name
+            channel._methods[method_name] = SharedStoreMethod(method_node, channel, self)
+
+        # Register the channel in the environment
+        self.environment.define(node.name, channel, is_const=True)
+
+        # Track as shared for cross-agent visibility
+        if not hasattr(self, '_shared_vars'):
+            self._shared_vars: set[str] = set()
+        self._shared_vars.add(node.name)
+
+        return channel
+
     # ------------------------------------------------------------------
     # Control flow
     # ------------------------------------------------------------------

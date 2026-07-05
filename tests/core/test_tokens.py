@@ -112,6 +112,8 @@ class TestTokenType:
             "IN",
             "FUNCTIONS",
             "MAIN",
+            "STORE",
+            "CHANNEL",
         ]:
             assert hasattr(TokenType, name), f"Missing keyword: {name}"
 
@@ -137,7 +139,7 @@ class TestKeywords:
     def test_keyword_count(self):
         """Test that the keyword map contains the expected number of entries."""
         kw = keywords()
-        assert len(kw) == 91  # 46 English + 45 Chinese keywords (v1.12: added 'store')
+        assert len(kw) == 94  # 47 English + 47 Chinese keywords (v1.13: added 'channel', '仓库', '通道')
 
     def test_all_keywords_map_to_token_types(self) -> None:
         """Every keyword value should be a TokenType member."""

@@ -4,6 +4,44 @@
 
 ---
 
+## [2026-07-05] feat | v1.13 — Channel 通道 + 中文关键字补全
+
+**操作**: 实现 Channel 机制 + 补全 `store` 中文关键字
+**执行时间**: 2026-07-05
+**状态**: ✅ 完成
+
+### 新增功能
+
+1. **Channel 通道声明**
+   - `channel Name { fields, methods }` 语法
+   - 中文：`通道 Name { ... }`
+   - 与 shared store 结构相同，语义表示 agent 间通信端点
+   - 全链路实现：token → AST → parser → analyzer → interpreter
+
+2. **中文关键字补全**
+   - `store` → `仓库`
+   - `channel` → `通道`
+   - 关键字总数：94（47 英文 + 47 中文）
+
+### 实现细节
+
+| 层次 | 文件 | 改动 |
+|------|------|------|
+| Token | `tokens.py` | `CHANNEL` TokenType + `仓库`/`通道` 映射 |
+| AST | `ast.py` | `ChannelDeclNode` + Visitor 方法 |
+| Parser | `parser.py` | `_channel_decl()` 解析方法 |
+| Analyzer | `analyzer.py` | `visit_channel_decl()` 语义分析 |
+| Interpreter | `interpreter.py` | `visit_channel_decl()` 运行时（复用 SharedStore） |
+| Tests | `test_v12_isolation.py` | 8 个 channel 专项测试 |
+
+### 新增测试
+
+8 个 channel 测试：基本创建、中文语法、多字段、agent 访问、跨 agent 共享、重复检测。
+
+总测试数：2374 passed
+
+---
+
 ## [2026-07-05] fix | v1.12 第二轮隔离修复
 
 **操作**: 修复 v1.12 第二轮隔离缺陷

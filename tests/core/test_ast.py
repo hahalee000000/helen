@@ -115,6 +115,10 @@ class MockVisitor(Visitor[str]):
         self.calls.append("visit_shared_store_decl")
         return "<shared_store>"
 
+    def visit_channel_decl(self, node) -> str:
+        self.calls.append("visit_channel_decl")
+        return "<channel>"
+
     def visit_if_stmt(self, node: IfStmtNode) -> str:
         self.calls.append("visit_if_stmt")
         return "<if>"

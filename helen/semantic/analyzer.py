@@ -518,6 +518,97 @@ class SemanticAnalyzer(Visitor[None]):
         finally:
             self.symbols.exit_scope()
 
+    def visit_channel_decl(self, node: object) -> None:
+        """Analyze a channel declaration: channel Name { fields, methods }.
+
+        v1.13: Channels provide typed, thread-safe communication between agents.
+        Analysis is structurally identical to shared store.
+        """
+        from helen.core.ast import ChannelDeclNode
+        if not isinstance(node, ChannelDeclNode):
+            return
+
+        # Register the channel name in the symbol table
+        symbol = Symbol(
+            name=node.name,
+            kind="channel",
+            is_const=True,  # The channel reference itself is const
+        )
+        existing = self.symbols.define(node.name, symbol)
+        if existing is not None:
+            if existing.kind == "builtin":
+                pass
+            else:
+                self.errors.error(
+                    ErrorCode.DUPLICATE_SYMBOL,
+                    f"duplicate declaration of '{node.name}'",
+                    node.span,
+                )
+
+        # Track as shared for cross-agent visibility
+        self._shared_var_names.add(node.name)
+
+        # Create a scope for the channel body
+        self.symbols.enter_scope(f"channel:{node.name}", "store")
+        try:
+            # Analyze fields — track names for clash detection
+            field_names: set[str] = set()
+            for field_node in node.fields:
+                if field_node.name in field_names:
+                    self.errors.error(
+                        ErrorCode.DUPLICATE_SYMBOL,
+                        f"duplicate field '{field_node.name}' in channel '{node.name}'",
+                        field_node.span,
+                    )
+                field_names.add(field_node.name)
+                field_node.accept(self)
+
+            # Analyze methods — check for name clashes with fields
+            method_names: set[str] = set()
+            for method_node in node.methods:
+                if method_node.name in method_names:
+                    self.errors.error(
+                        ErrorCode.DUPLICATE_SYMBOL,
+                        f"duplicate method '{method_node.name}' in channel '{node.name}'",
+                        method_node.span,
+                    )
+                if method_node.name in field_names:
+                    self.errors.error(
+                        ErrorCode.DUPLICATE_SYMBOL,
+                        f"method '{method_node.name}' clashes with field of same name "
+                        f"in channel '{node.name}'",
+                        method_node.span,
+                    )
+                method_names.add(method_node.name)
+                # Register method in channel scope
+                method_sym = Symbol(
+                    name=method_node.name,
+                    kind="function",
+                    type_node=method_node.return_type,
+                )
+                self.symbols.define(method_node.name, method_sym)
+
+                # Analyze method body in a new scope
+                prev_return_type = self._current_return_type
+                old_in_store_method = getattr(self, '_in_store_method', False)
+                self._in_store_method = True
+                self._current_return_type = self._type_from_typenode(method_node.return_type)
+                self.symbols.enter_scope(f"channel_method:{method_node.name}", "function")
+                try:
+                    # Bind method parameters
+                    for param in method_node.params:
+                        param_sym = Symbol(name=param.name, kind="param",
+                                          type_node=param.type_annotation)
+                        self.symbols.define(param.name, param_sym)
+                    # Analyze method body
+                    method_node.body.accept(self)
+                finally:
+                    self.symbols.exit_scope()
+                    self._current_return_type = prev_return_type
+                    self._in_store_method = old_in_store_method
+        finally:
+            self.symbols.exit_scope()
+
     def visit_variable(self, node: VariableNode) -> None:
         sym = self.symbols.resolve(node.name)
         if sym is None:

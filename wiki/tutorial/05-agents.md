@@ -2053,6 +2053,93 @@ shared store Cache {
 
 ---
 
+## v1.13 Channel 通道 — Agent 间通信
+
+v1.13 引入了 `channel`（中文：`通道`），为 agent 间通信提供类型安全的结构化方式。
+
+### 基本语法
+
+```helen
+// 声明 channel
+channel Counter {
+    let count: int = 0
+    
+    fn increment() {
+        count = count + 1
+    }
+    
+    fn get(): int {
+        return count
+    }
+}
+
+// 使用
+Counter.increment()
+Counter.increment()
+let val = Counter.get()  // 2
+```
+
+### 中文语法
+
+```helen
+通道 计数器 {
+    让 count: int = 0
+    
+    函数 increment() {
+        count = count + 1
+    }
+    
+    函数 get(): int {
+        返回 count
+    }
+}
+
+计数器.increment()
+let val = 计数器.get()
+```
+
+### Agent 中使用
+
+```helen
+channel TaskQueue {
+    let tasks: list = []
+    
+    fn push(task) {
+        tasks.append(task)
+    }
+    
+    fn size(): int {
+        return len(tasks)
+    }
+}
+
+agent Worker() {
+    main {
+        TaskQueue.push("task-1")
+        TaskQueue.push("task-2")
+        return TaskQueue.size()
+    }
+}
+
+let result = Worker()  // 2
+```
+
+### Channel vs Shared Store
+
+| 特性 | Shared Store | Channel |
+|------|-------------|---------|
+| 声明 | `shared store Name { ... }` | `channel Name { ... }` |
+| 中文 | `共享 store` 或 `共享 仓库` | `通道` |
+| 语义 | 共享可变状态 | Agent 间通信端点 |
+| 线程安全 | ✅ RLock | ✅ RLock |
+| 运行时实现 | SharedStore 类 | 复用 SharedStore 类 |
+
+两者在运行时使用相同的底层机制（SharedStore），区别在于语义意图：
+- **Shared store** 强调"共享的可变状态"
+- **Channel** 强调"agent 间的通信通道"
+
+---
+
 ## v1.10 shared let 完整示例
 
 ### 计数器示例

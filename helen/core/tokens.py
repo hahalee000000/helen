@@ -116,6 +116,7 @@ class TokenType(Enum):
     FUNCTIONS = auto()
     MAIN = auto()
     STORE = auto()  # v1.12: shared store declaration
+    CHANNEL = auto()  # v1.13: channel declaration
     PROTOCOL = auto()  # v1.7: protocol declaration
     IMPL = auto()      # v1.7: protocol implementation
     IS = auto()        # v1.8: type pattern in match
@@ -170,6 +171,9 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "functions": TokenType.FUNCTIONS,
     "main": TokenType.MAIN,
     "store": TokenType.STORE,  # v1.12: shared store
+    "仓库": TokenType.STORE,   # v1.12: Chinese equivalent
+    "channel": TokenType.CHANNEL,  # v1.13: channel declaration
+    "通道": TokenType.CHANNEL,     # v1.13: Chinese equivalent
     "alias": TokenType.ALIAS,
     "protocol": TokenType.PROTOCOL,  # v1.7
     "impl": TokenType.IMPL,          # v1.7

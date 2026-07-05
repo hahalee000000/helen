@@ -60,6 +60,10 @@ class Visitor(ABC, Generic[R]):
         """Visit a SharedStoreDeclNode."""
 
     @abstractmethod
+    def visit_channel_decl(self, node: "ChannelDeclNode") -> R:
+        """Visit a ChannelDeclNode."""
+
+    @abstractmethod
     def visit_if_stmt(self, node: IfStmtNode) -> R:
         """Visit an IfStmtNode."""
 
@@ -544,6 +548,42 @@ class SharedStoreDeclNode(StatementNode):
     def accept(self, visitor: Visitor[R]) -> R:
         """Dispatch to the visitor."""
         return visitor.visit_shared_store_decl(self)
+
+
+@dataclass(frozen=True)
+class ChannelDeclNode(StatementNode):
+    """Channel declaration: channel Name { fields, methods }.
+
+    v1.13: Channels provide typed, thread-safe communication between agents.
+    Structurally identical to SharedStore but semantically represents a
+    communication endpoint rather than shared state.
+
+    Channels are thread-safe — method calls are serialized via an internal lock.
+    They can be passed as agent parameters and accessed from any agent.
+
+    Example:
+        channel Counter {
+            let count: int = 0
+
+            fn increment() { count = count + 1 }
+            fn get(): int { return count }
+        }
+
+    Chinese syntax:
+        通道 Counter {
+            让 count: int = 0
+            函数 increment() { count = count + 1 }
+            函数 get(): int { 返回 count }
+        }
+    """
+    name: str
+    fields: list["VarDeclNode"]  # Private state variables
+    methods: list["FunctionDeclNode"]  # Public methods
+    span: SourceSpan
+
+    def accept(self, visitor: Visitor[R]) -> R:
+        """Dispatch to the visitor."""
+        return visitor.visit_channel_decl(self)
 
 
 @dataclass(frozen=True)
@@ -1198,6 +1238,15 @@ class ASTPrinter(Visitor[str]):
         for method in node.methods:
             parts.append(method)
         return self._parenthesize("shared store", *parts)
+
+    def visit_channel_decl(self, node: ChannelDeclNode) -> str:
+        """Visit a ChannelDeclNode."""
+        parts: list[Any] = [node.name]
+        for field in node.fields:
+            parts.append(field)
+        for method in node.methods:
+            parts.append(method)
+        return self._parenthesize("channel", *parts)
 
     def visit_if_stmt(self, node: IfStmtNode) -> str:
         """Visit an IfStmtNode."""

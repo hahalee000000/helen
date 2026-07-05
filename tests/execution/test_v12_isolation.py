@@ -906,3 +906,164 @@ class TestEnvironmentSnapshotDeepCopy:
 
         # Snapshot should be unaffected
         assert snap._store["config"] == {"a": 1}
+
+
+# ============================================================
+# 11. Channel tests (v1.13)
+# ============================================================
+
+class TestChannelBasic:
+    """Basic channel declaration and usage."""
+
+    def test_channel_creation(self):
+        """Channel can be created and methods called."""
+        source = """
+channel Counter {
+    let count: int = 0
+    fn increment() { count = count + 1 }
+    fn get(): int { return count }
+}
+
+Counter.increment()
+Counter.increment()
+Counter.increment()
+let result = Counter.get()
+"""
+        interp = _run(source)
+        assert interp.environment.lookup("result") == 3
+
+    def test_channel_chinese(self):
+        """Channel with Chinese keywords works."""
+        source = """
+通道 计数器 {
+    让 count: int = 0
+    函数 increment() { count = count + 1 }
+    函数 get(): int { 返回 count }
+}
+
+计数器.increment()
+计数器.increment()
+let result = 计数器.get()
+"""
+        interp = _run(source)
+        assert interp.environment.lookup("result") == 2
+
+    def test_channel_with_fields(self):
+        """Channel can have multiple fields."""
+        source = """
+channel Stats {
+    let total: int = 0
+    let count: int = 0
+
+    fn add(value: int) {
+        total = total + value
+        count = count + 1
+    }
+
+    fn average(): int {
+        if count == 0 { return 0 }
+        return total / count
+    }
+}
+
+Stats.add(10)
+Stats.add(20)
+Stats.add(30)
+let result = Stats.average()
+"""
+        interp = _run(source)
+        assert interp.environment.lookup("result") == 20
+
+
+class TestChannelAgentAccess:
+    """Channel access from agents."""
+
+    def test_channel_accessible_from_agent(self):
+        """Agent can access channel methods."""
+        source = """
+channel Counter {
+    let count: int = 0
+    fn increment() { count = count + 1 }
+    fn get(): int { return count }
+}
+
+agent Worker() {
+    main {
+        Counter.increment()
+        Counter.increment()
+        return Counter.get()
+    }
+}
+
+let result = Worker()
+"""
+        interp = _run(source)
+        assert interp.environment.lookup("result") == 2
+
+    def test_channel_shared_across_agents(self):
+        """Multiple agents share the same channel state."""
+        source = """
+channel Counter {
+    let count: int = 0
+    fn increment() { count = count + 1 }
+    fn get(): int { return count }
+}
+
+agent WorkerA() {
+    main {
+        Counter.increment()
+        Counter.increment()
+        return "A"
+    }
+}
+
+agent WorkerB() {
+    main {
+        Counter.increment()
+        return "B"
+    }
+}
+
+WorkerA()
+WorkerB()
+let result = Counter.get()
+"""
+        interp = _run(source)
+        assert interp.environment.lookup("result") == 3
+
+
+class TestChannelDuplicateDetection:
+    """Semantic analysis detects duplicates in channels."""
+
+    def test_duplicate_field(self):
+        """Duplicate field names are detected."""
+        source = """
+channel Bad {
+    let x: int = 1
+    let x: int = 2
+}
+"""
+        errors = _analyze_only(source)
+        assert errors.has_errors
+
+    def test_duplicate_method(self):
+        """Duplicate method names are detected."""
+        source = """
+channel Bad {
+    fn foo() { return 1 }
+    fn foo() { return 2 }
+}
+"""
+        errors = _analyze_only(source)
+        assert errors.has_errors
+
+    def test_field_method_clash(self):
+        """Field/method name clash is detected."""
+        source = """
+channel Bad {
+    let x: int = 1
+    fn x() { return 1 }
+}
+"""
+        errors = _analyze_only(source)
+        assert errors.has_errors

@@ -518,6 +518,12 @@ class Parser:
         if self._check(TokenType.ASYNC):
             return self._async_call_stmt()
 
+        # v1.13: channel declaration — typed, thread-safe agent communication
+        if self._match(TokenType.CHANNEL):
+            if isolation_level != "standard":
+                self._error(f"Decorator '@{isolation_level}' can only be applied to agent declarations.")
+            return self._channel_decl()
+
         if self._match(TokenType.SHARED):
             if isolation_level != "standard":
                 self._error(f"Decorator '@{isolation_level}' can only be applied to agent declarations.")
@@ -846,6 +852,39 @@ class Parser:
         end = self._consume(TokenType.RIGHT_BRACE, "Expected '}' after shared store body.")
 
         return SharedStoreDeclNode(
+            name=name_tok.lexeme,
+            fields=fields,
+            methods=methods,
+            span=self._make_span(name_tok, end),
+        )
+
+    def _channel_decl(self) -> "ChannelDeclNode":
+        """Parse a channel declaration: channel Name { fields, methods }.
+
+        v1.13: Channels provide typed, thread-safe communication between agents.
+        Structurally identical to shared store but semantically represents a
+        communication endpoint.
+        """
+        from .ast import ChannelDeclNode
+        name_tok = self._consume(TokenType.IDENTIFIER, "Expected channel name after 'channel'.")
+        self._consume(TokenType.LEFT_BRACE, "Expected '{' after channel name.")
+
+        fields: list = []
+        methods: list = []
+
+        while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF):
+            if self._match(TokenType.FN):
+                methods.append(self._function_decl())
+            elif self._check(TokenType.LET, TokenType.CONST):
+                self._advance()  # consume let/const
+                fields.append(self._var_decl())
+            else:
+                self._error(f"Expected 'fn', 'let', or 'const' inside channel, got {self._current().type.name}")
+                self._synchronize()
+
+        end = self._consume(TokenType.RIGHT_BRACE, "Expected '}' after channel body.")
+
+        return ChannelDeclNode(
             name=name_tok.lexeme,
             fields=fields,
             methods=methods,
