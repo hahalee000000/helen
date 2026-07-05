@@ -316,51 +316,37 @@ class TestShellExec:
         if "output" in result:
             assert len(result["output"]) <= 8020  # 8000 + truncation marker
 
-    def test_smart_shell_detection_and(self):
-        """Test auto-detection of && operator"""
+    def test_shell_true_default(self):
+        """Test that shell=True is the default"""
+        # Command with shell syntax should work by default
         result = json.loads(_shell_exec("echo first && echo second"))
         assert result["exit_code"] == 0
-        assert result["shell_mode"] is True
         assert "first" in result["output"]
         assert "second" in result["output"]
 
-    def test_smart_shell_detection_pipe(self):
-        """Test auto-detection of | operator"""
+    def test_shell_syntax_pipe(self):
+        """Test pipe operator works with default shell=True"""
         result = json.loads(_shell_exec("echo 'hello world' | wc -w"))
         assert result["exit_code"] == 0
-        assert result["shell_mode"] is True
         assert "2" in result["output"]  # word count
 
-    def test_smart_shell_detection_redirect(self):
-        """Test auto-detection of > operator"""
+    def test_shell_syntax_redirect(self):
+        """Test redirect operator works with default shell=True"""
         import tempfile
         import os
         with tempfile.TemporaryDirectory() as tmpdir:
             test_file = os.path.join(tmpdir, "test.txt")
             result = json.loads(_shell_exec(f"echo test > {test_file}"))
             assert result["exit_code"] == 0
-            assert result["shell_mode"] is True
             assert os.path.exists(test_file)
             with open(test_file) as f:
                 assert f.read().strip() == "test"
 
-    def test_smart_shell_detection_simple_command(self):
-        """Test that simple commands use shell=False"""
-        result = json.loads(_shell_exec("echo hello"))
-        assert result["exit_code"] == 0
-        assert result["shell_mode"] is False
-
-    def test_explicit_shell_true(self):
-        """Test explicit shell=True overrides detection"""
-        result = json.loads(_shell_exec("echo hello", shell=True))
-        assert result["exit_code"] == 0
-        assert result["shell_mode"] is True
-
     def test_explicit_shell_false(self):
-        """Test explicit shell=False overrides detection"""
+        """Test explicit shell=False"""
         result = json.loads(_shell_exec("echo hello", shell=False))
         assert result["exit_code"] == 0
-        assert result["shell_mode"] is False
+        assert "hello" in result["output"]
 
 
 # ── Patch File ────────────────────────────────────────────────

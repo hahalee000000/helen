@@ -233,26 +233,20 @@ def _write_file(path: str, content: str) -> str:
         return json.dumps({"error": f"Write failed: {e}"}, ensure_ascii=False)
 
 
-def _shell_exec(command: str, timeout: int = 30, shell: bool = None) -> str:
+def _shell_exec(command: str, timeout: int = 30, shell: bool = True) -> str:
     """Execute a shell command and return output.
 
     Args:
-        command: Command to execute. When shell=False, the command
-                 is split into args for safety. When shell=True, passed as string.
-                 When shell=None (default), auto-detects shell syntax.
+        command: Command to execute. When shell=True (default), passed as string
+                 to the shell. When shell=False, split into args for safety.
         timeout: Timeout in seconds (default 30).
-        shell: Whether to use shell execution. None = auto-detect (default).
+        shell: Whether to use shell execution (default True).
 
-    Auto-detection: If command contains shell syntax (&&, ||, |, >, <, ;, etc.),
-    automatically uses shell=True. Otherwise uses shell=False for safety.
+    Note: When shell=True, be careful with user input to avoid shell injection.
+    Use shell=False for commands with untrusted input.
     """
     import shlex
     import subprocess
-
-    # Smart detection: if shell is None, check for shell syntax
-    if shell is None:
-        shell_syntax = ['&&', '||', '|', '>', '<', '>>', '<<', ';', '$(', '`', '\n']
-        shell = any(syntax in command for syntax in shell_syntax)
 
     try:
         cmd = command if shell else shlex.split(command)
@@ -269,7 +263,6 @@ def _shell_exec(command: str, timeout: int = 30, shell: bool = None) -> str:
             "command": command,
             "exit_code": result.returncode,
             "output": output,
-            "shell_mode": shell,  # Indicate which mode was used
         }, ensure_ascii=False)
     except subprocess.TimeoutExpired:
         return json.dumps({"error": f"Command timed out after {timeout}s"}, ensure_ascii=False)
