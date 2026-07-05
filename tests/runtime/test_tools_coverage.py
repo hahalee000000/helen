@@ -355,44 +355,60 @@ class TestPatchFile:
 class TestWebSearch:
     """Tests for _web_search with mocked HTTP calls."""
 
-    def test_wikipedia_summary_success(self):
-        """Test Wikipedia summary API success."""
-        mock_data = json.dumps({
-            "type": "standard",
-            "title": "Python",
-            "extract": "Python is a programming language",
-            "content_urls": {"desktop": {"page": "https://en.wikipedia.org/wiki/Python"}}
-        }).encode("utf-8")
+    def test_bing_search_success(self):
+        """Test Bing search HTML parsing success."""
+        mock_html = b"""
+        <html>
+        <ol id="b_results">
+            <li class="b_algo">
+                <h2><a href="https://www.python.org/">Welcome to <strong>Python</strong>.org</a></h2>
+                <p class="b_lineclamp2">The mission of the Python Software Foundation is to promote, protect, and advance the Python programming language.</p>
+            </li>
+            <li class="b_algo">
+                <h2><a href="https://docs.python.org/">Python Documentation</a></h2>
+                <p class="b_lineclamp2">Official Python documentation and tutorials.</p>
+            </li>
+        </ol>
+        </html>
+        """
 
         mock_resp = MagicMock()
-        mock_resp.read.return_value = mock_data
+        mock_resp.read.return_value = mock_html
+        mock_resp.headers.get.return_value = ''  # No content encoding
         mock_resp.__enter__ = lambda s: s
         mock_resp.__exit__ = MagicMock(return_value=False)
 
         with patch("urllib.request.urlopen", return_value=mock_resp):
             result = json.loads(_web_search("Python"))
             assert "results" in result
-            assert len(result["results"]) >= 1
+            assert len(result["results"]) == 2
+            assert "Welcome to Python.org" in result["results"][0]
+            assert "https://www.python.org/" in result["results"][0]
 
-    def test_wikipedia_not_found(self):
-        """Test Wikipedia returns not_found type."""
-        mock_data = json.dumps({"type": "not_found"}).encode("utf-8")
+    def test_bing_search_no_results(self):
+        """Test Bing search with no results."""
+        mock_html = b"<html><ol id=\"b_results\"></ol></html>"
+
         mock_resp = MagicMock()
-        mock_resp.read.return_value = mock_data
+        mock_resp.read.return_value = mock_html
+        mock_resp.headers.get.return_value = ''
         mock_resp.__enter__ = lambda s: s
         mock_resp.__exit__ = MagicMock(return_value=False)
 
-        # First call returns not_found, second call (search) also fails
-        with patch("urllib.request.urlopen", side_effect=Exception("network error")):
+        with patch("urllib.request.urlopen", return_value=mock_resp):
             result = json.loads(_web_search("xyznonexistent"))
-            assert "results" in result or "message" in result
+            assert "results" in result
+            assert result["results"] == []
+            assert "message" in result
 
-    def test_all_apis_fail(self):
-        """Test when all APIs fail."""
+    def test_bing_search_network_error(self):
+        """Test when Bing search fails due to network error."""
         with patch("urllib.request.urlopen", side_effect=Exception("network error")):
             result = json.loads(_web_search("test"))
             assert "results" in result
-            assert result["results"] == [] or "message" in result
+            assert result["results"] == []
+            assert "message" in result
+            assert "Search failed" in result["message"]
 
 
 # ── Web Fetch (mocked) ────────────────────────────────────────

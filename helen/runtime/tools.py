@@ -92,73 +92,110 @@ def dispatch_tool(name: str, args: dict[str, Any]) -> str:
 
 
 def _web_search(query: str, num_results: int = 3) -> str:
-    """Search the web and return results.
+    """Search the web using Bing and return results.
 
-    Uses Wikipedia API as primary source (reliable, no API key needed).
-    Falls back to DuckDuckGo lite if Wikipedia has no results.
+    Uses Bing.com search (accessible in China, no API key needed).
+    Parses HTML search results page.
     """
+    import re
 
     results = []
 
-    # Try Wikipedia API first (reliable, structured)
     try:
-        wiki_url = (
-            f"https://en.wikipedia.org/api/rest_v1/page/summary/"
-            f"{urllib.parse.quote(query.replace(' ', '_'))}"
-        )
-        req = urllib.request.Request(wiki_url, headers={
-            "User-Agent": "HelenAgent/1.0 (https://github.com/hahalee000000/helen)",
-        })
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        if data.get("type") != "not_found":
-            title = data.get("title", query)
-            extract = data.get("extract", "")
-            url = data.get("content_urls", {}).get("desktop", {}).get("page", "")
-            results.append(f"- {title}\n  {extract[:300]}\n  {url}")
-    except Exception as e:
-        import logging
-        logging.debug("Wikipedia summary API failed for query %r: %s", query, e)
-    try:
-        search_url = (
-            f"https://en.wikipedia.org/w/api.php?"
-            f"action=opensearch&search={urllib.parse.quote(query)}"
-            f"&limit={num_results}&format=json"
-        )
+        # Build Bing search URL
+        search_url = f"https://www.bing.com/search?q={urllib.parse.quote(query)}&count={num_results}"
         req = urllib.request.Request(search_url, headers={
-            "User-Agent": "HelenAgent/1.0 (https://github.com/hahalee000000/helen)",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            "Accept-Encoding": "gzip, deflate"
         })
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        # opensearch returns [query, [titles], [descriptions], [urls]]
-        if len(data) >= 4:
-            titles = data[1]
-            descriptions = data[2]
-            urls = data[3]
-            for t, d, u in zip(titles, descriptions, urls):
-                entry = f"- {t}"
-                if d:
-                    entry += f"\n  {d}"
-                entry += f"\n  {u}"
-                if entry not in results:
-                    results.append(entry)
+
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            # Handle content encoding
+            content_encoding = resp.headers.get('Content-Encoding', '').lower()
+            raw_data = resp.read()
+
+            if content_encoding == 'gzip':
+                import gzip
+                raw_data = gzip.decompress(raw_data)
+            elif content_encoding == 'deflate':
+                import zlib
+                raw_data = zlib.decompress(raw_data)
+
+            html = raw_data.decode("utf-8", errors="replace")
+
+        # Extract search results container
+        results_match = re.search(r'<ol id="b_results"(.*?)</ol>', html, re.DOTALL)
+        if not results_match:
+            return json.dumps({"results": [], "message": f"No results found for '{query}'."}, ensure_ascii=False)
+
+        results_html = results_match.group(1)
+
+        # Find all search result blocks (b_algo class)
+        algo_items = re.findall(r'<li class="b_algo"(.*?)</li>', results_html, re.DOTALL)
+
+        for item in algo_items[:num_results]:
+            # Extract title and URL from <h2><a href="URL">Title</a></h2>
+            title_match = re.search(r'<h2[^>]*><a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', item, re.DOTALL)
+            if not title_match:
+                continue
+
+            url = title_match.group(1)
+            title_html = title_match.group(2)
+            # Remove HTML tags and clean up
+            title = re.sub(r'<[^>]+>', '', title_html).strip()
+
+            # Extract description from <p class="b_lineclamp..."> or <div class="b_caption">
+            snippet = ""
+            desc_match = re.search(r'<p[^>]*class="b_lineclamp[^"]*"[^>]*>(.*?)</p>', item, re.DOTALL)
+            if not desc_match:
+                desc_match = re.search(r'<div class="b_caption"[^>]*>(.*?)</div>', item, re.DOTALL)
+
+            if desc_match:
+                snippet_html = desc_match.group(1)
+                snippet = re.sub(r'<[^>]+>', '', snippet_html).strip()
+                # Clean up whitespace and HTML entities
+                snippet = re.sub(r'\s+', ' ', snippet)
+                snippet = snippet.replace('&ensp;', ' ').replace('&amp;', '&')
+
+            # Format result
+            entry = f"- {title}\n  {snippet}\n  {url}"
+            results.append(entry)
+
     except Exception as e:
         import logging
-        logging.debug("Wikipedia search API failed for query %r: %s", query, e)
+        logging.debug("Bing search failed for query %r: %s", query, e)
+        return json.dumps({"results": [], "message": f"Search failed: {e}"}, ensure_ascii=False)
 
     if not results:
         return json.dumps({"results": [], "message": f"No results found for '{query}'."}, ensure_ascii=False)
-    return json.dumps({"results": results[:num_results]}, ensure_ascii=False)
+    return json.dumps({"results": results}, ensure_ascii=False)
 
 
 def _web_fetch(url: str) -> str:
     """Fetch the text content of a URL."""
     req = urllib.request.Request(url, headers={
-        "User-Agent": "Mozilla/5.0 (compatible; Helen/1.0)"
+        "User-Agent": "Mozilla/5.0 (compatible; Helen/1.0)",
+        "Accept-Encoding": "gzip, deflate"
     })
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
-            content = resp.read().decode("utf-8", errors="replace")
+            # Handle content encoding (gzip/deflate)
+            content_encoding = resp.headers.get('Content-Encoding', '').lower()
+            raw_data = resp.read()
+
+            # Decompress if needed
+            if content_encoding == 'gzip':
+                import gzip
+                raw_data = gzip.decompress(raw_data)
+            elif content_encoding == 'deflate':
+                import zlib
+                raw_data = zlib.decompress(raw_data)
+
+            # Decode to text
+            content = raw_data.decode("utf-8", errors="replace")
+
         # Strip HTML tags for a rough text extraction
         import re
         text = re.sub(r'<script[^>]*>.*?</script>', '', content, flags=re.DOTALL)
