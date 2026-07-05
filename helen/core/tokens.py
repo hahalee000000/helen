@@ -61,6 +61,7 @@ class TokenType(Enum):
     LESS_EQUAL = auto()  # <=
     AND = auto()  # &&
     OR = auto()  # ||
+    AT = auto()  # @ (v1.12: decorator for agent isolation level)
 
     # === Literals ===
     IDENTIFIER = auto()
@@ -114,6 +115,7 @@ class TokenType(Enum):
     IN = auto()
     FUNCTIONS = auto()
     MAIN = auto()
+    STORE = auto()  # v1.12: shared store declaration
     PROTOCOL = auto()  # v1.7: protocol declaration
     IMPL = auto()      # v1.7: protocol implementation
     IS = auto()        # v1.8: type pattern in match
@@ -167,6 +169,7 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "in": TokenType.IN,
     "functions": TokenType.FUNCTIONS,
     "main": TokenType.MAIN,
+    "store": TokenType.STORE,  # v1.12: shared store
     "alias": TokenType.ALIAS,
     "protocol": TokenType.PROTOCOL,  # v1.7
     "impl": TokenType.IMPL,          # v1.7

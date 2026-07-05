@@ -4,7 +4,37 @@
 
 ---
 
-## [2026-07-05] update | v1.12 Agent 隔离增强
+## [2026-07-05] update | v1.12 完整版 — 隔离级别、Shared Store
+
+**操作**: 更新 agent 隔离文档，记录 v1.12 完整改进
+**执行时间**: 2026-07-05
+**状态**: ✅ 完成
+
+### 变更内容
+
+1. **wiki/tutorial/05-agents.md**
+   - 新增 "隔离级别注解" 章节（@open/@strict/@sandbox）
+   - 新增 "Shared Store" 章节（shared store 语法和使用）
+   - 更新 v1.12 改进列表
+
+2. **新增功能**
+   - P2-1: 隔离级别注解（L0-L3）
+   - P2-2: 返回值深拷贝（@strict/@sandbox）
+   - P2-3: Shared Store（受控共享可变状态）
+   - P3-1: Channel（通过 Shared Store 替代）
+   - P3-2: 回调隔离（通过闭包值捕获实现）
+
+### 相关代码变更
+
+- `helen/core/ast.py`: 新增 SharedStoreDeclNode、isolation_level 字段
+- `helen/core/tokens.py`: 新增 @ 符号、store 关键字
+- `helen/core/parser.py`: 解析装饰器和 shared store
+- `helen/interpreter/interpreter.py`: SharedStore 类、隔离级别处理
+- `helen/semantic/analyzer.py`: shared store 语义分析
+
+---
+
+## [2026-07-05] update | v1.12 Agent 隔离增强（基础）
 
 **操作**: 更新 agent 隔离文档，记录 v1.12 的隔离增强改进
 **执行时间**: 2026-07-05

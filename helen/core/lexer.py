@@ -97,6 +97,7 @@ _SINGLE_CHAR_TOKENS: Final[dict[str, TokenType]] = {
     ">": TokenType.GREATER,
     "<": TokenType.LESS,
     "|": TokenType.PIPE,
+    "@": TokenType.AT,  # v1.12: decorator for agent isolation level
     # ── Fullwidth (U+FF00) Chinese punctuation equivalents ──
     "\uff08": TokenType.LEFT_PAREN,   # （
     "\uff09": TokenType.RIGHT_PAREN,  # ）

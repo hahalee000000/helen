@@ -126,16 +126,43 @@ agent Developer {
 
 | 变量类型 | 在 agent main 中 | 说明 |
 |---------|-----------------|------|
-| 模块级 `let` | ❌ **不可见** | 编译时报错 |
+| 模块级 `let` | ❌ **不可见** | 编译时报错（@open 除外）|
 | 模块级 `const` | ✅ 自动可见 | 只读共享 |
 | `shared let`（值类型） | ✅ 可见 | 跨 agent 可写 |
+| `shared store` | ✅ 可见 | 通过方法访问 |
 | 局部变量 | ✅ 可见 | 闭包值捕获 |
 
 **v1.12 新增**：
-- `shared let` 只允许值类型（int/float/str/bool），引用类型（list/dict）禁止
-- 参数中的引用类型（list/dict）自动包装为只读视图（`ReadOnlyView`）
+- `@open` 装饰器：允许访问模块级 let（调试用）
+- `@strict` 装饰器：参数和返回值深拷贝
+- `@sandbox` 装饰器：最严格隔离
+- `shared let` 只允许值类型（int/float/str/bool）
+- 引用类型（list/dict）通过**参数传递**，自动只读包装
 - 闭包采用值捕获，不持有整个环境引用
 - `arr[i] = x` 和 `obj.field = x` 也受隔离检查约束
+
+### 隔离级别
+
+```helen
+// L0: @open — 模块级 let 可见（调试用）
+@open agent DebugAgent() {
+    main { return module_let }
+}
+
+// L1: 标准隔离（默认）
+agent NormalAgent() { ... }
+
+// L2: @strict — 深拷贝参数和返回值
+@strict agent StrictAgent(data: list) {
+    main {
+        data.append(4)  // 安全：data 是副本
+        return data     // 返回值也是副本
+    }
+}
+
+// L3: @sandbox — 最严格
+@sandbox agent SafeAgent() { ... }
+```
 
 ### 示例：作用域隔离
 
@@ -256,6 +283,52 @@ let my_cache = {}
 let updated = CacheWriter(my_cache, "user:1", "Alice")
 RequestCounter()
 print("Requests: " + request_count)  // 1
+```
+
+### Shared Store 协作模式（v1.12）
+
+对于需要共享复杂可变状态的场景，使用 `shared store`：
+
+```helen
+// v1.12: 使用 shared store 管理复杂共享状态
+shared store TaskManager {
+    let pending = 0
+    let completed = 0
+
+    fn submit() {
+        pending = pending + 1
+    }
+
+    fn finish() {
+        pending = pending - 1
+        completed = completed + 1
+    }
+
+    fn get_status(): str {
+        return str(pending) + " pending, " + str(completed) + " completed"
+    }
+}
+
+agent TaskProducer() {
+    main {
+        TaskManager.submit()
+        TaskManager.submit()
+        return "submitted"
+    }
+}
+
+agent TaskWorker() {
+    main {
+        TaskManager.finish()
+        return "done"
+    }
+}
+
+main {
+    TaskProducer()
+    TaskWorker()
+    print(TaskManager.get_status())  // "1 pending, 1 completed"
+}
 ```
 
 ## 设计模式

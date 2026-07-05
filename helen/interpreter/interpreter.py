@@ -247,6 +247,112 @@ class ReadOnlyView:
         return self._data
 
 
+class SharedStore:
+    """Shared store instance for controlled shared mutable state.
+
+    v1.12: Provides a structured way to share mutable state across agents.
+    Fields are private, methods provide the public interface.
+
+    Example:
+        shared store Counter {
+            count: int = 0
+            fn increment() { count += 1 }
+            fn get(): int { return count }
+        }
+    """
+    def __init__(self, name: str, fields: dict[str, object], methods: dict[str, object]):
+        """Initialize a shared store.
+
+        Args:
+            name: The store's name.
+            fields: Initial field values (private state).
+            methods: Method implementations (callable closures).
+        """
+        self._name = name
+        self._fields = fields  # Private state
+        self._methods = methods  # Public methods
+
+    def __getattr__(self, name: str) -> object:
+        """Access a field or method by name."""
+        if name.startswith('_'):
+            raise AttributeError(f"Cannot access private attribute '{name}'")
+        if name in self._methods:
+            return self._methods[name]
+        if name in self._fields:
+            return self._fields[name]
+        raise AttributeError(f"Shared store '{self._name}' has no field or method '{name}'")
+
+    def __setattr__(self, name: str, value: object) -> None:
+        """Set a field value. Only fields can be modified, not methods."""
+        if name.startswith('_'):
+            object.__setattr__(self, name, value)
+            return
+        if name in self._methods:
+            raise AttributeError(f"Cannot overwrite method '{name}' in shared store '{self._name}'")
+        if name in self._fields:
+            self._fields[name] = value
+            return
+        raise AttributeError(f"Shared store '{self._name}' has no field '{name}'")
+
+    def __repr__(self) -> str:
+        return f"<SharedStore {self._name} with {len(self._fields)} fields, {len(self._methods)} methods>"
+
+    def get_field(self, name: str) -> object:
+        """Get a field value."""
+        if name not in self._fields:
+            raise AttributeError(f"Shared store '{self._name}' has no field '{name}'")
+        return self._fields[name]
+
+    def set_field(self, name: str, value: object) -> None:
+        """Set a field value."""
+        if name not in self._fields:
+            raise AttributeError(f"Shared store '{self._name}' has no field '{name}'")
+        self._fields[name] = value
+
+
+class SharedStoreMethod:
+    """A callable wrapper for a shared store method.
+
+    When accessed via store.method, returns this callable.
+    When called, executes the method with access to the store's fields.
+    """
+    def __init__(self, method_node, store: SharedStore, interpreter):
+        self._method_node = method_node
+        self._store = store
+        self._interpreter = interpreter
+
+    def __call__(self, *args):
+        """Call the method with the given arguments."""
+        interp = self._interpreter
+        m_node = self._method_node
+        store_inst = self._store
+
+        # Create execution environment with store fields as variables
+        old_env = interp.environment
+        method_env = old_env.enter_scope()
+        # Bind store fields as local variables
+        for fname, fvalue in store_inst._fields.items():
+            method_env.define(fname, fvalue)
+        # Bind method parameters
+        for i, param in enumerate(m_node.params):
+            if i < len(args):
+                method_env.define(param.name, args[i])
+        interp.environment = method_env
+        try:
+            result = interp._execute_stmts(m_node.body.body)
+            # Write back any field modifications
+            for fname in store_inst._fields:
+                try:
+                    store_inst._fields[fname] = method_env.lookup(fname)
+                except NameError:
+                    pass
+            if isinstance(result, ReturnSentinel):
+                return result.value
+            return result
+        finally:
+            interp.environment = old_env
+
+
 def _is_mutable_type(value: object) -> bool:
     """Check if a value is a mutable reference type."""
     return isinstance(value, (list, dict))
@@ -1138,6 +1244,43 @@ class Interpreter(LlmMixin, Visitor[object]):
                 self._shared_vars: set[str] = set()
             self._shared_vars.add(node.name)
         return value
+
+    def visit_shared_store_decl(self, node: object) -> object:
+        """Execute a shared store declaration: shared store Name { fields, methods }.
+
+        v1.12: Creates a SharedStore instance with private fields and public methods.
+        """
+        from helen.core.ast import SharedStoreDeclNode
+        if not isinstance(node, SharedStoreDeclNode):
+            return None
+
+        # Initialize field values
+        fields: dict[str, object] = {}
+        for field_node in node.fields:
+            value = None
+            if field_node.initializer is not None:
+                value = field_node.initializer.accept(self)
+            fields[field_node.name] = value
+
+        # Create method closures
+        # Each method needs access to the store's fields
+        store = SharedStore(node.name, fields, {})
+
+        # Create method implementations that have access to store fields
+        for method_node in node.methods:
+            method_name = method_node.name
+            # Create a callable wrapper for the method
+            store._methods[method_name] = SharedStoreMethod(method_node, store, self)
+
+        # Register the store in the environment
+        self.environment.define(node.name, store, is_const=True)
+
+        # Track as shared for cross-agent visibility
+        if not hasattr(self, '_shared_vars'):
+            self._shared_vars: set[str] = set()
+        self._shared_vars.add(node.name)
+
+        return store
 
     # ------------------------------------------------------------------
     # Control flow
@@ -2292,16 +2435,25 @@ class Interpreter(LlmMixin, Visitor[object]):
         They do NOT inherit parent agent's variables. The only parameter
         passing channel is explicit call Agent(param=value) arguments.
 
+        v1.12: Isolation levels affect the agent's behavior:
+        - "open" (L0): Module-level let is visible (for debugging)
+        - "standard" (L1): Default isolation (const + shared let visible)
+        - "strict" (L2): Standard + deep copy parameters and return values
+        - "sandbox" (L3): Strict + no I/O tools, limited capabilities
+
         Args:
             agent: The AgentDeclNode to execute.
             args: Keyword arguments from the call statement.
         """
+        # v1.12: Determine isolation level
+        isolation_level = getattr(agent, 'isolation_level', 'standard')
+
         # Check if agent is streaming mode
         is_streaming = self._is_agent_streaming(agent)
 
         # Push call stack frame (AI observability)
         self.observability.call_stack.push(agent.name, agent.span, args)
-        self.observability.tracer.trace("call", agent.span, {"agent": agent.name, "args": args})
+        self.observability.tracer.trace("call", agent.span, {"agent": agent.name, "args": args, "isolation": isolation_level})
 
         # Create a completely isolated environment (HLD 3.5.2)
         # Start from a fresh root, not inheriting parent agent's variables.
@@ -2311,6 +2463,19 @@ class Interpreter(LlmMixin, Visitor[object]):
         stdlib_cache = _get_stdlib_cache()
         for _name, _fn in stdlib_cache.items():
             call_env.define(_name, _fn)
+
+        # v1.12: L0 (open) isolation — inject module-level let for debugging
+        if isolation_level == "open":
+            current_env = self.environment
+            while current_env is not None:
+                for _name, _value in current_env._store.items():
+                    if not current_env.is_const(_name):
+                        # This is a module-level let, inject it
+                        try:
+                            call_env.lookup(_name)
+                        except NameError:
+                            call_env.define(_name, _value, is_const=False)
+                current_env = current_env.parent
 
         # v1.10: Inject module-level consts as read-only shared state.
         # const values are immutable by definition, so sharing them across
@@ -2354,11 +2519,18 @@ class Interpreter(LlmMixin, Visitor[object]):
         # Bind parameters from agent's param declarations
         # v1.12: Wrap mutable reference types (list, dict) in ReadOnlyView
         # to prevent agent from modifying caller's data.
+        # L2 (strict): Deep copy parameters instead of read-only wrapper
         for param in agent.params:
             if param.name in args:
                 value = args[param.name]
-                if _is_mutable_type(value):
-                    value = ReadOnlyView(value)
+                if isolation_level == "strict" or isolation_level == "sandbox":
+                    # L2/L3: Deep copy mutable types
+                    if _is_mutable_type(value):
+                        value = copy.deepcopy(value)
+                else:
+                    # L1: Read-only wrapper
+                    if _is_mutable_type(value):
+                        value = ReadOnlyView(value)
                 call_env.define(param.name, value)
             elif param.default_value is not None:
                 # v1.12: Evaluate default in agent's isolated environment.
@@ -2398,12 +2570,19 @@ class Interpreter(LlmMixin, Visitor[object]):
             if agent.logic is not None:
                 result = agent.logic.accept(self)
                 if isinstance(result, ReturnSentinel):
-                    self.observability.tracer.trace("return", agent.span, {"agent": agent.name, "value": result.value})
+                    # v1.12: Deep copy return value for L2/L3 to prevent reference escape
+                    return_value = result.value
+                    if (isolation_level == "strict" or isolation_level == "sandbox") and _is_mutable_type(return_value):
+                        return_value = copy.deepcopy(return_value)
+                    self.observability.tracer.trace("return", agent.span, {"agent": agent.name, "value": return_value})
                     # If streaming mode, wrap result in StreamingResponse
-                    if is_streaming and isinstance(result.value, str):
-                        return self._create_streaming_response(result.value)
-                    return result.value
+                    if is_streaming and isinstance(return_value, str):
+                        return self._create_streaming_response(return_value)
+                    return return_value
                 self.observability.tracer.trace("return", agent.span, {"agent": agent.name})
+                # v1.12: Deep copy return value for L2/L3 to prevent reference escape
+                if (isolation_level == "strict" or isolation_level == "sandbox") and _is_mutable_type(result):
+                    result = copy.deepcopy(result)
                 # If streaming mode, wrap result in StreamingResponse
                 if is_streaming and isinstance(result, str):
                     return self._create_streaming_response(result)

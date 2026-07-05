@@ -513,24 +513,24 @@ class TestErrorCases:
     """Tests for error reporting."""
 
     def test_illegal_character(self) -> None:
-        """Illegal character '@' should report an error."""
-        s = Scanner("@")
+        """Illegal character '~' should report an error."""
+        s = Scanner("~")
         s.scan_all()
         assert s.has_errors
         assert any(
-            e.code == ErrorCode.SCANNER_ERROR and "@" in e.message
+            e.code == ErrorCode.SCANNER_ERROR and "~" in e.message
             for e in s.errors
         )
 
     def test_multiple_illegal_chars(self) -> None:
         """Multiple illegal characters should each be reported."""
-        s = Scanner("@#$")
+        s = Scanner("~#$")
         s.scan_all()
         assert len(s.errors) == 3
 
     def test_illegal_char_does_not_stop_scanning(self) -> None:
         """Scanning should continue after an illegal character."""
-        tokens = _scan("@ foo")
+        tokens = _scan("~ foo")
         # Should still get the identifier after the error
         types = _token_types(tokens)
         assert TokenType.IDENTIFIER in types
@@ -722,7 +722,7 @@ class TestEdgeCases:
 
     def test_errors_property_is_copy(self) -> None:
         """errors property should return a copy."""
-        s = Scanner("@")
+        s = Scanner("~")
         s.scan_all()
         e1 = s.errors
         e1.clear()

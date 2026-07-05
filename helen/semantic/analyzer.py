@@ -133,6 +133,7 @@ class SemanticAnalyzer(Visitor[None]):
         self._agent_scope_boundary: int = 0  # scope depth where agent boundary starts
         self._shared_var_names: set[str] = set()  # v1.10: shared let variable names
         self._in_closure: int = 0  # v1.10: closure nesting depth (lambda inside agent main)
+        self._agent_isolation_open: bool = False  # v1.12: True if current agent has @open decorator
         # Register stdlib builtins in global scope (HLD M15)
         self._register_stdlib()
 
@@ -427,6 +428,73 @@ class SemanticAnalyzer(Visitor[None]):
 
             self._shared_var_names.add(node.name)
 
+    def visit_shared_store_decl(self, node: object) -> None:
+        """Analyze a shared store declaration: shared store Name { fields, methods }.
+
+        v1.12: Provides controlled shared mutable state for agent collaboration.
+        """
+        from helen.core.ast import SharedStoreDeclNode
+        if not isinstance(node, SharedStoreDeclNode):
+            return
+
+        # Register the store name in the symbol table
+        symbol = Symbol(
+            name=node.name,
+            kind="store",
+            is_const=True,  # The store reference itself is const
+        )
+        existing = self.symbols.define(node.name, symbol)
+        if existing is not None:
+            if existing.kind == "builtin":
+                pass
+            else:
+                self.errors.error(
+                    ErrorCode.DUPLICATE_SYMBOL,
+                    f"duplicate declaration of '{node.name}'",
+                    node.span,
+                )
+
+        # Track as shared for cross-agent visibility
+        self._shared_var_names.add(node.name)
+
+        # Create a scope for the store body
+        self.symbols.enter_scope(f"store:{node.name}", "store")
+        try:
+            # Analyze fields
+            for field_node in node.fields:
+                field_node.accept(self)
+
+            # Analyze methods
+            for method_node in node.methods:
+                # Register method in store scope
+                method_sym = Symbol(
+                    name=method_node.name,
+                    kind="function",
+                    type_node=method_node.return_type,
+                )
+                self.symbols.define(method_node.name, method_sym)
+
+                # Analyze method body in a new scope
+                prev_return_type = self._current_return_type
+                old_in_store_method = getattr(self, '_in_store_method', False)
+                self._in_store_method = True
+                self._current_return_type = self._type_from_typenode(method_node.return_type)
+                self.symbols.enter_scope(f"store_method:{method_node.name}", "function")
+                try:
+                    # Bind method parameters
+                    for param in method_node.params:
+                        param_sym = Symbol(name=param.name, kind="param",
+                                          type_node=param.type_annotation)
+                        self.symbols.define(param.name, param_sym)
+                    # Analyze method body
+                    method_node.body.accept(self)
+                finally:
+                    self.symbols.exit_scope()
+                    self._current_return_type = prev_return_type
+                    self._in_store_method = old_in_store_method
+        finally:
+            self.symbols.exit_scope()
+
     def visit_variable(self, node: VariableNode) -> None:
         sym = self.symbols.resolve(node.name)
         if sym is None:
@@ -436,6 +504,9 @@ class SemanticAnalyzer(Visitor[None]):
                 node.span,
             )
         elif self._in_agent and sym.kind == "variable":
+            # v1.12: @open agents can access module-level let (for debugging)
+            if self._agent_isolation_open:
+                return
             # Agent main {} runs in an isolated environment — module-level
             # let/const variables are NOT visible at runtime.  But variables
             # defined inside the agent main scope itself ARE fine.
@@ -535,10 +606,10 @@ class SemanticAnalyzer(Visitor[None]):
         self._check_break_continue_position(node, "continue")
 
     def visit_return_stmt(self, node: ReturnStmtNode) -> None:
-        if self._in_function == 0 and not self._in_agent:
+        if self._in_function == 0 and not self._in_agent and not getattr(self, '_in_store_method', False):
             self.errors.error(
                 ErrorCode.RETURN_OUTSIDE_FUNCTION,
-                "return can only be used inside a function or agent main block",
+                "return can only be used inside a function, agent main block, or store method",
                 node.span,
             )
         if node.value is not None:
@@ -867,7 +938,10 @@ class SemanticAnalyzer(Visitor[None]):
         if node.logic is not None:
             old_in_agent = self._in_agent
             old_boundary = self._agent_scope_boundary
+            old_isolation_open = self._agent_isolation_open
             self._in_agent = True
+            # v1.12: @open agents can access module-level let
+            self._agent_isolation_open = (getattr(node, 'isolation_level', 'standard') == "open")
 
             # Enter agent scope so parameters are registered inside the
             # agent's scope chain (not in global scope).  This lets
@@ -969,6 +1043,7 @@ class SemanticAnalyzer(Visitor[None]):
                 self.symbols.exit_scope()
                 self._in_agent = old_in_agent
                 self._agent_scope_boundary = old_boundary
+                self._agent_isolation_open = old_isolation_open
 
     def visit_prompt_def(self, node: PromptDefNode) -> None:
         pass  # prompt content is a string, validated at runtime

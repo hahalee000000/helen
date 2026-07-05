@@ -507,16 +507,24 @@ class Parser:
             self._advance()
             return None
 
+        # v1.12: Parse decorators (@sandbox, @open, @strict) before declarations
+        isolation_level = "standard"
+        if self._check(TokenType.AT):
+            isolation_level = self._parse_decorator()
+
         # async statement modifier detection (HLD 3.3.3)
         if self._check(TokenType.ASYNC):
             return self._async_call_stmt()
 
         if self._match(TokenType.SHARED):
-            # shared let / shared const — cross-agent visible variable
+            # shared let / shared const / shared store — cross-agent visible
             is_shared = True
             if self._match(TokenType.LET, TokenType.CONST):
                 return self._var_decl(shared=True)
-            self._error("Expected 'let' or 'const' after 'shared'.")
+            if self._match(TokenType.STORE):
+                # v1.12: shared store Name { fields, methods }
+                return self._shared_store_decl()
+            self._error("Expected 'let', 'const', or 'store' after 'shared'.")
             return None
         if self._match(TokenType.LET, TokenType.CONST):
             return self._var_decl()
@@ -541,7 +549,22 @@ class Parser:
         if self._match(TokenType.ALIAS):
             return self._alias_stmt()
         if self._match(TokenType.AGENT):
-            return self._agent_decl()
+            agent_node = self._agent_decl()
+            # Apply isolation level from decorator
+            if isolation_level != "standard":
+                agent_node = AgentDeclNode(
+                    name=agent_node.name,
+                    params=agent_node.params,
+                    declarations=agent_node.declarations,
+                    prompt=agent_node.prompt,
+                    logic=agent_node.logic,
+                    span=agent_node.span,
+                    functions=agent_node.functions,
+                    function_vars=agent_node.function_vars,
+                    has_streaming=agent_node.has_streaming,
+                    isolation_level=isolation_level,
+                )
+            return agent_node
         if self._match(TokenType.TRY):
             return self._try_stmt()
         if self._match(TokenType.THROW):
@@ -562,6 +585,23 @@ class Parser:
         if self._at_end():
             return None
         return self._expr_stmt()
+
+    def _parse_decorator(self) -> str:
+        """Parse a decorator: @sandbox, @open, @strict.
+
+        Returns the isolation level string.
+        """
+        self._advance()  # consume @
+        if self._check(TokenType.IDENTIFIER):
+            decorator_name = self._current().lexeme
+            if decorator_name in ("sandbox", "open", "strict"):
+                self._advance()
+                return decorator_name
+            else:
+                self._error(f"Unknown decorator '@{decorator_name}'. Expected @sandbox, @open, or @strict.")
+        else:
+            self._error("Expected decorator name after '@'.")
+        return "standard"
 
     def _llm_stmt(self) -> StatementNode:
         """Parse an llm statement: dispatch based on the next token (llm if / llm act / llm stream)."""
@@ -765,6 +805,37 @@ class Parser:
                              functions=agent_functions,
                              function_vars=agent_function_vars,
                              has_streaming=has_streaming)
+
+    def _shared_store_decl(self) -> "SharedStoreDeclNode":
+        """Parse a shared store declaration: shared store Name { fields, methods }.
+
+        v1.12: Provides controlled shared mutable state for agent collaboration.
+        """
+        from .ast import SharedStoreDeclNode
+        name_tok = self._consume(TokenType.IDENTIFIER, "Expected store name after 'shared store'.")
+        self._consume(TokenType.LEFT_BRACE, "Expected '{' after store name.")
+
+        fields: list = []
+        methods: list = []
+
+        while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF):
+            if self._match(TokenType.FN):
+                methods.append(self._function_decl())
+            elif self._check(TokenType.LET, TokenType.CONST):
+                self._advance()  # consume let/const
+                fields.append(self._var_decl())
+            else:
+                self._error(f"Expected 'fn', 'let', or 'const' inside shared store, got {self._current().type.name}")
+                self._synchronize()
+
+        end = self._consume(TokenType.RIGHT_BRACE, "Expected '}' after shared store body.")
+
+        return SharedStoreDeclNode(
+            name=name_tok.lexeme,
+            fields=fields,
+            methods=methods,
+            span=self._make_span(name_tok, end),
+        )
 
     def _agent_param(self) -> AgentParamNode:
         """Parse an agent parameter: name: Type? = expr?."""

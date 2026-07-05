@@ -56,6 +56,10 @@ class Visitor(ABC, Generic[R]):
         """Visit a VarDeclNode."""
 
     @abstractmethod
+    def visit_shared_store_decl(self, node: "SharedStoreDeclNode") -> R:
+        """Visit a SharedStoreDeclNode."""
+
+    @abstractmethod
     def visit_if_stmt(self, node: IfStmtNode) -> R:
         """Visit an IfStmtNode."""
 
@@ -517,6 +521,32 @@ class VarDeclNode(StatementNode):
 
 
 @dataclass(frozen=True)
+class SharedStoreDeclNode(StatementNode):
+    """Shared store declaration: shared store Name { fields, methods }.
+
+    v1.12: Provides controlled shared mutable state for agent collaboration.
+    Fields are private, methods provide the public interface.
+    Methods can be marked @atomic for transaction safety.
+
+    Example:
+        shared store Counter {
+            count: int = 0
+
+            fn increment() { count += 1 }
+            fn get(): int { return count }
+        }
+    """
+    name: str
+    fields: list["VarDeclNode"]  # Private state variables
+    methods: list["FunctionDeclNode"]  # Public methods
+    span: SourceSpan
+
+    def accept(self, visitor: Visitor[R]) -> R:
+        """Dispatch to the visitor."""
+        return visitor.visit_shared_store_decl(self)
+
+
+@dataclass(frozen=True)
 class IfStmtNode(StatementNode):
     """Conditional: if cond { ... } else { ... }."""
     condition: ExpressionNode
@@ -658,6 +688,7 @@ class AgentDeclNode(StatementNode):
         functions: Functions declared inside ``functions { }`` block (HLD 3.5.3).
             Registered in the agent's call scope when invoked, so ``main`` can call them.
         has_streaming: Pre-computed flag indicating if any declaration has streaming=true (P2 optimization).
+        isolation_level: v1.12 isolation level - "standard" (L1), "open" (L0), "strict" (L2), "sandbox" (L3).
     """
     name: str
     params: list[AgentParamNode]
@@ -668,6 +699,7 @@ class AgentDeclNode(StatementNode):
     functions: list["FunctionDeclNode"] = field(default_factory=list)
     function_vars: list["VarDeclNode"] = field(default_factory=list)  # let/const in functions block
     has_streaming: bool = False  # Pre-computed for _is_agent_streaming (P2)
+    isolation_level: str = "standard"  # v1.12: "open", "standard", "strict", "sandbox"
 
     def accept(self, visitor: Visitor[R]) -> R:
         """Dispatch to the visitor."""
@@ -1157,6 +1189,15 @@ class ASTPrinter(Visitor[str]):
             parts.append("=")
             parts.append(node.initializer)
         return self._parenthesize(kw, *parts)
+
+    def visit_shared_store_decl(self, node: SharedStoreDeclNode) -> str:
+        """Visit a SharedStoreDeclNode."""
+        parts: list[Any] = [node.name]
+        for field in node.fields:
+            parts.append(field)
+        for method in node.methods:
+            parts.append(method)
+        return self._parenthesize("shared store", *parts)
 
     def visit_if_stmt(self, node: IfStmtNode) -> str:
         """Visit an IfStmtNode."""

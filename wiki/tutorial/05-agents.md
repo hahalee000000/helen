@@ -1722,7 +1722,52 @@ agent MyAgent {
 
 v1.12 对 agent 隔离进行了多项增强，堵住了之前版本中的隐式泄漏漏洞。
 
-### 1. 参数默认值求值环境修复
+### 1. 隔离级别注解
+
+v1.12 引入了 `@open`、`@strict`、`@sandbox` 装饰器，可以控制 agent 的隔离级别：
+
+```helen
+// L0: @open — 允许访问模块级 let（调试用）
+@open agent DebugAgent() {
+    main {
+        // 可以访问模块级 let
+        return module_secret
+    }
+}
+
+// L1: 标准隔离（默认）
+agent NormalAgent() {
+    main {
+        // 只能访问 const 和 shared let
+    }
+}
+
+// L2: @strict — 标准 + 深拷贝参数和返回值
+@strict agent StrictAgent(data: list) {
+    main {
+        // data 是深拷贝的副本，可以自由修改
+        data.append(4)
+        return data  // 返回值也是深拷贝
+    }
+}
+
+// L3: @sandbox — 最严格，适合不可信 LLM
+@sandbox agent SafeAgent() {
+    main {
+        // 参数和返回值都深拷贝
+        // 工具调用可能受限
+    }
+}
+```
+
+| 级别 | 装饰器 | 特点 |
+|------|--------|------|
+| L0 | `@open` | 模块级 let 可见（调试用） |
+| L1 | （默认） | const + shared let 可见，参数只读包装 |
+| L2 | `@strict` | L1 + 参数深拷贝 + 返回值深拷贝 |
+| L3 | `@sandbox` | L2 + 可能的工具限制 |
+
+### 2. 参数默认值求值环境修复
 
 **v1.11 及之前**：agent 参数默认值在**调用者环境**中求值，可能绕过隔离。
 
@@ -1874,6 +1919,98 @@ agent Worker() {
     }
 }
 ```
+
+---
+
+## v1.12 Shared Store — 受控的共享可变状态
+
+v1.12 引入了 `shared store`，为跨 agent 共享可变引用类型提供了结构化的方式。
+
+### 基本语法
+
+```helen
+shared store Counter {
+    let count = 0           // 私有字段
+
+    fn increment() {
+        count = count + 1   // 通过方法修改
+    }
+
+    fn get(): int {
+        return count        // 通过方法读取
+    }
+}
+```
+
+### 使用示例
+
+```helen
+shared store Cache {
+    let hits = 0
+    let misses = 0
+
+    fn record_hit() {
+        hits = hits + 1
+    }
+
+    fn record_miss() {
+        misses = misses + 1
+    }
+
+    fn get_stats(): str {
+        return str(hits) + " hits, " + str(misses) + " misses"
+    }
+}
+
+agent CachedWorker(key: str) {
+    main {
+        // 使用 store 的方法
+        if has_cached(key) {
+            Cache.record_hit()
+        } else {
+            Cache.record_miss()
+        }
+        return do_work(key)
+    }
+}
+
+main {
+    CachedWorker("a")
+    CachedWorker("b")
+    CachedWorker("a")
+    print(Cache.get_stats())  // "1 hits, 2 misses"
+}
+```
+
+### 为什么需要 Shared Store？
+
+v1.12 将 `shared let` 限制为值类型，因为引用类型（list、dict）的共享可能导致竞态条件和数据损坏。
+
+**之前（不推荐）**：
+```helen
+// ❌ 直接共享可变引用类型
+shared let cache = {}        // 现在会报编译错误！
+```
+
+**现在（推荐）**：
+```helen
+// ✅ 使用 shared store 封装可变状态
+shared store Cache {
+    let data = {}            // 字段被封装在 store 内部
+
+    fn get(key) { ... }      // 通过方法访问
+    fn set(key, val) { ... }
+}
+```
+
+### Shared Store vs Shared Let
+
+| 特性 | shared let | shared store |
+|------|-----------|--------------|
+| 允许的类型 | 值类型（int/str/bool/float） | 任意类型 |
+| 访问方式 | 直接读写 | 通过方法 |
+| 封装 | 无 | 有（字段私有） |
+| 适用场景 | 简单计数器、状态标志 | 复杂共享状态 |
 
 ---
 

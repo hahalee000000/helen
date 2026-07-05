@@ -137,7 +137,7 @@ class TestKeywords:
     def test_keyword_count(self):
         """Test that the keyword map contains the expected number of entries."""
         kw = keywords()
-        assert len(kw) == 90  # 45 English + 45 Chinese keywords
+        assert len(kw) == 91  # 46 English + 45 Chinese keywords (v1.12: added 'store')
 
     def test_all_keywords_map_to_token_types(self) -> None:
         """Every keyword value should be a TokenType member."""
