@@ -191,6 +191,11 @@ class LlmMixin:
             # Bare form: use agent description as system_prompt
             system_prompt = self._get_agent_setting("description")
 
+        # Inject Helen language conventions (always included)
+        helen_conventions = self._build_helen_conventions()
+        if helen_conventions:
+            system_prompt = helen_conventions + ("\n\n" + system_prompt if system_prompt else "")
+
         # Inject skill index into system prompt
         skill_index = self._build_skill_index()
         if skill_index:
@@ -494,11 +499,13 @@ class LlmMixin:
         tools: list[dict[str, Any]] = []
         tool_names: set[str] = set()
 
-        # v1.12: @sandbox (L3) — force empty tools, no capabilities
+        # v1.12: @sandbox (L3) — force empty tools, except load_skill
         if self._current_agent is not None:
             isolation = getattr(self._current_agent, 'isolation_level', 'standard')
             if isolation == "sandbox":
-                return tools  # empty list — no tools at all
+                # Sandbox agents get only load_skill for skill access
+                tools.extend(get_tool_schemas(["load_skill"]))
+                return tools
 
         # 1. Read declared tools allowlist
         declared_tools: list[str] | None = None
@@ -678,6 +685,18 @@ class LlmMixin:
             # Restore environment
             self.environment = old_env
 
+    def _build_helen_conventions(self: Any) -> str:
+        """Build Helen language conventions section for system prompt.
+
+        P2: Delegates to PromptBuilder for unified implementation.
+        Provides foundational guidance for generating correct Helen code.
+        """
+        if hasattr(self, '_prompt_builder') and self._prompt_builder is not None:
+            return self._prompt_builder._build_helen_conventions()
+
+        # Fallback: return empty string (should not reach here normally)
+        return ""
+
     def _build_skill_index(self: Any) -> str:
         """Build the Tier 1 Skill Index for system prompt injection.
 
@@ -733,8 +752,9 @@ class LlmMixin:
                 by_category.setdefault(s.category or "uncategorized", []).append(s)
 
             lines = ["<available_skills>"]
-            lines.append("Before replying, scan skills below. If relevant,")
-            lines.append("use load_skill tool to load full content.")
+            lines.append("Before replying — and especially before writing code —")
+            lines.append("scan the skills below. If any skill is relevant, use the")
+            lines.append("load_skill tool to load its full instructions before proceeding.")
             lines.append("")
 
             for category, skill_list in sorted(by_category.items()):

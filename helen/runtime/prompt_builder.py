@@ -127,9 +127,10 @@ class PromptBuilder:
         """Build the System Prompt for an agent (HLD 3.7.1).
 
         Components:
-        1. Agent description
-        2. Skill Index Tier 1 (<available_skills>)
-        3. Tool schemas (including load_skill)
+        1. Helen language conventions and best practices
+        2. Agent description
+        3. Skill Index Tier 1 (<available_skills>)
+        4. Tool schemas (including load_skill)
 
         Per HLD 3.7.1 progressive disclosure:
         - Tier 1: Skill Index (lightweight) in System Prompt
@@ -137,7 +138,12 @@ class PromptBuilder:
         """
         parts = []
 
-        # 1. Agent description
+        # 1. Helen language conventions (always included)
+        helen_conventions = self._build_helen_conventions()
+        if helen_conventions:
+            parts.append(helen_conventions)
+
+        # 2. Agent description
         for decl in agent_decl.declarations:
             if decl.description is not None:
                 from helen.core.ast import LiteralNode
@@ -145,12 +151,88 @@ class PromptBuilder:
                     parts.append(decl.description.value)
                     break
 
-        # 2. Skill Index (Tier 1)
+        # 3. Skill Index (Tier 1)
         skill_index = self.build_skill_index()
         if skill_index:
             parts.append(skill_index)
 
         return "\n\n".join(parts)
+
+    def _build_helen_conventions(self) -> str:
+        """Build Helen language conventions and best practices section.
+
+        This provides foundational guidance for generating correct Helen code,
+        inspired by Claude Code's system prompt structure.
+        """
+        return """<helen_conventions>
+You are generating code for Helen, a prompt-first Agent programming language.
+
+## Core Principles
+- Helen is agent-centric: design around `agent` blocks with `prompt`, `tools`, and `main`
+- Use `llm act` for LLM interactions (with optional tool calling via `tools` declaration)
+- Use `llm if` for LLM-routed branching (classification tasks)
+- Prefer composition over inheritance: build small, focused agents that collaborate
+
+## Skill-Driven Development
+**CRITICAL**: Before writing ANY code (tests, main program, or utilities):
+1. Scan the available skills below
+2. If a skill matches your task, call `load_skill(name='skill-name')` FIRST
+3. Follow the loaded skill's instructions precisely
+
+Common skills to load:
+- `helen-syntax` — Language syntax, keywords, patterns
+- `helen-testing` — Test framework (`fn test_name()`, `assert_true`, `assert_equal`)
+- `helen-stdlib` — Built-in functions (string, math, collections, time, etc.)
+- `helen-agent-collaboration` — Multi-agent patterns (shared let, channel, shared store)
+
+## Code Generation Best Practices
+- **Test-first**: Write tests before implementation when possible
+- **Incremental**: Build and verify in small steps, not all at once
+- **Error handling**: Use `try-catch` with specific exception types
+- **Tool usage**:
+  - Use `read_file` to inspect existing code before modifying
+  - Use `shell_exec` for running tests (`helen test <file>`) and checks (`helen check <file>`)
+  - Use `write_file` to create/update files (not shell commands like `echo >`)
+
+## Common Pitfalls to Avoid
+- ❌ Guessing stdlib function names → ✅ Load `helen-stdlib` skill or read source
+- ❌ Inventing test syntax → ✅ Load `helen-testing` skill
+- ❌ Using Python/C APIs (e.g., `strftime`) → ✅ Use Helen stdlib (e.g., `date_format`)
+- ❌ Skipping skill loading → ✅ Always check skills first
+
+## Testing Syntax (Quick Reference)
+```helen
+// Correct test structure
+fn test_feature_name() {
+    let result = function_under_test()
+    assert_true(result > 0)
+    assert_equal(result, expected_value)
+}
+
+// Run tests
+run_tests()  // Executes all fn test_*() functions
+```
+
+## Agent Structure (Quick Reference)
+```helen
+agent MyAgent(input: str) {
+    description "What this agent does"
+    prompt "Task: {{input}}"
+    tools ["read_file", "write_file"]  // Optional tool whitelist
+
+    functions {
+        fn helper_fn(): str {
+            return "processed"
+        }
+    }
+
+    main {
+        let result = llm act  // Uses prompt + tools
+        return result
+    }
+}
+```
+</helen_conventions>"""
 
     def build_user_prompt(
         self, agent_decl: "AgentDeclNode", context: str | None = None
@@ -245,8 +327,9 @@ class PromptBuilder:
                 by_category.setdefault(s.category or "uncategorized", []).append(s)
 
             lines = ["<available_skills>"]
-            lines.append("Before replying, scan skills below. If relevant,")
-            lines.append("use load_skill tool to load full content.")
+            lines.append("Before replying — and especially before writing code —")
+            lines.append("scan the skills below. If any skill is relevant, use the")
+            lines.append("load_skill tool to load its full instructions before proceeding.")
             lines.append("")
 
             for category, skill_list in sorted(by_category.items()):
