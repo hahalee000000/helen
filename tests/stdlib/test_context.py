@@ -71,9 +71,10 @@ class TestCompressContext:
         # Create a mock history manager
         self.mock_manager = MagicMock()
         self.mock_manager.estimate_tokens.side_effect = lambda h: len(h) * 10
-        self.mock_manager.compress_if_needed.return_value = None
-        self.mock_manager._compress_summarize.return_value = None
-        self.mock_manager._compress_truncate.return_value = None
+        self.mock_manager.enforce_limit.return_value = None
+        self.mock_manager._summarize_compress.return_value = None
+        self.mock_manager._truncate_compress.return_value = None
+        self.mock_manager.MAX_TOKENS = 128000
 
     def test_compress_context_auto(self):
         """Test auto compression strategy."""
@@ -86,7 +87,7 @@ class TestCompressContext:
         assert "compressed_messages" in result
         assert "original_tokens" in result
         assert "compressed_tokens" in result
-        self.mock_manager.compress_if_needed.assert_called_once()
+        self.mock_manager.enforce_limit.assert_called_once()
 
     def test_compress_context_summarize(self):
         """Test summarize compression strategy."""
@@ -95,7 +96,7 @@ class TestCompressContext:
 
         assert result["status"] == "ok"
         assert result["strategy"] == "summarize"
-        self.mock_manager._compress_summarize.assert_called_once()
+        self.mock_manager._summarize_compress.assert_called_once()
 
     def test_compress_context_truncate(self):
         """Test truncate compression strategy."""
@@ -104,7 +105,7 @@ class TestCompressContext:
 
         assert result["status"] == "ok"
         assert result["strategy"] == "truncate"
-        self.mock_manager._compress_truncate.assert_called_once()
+        self.mock_manager._truncate_compress.assert_called_once()
 
     def test_compress_context_none(self):
         """Test none compression strategy (no-op)."""

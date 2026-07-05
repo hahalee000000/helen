@@ -144,14 +144,18 @@ def _compress_context(strategy: str = "auto") -> dict:
 
     # Perform compression
     if strategy == "auto":
-        # Use HistoryManager's default compression (threshold-based)
-        _interpreter_history_manager.compress_if_needed(_interpreter_history)
+        # Use HistoryManager's enforce_limit (respects compression_mode setting)
+        _interpreter_history_manager.enforce_limit(_interpreter_history)
     elif strategy == "summarize":
-        # Force summarize compression
-        _interpreter_history_manager._compress_summarize(_interpreter_history)
+        # Force summarize compression with default budget
+        from helen.runtime.history import HISTORY_BUDGET_RATIO
+        budget = int(_interpreter_history_manager.MAX_TOKENS * HISTORY_BUDGET_RATIO)
+        _interpreter_history_manager._summarize_compress(_interpreter_history, budget)
     elif strategy == "truncate":
-        # Force truncate compression (keep last 10 messages)
-        _interpreter_history_manager._compress_truncate(_interpreter_history, keep_last=10)
+        # Force truncate compression with default budget
+        from helen.runtime.history import HISTORY_BUDGET_RATIO
+        budget = int(_interpreter_history_manager.MAX_TOKENS * HISTORY_BUDGET_RATIO)
+        _interpreter_history_manager._truncate_compress(_interpreter_history, budget)
     else:
         return {
             "status": "error",

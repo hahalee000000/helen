@@ -64,13 +64,13 @@ def _write_file(path: str, content: str) -> str:
     return py_write_file(path, content)
 
 
-def _shell_exec(command: str, timeout: int = 30, shell: bool = False) -> str:
+def _shell_exec(command: str, timeout: int = 30, shell: bool = True) -> str:
     """Execute a shell command and return output.
 
     Args:
         command: Command to execute
         timeout: Timeout in seconds (default 30)
-        shell: Whether to use shell execution (default False for safety)
+        shell: Whether to use shell execution (default True for full shell syntax support)
 
     Returns:
         JSON string with command, exit_code, and output
