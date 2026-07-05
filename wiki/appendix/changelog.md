@@ -37,62 +37,132 @@ llm act "写长文" on_chunk handle_chunk
 
 ---
 
-## v1.12: 上下文管理全面优化
+## v1.13: Channel 通道 + 中文关键字补全
 
-| 改动 | 说明 | 优先级 | 状态 |
-|------|------|--------|------|
-| user 消息去重 | 修复 `act()` 重复追加 user 消息的代码味道 | P0 | ✅ |
-| bare form system_prompt 修复 | 不再将 prompt 模板同时放入 system 和 user message | P0 | ✅ |
-| Tool calling 上下文可见 | `_history` 记录 tool 调用摘要，后续 `llm act` 可引用 | P1 | ✅ |
-| act_stream 网络重试 | 流式调用增加指数退避重试（5xx/429/网络错误） | P2 | ✅ |
-| PromptBuilder 统一 | 单一来源：嵌套访问 + mtime 缓存 + 描述截断 | P2 | ✅ |
-| Token 估算改进 | 可选 tiktoken 精确计数（`pip install helen[accurate-tokens]`） | P3 | ✅ |
-| History 压缩优化 | 三种压缩模式（summarize/truncate/none）+ 三层压缩策略 | P3 | ✅ |
-| History 持久化 | `save_history()` / `load_history()` 跨会话保留对话 | P4 | ✅ |
-| History 检索 | `search_history()` / `get_tool_history()` 多条件查询 | P4 | ✅ |
-| 上下文可视化 | REPL `:stats` 命令 + 进度条 + 角色分布 | P4 | ✅ |
+### Channel 声明
 
-### Bug 修复：user 消息重复追加
-
-**问题**：`_add_to_history("user", prompt)` 和 `act()` 内部的 `messages.append({"role": "user", ...})` 都追加了 user 消息，依赖 `_repair_message_sequence` 修复——代码味道。
-
-**修复**：`act()`/`act_stream()`/`act_async()`/`act_stream_async()` 检查最后一条消息是否已是相同 user 消息，避免重复追加。
-
-### 新功能：Tool calling 上下文可见
-
-**问题**：全局 `_history` 不记录中间 tool_call/tool_result，后续 `llm act` 看不到之前的工具执行信息。
-
-**修复**：`act()` 收集 tool_calls_log（工具名、参数、结果截断到 500 字符），`_record_llm_response_to_history()` 记录结构化摘要 `[tool_name(args) → result]` 到 history。
-
-### 新功能：History 持久化
+新增 `channel`（中文：`通道`）声明，为 agent 间通信提供类型安全的结构化方式：
 
 ```helen
-agent PersistentAgent {
+// 英文语法
+channel Counter {
+    count: int = 0
+    fn increment() { count += 1 }
+    fn get(): int { return count }
+}
+
+// 中文语法
+通道 计数器 {
+    计数: int = 0
+    fn 增加() { 计数 += 1 }
+    fn 获取(): int { 返回 计数 }
+}
+```
+
+**Channel vs Shared Store**:
+
+| 特性 | Shared Store | Channel |
+|------|-------------|---------|
+| 关键字 | `shared store` | `channel` |
+| 中文 | `共享 仓库` | `通道` |
+| 语义 | 共享状态容器 | 通信端点 |
+| 运行时实现 | `SharedStore` 类 | 复用 `SharedStore` |
+| 线程安全 | RLock | RLock |
+| 私有字段 | `_` 前缀 | `_` 前缀 |
+
+### 中文关键字补全
+
+新增关键字：
+- `store` → `仓库`
+- `channel` → `通道`
+
+关键字总数：94（47 英文 + 47 中文）
+
+### 实现变更
+
+- `tokens.py`: 新增 `CHANNEL` TokenType + `仓库`/`通道` 映射
+- `ast.py`: 新增 `ChannelDeclNode` + Visitor 方法
+- `parser.py`: 新增 `_channel_decl()` 方法
+- `analyzer.py`: 新增 `visit_channel_decl()` 方法
+- `interpreter.py`: 新增 `visit_channel_decl()`（运行时复用 `SharedStore` 类）
+
+---
+
+## v1.12: Agent 隔离增强 + Shared Store + 上下文管理
+
+### 隔离改进
+
+| 改动 | 说明 | 优先级 |
+|------|------|--------|
+| 参数默认值求值环境修复 | 默认值在 agent env 中求值，防止模块变量泄露 | P0 |
+| `functions{}` 变量求值环境修复 | 初始化在 agent env 中求值 | P0 |
+| `function_vars` 语义分析补全 | 类型检查 + 作用域检查 | P0 |
+| 复合赋值隔离检查 | `arr[i]=x`/`obj.field=x` 现在正确检查作用域 | P0 |
+| 引用类型参数只读包装 | list/dict 参数自动 `ReadOnlyView` 包装 | P1 |
+| 闭包值捕获 | 替代环境引用捕获，防止 agent 环境逃逸 | P1 |
+| `shared let` 值类型限制 | 只能使用 int/float/str/bool | P1 |
+| 隔离级别注解 | `@open`/`@strict`/`@sandbox` | P2 |
+| Shared Store | 结构化共享可变状态 | P2 |
+
+### `@sandbox` 隔离注解 (P2)
+
+```helen
+@sandbox agent SafeWorker {
+    // 只能访问 params 和 const
+    // 不能调用任何外部工具
+    main { ... }
+}
+```
+
+| 隔离级别 | 模块 let | 模块 const | shared let | 外部工具 |
+|----------|----------|------------|------------|----------|
+| 标准 (默认) | ❌ | ✅ | ✅ | ✅ |
+| `@open` | ✅ | ✅ | ✅ | ✅ |
+| `@strict` | ❌ | ✅ | ✅ (深拷贝) | ✅ |
+| `@sandbox` | ❌ | ✅ | ❌ | ❌ |
+
+### Shared Store (P2)
+
+`shared store` 为跨 agent 共享可变引用类型提供结构化方式：
+
+```helen
+shared store Cache {
+    data: dict = {}
+    _lock_count: int = 0  // 私有字段（_前缀），agent 不可直接访问
+
+    fn get(key): any { return data[key] }
+    fn set(key, value) { data[key] = value }
+    fn size(): int { return len(data) }
+}
+
+agent Worker(cache: Cache) {
     main {
-        save_history("./session.json")   // 保存
-        load_history("./session.json")   // 加载
+        cache.set("key", "value")  // ✅ 通过方法访问
+        // cache.data = {}          // ❌ 可以（公共字段）
+        // cache._lock_count = 0    // ❌ ScopeViolationError
     }
 }
 ```
 
-### 新功能：History 检索
+### Bug 修复
 
-```helen
-// 搜索之前的工具调用
-let past_searches = search_history(tool_name="web_search")
-// 按角色过滤
-let user_questions = search_history(role="user")
-// 文本搜索
-let mentions = search_history(query="Python")
-```
+- **参数默认值环境**: 修复默认值在 caller 环境中求值的问题
+- **闭包捕获**: 闭包采用值快照而非环境引用，防止 agent 环境逃逸
 
-### 新功能：上下文可视化
+### 上下文管理优化
 
-REPL 中 `:stats` 命令显示：
-- Token 使用进度条（百分比 + 当前/总量）
-- 角色分布（user/assistant/system/system_prompt）
-- 压缩状态（摘要消息数）
-- 模型信息
+| 改动 | 说明 | 优先级 |
+|------|------|--------|
+| user 消息去重 | 修复 `act()` 重复追加 user 消息的代码味道 | P0 |
+| bare form system_prompt 修复 | 不再将 prompt 模板同时放入 system 和 user message | P0 |
+| Tool calling 上下文可见 | `_history` 记录 tool 调用摘要，后续 `llm act` 可引用 | P1 |
+| act_stream 网络重试 | 流式调用增加指数退避重试（5xx/429/网络错误） | P2 |
+| PromptBuilder 统一 | 单一来源：嵌套访问 + mtime 缓存 + 描述截断 | P2 |
+| Token 估算改进 | 可选 tiktoken 精确计数 | P3 |
+| History 压缩优化 | 三种压缩模式（summarize/truncate/none） | P3 |
+| History 持久化 | `save_history()` / `load_history()` 跨会话保留对话 | P4 |
+| History 检索 | `search_history()` / `get_tool_history()` 多条件查询 | P4 |
+| 上下文可视化 | REPL `:stats` 命令 + 进度条 + 角色分布 | P4 |
 
 ---
 

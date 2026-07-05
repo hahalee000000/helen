@@ -1,7 +1,7 @@
 # Helen 语言完整教程
 
 > **Helen** — A Prompt-first Agent Programming Language
-> 版本: v1.10 | 状态: Phase 0-10 + 中文语法 + Agent 作用域隔离 | 测试: 1500+ passed
+> 版本: v1.14 | 状态: Phase 0-10 + 中文语法 + Agent 隔离 + Shared Store + Channel | 测试: 2400+ passed
 
 ---
 
@@ -13,13 +13,13 @@
 | [02](#教程-02-变量与类型) | let/const/shared let(v1.10)、数据类型、类型注解、运算、集合操作、子脚本/字段赋值(v1.10) |
 | [03](#教程-03-函数) | fn 声明、参数、返回值、递归、Agent 内部函数、作用域、闭包(v1.7) |
 | [04](#教程-04-控制流) | if/for/while/match、break/continue、try-catch、管道操作符(v1.8)、模式匹配增强(v1.8)、短路求值(v1.10) |
-| [05](#教程-05-agent-编程) | agent 声明、配置、参数、调用、协议(v1.7)、作用域隔离(v1.10) |
-| [06](#教程-06-llm-语句) | llm act/if、对话历史、流式输出（on_chunk/on_complete 回调）、异步 HTTP(v1.10) |
+| [05](#教程-05-agent-编程) | agent 声明、配置、参数、调用、协议(v1.7)、作用域隔离(v1.10)、隔离注解(v1.12)、Shared Store(v1.12)、Channel(v1.13) |
+| [06](#教程-06-llm-语句) | llm act/if、对话历史、流式输出（on_chunk/on_complete 回调，v1.14 统一到 llm act）、异步 HTTP(v1.10) |
 | [07](#教程-07-异步编程) | async、await、并发 Agent 调用、HTTP 异步方法(v1.10) |
 | [08](#教程-08-模块与导入) | import、多格式、跨文件复用、路径安全、shared let 导入(v1.10) |
 | [09](#教程-09-python-ffi) | Python 库导入、类型转换、调用 Python 函数 |
 | [10](#教程-10-标准库参考) | 186 个内置函数，覆盖 AI 应用开发所有核心需求 |
-| [11](#教程-11-构建多-agent-系统) | 多 Agent 协作、工具调用、Agent 模式 |
+| [11](#教程-11-构建多-agent-系统) | 多 Agent 协作、工具调用、Agent 模式、Shared Store 协作(v1.12)、Channel 通信(v1.13) |
 | [12](#教程-12-测试框架与-tdd) | 测试 API、断言函数、Expect 链式、TDD 工作流、监听模式 |
 | [13](#教程-13-技能系统) | 技能概念、三层搜索、创建技能、REPL 技能感知 |
 | [14](#教程-14-ai-原生可观测性) | 调试、日志、追踪、性能监控、AI 原生观测能力 |
@@ -1719,11 +1719,139 @@ main {
 }
 ```
 
+## Shared Store — 受控的共享可变状态 (v1.12)
+
+`shared let` 限制为值类型（int/float/str/bool），无法共享引用类型（list、dict）。`shared store` 填补了这个空缺，为跨 agent 共享可变引用类型提供结构化方式。
+
+### 基本语法
+
+```helen
+shared store Cache {
+    data: dict = {}
+    _hits: int = 0  // 私有字段（_前缀），agent 不可直接访问
+
+    fn get(key): any {
+        _hits += 1
+        return data[key]
+    }
+
+    fn set(key, value) { data[key] = value }
+    fn size(): int { return len(data) }
+    fn hits(): int { return _hits }
+}
+```
+
+### 在 Agent 中使用
+
+```helen
+agent Worker(cache: Cache) {
+    main {
+        cache.set("user:1", {name: "Alice"})
+        print(cache.get("user:1"))  // {name: "Alice"}
+        print(cache.size())         // 1
+        // cache._hits = 0          // ❌ 私有字段不可访问
+    }
+}
+```
+
+### 线程安全
+
+Shared Store 内部使用 RLock 保护所有字段访问，多个 agent 可以安全地并发访问：
+
+```helen
+shared store Counter { count: int = 0 }
+
+agent Worker(counter: Counter) {
+    main {
+        for i in range(100) {
+            counter.count = counter.count + 1  // 线程安全
+        }
+    }
+}
+
+main {
+    let counter = Counter
+    async call Worker(counter)
+    async call Worker(counter)
+    await []
+    print(counter.count)  // 200
+}
+```
+
+## Channel 通道 — Agent 间通信 (v1.13)
+
+Channel 为 agent 间通信提供类型安全的结构化方式。语法与 shared store 一致，语义上表示通信端点。
+
+### 基本语法
+
+```helen
+channel TaskQueue {
+    pending: list = []
+
+    fn enqueue(task) { pending.append(task) }
+    fn dequeue(): any { return pending.shift() }
+    fn size(): int { return len(pending) }
+    fn is_empty(): bool { return len(pending) == 0 }
+}
+```
+
+### 中文语法
+
+```helen
+通道 任务队列 {
+    待处理: list = []
+
+    fn 入队(任务) { 待处理.append(任务) }
+    fn 出队(): any { 返回 待处理.shift() }
+    fn 大小(): int { 返回 len(待处理) }
+}
+```
+
+### Channel vs Shared Store
+
+| 特性 | Shared Store | Channel |
+|------|-------------|---------|
+| 关键字 | `shared store` | `channel` |
+| 中文 | `共享 仓库` | `通道` |
+| 语义 | 共享状态容器 | 通信端点 |
+| 运行时 | `SharedStore` 类 | 复用 `SharedStore` |
+| 线程安全 | RLock | RLock |
+| 私有字段 | `_` 前缀 | `_` 前缀 |
+
+## Agent 隔离注解 (v1.12)
+
+Agent 声明前可添加 `@open`/`@strict`/`@sandbox` 隔离注解：
+
+```helen
+@open agent Permissive {
+    // 可访问模块 let
+    main { print(module_var) }
+}
+
+@sandbox agent Safe {
+    // 禁用外部工具，禁止 shared let
+    // 只能访问 params 和 const
+    main { llm act "simple task" }
+}
+```
+
+| 隔离级别 | 模块 let | 模块 const | shared let | 外部工具 |
+|----------|----------|------------|------------|----------|
+| 标准 (默认) | ❌ | ✅ | ✅ | ✅ |
+| `@open` | ✅ | ✅ | ✅ | ✅ |
+| `@strict` | ❌ | ✅ | ✅ (深拷贝) | ✅ |
+| `@sandbox` | ❌ | ✅ | ❌ | ❌ |
+
+---
+
 ## 练习
 
 1. 创建一个 Agent，描述为"判断文本情感"，测试不同输入
 2. 创建一个 Agent 配置 temperature 为 0，观察输出稳定性
 3. 创建一个多 Agent 系统：分类器 + 响应器 + 总结器
+4. 创建一个 shared store 用于在多个 Agent 之间共享计数器
+5. 创建一个 channel 作为任务队列，实现生产者-消费者模式
+6. 使用 `@sandbox` 注解创建一个受限 Agent，验证其无法访问 shared let
 
 ---
 
@@ -1896,6 +2024,8 @@ print("Mood: " + mood)
 ## llm act 流式输出 — on_chunk / on_complete 回调
 
 `llm act` 支持可选的 `on_chunk` 和 `on_complete` 回调，实现流式输出，适用于长文本生成场景。
+
+**v1.14 变更**: `llm stream` 关键字已删除，流式功能统一合并到 `llm act`。旧语法 `llm stream "..." on_chunk handle` 现在写为 `llm act "..." on_chunk handle`。
 
 ### 基本用法
 
@@ -3923,6 +4053,75 @@ To reset your password, please follow these steps...
 
 # 生成文档
 $ helen doc customer-service/main.helen --format markdown
+```
+
+## 多 Agent 协作模式 (v1.12/v1.13)
+
+### Shared Store 协作
+
+当多个 Agent 需要共享可变状态时，使用 `shared store`：
+
+```helen
+shared store Metrics {
+    total_requests: int = 0
+    error_count: int = 0
+    _start_time: str = ""  // 私有字段
+
+    fn record_request() { total_requests += 1 }
+    fn record_error() { error_count += 1 }
+    fn error_rate(): float {
+        if total_requests == 0 { return 0.0 }
+        return float(error_count) / float(total_requests)
+    }
+}
+
+agent RequestHandler(metrics: Metrics) {
+    main {
+        metrics.record_request()
+        try {
+            // 处理请求
+            llm act "process request"
+        } catch {
+            metrics.record_error()
+        }
+    }
+}
+```
+
+### Channel 通信
+
+当 Agent 之间需要结构化通信时，使用 `channel`：
+
+```helen
+channel TaskQueue {
+    tasks: list = []
+    fn submit(task) { tasks.append(task) }
+    fn next(): any { return tasks.shift() }
+    fn pending(): int { return len(tasks) }
+}
+
+agent Producer(queue: TaskQueue) {
+    main {
+        queue.submit("task 1")
+        queue.submit("task 2")
+    }
+}
+
+agent Consumer(queue: TaskQueue) {
+    main {
+        while queue.pending() > 0 {
+            let task = queue.next()
+            llm act "Process: " + task
+        }
+    }
+}
+
+main {
+    let queue = TaskQueue
+    async call Producer(queue)
+    async call Consumer(queue)
+    await []
+}
 ```
 
 ## 总结

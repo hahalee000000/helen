@@ -186,6 +186,98 @@ let obj = { name: "Alice", age: 30 }
 obj.name = "Bob"  // ✅ obj 变为 {name: "Bob", age: 30}
 ```
 
+### v1.12 Shared Store 执行语义
+
+`shared store` 在运行时创建 `SharedStore` 实例：
+
+```python
+class SharedStore:
+    """受控的共享可变状态。"""
+    def __init__(self, name, fields, methods):
+        self._name = name
+        self._fields = dict(fields)      # 私有字段
+        self._methods = dict(methods)    # 方法闭包
+        self._lock = threading.RLock()   # 线程安全
+```
+
+**执行规则**:
+- `visit_shared_store_decl`: 求值所有字段的初始值，创建 `SharedStore` 实例，注册到当前环境
+- 字段访问 `store.field` → `SharedStore.__getattr__()`，自动加 RLock
+- 字段赋值 `store.field = x` → `SharedStore.__setattr__()`，自动加 RLock
+- 方法调用 `store.method(args)` → 返回 `SharedStoreMethod` 包装器，执行时通过 store 的 RLock 串行化
+- `_` 前缀字段/方法为私有，agent 内访问会抛 `AttributeError`
+- 内部属性（`_name`/`_fields`/`_methods`/`_lock`）不可从 Helen 代码访问
+
+**线程安全**:
+- 字段读写操作由 RLock 保护
+- 方法执行期间持有锁，防止并发修改字段
+- 多个 agent 可安全地并发访问同一个 SharedStore
+
+```helen
+shared store Cache {
+    data: dict = {}
+    _hits: int = 0  // 私有，agent 不可访问
+
+    fn get(key): any {
+        _hits += 1   // ✅ store 内部方法可访问私有字段
+        return data[key]
+    }
+}
+
+agent Worker(cache: Cache) {
+    main {
+        cache.get("key")    // ✅ 通过公共方法访问
+        cache._hits = 0     // ❌ ScopeViolationError
+    }
+}
+```
+
+### v1.12 Agent 隔离增强
+
+**闭包值捕获**:
+```python
+def visit_lambda(self, node: LambdaNode) -> object:
+    # v1.12: 值快照替代环境引用捕获
+    captured = {}
+    for var_name in node.free_variables:
+        captured[var_name] = self.environment.lookup(var_name)
+    captured_env = Environment()
+    for name, value in captured.items():
+        captured_env.define(name, value)
+    return Closure(lambda_node=node, captured_env=captured_env)
+```
+
+**参数默认值求值环境修复**:
+- v1.11 及以前：默认值在 caller env 中求值（可能泄露模块变量）
+- v1.12+：先切换到 agent `call_env`，再求值默认值
+
+**引用类型参数只读包装**:
+```python
+# 在 _call_agent 中
+for param in agent.params:
+    if param.name in args:
+        value = args[param.name]
+        if isinstance(value, (list, dict)):
+            value = ReadOnlyView(value)  # 只读代理
+        call_env.define(param.name, value)
+```
+
+### v1.13 Channel 执行语义
+
+`channel` 声明在运行时复用 `SharedStore` 类：
+
+```python
+def visit_channel_decl(self, node: ChannelDeclNode) -> object:
+    # 与 shared store 相同，创建 SharedStore 实例
+    fields = {}
+    methods = {}
+    # ... 求值字段初始值、绑定方法闭包
+    store = SharedStore(name=node.name, fields=fields, methods=methods)
+    self.environment.define(node.name, store, is_const=True)
+```
+
+Channel 与 Shared Store 的运行时行为完全一致，语义差异仅在语言层面（通信端点 vs 共享状态容器）。
+
 ---
 
 ## 语句执行

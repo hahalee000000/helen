@@ -568,6 +568,102 @@ agent GoodCounter {
 }
 ```
 
+### 4. 使用 Shared Store 共享引用类型（v1.12）
+
+`shared let` 限制为值类型。需要共享 list/dict 时，使用 `shared store`：
+
+```helen
+shared store TaskRegistry {
+    tasks: dict = {}
+    _counter: int = 0
+
+    fn register(task_name: str, task_data: any) {
+        _counter += 1
+        tasks[task_name] = task_data
+    }
+
+    fn get(task_name: str): any { return tasks[task_name] }
+    fn size(): int { return len(tasks) }
+    fn all(): dict { return tasks }
+}
+
+agent Producer(registry: TaskRegistry) {
+    main {
+        registry.register("task_1", {status: "pending", priority: 1})
+        registry.register("task_2", {status: "pending", priority: 2})
+    }
+}
+
+agent Consumer(registry: TaskRegistry) {
+    main {
+        for i in range(registry.size()) {
+            // 通过方法安全访问共享 dict
+            let task = registry.get("task_" + str(i + 1))
+            // 处理任务
+        }
+    }
+}
+
+main {
+    let registry = TaskRegistry
+    async call Producer(registry)
+    async call Consumer(registry)
+    await []
+}
+```
+
+**Shared Store 优势**:
+- 线程安全（RLock 保护所有字段访问）
+- `_` 前缀字段为私有，agent 不可直接访问
+- 方法封装逻辑，避免散落的锁操作
+
+### 5. 使用 Channel 进行 Agent 间通信（v1.13）
+
+Channel 提供类型安全的结构化通信：
+
+```helen
+channel MessageQueue {
+    messages: list = []
+
+    fn send(msg: str) { messages.append(msg) }
+    fn receive(): str { return messages.shift() }
+    fn pending(): int { return len(messages) }
+    fn is_empty(): bool { return len(messages) == 0 }
+}
+
+agent Sender(queue: MessageQueue) {
+    main {
+        queue.send("Hello from sender")
+        queue.send("Another message")
+    }
+}
+
+agent Receiver(queue: MessageQueue) {
+    main {
+        while not queue.is_empty() {
+            let msg = queue.receive()
+            print("Received: " + msg)
+        }
+    }
+}
+
+main {
+    let queue = MessageQueue
+    async call Sender(queue)
+    async call Receiver(queue)
+    await []
+}
+```
+
+**Channel vs Shared Store**:
+
+| 场景 | 推荐 |
+|------|------|
+| 多个 Agent 读写同一个状态 | Shared Store |
+| Agent 间传递消息/任务 | Channel |
+| 需要类型安全的接口 | Channel |
+| 需要线程安全的字段访问 | 两者都支持 |
+
 ## 错误处理
 
 ### 并发任务错误处理

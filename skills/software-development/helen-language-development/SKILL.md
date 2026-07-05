@@ -1,10 +1,10 @@
 ---
 name: helen-language-development
-description: "Helen 语言实现模式 — AST/解析器/解释器扩展、async/await、异常层级、作用域隔离、共享变量、v1.10 特性"
-version: 1.11.0
+description: "Helen 语言实现模式 — AST/解析器/解释器扩展、async/await、异常层级、作用域隔离、共享变量、v1.14 特性（Shared Store、Channel、llm act 流式统一）"
+version: 1.14.0
 author: Helen Team
 license: MIT
-tags: [helen, language-design, interpreter, async, parser, streaming, tool-calls, ffi, python-integration, contract-first, stdlib, closures, protocols, pipe-operator, pattern-matching, chinese-keywords, scope-isolation, shared-let, v1.10, v1.11]
+tags: [helen, language-design, interpreter, async, parser, streaming, tool-calls, ffi, python-integration, contract-first, stdlib, closures, protocols, pipe-operator, pattern-matching, chinese-keywords, scope-isolation, shared-let, shared-store, channel, v1.10, v1.11, v1.12, v1.13, v1.14]
 ---
 
 # Helen Language Development
@@ -20,7 +20,7 @@ Development patterns and pitfalls for the Helen programming language (~/helen/).
 - **Tests**: `cd ~/helen && pytest`
 - **Git remote**: `https://github.com/hahalee000000/helen.git`
 - **File extension**: `.helen` (not `.hellen`)
-- **Current version**: v1.11 (includes v1.10 features: scope isolation, shared let, Chinese punctuation)
+- **Current version**: v1.14 (includes: scope isolation v1.10, shared let v1.10, isolation enhancements + shared store v1.12, channel v1.13, llm stream merged into llm act v1.14)
 
 ## When to Use
 
@@ -284,9 +284,90 @@ obj.field = x        // field assignment
 map["key"] = value   // map key assignment
 ```
 
-### 91 Bilingual Keywords
+### 92 Bilingual Keywords
 
-Helen supports 91 keywords in both English and Chinese. See `references/chinese-keyword-implementation.md` for the full mapping table.
+Helen supports 92 keywords in both English and Chinese. See `references/chinese-keyword-implementation.md` for the full mapping table.
+
+**v1.12 新增**: `store`/`仓库`（Shared Store 声明）
+**v1.13 新增**: `channel`/`通道`（Channel 声明）
+**v1.14 删除**: `stream`/`流式执行`（流式功能合并到 `llm act`）
+
+## v1.12 Features: Shared Store + Isolation Enhancements
+
+### Shared Store (`shared store`)
+
+`shared store` 为跨 agent 共享可变引用类型提供结构化方式：
+
+```python
+# AST: SharedStoreDeclNode(StatementNode)
+# Token: STORE (keyword "store"/"仓库")
+
+# Parser: _shared_store_decl() parses name, body with fn/let/const members
+# Analyzer: visit_shared_store_decl() registers in symbol table, checks duplicates
+# Interpreter: visit_shared_store_decl() creates SharedStore instance
+
+class SharedStore:
+    """Thread-safe shared state (RLock). Private fields: _prefix."""
+    _INTERNAL_ATTRS = frozenset({'_name', '_fields', '_methods', '_lock'})
+
+    def __getattr__(self, name):  # blocks _-prefixed names
+    def __setattr__(self, name, value):  # blocks _-prefixed, methods
+    def get_field(self, name):  # with lock
+    def set_field(self, name, value):  # with lock
+```
+
+### Isolation Enhancements
+
+- **参数默认值**: evaluate in agent env, not caller env
+- **functions{} 变量**: evaluate in agent env
+- **闭包值捕获**: snapshot values instead of env reference
+- **引用类型参数**: auto-wrap in ReadOnlyView
+- **复合赋值**: `arr[i]=x`, `obj.field=x` now check isolation
+- **@open/@strict/@sandbox**: isolation level decorators
+
+### `@` (AT) Token
+
+- `TokenType.AT` — single-char operator (v1.12)
+- Used for agent isolation decorators: `@open`, `@strict`, `@sandbox`
+- Parser: `_parse_decorator()` before agent/fn/import declarations
+
+## v1.13 Features: Channel
+
+### Channel (`channel`)
+
+`channel` 声明类型安全的 agent 间通信端点。运行时复用 `SharedStore` 类。
+
+```python
+# AST: ChannelDeclNode(StatementNode)
+# Token: CHANNEL (keyword "channel"/"通道")
+
+# Parser: _channel_decl() — structurally identical to _shared_store_decl()
+# Analyzer: visit_channel_decl() — registers as kind="channel"
+# Interpreter: visit_channel_decl() — creates SharedStore instance (same as shared store)
+```
+
+**语义差异**: channel 是通信端点（message-passing），shared store 是共享状态容器（shared-memory）。运行时行为完全一致。
+
+## v1.14 Features: llm stream merged into llm act
+
+### Breaking Change
+
+- `llm stream` keyword removed
+- `STREAM` TokenType removed
+- `LlmStreamStmtNode` removed
+- `LlmActExprNode` gained `on_chunk`/`on_complete` optional fields
+- `visit_llm_stream_stmt` removed; `visit_llm_act_expr` dispatches to sync or streaming path based on callback presence
+
+```python
+# llm_mixin.py
+has_streaming = node.on_chunk is not None or node.on_complete is not None
+if has_streaming:
+    return self._visit_llm_act_streaming(...)
+else:
+    return self._visit_llm_act_sync(...)
+```
+
+**关键字变化**: 94 → 92 (removed `stream`/`流式执行`)
 
 ## Testing Patterns
 
