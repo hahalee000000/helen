@@ -4,6 +4,49 @@
 
 ---
 
+## [2026-07-05] fix | v1.12 第二轮隔离修复
+
+**操作**: 修复 v1.12 第二轮隔离缺陷
+**执行时间**: 2026-07-05
+**状态**: ✅ 完成
+
+### 修复内容
+
+1. **C1: visit_access 支持 ReadOnlyView dict 点号访问**
+   - `config.name` 现在可以正确访问 dict 参数中的键
+   - 嵌套可变值也被包装为 ReadOnlyView
+
+2. **C2: AccessNode 赋值阻止 ReadOnlyView**
+   - `config.name = "hacked"` 现在抛出 ScopeViolationError
+   - 之前会静默在 wrapper 对象上设置属性
+
+3. **M3: @sandbox auto-execution 工具限制**
+   - prompt-only @sandbox agent 自动执行时也传 `tools=[]`
+   - 之前 LLM 可以用默认工具
+
+4. **M4: 装饰器位置校验**
+   - `@strict fn foo()` 和 `@open let x = 5` 现在报错
+   - 装饰器只能用在 agent 声明上
+
+5. **H1: Environment.snapshot() 深拷贝**
+   - 快照对 list/dict 值做深拷贝
+   - 防止异步任务间共享可变引用
+
+6. **H2: ReadOnlyView 包装含可变元素的 tuple**
+   - FFI 返回的 tuple 如果包含 list/dict 也会被包装
+
+7. **M1: _stringify 支持 ReadOnlyView**
+   - `str(param)` 对 dict ReadOnlyView 使用 Helen 格式
+
+8. **L2: ReadOnlyView 添加 __radd__**
+   - `[1, 2] + ReadOnlyView([3, 4])` 现在正确工作
+
+### 新增测试
+
+11 个回归测试（总计 63 个 v1.12 测试，全项目 2366 passed）
+
+---
+
 ## [2026-07-05] fix | v1.12 隔离缺陷修复
 
 **操作**: 修复 v1.12 agent 隔离的关键缺陷

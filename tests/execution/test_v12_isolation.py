@@ -736,3 +736,173 @@ class TestDecoratorParsing:
 """
         errors = _analyze_only(source)
         assert errors.has_errors
+
+
+# ============================================================
+# 10. Regression tests — second round fixes
+# ============================================================
+
+class TestVisitAccessReadOnlyView:
+    """C1: visit_access handles ReadOnlyView dict dot notation."""
+
+    def test_dict_param_dot_access(self):
+        """Agent can access dict param keys via dot notation."""
+        source = """
+agent Reader(config: dict) {
+    main {
+        return config.name
+    }
+}
+
+let result = Reader(config = {"name": "Alice", "age": 30})
+"""
+        interp = _run(source)
+        assert interp.environment.lookup("result") == "Alice"
+
+    def test_dict_param_dot_access_missing_key(self):
+        """Dot access on missing key returns runtime error."""
+        source = """
+agent Reader(config: dict) {
+    main {
+        return config.missing
+    }
+}
+
+let result = Reader(config = {"name": "Alice"})
+"""
+        with pytest.raises((AgentError, RuntimeError)):
+            _run(source)
+
+    def test_dict_param_dot_access_method(self):
+        """Agent can call dict methods on ReadOnlyView param."""
+        source = """
+agent Reader(config: dict) {
+    main {
+        return config.get("name", "default")
+    }
+}
+
+let result = Reader(config = {"name": "Alice"})
+"""
+        interp = _run(source)
+        assert interp.environment.lookup("result") == "Alice"
+
+
+class TestAccessNodeAssignmentReadOnlyView:
+    """C2: AccessNode assignment on ReadOnlyView raises ScopeViolationError."""
+
+    def test_dot_assignment_blocked(self):
+        """param.field = value raises ScopeViolationError."""
+        source = """
+agent Mutator(config: dict) {
+    main {
+        config.name = "hacked"
+        return config.name
+    }
+}
+
+let result = Mutator(config = {"name": "Alice"})
+"""
+        with pytest.raises((ScopeViolationError, AgentError, RuntimeError)):
+            _run(source)
+
+
+class TestDecoratorOnNonAgent:
+    """M4: Decorator on non-agent should error."""
+
+    def test_decorator_on_fn_errors(self):
+        """@strict on a function is rejected."""
+        source = """
+@strict fn foo() { return 1 }
+"""
+        errors = _analyze_only(source)
+        assert errors.has_errors
+        error_messages = [e.message for e in errors.errors]
+        assert any("agent" in m.lower() for m in error_messages)
+
+    def test_decorator_on_let_errors(self):
+        """@open on a let is rejected."""
+        source = """
+@open let x = 5
+"""
+        errors = _analyze_only(source)
+        assert errors.has_errors
+        error_messages = [e.message for e in errors.errors]
+        assert any("agent" in m.lower() for m in error_messages)
+
+
+class TestSandboxAutoExecution:
+    """M3: @sandbox auto-execution enforces empty tools."""
+
+    def test_sandbox_prompt_only_agent(self):
+        """@sandbox agent with prompt-only auto-executes without tools."""
+        source = """
+@sandbox agent Safe() {
+    description "A sandboxed agent"
+    prompt "Hello"
+}
+"""
+        # Just check it parses and analyzes without error
+        errors = _analyze_only(source)
+        assert not errors.has_errors
+
+
+class TestStringifyReadOnlyView:
+    """M1: _stringify handles ReadOnlyView correctly."""
+
+    def test_stringify_list_via_str(self):
+        """str() on list ReadOnlyView uses Helen format."""
+        source = """
+agent Worker(items: list) {
+    main {
+        return str(items)
+    }
+}
+
+let result = Worker(items = [1, 2, 3])
+"""
+        interp = _run(source)
+        assert "[1, 2, 3]" in interp.environment.lookup("result")
+
+
+class TestReadOnlyViewRadd:
+    """L2: ReadOnlyView supports __radd__."""
+
+    def test_radd_with_list(self):
+        """[1, 2] + ReadOnlyView([3, 4]) returns ReadOnlyView."""
+        view = ReadOnlyView([3, 4])
+        result = [1, 2] + view
+        assert isinstance(result, ReadOnlyView)
+        assert list(result) == [1, 2, 3, 4]
+
+
+class TestEnvironmentSnapshotDeepCopy:
+    """H1: snapshot() deep copies mutable values."""
+
+    def test_snapshot_deep_copies_list(self):
+        """Snapshot creates independent copy of list values."""
+        from helen.interpreter.environment import Environment
+
+        env = Environment()
+        env.define("items", [1, 2, 3])
+
+        snap = env.snapshot()
+        # Modify original
+        env._store["items"].append(4)
+
+        # Snapshot should be unaffected
+        assert snap._store["items"] == [1, 2, 3]
+
+    def test_snapshot_deep_copies_dict(self):
+        """Snapshot creates independent copy of dict values."""
+        from helen.interpreter.environment import Environment
+
+        env = Environment()
+        env.define("config", {"a": 1})
+
+        snap = env.snapshot()
+        # Modify original
+        env._store["config"]["b"] = 2
+
+        # Snapshot should be unaffected
+        assert snap._store["config"] == {"a": 1}

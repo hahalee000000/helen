@@ -171,8 +171,11 @@ class ReadOnlyView:
 
     def __getitem__(self, key):
         value = self._data[key]
-        # Wrap nested mutable types as well
+        # Wrap nested mutable types (list, dict) as well
+        # Also wrap tuples that may contain mutable items
         if isinstance(value, (list, dict)):
+            return ReadOnlyView(value)
+        if isinstance(value, tuple) and any(isinstance(v, (list, dict)) for v in value):
             return ReadOnlyView(value)
         return value
 
@@ -183,6 +186,8 @@ class ReadOnlyView:
         """Iterate with each item wrapped in ReadOnlyView if mutable."""
         for item in self._data:
             if isinstance(item, (list, dict)):
+                yield ReadOnlyView(item)
+            elif isinstance(item, tuple) and any(isinstance(v, (list, dict)) for v in item):
                 yield ReadOnlyView(item)
             else:
                 yield item
@@ -226,6 +231,14 @@ class ReadOnlyView:
     def __add__(self, other):
         other_data = other._data if isinstance(other, ReadOnlyView) else other
         result = self._data + other_data
+        if isinstance(result, (list, dict)):
+            return ReadOnlyView(result)
+        return result
+
+    def __radd__(self, other):
+        """Support [1, 2] + ReadOnlyView([3, 4])."""
+        other_data = other._data if isinstance(other, ReadOnlyView) else other
+        result = other_data + self._data
         if isinstance(result, (list, dict)):
             return ReadOnlyView(result)
         return result
@@ -942,6 +955,14 @@ class Interpreter(LlmMixin, Visitor[object]):
                 # obj.field = value
                 target = node.left.target.accept(self)
                 prop = node.left.property
+                # v1.12 fix: ReadOnlyView blocks mutation via attribute access
+                if isinstance(target, ReadOnlyView):
+                    raise ScopeViolationError(
+                        "cannot modify read-only parameter in agent scope. "
+                        "Parameters are passed as read-only views to prevent "
+                        "accidental modification of caller's data. "
+                        "Create a local copy with `let copy = dict(param)` if you need to modify."
+                    )
                 try:
                     if isinstance(target, dict):
                         target[prop] = right
@@ -1211,6 +1232,22 @@ class Interpreter(LlmMixin, Visitor[object]):
         """Evaluate member access: target.property."""
         target = node.target.accept(self)
         try:
+            # v1.12 fix: ReadOnlyView wrapping a dict — delegate to __getitem__
+            if isinstance(target, ReadOnlyView):
+                prop = node.property
+                data = target._data
+                if isinstance(data, dict):
+                    if prop in data:
+                        value = data[prop]
+                        if isinstance(value, (list, dict)):
+                            return ReadOnlyView(value)
+                        return value
+                    # Fall through to method access (keys, values, items, get)
+                # Check for ReadOnlyView's own methods
+                if hasattr(target, prop):
+                    return getattr(target, prop)
+                self._runtime_error(node.span, f"'{type(data).__name__}' has no property '{prop}'")
+                return None
             if isinstance(target, dict):
                 # v1.6: Check if this is a module object
                 if target.get("__type__") == "module":
@@ -1528,6 +1565,11 @@ class Interpreter(LlmMixin, Visitor[object]):
                 # the "snapshot" promise.
                 if _is_mutable_type(value):
                     value = copy.deepcopy(value)
+                # Note: SharedStore instances are NOT deep-copied — they are
+                # designed for controlled cross-agent sharing. Closures that
+                # capture a SharedStore retain access to its public interface
+                # (methods), which is thread-safe by design. This is intentional:
+                # @sandbox restricts LLM tools, not shared-state access.
                 captured_env.define(var_name, value)
             except NameError:
                 # Variable not found in current scope — skip
@@ -2383,6 +2425,9 @@ class Interpreter(LlmMixin, Visitor[object]):
             if value == int(value):
                 return str(int(value))
             return str(value)
+        # v1.12: Unwrap ReadOnlyView for stringification
+        if isinstance(value, ReadOnlyView):
+            return Interpreter._stringify(value._data)
         if isinstance(value, list):
             items = ", ".join(Interpreter._stringify(item) for item in value)
             return f"[{items}]"
@@ -2702,12 +2747,14 @@ class Interpreter(LlmMixin, Visitor[object]):
                 # Agent has no logic but has a prompt - auto-execute LLM call
                 rendered_prompt = self._get_rendered_agent_prompt()
                 if rendered_prompt:
+                    # v1.12 fix: @sandbox agents get NO tools, even in auto-execution
+                    sandbox_tools = [] if isolation_level == "sandbox" else None
                     if is_streaming:
                         # Return streaming response
                         return self._call_llm_streaming(rendered_prompt, agent)
                     else:
                         # Return complete response
-                        return self.llm_runtime.act(rendered_prompt)
+                        return self.llm_runtime.act(rendered_prompt, tools=sandbox_tools)
                 return None
             return None
         except AgentError:

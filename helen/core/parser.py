@@ -509,7 +509,9 @@ class Parser:
 
         # v1.12: Parse decorators (@sandbox, @open, @strict) before declarations
         isolation_level = "standard"
+        decorator_span = None
         if self._check(TokenType.AT):
+            decorator_span = self._current().span
             isolation_level = self._parse_decorator()
 
         # async statement modifier detection (HLD 3.3.3)
@@ -517,6 +519,8 @@ class Parser:
             return self._async_call_stmt()
 
         if self._match(TokenType.SHARED):
+            if isolation_level != "standard":
+                self._error(f"Decorator '@{isolation_level}' can only be applied to agent declarations.")
             # shared let / shared const / shared store — cross-agent visible
             is_shared = True
             if self._match(TokenType.LET, TokenType.CONST):
@@ -527,6 +531,8 @@ class Parser:
             self._error("Expected 'let', 'const', or 'store' after 'shared'.")
             return None
         if self._match(TokenType.LET, TokenType.CONST):
+            if isolation_level != "standard":
+                self._error(f"Decorator '@{isolation_level}' can only be applied to agent declarations.")
             return self._var_decl()
         if self._match(TokenType.IF):
             return self._if_stmt()
@@ -541,6 +547,8 @@ class Parser:
         if self._match(TokenType.RETURN):
             return self._return_stmt()
         if self._match(TokenType.FN):
+            if isolation_level != "standard":
+                self._error(f"Decorator '@{isolation_level}' can only be applied to agent declarations, not functions.")
             return self._function_decl()
         if self._match(TokenType.MAIN):
             return self._main_block()
@@ -574,8 +582,12 @@ class Parser:
         if self._match(TokenType.MATCH):
             return self._match_stmt()
         if self._match(TokenType.PROTOCOL):
+            if isolation_level != "standard":
+                self._error(f"Decorator '@{isolation_level}' can only be applied to agent declarations.")
             return self._protocol_decl()
         if self._match(TokenType.IMPL):
+            if isolation_level != "standard":
+                self._error(f"Decorator '@{isolation_level}' can only be applied to agent declarations.")
             return self._impl_decl()
 
         # LLM keyword disambiguation (HLD 3.3.5)

@@ -290,10 +290,14 @@ class Environment:
 
         Returns:
             A new Environment chain with copied stores.
-        
+
         Note:
             Does not use pooling - snapshots are long-lived and should
             not be returned to the pool.
+
+        v1.12 fix: Mutable values (list, dict) are deep-copied to prevent
+        async tasks from sharing mutable references. Without this, concurrent
+        tasks could race on the same list/dict objects.
         """
         import copy
 
@@ -302,10 +306,17 @@ class Environment:
         if self.parent is not None:
             parent_snapshot = self.parent.snapshot()
 
-        # Create a new environment with copied store and consts
+        # Create a new environment with deep-copied store and consts
         new_env = Environment(parent=parent_snapshot)
-        new_env._store = copy.copy(self._store)  # Shallow copy of variables
-        new_env._consts = copy.copy(self._consts)  # Copy of const set
+        # Deep copy mutable values to prevent cross-task mutation
+        new_store: dict = {}
+        for key, value in self._store.items():
+            if isinstance(value, (list, dict)):
+                new_store[key] = copy.deepcopy(value)
+            else:
+                new_store[key] = value
+        new_env._store = new_store
+        new_env._consts = copy.copy(self._consts)  # Copy of const set (immutable set)
         # Don't copy flat cache - it will be populated on demand
 
         return new_env
