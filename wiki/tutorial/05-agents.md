@@ -1920,6 +1920,45 @@ agent Worker() {
 }
 ```
 
+### 7. v1.12 隔离修复（第二轮）
+
+v1.12 初始实现后发现了若干关键缺陷，已全部修复：
+
+**ReadOnlyView 加固**:
+- `param[0]` 读取正常工作（之前 `visit_index` 不识别 ReadOnlyView）
+- `for item in param` 中的 item 也是只读的（防止通过迭代绕过保护）
+- 删除了公开的 `unwrap()` 方法（防止逃逸到可变原始数据）
+- 添加了 `__bool__`、`__str__`、比较运算符等，支持常见操作
+
+**闭包值捕获修正**:
+```helen
+let arr = [1, 2]
+let f = fn() { return arr }
+arr.append(3)
+// f() 返回 [1, 2]（快照），不是 [1, 2, 3]
+// v1.12 修复后：引用类型在捕获时做深拷贝
+```
+
+**@sandbox 工具限制**:
+`@sandbox` (L3) agent 的工具列表强制为空 — LLM 无法调用任何工具（包括 `load_skill`）。
+
+**SharedStore 线程安全**:
+- 所有字段读写通过 `RLock` 保护
+- 方法执行串行化（同一时刻只有一个方法在执行）
+- 内部属性（`_fields`、`_methods`、`_lock`）不可从 Helen 代码篡改
+
+**闭包作用域检查修正**:
+```helen
+let secret = "hidden"
+
+agent Worker() {
+    main {
+        // ❌ 之前闭包绕过了作用域检查，现在正确报错
+        let f = fn() { return secret }  // E0350 SCOPE_VIOLATION
+    }
+}
+```
+
 ---
 
 ## v1.12 Shared Store — 受控的共享可变状态

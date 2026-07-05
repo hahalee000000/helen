@@ -587,16 +587,19 @@ class Parser:
         return self._expr_stmt()
 
     def _parse_decorator(self) -> str:
-        """Parse a decorator: @sandbox, @open, @strict.
+        """Parse a decorator: @sandbox/@open/@strict (or Chinese equivalents).
 
         Returns the isolation level string.
         """
         self._advance()  # consume @
         if self._check(TokenType.IDENTIFIER):
             decorator_name = self._current().lexeme
-            if decorator_name in ("sandbox", "open", "strict"):
+            # Map Chinese decorator names to English equivalents
+            _chinese_map = {"开放": "open", "严格": "strict", "沙箱": "sandbox"}
+            mapped = _chinese_map.get(decorator_name, decorator_name)
+            if mapped in ("sandbox", "open", "strict"):
                 self._advance()
-                return decorator_name
+                return mapped
             else:
                 self._error(f"Unknown decorator '@{decorator_name}'. Expected @sandbox, @open, or @strict.")
         else:

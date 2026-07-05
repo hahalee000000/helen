@@ -460,12 +460,35 @@ class SemanticAnalyzer(Visitor[None]):
         # Create a scope for the store body
         self.symbols.enter_scope(f"store:{node.name}", "store")
         try:
-            # Analyze fields
+            # Analyze fields — track names for clash detection
+            field_names: set[str] = set()
             for field_node in node.fields:
+                if field_node.name in field_names:
+                    self.errors.error(
+                        ErrorCode.DUPLICATE_SYMBOL,
+                        f"duplicate field '{field_node.name}' in shared store '{node.name}'",
+                        field_node.span,
+                    )
+                field_names.add(field_node.name)
                 field_node.accept(self)
 
-            # Analyze methods
+            # Analyze methods — check for name clashes with fields
+            method_names: set[str] = set()
             for method_node in node.methods:
+                if method_node.name in method_names:
+                    self.errors.error(
+                        ErrorCode.DUPLICATE_SYMBOL,
+                        f"duplicate method '{method_node.name}' in shared store '{node.name}'",
+                        method_node.span,
+                    )
+                if method_node.name in field_names:
+                    self.errors.error(
+                        ErrorCode.DUPLICATE_SYMBOL,
+                        f"method '{method_node.name}' clashes with field of same name "
+                        f"in shared store '{node.name}'",
+                        method_node.span,
+                    )
+                method_names.add(method_node.name)
                 # Register method in store scope
                 method_sym = Symbol(
                     name=method_node.name,
@@ -513,6 +536,11 @@ class SemanticAnalyzer(Visitor[None]):
             # Check: if the variable resolves in the agent's scope chain
             # (not just the immediate scope), it's agent-local and OK.
             # If it only resolves via global scope, it's a module-level variable.
+            # v1.12 fix: This check applies equally inside closures — closures
+            # capture the agent's environment at runtime, and module-level let
+            # is NOT in the agent's environment. Without this fix, code like:
+            #   agent W { main { let f = fn() { return moduleLet } } }
+            # would pass semantic analysis but fail with NameError at runtime.
             local_sym = self.symbols.resolve_in_chain(node.name)
             if local_sym is None:
                 # v1.10: const and shared let are visible across agent boundaries
@@ -520,11 +548,6 @@ class SemanticAnalyzer(Visitor[None]):
                     return  # const is read-only shared — always OK
                 if node.name in self._shared_var_names:
                     return  # shared let — explicitly cross-agent
-                # v1.10: Inside a closure (lambda) within agent main,
-                # the closure captures the agent's environment at runtime.
-                # The variable will be resolved via the captured scope chain.
-                if self._in_closure > 0:
-                    return
                 self.errors.error(
                     ErrorCode.SCOPE_VIOLATION,
                     f"agent scope isolation: cannot access module-level variable "
@@ -650,7 +673,8 @@ class SemanticAnalyzer(Visitor[None]):
                 # Agent scope isolation: writing to module-level variable
                 # from agent main {} is not allowed at runtime.
                 # v1.10: shared let variables are writable across agent boundaries.
-                if self._in_agent:
+                # v1.12: @open agents can also write to module-level let (debugging).
+                if self._in_agent and not self._agent_isolation_open:
                     sym = self.symbols.resolve(target_var_name)
                     if sym is not None and sym.kind == "variable":
                         local_sym = self.symbols.resolve_in_chain(target_var_name)
@@ -665,19 +689,17 @@ class SemanticAnalyzer(Visitor[None]):
                                     node.span,
                                 )
                             elif target_var_name not in self._shared_var_names:
-                                # v1.10: Inside a closure, the variable is captured
-                                # from the agent's environment at runtime.
-                                if self._in_closure > 0:
-                                    pass  # closure captures agent env — OK
-                                else:
-                                    self.errors.error(
-                                        ErrorCode.SCOPE_VIOLATION,
-                                        f"agent scope isolation: cannot assign to module-level "
-                                        f"variable '{target_var_name}' from agent main {{}}. "
-                                        f"Agent main runs in an isolated environment. "
-                                        f"Use 'shared let' or a setter function instead.",
-                                        node.span,
-                                    )
+                                # v1.12 fix: Same check applies inside closures —
+                                # closures can only write to variables visible in
+                                # the agent's environment, not module-level let.
+                                self.errors.error(
+                                    ErrorCode.SCOPE_VIOLATION,
+                                    f"agent scope isolation: cannot assign to module-level "
+                                    f"variable '{target_var_name}' from agent main {{}}. "
+                                    f"Agent main runs in an isolated environment. "
+                                    f"Use 'shared let' or a setter function instead.",
+                                    node.span,
+                                )
                 # Type check on reassignment: declared type must be compatible with new value
                 # (Only for simple variable assignments, not subscript/member access)
                 if isinstance(node.left, VariableNode):

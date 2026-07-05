@@ -4,6 +4,65 @@
 
 ---
 
+## [2026-07-05] fix | v1.12 隔离缺陷修复
+
+**操作**: 修复 v1.12 agent 隔离的关键缺陷
+**执行时间**: 2026-07-05
+**状态**: ✅ 完成
+
+### 修复内容
+
+1. **ReadOnlyView 关键缺陷修复**
+   - `visit_index` 识别 ReadOnlyView（修复 `param[0]` 读取失败）
+   - `__iter__` 包装嵌套引用类型（修复 `for item in param` 绕过只读）
+   - 删除公开 `unwrap()` 方法（防止逃逸）
+   - 添加 `__bool__`、`__str__`、`__ne__`、比较运算符、`__add__`
+   - `visit_binary_op` 不吞掉 ScopeViolationError
+   - `_truthy()` 和 `_add()` 支持 ReadOnlyView
+   - `visit_for_stmt` 支持 ReadOnlyView 迭代
+
+2. **闭包值捕获修复**
+   - `visit_lambda` 对引用类型做深拷贝（之前是引用捕获）
+   - 现在闭包真正捕获快照，不受后续修改影响
+
+3. **@sandbox 工具限制实现**
+   - `_build_tools_list` 对 @sandbox agent 返回空工具列表
+   - 之前 @sandbox 和 @strict 走相同代码路径
+
+4. **SharedStore 加固**
+   - 添加 `threading.RLock` 保护字段读写
+   - 方法执行通过锁串行化
+   - `__setattr__` 阻止所有 `_` 前缀属性篡改
+   - `__init__` 使用 `object.__setattr__` 绕过自定义 setter
+   - 防御性字段/方法拷贝
+
+5. **语义分析修复**
+   - 移除 `_in_closure > 0` 作用域检查绕过（闭包不能绕过隔离检查）
+   - @open agent 赋值检查放行（允许修改模块级 let）
+   - SharedStore 字段/方法名冲突检测
+   - `type_compatible` 支持 AnyType actual（动态类型兼容）
+
+6. **其他修复**
+   - stdlib `_len()` 支持 ReadOnlyView
+   - @open agent 写回模块级 let 修改
+   - 共享 store 写回跳过 const 变量
+   - 解析器支持中文装饰器（@开放/@严格/@沙箱）
+
+### 新增测试
+
+52 个新测试覆盖：
+- ReadOnlyView 读写操作（14 个单元测试）
+- Agent 参数只读集成（7 个集成测试）
+- 闭包值捕获快照语义（4 个测试）
+- 闭包作用域检查（4 个测试）
+- @open/@strict/@sandbox agent（5 个测试）
+- SharedStore（8 个测试）
+- 装饰器解析（5 个测试）
+
+总测试数：2355 passed
+
+---
+
 ## [2026-07-05] update | v1.12 完整版 — 隔离级别、Shared Store
 
 **操作**: 更新 agent 隔离文档，记录 v1.12 完整改进

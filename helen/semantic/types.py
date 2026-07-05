@@ -258,6 +258,10 @@ def type_compatible(actual: Type, expected: Type) -> bool:
     if isinstance(expected, AnyType):
         return True
 
+    # AnyType actual is compatible with everything (dynamic type)
+    if isinstance(actual, AnyType):
+        return True
+
     # Same type
     if type(actual) is type(expected):
         return True

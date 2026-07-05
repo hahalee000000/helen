@@ -543,12 +543,20 @@ class LlmMixin:
         - tools = CONST_NAME references a module-level const that holds a list.
         - load_skill is always included for Tier 2 skill disclosure (HLD 3.6.5)
         - If tools is not declared, the LLM has NO tools (except load_skill)
+
+        v1.12: @sandbox (L3) agents have NO tools at all — not even load_skill.
         """
         from helen.core.ast import VariableNode
         from helen.runtime.tools import get_tool_schemas
 
         tools: list[dict[str, Any]] = []
         tool_names: set[str] = set()
+
+        # v1.12: @sandbox (L3) — force empty tools, no capabilities
+        if self._current_agent is not None:
+            isolation = getattr(self._current_agent, 'isolation_level', 'standard')
+            if isolation == "sandbox":
+                return tools  # empty list — no tools at all
 
         # 1. Read declared tools allowlist
         declared_tools: list[str] | None = None

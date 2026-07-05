@@ -253,8 +253,11 @@ def _print(*args: Any) -> str:
 
 
 def _len(value: Any) -> int:
-    """Return the length of a string, list, or dict."""
+    """Return the length of a string, list, dict, or read-only view."""
     if isinstance(value, (str, list, dict, tuple)):
+        return len(value)
+    # v1.12: ReadOnlyView and other objects with __len__
+    if hasattr(value, '__len__'):
         return len(value)
     raise TypeError(f"object of type '{type(value).__name__}' has no len()")
 

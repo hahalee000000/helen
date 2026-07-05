@@ -88,6 +88,7 @@ from helen.interpreter.exceptions import (
     HelenRuntimeError,
     ReturnSentinel,
     RuntimeError as HelenRuntimeErrorClass,
+    ScopeViolationError,
     error_matches,
     resolve_exception,
     _PREDEFINED_EXCEPTIONS,
@@ -157,10 +158,16 @@ class ReadOnlyView:
     to prevent the agent from modifying the caller's data.
 
     The wrapper supports read operations (iteration, indexing, len) but
-    raises an error on mutation attempts.
+    raises ScopeViolationError on mutation attempts.
+
+    Security notes:
+    - __iter__ wraps each yielded item in ReadOnlyView to prevent escape
+      through iteration (e.g. `for item in param { item.append(1) }`)
+    - unwrap is renamed to _unwrap and is inaccessible from Helen code
+      (__getattr__ blocks _-prefixed names)
     """
     def __init__(self, data):
-        self._data = data
+        object.__setattr__(self, '_data', data)
 
     def __getitem__(self, key):
         value = self._data[key]
@@ -173,10 +180,21 @@ class ReadOnlyView:
         return len(self._data)
 
     def __iter__(self):
-        return iter(self._data)
+        """Iterate with each item wrapped in ReadOnlyView if mutable."""
+        for item in self._data:
+            if isinstance(item, (list, dict)):
+                yield ReadOnlyView(item)
+            else:
+                yield item
 
     def __contains__(self, item):
         return item in self._data
+
+    def __bool__(self):
+        return bool(self._data)
+
+    def __str__(self):
+        return str(self._data)
 
     def __repr__(self):
         return f"ReadOnly({self._data!r})"
@@ -185,6 +203,32 @@ class ReadOnlyView:
         if isinstance(other, ReadOnlyView):
             return self._data == other._data
         return self._data == other
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __lt__(self, other):
+        other_data = other._data if isinstance(other, ReadOnlyView) else other
+        return self._data < other_data
+
+    def __le__(self, other):
+        other_data = other._data if isinstance(other, ReadOnlyView) else other
+        return self._data <= other_data
+
+    def __gt__(self, other):
+        other_data = other._data if isinstance(other, ReadOnlyView) else other
+        return self._data > other_data
+
+    def __ge__(self, other):
+        other_data = other._data if isinstance(other, ReadOnlyView) else other
+        return self._data >= other_data
+
+    def __add__(self, other):
+        other_data = other._data if isinstance(other, ReadOnlyView) else other
+        result = self._data + other_data
+        if isinstance(result, (list, dict)):
+            return ReadOnlyView(result)
+        return result
 
     def __hash__(self):
         return hash(self._data) if not isinstance(self._data, (list, dict)) else id(self)
@@ -203,9 +247,15 @@ class ReadOnlyView:
         raise AttributeError("ReadOnly list has no values() method")
 
     def items(self):
-        """Dict-like items() method."""
+        """Dict-like items() method — values wrapped in ReadOnlyView if mutable."""
         if hasattr(self._data, 'items'):
-            return self._data.items()
+            result = []
+            for k, v in self._data.items():
+                if isinstance(v, (list, dict)):
+                    result.append((k, ReadOnlyView(v)))
+                else:
+                    result.append((k, v))
+            return result
         raise AttributeError("ReadOnly list has no items() method")
 
     def get(self, key, default=None):
@@ -242,16 +292,19 @@ class ReadOnlyView:
     setdefault = _mutate_error
     popitem = _mutate_error
 
-    def unwrap(self):
-        """Get the underlying data (for internal use only)."""
-        return self._data
-
 
 class SharedStore:
     """Shared store instance for controlled shared mutable state.
 
     v1.12: Provides a structured way to share mutable state across agents.
     Fields are private, methods provide the public interface.
+
+    Thread safety: All field access is protected by a reentrant lock (RLock).
+    This allows concurrent agents to safely read/write shared state.
+
+    Security: Internal attributes (_name, _fields, _methods, _lock) cannot be
+    accessed or modified from Helen code — __getattr__/__setattr__ block
+    underscore-prefixed names.
 
     Example:
         shared store Counter {
@@ -260,6 +313,9 @@ class SharedStore:
             fn get(): int { return count }
         }
     """
+    # Internal attribute names — set in __init__ via object.__setattr__
+    _INTERNAL_ATTRS = frozenset({'_name', '_fields', '_methods', '_lock'})
+
     def __init__(self, name: str, fields: dict[str, object], methods: dict[str, object]):
         """Initialize a shared store.
 
@@ -268,46 +324,71 @@ class SharedStore:
             fields: Initial field values (private state).
             methods: Method implementations (callable closures).
         """
-        self._name = name
-        self._fields = fields  # Private state
-        self._methods = methods  # Public methods
+        import threading
+        object.__setattr__(self, '_name', name)
+        object.__setattr__(self, '_fields', dict(fields))  # defensive copy
+        object.__setattr__(self, '_methods', dict(methods))  # defensive copy
+        object.__setattr__(self, '_lock', threading.RLock())
 
     def __getattr__(self, name: str) -> object:
-        """Access a field or method by name."""
+        """Access a field or method by name. Private attrs (_prefix) are blocked."""
         if name.startswith('_'):
             raise AttributeError(f"Cannot access private attribute '{name}'")
-        if name in self._methods:
-            return self._methods[name]
-        if name in self._fields:
-            return self._fields[name]
-        raise AttributeError(f"Shared store '{self._name}' has no field or method '{name}'")
+        fields = object.__getattribute__(self, '_fields')
+        methods = object.__getattribute__(self, '_methods')
+        store_name = object.__getattribute__(self, '_name')
+        if name in methods:
+            return methods[name]
+        if name in fields:
+            return fields[name]
+        raise AttributeError(f"Shared store '{store_name}' has no field or method '{name}'")
 
     def __setattr__(self, name: str, value: object) -> None:
-        """Set a field value. Only fields can be modified, not methods."""
+        """Set a field value. Only public fields can be modified, not methods or internals."""
+        # Block ALL underscore-prefixed names — including after __init__
         if name.startswith('_'):
-            object.__setattr__(self, name, value)
+            store_name = object.__getattribute__(self, '_name')
+            raise AttributeError(
+                f"Cannot set private attribute '{name}' on shared store '{store_name}'. "
+                f"Internal attributes are not accessible from Helen code."
+            )
+        methods = object.__getattribute__(self, '_methods')
+        fields = object.__getattribute__(self, '_fields')
+        store_name = object.__getattribute__(self, '_name')
+        if name in methods:
+            raise AttributeError(f"Cannot overwrite method '{name}' in shared store '{store_name}'")
+        if name in fields:
+            lock = object.__getattribute__(self, '_lock')
+            with lock:
+                fields[name] = value
             return
-        if name in self._methods:
-            raise AttributeError(f"Cannot overwrite method '{name}' in shared store '{self._name}'")
-        if name in self._fields:
-            self._fields[name] = value
-            return
-        raise AttributeError(f"Shared store '{self._name}' has no field '{name}'")
+        raise AttributeError(f"Shared store '{store_name}' has no field '{name}'")
 
     def __repr__(self) -> str:
-        return f"<SharedStore {self._name} with {len(self._fields)} fields, {len(self._methods)} methods>"
+        name = object.__getattribute__(self, '_name')
+        fields = object.__getattribute__(self, '_fields')
+        methods = object.__getattribute__(self, '_methods')
+        return f"<SharedStore {name} with {len(fields)} fields, {len(methods)} methods>"
 
     def get_field(self, name: str) -> object:
-        """Get a field value."""
-        if name not in self._fields:
-            raise AttributeError(f"Shared store '{self._name}' has no field '{name}'")
-        return self._fields[name]
+        """Get a field value (thread-safe)."""
+        fields = object.__getattribute__(self, '_fields')
+        store_name = object.__getattribute__(self, '_name')
+        if name not in fields:
+            raise AttributeError(f"Shared store '{store_name}' has no field '{name}'")
+        lock = object.__getattribute__(self, '_lock')
+        with lock:
+            return fields[name]
 
     def set_field(self, name: str, value: object) -> None:
-        """Set a field value."""
-        if name not in self._fields:
-            raise AttributeError(f"Shared store '{self._name}' has no field '{name}'")
-        self._fields[name] = value
+        """Set a field value (thread-safe)."""
+        fields = object.__getattribute__(self, '_fields')
+        store_name = object.__getattribute__(self, '_name')
+        if name not in fields:
+            raise AttributeError(f"Shared store '{store_name}' has no field '{name}'")
+        lock = object.__getattribute__(self, '_lock')
+        with lock:
+            fields[name] = value
 
 
 class SharedStoreMethod:
@@ -315,42 +396,49 @@ class SharedStoreMethod:
 
     When accessed via store.method, returns this callable.
     When called, executes the method with access to the store's fields.
+
+    v1.12 fix: Method execution is serialized via the store's lock to prevent
+    concurrent field corruption.
     """
     def __init__(self, method_node, store: SharedStore, interpreter):
-        self._method_node = method_node
-        self._store = store
-        self._interpreter = interpreter
+        object.__setattr__(self, '_method_node', method_node)
+        object.__setattr__(self, '_store', store)
+        object.__setattr__(self, '_interpreter', interpreter)
 
     def __call__(self, *args):
-        """Call the method with the given arguments."""
+        """Call the method with the given arguments (serialized via store lock)."""
         interp = self._interpreter
-        m_node = self._method_node
-        store_inst = self._store
+        m_node = object.__getattribute__(self, '_method_node')
+        store_inst = object.__getattribute__(self, '_store')
+        lock = object.__getattribute__(store_inst, '_lock')
+        fields = object.__getattribute__(store_inst, '_fields')
 
-        # Create execution environment with store fields as variables
-        old_env = interp.environment
-        method_env = old_env.enter_scope()
-        # Bind store fields as local variables
-        for fname, fvalue in store_inst._fields.items():
-            method_env.define(fname, fvalue)
-        # Bind method parameters
-        for i, param in enumerate(m_node.params):
-            if i < len(args):
-                method_env.define(param.name, args[i])
-        interp.environment = method_env
-        try:
-            result = interp._execute_stmts(m_node.body.body)
-            # Write back any field modifications
-            for fname in store_inst._fields:
-                try:
-                    store_inst._fields[fname] = method_env.lookup(fname)
-                except NameError:
-                    pass
-            if isinstance(result, ReturnSentinel):
-                return result.value
-            return result
-        finally:
-            interp.environment = old_env
+        # Serialize method execution to prevent concurrent field corruption
+        with lock:
+            # Create execution environment with store fields as variables
+            old_env = interp.environment
+            method_env = old_env.enter_scope()
+            # Bind store fields as local variables
+            for fname, fvalue in fields.items():
+                method_env.define(fname, fvalue)
+            # Bind method parameters
+            for i, param in enumerate(m_node.params):
+                if i < len(args):
+                    method_env.define(param.name, args[i])
+            interp.environment = method_env
+            try:
+                result = interp._execute_stmts(m_node.body.body)
+                # Write back any field modifications
+                for fname in fields:
+                    try:
+                        fields[fname] = method_env.lookup(fname)
+                    except NameError:
+                        pass
+                if isinstance(result, ReturnSentinel):
+                    return result.value
+                return result
+            finally:
+                interp.environment = old_env
 
 
 def _is_mutable_type(value: object) -> bool:
@@ -844,6 +932,8 @@ class Interpreter(LlmMixin, Visitor[object]):
                 index = node.left.index.accept(self)
                 try:
                     target[index] = right
+                except ScopeViolationError:
+                    raise  # v1.12: Don't swallow isolation errors
                 except (TypeError, IndexError, KeyError) as e:
                     self._runtime_error(node.span, str(e))
                     return None
@@ -1087,6 +1177,9 @@ class Interpreter(LlmMixin, Visitor[object]):
         target = node.target.accept(self)
         index = node.index.accept(self)
         try:
+            # v1.12: ReadOnlyView supports __getitem__ directly
+            if isinstance(target, ReadOnlyView):
+                return target[index]
             if isinstance(target, (list, tuple)):
                 if isinstance(index, int):
                     return target[index]
@@ -1298,7 +1391,8 @@ class Interpreter(LlmMixin, Visitor[object]):
     def visit_for_stmt(self, node: ForStmtNode) -> object:
         """Execute a for-in loop."""
         iterable = node.iterable.accept(self)
-        if not isinstance(iterable, (list, tuple)):
+        # v1.12: ReadOnlyView is iterable (yields wrapped items)
+        if not isinstance(iterable, (list, tuple, ReadOnlyView)):
             self._runtime_error(node.span, f"Cannot iterate over {type(iterable).__name__}")
             return None
 
@@ -1418,6 +1512,7 @@ class Interpreter(LlmMixin, Visitor[object]):
         - Isolation: closures don't hold references to agent environments
         - Memory efficiency: only captured values are retained, not entire scopes
         - Predictability: captured values are snapshots, immune to later mutations
+          (reference types like list/dict are deep-copied for true value semantics)
         """
         # Compute free variables used in the lambda body
         free_vars = _compute_free_variables(node)
@@ -1427,6 +1522,12 @@ class Interpreter(LlmMixin, Visitor[object]):
         for var_name in free_vars:
             try:
                 value = self.environment.lookup(var_name)
+                # v1.12 fix: Deep copy reference types for true value semantics.
+                # Without this, the closure captures a reference to the mutable,
+                # and later mutations are visible inside the closure — contradicting
+                # the "snapshot" promise.
+                if _is_mutable_type(value):
+                    value = copy.deepcopy(value)
                 captured_env.define(var_name, value)
             except NameError:
                 # Variable not found in current scope — skip
@@ -2225,6 +2326,9 @@ class Interpreter(LlmMixin, Visitor[object]):
             return len(value) > 0
         if isinstance(value, (list, dict)):
             return len(value) > 0
+        # v1.12: ReadOnlyView delegates truthiness to underlying data
+        if isinstance(value, ReadOnlyView):
+            return len(value._data) > 0
         return True
 
     @staticmethod
@@ -2254,8 +2358,15 @@ class Interpreter(LlmMixin, Visitor[object]):
             return str(left) + str(right)
         if isinstance(left, (int, float)) and isinstance(right, (int, float)):
             return left + right
-        if isinstance(left, list) and isinstance(right, list):
-            return left + right
+        # v1.12: Unwrap ReadOnlyView for list concatenation
+        l_data = left._data if isinstance(left, ReadOnlyView) else left
+        r_data = right._data if isinstance(right, ReadOnlyView) else right
+        if isinstance(l_data, list) and isinstance(r_data, list):
+            result = l_data + r_data
+            # If either operand was read-only, result should be too
+            if isinstance(left, ReadOnlyView) or isinstance(right, ReadOnlyView):
+                return ReadOnlyView(result)
+            return result
         raise HelenRuntimeError(
             f"Cannot add {type(left).__name__} and {type(right).__name__}"
         )
@@ -2639,6 +2750,9 @@ class Interpreter(LlmMixin, Visitor[object]):
             # v1.12: Deep copy values on writeback for safety (same rationale as injection).
             for _name in getattr(self, '_shared_vars', set()):
                 if _name in call_env._store:
+                    # Skip const variables (e.g., shared stores are const references)
+                    if old_env.is_const(_name):
+                        continue
                     _value = call_env._store[_name]
                     if _is_mutable_type(_value):
                         _value = copy.deepcopy(_value)
@@ -2646,6 +2760,25 @@ class Interpreter(LlmMixin, Visitor[object]):
                         old_env.assign(_name, _value)
                     except NameError:
                         pass
+            # v1.12: For @open agents, also write back module-level let modifications.
+            # @open agents have read/write access to module-level let for debugging;
+            # without writeback, modifications are lost when the agent returns.
+            if isolation_level == "open":
+                for _name, _value in call_env._store.items():
+                    if _name in getattr(self, '_shared_vars', set()):
+                        continue  # already handled above
+                    # Skip consts, stdlib, agent params, function_vars
+                    if call_env.is_const(_name):
+                        continue
+                    # Only write back if the variable exists in the caller's scope chain
+                    try:
+                        old_env.lookup(_name)
+                        # Variable exists in caller — write back
+                        if _is_mutable_type(_value):
+                            _value = copy.deepcopy(_value)
+                        old_env.assign(_name, _value)
+                    except NameError:
+                        pass  # Not a caller variable (stdlib, agent-local, etc.)
             self.environment = old_env
             self._current_agent = old_agent
             self.observability.call_stack.pop()
