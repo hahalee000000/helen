@@ -77,6 +77,8 @@ from helen.stdlib.file_advanced import (
     _copy_file, _move_file, _delete_file, _delete_dir,
     # Temp files
     _temp_file, _temp_dir,
+    # Path ops (Issue #28)
+    _path_glob,
 )
 
 # Import system functions
@@ -910,6 +912,9 @@ def _register_builtins() -> None:
         BuiltinFunction("delete_dir", "Delete directory", "delete_dir(path, recursive?)", _delete_dir, "file"),
         BuiltinFunction("temp_file", "Create temp file", "temp_file(suffix?, prefix?, dir?)", _temp_file, "file"),
         BuiltinFunction("temp_dir", "Create temp directory", "temp_dir(suffix?, prefix?, dir?)", _temp_dir, "file"),
+
+        # Path operations (Issue #28)
+        BuiltinFunction("path_glob", "Find files matching glob pattern", "path_glob(pattern)", _path_glob, "file"),
 
         # System environment operations
         BuiltinFunction("env_get", "Get environment variable", "env_get(key, default?)", _env_get, "system"),

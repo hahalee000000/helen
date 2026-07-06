@@ -5,6 +5,7 @@ Provides advanced file operations: info, copy, move, delete, temp files.
 
 from __future__ import annotations
 
+import glob
 import os
 import shutil
 import tempfile
@@ -217,3 +218,24 @@ def _temp_dir(suffix: str = "", prefix: str = "tmp", dir: str | None = None) -> 
         Path to temporary directory
     """
     return tempfile.mkdtemp(suffix=suffix, prefix=prefix, dir=dir)
+
+
+# ── Path operations ────────────────────────────────────────────
+
+
+def _path_glob(pattern: str) -> list[str]:
+    """Find files matching glob pattern.
+
+    Args:
+        pattern: Glob pattern (supports *, **, ?, [seq], [!seq])
+
+    Returns:
+        List of matching file paths
+
+    Examples:
+        path_glob("*.txt")           // All .txt files in current dir
+        path_glob("**/*.py")         // All .py files recursively
+        path_glob("src/**/*.helen")  // All .helen files under src/
+        path_glob("file?.txt")       // file1.txt, fileA.txt, etc.
+    """
+    return sorted(glob.glob(pattern, recursive=True))
