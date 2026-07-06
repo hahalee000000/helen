@@ -21,6 +21,7 @@ from helen.runtime.tools import (
     _read_file,
     _write_file,
     _shell_exec,
+    _shell_exec_full,
     _patch_file,
     _web_search,
     _web_fetch,
@@ -294,41 +295,45 @@ class TestShellExec:
     """Tests for the _shell_exec tool."""
 
     def test_simple_command(self):
-        result = json.loads(_shell_exec("echo hello"))
+        # Issue #25: shell_exec returns raw stdout
+        result = _shell_exec("echo hello")
+        assert "hello" in result
+
+    def test_simple_command_full(self):
+        # Issue #25: shell_exec_full returns JSON
+        result = json.loads(_shell_exec_full("echo hello"))
         assert result["exit_code"] == 0
         assert "hello" in result["output"]
 
     def test_command_with_stderr(self):
-        result = json.loads(_shell_exec("bash -c 'echo error >&2'", shell=False))
+        result = json.loads(_shell_exec_full("bash -c 'echo error >&2'", shell=False))
         assert "[stderr]" in result["output"]
 
     def test_command_timeout(self):
-        result = json.loads(_shell_exec("sleep 10", timeout=1))
+        result = json.loads(_shell_exec_full("sleep 10", timeout=1))
         assert "error" in result
         assert "timed out" in result["error"]
 
     def test_command_failure(self):
-        result = json.loads(_shell_exec("false"))
+        result = json.loads(_shell_exec_full("false"))
         assert result["exit_code"] != 0
 
     def test_command_output_truncated(self):
-        result = json.loads(_shell_exec("yes | head -n 2000", shell=True))
+        result = json.loads(_shell_exec_full("yes | head -n 2000", shell=True))
         if "output" in result:
             assert len(result["output"]) <= 8020  # 8000 + truncation marker
 
     def test_shell_true_default(self):
         """Test that shell=True is the default"""
         # Command with shell syntax should work by default
-        result = json.loads(_shell_exec("echo first && echo second"))
-        assert result["exit_code"] == 0
-        assert "first" in result["output"]
-        assert "second" in result["output"]
+        result = _shell_exec("echo first && echo second")
+        assert "first" in result
+        assert "second" in result
 
     def test_shell_syntax_pipe(self):
         """Test pipe operator works with default shell=True"""
-        result = json.loads(_shell_exec("echo 'hello world' | wc -w"))
-        assert result["exit_code"] == 0
-        assert "2" in result["output"]  # word count
+        result = _shell_exec("echo 'hello world' | wc -w")
+        assert "2" in result  # word count
 
     def test_shell_syntax_redirect(self):
         """Test redirect operator works with default shell=True"""
@@ -336,17 +341,15 @@ class TestShellExec:
         import os
         with tempfile.TemporaryDirectory() as tmpdir:
             test_file = os.path.join(tmpdir, "test.txt")
-            result = json.loads(_shell_exec(f"echo test > {test_file}"))
-            assert result["exit_code"] == 0
+            _shell_exec(f"echo test > {test_file}")
             assert os.path.exists(test_file)
             with open(test_file) as f:
                 assert f.read().strip() == "test"
 
     def test_explicit_shell_false(self):
         """Test explicit shell=False"""
-        result = json.loads(_shell_exec("echo hello", shell=False))
-        assert result["exit_code"] == 0
-        assert "hello" in result["output"]
+        result = _shell_exec("echo hello", shell=False)
+        assert "hello" in result
 
     def test_brace_expansion(self):
         """Test bash brace expansion works with default shell=True"""
@@ -354,8 +357,7 @@ class TestShellExec:
         import os
         with tempfile.TemporaryDirectory() as tmpdir:
             test_dir = os.path.join(tmpdir, "test_brace")
-            result = json.loads(_shell_exec(f"mkdir -p {test_dir}/{{a,b,c}}"))
-            assert result["exit_code"] == 0
+            _shell_exec(f"mkdir -p {test_dir}/{{a,b,c}}")
             # Should create three separate directories, not one literal {a,b,c}
             assert os.path.exists(os.path.join(test_dir, "a"))
             assert os.path.exists(os.path.join(test_dir, "b"))

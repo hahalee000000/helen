@@ -65,7 +65,7 @@ def _write_file(path: str, content: str) -> str:
 
 
 def _shell_exec(command: str, timeout: int = 30, shell: bool = True) -> str:
-    """Execute a shell command and return output.
+    """Execute a shell command and return raw stdout (Issue #25).
 
     Args:
         command: Command to execute
@@ -73,10 +73,25 @@ def _shell_exec(command: str, timeout: int = 30, shell: bool = True) -> str:
         shell: Whether to use shell execution (default True for full shell syntax support)
 
     Returns:
-        JSON string with command, exit_code, and output
+        Raw stdout output as string (not JSON).
     """
     from helen.runtime.tools import _shell_exec as py_shell_exec
     return py_shell_exec(command, timeout, shell)
+
+
+def _shell_exec_full(command: str, timeout: int = 30, shell: bool = True) -> str:
+    """Execute a shell command and return full result as JSON (Issue #25).
+
+    Args:
+        command: Command to execute
+        timeout: Timeout in seconds (default 30)
+        shell: Whether to use shell execution (default True for full shell syntax support)
+
+    Returns:
+        JSON string with command, exit_code, output, and stderr.
+    """
+    from helen.runtime.tools import _shell_exec_full as py_shell_exec_full
+    return py_shell_exec_full(command, timeout, shell)
 
 
 def _calculate(expression: str) -> str:

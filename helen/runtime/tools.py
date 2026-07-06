@@ -234,13 +234,52 @@ def _write_file(path: str, content: str) -> str:
 
 
 def _shell_exec(command: str, timeout: int = 30, shell: bool = True) -> str:
-    """Execute a shell command and return output.
+    """Execute a shell command and return raw stdout (Issue #25).
 
     Args:
         command: Command to execute. When shell=True (default), passed as string
                  to the shell. When shell=False, split into args for safety.
         timeout: Timeout in seconds (default 30).
         shell: Whether to use shell execution (default True).
+
+    Returns:
+        Raw stdout output as string (not JSON).
+
+    Note: When shell=True, be careful with user input to avoid shell injection.
+    Use shell=False for commands with untrusted input.
+    """
+    import shlex
+    import subprocess
+
+    try:
+        cmd = command if shell else shlex.split(command)
+        # Use bash instead of sh to support brace expansion and other bash features
+        result = subprocess.run(
+            cmd, shell=shell, capture_output=True, text=True,
+            timeout=timeout, executable='/bin/bash' if shell else None,
+        )
+        output = result.stdout
+        # Truncate if too long
+        if len(output) > 8000:
+            output = output[:8000] + "\n... [truncated]"
+        return output
+    except subprocess.TimeoutExpired:
+        return f"[error] Command timed out after {timeout}s"
+    except Exception as e:
+        return f"[error] Exec failed: {e}"
+
+
+def _shell_exec_full(command: str, timeout: int = 30, shell: bool = True) -> str:
+    """Execute a shell command and return full result as JSON (Issue #25).
+
+    Args:
+        command: Command to execute. When shell=True (default), passed as string
+                 to the shell. When shell=False, split into args for safety.
+        timeout: Timeout in seconds (default 30).
+        shell: Whether to use shell execution (default True).
+
+    Returns:
+        JSON string with command, exit_code, output, and stderr.
 
     Note: When shell=True, be careful with user input to avoid shell injection.
     Use shell=False for commands with untrusted input.

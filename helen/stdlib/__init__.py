@@ -131,7 +131,7 @@ from helen.stdlib.quality import (
 from helen.stdlib.tools import (
     # Tool wrappers
     _web_search, _web_fetch, _read_file as _tool_read_file, _write_file as _tool_write_file,
-    _shell_exec, _calculate, _patch_file, _load_skill,
+    _shell_exec, _shell_exec_full, _calculate, _patch_file, _load_skill,
 )
 
 # Import context management functions
@@ -1022,7 +1022,8 @@ def _register_builtins() -> None:
         # Tool wrappers (from helen.stdlib.tools)
         BuiltinFunction("web_search", "Search the web", "web_search(query, limit?)", _web_search, "tools"),
         BuiltinFunction("web_fetch", "Fetch web page content", "web_fetch(url)", _web_fetch, "tools"),
-        BuiltinFunction("shell_exec", "Execute shell command", "shell_exec(command, timeout?, shell?)", _shell_exec, "tools"),
+        BuiltinFunction("shell_exec", "Execute shell command (raw stdout)", "shell_exec(command, timeout?, shell?)", _shell_exec, "tools"),
+        BuiltinFunction("shell_exec_full", "Execute shell command (JSON result)", "shell_exec_full(command, timeout?, shell?)", _shell_exec_full, "tools"),
         BuiltinFunction("calculate", "Evaluate math expression", "calculate(expression)", _calculate, "tools"),
         BuiltinFunction("patch_file", "Patch a file", "patch_file(path, old_string, new_string, replace_all?)", _patch_file, "tools"),
         BuiltinFunction("load_skill", "Load a skill by name", "load_skill(name)", _load_skill, "tools"),
