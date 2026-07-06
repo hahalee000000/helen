@@ -1,0 +1,18 @@
+// 翻译 Agent 示例
+agent TranslatorAgent(text: str, target: str) {
+    description "翻译文本到目标语言"
+    prompt "Translate '{{text}}' to {{target}}"
+    
+    main {
+        return llm act "Translate '{{text}}' to {{target}}"
+    }
+}
+
+// 求和 Agent 示例
+agent SumAgent(a: int, b: int) {
+    description "计算两个数的和"
+    
+    main {
+        return a + b
+    }
+}
