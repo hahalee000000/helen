@@ -93,6 +93,35 @@ print("Grade: " + scores["grade"])
 | `import subprocess` | MEDIUM |
 | `input()` | LOW |
 
+## 测试覆盖评分详解
+
+测试覆盖维度（权重 15%）基于文件位置启发式评分，按最高得分命中：
+
+| 策略 | 得分 | 条件 |
+|------|:----:|------|
+| `// @test-location:` 注解 | **8.0** | 源文件中包含注解指向已有测试文件 |
+| 同级测试文件 | **8.0** | 存在 `<name>_test.helen` 或 `test_<name>.helen` |
+| 父级 `tests/` 匹配 | **7.0** | 父级 `tests/` 目录中有文件名包含源文件 stem 的 `*.py` |
+| 同级 `tests/` 目录 | **6.0** | 源文件旁有 `tests/` 目录含任意测试文件 |
+| 无测试 | **2.0** | 未找到任何测试 |
+
+### `// @test-location:` 注解
+
+Agent 密集型程序的集成测试通常放在独立的 `tests/` 目录，文件名与源文件 stem 不一定匹配，容易落入 6.0 上限。使用注解可以显式声明测试位置，直接得 8.0：
+
+```helen
+// @test-location: tests/integration/test_programmer.py
+
+agent Programmer {
+    description "代码编写助手"
+    main {
+        llm act "编写代码"
+    }
+}
+```
+
+注解路径支持绝对路径和相对路径（相对于源文件），文件必须实际存在。
+
 ## CI 集成
 
 ```bash
