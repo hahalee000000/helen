@@ -298,6 +298,40 @@ class TestStrings:
         tokens = _scan('"tab\\there\\n"')
         assert tokens[0].literal == "tab\there\n"
 
+    def test_escape_hex(self) -> None:
+        """\\xNN hex escape should produce the corresponding character."""
+        tokens = _scan(r'"\x1b"')
+        assert tokens[0].literal == "\x1b"
+
+    def test_escape_hex_ansi_codes(self) -> None:
+        """\\xNN should support ANSI color codes."""
+        tokens = _scan(r'"\x1b[1m\x1b[36mHelen\x1b[0m"')
+        assert tokens[0].literal == "\x1b[1m\x1b[36mHelen\x1b[0m"
+
+    def test_escape_hex_upper(self) -> None:
+        """\\xNN should accept uppercase hex digits."""
+        tokens = _scan(r'"\x1B"')
+        assert tokens[0].literal == "\x1b"
+
+    def test_escape_hex_zero(self) -> None:
+        """\\x00 should produce NUL character."""
+        tokens = _scan(r'"\x00"')
+        assert tokens[0].literal == "\x00"
+
+    def test_escape_hex_invalid(self) -> None:
+        """\\x with non-hex digits should report an error."""
+        s = Scanner(r'"\xGG"')
+        s.scan_all()
+        assert s.has_errors
+        assert any(e.code == ErrorCode.INVALID_ESCAPE for e in s.errors)
+
+    def test_escape_hex_incomplete(self) -> None:
+        """\\x with only one hex digit should report an error."""
+        s = Scanner(r'"\x1"')
+        s.scan_all()
+        assert s.has_errors
+        assert any(e.code == ErrorCode.INVALID_ESCAPE for e in s.errors)
+
     def test_unterminated_string(self) -> None:
         """Unterminated string should report an error."""
         s = Scanner('"hello')

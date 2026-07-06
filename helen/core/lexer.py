@@ -789,7 +789,10 @@ class Scanner:
     # ── escape sequences ───────────────────────────────────────────────
 
     def _parse_escape(self) -> str:
-        """Consume and return the character for an escape sequence after ``\\``."""
+        """Consume and return the character for an escape sequence after ``\\``.
+
+        Supported escapes: \\n, \\t, \\r, \\\\, \\", \\', \\0, \\xNN (hex).
+        """
         if self._at_end():
             self._error(
                 ErrorCode.INVALID_ESCAPE,
@@ -809,6 +812,26 @@ class Scanner:
         }
         if c in escape_map:
             return escape_map[c]
+
+        # \xNN hex escape (e.g., \x1b for ESC, \x00 for NUL)
+        if c == "x":
+            hex_chars = ""
+            for _ in range(2):
+                if self._at_end():
+                    self._error(
+                        ErrorCode.INVALID_ESCAPE,
+                        "Unterminated \\x escape sequence",
+                    )
+                    return ""
+                h = self._advance()
+                if h not in "0123456789abcdefABCDEF":
+                    self._error(
+                        ErrorCode.INVALID_ESCAPE,
+                        f"Invalid hex digit in \\x escape: '{h}'",
+                    )
+                    return ""
+                hex_chars += h
+            return chr(int(hex_chars, 16))
 
         self._error(
             ErrorCode.INVALID_ESCAPE,
