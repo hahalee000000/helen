@@ -417,6 +417,80 @@ def _patch_file(path: str, old_string: str, new_string: str, replace_all: bool =
         return json.dumps({"error": f"Patch failed: {e}"}, ensure_ascii=False)
 
 
+def _find_files(path: str, pattern: str = "**/*", max_results: int = 200) -> str:
+    """Find files matching a glob pattern and return structured results.
+
+    This is the LLM tool wrapper around stdlib's glob_files.
+    Provides a structured interface for LLM agents to search for files.
+    """
+    try:
+        # Import stdlib function
+        from helen.stdlib.file_advanced import _glob_files
+
+        # Find matching files
+        matches = _glob_files(path, pattern)
+
+        # Limit results
+        truncated = len(matches) > max_results
+        if truncated:
+            matches = matches[:max_results]
+
+        result = {
+            "path": path,
+            "pattern": pattern,
+            "matches": matches,
+            "count": len(matches),
+        }
+
+        if truncated:
+            result["truncated"] = True
+            result["message"] = f"Results truncated to {max_results} matches. Use a more specific pattern."
+
+        return json.dumps(result, ensure_ascii=False)
+
+    except FileNotFoundError as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"error": f"Find files failed: {e}"}, ensure_ascii=False)
+
+
+def _search_files(path: str, pattern: str, regex: bool = False,
+                  case_sensitive: bool = True, max_results: int = 100) -> str:
+    """Search file contents for a pattern and return structured results.
+
+    This is the LLM tool wrapper around stdlib's grep_files.
+    Provides a structured interface for LLM agents to search file contents.
+    """
+    try:
+        # Import stdlib function
+        from helen.stdlib.file_advanced import _grep_files
+
+        # Search for pattern
+        matches = _grep_files(path, pattern, regex=regex,
+                              case_sensitive=case_sensitive, max_results=max_results)
+
+        result = {
+            "path": path,
+            "pattern": pattern,
+            "regex": regex,
+            "matches": matches,
+            "count": len(matches),
+        }
+
+        if len(matches) >= max_results:
+            result["truncated"] = True
+            result["message"] = f"Results truncated to {max_results} matches."
+
+        return json.dumps(result, ensure_ascii=False)
+
+    except FileNotFoundError as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+    except ValueError as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"error": f"Search files failed: {e}"}, ensure_ascii=False)
+
+
 def _load_skill(name: str) -> str:
     """Load a skill's full SKILL.md content by name.
 
@@ -559,6 +633,38 @@ def _register_builtin_tools() -> None:
             "required": ["path", "old_string", "new_string"],
         },
         handler=_patch_file,
+    )
+
+    register_tool(
+        name="find_files",
+        description="Find files matching a glob pattern. Use ** for recursive search. Returns structured list of matching file paths.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Root directory to search"},
+                "pattern": {"type": "string", "description": "Glob pattern (e.g. '*.py', '**/*.txt', 'src/**/*.js'). Use ** for recursive. Default: '**/*'", "default": "**/*"},
+                "max_results": {"type": "integer", "description": "Maximum results to return (default: 200)", "default": 200},
+            },
+            "required": ["path"],
+        },
+        handler=_find_files,
+    )
+
+    register_tool(
+        name="search_files",
+        description="Search file contents for a text or regex pattern. Returns matches with file path, line number, and line content.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "File or directory to search"},
+                "pattern": {"type": "string", "description": "Text or regex pattern to search for"},
+                "regex": {"type": "boolean", "description": "Treat pattern as regex (default: false, literal text)", "default": False},
+                "case_sensitive": {"type": "boolean", "description": "Case-sensitive search (default: true)", "default": True},
+                "max_results": {"type": "integer", "description": "Maximum matches to return (default: 100)", "default": 100},
+            },
+            "required": ["path", "pattern"],
+        },
+        handler=_search_files,
     )
 
     register_tool(

@@ -18,7 +18,7 @@
 | [07](#教程-07-异步编程) | async、await、并发 Agent 调用、HTTP 异步方法(v1.10) |
 | [08](#教程-08-模块与导入) | import、多格式、跨文件复用、路径安全、shared let 导入(v1.10) |
 | [09](#教程-09-python-ffi) | Python 库导入、类型转换、调用 Python 函数 |
-| [10](#教程-10-标准库参考) | 186 个内置函数，覆盖 AI 应用开发所有核心需求 |
+| [10](#教程-10-标准库参考) | 200 个内置函数，覆盖 AI 应用开发所有核心需求 |
 | [11](#教程-11-构建多-agent-系统) | 多 Agent 协作、工具调用、Agent 模式、Shared Store 协作(v1.12)、Channel 通信(v1.13) |
 | [12](#教程-12-测试框架与-tdd) | 测试 API、断言函数、Expect 链式、TDD 工作流、监听模式 |
 | [13](#教程-13-技能系统) | 技能概念、三层搜索、创建技能、REPL 技能感知 |
@@ -2980,14 +2980,14 @@ main {
 
 | 功能 | Helen 原生 | Python FFI |
 |------|-----------|-----------|
-| 字符串处理 | ✅ 36 个 string 函数 | ✅ 可用 Python re 等 |
+| 字符串处理 | ✅ 37 个 string 函数 | ✅ 可用 Python re 等 |
 | 数学计算 | ✅ 15 个 math 函数 | ✅ 可用 numpy/scipy |
-| 文件操作 | ✅ 16 个 file 函数 | ✅ 可用 os/pathlib |
+| 文件操作 | ✅ 18 个 file 函数（含文件搜索） | ✅ 可用 os/pathlib |
 | 网络请求 | ✅ 9 个 network 函数 | ✅ 可用 requests（高级场景） |
 | 数据处理 | ✅ 25 个 data 函数（JSON/CSV/HTML/XML） | ✅ 可用 pandas（大数据集） |
 | 机器学习 | ❌ 无 | ✅ 可用 torch/tensorflow |
 
-**建议**：优先使用 Helen 原生功能（185 个内置函数覆盖常见需求），需要高级功能（如大数据处理、机器学习）时使用 Python FFI。
+**建议**：优先使用 Helen 原生功能（200 个内置函数覆盖常见需求），需要高级功能（如大数据处理、机器学习）时使用 Python FFI。
 
 ## 练习
 
@@ -3000,11 +3000,11 @@ main {
 
 # 教程 10: 标准库参考
 
-> 186 个内置函数，覆盖 AI 应用开发的所有核心需求
+> 200 个内置函数，覆盖 AI 应用开发的所有核心需求
 
 ## 概览
 
-Helen 标准库提供 186 个内置函数，分为 9 大类别：
+Helen 标准库提供 200 个内置函数，分为 10 大类别：
 
 | 类别 | 函数数 | 功能 |
 |------|--------|------|
@@ -3015,10 +3015,11 @@ Helen 标准库提供 186 个内置函数，分为 9 大类别：
 | **Network** | 9 | HTTP 请求、URL 处理 |
 | **Time** | 13 | 日期时间、格式化、运算 |
 | **Math** | 15 | 数学运算、统计分析 |
-| **File** | 16 | 文件读写、目录操作、临时文件 |
-| **System** | 16 | 环境变量、进程管理、日志 |
+| **File** | 18 | 文件读写、目录操作、临时文件、文件搜索 |
+| **System** | 18 | 环境变量、CLI 参数、进程管理、日志 |
 | **Crypto** | 11 | 哈希、随机数 |
 | **IO** | 5 | 流式输出控制 |
+| **Context** | 2 | 上下文管理（v1.15 新增） |
 
 ## 多语言 stdlib (v1.10)
 
@@ -3558,7 +3559,7 @@ stats_min(data)               // 1
 stats_max(data)               // 10
 ```
 
-## File 函数 (16)
+## File 函数 (18)
 
 ### 基础文件操作 (5)
 
@@ -3585,7 +3586,7 @@ path_is_file("file.txt")      // true
 path_is_dir("dir")            // true
 ```
 
-### 高级文件操作 (10)
+### 高级文件操作 (5)
 
 ```helen
 // 文件信息
@@ -3607,6 +3608,39 @@ copy_file("source.txt", "backup.txt")
 move_file("old.txt", "new.txt")
 delete_file("temp.txt")
 delete_dir("empty_dir")
+```
+
+### 文件搜索 (2) (v1.15 新增)
+
+```helen
+// glob_files - 递归查找文件
+let py_files = glob_files("src", "*.py")
+// 返回: ["main.py", "utils/helper.py", "tests/test_main.py"]
+
+// 使用 ** 显式递归
+let md_files = glob_files("docs", "**/*.md")
+
+// grep_files - 搜索文件内容（字面量）
+let matches = grep_files("src/", "TODO")
+// 返回: [{"file": "main.py", "line": 42, "text": "    # TODO: fix this"}]
+
+// 正则搜索
+let functions = grep_files("src/", "def \\w+\\(", regex=true)
+
+// 大小写不敏感搜索
+let errors = grep_files("logs/", "error", case_sensitive=false)
+
+// 示例：统计代码行数
+fn 统计代码行数(目录: str) {
+    let files = glob_files(目录, "*.py")
+    let total = 0
+    for file in files {
+        let content = read_file(file)
+        total += len(split(content, "\n"))
+    }
+    return {"files": len(files), "lines": total}
+}
+```
 delete_dir("full_dir", recursive=true)
 
 // 临时文件

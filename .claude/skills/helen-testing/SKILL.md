@@ -496,25 +496,9 @@ jobs:
 
 ### 测试覆盖率
 
-`helen quality` 的测试覆盖维度（权重 15%）基于文件位置启发式评分：
-
-| 策略 | 得分 | 条件 |
-|------|:----:|------|
-| `// @test-location:` 注解 | **8.0** | 源文件中注解指向已有测试文件 |
-| 同级测试文件 | **8.0** | `<name>_test.helen` 或 `test_<name>.helen` |
-| 父级 `tests/` 匹配 | **7.0** | 父级 `tests/` 中有文件名匹配的 `*.py` |
-| 同级 `tests/` 目录 | **6.0** | 源文件旁 `tests/` 目录含任意测试 |
-| 无测试 | **2.0** | 未找到测试 |
-
-**Agent 程序提示**：集成测试的文件名通常不与源文件 stem 匹配，容易落入 6.0。使用 `// @test-location:` 注解显式声明测试位置可得 8.0：
-
-```helen
-// @test-location: tests/integration/test_my_agent.py
-
-agent MyAgent {
-    description "示例 agent"
-    main { llm act "执行任务" }
-}
+```bash
+# 生成覆盖率报告（需要额外工具）
+helen test tests/*.helen --coverage --output coverage.html
 ```
 
 ## 调试测试

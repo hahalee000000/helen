@@ -26,6 +26,8 @@ from helen.runtime.tools import (
     _web_search,
     _web_fetch,
     _load_skill,
+    _find_files,
+    _search_files,
     HelenTool,
     _tools,
 )
@@ -547,3 +549,169 @@ class TestLoadSkill:
         result = json.loads(_load_skill("my_skill"))
         assert result["name"] == "my_skill"
         assert "My Skill" in result["content"]
+
+
+# ── Find Files Tool ───────────────────────────────────────────
+
+
+class TestFindFiles:
+    """Tests for the _find_files tool."""
+
+    def test_find_files_basic(self, tmp_path):
+        """Find files with basic pattern."""
+        (tmp_path / "file1.py").write_text("test1")
+        (tmp_path / "file2.txt").write_text("test2")
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        (subdir / "file3.py").write_text("test3")
+
+        result = json.loads(_find_files(str(tmp_path), "*.py"))
+        assert result["count"] == 2
+        assert "file1.py" in result["matches"]
+        assert any("file3.py" in m for m in result["matches"])
+
+    def test_find_files_default_pattern(self, tmp_path):
+        """Find all files with default pattern."""
+        (tmp_path / "a.txt").write_text("a")
+        (tmp_path / "b.txt").write_text("b")
+
+        result = json.loads(_find_files(str(tmp_path)))
+        assert result["count"] == 2
+        assert result["pattern"] == "**/*"
+
+    def test_find_files_empty_directory(self, tmp_path):
+        """Find files in empty directory returns empty list."""
+        result = json.loads(_find_files(str(tmp_path), "*.py"))
+        assert result["count"] == 0
+        assert result["matches"] == []
+
+    def test_find_files_nonexistent_directory(self):
+        """Find files in nonexistent directory returns error."""
+        result = json.loads(_find_files("/nonexistent/dir/xyz", "*.py"))
+        assert "error" in result
+        assert "not found" in result["error"].lower()
+
+    def test_find_files_max_results(self, tmp_path):
+        """Find files respects max_results limit."""
+        for i in range(50):
+            (tmp_path / f"file{i}.py").write_text(f"test{i}")
+
+        result = json.loads(_find_files(str(tmp_path), "*.py", max_results=10))
+        assert result["count"] == 10
+        assert result["truncated"] is True
+
+    def test_find_files_complex_pattern(self, tmp_path):
+        """Find files with complex directory pattern."""
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "main.py").write_text("main")
+        (src / "utils.py").write_text("utils")
+
+        result = json.loads(_find_files(str(tmp_path), "src/*.py"))
+        assert result["count"] == 2
+        assert all("src/" in m for m in result["matches"])
+
+    def test_find_files_registered_as_tool(self):
+        """Verify find_files is registered as a tool."""
+        tool = get_tool("find_files")
+        assert tool is not None
+        assert tool.name == "find_files"
+        assert "glob pattern" in tool.description.lower()
+
+    def test_find_files_dispatch(self, tmp_path):
+        """Test dispatch_tool works for find_files."""
+        (tmp_path / "test.py").write_text("test")
+        result = dispatch_tool("find_files", {"path": str(tmp_path), "pattern": "*.py"})
+        data = json.loads(result)
+        assert data["count"] == 1
+
+
+# ── Search Files Tool ─────────────────────────────────────────
+
+
+class TestSearchFiles:
+    """Tests for the _search_files tool."""
+
+    def test_search_files_literal(self, tmp_path):
+        """Search for literal text pattern."""
+        file1 = tmp_path / "file1.txt"
+        file1.write_text("Hello world\nThis is a test\nAnother line")
+
+        result = json.loads(_search_files(str(tmp_path), "test"))
+        assert result["count"] == 1
+        assert result["matches"][0]["file"] == "file1.txt"
+        assert result["matches"][0]["line"] == 2
+        assert "test" in result["matches"][0]["text"]
+
+    def test_search_files_regex(self, tmp_path):
+        """Search with regex pattern."""
+        file1 = tmp_path / "code.py"
+        file1.write_text("def foo():\n    pass\n\ndef bar():\n    pass")
+
+        result = json.loads(_search_files(str(tmp_path), r"def \w+\(\)", regex=True))
+        assert result["count"] == 2
+        assert result["regex"] is True
+
+    def test_search_files_case_insensitive(self, tmp_path):
+        """Search case-insensitively."""
+        file1 = tmp_path / "mixed.txt"
+        file1.write_text("ERROR: fail\nWarning: minor\nerror: again")
+
+        result = json.loads(_search_files(str(tmp_path), "error", case_sensitive=False))
+        assert result["count"] == 2
+
+    def test_search_files_single_file(self, tmp_path):
+        """Search a single file."""
+        file1 = tmp_path / "test.txt"
+        file1.write_text("line 1\nline 2 match\nline 3\nline 4 match")
+
+        result = json.loads(_search_files(str(file1), "match"))
+        assert result["count"] == 2
+
+    def test_search_files_no_matches(self, tmp_path):
+        """Search with no matches returns empty list."""
+        file1 = tmp_path / "clean.txt"
+        file1.write_text("no matches here")
+
+        result = json.loads(_search_files(str(tmp_path), "xyz123"))
+        assert result["count"] == 0
+        assert result["matches"] == []
+
+    def test_search_files_max_results(self, tmp_path):
+        """Search respects max_results limit."""
+        file1 = tmp_path / "many.txt"
+        file1.write_text("\n".join([f"match line {i}" for i in range(50)]))
+
+        result = json.loads(_search_files(str(tmp_path), "match", max_results=10))
+        assert result["count"] == 10
+        assert result["truncated"] is True
+
+    def test_search_files_invalid_regex(self, tmp_path):
+        """Search with invalid regex returns error."""
+        file1 = tmp_path / "test.txt"
+        file1.write_text("test")
+
+        result = json.loads(_search_files(str(tmp_path), "[invalid", regex=True))
+        assert "error" in result
+        assert "invalid regex" in result["error"].lower()
+
+    def test_search_files_nonexistent_path(self):
+        """Search in nonexistent path returns error."""
+        result = json.loads(_search_files("/nonexistent/path/xyz", "pattern"))
+        assert "error" in result
+        assert "not found" in result["error"].lower()
+
+    def test_search_files_registered_as_tool(self):
+        """Verify search_files is registered as a tool."""
+        tool = get_tool("search_files")
+        assert tool is not None
+        assert tool.name == "search_files"
+        assert "pattern" in tool.description.lower()
+
+    def test_search_files_dispatch(self, tmp_path):
+        """Test dispatch_tool works for search_files."""
+        file1 = tmp_path / "test.txt"
+        file1.write_text("hello world")
+        result = dispatch_tool("search_files", {"path": str(tmp_path), "pattern": "hello"})
+        data = json.loads(result)
+        assert data["count"] == 1

@@ -1,6 +1,6 @@
 # 标准库 (Stdlib)
 
-> 模块 M15 | `helen/stdlib/__init__.py` | **195 builtins** | 测试: `tests/stdlib/`
+> 模块 M15 | `helen/stdlib/__init__.py` | **200 builtins** | 测试: `tests/stdlib/`
 
 ---
 
@@ -39,19 +39,19 @@ class BuiltinFunction:
 | 类别 | 函数数 | 模块文件 |
 |------|--------|----------|
 | **Core** | 11 | `__init__.py` |
-| **String** | 36 | `string.py` |
+| **String** | 37 | `string.py` |
 | **Data** | 25 | `data.py`, `data_formats.py` |
 | **Collection** | 22 | `collection.py` |
 | **Network** | 9 | `network.py` |
 | **Time** | 13 | `time.py` |
 | **Math** | 15 | `math_stats.py` |
-| **File** | 16 | `file_advanced.py` |
+| **File** | 18 | `file_advanced.py` |
 | **System** | 18 | `system.py` |
 | **Crypto** | 11 | `crypto.py` |
 | **Test** | 14 | `test.py` |
 | **Quality** | 4 | `quality.py` |
 | **IO** | 5 | `__init__.py` |
-| **总计** | **195** | - |
+| **总计** | **200** | - |
 
 ---
 
@@ -73,7 +73,7 @@ class BuiltinFunction:
 
 ---
 
-## String (36)
+## String (37)
 
 ### 基础操作 (12)
 
@@ -322,7 +322,7 @@ class BuiltinFunction:
 
 ---
 
-## File (16)
+## File (18)
 
 ### 基础文件操作 (5)
 
@@ -345,7 +345,7 @@ class BuiltinFunction:
 | `path_is_file` | `path_is_file(path)` → bool | 检查是文件 |
 | `path_is_dir` | `path_is_dir(path)` → bool | 检查是目录 |
 
-### 高级文件操作 (10)
+### 高级文件操作 (5)
 
 | 函数 | 签名 | 说明 |
 |---|---|---|
@@ -357,6 +357,13 @@ class BuiltinFunction:
 | `move_file` | `move_file(src, dst)` → str | 移动文件 |
 | `delete_file` | `delete_file(path)` → str | 删除文件 |
 | `delete_dir` | `delete_dir(path, recursive?)` → str | 删除目录 |
+
+### 文件搜索 (2) (v1.15)
+
+| 函数 | 签名 | 说明 |
+|---|---|---|
+| `glob_files` | `glob_files(path, pattern?)` → list[str] | 递归查找文件（glob 模式） |
+| `grep_files` | `grep_files(path, pattern, regex?, case_sensitive?, max_results?)` → list[map] | 搜索文件内容 |
 | `temp_file` | `temp_file(suffix?, prefix?, dir?)` → str | 创建临时文件 |
 | `temp_dir` | `temp_dir(suffix?, prefix?, dir?)` → str | 创建临时目录 |
 

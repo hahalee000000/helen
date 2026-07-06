@@ -1,10 +1,10 @@
 # 教程 10: 标准库参考
 
-> 198 个内置函数，覆盖 AI 应用开发的所有核心需求
+> 200 个内置函数，覆盖 AI 应用开发的所有核心需求
 
 ## 概览
 
-Helen 标准库提供 198 个内置函数，分为 10 大类别：
+Helen 标准库提供 200 个内置函数，分为 10 大类别：
 
 | 类别 | 函数数 | 功能 |
 |------|--------|------|
@@ -15,7 +15,7 @@ Helen 标准库提供 198 个内置函数，分为 10 大类别：
 | **Network** | 9 | HTTP 请求、URL 处理 |
 | **Time** | 13 | 日期时间、格式化、运算 |
 | **Math** | 15 | 数学运算、统计分析 |
-| **File** | 16 | 文件读写、目录操作、临时文件 |
+| **File** | 18 | 文件读写、目录操作、临时文件、文件搜索 |
 | **System** | 18 | 环境变量、CLI 参数、进程管理、日志 |
 | **Crypto** | 11 | 哈希、随机数 |
 | **IO** | 5 | 流式输出控制 |
@@ -506,6 +506,195 @@ agent ChatBot {
         }
     }
 }
+```
+
+## File 函数 (18)
+
+文件操作函数分为三组：基础 I/O、目录操作、文件搜索。
+
+### 文件搜索 (2) (v1.15 新增)
+
+#### glob_files — 递归查找文件
+
+```helen
+// 查找所有 Python 文件（递归）
+let py_files = glob_files("src", "*.py")
+// 返回: ["main.py", "utils/helper.py", "tests/test_main.py"]
+
+// 查找特定模式的文件
+let test_files = glob_files(".", "*test*.py")
+// 返回: ["test_main.py", "tests/test_utils.py"]
+
+// 使用 ** 显式递归
+let md_files = glob_files("docs", "**/*.md")
+// 返回: ["readme.md", "guide/intro.md", "api/reference.md"]
+
+// 复杂模式
+let config_files = glob_files("config", "**/*.{json,yaml,yml}")
+// 返回配置文件列表
+```
+
+**参数**：
+- `path` (str): 搜索根目录
+- `pattern` (str, 可选): glob 模式，默认 `"**/*"`（所有文件）
+
+**返回**：`list<str>` — 匹配文件的相对路径列表
+
+**示例**：统计项目中所有 Python 文件的行数
+
+```helen
+fn 统计代码行数(目录: str) {
+    let files = glob_files(目录, "*.py")
+    let total_lines = 0
+    for file in files {
+        let content = read_file(file)
+        total_lines += len(split(content, "\n"))
+    }
+    return {"files": len(files), "lines": total_lines}
+}
+
+let stats = 统计代码行数("src")
+print("找到 " + str(stats["files"]) + " 个文件，共 " + str(stats["lines"]) + " 行")
+```
+
+#### grep_files — 搜索文件内容
+
+```helen
+// 字面量搜索
+let matches = grep_files("src/", "TODO")
+// 返回: [{"file": "main.py", "line": 42, "text": "    # TODO: fix this"}]
+
+// 正则搜索
+let functions = grep_files("src/", "def \\w+\\(", regex=true)
+// 返回所有函数定义
+
+// 大小写不敏感搜索
+let errors = grep_files("logs/", "error", case_sensitive=false)
+// 返回所有包含 "error"（不区分大小写）的行
+
+// 限制结果数量
+let first_10 = grep_files(".", "pattern", max_results=10)
+```
+
+**参数**：
+- `path` (str): 文件路径或目录
+- `pattern` (str): 搜索模式（字面量或正则）
+- `regex` (bool, 可选): 是否使用正则，默认 `false`
+- `case_sensitive` (bool, 可选): 大小写敏感，默认 `true`
+- `max_results` (int, 可选): 最大返回数，默认 `100`
+
+**返回**：`list<map>` — 匹配结果列表，每个匹配包含 `file`、`line`、`text` 字段
+
+**示例**：查找所有未处理的异常
+
+```helen
+agent 异常检查助手 {
+    description "检查代码中未处理的异常"
+    main {
+        let todos = grep_files("src/", "TODO.*exception", regex=true)
+        if len(todos) > 0 {
+            print("发现 " + str(len(todos)) + " 处待处理的异常:")
+            for match in todos {
+                print("  " + match["file"] + ":" + str(match["line"]))
+                print("    " + match["text"])
+            }
+        }
+    }
+}
+```
+
+### 基础文件 I/O (2)
+
+```helen
+// 读取文件
+let content = read_file("config.json")
+
+// 写入文件（自动创建父目录）
+write_file("output/result.txt", "Hello World")
+```
+
+### 文件信息 (2)
+
+```helen
+// 文件大小（字节）
+let size = file_size("document.pdf")
+print("文件大小: " + str(size) + " bytes")
+
+// 修改时间（ISO 8601 格式）
+let mtime = file_modified("data.csv")
+print("最后修改: " + mtime)
+```
+
+### 目录操作 (6)
+
+```helen
+// 列出目录内容
+let files = list_dir("src")
+// 返回: ["main.py", "utils.py", "tests/"]
+
+// 带模式过滤
+let py_files = list_dir("src", "*.py")
+// 返回: ["main.py", "utils.py"]
+
+// 递归遍历目录树
+let tree = walk_dir("project")
+// 返回: [(dirpath, dirnames, filenames), ...]
+for entry in tree {
+    let dir = entry[0]
+    let subdirs = entry[1]
+    let files = entry[2]
+    print(dir + ": " + str(len(files)) + " files")
+}
+
+// 创建目录
+mkdir("new_dir")
+mkdir_p("deep/nested/dir")  // 递归创建
+
+// 删除
+delete_file("temp.txt")
+delete_dir("old_dir", recursive=true)
+```
+
+### 文件操作 (2)
+
+```helen
+// 复制文件
+copy_file("source.txt", "backup.txt")
+
+// 移动/重命名文件
+move_file("old_name.txt", "new_name.txt")
+```
+
+### 临时文件 (2)
+
+```helen
+// 创建临时文件
+let tmp = temp_file(suffix=".txt", prefix="data_")
+write_file(tmp, "temporary data")
+// 使用完毕后需手动删除
+delete_file(tmp)
+
+// 创建临时目录
+let tmp_dir = temp_dir(prefix="build_")
+// 使用完毕后需手动删除
+delete_dir(tmp_dir, recursive=true)
+```
+
+### 路径操作 (6)
+
+```helen
+// 路径拼接
+let full_path = path_join("src", "utils", "helper.py")
+// 返回: "src/utils/helper.py"
+
+// 提取路径组件
+let base = path_basename("/path/to/file.txt")  // "file.txt"
+let dir = path_dirname("/path/to/file.txt")    // "/path/to"
+
+// 路径检查
+let exists = path_exists("config.json")
+let is_dir = path_is_dir("src")
+let is_file = path_is_file("main.py")
 ```
 
 ## 异常处理 (v1.9+)

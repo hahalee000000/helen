@@ -45,15 +45,14 @@ Helen documentation exists in two locations that must stay synchronized:
    ```markdown
    # 教程 10: 标准库参考
    
-   > 200 个内置函数，覆盖 AI 应用开发的所有核心需求
+   > 185 个内置函数，覆盖 AI 应用开发的所有核心需求
    
    ## 概览
    
    | 类别 | 函数数 | 功能 |
    |------|--------|------|
-   | **String** | 37 | 字符串处理、正则、文本分析 |
+   | **String** | 36 | 字符串处理、正则、文本分析 |
    | **Data** | 25 | JSON、HTML、CSV、Markdown、YAML、TOML、XML |
-   | **File** | 18 | 文件读写、目录操作、临时文件、文件搜索 |
    ...
    ```
 
@@ -159,36 +158,36 @@ Wiki Technical Docs (separate, technical focus)
 **Problem**: TOC entry doesn't match actual section title
 **Solution**: Update TOC when changing section titles:
 ```markdown
-| [10](#教程-10-标准库参考) | 200 个内置函数... |
+| [10](#教程-10-标准库参考) | 185 个内置函数... |
 ```
 
 ## Example: Adding 10 New Functions
 
 ### Before
 ```
-Total: 190 functions
+Total: 175 functions
 String: 26 functions
 ```
 
 ### After
 ```
-Total: 200 functions
+Total: 185 functions
 String: 36 functions
 ```
 
 ### Files to Update
 1. `~/wiki/helen/tutorial/10-stdlib.md`:
-   - Header: `> 200 个内置函数`
+   - Header: `> 185 个内置函数`
    - String section: Add 10 new functions with examples
    - Category table: Update String count to 36
 
 2. `~/helen/docs/tutorial.md`:
-   - Section header: `> 200 个内置函数`
+   - Section header: `> 185 个内置函数`
    - String section: Same content as wiki
    - TOC entry: Update description
 
 3. `~/wiki/helen/toolchain/stdlib.md`:
-   - Header: `**200 builtins**`
+   - Header: `**185 builtins**`
    - String table: Add 10 new rows
    - Category stats: Update String count
 

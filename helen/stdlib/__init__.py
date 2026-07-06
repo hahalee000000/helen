@@ -28,8 +28,6 @@ from helen.stdlib.string import (
     _base64_encode, _base64_decode, _html_escape, _html_unescape,
     # String ops
     _repeat, _reverse, _pad_left, _pad_right, _center, _count, _index, _contains,
-    # Character code operations (Issue #27)
-    _chr, _ord,
     # Float formatting
     _format_float,
 )
@@ -77,8 +75,8 @@ from helen.stdlib.file_advanced import (
     _copy_file, _move_file, _delete_file, _delete_dir,
     # Temp files
     _temp_file, _temp_dir,
-    # Path ops (Issue #28)
-    _path_glob,
+    # File search
+    _glob_files, _grep_files,
 )
 
 # Import system functions
@@ -131,7 +129,7 @@ from helen.stdlib.quality import (
 from helen.stdlib.tools import (
     # Tool wrappers
     _web_search, _web_fetch, _read_file as _tool_read_file, _write_file as _tool_write_file,
-    _shell_exec, _shell_exec_full, _calculate, _patch_file, _load_skill,
+    _shell_exec, _calculate, _patch_file, _load_skill,
 )
 
 # Import context management functions
@@ -818,10 +816,6 @@ def _register_builtins() -> None:
         # Float formatting
         BuiltinFunction("format_float", "Format float with decimals", "format_float(value, decimals)", _format_float, "string"),
 
-        # Character code operations (Issue #27)
-        BuiltinFunction("chr", "Convert code point to character", "chr(code)", _chr, "string"),
-        BuiltinFunction("ord", "Convert character to code point", "ord(char)", _ord, "string"),
-
         # Data JSON operations
         BuiltinFunction("json_parse", "Parse JSON", "json_parse(text)", _json_parse, "data"),
         BuiltinFunction("json_stringify", "Stringify to JSON", "json_stringify(value, indent?)", _json_stringify, "data"),
@@ -912,9 +906,8 @@ def _register_builtins() -> None:
         BuiltinFunction("delete_dir", "Delete directory", "delete_dir(path, recursive?)", _delete_dir, "file"),
         BuiltinFunction("temp_file", "Create temp file", "temp_file(suffix?, prefix?, dir?)", _temp_file, "file"),
         BuiltinFunction("temp_dir", "Create temp directory", "temp_dir(suffix?, prefix?, dir?)", _temp_dir, "file"),
-
-        # Path operations (Issue #28)
-        BuiltinFunction("path_glob", "Find files matching glob pattern", "path_glob(pattern)", _path_glob, "file"),
+        BuiltinFunction("glob_files", "Recursively find files matching glob pattern", "glob_files(path, pattern?)", _glob_files, "file"),
+        BuiltinFunction("grep_files", "Search file contents for a pattern", "grep_files(path, pattern, regex?, case_sensitive?, max_results?)", _grep_files, "file"),
 
         # System environment operations
         BuiltinFunction("env_get", "Get environment variable", "env_get(key, default?)", _env_get, "system"),
@@ -1022,8 +1015,7 @@ def _register_builtins() -> None:
         # Tool wrappers (from helen.stdlib.tools)
         BuiltinFunction("web_search", "Search the web", "web_search(query, limit?)", _web_search, "tools"),
         BuiltinFunction("web_fetch", "Fetch web page content", "web_fetch(url)", _web_fetch, "tools"),
-        BuiltinFunction("shell_exec", "Execute shell command (raw stdout)", "shell_exec(command, timeout?, shell?)", _shell_exec, "tools"),
-        BuiltinFunction("shell_exec_full", "Execute shell command (JSON result)", "shell_exec_full(command, timeout?, shell?)", _shell_exec_full, "tools"),
+        BuiltinFunction("shell_exec", "Execute shell command", "shell_exec(command, timeout?, shell?)", _shell_exec, "tools"),
         BuiltinFunction("calculate", "Evaluate math expression", "calculate(expression)", _calculate, "tools"),
         BuiltinFunction("patch_file", "Patch a file", "patch_file(path, old_string, new_string, replace_all?)", _patch_file, "tools"),
         BuiltinFunction("load_skill", "Load a skill by name", "load_skill(name)", _load_skill, "tools"),

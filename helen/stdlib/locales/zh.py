@@ -296,4 +296,12 @@ ALIASES: dict[str, str] = {
     "计算表达式": "calculate",
     "修补文件": "patch_file",
     "加载技能": "load_skill",
+
+    # ── Context (上下文管理) ──────────────────────────────────────
+    "清除上下文": "clear_context",
+    "压缩上下文": "compress_context",
+
+    # ── File Search (文件搜索) ────────────────────────────────────
+    "查找文件": "glob_files",
+    "搜索内容": "grep_files",
 }
