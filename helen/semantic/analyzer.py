@@ -133,6 +133,7 @@ class SemanticAnalyzer(Visitor[None]):
         self._shared_var_names: set[str] = set()  # v1.10: shared let variable names
         self._in_closure: int = 0  # v1.10: closure nesting depth (lambda inside agent main)
         self._agent_isolation_open: bool = False  # v1.12: True if current agent has @open decorator
+        self._in_main: bool = False  # v1.12: whether we're inside a top-level main {} block (Issue #26)
         # Register stdlib builtins in global scope (HLD M15)
         self._register_stdlib()
 
@@ -360,11 +361,15 @@ class SemanticAnalyzer(Visitor[None]):
         self._agent_names[node.name] = node
 
     def visit_main_block(self, node: MainBlockNode) -> None:
+        # v1.12: Allow return in top-level main (Issue #26)
+        old_in_main = self._in_main
+        self._in_main = True
         self.symbols.enter_scope("main", "block")
         try:
             self._visit_stmts(node.body)
         finally:
             self.symbols.exit_scope()
+            self._in_main = old_in_main
 
     # ------------------------------------------------------------------
     # Variable declarations & references
@@ -719,10 +724,11 @@ class SemanticAnalyzer(Visitor[None]):
         self._check_break_continue_position(node, "continue")
 
     def visit_return_stmt(self, node: ReturnStmtNode) -> None:
-        if self._in_function == 0 and not self._in_agent and not getattr(self, '_in_store_method', False):
+        # v1.12: Allow return in top-level main (Issue #26)
+        if self._in_function == 0 and not self._in_agent and not self._in_main and not getattr(self, '_in_store_method', False):
             self.errors.error(
                 ErrorCode.RETURN_OUTSIDE_FUNCTION,
-                "return can only be used inside a function, agent main block, or store method",
+                "return can only be used inside a function, agent main block, top-level main block, or store method",
                 node.span,
             )
         if node.value is not None:
