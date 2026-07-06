@@ -58,6 +58,7 @@
 - [[tutorial/11-building-agents|构建多 Agent 系统]] — 完整案例
 - [[tutorial/13-skills|技能系统]] — 三层搜索、两层披露、LLM 感知
 - [[tutorial/14-observability|AI 原生可观测性]] — assert、debug()、trace、LLM 审计
+- [[tutorial/15-python-bridge|Python Bridge]] — 让 Python 直接使用 Helen Agent
 
 ### 八、附录
 - [[appendix/error-codes|错误码参考]] — 42 ErrorCode 完整列表
