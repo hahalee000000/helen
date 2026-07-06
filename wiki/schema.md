@@ -50,7 +50,7 @@ wiki/
 │   ├── stdlib.md         # 标准库
 │   └── error-format.md   # 错误格式化
 │
-├── tutorial/             # 教程（14 章）
+├── tutorial/             # 教程（16 章）
 │   ├── 01-getting-started.md
 │   ├── 02-variables-and-types.md
 │   ├── 03-functions.md
@@ -62,8 +62,11 @@ wiki/
 │   ├── 09-python-ffi.md
 │   ├── 10-stdlib.md
 │   ├── 11-building-agents.md
+│   ├── 12-testing.md
 │   ├── 13-skills.md
-│   └── 14-observability.md
+│   ├── 14-observability.md
+│   ├── 15-python-bridge.md
+│   └── 16-quality-assessment.md
 │
 └── appendix/             # 附录
     ├── error-codes.md    # 错误码参考
@@ -86,7 +89,7 @@ title: 页面标题
 type: entity | concept | reference | tutorial | appendix
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
-version: v1.10
+version: v1.15
 sources: []  # 贡献的源代码文件
 ---
 ```
@@ -181,12 +184,16 @@ sources: []  # 贡献的源代码文件
 
 ## 同步任务
 
-### wiki/ → docs/
+### wiki/ → docs/（自动生成）
 
-当 wiki 更新时，检查是否需要同步到 `docs/tutorial.md`：
-- 教程内容变化
-- 新增教程章节
-- 示例代码更新
+`docs/tutorial.md` 由 `scripts/build_tutorial.py` 从 `wiki/tutorial/*.md` 自动生成。
+
+当教程内容变化时：
+```bash
+python3 scripts/build_tutorial.py
+```
+
+不要手动编辑 `docs/tutorial.md`——编辑 `wiki/tutorial/` 下的文件，然后重新生成。
 
 ### wiki/ → skills/
 
@@ -209,19 +216,23 @@ sources: []  # 贡献的源代码文件
 
 ## 版本追踪
 
-当前版本: **v1.10**
+当前版本: **v1.15**
 
 **版本历史**:
 - v1.8: 函数式编程增强（管道操作符、模式匹配增强）
 - v1.9: 中文关键字、基础 agent 支持
 - v1.10: shared let、agent 作用域隔离、子脚本赋值、短路求值、异步 HTTP
+- v1.12: 隔离装饰器、shared store/channel、ReadOnlyView
+- v1.13: channel 通道、97 关键字
+- v1.14: llm stream 合并到 llm act、流式回调
+- v1.15: Phase 1-7 上下文管理（工作记忆、渐进压缩、缓存感知、三通道上下文）
 
 **需要追踪的特性**:
-- 关键字列表（英文 + 中文）: 88 (44 + 44)
+- 关键字列表（英文 + 中文）: 97 (48.5 + 48.5)
 - Token 类型数量: 83
 - AST 节点数量: 63
 - Visitor 方法数量: 58
-- 内置函数数量: 195+（230+ 中文别名）
+- 内置函数数量: 200（230+ 中文别名）
 - 新特性列表（见 changelog.md）
 
 ---
@@ -280,6 +291,6 @@ sources: []  # 贡献的源代码文件
 
 ---
 
-**最后更新**: 2026-07-01  
+**最后更新**: 2026-07-06  
 **维护者**: LLM (Claude)  
-**版本**: v1.10
+**版本**: v1.15
