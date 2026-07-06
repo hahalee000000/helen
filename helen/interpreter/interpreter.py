@@ -2196,6 +2196,9 @@ class Interpreter(LlmMixin, Visitor[object]):
         v1.10: Also creates a module-level Environment that captures the module's
         consts and shared let. This env is used as the parent scope when calling
         module functions, so they can access their own module's variables.
+
+        v1.16: Also registers module functions as callable wrappers in module_env,
+        so cross-function calls within the same aliased module resolve correctly.
         """
         from helen.core.ast import VarDeclNode  # noqa: PLC0415
         module = {
@@ -2224,6 +2227,14 @@ class Interpreter(LlmMixin, Visitor[object]):
                     value = None
                 module_env.define(name, value, is_const=not data.mutable)
         module["__env__"] = module_env
+
+        # v1.16: Register module functions in module_env as callable wrappers,
+        # so cross-function calls within the same aliased module resolve correctly.
+        # Without this, `fn quadruple()` calling `fn double()` inside an aliased
+        # import fails because `double` is not in module_env.
+        for name, func in self.import_resolver.functions.items():
+            wrapper = self._create_module_function_wrapper(func, module)
+            module_env.define(name, wrapper)
 
         # Collect agents
         for name, agent in self.import_resolver.agents.items():
