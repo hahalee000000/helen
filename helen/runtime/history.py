@@ -276,6 +276,7 @@ class Message:
     """A single message in a conversation.
 
     P3: Supports model-aware token counting via optional model field.
+    Phase 1: Supports message classification for selective compression.
     """
 
     role: str  # "system" | "user" | "assistant" | "tool"
@@ -287,6 +288,11 @@ class Message:
     # P3: Optional model name for accurate token counting
     _model: str | None = field(default=None, repr=False)
 
+    # Phase 1: Message classification for selective compression
+    message_type: str | None = field(default=None, repr=False)  # Auto-inferred type
+    priority: int = field(default=50, repr=False)               # Priority (1-100, higher = more important)
+    compressed: bool = field(default=False, repr=False)         # Whether message has been compressed
+
     @property
     def token_count(self) -> int:
         """Lazily computed token count (model-aware when tiktoken available)."""
@@ -296,6 +302,60 @@ class Message:
             # OpenAI counts ~4 tokens per message overhead
             self._token_count += 4
         return self._token_count
+
+    def infer_message_type(self) -> str:
+        """Infer the message type based on role and content.
+
+        Returns one of:
+        - "system": System prompt
+        - "user": User message
+        - "assistant": Assistant text response
+        - "assistant_tool_call": Assistant tool call decision
+        - "tool": Tool execution result
+
+        Phase 1: Used for selective compression (preserve actions, clear data).
+        """
+        if self.role == "system":
+            return "system"
+        elif self.role == "user":
+            return "user"
+        elif self.role == "assistant":
+            # Check if this is a tool call decision or text response
+            if self.tool_calls and len(self.tool_calls) > 0:
+                return "assistant_tool_call"
+            else:
+                return "assistant"
+        elif self.role == "tool":
+            return "tool"
+        else:
+            # Unknown role, treat as assistant
+            return "assistant"
+
+    def assign_priority(self) -> int:
+        """Assign priority based on message type.
+
+        Priority scale (1-100, higher = more important):
+        - 100: System prompt, user requests (critical)
+        - 80: Assistant text responses (high)
+        - 70: Assistant tool call decisions (high - preserve actions)
+        - 20: Tool results (low - can be cleared)
+
+        Phase 1: Used for selective compression.
+        """
+        msg_type = self.message_type or self.infer_message_type()
+
+        if msg_type == "system":
+            return 100
+        elif msg_type == "user":
+            return 90
+        elif msg_type == "assistant":
+            return 80
+        elif msg_type == "assistant_tool_call":
+            return 70
+        elif msg_type == "tool":
+            return 20
+        else:
+            return 50
 
 
 class HistoryManager:

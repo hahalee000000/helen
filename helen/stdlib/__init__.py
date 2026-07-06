@@ -135,6 +135,7 @@ from helen.stdlib.tools import (
 # Import context management functions
 from helen.stdlib.context import (
     _clear_context, _compress_context, _set_interpreter_context,
+    _classify_message, _compress_context_target,  # Phase 1: Message classification
 )
 
 
@@ -1023,6 +1024,9 @@ def _register_builtins() -> None:
         # Context management (v1.15)
         BuiltinFunction("clear_context", "Clear conversation context", "clear_context()", _clear_context, "context"),
         BuiltinFunction("compress_context", "Compress conversation context", "compress_context(strategy?)", _compress_context, "context"),
+        # Phase 1: Message classification and selective compression
+        BuiltinFunction("classify_message", "Classify message type and priority", "classify_message(message)", _classify_message, "context"),
+        BuiltinFunction("compress_context_target", "Compress context by target type", "compress_context_target(target, keep_recent?)", _compress_context_target, "context"),
     ]
 
     for func in builtins:
