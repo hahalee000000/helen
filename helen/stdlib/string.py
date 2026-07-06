@@ -545,3 +545,58 @@ def _contains(s: str, sub: str) -> bool:
         True if substring is found, False otherwise
     """
     return sub in s
+
+
+# ── Character code operations (Issue #27) ─────────────────────
+
+
+def _chr(code: int) -> str:
+    """Convert Unicode code point to character.
+
+    Args:
+        code: Unicode code point (0 to 0x10FFFF)
+
+    Returns:
+        Single character string
+
+    Raises:
+        ValueError: If code is out of range
+
+    Examples:
+        chr(65)       // → "A"
+        chr(97)       // → "a"
+        chr(10)       // → "\n"
+        chr(27)       // → ESC character
+        chr(0x4e2d)   // → "中"
+    """
+    if not isinstance(code, int):
+        raise TypeError(f"chr() argument must be an integer, got {type(code).__name__}")
+    if code < 0 or code > 0x10FFFF:
+        raise ValueError(f"chr() arg not in range(0x110000)")
+    return chr(code)
+
+
+def _ord(char: str) -> int:
+    """Convert character to Unicode code point.
+
+    Args:
+        char: Single character string
+
+    Returns:
+        Unicode code point as integer
+
+    Raises:
+        TypeError: If input is not a string
+        ValueError: If string length is not 1
+
+    Examples:
+        ord("A")      // → 65
+        ord("a")      // → 97
+        ord("\n")     // → 10
+        ord("中")     // → 20013 (0x4e2d)
+    """
+    if not isinstance(char, str):
+        raise TypeError(f"ord() argument must be a string, got {type(char).__name__}")
+    if len(char) != 1:
+        raise ValueError(f"ord() expected a character, but string of length {len(char)} found")
+    return ord(char)

@@ -28,6 +28,8 @@ from helen.stdlib.string import (
     _base64_encode, _base64_decode, _html_escape, _html_unescape,
     # String ops
     _repeat, _reverse, _pad_left, _pad_right, _center, _count, _index, _contains,
+    # Character code operations (Issue #27)
+    _chr, _ord,
     # Float formatting
     _format_float,
 )
@@ -813,6 +815,10 @@ def _register_builtins() -> None:
 
         # Float formatting
         BuiltinFunction("format_float", "Format float with decimals", "format_float(value, decimals)", _format_float, "string"),
+
+        # Character code operations (Issue #27)
+        BuiltinFunction("chr", "Convert code point to character", "chr(code)", _chr, "string"),
+        BuiltinFunction("ord", "Convert character to code point", "ord(char)", _ord, "string"),
 
         # Data JSON operations
         BuiltinFunction("json_parse", "Parse JSON", "json_parse(text)", _json_parse, "data"),
