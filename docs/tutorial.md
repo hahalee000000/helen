@@ -5,7 +5,7 @@
 
 <!-- ⚠️ AUTO-GENERATED — DO NOT EDIT MANUALLY -->
 <!-- Generated from wiki/tutorial/*.md by scripts/build_tutorial.py -->
-<!-- Generated at: 2026-07-07 01:29 -->
+<!-- Generated at: 2026-07-07 06:55 -->
 
 ---
 
@@ -5892,4 +5892,4 @@ fi
 
 ---
 
-<!-- Auto-generated from wiki/tutorial/*.md | 2026-07-07 01:29 | Helen v1.15 -->
+<!-- Auto-generated from wiki/tutorial/*.md | 2026-07-07 06:55 | Helen v1.15 -->
