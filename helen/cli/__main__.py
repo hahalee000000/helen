@@ -191,8 +191,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     else:
         # Default: treat first argument as a file to run,
-        # remaining arguments become the program's `argv`.
-        return run_command(first, program_args=argv[1:])
+        # argv[0] = script name (Issue #30), argv[1:] = program arguments
+        return run_command(first, program_args=[first] + argv[1:])
 
     _print_help()
     return 1
