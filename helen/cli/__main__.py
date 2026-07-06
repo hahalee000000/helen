@@ -156,6 +156,52 @@ def _report_errors(errors, source_lines: list[str]) -> None:
         print(format_warning(warn, source_lines))
 
 
+def watch_command(file: str, program_args: list[str] | None = None) -> int:
+    """Watch a Helen file and re-run on changes (Issue #33).
+
+    Args:
+        file: Path to the Helen source file to watch.
+        program_args: Extra CLI arguments to pass to the program.
+
+    Returns:
+        0 on normal exit (Ctrl+C), 1 on error.
+    """
+    import time
+
+    source_path = Path(file)
+    if not source_path.exists():
+        print(f"Error: file not found: {file}", file=sys.stderr)
+        return 1
+
+    print(f"👀 Watching {file} (press Ctrl+C to stop)...")
+
+    last_mtime = 0.0
+    try:
+        while True:
+            try:
+                current_mtime = source_path.stat().st_mtime
+                if current_mtime != last_mtime:
+                    last_mtime = current_mtime
+                    print(f"\n🔄 [{time.strftime('%H:%M:%S')}] Change detected, running {file}...")
+                    print("=" * 60)
+                    try:
+                        result = run_command(file, program_args)
+                        if result == 0:
+                            print("✅ Program completed successfully")
+                        else:
+                            print(f"❌ Program exited with code {result}")
+                    except Exception as e:
+                        print(f"❌ Error: {e}")
+                    print("=" * 60)
+                time.sleep(0.5)  # Poll every 0.5 seconds
+            except KeyboardInterrupt:
+                print("\n👋 Stopped watching")
+                return 0
+    except KeyboardInterrupt:
+        print("\n👋 Stopped watching")
+        return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point."""
     argv = list(argv) if argv is not None else sys.argv[1:]
@@ -164,7 +210,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return repl_command()
 
     # Check for known subcommands
-    subcommands = {"check", "repl", "doc", "init", "test", "quality", "lsp"}
+    subcommands = {"check", "repl", "doc", "init", "test", "quality", "lsp", "watch"}
     first = argv[0]
 
     if first in subcommands:
@@ -186,6 +232,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             return quality_command(argv[1:])
         elif first == "lsp":
             return lsp_command()
+        elif first == "watch":
+            if len(argv) < 2:
+                print("Error: 'watch' requires a file argument", file=sys.stderr)
+                return 1
+            return watch_command(argv[1], program_args=argv[2:])
     elif first in ("-h", "--help", "help"):
         _print_help()
         return 0
