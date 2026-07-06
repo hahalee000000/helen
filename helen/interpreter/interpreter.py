@@ -31,6 +31,7 @@ from helen.core.ast import (
     CatchClauseNode,
     ContinueStmtNode,
     DeclarationNode,
+    DetachStmtNode,
     ExprStmtNode,
     ExpressionNode,
     FinallyBlockNode,
@@ -2382,6 +2383,35 @@ class Interpreter(LlmMixin, Visitor[object]):
             return Task.completed(result)
         except Exception as exc:
             return Task.failed(exc)
+
+    def visit_detach_stmt(self, node: DetachStmtNode) -> object:
+        """Execute detach statement: fire-and-forget background execution (Issue #29).
+
+        Starts the agent call in a background thread without waiting for completion.
+        No Task object is returned - completely detached from the main flow.
+
+        Example: detach Worker("input")
+
+        Returns:
+            None (fire-and-forget)
+        """
+        import threading
+
+        # Create a thread that will execute the call
+        def run_detached():
+            try:
+                node.call.accept(self)
+            except Exception as e:
+                # Log error but don't propagate - fire-and-forget
+                import sys
+                print(f"[detach] Background task error: {e}", file=sys.stderr)
+
+        # Start the thread
+        thread = threading.Thread(target=run_detached, daemon=True)
+        thread.start()
+
+        # Return immediately - fire-and-forget
+        return None
 
     def visit_async_call_expr(self, node: AsyncCallExprNode) -> object:
         """Execute async call expression (HLD 3.6.7).

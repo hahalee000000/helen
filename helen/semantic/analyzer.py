@@ -34,6 +34,7 @@ from helen.core.ast import (
     CatchClauseNode,
     ContinueStmtNode,
     DeclarationNode,
+    DetachStmtNode,
     ExprStmtNode,
     ExpressionNode,
     FinallyBlockNode,
@@ -1527,6 +1528,10 @@ class SemanticAnalyzer(Visitor[None]):
 
     def visit_async_call_expr(self, node) -> None:
         """Validate async expression: async Agent(...) -> Task."""
+        node.call.accept(self)
+
+    def visit_detach_stmt(self, node: DetachStmtNode) -> None:
+        """Validate detach statement: detach Agent(...) (Issue #29)."""
         node.call.accept(self)
 
     # ------------------------------------------------------------------

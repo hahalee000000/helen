@@ -21,6 +21,7 @@ from .ast import (
     CatchClauseNode,
     ContinueStmtNode,
     DeclarationNode,
+    DetachStmtNode,
     ExprStmtNode,
     ExpressionNode,
     FinallyBlockNode,
@@ -498,6 +499,10 @@ class Parser:
         if self._check(TokenType.ASYNC):
             return self._async_call_stmt()
 
+        # v1.12: detach statement for fire-and-forget background execution (Issue #29)
+        if self._check(TokenType.DETACH):
+            return self._detach_stmt()
+
         # v1.13: channel declaration — typed, thread-safe agent communication
         if self._match(TokenType.CHANNEL):
             if isolation_level != "standard":
@@ -626,6 +631,17 @@ class Parser:
             return AsyncCallStmtNode(call=CallNode(callee=VariableNode(name="", span=start.span), arguments=[], span=start.span), span=start.span)
         return AsyncCallStmtNode(call=call_expr,
                                  span=self._make_span(start, self._previous()))
+
+    def _detach_stmt(self) -> DetachStmtNode:
+        """Parse a detach statement: detach AgentName(...) (Issue #29)."""
+        start = self._advance()  # consume DETACH
+        # Parse as a call expression
+        call_expr = self._expression(Precedence.NONE)
+        if not isinstance(call_expr, CallNode):
+            self._error("'detach' must be followed by a function call.")
+            return DetachStmtNode(call=CallNode(callee=VariableNode(name="", span=start.span), arguments=[], span=start.span), span=start.span)
+        return DetachStmtNode(call=call_expr,
+                              span=self._make_span(start, self._previous()))
 
     def _async_call_expr(self) -> "AsyncCallExprNode":
         """Parse async as expression prefix: async Agent(...) -> Task."""

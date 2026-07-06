@@ -889,6 +889,22 @@ class AsyncCallExprNode(ExpressionNode):
 
 
 @dataclass(frozen=True)
+class DetachStmtNode(StatementNode):
+    """Detach statement: fire-and-forget background execution (Issue #29).
+
+    Starts an agent in the background without waiting for completion.
+    No Task object is returned - completely detached from the main flow.
+    Example: detach Worker("input")
+    """
+    call: CallNode
+    span: SourceSpan
+
+    def accept(self, visitor: Visitor[R]) -> R:
+        """Dispatch to the visitor."""
+        return visitor.visit_detach_stmt(self)
+
+
+@dataclass(frozen=True)
 class CaseNode(StatementNode):
     """Match case: case pattern { ... } or case pattern if guard { ... }."""
     pattern: ExpressionNode

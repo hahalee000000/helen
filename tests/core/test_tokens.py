@@ -139,7 +139,7 @@ class TestKeywords:
     def test_keyword_count(self):
         """Test that the keyword map contains the expected number of entries."""
         kw = keywords()
-        assert len(kw) == 92  # 46 English + 46 Chinese keywords (v1.14: removed 'stream', '流式执行' — merged into llm act)
+        assert len(kw) == 94  # 46 English + 46 Chinese keywords (v1.14: removed 'stream', '流式执行' — merged into llm act)
 
     def test_all_keywords_map_to_token_types(self) -> None:
         """Every keyword value should be a TokenType member."""

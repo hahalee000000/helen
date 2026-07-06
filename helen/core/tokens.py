@@ -99,6 +99,7 @@ class TokenType(Enum):
     RETURN = auto()
     AWAIT = auto()
     ASYNC = auto()
+    DETACH = auto()  # v1.12: fire-and-forget background execution (Issue #29)
     MATCH = auto()
     CASE = auto()
     BRANCH = auto()
@@ -153,6 +154,7 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "return": TokenType.RETURN,
     "await": TokenType.AWAIT,
     "async": TokenType.ASYNC,
+    "detach": TokenType.DETACH,  # v1.12: fire-and-forget (Issue #29)
     "match": TokenType.MATCH,
     "case": TokenType.CASE,
     "branch": TokenType.BRANCH,
@@ -212,6 +214,7 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "执行": TokenType.ACT,
     "异步": TokenType.ASYNC,
     "等待": TokenType.AWAIT,
+    "分离": TokenType.DETACH,  # v1.12: fire-and-forget (Issue #29)
     "提示": TokenType.PROMPT,
     "描述": TokenType.DESCRIPTION,
     "模型": TokenType.MODEL,
