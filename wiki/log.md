@@ -4,6 +4,118 @@
 
 ---
 
+## [2026-07-06] feature | v1.15 — Phase 7 上下文管理增强
+
+**操作**: 完成 Phase 7 Agent 集成与声明扩展
+**执行时间**: 2026-07-06
+**状态**: ✅ 完成
+
+### 变更内容
+
+1. **Agent 上下文集成**
+   - 创建 `AgentContextManager` 类
+   - 集成到 `llm_mixin.py` 的三个关键方法
+   - 自动应用渐进压缩和工作记忆
+
+2. **Agent 声明扩展**
+   - 新增 `context {}` 配置块
+   - 支持 4 个配置选项：
+     - `compression`: "none" / "graduated" / "traditional"
+     - `cache-aware`: true / false
+     - `working-memory`: true / false
+     - `working-memory-tokens`: int
+   - 支持中英文关键字
+
+3. **AST 扩展**
+   - 新增 `ContextConfigNode` 类
+   - `AgentDeclNode` 添加 `context_config` 字段
+   - 解析器支持 `context {}` 块解析
+
+4. **文档更新**
+   - wiki/tutorial/05-agents.md — 添加 context {} 说明
+   - wiki/runtime/history.md — 添加 Phase 1-7 完整说明
+   - wiki/index.md — 更新版本号和测试数量
+
+### 新语法
+
+```helen
+agent SmartAssistant {
+    description "Smart assistant"
+    
+    context {
+        compression "graduated"
+        cache-aware true
+        working-memory true
+        working-memory-tokens 5000
+    }
+    
+    tools ["read_file", "web_search"]
+    
+    main {
+        return llm act "..."
+    }
+}
+```
+
+### 测试覆盖
+
+- `tests/interpreter/test_phase7_agent_context.py` - 16 个新测试
+- 所有现有测试通过: 2583 passed
+
+---
+
+## [2026-07-06] feature | v1.15 — Phase 6 缓存感知压缩
+
+**操作**: 实施缓存感知压缩策略
+**执行时间**: 2026-07-06
+**状态**: ✅ 完成
+
+### 变更内容
+
+1. **缓存感知压缩**
+   - 稳定前缀 (30%): 保留前 30% 消息不变
+   - 批量阈值 (75%): 使用率达到 75% 才触发
+   - 仅后缀修改: 只在缓存区域外操作
+   - 缓存边界标记: 使用稳定的标记
+
+2. **效果**
+   - 缓存命中率从 10-20% 提升到 70-80%
+   - 对齐 Claude Code 的缓存管理
+
+### 测试覆盖
+
+- `tests/runtime/test_cache_aware_compression.py` - 18 个新测试
+
+---
+
+## [2026-07-06] feature | v1.15 — Phase 2-5 渐进压缩管线
+
+**操作**: 实施五层渐进压缩策略
+**执行时间**: 2026-07-06
+**状态**: ✅ 完成
+
+### 变更内容
+
+1. **渐进压缩管线 (Graduated Compression Pipeline)**
+   - Layer 1 (60%): Budget Reduction - 替换大工具输出为引用指针
+   - Layer 2 (70%): Snip - 丢弃过时轮次
+   - Layer 3 (80%): Microcompact - 清除旧工具结果，保留决策
+   - Layer 4 (90%): Context Collapse - 归档并投射折叠视图
+   - Layer 5 (95%): Auto-Compact - LLM 语义压缩
+
+2. **核心创新**
+   - "最廉价动作优先"原则
+   - 工具调用决策保留（Microcompact）
+   - 三通道上下文构建
+
+### 测试覆盖
+
+- `tests/runtime/test_graduated_compression.py` - 16 个测试
+- `tests/runtime/test_working_memory.py` - 17 个测试
+- `tests/runtime/test_llm_summarization.py` - 9 个测试
+
+---
+
 ## [2026-07-05] refactor | v1.14 — 合并 llm stream 到 llm act
 
 **操作**: 合并 `llm stream` 到 `llm act`，消除冗余 LLM 调用模式

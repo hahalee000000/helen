@@ -116,6 +116,92 @@ AI Agent 可通过编程方式获取 JSON 格式：`snapshot.to_json()`
 
 紧凑模式显示一行摘要（含模型名称和工具调用数），详细模式显示所有字段。
 
+## 上下文管理可观测性 (v1.15+)
+
+Helen v1.15 引入了完整的上下文管理增强，提供了丰富的可观测性。
+
+### 上下文使用统计
+
+```
+:stats                 # 显示上下文使用统计
+```
+
+显示信息：
+- Token 使用率和总数
+- 当前模型
+- 消息数量
+- 工作记忆状态（活跃文件、最近决策、待办事项、错误历史）
+
+### 工作记忆查看
+
+```
+:working_memory        # 显示当前工作记忆内容
+:working_memory files  # 只显示活跃文件
+:working_memory decisions  # 只显示最近决策
+:working_memory todos  # 只显示待办事项
+:working_memory errors # 只显示错误历史
+```
+
+### 压缩状态
+
+```
+:compression           # 显示当前压缩状态
+```
+
+显示信息：
+- 当前压缩层（Layer 1-5）
+- 使用率
+- 缓存命中状态
+
+### 程序化访问
+
+```helen
+main {
+    // 获取上下文统计
+    let stats = context_stats()
+    print("Token usage: " + stats["usage_ratio"])
+    print("Active files: " + stats["active_files"])
+    
+    // 获取工作记忆
+    let wm = working_memory_snapshot()
+    print("Recent decisions: " + wm["recent_decisions"])
+    
+    // 手动触发压缩
+    compress_context("graduated")
+    
+    // 清除上下文
+    clear_context()
+}
+```
+
+### 上下文管理调试
+
+```helen
+agent DebugHelper {
+    context {
+        compression "graduated"
+        working-memory true
+    }
+    
+    tools ["read_file", "write_file"]
+    
+    main {
+        // 工作记忆自动跟踪文件操作
+        let code = read_file("src/main.py")
+        let fixed = fix_code(code)
+        write_file("src/main.py", fixed)
+        
+        // 查看工作记忆
+        let wm = working_memory_snapshot()
+        debug("Working memory after file operations", wm)
+        
+        return llm act "Review the changes"
+    }
+}
+```
+
+---
+
 ## 架构
 
 ```

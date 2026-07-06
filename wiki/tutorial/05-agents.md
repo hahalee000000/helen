@@ -110,6 +110,189 @@ agent Assistant {
 
 `tools` 里的名字先查 `functions {}` 块（Helen 函数），再查 Python 工具注册表（`web_search`、`read_file` 等）。同名时 Helen 函数优先。
 
+### context {} — 上下文管理配置（v1.15+）
+
+`context {}` 块允许为每个 agent 自定义上下文管理策略，包括压缩算法、工作记忆等。
+
+#### 基本语法
+
+```helen
+agent SmartAssistant {
+    description "Smart assistant with custom context config"
+    
+    context {
+        compression "graduated"      // 压缩策略
+        cache-aware true             // 缓存感知
+        working-memory true          // 工作记忆
+        working-memory-tokens 5000   // 工作记忆令牌预算
+    }
+    
+    tools ["read_file", "web_search"]
+    prompt "You are a helpful assistant."
+    
+    main {
+        return llm act "..."
+    }
+}
+```
+
+#### 配置选项
+
+| 选项 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `compression` | str | `"graduated"` | 压缩策略：`"none"` / `"graduated"` / `"traditional"` |
+| `cache-aware` | bool | `true` | 启用缓存感知压缩（提高缓存命中率） |
+| `working-memory` | bool | `true` | 启用工作记忆（跟踪活跃文件、决策、错误） |
+| `working-memory-tokens` | int | `5000` | 工作记忆令牌预算 |
+
+#### 压缩策略详解
+
+**1. `"none"` — 不压缩**
+
+适合短对话或需要完整历史的场景。
+
+```helen
+context {
+    compression "none"
+}
+```
+
+**2. `"graduated"` — 渐进压缩（默认）**
+
+五层渐进策略，自动根据上下文使用率应用：
+
+| 层级 | 使用率阈值 | 策略 | 说明 |
+|------|-----------|------|------|
+| Layer 1 | 60% | Budget Reduction | 替换大工具输出为引用指针 |
+| Layer 2 | 70% | Snip | 丢弃过时轮次 |
+| Layer 3 | 80% | Microcompact | 清除旧工具结果，保留决策 |
+| Layer 4 | 90% | Context Collapse | 归档并投射折叠视图 |
+| Layer 5 | 95% | Auto-Compact | LLM 语义压缩 |
+
+```helen
+context {
+    compression "graduated"  // 推荐用于长对话
+}
+```
+
+**3. `"traditional"` — 传统压缩**
+
+简单的截断策略，适合快速场景。
+
+```helen
+context {
+    compression "traditional"
+}
+```
+
+#### 缓存感知压缩
+
+启用 `cache-aware` 后，压缩算法会考虑 prompt cache，提高缓存命中率：
+
+- **稳定前缀**：保留前 30% 消息不变（缓存友好区）
+- **批量阈值**：使用率达到 75% 才触发压缩
+- **仅后缀修改**：只在缓存区域外进行修改
+
+```helen
+context {
+    compression "graduated"
+    cache-aware true  // 提高缓存命中率 70-80%
+}
+```
+
+#### 工作记忆
+
+启用 `working-memory` 后，agent 会自动跟踪：
+
+- **活跃文件**：最近读写的文件路径
+- **最近决策**：assistant 的关键决策
+- **待办事项**：从注释中提取的 TODO
+- **错误历史**：工具调用的错误记录
+
+```helen
+context {
+    working-memory true
+    working-memory-tokens 5000  // 工作记忆预算
+}
+```
+
+#### 中文关键字
+
+支持中文关键字配置：
+
+```helen
+agent 智能助手 {
+    描述 "智能助手"
+    
+    上下文 {
+        压缩 "graduated"
+        缓存感知 true
+        工作记忆 true
+        工作记忆令牌 5000
+    }
+    
+    主逻辑 {
+        返回 llm act "..."
+    }
+}
+```
+
+#### 完整示例：高性能研究 Agent
+
+```helen
+agent Researcher(topic: str) {
+    description "Research assistant with optimized context"
+    
+    // 优化上下文管理
+    context {
+        compression "graduated"      // 渐进压缩
+        cache-aware true             // 缓存感知
+        working-memory true          // 跟踪研究文件
+        working-memory-tokens 8000   // 更大的工作记忆
+    }
+    
+    tools ["web_search", "web_fetch", "read_file", "write_file"]
+    
+    prompt """
+    你是研究助手。
+    研究主题：{{topic}}
+    
+    使用工具搜索和整理信息。
+    """
+    
+    main {
+        let result = llm act "开始研究"
+        return result
+    }
+}
+```
+
+#### 默认行为
+
+如果不指定 `context {}`，agent 使用默认配置：
+
+```helen
+// 等同于：
+agent DefaultAgent {
+    context {
+        compression "graduated"
+        cache-aware true
+        working-memory true
+        working-memory-tokens 5000
+    }
+}
+```
+
+#### 三通道上下文
+
+启用工作记忆后，LLM 看到的上下文分为三个通道：
+
+1. **系统指令（15%）**：框架指令、语言规范、agent 描述
+2. **工作记忆（50%）**：活跃文件、最近决策、待办事项、错误历史
+3. **对话历史（35%）**：压缩后的对话消息
+
+这种结构确保 LLM 始终了解当前上下文，同时保持历史连贯性。
+
 #### tools = CONST_NAME（复用工具集）
 
 `tools` 可以引用**模块级 const**，减少重复声明，并保持工具集**静态可审计**（安全边界清晰）：

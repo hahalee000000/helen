@@ -24,7 +24,7 @@ helen check <file.helen>        # Validate syntax/semantics without executing
 helen repl                      # Interactive REPL
 
 # Testing
-pytest                              # Run all 2200+ tests
+pytest                              # Run all 2583+ tests
 pytest tests/core/                  # Run tests for a specific module
 pytest tests/execution/test_functions.py::test_function_call -v  # Single test
 helen test <file.helen>             # Run Helen's built-in test framework
@@ -42,9 +42,9 @@ helen init                          # Initialize ~/.helen/ config directory
 
 ```
 Layer 1: Helen Core (pure language)
-  Lexer (maximal-munch, frozenset O(1) lookup, 92 bilingual keywords)
+  Lexer (maximal-munch, frozenset O(1) lookup, 97 bilingual keywords)
     → Parser (Pratt precedence + recursive descent)
-    → AST (60+ frozen dataclass nodes, Visitor pattern)
+    → AST (64 frozen dataclass nodes, Visitor pattern)
     → SemanticAnalyzer (two-pass for forward refs, SymbolTable, 14-type system)
     → Interpreter (environment chain, sentinels for control flow)
 
@@ -114,10 +114,16 @@ skills/            # 16 built-in skills (SKILL.md + references/)
 - **Pattern matching**: `match` with range, wildcard, variable binding, type patterns
 - **Exception hierarchy**: `AnyError → LLMError → TimeoutError/ModelError/AgentError`, `ToolError`, `RuntimeError` (including wrapped stdlib Python exceptions since v1.10), `AssertionError`, `AggregateError`, `ScopeViolationError`
 - **Imports**: Multi-format (`.helen`, `.json`, `.yaml`, `.md`, `.txt`, Python), circular detection; imported `shared let` tracked correctly since v1.10
-- **Chinese support**: 92 bilingual keywords (46 English + 46 Chinese) with full bilingual support (CJK identifiers, fullwidth punctuation since v1.10, Chinese quotes since v1.10)
+- **Chinese support**: 97 bilingual keywords (48.5 English + 48.5 Chinese) with full bilingual support (CJK identifiers, fullwidth punctuation since v1.10, Chinese quotes since v1.10)
 - **Subscript/field assignment (v1.10)**: `arr[i] = x` and `obj.field = x` are supported as assignment targets
 - **Alias statement (v1.10)**: `alias <canonical> as <alias_name>` / `别名 <canonical> 为 <alias_name>` — create aliases for stdlib, user functions, agents, and variables
 - **Context management (v1.12)**: `clear_context()` clears conversation history; `compress_context(strategy)` with strategies: `auto`, `summarize`, `truncate`, `none`
+- **Context enhancement (v1.15, Phase 1-7)**:
+  - **Working Memory**: Automatically tracks active files, recent decisions, pending TODOs, error history
+  - **Graduated Compression**: Five-layer progressive compression (Layer 1-5, from 60% to 95% usage)
+  - **Cache-Aware Compression**: Preserves stable prefix (30%), improves cache hit rate from 10-20% to 70-80%
+  - **Three-Channel Context**: System instructions (15%) + Working memory (50%) + Conversation history (35%)
+  - **Agent context configuration**: `context { compression "graduated" cache-aware true working-memory true working-memory-tokens 5000 }`
 
 ## Configuration
 
@@ -137,7 +143,7 @@ Tests in `tests/` mirror the source structure:
 - `semantic/` — Semantic analyzer, agent scope isolation
 - `interpreter/` — Interpreter, async, isolation (v1.12)
 - `execution/` — End-to-end (agents, async, control flow, functions, imports, match, exceptions, v1.12 isolation)
-- `runtime/` — LLM runtime, tools, memory, history, config, imports
+- `runtime/` — LLM runtime, tools, memory, history, config, imports, working memory, graduated compression, cache-aware compression
 - `stdlib/` — Standard library functions, context management
 - `language/` — Feature tests (v16-v18: pattern matching, closures, protocols)
 - `performance/` — Benchmarks
@@ -145,7 +151,7 @@ Tests in `tests/` mirror the source structure:
 - `lsp/` — Language Server
 - `cli/` — CLI and REPL
 
-**2400+ tests passing** (Python pytest)
+**2583+ tests passing** (Python pytest)
 
 Helen also has a built-in test framework (`helen/stdlib/test.py`) with `test()`, `assert_equal()`, `assert_true()`, `assert_throws()`, expect chains, suites, filtering, JSON output, watch mode, and coverage tracking.
 

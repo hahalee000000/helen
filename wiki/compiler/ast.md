@@ -1,6 +1,6 @@
 # AST 节点定义
 
-> 模块 M3 | `helen/core/ast.py` | 49 节点类 | Visitor 模式 46 方法
+> 模块 M3 | `helen/core/ast.py` | 50 节点类 | Visitor 模式 47 方法
 
 ---
 
@@ -112,6 +112,34 @@ class AgentDeclNode(StatementNode):
     prompt: str | None                 # prompt 文本
     declarations: list[StatementNode]  # 内部声明
     logic: list[StatementNode]         # 内部逻辑
+    context_config: ContextConfigNode | None  # Phase 7: 上下文配置
+```
+
+### ContextConfigNode (Phase 7)
+
+```python
+@dataclass(frozen=True)
+class ContextConfigNode(StatementNode):
+    span: SourceSpan
+    compression: str = "graduated"      # 压缩策略: "none" / "graduated" / "traditional"
+    cache_aware: bool = True            # 缓存感知
+    working_memory: bool = True         # 工作记忆
+    working_memory_tokens: int = 5000   # 工作记忆令牌预算
+```
+
+用于 agent 的 `context {}` 配置块，控制上下文管理策略。
+
+**语法示例**：
+
+```helen
+agent SmartAssistant {
+    context {
+        compression "graduated"
+        cache-aware true
+        working-memory true
+        working-memory-tokens 5000
+    }
+}
 ```
 
 ### LlmActStmtNode

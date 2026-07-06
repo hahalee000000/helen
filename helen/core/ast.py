@@ -100,6 +100,10 @@ class Visitor(ABC, Generic[R]):
         """Visit an AgentDeclNode."""
 
     @abstractmethod
+    def visit_context_config(self, node: ContextConfigNode) -> R:
+        """Visit a ContextConfigNode. Phase 7."""
+
+    @abstractmethod
     def visit_prompt_def(self, node: PromptDefNode) -> R:
         """Visit a PromptDefNode."""
 
@@ -717,6 +721,29 @@ class AgentParamNode(StatementNode):
 
 
 @dataclass(frozen=True)
+class ContextConfigNode(StatementNode):
+    """Agent context configuration block: context { compression, cache-aware, ... }.
+
+    Phase 7: Enables per-agent context management configuration.
+
+    Attributes:
+        compression: "none" | "traditional" | "graduated" (default "graduated")
+        cache_aware: Enable cache-aware compression (default True)
+        working_memory: Enable working memory tracking (default True)
+        working_memory_tokens: Token budget for working memory (default 5000)
+    """
+    compression: str = "graduated"
+    cache_aware: bool = True
+    working_memory: bool = True
+    working_memory_tokens: int = 5000
+    span: SourceSpan | None = None
+
+    def accept(self, visitor: Visitor[R]) -> R:
+        """Dispatch to the visitor."""
+        return visitor.visit_context_config(self)
+
+
+@dataclass(frozen=True)
 class AgentDeclNode(StatementNode):
     """Agent declaration: agent Name(params?) { declarations, prompt, logic }.
 
@@ -725,6 +752,7 @@ class AgentDeclNode(StatementNode):
             Registered in the agent's call scope when invoked, so ``main`` can call them.
         has_streaming: Pre-computed flag indicating if any declaration has streaming=true (P2 optimization).
         isolation_level: v1.12 isolation level - "standard" (L1), "open" (L0), "strict" (L2), "sandbox" (L3).
+        context_config: Phase 7 context configuration (compression, cache-aware, working memory).
     """
     name: str
     params: list[AgentParamNode]
@@ -736,6 +764,7 @@ class AgentDeclNode(StatementNode):
     function_vars: list["VarDeclNode"] = field(default_factory=list)  # let/const in functions block
     has_streaming: bool = False  # Pre-computed for _is_agent_streaming (P2)
     isolation_level: str = "standard"  # v1.12: "open", "standard", "strict", "sandbox"
+    context_config: "ContextConfigNode | None" = None  # Phase 7: context configuration
 
     def accept(self, visitor: Visitor[R]) -> R:
         """Dispatch to the visitor."""
@@ -1291,7 +1320,19 @@ class ASTPrinter(Visitor[str]):
             parts.append(node.params)
         if node.prompt:
             parts.append(node.prompt)
+        if node.context_config:
+            parts.append(node.context_config)
         return self._parenthesize("agent", *parts)
+
+    def visit_context_config(self, node: ContextConfigNode) -> str:
+        """Visit a ContextConfigNode. Phase 7."""
+        parts = [
+            f"compression={node.compression}",
+            f"cache_aware={node.cache_aware}",
+            f"working_memory={node.working_memory}",
+            f"tokens={node.working_memory_tokens}",
+        ]
+        return self._parenthesize("context-config", *parts)
 
     def visit_prompt_def(self, node: PromptDefNode) -> str:
         """Visit a PromptDefNode."""

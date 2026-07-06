@@ -1177,6 +1177,10 @@ class SemanticAnalyzer(Visitor[None]):
     def visit_declaration(self, node: DeclarationNode) -> None:
         pass  # config block, validated structurally
 
+    def visit_context_config(self, node) -> None:
+        """Phase 7: Context configuration validated structurally."""
+        pass  # ContextConfigNode is validated during parsing
+
     # ------------------------------------------------------------------
     # Functions
     # ------------------------------------------------------------------

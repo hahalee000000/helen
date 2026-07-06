@@ -152,6 +152,28 @@ class WorkingMemory:
         if len(self.error_history) > 5:
             self.error_history = self.error_history[-5:]
 
+    def _add_todo(self, todo: str) -> None:
+        """Add a TODO item to pending todos list.
+
+        Args:
+            todo: TODO description
+        """
+        # Avoid duplicates
+        if todo not in self.pending_todos:
+            self.pending_todos.append(todo)
+            # Keep only last 20 TODOs
+            if len(self.pending_todos) > 20:
+                self.pending_todos = self.pending_todos[-20:]
+
+    def _complete_todo(self, todo: str) -> None:
+        """Remove a TODO item when completed.
+
+        Args:
+            todo: TODO description to remove
+        """
+        if todo in self.pending_todos:
+            self.pending_todos.remove(todo)
+
     def estimate_tokens(self) -> int:
         """Estimate token count for working memory context.
 
@@ -176,6 +198,7 @@ def build_three_channel_context(
     working_memory: WorkingMemory,
     history: list,
     budget: dict[str, float] | None = None,
+    max_tokens: int = 131072,
 ) -> list[dict]:
     """Build three-channel context for LLM submission.
 
@@ -188,6 +211,7 @@ def build_three_channel_context(
         working_memory: Working memory instance
         history: Conversation history (may be compressed)
         budget: Token budget allocation (default: 15/50/35 split)
+        max_tokens: Maximum context window tokens (for budget enforcement)
 
     Returns:
         List of messages ready for LLM submission
@@ -201,14 +225,18 @@ def build_three_channel_context(
 
     messages = []
 
-    # Channel 1: System instructions
+    # Channel 1: System instructions (budget: 15% of max_tokens)
+    system_budget = int(max_tokens * budget.get("system", 0.15))
     if system_prompt:
+        # Truncate system prompt if it exceeds budget (rough: 4 chars/token)
+        max_chars = system_budget * 4
+        truncated_prompt = system_prompt[:max_chars] if len(system_prompt) > max_chars else system_prompt
         messages.append({
             "role": "system",
-            "content": system_prompt,
+            "content": truncated_prompt,
         })
 
-    # Channel 2: Working memory
+    # Channel 2: Working memory (budget: 50% of max_tokens, capped by working_memory.max_tokens)
     working_context = working_memory.to_context()
     if working_context:
         messages.append({
@@ -216,8 +244,23 @@ def build_three_channel_context(
             "content": f"[Working Memory]\n{working_context}",
         })
 
-    # Channel 3: Conversation history
-    for msg in history:
+    # Channel 3: Conversation history (budget: 35% of max_tokens)
+    history_budget = int(max_tokens * budget.get("history", 0.35))
+    history_budget_chars = history_budget * 4  # Rough conversion
+
+    # Truncate history to fit within budget
+    selected_history = []
+    used_chars = 0
+    # Iterate from most recent to oldest, keep until budget exhausted
+    for msg in reversed(history):
+        msg_chars = len(msg.content)
+        if used_chars + msg_chars <= history_budget_chars:
+            selected_history.insert(0, msg)
+            used_chars += msg_chars
+        else:
+            break  # Budget exhausted
+
+    for msg in selected_history:
         messages.append({
             "role": msg.role,
             "content": msg.content,

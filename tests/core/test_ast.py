@@ -127,6 +127,10 @@ class MockVisitor(Visitor[str]):
         self.calls.append("visit_agent_decl")
         return "<agent>"
 
+    def visit_context_config(self, node) -> str:
+        self.calls.append("visit_context_config")
+        return "<context_config>"
+
     def visit_prompt_def(self, node: PromptDefNode) -> str:
         self.calls.append("visit_prompt_def")
         return "<prompt>"

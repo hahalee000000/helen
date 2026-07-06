@@ -173,6 +173,17 @@ class LlmMixin:
         temperature = float(self._get_agent_setting("temperature", 1.0))
         max_turns = int(self._get_agent_setting("max-turns", 1))
 
+        # Phase 7: Apply context config if agent has one
+        if self._current_agent is not None and hasattr(self._current_agent, 'context_config'):
+            ctx_config = self._current_agent.context_config
+            if ctx_config is not None and hasattr(self, '_agent_context') and self._agent_context is not None:
+                # Update AgentContextManager with agent-specific settings
+                self._agent_context.compression_enabled = (ctx_config.compression != "none")
+                self._agent_context.working_memory_enabled = ctx_config.working_memory
+                self._agent_context.cache_aware_enabled = ctx_config.cache_aware
+                if ctx_config.working_memory_tokens > 0:
+                    self._agent_context.working_memory.max_tokens = ctx_config.working_memory_tokens
+
         # P2: Update history manager's model for model-aware context window
         if model:
             self._history_manager.set_model(model)
@@ -887,11 +898,16 @@ class LlmMixin:
         P2: After adding, enforce history size limit to prevent unbounded
         memory growth in long REPL sessions.
         P3: Sets model on message for accurate token counting.
+        Phase 7: Update working memory from message content.
         """
         # P3: Set model on message for tiktoken encoding selection
         model = getattr(self._history_manager, '_model', None)
         msg = HistoryMessage(role=role, content=content, _model=model)
         self._history.append(msg)
+
+        # Phase 7: Update working memory from message
+        if hasattr(self, '_agent_context') and self._agent_context is not None:
+            self._agent_context.update_from_message(content, role)
 
         # P2: Enforce history size limit after each addition
         # This prevents unbounded memory growth in long REPL sessions.
@@ -907,6 +923,8 @@ class LlmMixin:
         so that future LLM calls can reference what tools were called and what
         they returned, preventing redundant tool executions.
 
+        Phase 7: Update working memory from tool calls.
+
         Args:
             response: LLMResponse-like object with .text and .tool_calls attributes.
         """
@@ -919,6 +937,13 @@ class LlmMixin:
             for tc in tool_calls:
                 name = tc.get("name", "unknown")
                 args_raw = tc.get("args", "{}")
+                result = tc.get("result", "")
+
+                # Phase 7: Update working memory from tool call
+                if hasattr(self, '_agent_context') and self._agent_context is not None:
+                    exit_code = tc.get("exit_code")
+                    self._agent_context.update_from_tool_call(name, args_raw, result, exit_code)
+
                 # Parse args for compact display
                 try:
                     if isinstance(args_raw, str):
@@ -938,11 +963,11 @@ class LlmMixin:
                 args_display = ", ".join(args_parts)
 
                 # Truncate result for display
-                result = tc.get("result", "")
-                if len(result) > 200:
-                    result = result[:197] + "..."
+                result_display = result
+                if len(result_display) > 200:
+                    result_display = result_display[:197] + "..."
 
-                parts.append(f"[{name}({args_display}) → {result}]")
+                parts.append(f"[{name}({args_display}) → {result_display}]")
 
             tool_summary = "Tool calls: " + " | ".join(parts)
             self._add_to_history("assistant", tool_summary)
@@ -958,6 +983,9 @@ class LlmMixin:
     ) -> list[dict[str, Any]] | None:
         """Prepare conversation history for an LLM API call.
 
+        Phase 7: Uses AgentContextManager to build three-channel context
+        with working memory and graduated compression.
+
         Uses HistoryManager to calculate budget, trim to fit context window,
         and convert to OpenAI messages format.
 
@@ -971,6 +999,17 @@ class LlmMixin:
         if not self._history:
             return None
 
+        # Phase 7: Use AgentContextManager if available
+        if hasattr(self, '_agent_context') and self._agent_context is not None:
+            max_tokens = self._history_manager.MAX_TOKENS
+            return self._agent_context.prepare_context(
+                system_prompt=system_prompt,
+                history=self._history,
+                max_tokens=max_tokens,
+                current_prompt=current_prompt,
+            )
+
+        # Fallback: Use HistoryManager (Phase 1-6 behavior)
         return self._history_manager.prepare_for_llm(
             self._history, system_prompt, current_prompt
         )

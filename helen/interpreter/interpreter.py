@@ -767,6 +767,14 @@ class Interpreter(LlmMixin, Visitor[object]):
         except Exception:
             model = None
         self._history_manager = HistoryManager(model=model)
+        # Phase 7: Initialize AgentContextManager for working memory and compression
+        from helen.interpreter.agent_context import AgentContextManager
+        self._agent_context = AgentContextManager(
+            working_memory_tokens=5000,
+            compression_enabled=True,
+            working_memory_enabled=True,
+            cache_aware_enabled=True,
+        )
         # P2: Initialize PromptBuilder for unified prompt construction
         from helen.runtime.prompt_builder import PromptBuilder
         self._prompt_builder = PromptBuilder()
@@ -1677,6 +1685,10 @@ class Interpreter(LlmMixin, Visitor[object]):
         return None
 
     def visit_prompt_def(self, node: PromptDefNode) -> object:
+        return None
+
+    def visit_context_config(self, node) -> object:
+        """Phase 7: Context configuration is processed during agent execution."""
         return None
 
     # ------------------------------------------------------------------

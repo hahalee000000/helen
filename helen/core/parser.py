@@ -777,6 +777,7 @@ class Parser:
         logic: StatementNode | None = None
         agent_functions: list = []
         agent_function_vars: list = []
+        context_config: "ContextConfigNode | None" = None  # Phase 7
         while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF):
             if self._match(TokenType.PROMPT):
                 if self._match(TokenType.STRING, TokenType.TRIPLE_QUOTE_STRING):
@@ -802,6 +803,46 @@ class Parser:
                         self._error(f"Expected 'fn', 'let', or 'const' inside functions block, got {self._current().type.name}")
                         self._synchronize()
                 self._consume(TokenType.RIGHT_BRACE, "Expected '}' after functions block.")
+            elif self._is_context_keyword("context"):
+                # Phase 7: Parse context {} block
+                self._advance()  # consume 'context'
+                self._consume(TokenType.LEFT_BRACE, "Expected '{' after 'context'.")
+                compression = "graduated"
+                cache_aware = True
+                working_memory = True
+                working_memory_tokens = 5000
+                context_span = self._previous().span
+                while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF):
+                    # Collect key: identifier possibly followed by -identifier sequences
+                    key = self._current().lexeme
+                    self._advance()
+                    # Check for hyphenated continuation (e.g., working-memory-tokens)
+                    while self._check(TokenType.MINUS):
+                        self._advance()  # consume '-'
+                        key += "-" + self._current().lexeme
+                        self._advance()
+                    if key in ("compression", "压缩"):
+                        compression = self._consume(TokenType.STRING, "Expected string value for compression").literal or "graduated"
+                    elif key in ("cache-aware", "缓存感知"):
+                        val_tok = self._advance()
+                        cache_aware = val_tok.lexeme.lower() in ("true", "是")
+                    elif key in ("working-memory", "工作记忆"):
+                        val_tok = self._advance()
+                        working_memory = val_tok.lexeme.lower() in ("true", "是")
+                    elif key in ("working-memory-tokens", "工作记忆令牌"):
+                        working_memory_tokens = int(self._advance().literal)
+                    else:
+                        self._error(f"Unknown context option: {key}")
+                        self._synchronize()
+                self._consume(TokenType.RIGHT_BRACE, "Expected '}' after context block.")
+                from .ast import ContextConfigNode
+                context_config = ContextConfigNode(
+                    compression=compression,
+                    cache_aware=cache_aware,
+                    working_memory=working_memory,
+                    working_memory_tokens=working_memory_tokens,
+                    span=context_span,
+                )
             elif self._check(
                 TokenType.DESCRIPTION, TokenType.MODEL, TokenType.TOOLS,
                 TokenType.MEMORY, TokenType.TEMPERATURE,
@@ -819,7 +860,8 @@ class Parser:
                              span=self._make_span(name_tok, end),
                              functions=agent_functions,
                              function_vars=agent_function_vars,
-                             has_streaming=has_streaming)
+                             has_streaming=has_streaming,
+                             context_config=context_config)
 
     def _shared_store_decl(self) -> "SharedStoreDeclNode":
         """Parse a shared store declaration: shared store Name { fields, methods }.
