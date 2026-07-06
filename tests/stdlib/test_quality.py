@@ -500,3 +500,271 @@ fn test() {
         assert "test.helen" in report
         assert "Quality Scores" in report
         assert "GRADE" in report
+
+
+# ── Issue #4 — docstring detection before function ──────────────
+
+
+class TestIssue4DocstringDetection:
+    """helenagent issue #4: docstring placed before fn definition
+    (industry convention) must be recognized, not just inside the body."""
+
+    def test_block_comment_before_fn_is_docstring(self):
+        source = """
+/** Computes the answer to everything. */
+fn answer(): int {
+    return 42
+}
+"""
+        analyzer = HelenCodeAnalyzer(source)
+        metrics = analyzer.analyze()
+        assert metrics.functions[0].has_docstring is True
+
+    def test_line_comments_before_fn_is_docstring(self):
+        source = """
+// Add two numbers together
+// and return the result.
+fn add(a, b) {
+    return a + b
+}
+"""
+        analyzer = HelenCodeAnalyzer(source)
+        metrics = analyzer.analyze()
+        assert metrics.functions[0].has_docstring is True
+
+    def test_block_comment_with_blank_line_before_fn(self):
+        source = """
+/** This is documented. */
+
+fn foo() {
+    return 1
+}
+"""
+        analyzer = HelenCodeAnalyzer(source)
+        metrics = analyzer.analyze()
+        assert metrics.functions[0].has_docstring is True
+
+    def test_no_docstring_before_or_inside(self):
+        source = """
+fn undocumented() {
+    return 42
+}
+"""
+        analyzer = HelenCodeAnalyzer(source)
+        metrics = analyzer.analyze()
+        assert metrics.functions[0].has_docstring is False
+
+    def test_comment_inside_body_still_works(self):
+        """Backward compat: comment inside function body still counts."""
+        source = """
+fn legacy() {
+    // legacy docstring
+    return 42
+}
+"""
+        analyzer = HelenCodeAnalyzer(source)
+        metrics = analyzer.analyze()
+        assert metrics.functions[0].has_docstring is True
+
+
+# ── Issue #5 — multi-line string false positives ────────────────
+
+
+class TestIssue5MultiLineStrings:
+    """helenagent issue #5: content inside \"\"\"...\"\"\" must not be
+    analyzed for security patterns."""
+
+    def test_triple_quoted_string_ignored(self):
+        source = '''
+agent Example() {
+    prompt """
+    Here is an example:
+    ```helen
+    fn factorial(n: int): int {
+        if (n <= 1) { return 1 }
+        return n * factorial(n - 1)
+    }
+    main {
+        let num = int(input("输入数字: "))
+        shell_exec("rm -rf " + user_input)
+    }
+    ```
+    """
+    main {
+        return "ok"
+    }
+}
+'''
+        analyzer = SecurityAnalyzer(source)
+        issues = analyzer.analyze()
+        # None of the patterns inside the triple-quoted string should fire
+        patterns_found = {i.pattern for i in issues}
+        assert "shell_exec concat" not in patterns_found
+        assert "user input" not in patterns_found
+
+    def test_real_code_after_multiline_string_still_checked(self):
+        source = '''
+let greeting = """
+Hello, world!
+"""
+
+fn dangerous() {
+    let x = eval(user_input)
+    return x
+}
+'''
+        analyzer = SecurityAnalyzer(source)
+        issues = analyzer.analyze()
+        assert any(i.pattern == "eval()" for i in issues)
+
+    def test_block_comment_ignored(self):
+        source = """
+/* shell_exec("rm -rf /")
+   eval(bad_code)
+*/
+fn safe() {
+    return 42
+}
+"""
+        analyzer = SecurityAnalyzer(source)
+        issues = analyzer.analyze()
+        assert len(issues) == 0
+
+    def test_inline_comment_stripped(self):
+        """Inline // comment containing patterns should not fire."""
+        source = """
+fn safe() {
+    return 42  // eval(user_input) would be bad
+}
+"""
+        analyzer = SecurityAnalyzer(source)
+        issues = analyzer.analyze()
+        assert len(issues) == 0
+
+
+# ── Issue #6 — shell_exec concat severity ───────────────────────
+
+
+class TestIssue6ShellExecSeverity:
+    """helenagent issue #6: shell_exec with concatenation inside the
+    call must have the same severity as assigning to a variable first."""
+
+    def test_shell_exec_concat_is_medium(self):
+        source = """
+fn test1(path: str) {
+    shell_exec("helen check " + path + " 2>&1")
+}
+"""
+        analyzer = SecurityAnalyzer(source)
+        issues = analyzer.analyze()
+        shell_issues = [i for i in issues if "shell_exec" in i.pattern]
+        assert all(i.severity != "high" for i in shell_issues), \
+            "shell_exec concat should not be HIGH"
+        assert any(i.severity == "medium" for i in shell_issues)
+
+    def test_shell_exec_variable_concat_is_medium(self):
+        source = """
+fn test2(path: str) {
+    let cmd = "helen check " + path + " 2>&1"
+    shell_exec(cmd)
+}
+"""
+        analyzer = SecurityAnalyzer(source)
+        issues = analyzer.analyze()
+        shell_issues = [i for i in issues if "shell_exec" in i.pattern]
+        assert all(i.severity != "high" for i in shell_issues)
+        assert any(i.severity == "medium" for i in shell_issues)
+
+    def test_both_forms_same_severity(self):
+        """Both forms should produce the same maximum severity."""
+        src_direct = """
+fn a(p: str) { shell_exec("cmd " + p) }
+"""
+        src_var = """
+fn a(p: str) { let c = "cmd " + p; shell_exec(c) }
+"""
+        direct_max = max(
+            (i.severity for i in SecurityAnalyzer(src_direct).analyze()
+             if "shell_exec" in i.pattern),
+            key=lambda s: {"high": 2, "medium": 1, "low": 0}[s],
+            default="low",
+        )
+        var_max = max(
+            (i.severity for i in SecurityAnalyzer(src_var).analyze()
+             if "shell_exec" in i.pattern),
+            key=lambda s: {"high": 2, "medium": 1, "low": 0}[s],
+            default="low",
+        )
+        assert direct_max == var_max
+
+
+# ── Issue #7 — test coverage scoring for agent programs ─────────
+
+
+class TestIssue7TestCoverageScoring:
+    """helenagent issue #7: test coverage scoring should recognize
+    Python tests and @test-location annotations."""
+
+    def test_annotation_existing_path(self, tmp_path):
+        """@test-location pointing at an existing file → 8.0"""
+        test_file = tmp_path / "tests" / "test_my_agent.py"
+        test_file.parent.mkdir()
+        test_file.write_text("# test")
+
+        src = f'// @test-location: {test_file}\nfn foo() {{}}\n'
+        scorer = QualityScorer()
+        score = scorer.score_test_coverage("/some/path/agent.helen", source=src)
+        assert score == 8.0
+
+    def test_annotation_nonexistent_path_falls_through(self, tmp_path):
+        """@test-location pointing at a non-existing file → skip."""
+        src = "// @test-location: /does/not/exist.py\nfn foo() {}\n"
+        scorer = QualityScorer()
+        # With no matching file on disk, it should fall through
+        score = scorer.score_test_coverage(str(tmp_path / "x.helen"), source=src)
+        assert score == 2.0
+
+    def test_python_tests_in_tests_dir(self, tmp_path):
+        """tests/ directory with *.py files → 6.0"""
+        tests_dir = tmp_path / "tests"
+        tests_dir.mkdir()
+        (tests_dir / "test_something.py").write_text("# test")
+
+        scorer = QualityScorer()
+        score = scorer.score_test_coverage(str(tmp_path / "main.helen"))
+        assert score == 6.0
+
+    def test_parent_level_matching_py_test(self, tmp_path):
+        """Parent-level tests/ with matching *.py → 7.0"""
+        # Set up: tmp_path/project/agent.helen and tmp_path/tests/test_agent.py
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        tests_dir = tmp_path / "tests"
+        tests_dir.mkdir()
+        (tests_dir / "test_agent.py").write_text("# test")
+
+        agent_file = project_dir / "agent.helen"
+        scorer = QualityScorer()
+        score = scorer.score_test_coverage(str(agent_file))
+        assert score == 7.0
+
+    def test_no_tests_found(self, tmp_path):
+        """No tests anywhere → 2.0"""
+        scorer = QualityScorer()
+        score = scorer.score_test_coverage(str(tmp_path / "lonely.helen"))
+        assert score == 2.0
+
+    def test_integration_with_quality_score(self, tmp_path):
+        """End-to-end: _quality_score picks up the parent-level tests/."""
+        project_dir = tmp_path / "myagent"
+        project_dir.mkdir()
+        tests_dir = tmp_path / "tests"
+        tests_dir.mkdir()
+        (tests_dir / "test_helen_programmer.py").write_text("# test")
+
+        src = "fn helper(): str { return \"ok\" }\n"
+        agent_file = project_dir / "helen_programmer.helen"
+
+        score = _quality_score(src, str(agent_file))
+        assert score["test_coverage"] == 7.0
+
