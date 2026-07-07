@@ -11,13 +11,13 @@ Thresholds:
 - 70%: Layer 2 - Snip
 - 80%: Layer 3 - Microcompact
 - 90%: Layer 4 - Context Collapse
-- 95%: Layer 5 - Auto-Compact
+- 95%: Layer 5 - LLM Semantic Summarization
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Callable
 
 from helen.runtime.history import Message
 
@@ -55,6 +55,7 @@ def graduated_compress(
     history: list[Message],
     usage_ratio: float,
     max_tokens: int = 131072,
+    llm_client: Callable | None = None,
 ) -> tuple[list[Message], str]:
     """Graduated compression pipeline - cheapest move first.
 
@@ -64,6 +65,9 @@ def graduated_compress(
         history: Conversation history
         usage_ratio: Current usage ratio (0.0 - 1.0)
         max_tokens: Maximum context window tokens
+        llm_client: Optional LLM client for Layer 5 semantic summarization.
+                    If None, Layer 5 falls back to structural summarization.
+                    Expected signature: llm_client(messages) -> str
 
     Returns:
         (compressed_history, layer_used)
@@ -76,6 +80,7 @@ def graduated_compress(
         - Each layer only triggers when cheaper layers are insufficient
         - Zero-cost layers (Layer 1-4) never call LLM
         - Layer 5 only triggers when all previous layers are insufficient
+        - Layer 5 uses LLM when llm_client is provided, otherwise structural
     """
     if not history:
         return history, LAYER_NONE
@@ -121,9 +126,10 @@ def graduated_compress(
             current_ratio = new_ratio
             last_layer = LAYER_CONTEXT_COLLAPSE
 
-    # Layer 5: Auto-Compact (95%) - Structural summarization (zero-cost fallback)
+    # Layer 5: Auto-Compact (95%) - LLM semantic summarization (or structural fallback)
     if current_ratio >= COMPRESSION_THRESHOLDS["auto_compact"]:
-        new_history = _auto_compact(current_history)
+        # Use LLM summarization if client is available, otherwise structural
+        new_history = _auto_compact(current_history, llm_client=llm_client, target_tokens=max_tokens // 10)
         new_ratio = _calculate_usage_ratio(new_history, max_tokens)
         if new_ratio < current_ratio:
             current_history = new_history
@@ -274,23 +280,32 @@ def _microcompact(history: list[Message], keep_recent: int = 5) -> list[Message]
 
 
 # ---------------------------------------------------------------------------
-# Phase 2: Layer 4 - Context Collapse
+# Phase 2: Layer 4 - Context Collapse (with temporal preservation)
 # ---------------------------------------------------------------------------
 
 def _context_collapse(history: list[Message]) -> list[Message]:
-    """Layer 4: Archive and project collapsed view.
+    """Layer 4: Archive and project collapsed view with temporal preservation.
 
     Zero-cost operation (no LLM calls).
 
-    Architectural insight: Does NOT modify underlying history.
-    Instead, projects a collapsed view for the model to see.
+    Inspired by RCC (Recurrent Context Compression) and CogCanvas:
+    - Preserves temporal structure via timeline view
+    - Extracts key decision points and task state changes
+    - Segments old messages into time blocks with per-block summaries
+    - Maintains continuity with recent conversation
 
-    For conversations older than CONTEXT_COLLAPSE_THRESHOLD turns:
-    - Generate simple structural summary (no LLM)
-    - Replace old messages with summary in the view
+    Algorithm:
+    1. Segment old messages into time blocks (every ~10 messages)
+    2. For each block, extract:
+       - Time marker (message index range)
+       - File references
+       - Tool usage
+       - User intents / task state
+    3. Generate timeline summary preserving progression
+    4. Return: system + timeline summary + recent messages
 
     Returns:
-        History with collapsed view projected
+        History with collapsed view projected (temporal-aware)
     """
     if len(history) <= CONTEXT_COLLAPSE_THRESHOLD:
         return history  # Not enough messages to collapse
@@ -306,25 +321,30 @@ def _context_collapse(history: list[Message]) -> list[Message]:
     old_msgs = conversation_msgs[:-CONTEXT_COLLAPSE_THRESHOLD]
     recent_msgs = conversation_msgs[-CONTEXT_COLLAPSE_THRESHOLD:]
 
-    # Generate simple structural summary (no LLM)
-    summary_parts = []
-    file_refs = set()
-    tool_refs = set()
+    # Generate temporal timeline summary
+    timeline_parts = [f"[Context Collapse: {len(old_msgs)} turns archived as timeline]"]
 
-    for msg in old_msgs:
-        if msg.role == "user":
-            # Extract file references from user messages
-            if "file" in msg.content.lower():
-                file_refs.add("[file references]")
-        elif msg.role == "assistant":
-            if msg.tool_calls:
-                for tc in msg.tool_calls:
-                    tool_name = tc.get("name", "unknown")
-                    tool_refs.add(tool_name)
+    # Segment into time blocks (every ~10 messages)
+    block_size = 10
+    blocks = []
+    for i in range(0, len(old_msgs), block_size):
+        block = old_msgs[i:i + block_size]
+        blocks.append((i, i + len(block), block))
 
-    summary_text = f"[Conversation summary: {len(old_msgs)} turns archived]\n"
-    summary_text += f"Tools used: {', '.join(sorted(tool_refs)[:5])}\n"
-    summary_text += f"Recent {len(recent_msgs)} turns preserved"
+    # Process each block
+    for block_idx, (start, end, block) in enumerate(blocks):
+        block_summary = _summarize_block(block, start, end)
+        if block_summary:
+            timeline_parts.append(block_summary)
+
+    # Add global statistics
+    global_stats = _extract_global_stats(old_msgs)
+    if global_stats:
+        timeline_parts.append(global_stats)
+
+    timeline_parts.append(f"[Preserved: last {len(recent_msgs)} turns for continuity]")
+
+    summary_text = "\n".join(timeline_parts)
 
     # Create summary message
     summary_msg = Message(
@@ -339,35 +359,142 @@ def _context_collapse(history: list[Message]) -> list[Message]:
         compressed=False,  # Summary itself is not compressed
     )
 
-    # Return: system messages + summary + recent conversation
+    # Return: system messages + timeline summary + recent conversation
     result = system_msgs + [summary_msg] + recent_msgs
 
-    logger.debug("Context collapse: Archived %d turns, projected collapsed view",
-                len(old_msgs))
+    logger.debug(
+        "Context collapse (temporal): Archived %d turns in %d blocks, kept %d recent",
+        len(old_msgs), len(blocks), len(recent_msgs)
+    )
 
     return result
 
 
-# ---------------------------------------------------------------------------
-# Phase 2: Layer 5 - Auto-Compact (Structural Summarization)
-# ---------------------------------------------------------------------------
+def _summarize_block(block: list[Message], start_idx: int, end_idx: int) -> str | None:
+    """Summarize a block of messages with temporal markers.
 
-def _auto_compact(history: list[Message], keep_recent: int = 4) -> list[Message]:
-    """Layer 5: Aggressive structural summarization (zero-cost).
+    Extracts:
+    - Message range (time marker)
+    - File references
+    - Tool usage
+    - User intents / decisions
 
-    Zero-cost operation (no LLM calls).
-
-    More aggressive than Layer 4 (context_collapse):
-    - Archives more messages (all but keep_recent)
-    - Generates richer structural summary with:
-      - File references extracted from messages
-      - Tool usage summary
-      - Key decisions extracted from assistant messages
-      - Error history preserved
-    - Preserves recent conversation for continuity
+    Args:
+        block: Messages in this block
+        start_idx: Start index in original conversation
+        end_idx: End index in original conversation
 
     Returns:
-        History with aggressive summarization applied
+        Block summary string or None if empty
+    """
+    import re
+
+    parts = [f"  [{start_idx}-{end_idx}]"]
+
+    # Extract file references
+    file_refs = set()
+    for msg in block:
+        matches = re.finditer(
+            r'[\w./-]+\.(?:py|js|ts|json|yaml|yml|md|txt|helen|rs|go|java|c|cpp|h|hpp)',
+            msg.content
+        )
+        for m in matches:
+            file_refs.add(m.group())
+    if file_refs:
+        parts.append(f"Files: {', '.join(sorted(file_refs)[:3])}")
+
+    # Extract tool usage
+    tool_counts = {}
+    for msg in block:
+        if msg.role == "assistant" and msg.tool_calls:
+            for tc in msg.tool_calls:
+                name = tc.get("name", "unknown")
+                tool_counts[name] = tool_counts.get(name, 0) + 1
+    if tool_counts:
+        top_tools = sorted(tool_counts.items(), key=lambda x: -x[1])[:3]
+        tool_str = ", ".join(f"{name}({count})" for name, count in top_tools)
+        parts.append(f"Tools: {tool_str}")
+
+    # Extract user intents (first line of user messages)
+    user_intents = []
+    for msg in block:
+        if msg.role == "user" and msg.content:
+            first_line = msg.content.split('\n')[0][:60].strip()
+            if first_line and first_line not in user_intents:
+                user_intents.append(first_line)
+    if user_intents:
+        parts.append(f"Tasks: {'; '.join(user_intents[:2])}")
+
+    # Only return if we have meaningful content
+    if len(parts) > 1:
+        return " | ".join(parts)
+    return None
+
+
+def _extract_global_stats(old_msgs: list[Message]) -> str | None:
+    """Extract global statistics across all old messages.
+
+    Args:
+        old_msgs: All archived messages
+
+    Returns:
+        Global stats string or None if empty
+    """
+    stats_parts = ["[Global]"]
+
+    # Total turns
+    user_turns = sum(1 for m in old_msgs if m.role == "user")
+    assistant_turns = sum(1 for m in old_msgs if m.role == "assistant")
+    stats_parts.append(f"Turns: {user_turns}u/{assistant_turns}a")
+
+    # Total tool calls
+    total_tools = sum(
+        len(m.tool_calls) for m in old_msgs
+        if m.role == "assistant" and m.tool_calls
+    )
+    if total_tools > 0:
+        stats_parts.append(f"Tool calls: {total_tools}")
+
+    # Error count
+    errors = sum(
+        1 for m in old_msgs
+        if m.role == "tool" and "error" in m.content.lower()
+    )
+    if errors > 0:
+        stats_parts.append(f"Errors: {errors}")
+
+    return " ".join(stats_parts) if len(stats_parts) > 1 else None
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: Layer 5 - Auto-Compact (LLM Semantic Summarization)
+# ---------------------------------------------------------------------------
+
+def _auto_compact(
+    history: list[Message],
+    keep_recent: int = 4,
+    llm_client: Callable | None = None,
+    target_tokens: int = 2000,
+) -> list[Message]:
+    """Layer 5: LLM semantic summarization (or structural fallback).
+
+    When llm_client is provided, uses LLMSummarizer for high-quality semantic
+    compression that preserves task objectives, key decisions, and context.
+
+    When llm_client is None, falls back to zero-cost structural summarization:
+    - Archives more messages (all but keep_recent)
+    - Generates rich structural summary with file refs, tool usage, etc.
+    - Preserves recent conversation for continuity
+
+    Args:
+        history: Conversation history to compress
+        keep_recent: Number of recent messages to preserve (default: 4)
+        llm_client: Optional LLM client for semantic summarization.
+                    Expected signature: llm_client(messages) -> str
+        target_tokens: Target token count for the summary (default: 2000)
+
+    Returns:
+        History with summarization applied
     """
     if len(history) <= keep_recent + 2:
         return history  # Not enough to compact
@@ -383,6 +510,63 @@ def _auto_compact(history: list[Message], keep_recent: int = 4) -> list[Message]
     old_msgs = conversation_msgs[:-keep_recent]
     recent_msgs = conversation_msgs[-keep_recent:]
 
+    # Use LLM summarization if client is available
+    if llm_client is not None:
+        try:
+            from helen.runtime.llm_summarizer import LLMSummarizer
+            summarizer = LLMSummarizer(llm_client)
+            summary_text = summarizer.summarize(old_msgs, target_tokens=target_tokens)
+
+            summary_msg = Message(
+                role="system",
+                content=f"[Previous conversation summary - LLM generated]\n\n{summary_text}",
+                tool_calls=[],
+                tool_call_id=None,
+                _token_count=0,
+                _model=history[0]._model if history else None,
+                message_type="system",
+                priority=100,
+                compressed=False,
+            )
+
+            result = system_msgs + [summary_msg] + recent_msgs
+            logger.debug(
+                "Auto-Compact (LLM): Archived %d turns into semantic summary, kept %d recent",
+                len(old_msgs), len(recent_msgs)
+            )
+            return result
+
+        except Exception as e:
+            logger.warning(f"LLM summarization failed, falling back to structural: {e}")
+            # Fall through to structural summarization
+
+    # Fallback: Zero-cost structural summarization
+    return _structural_auto_compact(system_msgs, old_msgs, recent_msgs, history)
+
+
+def _structural_auto_compact(
+    system_msgs: list[Message],
+    old_msgs: list[Message],
+    recent_msgs: list[Message],
+    original_history: list[Message],
+) -> list[Message]:
+    """Zero-cost structural summarization (fallback for Layer 5).
+
+    Extracts structural information without calling LLM:
+    - File references
+    - Tool usage statistics
+    - User intents
+    - Error history
+
+    Args:
+        system_msgs: System messages to preserve
+        old_msgs: Old messages to summarize
+        recent_msgs: Recent messages to preserve
+        original_history: Original history for metadata
+
+    Returns:
+        History with structural summary applied
+    """
     # Build rich structural summary
     summary_parts = [f"[Auto-Compact: {len(old_msgs)} turns archived]"]
 
@@ -444,7 +628,7 @@ def _auto_compact(history: list[Message], keep_recent: int = 4) -> list[Message]
         tool_calls=[],
         tool_call_id=None,
         _token_count=0,
-        _model=history[0]._model if history else None,
+        _model=original_history[0]._model if original_history else None,
         message_type="system",
         priority=100,
         compressed=False,
@@ -453,7 +637,7 @@ def _auto_compact(history: list[Message], keep_recent: int = 4) -> list[Message]
     result = system_msgs + [summary_msg] + recent_msgs
 
     logger.debug(
-        "Auto-Compact: Archived %d turns into summary, kept %d recent",
+        "Auto-Compact (structural): Archived %d turns into summary, kept %d recent",
         len(old_msgs), len(recent_msgs)
     )
 

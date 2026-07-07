@@ -87,13 +87,48 @@ def build_conversation_summary(self, history: list[Message], max_tokens=4096) ->
 ## Token 估算
 
 ```python
-@staticmethod
-def estimate_tokens(text: str) -> int:
-    """v1: 简单启发式 (字符数 / 4)。"""
-    return len(text) // 4
+def estimate_tokens(text: str, model: str | None = None) -> int:
+    """字符类型感知的 Token 估算，支持 tiktoken 精确计数。"""
+    # 1. 优先使用 tiktoken（如果已安装）进行精确计数
+    tiktoken_count = _try_tiktoken_count(text, model)
+    if tiktoken_count is not None:
+        return tiktoken_count
+    
+    # 2. 回退到字符类型感知的启发式方法
+    cjk_count = sum(1 for c in text if _is_cjk(c))
+    total_len = len(text)
+    
+    if cjk_count == 0:
+        # 纯英文/拉丁文：4 字符 ≈ 1 token
+        return max(1, int(total_len / 4.0))
+    elif cjk_count == total_len:
+        # 纯 CJK：1.2 字符 ≈ 1 token（CJK 字符通常占用 1-2 个 token）
+        return max(1, int(total_len / 1.2))
+    else:
+        # 混合内容：CJK 和拉丁文分别按各自比例计算
+        non_cjk = total_len - cjk_count
+        return max(1, int(cjk_count / 1.2 + non_cjk / 4.0))
 ```
 
-未来版本可接入真实 Tokenizer。
+**常量定义** (`helen/runtime/history.py`):
+```python
+CHARS_PER_TOKEN_EN = 4.0    # 英文/拉丁文
+CHARS_PER_TOKEN_CJK = 1.2   # CJK 字符（中日韩）
+CHARS_PER_TOKEN_MIXED = 3.0  # 混合内容估算
+```
+
+**CJK 检测** (`_is_cjk()`):
+- CJK Unified Ideographs (0x4E00-0x9FFF)
+- CJK Extension A/B/C/D
+- CJK Symbols and Punctuation (0x3000-0x303F)
+- Hiragana (0x3040-0x309F)
+- Katakana (0x30A0-0x30FF)
+- Hangul Syllables (0xAC00-0xD7AF)
+
+**tiktoken 集成**（可选）:
+- 如果安装了 `tiktoken`，使用精确计数
+- 支持模型特定的 encoding（如 `cl100k_base`）
+- 回退策略：未知模型使用通用 encoding
 
 ---
 

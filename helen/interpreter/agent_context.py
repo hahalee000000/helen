@@ -80,6 +80,7 @@ class AgentContextManager:
         compression_strategy: str = "graduated",
         working_memory_enabled: bool = True,
         cache_aware_enabled: bool = True,
+        llm_client: Any | None = None,
         *,
         compression_enabled: bool | None = None,
     ):
@@ -91,6 +92,10 @@ class AgentContextManager:
                 "none" | "graduated" | "traditional"
             working_memory_enabled: Enable working memory tracking
             cache_aware_enabled: Enable cache-aware prefix preservation
+            llm_client: Optional LLM client for Layer 5 semantic summarization.
+                        Expected signature: llm_client(messages) -> str
+                        When provided, graduated compression uses LLM for
+                        high-quality semantic compression at Layer 5.
             compression_enabled: (deprecated) Backward compat shim.
                 True → "graduated", False → "none".
                 Only used when compression_strategy is not explicitly set.
@@ -110,6 +115,7 @@ class AgentContextManager:
         self._compression_strategy = compression_strategy
         self.working_memory_enabled = working_memory_enabled
         self.cache_aware_enabled = cache_aware_enabled
+        self.llm_client = llm_client
         self._last_usage_ratio = 0.0
         self._last_cache_stats: CacheStats | None = None
 
@@ -322,7 +328,9 @@ class AgentContextManager:
             return self._apply_traditional(history, max_tokens)
 
         # graduated
-        compressed, layer = graduated_compress(history, usage_ratio, max_tokens)
+        compressed, layer = graduated_compress(
+            history, usage_ratio, max_tokens, llm_client=self.llm_client
+        )
         if layer != "none":
             logger.debug(f"Applied graduated compression: {layer}")
             self._last_usage_ratio = _calculate_usage_ratio(compressed, max_tokens)
@@ -406,7 +414,7 @@ class AgentContextManager:
         else:  # "graduated"
             zone_ratio = _calculate_usage_ratio(compressible, remaining_budget)
             compressed_zone, layer = graduated_compress(
-                compressible, zone_ratio, remaining_budget
+                compressible, zone_ratio, remaining_budget, llm_client=self.llm_client
             )
             if layer != "none":
                 logger.debug(

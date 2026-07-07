@@ -150,13 +150,23 @@ agent 智能助手 {
 ```python
 @dataclass
 class WorkingMemory:
-    task_description: str = ""         # 当前任务描述
-    active_files: list[str]            # 最近 10 个文件
-    recent_decisions: list[str]        # 最近 10 个决策
-    pending_todos: list[str]           # 最近 20 个 TODO
-    error_history: list[dict]          # 最近 5 个错误
-    max_tokens: int = 5000             # 预算（当前仅用于三通道构建，WorkingMemory 内部未强制）
+    task_description: str = ""         # 当前任务描述（永不淘汰，最高优先级）
+    active_files: list[str]            # 活跃文件（受 token 预算淘汰）
+    recent_decisions: list[str]        # 最近决策（受 token 预算淘汰）
+    pending_todos: list[str]           # 待办事项（受 token 预算淘汰）
+    error_history: list[dict]          # 错误记录（受 token 预算淘汰）
+    max_tokens: int = 5000             # token 预算
 ```
+
+**Token 级淘汰（v1.15+）**：`_add_active_file`、`_add_decision`、`_add_todo`、`_add_error` 每次添加后检查总 token 数。超出 `max_tokens` 时，按优先级从低到高淘汰最旧条目：
+
+```
+淘汰顺序（最先淘汰 → 最后淘汰）:
+Pending TODOs → Recent Decisions → Active Files → Error History
+（task_description 永不淘汰）
+```
+
+**与旧版差异**：旧版使用硬编码列表长度上限（10/10/20/5），新版改为 token 预算驱动。条目大小不均时更精确，大条目（长路径、长错误）更快触发淘汰。
 
 ### 3.2 自动更新
 
@@ -220,10 +230,12 @@ Current Task (最后丢弃，必要时截断正文到行边界)
 | Layer 1 | 60% | Budget Reduction | 零 | 替换 >4000 字符的工具结果为引用指针 |
 | Layer 2 | 70% | Snip | 零 | 丢弃过时轮次，保留最近 8 轮 |
 | Layer 3 | 80% | Microcompact | 零 | 清除旧工具结果内容，保留 `tool_use` 决策 ⭐ |
-| Layer 4 | 90% | Context Collapse | 零 | 归档旧轮次，投射结构折叠视图 |
-| Layer 5 | 95% | Auto-Compact | 零 | 零成本结构摘要（提取文件路径、工具计数等） |
+| Layer 4 | 90% | Context Collapse | 零 | 归档旧轮次，**投射时间线视图**（分段摘要，保留时间结构） |
+| Layer 5 | 95% | Auto-Compact | **零或高** | 优先调用 `LLMSummarizer` 进行语义摘要；LLM 不可用时回退到零成本结构摘要 |
 
-**重要澄清**：所有 5 层都是**零成本**的——使用正则/字符串操作，不调用 LLM。`LLMSummarizer`（`runtime/llm_summarizer.py`）是一个独立的模块，提供 LLM 语义摘要功能，但当前**未被集成到压缩管线中**。
+**Layer 4 改进（时间线保留）**：受 RCC (Recurrent Context Compression) 和 CogCanvas 启发，Context Collapse 现在将旧消息分段（每 10 条一块），每段提取文件引用、工具使用、用户意图，生成时间线视图，保留任务进展的时序结构。
+
+**Layer 5 改进（LLM 语义摘要）**：当 `llm_client` 参数提供时，`_auto_compact` 调用 `LLMSummarizer` 生成高质量语义摘要，保留任务目标、关键决策、文件变更等。LLM 不可用时回退到零成本结构摘要（提取文件路径、工具计数、用户意图等）。
 
 ### 4.2 API
 
@@ -232,8 +244,14 @@ def graduated_compress(
     history: list[Message],
     usage_ratio: float,
     max_tokens: int = 131072,
+    llm_client: Callable | None = None,  # 新增：Layer 5 LLM 客户端
 ) -> tuple[list[Message], str]:
     """
+    Args:
+        llm_client: 可选 LLM 客户端，用于 Layer 5 语义摘要。
+                    签名: llm_client(messages) -> str
+                    为 None 时 Layer 5 回退到结构摘要。
+
     Returns:
         (compressed_history, layer_used)
         layer_used: "none" | "budget_reduction" | "snip" |
@@ -248,6 +266,60 @@ def graduated_compress(
 - ❌ 清除旧 `tool_result` content — "工具返回了什么"
 
 效果：用 20% 的 token 保留 80% 的决策上下文。
+
+### 4.4 Context Collapse 时间线视图
+
+**设计思想**：受 CogCanvas 和 RCC 启发，保留对话的时序结构，避免传统摘要丢失"何时发生"的信息。
+
+**算法**：
+1. 将旧消息分段（每 10 条一块）
+2. 每段提取：
+   - 时间标记（消息索引范围）
+   - 文件引用（正则提取路径）
+   - 工具使用（统计 tool_calls）
+   - 用户意图（首行截取）
+3. 生成时间线摘要 + 全局统计
+
+**示例输出**：
+```
+[Context Collapse: 30 turns archived as timeline]
+  [0-10] Files: main.py, utils.py | Tools: read_file(3), write_file(1) | Tasks: Fix auth bug
+  [10-20] Files: auth.py, test_auth.py | Tools: shell_exec(2) | Tasks: Run tests
+  [20-30] Files: config.yaml | Tools: patch_file(1)
+[Global] Turns: 15u/15a | Tool calls: 12 | Errors: 2
+[Preserved: last 20 turns for continuity]
+```
+
+### 4.5 Auto-Compact LLM 语义摘要
+
+**启用方式**：在 `AgentContextManager` 初始化时传入 `llm_client`：
+
+```python
+agent_context = AgentContextManager(
+    compression_strategy="graduated",
+    llm_client=my_llm_client,  # 签名: (messages) -> str
+)
+```
+
+**LLM 摘要格式**（由 `LLMSummarizer` 生成）：
+```
+## Task Objective
+[用户目标]
+
+## Key Decisions
+- [决策 1 及理由]
+
+## File Changes
+- path/to/file.py: [变更内容]
+
+## Completed
+- [已完成项]
+
+## Pending
+- [ ] [待办项]
+```
+
+**回退机制**：LLM 调用失败时自动回退到结构摘要，确保压缩流程不中断。
 
 ---
 
@@ -386,17 +458,15 @@ let result = compress_context(target="stale_turns", keep_recent=8)
 
 ### 9.1 架构问题
 
-| 问题 | 说明 |
-|------|------|
-| **`LLMSummarizer` 未集成** | `runtime/llm_summarizer.py` 提供 LLM 语义摘要，但未被压缩管线或任何生产路径调用 |
-| **`WorkingMemory` 列表长度限制** | 仅依赖硬编码的列表长度上限（10/10/20/5），无 token 级淘汰策略 |
+**已修复**：
+- ✅ `LLMSummarizer` 已集成到 Layer 5：通过 `graduated_compress(llm_client=...)` 传递，LLM 不可用时回退到结构摘要
+- ✅ `WorkingMemory` 已改为 token 级淘汰：`_evict_to_budget()` 按优先级淘汰最旧条目
 
 ### 9.2 文档与代码不符
 
-| 文档 | 不符内容 |
-|------|---------|
-| `wiki/runtime/working_memory.md` | 描述了不存在的方法 (`has_content()`, `format_for_context()`) |
-| `wiki/runtime/history.md` | `estimate_tokens` 描述为 `len(text)//4`，实际有字符类型感知和 CJK 支持 |
+**已修复**：
+- ✅ `wiki/runtime/working_memory.md`：已更新为正确的 API（`to_context(budget_chars)`、Channel 2 预算截断）
+- ✅ `wiki/runtime/history.md`：已更新 `estimate_tokens` 描述，说明字符类型感知和 CJK 支持
 
 ---
 
@@ -451,6 +521,18 @@ visit_llm_act_expr()
 | `helen/core/ast.py` | `ContextConfigNode` AST 节点 |
 | `helen/core/parser.py` | `context {}` 块解析 |
 | `helen/interpreter/llm_mixin.py` | `context_config` 应用、历史更新集成 |
+
+---
+
+## 十二、参考文献
+
+本文档描述的上下文管理系统借鉴了以下学术研究：
+
+- **RCC (Recurrent Context Compression)** — 分段摘要，保留时序结构 → Layer 4 Context Collapse
+- **CogCanvas** — 保留时间细节，避免信息丢失 → Layer 4 时间线视图
+- **DAST (Dynamic Allocation)** — 动态分配压缩 tokens（未来改进方向）
+
+详见 [[runtime/context-compression-research|上下文压缩研究资料]]。
 
 ---
 

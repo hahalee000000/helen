@@ -185,30 +185,37 @@ class WorkingMemory:
                 self._add_error(command, error_msg)
 
     def _add_active_file(self, file_path: str) -> None:
-        """Add a file to active files list, maintaining limit.
+        """Add a file to active files list, maintaining token budget.
+
+        Token-level eviction: when total tokens exceed max_tokens,
+        oldest entries are removed first.
 
         Args:
             file_path: Path to the file
         """
         if file_path not in self.active_files:
             self.active_files.append(file_path)
-            # Keep only last 10 files
-            if len(self.active_files) > 10:
-                self.active_files = self.active_files[-10:]
+            # Token-level eviction: remove oldest until under budget
+            self._evict_to_budget()
 
     def _add_decision(self, decision: str) -> None:
-        """Add a decision to recent decisions list.
+        """Add a decision to recent decisions list, maintaining token budget.
+
+        Token-level eviction: when total tokens exceed max_tokens,
+        oldest entries are removed first.
 
         Args:
             decision: Decision description
         """
         self.recent_decisions.append(decision)
-        # Keep only last 10 decisions
-        if len(self.recent_decisions) > 10:
-            self.recent_decisions = self.recent_decisions[-10:]
+        # Token-level eviction: remove oldest until under budget
+        self._evict_to_budget()
 
     def _add_error(self, command: str, error: str) -> None:
-        """Add an error to error history.
+        """Add an error to error history, maintaining token budget.
+
+        Token-level eviction: when total tokens exceed max_tokens,
+        oldest entries are removed first.
 
         Args:
             command: Command that failed
@@ -218,12 +225,14 @@ class WorkingMemory:
             "command": command,
             "error": error,
         })
-        # Keep only last 5 errors
-        if len(self.error_history) > 5:
-            self.error_history = self.error_history[-5:]
+        # Token-level eviction: remove oldest until under budget
+        self._evict_to_budget()
 
     def _add_todo(self, todo: str) -> None:
-        """Add a TODO item to pending todos list.
+        """Add a TODO item to pending todos list, maintaining token budget.
+
+        Token-level eviction: when total tokens exceed max_tokens,
+        oldest entries are removed first.
 
         Args:
             todo: TODO description
@@ -231,9 +240,8 @@ class WorkingMemory:
         # Avoid duplicates
         if todo not in self.pending_todos:
             self.pending_todos.append(todo)
-            # Keep only last 20 TODOs
-            if len(self.pending_todos) > 20:
-                self.pending_todos = self.pending_todos[-20:]
+            # Token-level eviction: remove oldest until under budget
+            self._evict_to_budget()
 
     def _complete_todo(self, todo: str) -> None:
         """Remove a TODO item when completed.
@@ -243,6 +251,73 @@ class WorkingMemory:
         """
         if todo in self.pending_todos:
             self.pending_todos.remove(todo)
+
+    def _evict_to_budget(self) -> None:
+        """Evict oldest entries to stay within token budget.
+
+        Token-level eviction strategy:
+        1. Estimate total tokens across all lists
+        2. If over max_tokens, remove oldest entries from lowest-priority lists first
+        3. Priority (highest first): task_description > error_history > active_files >
+           recent_decisions > pending_todos
+
+        This ensures the most important information is preserved even when
+        individual entries vary greatly in size.
+        """
+        if self.max_tokens <= 0:
+            return  # No budget constraint
+
+        # Estimate current total tokens
+        # Rough estimate: 4 chars per token for English, but we use a conservative
+        # multiplier for mixed content
+        def estimate_list_tokens(items: list) -> int:
+            total_chars = sum(len(str(item)) for item in items)
+            return total_chars // 4
+
+        # Task description is always preserved (highest priority)
+        task_tokens = len(self.task_description) // 4 if self.task_description else 0
+
+        # Calculate tokens for each list
+        error_tokens = estimate_list_tokens(
+            [f"{e.get('command', '')}{e.get('error', '')}" for e in self.error_history]
+        )
+        file_tokens = estimate_list_tokens(self.active_files)
+        decision_tokens = estimate_list_tokens(self.recent_decisions)
+        todo_tokens = estimate_list_tokens(self.pending_todos)
+
+        total_tokens = task_tokens + error_tokens + file_tokens + decision_tokens + todo_tokens
+
+        # If under budget, nothing to do
+        if total_tokens <= self.max_tokens:
+            return
+
+        # Evict from lowest-priority lists first
+        # Priority order (evict first): pending_todos > recent_decisions > active_files > error_history
+        # task_description is never evicted
+
+        # Phase 1: Evict pending_todos (lowest priority)
+        while todo_tokens > 0 and total_tokens > self.max_tokens and self.pending_todos:
+            removed = self.pending_todos.pop(0)
+            todo_tokens -= len(removed) // 4
+            total_tokens -= len(removed) // 4
+
+        # Phase 2: Evict recent_decisions
+        while decision_tokens > 0 and total_tokens > self.max_tokens and self.recent_decisions:
+            removed = self.recent_decisions.pop(0)
+            decision_tokens -= len(removed) // 4
+            total_tokens -= len(removed) // 4
+
+        # Phase 3: Evict active_files
+        while file_tokens > 0 and total_tokens > self.max_tokens and self.active_files:
+            removed = self.active_files.pop(0)
+            file_tokens -= len(removed) // 4
+            total_tokens -= len(removed) // 4
+
+        # Phase 4: Evict error_history (highest priority list, evict last)
+        while error_tokens > 0 and total_tokens > self.max_tokens and self.error_history:
+            removed = self.error_history.pop(0)
+            error_tokens -= (len(removed.get('command', '')) + len(removed.get('error', ''))) // 4
+            total_tokens -= (len(removed.get('command', '')) + len(removed.get('error', ''))) // 4
 
     def estimate_tokens(self) -> int:
         """Estimate token count for working memory context.

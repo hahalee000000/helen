@@ -123,43 +123,47 @@ class TestWorkingMemory:
         assert "Test failed" in wm.error_history[0]["error"]
 
     def test_active_files_limit(self):
-        """Test that active files list maintains limit."""
-        wm = WorkingMemory()
+        """Test that active files list maintains token budget via eviction."""
+        # Use very small max_tokens to trigger eviction
+        wm = WorkingMemory(max_tokens=20)  # 20 tokens = 80 chars
 
-        # Add 15 files
+        # Add files until we exceed budget
         for i in range(15):
-            wm._add_active_file(f"file{i}.py")
+            wm._add_active_file(f"file{i}.py")  # ~10 chars each = ~3 tokens
 
-        # Should only keep last 10
-        assert len(wm.active_files) == 10
+        # Should have evicted oldest to stay under 20 tokens
+        # 20 tokens / 3 tokens per file ≈ 6-7 files
+        assert len(wm.active_files) < 15
+        # Most recent files should be kept
         assert "file14.py" in wm.active_files
-        assert "file4.py" not in wm.active_files
 
     def test_decisions_limit(self):
-        """Test that decisions list maintains limit."""
-        wm = WorkingMemory()
+        """Test that decisions list maintains token budget via eviction."""
+        # Use very small max_tokens to trigger eviction
+        wm = WorkingMemory(max_tokens=15)  # 15 tokens = 60 chars
 
-        # Add 15 decisions
+        # Add decisions until we exceed budget
         for i in range(15):
-            wm._add_decision(f"Decision {i}")
+            wm._add_decision(f"Decision {i}")  # ~12 chars each = ~3 tokens
 
-        # Should only keep last 10
-        assert len(wm.recent_decisions) == 10
+        # Should have evicted oldest to stay under 15 tokens
+        assert len(wm.recent_decisions) < 15
+        # Most recent decisions should be kept
         assert "Decision 14" in wm.recent_decisions
-        assert "Decision 4" not in wm.recent_decisions
 
     def test_error_history_limit(self):
-        """Test that error history maintains limit."""
-        wm = WorkingMemory()
+        """Test that error history maintains token budget via eviction."""
+        # Use very small max_tokens to trigger eviction
+        wm = WorkingMemory(max_tokens=10)  # 10 tokens = 40 chars
 
-        # Add 8 errors
+        # Add errors until we exceed budget
         for i in range(8):
-            wm._add_error(f"command{i}", f"error{i}")
+            wm._add_error(f"cmd{i}", f"err{i}")  # ~10 chars each = ~3 tokens
 
-        # Should only keep last 5
-        assert len(wm.error_history) == 5
-        assert wm.error_history[-1]["command"] == "command7"
-        assert wm.error_history[0]["command"] == "command3"
+        # Should have evicted oldest to stay under 10 tokens
+        assert len(wm.error_history) < 8
+        # Most recent errors should be kept
+        assert wm.error_history[-1]["command"] == "cmd7"
 
     def test_estimate_tokens(self):
         """Test token estimation."""

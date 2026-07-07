@@ -216,20 +216,51 @@ def build_three_channel_context(
     system_prompt: str,
     working_memory: WorkingMemory,
     history: list[Message],
+    budget: dict[str, float] | None = None,
+    max_tokens: int = 131072,
 ) -> list[dict]:
     """构建三通道上下文。"""
+    if budget is None:
+        budget = {"system": 0.15, "working": 0.50, "history": 0.35}
+    
     messages = []
     
-    # 通道 1: 系统指令
-    messages.append({"role": "system", "content": system_prompt})
+    # 通道 1: 系统指令（15% 预算）
+    system_budget = int(max_tokens * budget["system"])
+    if system_prompt:
+        # 字符级截断（4 字符 ≈ 1 token）
+        max_chars = system_budget * 4
+        truncated_prompt = system_prompt[:max_chars] if len(system_prompt) > max_chars else system_prompt
+        messages.append({"role": "system", "content": truncated_prompt})
     
-    # 通道 2: 工作记忆（注入到系统消息中）
-    if working_memory.has_content():
-        wm_content = working_memory.format_for_context()
-        messages[0]["content"] += "\n\n" + wm_content
+    # 通道 2: 工作记忆（50% 预算，受 max_tokens 限制）
+    working_budget = int(max_tokens * budget["working"])
+    working_budget = min(working_budget, working_memory.max_tokens)
+    working_budget_chars = working_budget * 4
     
-    # 通道 3: 对话历史
-    for msg in history:
+    working_context = working_memory.to_context(budget_chars=working_budget_chars)
+    if working_context:
+        messages.append({
+            "role": "system",
+            "content": f"[Working Memory]\n{working_context}",
+        })
+    
+    # 通道 3: 对话历史（35% 预算）
+    history_budget = int(max_tokens * budget["history"])
+    history_budget_chars = history_budget * 4
+    
+    # 从新到旧填充历史
+    selected_history = []
+    used_chars = 0
+    for msg in reversed(history):
+        msg_chars = len(msg.content)
+        if used_chars + msg_chars <= history_budget_chars:
+            selected_history.insert(0, msg)
+            used_chars += msg_chars
+        else:
+            break
+    
+    for msg in selected_history:
         messages.append({"role": msg.role, "content": msg.content})
     
     return messages
@@ -238,30 +269,55 @@ def build_three_channel_context(
 ### 工作记忆格式化
 
 ```python
-def format_for_context(self) -> str:
-    """格式化工作记忆为上下文字符串。"""
-    parts = []
+def to_context(self, budget_chars: int | None = None) -> str:
+    """格式化工作记忆为上下文字符串。
     
-    if self.active_files:
-        files_str = ", ".join(self.active_files[-5:])
-        parts.append(f"<active_files>{files_str}</active_files>")
+    Args:
+        budget_chars: 可选字符预算。当提供时，按优先级渐进丢弃分区：
+            Pending TODOs (最先丢弃) → Recent Decisions → Active Files → 
+            Recent Errors → Current Task (最后丢弃)
     
-    if self.recent_decisions:
-        decisions_str = "\n".join(f"- {d}" for d in self.recent_decisions[-5:])
-        parts.append(f"<recent_decisions>\n{decisions_str}\n</recent_decisions>")
+    Returns:
+        格式化的 Markdown 字符串
+    """
+    # max_tokens 作为硬上限
+    effective_budget = budget_chars
+    if self.max_tokens > 0:
+        max_chars = self.max_tokens * 4
+        if effective_budget is None:
+            effective_budget = max_chars
+        else:
+            effective_budget = min(effective_budget, max_chars)
     
-    if self.pending_todos:
-        todos_str = "\n".join(f"- {t}" for t in self.pending_todos[:10])
-        parts.append(f"<pending_todos>\n{todos_str}\n</pending_todos>")
+    # 按优先级构建分区（最高优先级优先）
+    sections = []
+    
+    if self.task_description:
+        sections.append((["## Current Task"], [self.task_description, ""]))
     
     if self.error_history:
-        errors_str = "\n".join(
-            f"- {e['command']}: {e['error']}" 
-            for e in self.error_history[-3:]
-        )
-        parts.append(f"<error_history>\n{errors_str}\n</error_history>")
+        body = []
+        for e in self.error_history[-3:]:
+            body.append(f"- Command: {e.get('command', 'unknown')}")
+            body.append(f"  Error: {e.get('error', 'unknown')[:100]}")
+        sections.append((["## Recent Errors"], body))
     
-    return "\n\n".join(parts)
+    if self.active_files:
+        body = [f"- {f}" for f in self.active_files[-5:]]
+        sections.append((["## Active Files"], body))
+    
+    if self.recent_decisions:
+        body = [f"- {d}" for d in self.recent_decisions[-5:]]
+        sections.append((["## Recent Decisions"], body))
+    
+    if self.pending_todos:
+        body = [f"- [ ] {t}" for t in self.pending_todos[:10]]
+        sections.append((["## Pending TODOs"], body))
+    
+    # 如果超出预算，从最低优先级开始丢弃分区
+    # ... (截断逻辑)
+    
+    return "\n".join(parts)
 ```
 
 ---

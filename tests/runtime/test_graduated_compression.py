@@ -198,8 +198,8 @@ class TestContextCollapse:
         # Should have system + summary + recent 20 turns
         assert len(result) < len(history)
         assert result[0].role == "system"
-        # Should have a summary message
-        summary_msgs = [m for m in result if "summary" in m.content.lower()]
+        # Should have a summary/timeline message
+        summary_msgs = [m for m in result if "archived" in m.content.lower() or "timeline" in m.content.lower() or "context collapse" in m.content.lower()]
         assert len(summary_msgs) > 0
 
     def test_no_collapse_when_few_turns(self):
@@ -312,3 +312,140 @@ class TestGraduatedCompress:
 
         assert layer == LAYER_NONE
         assert result == []
+
+
+class TestAutoCompactLLMIntegration:
+    """Tests for Layer 5 LLM semantic summarization integration."""
+
+    def test_auto_compact_without_llm_client_uses_structural(self):
+        """Without llm_client, Layer 5 uses structural summarization."""
+        from helen.runtime.graduated_compression import _auto_compact
+
+        history = []
+        for i in range(20):
+            history.append(Message(
+                role="user" if i % 2 == 0 else "assistant",
+                content=f"Message {i}",
+                tool_calls=[],
+                tool_call_id=None,
+                _token_count=10,
+                _model="qwen3.7-plus",
+            ))
+
+        # Without llm_client
+        result = _auto_compact(history, keep_recent=4, llm_client=None)
+
+        # Should use structural summary
+        assert len(result) < len(history)
+        summary_msgs = [m for m in result if "Auto-Compact" in m.content]
+        assert len(summary_msgs) > 0
+
+    def test_auto_compact_with_llm_client_uses_semantic(self):
+        """With llm_client, Layer 5 uses LLM semantic summarization."""
+        from helen.runtime.graduated_compression import _auto_compact
+
+        history = []
+        for i in range(20):
+            history.append(Message(
+                role="user" if i % 2 == 0 else "assistant",
+                content=f"Message {i}",
+                tool_calls=[],
+                tool_call_id=None,
+                _token_count=10,
+                _model="qwen3.7-plus",
+            ))
+
+        # Mock LLM client
+        def mock_llm_client(messages):
+            return "LLM-generated semantic summary of conversation"
+
+        result = _auto_compact(history, keep_recent=4, llm_client=mock_llm_client)
+
+        # Should use LLM summary
+        assert len(result) < len(history)
+        summary_msgs = [m for m in result if "LLM-generated" in m.content]
+        assert len(summary_msgs) > 0
+
+    def test_auto_compact_llm_failure_falls_back_to_structural(self):
+        """When LLM fails, falls back to structural summarization."""
+        from helen.runtime.graduated_compression import _auto_compact
+
+        history = []
+        for i in range(20):
+            history.append(Message(
+                role="user" if i % 2 == 0 else "assistant",
+                content=f"Message {i}",
+                tool_calls=[],
+                tool_call_id=None,
+                _token_count=10,
+                _model="qwen3.7-plus",
+            ))
+
+        # Mock LLM client that raises exception
+        def failing_llm_client(messages):
+            raise RuntimeError("LLM unavailable")
+
+        result = _auto_compact(history, keep_recent=4, llm_client=failing_llm_client)
+
+        # Should still produce a summary (either LLM fallback or structural)
+        assert len(result) < len(history)
+        # LLMSummarizer has its own fallback that produces "Conversation Summary - Auto-generated fallback"
+        # which gets wrapped in "[Previous conversation summary - LLM generated]"
+        # Or _auto_compact catches exception and falls back to structural "Auto-Compact"
+        summary_msgs = [m for m in result if
+                       "Auto-Compact" in m.content or
+                       "Previous conversation summary" in m.content]
+        assert len(summary_msgs) > 0
+
+
+class TestContextCollapseTimeline:
+    """Tests for Layer 4 Context Collapse timeline preservation."""
+
+    def test_context_collapse_generates_timeline(self):
+        """Context Collapse generates timeline with segmented blocks."""
+        from helen.runtime.graduated_compression import _context_collapse
+
+        history = [
+            Message(role="system", content="System", tool_calls=[], tool_call_id=None, _token_count=50, _model="qwen3.7-plus"),
+        ]
+        for i in range(30):
+            history.append(Message(
+                role="user" if i % 2 == 0 else "assistant",
+                content=f"Message {i}",
+                tool_calls=[{"name": "read_file", "args": {}}] if i % 3 == 0 else [],
+                tool_call_id=None,
+                _token_count=10,
+                _model="qwen3.7-plus",
+            ))
+
+        result = _context_collapse(history)
+
+        # Should have timeline message
+        assert len(result) < len(history)
+        timeline_msgs = [m for m in result if "timeline" in m.content.lower() or "archived" in m.content.lower()]
+        assert len(timeline_msgs) > 0
+
+        # Timeline should contain segment markers
+        timeline_content = timeline_msgs[0].content
+        assert "[0-10]" in timeline_content or "[0-" in timeline_content
+
+    def test_context_collapse_preserves_global_stats(self):
+        """Context Collapse includes global statistics."""
+        from helen.runtime.graduated_compression import _context_collapse
+
+        history = []
+        for i in range(30):
+            history.append(Message(
+                role="user" if i % 2 == 0 else "assistant",
+                content=f"Message {i}",
+                tool_calls=[],
+                tool_call_id=None,
+                _token_count=10,
+                _model="qwen3.7-plus",
+            ))
+
+        result = _context_collapse(history)
+
+        # Should have global stats
+        summary_msgs = [m for m in result if "[Global]" in m.content]
+        assert len(summary_msgs) > 0
