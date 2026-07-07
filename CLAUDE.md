@@ -24,7 +24,7 @@ helen check <file.helen>        # Validate syntax/semantics without executing
 helen repl                      # Interactive REPL
 
 # Testing
-pytest                              # Run all 2615+ tests
+pytest                              # Run all 2624+ tests
 pytest tests/core/                  # Run tests for a specific module
 pytest tests/execution/test_functions.py::test_function_call -v  # Single test
 helen test <file.helen>             # Run Helen's built-in test framework
@@ -151,7 +151,7 @@ Tests in `tests/` mirror the source structure:
 - `lsp/` — Language Server
 - `cli/` — CLI and REPL
 
-**2615+ tests passing** (Python pytest)
+**2624+ tests passing** (Python pytest)
 
 Helen also has a built-in test framework (`helen/stdlib/test.py`) with `test()`, `assert_equal()`, `assert_true()`, `assert_throws()`, expect chains, suites, filtering, JSON output, watch mode, and coverage tracking.
 
