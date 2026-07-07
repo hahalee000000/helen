@@ -60,7 +60,9 @@ Cite specific files and functions from the source code when appropriate."""
         let context = build_context()
         
         // Stream LLM response chunk by chunk for real-time output
-        llm stream context
+        llm act context on_chunk fn(chunk: str) {
+            print(chunk)
+        }
     }
 }
 

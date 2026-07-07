@@ -18,8 +18,10 @@ agent HelenChat(user_input: str) {
     temperature 0.7
     
     main {
-        // 使用 llm stream 流式输出
-        llm stream user_input
+        // 使用 llm act + on_chunk 流式输出
+        llm act user_input on_chunk fn(chunk: str) {
+            print(chunk)
+        }
     }
 }
 

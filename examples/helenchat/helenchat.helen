@@ -85,7 +85,9 @@ When given a complex task:
         }
 
         // Execute with LLM using streaming (tools from the tools = [...] allowlist)
-        llm stream full_prompt
+        llm act full_prompt on_chunk fn(chunk: str) {
+            print(chunk)
+        }
     }
 }
 

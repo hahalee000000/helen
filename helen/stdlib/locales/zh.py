@@ -300,6 +300,8 @@ ALIASES: dict[str, str] = {
     # ── Context (上下文管理) ──────────────────────────────────────
     "清除上下文": "clear_context",
     "压缩上下文": "compress_context",
+    "消息分类": "classify_message",
+    "定向压缩": "compress_context_target",
 
     # ── File Search (文件搜索) ────────────────────────────────────
     "查找文件": "glob_files",
