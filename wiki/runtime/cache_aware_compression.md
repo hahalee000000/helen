@@ -1,5 +1,7 @@
 # 缓存感知压缩 (Cache-Aware Compression)
 
+> ⚠️ **本文档已被 [[runtime/context-management|上下文管理架构]] 取代。** 本页保留供历史参考。当前实现中缓存感知作为包裹层（而非独立策略）集成在 `AgentContextManager` 中。请参阅新文档。
+
 > Phase 6 | `helen/runtime/cache_aware_compression.py` | 测试: `tests/runtime/test_cache_aware_compression.py`
 
 ---

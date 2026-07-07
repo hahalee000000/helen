@@ -1,5 +1,7 @@
 # 工作记忆 (Working Memory)
 
+> ⚠️ **本文档已被 [[runtime/context-management|上下文管理架构]] 取代。** 本页保留供历史参考，部分内容已过时。请参阅新文档了解最新 API（`to_context(budget_chars)`、Channel 2 预算截断）。
+
 > Phase 1 | `helen/runtime/working_memory.py` | 测试: `tests/runtime/test_working_memory.py`
 
 ---

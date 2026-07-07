@@ -1,7 +1,7 @@
 # Helen 语言 Wiki 索引
 
 > **Helen** — A Prompt-first Agent Programming Language
-> 版本: v1.15 | 状态: Phase 0-10 全部实现 + Phase 1-7 上下文管理增强 + 中文语法 + Agent 作用域隔离 | 测试: 2583 passed
+> 版本: v1.15 | 状态: Phase 0-10 全部实现 + Phase 1-7 上下文管理增强 + 中文语法 + Agent 作用域隔离 | 测试: 2606 passed
 
 ---
 
@@ -31,13 +31,12 @@
 - [[runtime/llm-runtime|LLM 运行时]] — route/choose/act 接口、取消机制
 - [[runtime/prompt-builder|提示词构建]] — 两层渐进式披露、模板渲染
 - [[runtime/memory|内存系统]] — FileMemoryProvider、InMemoryProvider
+- [[runtime/context-management|上下文管理架构]] — 统一入口、三通道、渐进压缩、缓存感知、工作记忆（**权威文档**）
 - [[runtime/history|历史管理]] — Token 预算、截断策略、conversation_summary
-- [[runtime/working_memory|工作记忆]] — 自动跟踪文件、决策、TODO、错误 (Phase 1)
-- [[runtime/graduated_compression|渐进压缩]] — 五层策略 (Phase 2-5)
-- [[runtime/cache_aware_compression|缓存感知压缩]] — 缓存友好策略 (Phase 6)
-- [[runtime/agent_context|Agent 上下文管理器]] — 集成工作记忆和压缩 (Phase 7)
 - [[runtime/import|模块系统]] — 多格式导入、循环检测、路径安全
 - [[runtime/skills|技能系统]] — 三层搜索架构、两层披露机制
+
+> 注：`runtime/working_memory`、`runtime/graduated_compression`、`runtime/cache_aware_compression`、`runtime/agent_context` 的内容已合并到 `runtime/context-management`。旧页面仍保留但不再维护。
 
 ### 六、工具链
 - [[toolchain/cli|命令行工具]] — `helen <file>/check/test/quality/repl/doc/init/lsp`

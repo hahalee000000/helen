@@ -1,5 +1,7 @@
 # Agent 上下文管理器 (AgentContextManager)
 
+> ⚠️ **本文档已被 [[runtime/context-management|上下文管理架构]] 取代。** 本页保留供历史参考，部分内容已过时（如 `compression_enabled: bool` API、`CacheAwareCompressor` 直接调用）。请参阅新文档了解统一压缩架构。
+
 > Phase 7 | `helen/interpreter/agent_context.py` | 测试: `tests/interpreter/test_phase7_agent_context.py`
 
 ---

@@ -1,5 +1,7 @@
 # 渐进压缩管线 (Graduated Compression Pipeline)
 
+> ⚠️ **本文档已被 [[runtime/context-management|上下文管理架构]] 取代。** 本页保留供历史参考。特别注意：Layer 5 (Auto-Compact) 是零成本结构摘要，**不调用 LLM**（本页部分描述已过时）。请参阅新文档。
+
 > Phase 2-5 | `helen/runtime/graduated_compression.py` | 测试: `tests/runtime/test_graduated_compression.py`
 
 ---
