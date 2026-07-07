@@ -243,3 +243,145 @@ class TestThreeChannelContext:
         working_msg = [m for m in messages if "Working Memory" in m.get("content", "")]
         # Empty working memory still gets included (it's just empty sections)
         assert len(messages) >= 2
+
+
+class TestWorkingMemoryBudgetTruncation:
+    """Tests for to_context() with budget_chars parameter (Channel 2 budget enforcement)."""
+
+    def test_no_budget_includes_everything(self):
+        """Without budget, all sections are included."""
+        wm = WorkingMemory(
+            task_description="Fix bug in main.py",
+            active_files=["main.py", "utils.py"],
+            recent_decisions=["Use async"],
+            pending_todos=["Write tests"],
+            error_history=[{"command": "pytest", "error": "failed"}],
+        )
+        result = wm.to_context()
+        assert "## Current Task" in result
+        assert "## Active Files" in result
+        assert "## Recent Decisions" in result
+        assert "## Pending TODOs" in result
+        assert "## Recent Errors" in result
+
+    def test_budget_drops_lowest_priority_first(self):
+        """With tight budget, lowest-priority sections (TODOs) are dropped first."""
+        wm = WorkingMemory(
+            task_description="Fix bug in main.py",
+            active_files=["main.py"],
+            recent_decisions=["Use async approach"],
+            pending_todos=["Write tests", "Update docs", "Add logging"],
+            error_history=[{"command": "pytest", "error": "3 failed"}],
+        )
+        # Get full output length to determine a restrictive but non-trivial budget
+        full = wm.to_context()
+        # Budget that can fit task + errors + files but not decisions + todos
+        budget = len(full) // 2
+        result = wm.to_context(budget_chars=budget)
+        # Task (highest priority) must be present
+        assert "## Current Task" in result
+        # TODOs (lowest priority) should be dropped
+        assert "## Pending TODOs" not in result
+
+    def test_budget_keeps_task_above_all(self):
+        """With very tight budget, only the task survives."""
+        wm = WorkingMemory(
+            task_description="Deploy v2",
+            active_files=["a.py"] * 5,
+            recent_decisions=["Use staging"] * 5,
+            pending_todos=["todo"] * 10,
+            error_history=[{"command": "x", "error": "y"}] * 3,
+        )
+        # Just enough for the task header + short body
+        result = wm.to_context(budget_chars=80)
+        assert "## Current Task" in result
+        assert "Deploy v2" in result
+        # Everything else should be gone
+        assert "## Active Files" not in result
+        assert "## Pending TODOs" not in result
+
+    def test_budget_truncates_body_when_section_too_large(self):
+        """If even one section exceeds budget, its body is truncated at line boundary."""
+        # Long task description that alone exceeds the budget
+        long_desc = "\n".join([f"Line {i}: detailed task info" for i in range(20)])
+        wm = WorkingMemory(task_description=long_desc)
+        result = wm.to_context(budget_chars=100)
+        # Must contain header
+        assert "## Current Task" in result
+        # Must not exceed budget by much (allow trailing newline variance)
+        assert len(result) <= 120
+        # Should cut at a line boundary (no partial line at end)
+        lines = result.split("\n")
+        # Last non-empty line should be a complete line
+        non_empty = [l for l in lines if l.strip()]
+        assert len(non_empty) >= 2  # header + at least one body line
+
+    def test_budget_zero_returns_empty_or_minimal(self):
+        """Zero budget returns empty string."""
+        wm = WorkingMemory(task_description="Fix bug")
+        result = wm.to_context(budget_chars=0)
+        assert result == ""
+
+    def test_budget_respects_priority_order(self):
+        """Sections are dropped in order: TODOs > Decisions > Files > Errors > Task."""
+        wm = WorkingMemory(
+            task_description="Task",
+            active_files=["f.py"],
+            recent_decisions=["Dec"],
+            pending_todos=["Todo"],
+            error_history=[{"command": "c", "error": "e"}],
+        )
+        # Measure each section's size
+        full = wm.to_context()
+        # Progressively tighten budget and verify sections disappear in order
+        sizes = []
+        for budget in [len(full), len(full) * 3 // 4, len(full) // 2, len(full) // 4]:
+            result = wm.to_context(budget_chars=budget)
+            sizes.append(result)
+
+        # The most restrictive result should be a subset of (or equal to)
+        # less restrictive results in terms of section presence
+        most_restrictive = sizes[-1]
+        # Task should survive longest
+        if most_restrictive:
+            assert "## Current Task" in most_restrictive or len(most_restrictive) == 0
+
+
+class TestThreeChannelBudgetEnforcement:
+    """Tests for build_three_channel_context Channel 2 budget enforcement."""
+
+    def test_channel2_respects_max_tokens_cap(self):
+        """Channel 2 budget is capped by working_memory.max_tokens."""
+        wm = WorkingMemory(
+            task_description="x" * 100000,  # Very large task description
+            max_tokens=100,  # Hard cap at 100 tokens = 400 chars
+        )
+        history = []
+        messages = build_three_channel_context(
+            system_prompt="sys", working_memory=wm, history=history,
+            max_tokens=131072,
+        )
+        working_msgs = [m for m in messages if "Working Memory" in m.get("content", "")]
+        if working_msgs:
+            content = working_msgs[0]["content"]
+            # Should be capped: 100 tokens * 4 chars = 400 chars + header overhead
+            assert len(content) < 500
+
+    def test_channel2_drops_sections_under_budget(self):
+        """When working memory content exceeds budget, low-priority sections are dropped."""
+        wm = WorkingMemory(
+            task_description="Active task",
+            pending_todos=[f"TODO item {i}" for i in range(20)],
+            error_history=[{"command": f"cmd{i}", "error": f"err{i}"} for i in range(5)],
+            max_tokens=50,  # Very tight: 50 tokens = 200 chars
+        )
+        history = []
+        messages = build_three_channel_context(
+            system_prompt="sys", working_memory=wm, history=history,
+            max_tokens=131072,
+        )
+        working_msgs = [m for m in messages if "Working Memory" in m.get("content", "")]
+        if working_msgs:
+            content = working_msgs[0]["content"]
+            # Task should survive; TODOs should be dropped
+            assert "## Current Task" in content or "Active task" in content

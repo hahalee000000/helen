@@ -178,7 +178,7 @@ class LlmMixin:
             ctx_config = self._current_agent.context_config
             if ctx_config is not None and hasattr(self, '_agent_context') and self._agent_context is not None:
                 # Update AgentContextManager with agent-specific settings
-                self._agent_context.compression_enabled = (ctx_config.compression != "none")
+                self._agent_context.compression_strategy = ctx_config.compression
                 self._agent_context.working_memory_enabled = ctx_config.working_memory
                 self._agent_context.cache_aware_enabled = ctx_config.cache_aware
                 if ctx_config.working_memory_tokens > 0:

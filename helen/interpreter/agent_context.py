@@ -2,11 +2,28 @@
 
 Provides automatic integration of:
 - WorkingMemory: Track active files, decisions, todos, errors
-- Graduated compression: Apply progressive compression strategies
+- Unified compression: "none" | "graduated" | "traditional"
+- Cache-aware wrapping: Preserves stable prefix for prompt cache
 - Three-channel context: Build system + working memory + history
 
+Compression architecture:
+
+    prepare_context()
+        └─> _compress_history()
+              ├─ strategy="none"       → no compression
+              ├─ strategy="traditional" → HistoryManager.enforce_limit()
+              └─ strategy="graduated"   → graduated_compress() (5-layer pipeline)
+              Then, if cache_aware_enabled:
+                  └─ _apply_cache_aware_wrap()
+                       preserves first N messages (cache zone)
+                       re-applies base strategy to compressible zone only
+
 Usage:
-    agent_context = AgentContextManager(working_memory_tokens=5000)
+    agent_context = AgentContextManager(
+        working_memory_tokens=5000,
+        compression_strategy="graduated",
+        cache_aware_enabled=True,
+    )
 
     # After each history addition
     agent_context.update_working_memory(message, role)
@@ -26,10 +43,18 @@ from typing import Any
 
 from helen.runtime.working_memory import WorkingMemory, build_three_channel_context
 from helen.runtime.graduated_compression import graduated_compress, _calculate_usage_ratio
-from helen.runtime.cache_aware_compression import CacheAwareCompressor, CacheStats
+from helen.runtime.cache_aware_compression import (
+    CacheAwareCompressor,
+    CacheStats,
+    DEFAULT_CACHE_ZONE_RATIO,
+    MIN_CACHE_ZONE_MESSAGES,
+)
 from helen.runtime.history import Message
 
 logger = logging.getLogger(__name__)
+
+# Valid compression strategies
+COMPRESSION_STRATEGIES = frozenset({"none", "graduated", "traditional"})
 
 
 class AgentContextManager:
@@ -41,33 +66,81 @@ class AgentContextManager:
     - Pending todos (extracted from comments)
     - Error history (from shell_exec failures)
 
-    Automatically applies:
-    - Graduated compression when history grows
-    - Three-channel context building for LLM calls
+    Compression architecture (unified entry point):
+    - compression_strategy controls the base algorithm:
+        "none"       → no compression
+        "graduated"  → 5-layer graduated pipeline (default)
+        "traditional" → HistoryManager single-layer compress
+    - cache_aware_enabled optionally wraps the base algorithm
+      to preserve the first N messages (cache-friendly zone)
     """
 
     def __init__(
         self,
         working_memory_tokens: int = 5000,
-        compression_enabled: bool = True,
+        compression_strategy: str = "graduated",
         working_memory_enabled: bool = True,
         cache_aware_enabled: bool = True,
+        *,
+        compression_enabled: bool | None = None,
     ):
         """Initialize agent context manager.
 
         Args:
             working_memory_tokens: Token budget for working memory
-            compression_enabled: Enable graduated compression
+            compression_strategy: Compression strategy
+                "none" | "graduated" | "traditional"
             working_memory_enabled: Enable working memory tracking
-            cache_aware_enabled: Enable cache-aware compression (Phase 6)
+            cache_aware_enabled: Enable cache-aware prefix preservation
+            compression_enabled: (deprecated) Backward compat shim.
+                True → "graduated", False → "none".
+                Only used when compression_strategy is not explicitly set.
         """
+        # Backward compatibility: compression_enabled → compression_strategy
+        if compression_enabled is not None:
+            compression_strategy = "graduated" if compression_enabled else "none"
+
+        if compression_strategy not in COMPRESSION_STRATEGIES:
+            logger.warning(
+                f"Unknown compression strategy {compression_strategy!r}, "
+                f"falling back to 'graduated'"
+            )
+            compression_strategy = "graduated"
+
         self.working_memory = WorkingMemory(max_tokens=working_memory_tokens)
-        self.compression_enabled = compression_enabled
+        self._compression_strategy = compression_strategy
         self.working_memory_enabled = working_memory_enabled
         self.cache_aware_enabled = cache_aware_enabled
         self._last_usage_ratio = 0.0
         self._last_cache_stats: CacheStats | None = None
-        self._cache_compressor = CacheAwareCompressor() if cache_aware_enabled else None
+        self._cache_compressor = CacheAwareCompressor()
+
+    # -- Backward compatibility property for compression_enabled --
+
+    @property
+    def compression_enabled(self) -> bool:
+        """Whether any compression is enabled (strategy != 'none')."""
+        return self._compression_strategy != "none"
+
+    @compression_enabled.setter
+    def compression_enabled(self, value: bool) -> None:
+        """Set compression via boolean (backward compat)."""
+        self._compression_strategy = "graduated" if value else "none"
+
+    @property
+    def compression_strategy(self) -> str:
+        """Current compression strategy: 'none' | 'graduated' | 'traditional'."""
+        return self._compression_strategy
+
+    @compression_strategy.setter
+    def compression_strategy(self, value: str) -> None:
+        if value not in COMPRESSION_STRATEGIES:
+            logger.warning(
+                f"Unknown compression strategy {value!r}, "
+                f"falling back to 'graduated'"
+            )
+            value = "graduated"
+        self._compression_strategy = value
 
     def update_from_message(self, content: str, role: str) -> None:
         """Update working memory from a message.
@@ -165,7 +238,7 @@ class AgentContextManager:
         """Prepare three-channel context for LLM call.
 
         Applies:
-        1. Graduated compression to history (if enabled)
+        1. Compression to history (via unified _compress_history)
         2. Three-channel context building (if working memory enabled)
 
         Args:
@@ -177,34 +250,8 @@ class AgentContextManager:
         Returns:
             List of message dicts ready for LLM API
         """
-        # Apply graduated compression if enabled
-        if self.compression_enabled and len(history) > 10:
-            # Calculate actual usage_ratio (0.0-1.0) before passing to graduated_compress
-            total_tokens = sum(msg.token_count for msg in history)
-            usage_ratio = total_tokens / max_tokens if max_tokens > 0 else 0.0
-
-            # Phase 6: Use cache-aware compression if enabled (replaces graduated compression)
-            if self.cache_aware_enabled and self._cache_compressor is not None:
-                compressed_history, cache_stats = self._cache_compressor.compress(
-                    history, max_tokens, usage_ratio
-                )
-                self._last_cache_stats = cache_stats
-                if cache_stats.messages_modified > 0:
-                    logger.debug(
-                        f"Applied cache-aware compression: "
-                        f"strategy={cache_stats.compression_strategy}, "
-                        f"cache_hit={cache_stats.estimated_cache_hit}, "
-                        f"tokens_saved={cache_stats.tokens_saved}"
-                    )
-            else:
-                compressed_history, layer = graduated_compress(history, usage_ratio, max_tokens)
-                if layer != "none":
-                    logger.debug(f"Applied graduated compression: {layer}")
-                    self._last_usage_ratio = sum(
-                        msg.token_count for msg in compressed_history
-                    ) / max_tokens if max_tokens > 0 else 0.0
-        else:
-            compressed_history = history
+        # Apply compression via unified entry point
+        compressed_history = self._compress_history(history, max_tokens)
 
         # Build three-channel context if working memory enabled
         if self.working_memory_enabled:
@@ -227,6 +274,177 @@ class AgentContextManager:
                 })
 
         return messages
+
+    def _compress_history(
+        self,
+        history: list[Message],
+        max_tokens: int,
+    ) -> list[Message]:
+        """Unified compression entry point.
+
+        Composition logic:
+        1. Select base compression via compression_strategy:
+           - "none": no compression
+           - "graduated": 5-layer graduated pipeline
+           - "traditional": HistoryManager single-layer compress
+        2. If cache_aware_enabled AND base strategy is not "none":
+           preserve first N messages (cache zone), re-apply base
+           strategy only to the compressible suffix.
+
+        Args:
+            history: Conversation history
+            max_tokens: Maximum context window tokens
+
+        Returns:
+            Compressed history
+        """
+        strategy = self._compression_strategy
+
+        # Skip compression entirely
+        if strategy == "none" or len(history) <= 10:
+            return history
+
+        # Calculate global usage ratio
+        usage_ratio = _calculate_usage_ratio(history, max_tokens)
+
+        # Step 1: Apply base compression strategy
+        if strategy == "traditional":
+            base_compressed = self._apply_traditional(history, max_tokens)
+        else:  # "graduated"
+            base_compressed, layer = graduated_compress(
+                history, usage_ratio, max_tokens
+            )
+            if layer != "none":
+                logger.debug(f"Applied graduated compression: {layer}")
+                self._last_usage_ratio = _calculate_usage_ratio(
+                    base_compressed, max_tokens
+                )
+
+        # Step 2: Cache-aware wrapping (preserves prefix, re-compresses suffix)
+        if self.cache_aware_enabled:
+            result = self._apply_cache_aware_wrap(
+                base_compressed, history, max_tokens
+            )
+            return result
+
+        return base_compressed
+
+    def _apply_traditional(
+        self,
+        history: list[Message],
+        max_tokens: int,
+    ) -> list[Message]:
+        """Traditional single-layer compression via HistoryManager.
+
+        Uses HistoryManager.enforce_limit() which applies summarize or
+        truncate based on its configured compression_mode (defaults to
+        summarize). This is the pre-v1.15 behavior.
+
+        Args:
+            history: Conversation history
+            max_tokens: Maximum context window tokens
+
+        Returns:
+            Compressed history
+        """
+        from helen.runtime.history import HistoryManager
+
+        manager = HistoryManager(context_window=max_tokens)
+        return manager.enforce_limit(list(history))
+
+    def _apply_cache_aware_wrap(
+        self,
+        base_compressed: list[Message],
+        original_history: list[Message],
+        max_tokens: int,
+    ) -> list[Message]:
+        """Cache-aware wrapping: preserve prefix, re-compress suffix.
+
+        Splits history at the cache zone boundary:
+        - Cache zone (first N messages): kept from ORIGINAL history
+          unchanged, ensuring prompt cache hits.
+        - Compressible zone (remaining messages): re-apply the base
+          compression strategy with adjusted budget.
+
+        This composes cache-awareness with ANY base strategy, instead
+        of being a separate mutually-exclusive path.
+
+        Args:
+            base_compressed: Result from base compression (unused directly;
+                we re-compress the suffix from original for correctness)
+            original_history: The uncompressed original history
+            max_tokens: Maximum context window tokens
+
+        Returns:
+            History with cache zone preserved and suffix compressed
+        """
+        cache_zone_end = self._identify_cache_zone(len(original_history))
+
+        if cache_zone_end >= len(original_history):
+            # Entire history is cache zone — nothing to compress
+            return original_history
+
+        # Cache zone: untouched prefix from original
+        cache_zone = original_history[:cache_zone_end]
+        cache_tokens = sum(m.token_count for m in cache_zone)
+
+        # Compressible zone: suffix from original
+        compressible = original_history[cache_zone_end:]
+        remaining_budget = max(1, max_tokens - cache_tokens)
+
+        # Re-apply base strategy to compressible zone only
+        if self._compression_strategy == "traditional":
+            compressed_zone = self._apply_traditional(
+                compressible, remaining_budget
+            )
+        else:  # "graduated"
+            zone_ratio = _calculate_usage_ratio(compressible, remaining_budget)
+            compressed_zone, layer = graduated_compress(
+                compressible, zone_ratio, remaining_budget
+            )
+            if layer != "none":
+                logger.debug(
+                    f"Cache-aware + graduated: applied {layer} to compressible zone"
+                )
+
+        # Track cache stats for reporting
+        messages_modified = sum(
+            1 for m in compressed_zone
+            if getattr(m, "compressed", False)
+        )
+        self._last_cache_stats = CacheStats(
+            cache_zone_size=len(cache_zone),
+            compressible_zone_size=len(compressible),
+            messages_modified=messages_modified,
+            cache_zone_preserved=True,
+            compression_strategy=f"cache_aware+{self._compression_strategy}",
+        )
+
+        return cache_zone + compressed_zone
+
+    def _identify_cache_zone(self, history_length: int) -> int:
+        """Calculate cache zone size (number of messages to preserve).
+
+        Mirrors CacheAwareCompressor._identify_cache_zone logic.
+
+        Args:
+            history_length: Total number of messages in history
+
+        Returns:
+            Number of messages in the cache zone
+        """
+        if history_length == 0:
+            return 0
+
+        ratio_based = int(history_length * DEFAULT_CACHE_ZONE_RATIO)
+        cache_zone_size = max(ratio_based, MIN_CACHE_ZONE_MESSAGES)
+        cache_zone_size = min(cache_zone_size, history_length)
+
+        # Leave room for at least 2 messages in compressible zone
+        if history_length - cache_zone_size < 2:
+            cache_zone_size = max(0, history_length - 2)
+
+        return cache_zone_size
 
     def _extract_file_references(self, content: str) -> list[str]:
         """Extract file references from content.
@@ -341,6 +559,7 @@ class AgentContextManager:
         """
         stats = {
             "working_memory_enabled": self.working_memory_enabled,
+            "compression_strategy": self._compression_strategy,
             "compression_enabled": self.compression_enabled,
             "cache_aware_enabled": self.cache_aware_enabled,
             "active_files": len(self.working_memory.active_files),

@@ -37,45 +37,105 @@ class WorkingMemory:
     # Token budget for working memory
     max_tokens: int = 5000
 
-    def to_context(self) -> str:
+    def to_context(self, budget_chars: int | None = None) -> str:
         """Format working memory as context for the LLM.
+
+        Args:
+            budget_chars: Optional character budget. When provided, sections
+                are progressively dropped (lowest-priority first) to fit
+                within the budget. Priority order (highest first):
+                Current Task > Recent Errors > Active Files >
+                Recent Decisions > Pending TODOs.
+                If None, all sections are included without budget enforcement.
 
         Returns:
             Formatted string representation of working memory
         """
-        parts = []
+        # Build sections in priority order (highest priority first).
+        # When over budget, sections are dropped from the END first.
+        # Each entry: (section_header_lines, section_body_lines)
+        sections: list[tuple[list[str], list[str]]] = []
 
         if self.task_description:
-            parts.append("## Current Task")
-            parts.append(self.task_description)
-            parts.append("")
-
-        if self.active_files:
-            parts.append("## Active Files")
-            for f in self.active_files[-5:]:  # Last 5 files
-                parts.append(f"- {f}")
-            parts.append("")
-
-        if self.recent_decisions:
-            parts.append("## Recent Decisions")
-            for d in self.recent_decisions[-5:]:  # Last 5 decisions
-                parts.append(f"- {d}")
-            parts.append("")
-
-        if self.pending_todos:
-            parts.append("## Pending TODOs")
-            for t in self.pending_todos[:10]:  # First 10 TODOs
-                parts.append(f"- [ ] {t}")
-            parts.append("")
+            sections.append(
+                (["## Current Task"], [self.task_description, ""])
+            )
 
         if self.error_history:
-            parts.append("## Recent Errors")
-            for e in self.error_history[-3:]:  # Last 3 errors
+            body: list[str] = []
+            for e in self.error_history[-3:]:
                 cmd = e.get("command", "unknown")
-                err = e.get("error", "unknown")[:100]  # Truncate
-                parts.append(f"- Command: {cmd}")
-                parts.append(f"  Error: {err}")
-            parts.append("")
+                err = e.get("error", "unknown")[:100]
+                body.append(f"- Command: {cmd}")
+                body.append(f"  Error: {err}")
+            body.append("")
+            sections.append((["## Recent Errors"], body))
+
+        if self.active_files:
+            body = [f"- {f}" for f in self.active_files[-5:]]
+            body.append("")
+            sections.append((["## Active Files"], body))
+
+        if self.recent_decisions:
+            body = [f"- {d}" for d in self.recent_decisions[-5:]]
+            body.append("")
+            sections.append((["## Recent Decisions"], body))
+
+        if self.pending_todos:
+            body = [f"- [ ] {t}" for t in self.pending_todos[:10]]
+            body.append("")
+            sections.append((["## Pending TODOs"], body))
+
+        if budget_chars is None:
+            # No budget — include everything
+            parts: list[str] = []
+            for header, body in sections:
+                parts.extend(header)
+                parts.extend(body)
+            return "\n".join(parts)
+
+        # With budget: drop lowest-priority sections until we fit.
+        # Iterate from lowest priority (end of list) to highest.
+        included = list(range(len(sections)))
+        total_chars = sum(
+            len("\n".join(sections[i][0] + sections[i][1])) + 1
+            for i in included
+        ) if included else 0
+
+        while total_chars > budget_chars and len(included) > 1:
+            # Drop the lowest-priority section still included
+            # Keep at least one section — body truncation handles the rest
+            dropped = included.pop()
+            total_chars -= (
+                len("\n".join(sections[dropped][0] + sections[dropped][1])) + 1
+            )
+
+        # If even the highest-priority section alone exceeds budget,
+        # truncate its body content to fit.
+        parts = []
+        remaining_chars = budget_chars
+        for idx in included:
+            header, body = sections[idx]
+            header_str = "\n".join(header)
+            body_str = "\n".join(body)
+            section_str = f"{header_str}\n{body_str}"
+
+            if len(section_str) <= remaining_chars:
+                parts.append(section_str)
+                remaining_chars -= len(section_str) + 1  # +1 for trailing \n
+            elif remaining_chars > len(header_str) + 4:
+                # Can fit header + partial body; truncate body
+                body_budget = remaining_chars - len(header_str) - 2
+                truncated_body = body_str[:body_budget]
+                # Cut at last complete line to avoid mid-character break
+                last_newline = truncated_body.rfind("\n")
+                if last_newline > 0:
+                    truncated_body = truncated_body[:last_newline]
+                parts.append(f"{header_str}\n{truncated_body}")
+                remaining_chars = 0
+                break
+            else:
+                break
 
         return "\n".join(parts)
 
@@ -237,7 +297,11 @@ def build_three_channel_context(
         })
 
     # Channel 2: Working memory (budget: 50% of max_tokens, capped by working_memory.max_tokens)
-    working_context = working_memory.to_context()
+    working_budget = int(max_tokens * budget.get("working", 0.50))
+    working_budget = min(working_budget, working_memory.max_tokens)
+    working_budget_chars = working_budget * 4  # Rough conversion
+
+    working_context = working_memory.to_context(budget_chars=working_budget_chars)
     if working_context:
         messages.append({
             "role": "system",

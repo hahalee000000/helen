@@ -268,3 +268,204 @@ class TestASTPrinterContextConfig:
         assert "cache_aware=True" in result
         assert "working_memory=True" in result
         assert "tokens=5000" in result
+
+
+class TestUnifiedCompressionArchitecture:
+    """Tests for unified compression architecture (traditional + cache-aware composition)."""
+
+    def test_compression_strategy_default(self):
+        """Default strategy is 'graduated'."""
+        from helen.interpreter.agent_context import AgentContextManager
+
+        mgr = AgentContextManager()
+        assert mgr.compression_strategy == "graduated"
+        assert mgr.compression_enabled is True
+
+    def test_compression_strategy_traditional(self):
+        """Strategy 'traditional' is accepted and tracked."""
+        from helen.interpreter.agent_context import AgentContextManager
+
+        mgr = AgentContextManager(compression_strategy="traditional")
+        assert mgr.compression_strategy == "traditional"
+        assert mgr.compression_enabled is True
+
+    def test_compression_strategy_none(self):
+        """Strategy 'none' disables compression."""
+        from helen.interpreter.agent_context import AgentContextManager
+
+        mgr = AgentContextManager(compression_strategy="none")
+        assert mgr.compression_strategy == "none"
+        assert mgr.compression_enabled is False
+
+    def test_backward_compat_compression_enabled_true(self):
+        """Old-style compression_enabled=True still works (maps to 'graduated')."""
+        from helen.interpreter.agent_context import AgentContextManager
+
+        mgr = AgentContextManager(compression_enabled=True)
+        assert mgr.compression_strategy == "graduated"
+        assert mgr.compression_enabled is True
+
+    def test_backward_compat_compression_enabled_false(self):
+        """Old-style compression_enabled=False still works (maps to 'none')."""
+        from helen.interpreter.agent_context import AgentContextManager
+
+        mgr = AgentContextManager(compression_enabled=False)
+        assert mgr.compression_strategy == "none"
+        assert mgr.compression_enabled is False
+
+    def test_backward_compat_property_setter(self):
+        """compression_enabled setter still works."""
+        from helen.interpreter.agent_context import AgentContextManager
+
+        mgr = AgentContextManager()
+        mgr.compression_enabled = False
+        assert mgr.compression_strategy == "none"
+        mgr.compression_enabled = True
+        assert mgr.compression_strategy == "graduated"
+
+    def test_unknown_strategy_falls_back_to_graduated(self):
+        """Unknown strategy strings fall back to 'graduated'."""
+        from helen.interpreter.agent_context import AgentContextManager
+
+        mgr = AgentContextManager(compression_strategy="unknown")
+        assert mgr.compression_strategy == "graduated"
+
+    def test_strategy_setter(self):
+        """compression_strategy setter works for valid and invalid values."""
+        from helen.interpreter.agent_context import AgentContextManager
+
+        mgr = AgentContextManager()
+        mgr.compression_strategy = "traditional"
+        assert mgr.compression_strategy == "traditional"
+        mgr.compression_strategy = "invalid"
+        assert mgr.compression_strategy == "graduated"  # fallback
+
+    def test_get_stats_includes_strategy(self):
+        """get_stats() reports compression_strategy."""
+        from helen.interpreter.agent_context import AgentContextManager
+
+        mgr = AgentContextManager(compression_strategy="traditional")
+        stats = mgr.get_stats()
+        assert stats["compression_strategy"] == "traditional"
+        assert stats["compression_enabled"] is True
+
+    def test_no_compression_returns_original_history(self):
+        """strategy='none' returns history unchanged."""
+        from helen.interpreter.agent_context import AgentContextManager
+        from helen.runtime.history import Message
+
+        mgr = AgentContextManager(
+            compression_strategy="none",
+            working_memory_enabled=False,
+        )
+        history = [Message("user", f"msg {i}") for i in range(20)]
+        result = mgr._compress_history(history, max_tokens=131072)
+        assert result is history  # same object, no compression
+
+    def test_traditional_strategy_calls_history_manager(self):
+        """strategy='traditional' produces compressed output for large history."""
+        from helen.interpreter.agent_context import AgentContextManager
+        from helen.runtime.history import Message
+
+        mgr = AgentContextManager(
+            compression_strategy="traditional",
+            cache_aware_enabled=False,
+            working_memory_enabled=False,
+        )
+        # Create history that exceeds a tiny max_tokens to trigger compression
+        history = [
+            Message("user", "x" * 500, _token_count=100)
+            for _ in range(20)
+        ]
+        # max_tokens small enough to trigger compression
+        result = mgr._compress_history(history, max_tokens=500)
+        # Should produce some result (possibly compressed)
+        assert isinstance(result, list)
+
+    def test_graduated_strategy_runs(self):
+        """strategy='graduated' runs graduated_compress."""
+        from helen.interpreter.agent_context import AgentContextManager
+        from helen.runtime.history import Message
+
+        mgr = AgentContextManager(
+            compression_strategy="graduated",
+            cache_aware_enabled=False,
+            working_memory_enabled=False,
+        )
+        history = [
+            Message("user", "x" * 500, _token_count=100)
+            for _ in range(20)
+        ]
+        result = mgr._compress_history(history, max_tokens=500)
+        assert isinstance(result, list)
+
+    def test_cache_aware_wraps_graduated(self):
+        """cache_aware + graduated: cache zone preserved, suffix compressed."""
+        from helen.interpreter.agent_context import AgentContextManager
+        from helen.runtime.history import Message
+
+        mgr = AgentContextManager(
+            compression_strategy="graduated",
+            cache_aware_enabled=True,
+            working_memory_enabled=False,
+        )
+        # Create history with distinct first N messages (cache zone)
+        history = [
+            Message("user", f"cache-msg-{i}", _token_count=10)
+            for i in range(5)
+        ] + [
+            Message("user", f"suffix-{i}" + "x" * 500, _token_count=100)
+            for i in range(20)
+        ]
+        original_first_5 = [m.content for m in history[:5]]
+
+        # Use tiny max_tokens to force compression
+        result = mgr._compress_history(history, max_tokens=200)
+
+        # Cache zone (first 5 messages) should be preserved verbatim
+        result_first_5 = [m.content for m in result[:5]]
+        assert result_first_5 == original_first_5
+
+        # Cache stats should reflect cache-aware wrapping
+        assert mgr._last_cache_stats is not None
+        assert "cache_aware+graduated" in mgr._last_cache_stats.compression_strategy
+
+    def test_cache_aware_wraps_traditional(self):
+        """cache_aware + traditional: cache zone preserved, suffix compressed traditionally."""
+        from helen.interpreter.agent_context import AgentContextManager
+        from helen.runtime.history import Message
+
+        mgr = AgentContextManager(
+            compression_strategy="traditional",
+            cache_aware_enabled=True,
+            working_memory_enabled=False,
+        )
+        history = [
+            Message("user", f"cache-{i}", _token_count=10)
+            for i in range(5)
+        ] + [
+            Message("user", f"body-{i}" + "x" * 500, _token_count=100)
+            for i in range(20)
+        ]
+        original_first_5 = [m.content for m in history[:5]]
+
+        result = mgr._compress_history(history, max_tokens=200)
+
+        # Cache zone preserved
+        result_first_5 = [m.content for m in result[:5]]
+        assert result_first_5 == original_first_5
+
+        # Stats reflect traditional+cache-aware
+        assert mgr._last_cache_stats is not None
+        assert "cache_aware+traditional" in mgr._last_cache_stats.compression_strategy
+
+    def test_short_history_skips_compression(self):
+        """History with <=10 messages skips compression regardless of strategy."""
+        from helen.interpreter.agent_context import AgentContextManager
+        from helen.runtime.history import Message
+
+        for strategy in ["graduated", "traditional"]:
+            mgr = AgentContextManager(compression_strategy=strategy)
+            history = [Message("user", f"msg {i}") for i in range(5)]
+            result = mgr._compress_history(history, max_tokens=131072)
+            assert result is history

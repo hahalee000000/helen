@@ -771,7 +771,7 @@ class Interpreter(LlmMixin, Visitor[object]):
         from helen.interpreter.agent_context import AgentContextManager
         self._agent_context = AgentContextManager(
             working_memory_tokens=5000,
-            compression_enabled=True,
+            compression_strategy="graduated",
             working_memory_enabled=True,
             cache_aware_enabled=True,
         )
