@@ -124,7 +124,7 @@ HELLEN_KEYWORDS = [
     # Literals
     "true", "false", "null",
     # Chinese keywords (v1.10 — bilingual support)
-    "让", "常量", "函数", "返回",       # let, const, fn, return
+    "定义", "常量", "函数", "返回",       # let, const, fn, return
     "如果", "否则", "对于", "属于", "当",  # if, else, for, in, while
     "中断", "继续",                     # break, continue
     "匹配", "情况", "默认", "分支",       # match, case, default, branch
@@ -132,7 +132,7 @@ HELLEN_KEYWORDS = [
     "真", "假", "空", "是",             # true, false, null, is
     "智能体", "大模型", "执行",               # agent, llm, act
     "异步", "等待",                     # async, await
-    "提示", "描述", "模型", "工具",       # prompt, description, model, tools
+    "提示词", "描述", "模型", "工具",       # prompt, description, model, tools
     "流式输出", "温度", "最大轮次",        # streaming, temperature, max-turns
     "函数区", "主函",                   # functions, main
     "导入", "作为",                     # import, as
@@ -394,7 +394,7 @@ class HelenLanguageServer:
             patterns = [
                 rf'agent\s+({target})\s*[\({{{{]',                   # agent decl
                 rf'fn\s+({target})\s*\(',                            # function decl
-                rf'(?:shared\s+)?(?:let|const|让|常量)\s+({target})\s*=',  # variable decl
+                rf'(?:shared\s+)?(?:let|const|定义|常量)\s+({target})\s*=',  # variable decl
             ]
 
             for i, file_line in enumerate(lines):

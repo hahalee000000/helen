@@ -214,15 +214,15 @@ class TestChinesePunctuationLexer:
     def test_full_chinese_program_no_errors(self):
         """A complete Chinese program with fullwidth punctuation should lex cleanly."""
         source = """\
-让 x ＝ 10
+定义 x ＝ 10
 常量 Y ＝ 20
 函数 加（甲： int， 乙： int）： int ｛
     返回 甲 ＋ 乙
 ｝
 如果 x ＞ 0 ｛
-    让 结果 ＝ 加（x， Y）
+    定义 结果 ＝ 加（x， Y）
 ｝ 否则 ｛
-    让 结果 ＝ 0
+    定义 结果 ＝ 0
 ｝
 """
         scanner = Scanner(source=source, file="<test>")
@@ -232,13 +232,13 @@ class TestChinesePunctuationLexer:
     def test_full_chinese_with_two_char_ops(self):
         """Two-character fullwidth operators in a real program."""
         source = """\
-让 a ＝ 5
-让 b ＝ 10
+定义 a ＝ 5
+定义 b ＝ 10
 如果 a ＜＝ b ＆＆ b ＞＝ a ｛
-    让 c ＝ a ＋ b
+    定义 c ＝ a ＋ b
 ｝
-让 eq ＝ a ＝＝ 5
-让 ne ＝ a ！＝ 10
+定义 eq ＝ a ＝＝ 5
+定义 ne ＝ a ！＝ 10
 """
         scanner = Scanner(source=source, file="<test>")
         scanner.scan_all()
@@ -246,7 +246,7 @@ class TestChinesePunctuationLexer:
 
     def test_fullwidth_pipe_expression(self):
         """Fullwidth pipe operator in expression."""
-        source = "让 result ＝ 5 ｜＞ double"
+        source = "定义 result ＝ 5 ｜＞ double"
         scanner = Scanner(source=source, file="<test>")
         scanner.scan_all()
         assert not scanner.has_errors, f"Unexpected errors: {scanner.errors}"
@@ -356,7 +356,7 @@ class TestChinesePunctuationLexer:
 
     def test_chinese_quote_in_program(self):
         """Chinese quotes in a full program with variables."""
-        source = '让 问候 ＝ \u201c你好，世界！\u201d'
+        source = '定义 问候 ＝ \u201c你好，世界！\u201d'
         tokens = self._scan(source)
         str_token = next(t for t in tokens if t.type == TokenType.STRING)
         assert str_token.literal == "你好，世界！"
@@ -366,7 +366,7 @@ class TestChinesePunctuationLexer:
         source = """\
 智能体 翻译器 ｛
     描述 \u300c翻译文本\u300d
-    提示 \u300c你是专业翻译，请将输入翻译成中文\u300d
+    提示词 \u300c你是专业翻译，请将输入翻译成中文\u300d
     主函 ｛
         返回 \u300c完成\u300d
     ｝
@@ -389,7 +389,7 @@ class TestChinesePunctuationParser:
     """Verify the parser accepts fullwidth punctuation in full programs."""
 
     def test_parse_fullwidth_parens_in_call(self):
-        source = "让 result ＝ add（1， 2）"
+        source = "定义 result ＝ add（1， 2）"
         program = self._parse(source)
         assert len(program.statements) == 1
 
@@ -418,12 +418,12 @@ class TestChinesePunctuationParser:
         assert isinstance(program.statements[0], IfStmtNode)
 
     def test_parse_fullwidth_comparison(self):
-        source = "让 ok ＝ x ＞＝ 0 ＆＆ x ＜＝ 100"
+        source = "定义 ok ＝ x ＞＝ 0 ＆＆ x ＜＝ 100"
         program = self._parse(source)
         assert len(program.statements) == 1
 
     def test_parse_fullwidth_list(self):
-        source = "让 nums ＝ ［1， 2， 3］"
+        source = "定义 nums ＝ ［1， 2， 3］"
         program = self._parse(source)
         assert len(program.statements) == 1
 
@@ -440,19 +440,19 @@ class TestChinesePunctuationParser:
         assert isinstance(program.statements[0], MatchStmtNode)
 
     def test_parse_fullwidth_pipe(self):
-        source = "让 result ＝ 5 ｜＞ double"
+        source = "定义 result ＝ 5 ｜＞ double"
         program = self._parse(source)
         assert len(program.statements) == 1
 
     def test_parse_fullwidth_bang_not(self):
-        source = "让 flag ＝ ！真"
+        source = "定义 flag ＝ ！真"
         program = self._parse(source)
         assert len(program.statements) == 1
 
     def test_parse_mixed_punctuation(self):
         """Mixed ASCII and fullwidth punctuation should parse correctly."""
         source = """\
-让 x ＝ 10
+定义 x ＝ 10
 const y = 20
 如果 x ＞ 0 {
     返回 x ＋ y

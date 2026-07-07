@@ -183,7 +183,7 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "null": TokenType.NULL_KW,
     # === Chinese keywords (中文关键字) ===
     # Variable/function
-    "让": TokenType.LET,
+    "定义": TokenType.LET,
     "常量": TokenType.CONST,
     "函数": TokenType.FN,
     "返回": TokenType.RETURN,
@@ -215,7 +215,7 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "异步": TokenType.ASYNC,
     "等待": TokenType.AWAIT,
     "分离": TokenType.DETACH,  # v1.12: fire-and-forget (Issue #29)
-    "提示": TokenType.PROMPT,
+    "提示词": TokenType.PROMPT,
     "描述": TokenType.DESCRIPTION,
     "模型": TokenType.MODEL,
     "工具": TokenType.TOOLS,

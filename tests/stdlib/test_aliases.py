@@ -115,8 +115,8 @@ class TestStdlibAliasExecution:
         """Mixing English and Chinese stdlib names in the same program."""
         source = """
 主函 {
-    让 数据 = [3, 1, 4, 1, 5]
-    让 排序后 = 排序(数据)
+    定义 数据 = [3, 1, 4, 1, 5]
+    定义 排序后 = 排序(数据)
     len(排序后)
 }
 """
@@ -126,7 +126,7 @@ class TestStdlibAliasExecution:
         """Full Chinese program with Chinese stdlib names and 主函."""
         source = """
 函数 测试() {
-    让 列表 = [5, 2, 8, 1, 9]
+    定义 列表 = [5, 2, 8, 1, 9]
     返回 长度(排序(列表))
 }
 

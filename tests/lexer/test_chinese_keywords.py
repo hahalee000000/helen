@@ -13,10 +13,10 @@ class TestChineseKeywordsLexer:
     """Verify the lexer recognizes Chinese keywords as correct token types."""
 
     def test_let(self):
-        source = "让 x = 42"
+        source = "定义 x = 42"
         tokens = self._scan(source)
         assert tokens[0].type == TokenType.LET
-        assert tokens[0].lexeme == "让"
+        assert tokens[0].lexeme == "定义"
 
     def test_const(self):
         source = "常量 PI = 3.14"
@@ -130,10 +130,10 @@ class TestChineseKeywordsLexer:
         assert tokens[4].lexeme == "等待"
 
     def test_agent_decl_keywords(self):
-        source = "提示 描述 模型 工具 流式输出 温度 最大轮次 函数区 主函"
+        source = "提示词 描述 模型 工具 流式输出 温度 最大轮次 函数区 主函"
         tokens = self._scan(source)
         assert tokens[0].type == TokenType.PROMPT
-        assert tokens[0].lexeme == "提示"
+        assert tokens[0].lexeme == "提示词"
         assert tokens[1].type == TokenType.DESCRIPTION
         assert tokens[1].lexeme == "描述"
         assert tokens[2].type == TokenType.MODEL
@@ -169,7 +169,7 @@ class TestChineseKeywordsLexer:
 
     def test_chinese_identifiers(self):
         """Chinese characters not in keyword map should be IDENTIFIER."""
-        source = "让 姓名 = \"张三\""
+        source = "定义 姓名 = \"张三\""
         tokens = self._scan(source)
         assert tokens[0].type == TokenType.LET
         name_token = tokens[1]
@@ -178,10 +178,10 @@ class TestChineseKeywordsLexer:
 
     def test_mixed_chinese_english(self):
         """Chinese and English keywords can be mixed freely."""
-        source = "让 x = 42\nconst y = 100\n如果 x > 0 { 返回 x }"
+        source = "定义 x = 42\nconst y = 100\n如果 x > 0 { 返回 x }"
         tokens = self._scan(source)
         assert tokens[0].type == TokenType.LET
-        assert tokens[0].lexeme == "让"
+        assert tokens[0].lexeme == "定义"
         # const should still work
         const_token = next(t for t in tokens if t.type == TokenType.CONST)
         assert const_token.lexeme == "const"
@@ -202,15 +202,15 @@ class TestChineseKeywordsLexer:
     def test_no_lexer_errors(self):
         """Full Chinese program should produce zero lexer errors."""
         source = """
-让 x = 10
+定义 x = 10
 常量 Y = 20
 函数 加(甲: int, 乙: int): int {
     返回 甲 + 乙
 }
 如果 x > 0 {
-    让 结果 = 加(x, Y)
+    定义 结果 = 加(x, Y)
 } 否则 {
-    让 结果 = 0
+    定义 结果 = 0
 }
 """
         scanner = Scanner(source=source, file="<test>")
@@ -231,7 +231,7 @@ class TestChineseKeywordsParser:
     """Verify the parser accepts Chinese keywords in full programs."""
 
     def test_parse_simple_let(self):
-        source = "让 x = 42"
+        source = "定义 x = 42"
         program = self._parse(source)
         assert len(program.statements) == 1
         from helen.core.ast import VarDeclNode
@@ -255,9 +255,9 @@ class TestChineseKeywordsParser:
     def test_parse_if_else_chinese(self):
         source = """
 如果 真 {
-    让 x = 1
+    定义 x = 1
 } 否则 {
-    让 x = 2
+    定义 x = 2
 }
 """
         program = self._parse(source)
@@ -291,7 +291,7 @@ class TestChineseKeywordsParser:
     def test_parse_try_catch_chinese(self):
         source = """
 尝试 {
-    让 x = 1
+    定义 x = 1
 } 捕获 RuntimeError e {
     print(e)
 }
@@ -305,7 +305,7 @@ class TestChineseKeywordsParser:
         source = """
 智能体 翻译器 {
     描述 "翻译文本"
-    提示 "你是专业翻译"
+    提示词 "你是专业翻译"
     模型 "gpt-4"
     温度 0.3
     主函 {
@@ -321,7 +321,7 @@ class TestChineseKeywordsParser:
     def test_parse_mixed_chinese_english(self):
         """Chinese and English keywords can be freely mixed."""
         source = """
-让 x = 42
+定义 x = 42
 const y = 100
 如果 x > 0 {
     返回 x + y
@@ -333,8 +333,8 @@ const y = 100
     def test_parse_chinese_identifiers(self):
         """Chinese variable and function names should work."""
         source = """
-让 姓名 = "张三"
-让 年龄 = 30
+定义 姓名 = "张三"
+定义 年龄 = 30
 函数 打招呼(名字: str) {
     print("你好, " + 名字)
 }

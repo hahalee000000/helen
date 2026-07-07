@@ -936,7 +936,7 @@ let result = Counter.get()
         """Channel with Chinese keywords works."""
         source = """
 通道 计数器 {
-    让 count: int = 0
+    定义 count: int = 0
     函数 increment() { count = count + 1 }
     函数 get(): int { 返回 count }
 }
