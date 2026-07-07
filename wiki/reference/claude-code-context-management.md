@@ -589,9 +589,339 @@ context_management={
 
 ### 4.5 策略 3: 服务端压缩 (compact_20260112)
 
-替代已弃用的 SDK `compaction_control` 参数。在服务端执行完整的对话压缩。
+**Anthropic 推荐**: 服务端压缩是管理长对话的**首选策略**，优于 SDK 端的 `compaction_control`（已弃用）。
+
+#### 基本信息
+
+| 项目 | 说明 |
+|------|------|
+| Beta header | `compact-2026-01-12` |
+| 策略类型 | `compact_20260112` |
+| 运行位置 | 服务端（API 侧） |
+| 客户端状态 | 客户端维护完整历史，API 自动处理压缩 |
+
+#### 工作原理
+
+```
+1. 客户端发送请求，附带 context_management.edits 配置
+2. API 监控 input_tokens，达到阈值时触发压缩
+3. Claude 将旧对话历史压缩为结构化摘要
+4. 响应中包含一个 type="compaction" 的内容块
+5. 后续请求追加响应到消息列表，API 自动丢弃 compaction 块之前的内容
+```
+
+**关键特性**:
+- ✅ 无需客户端压缩代码
+- ✅ 自动处理 token 计算
+- ✅ 多次压缩支持（同一对话可触发多次）
+- ✅ 与 server tools（web_search 等）兼容
+
+#### 参数详解
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `trigger` | object | 必需 | 触发条件。目前仅支持 `{"type": "input_tokens", "value": N}` |
+| `trigger.type` | string | - | 必须是 `"input_tokens"` |
+| `trigger.value` | int | - | 触发阈值（input token 数） |
+| `pause_after_compaction` | bool | false | 是否在生成摘要后暂停响应 |
+| `custom_instructions` | string | 模型特定的默认提示 | 自定义摘要提示，**完全替换**默认提示 |
+
+#### 基础使用示例
+
+```python
+# Python
+client = anthropic.Anthropic()
+
+response = client.beta.messages.create(
+    betas=["compact-2026-01-12"],
+    model="claude-opus-4-8",
+    max_tokens=4096,
+    messages=[{"role": "user", "content": "Hello, Claude"}],
+    context_management={
+        "edits": [
+            {
+                "type": "compact_20260112",
+                "trigger": {"type": "input_tokens", "value": 150000},
+            }
+        ]
+    },
+)
+```
+
+```bash
+# cURL
+curl https://api.anthropic.com/v1/messages \
+  -H "x-api-key: $ANTHROPIC_API_KEY" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "anthropic-beta: compact-2026-01-12" \
+  -H "content-type: application/json" \
+  -d '{
+    "model": "claude-opus-4-8",
+    "max_tokens": 4096,
+    "messages": [{"role": "user", "content": "Hello"}],
+    "context_management": {
+      "edits": [{
+        "type": "compact_20260112",
+        "trigger": {"type": "input_tokens", "value": 150000}
+      }]
+    }
+  }'
+```
+
+#### 长对话完整示例
+
+```python
+client = anthropic.Anthropic()
+messages: list[dict] = []
+
+def chat(user_message: str) -> str:
+    messages.append({"role": "user", "content": user_message})
+
+    response = client.beta.messages.create(
+        betas=["compact-2026-01-12"],
+        model="claude-opus-4-8",
+        max_tokens=4096,
+        messages=messages,
+        context_management={
+            "edits": [{
+                "type": "compact_20260112",
+                "trigger": {"type": "input_tokens", "value": 100000},
+            }]
+        },
+    )
+
+    # 追加响应（包含 compaction 块）到消息列表
+    messages.append({"role": "assistant", "content": response.content})
+    return response.content[0].text if response.content else ""
+
+# 可以无限次调用 chat()，API 自动处理压缩
+chat("帮我构建一个 Python 网络爬虫")
+chat("添加对 JavaScript 渲染页面的支持")
+chat("现在添加限速和错误处理")
+# ... 持续数百轮对话
+```
+
+#### pause_after_compaction 模式
+
+启用 `pause_after_compaction` 允许在压缩后插入额外消息（如保留最近的交换）：
+
+```python
+response = client.beta.messages.create(
+    betas=["compact-2026-01-12"],
+    model="claude-opus-4-8",
+    max_tokens=4096,
+    messages=messages,
+    context_management={
+        "edits": [{
+            "type": "compact_20260112",
+            "trigger": {"type": "input_tokens", "value": 100000},
+            "pause_after_compaction": True,
+        }]
+    },
+)
+
+# 检查是否触发了压缩暂停
+if response.stop_reason == "compaction":
+    # 响应只包含 compaction 块
+    compaction_block = response.content[0]
+
+    # 保留最近的交换（例如最后 3 条消息）
+    preserved = messages[-3:]
+
+    # 构建新消息列表：compaction + 保留的消息
+    messages = [
+        {"role": "assistant", "content": [compaction_block]},
+        *preserved,
+    ]
+
+    # 继续请求
+    response = client.beta.messages.create(
+        betas=["compact-2026-01-12"],
+        model="claude-opus-4-8",
+        max_tokens=4096,
+        messages=messages,
+        context_management={
+            "edits": [{
+                "type": "compact_20260112",
+                "trigger": {"type": "input_tokens", "value": 100000},
+            }]
+        },
+    )
+```
+
+#### 自定义摘要提示
+
+```python
+response = client.beta.messages.create(
+    betas=["compact-2026-01-12"],
+    model="claude-opus-4-8",
+    max_tokens=4096,
+    messages=messages,
+    context_management={
+        "edits": [{
+            "type": "compact_20260112",
+            "trigger": {"type": "input_tokens", "value": 100000},
+            "custom_instructions": "Focus on preserving code snippets, variable names, and technical decisions.",
+        }]
+    },
+)
+```
+
+**注意**: `custom_instructions` **完全替换**默认提示，不是补充。
+
+#### Token 预算追踪
+
+长任务可结合 `trigger` 和压缩计数器估算总消耗：
+
+```python
+TRIGGER_THRESHOLD = 100_000
+TOTAL_TOKEN_BUDGET = 3_000_000
+n_compactions = 0
+
+response = client.beta.messages.create(
+    betas=["compact-2026-01-12"],
+    model="claude-opus-4-8",
+    max_tokens=4096,
+    messages=messages,
+    context_management={
+        "edits": [{
+            "type": "compact_20260112",
+            "trigger": {"type": "input_tokens", "value": TRIGGER_THRESHOLD},
+            "pause_after_compaction": True,
+        }]
+    },
+)
+
+# 统计压缩次数估算总消耗
+if response.stop_reason == "compaction":
+    n_compactions += 1
+    estimated_total = n_compactions * TRIGGER_THRESHOLD
+    if estimated_total >= TOTAL_TOKEN_BUDGET:
+        # 预算用完，要求模型收尾
+        messages.append({
+            "role": "user",
+            "content": "Please wrap up your current work and summarize the final state."
+        })
+```
+
+#### 响应格式
+
+当触发压缩时，响应包含 `compaction` 类型的内容块：
+
+```json
+{
+  "id": "msg_123",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "compaction",
+      "summary": "The user requested help building a web scraper..."
+    }
+  ],
+  "stop_reason": "compaction",  // 或 "end_turn"（如果未触发压缩）
+  "usage": {
+    "input_tokens": 150000,
+    "output_tokens": 500
+  },
+  "context_management": {
+    "original_input_tokens": 180000
+  }
+}
+```
+
+#### 缓存行为
+
+```
+压缩后:
+- 摘要成为新内容，需要写入缓存
+- 如果不设置缓存断点，系统提示缓存也会失效
+
+最佳实践:
+- 在系统提示末尾设置 cache breakpoint
+- 系统提示保持独立缓存
+- 压缩时只需写入新的摘要缓存条目
+```
+
+#### 计费与限制
+
+- 压缩需要额外的采样步骤，计入 rate limits 和计费
+- 响应中的 `usage` 数组显示每次采样的使用情况
+- 重新应用之前的 `compaction` 块**不产生额外费用**
+
+#### 与服务端工具配合
+
+当使用 server tools（web_search 等）时：
+- 压缩触发检查在每个采样迭代开始时
+- 单次请求可能触发多次压缩
+- SDK 可能错误计算 token 使用（包含服务端工具内部调用的累积读取）
+
+**建议**: 使用服务端工具时避免客户端 compaction，优先使用服务端 compaction。
+
+#### 已知问题
+
+模型在内部摘要步骤中偶尔会调用工具而不是写摘要。解决方法：
+
+```python
+"custom_instructions": "Include relevant information in the summary for continuing the task in the next context window. Do not call any tools while writing this summary; respond with text only."
+```
+
+#### 支持的模型
+
+- Claude Opus 4.x 系列
+- Claude Sonnet 4.x 系列
+- 使用请求中的模型进行摘要（**无法使用更便宜的模型**）
 
 ---
+
+### 4.6 SDK Compaction（已弃用）
+
+**Anthropic 强烈推荐服务端 compaction，SDK compaction 已被弃用。**
+
+SDK 的 `compaction_control` 参数在 Python、TypeScript、Ruby SDK 中已弃用，未来版本将移除。SDK 启用时会发出弃用警告。
+
+**SDK compaction 的问题**:
+- 客户端运行，需要额外集成代码
+- Token 使用计算不准确（特别是使用服务端工具时）
+- 客户端限制
+
+**仅当需要客户端控制摘要过程时才使用 SDK compaction。**
+
+---
+
+### 4.7 策略选择指南
+
+| 场景 | 推荐策略 |
+|------|---------|
+| 长对话（>100k tokens） | `compact_20260112`（服务端压缩） |
+| 工具密集型工作流 | `clear_tool_uses_20250919` |
+| 使用扩展思考 | `clear_thinking_20251015` |
+| 需要精细控制 | 组合多个策略 |
+| 需要保持推理连续性 | `clear_thinking` + 保留最近思考 |
+
+**策略组合示例**:
+```python
+context_management={
+    "edits": [
+        {
+            "type": "clear_thinking_20251015",  # 必须在前
+            "keep": {"type": "thinking_turns", "value": 2},
+        },
+        {
+            "type": "clear_tool_uses_20250919",
+            "trigger": {"type": "input_tokens", "value": 50000},
+            "keep": {"type": "tool_uses", "value": 5},
+            "exclude_tools": ["web_search"],
+        },
+        {
+            "type": "compact_20260112",
+            "trigger": {"type": "input_tokens", "value": 150000},
+        },
+    ]
+}
+```
+
+**注意**: `clear_thinking` 必须在其他策略之前。
 
 ## 五、Context Awareness（上下文感知）
 
