@@ -1,14 +1,24 @@
 # Helen vs Claude Code 上下文管理差距分析
 
-> **日期**: 2026-07-06  
-> **版本**: Helen v1.15  
-> **参考**: `wiki/reference/claude-code-context-management.md`
+> **日期**: 2026-07-07  
+> **版本**: Helen v1.15 (最新)  
+> **参考**: 
+> - `wiki/reference/claude-code-context-management.md`
+> - `wiki/runtime/context-management.md`
+> - `wiki/runtime/context-compression-research.md`
 
 ---
 
 ## 概述
 
-Helen v1.15 通过 Phase 1-7 实施了完整的上下文管理增强，已对齐 Claude Code 的核心功能。但仍存在一些差距，特别是在服务端编辑、反应式压缩、持久化设计等方面。
+Helen v1.15 通过 Phase 1-7 实施了完整的上下文管理增强，已对齐 Claude Code 的核心功能。最新改进（2026-07-07）进一步缩小了差距：
+
+**最新改进**:
+- ✅ Layer 5 Auto-Compact 集成 LLM 语义摘要（对齐 Claude Code）
+- ✅ Context Collapse 改进为时间线保留（借鉴 RCC、CogCanvas）
+- ✅ WorkingMemory 改为 token 级淘汰（更精确的预算控制）
+
+仍存在一些差距，特别是在服务端编辑、反应式压缩、持久化设计等方面。
 
 ---
 
@@ -18,11 +28,23 @@ Helen v1.15 通过 Phase 1-7 实施了完整的上下文管理增强，已对齐
 
 | 层级 | Claude Code | Helen v1.15 | 状态 |
 |------|------------|-------------|------|
-| Layer 1: Budget Reduction | ✅ | ✅ | 完全对齐 |
-| Layer 2: Snip | ✅ | ✅ | 完全对齐 |
-| Layer 3: Microcompact | ✅ | ✅ | 完全对齐 |
-| Layer 4: Context Collapse | ✅ | ✅ | 完全对齐 |
-| Layer 5: Auto-Compact | ✅ | ✅ | 完全对齐 |
+| Layer 1: Budget Reduction | ✅ 零成本，总是启用 | ✅ 零成本，总是启用 | 完全对齐 |
+| Layer 2: Snip | ✅ 零成本，feature flag | ✅ 零成本，保留最近 8 轮 | 完全对齐 |
+| Layer 3: Microcompact | ✅ 零成本，保留 tool_use 决策 | ✅ 零成本，保留 tool_use 决策 ⭐ | 完全对齐 |
+| Layer 4: Context Collapse | ✅ 零成本，纯读时投影 | ✅ 零成本，**时间线视图** 🆕 | **超越**（借鉴 RCC/CogCanvas）|
+| Layer 5: Auto-Compact | ✅ LLM 调用，最后手段 | ✅ **LLM 语义摘要** 🆕 | 完全对齐 |
+
+**Layer 4 改进详情**:
+- Helen 现在将旧消息分段（每 10 条一块），生成时间线视图
+- 每段提取：时间标记、文件引用、工具使用、用户意图
+- 保留任务进展的时序结构（借鉴 CogCanvas 的认知工件思想）
+- Claude Code 的 Context Collapse 是纯读时投影，Helen 实现了类似效果
+
+**Layer 5 改进详情**:
+- Helen 现在通过 `llm_client` 参数可选启用 LLM 语义摘要
+- 调用 `LLMSummarizer` 生成高质量摘要（任务目标、关键决策、文件变更）
+- LLM 不可用时回退到零成本结构摘要
+- 完全对齐 Claude Code 的 `compactConversation()` 机制
 
 ### ✅ 缓存感知压缩
 
@@ -32,6 +54,7 @@ Helen v1.15 通过 Phase 1-7 实施了完整的上下文管理增强，已对齐
 | 批量阈值 (75%) | ✅ | ✅ | 完全对齐 |
 | 仅后缀修改 | ✅ | ✅ | 完全对齐 |
 | 缓存边界标记 | ✅ | ✅ | 完全对齐 |
+| 缓存感知 Microcompact | ✅ `CACHED_MICROCOMPACT` flag | ✅ cache_aware_enabled | 完全对齐 |
 
 ### ✅ 工作记忆
 
@@ -41,14 +64,22 @@ Helen v1.15 通过 Phase 1-7 实施了完整的上下文管理增强，已对齐
 | 最近决策提取 | ✅ | ✅ | 完全对齐 |
 | 待办事项提取 | ✅ | ✅ | 完全对齐 |
 | 错误历史 | ✅ | ✅ | 完全对齐 |
+| **Token 级淘汰** 🆕 | ✅ (推断) | ✅ `_evict_to_budget()` | 完全对齐 |
+
+**Token 级淘汰详情**:
+- 每次添加条目后检查 token 预算
+- 超出 `max_tokens` 时按优先级淘汰最旧条目
+- 淘汰顺序：TODOs > Decisions > Files > Errors
+- `task_description` 永不淘汰（最高优先级）
 
 ### ✅ Agent 集成
 
 | 特性 | Claude Code | Helen v1.15 | 状态 |
 |------|------------|-------------|------|
-| 每 agent 独立配置 | ✅ | ✅ | 完全对齐 |
-| 三通道上下文 | ✅ | ✅ | 完全对齐 |
-| 自动应用压缩 | ✅ | ✅ | 完全对齐 |
+| 每 agent 独立配置 | ✅ | ✅ `context {}` 块 | 完全对齐 |
+| 三通道上下文 | ✅ | ✅ System 15% + WM 50% + History 35% | 完全对齐 |
+| 自动应用压缩 | ✅ | ✅ `prepare_context()` | 完全对齐 |
+| Channel 2 预算截断 | ✅ (推断) | ✅ `to_context(budget_chars)` | 完全对齐 |
 
 ---
 
@@ -294,67 +325,21 @@ class MostlyAppendPersister:
 
 ---
 
-### ❌ 6. "行动 > 数据"区分
-
-**Claude Code 实现**:
-```python
-# Microcompact 的关键洞察
-# ✅ 保留 tool_use blocks — "LLM 决定做什么"
-# ❌ 清除 tool_result content — "工具返回了什么"
-
-# tool_use 块保留
-{"role": "assistant", "tool_calls": [{"name": "read_file", "args": {...}}]}
-
-# tool_result 清除
-{"role": "tool", "content": "[cleared]"}  # 而不是完整内容
-```
-
-**Helen 现状**:
-- ❌ 无差别对待消息
-- ❌ 工具调用决策和结果一起压缩
-- ❌ 可能丢失重要决策信息
-
-**差距影响**:
-- 丢失 LLM 的决策路径
-- 压缩效果不理想
-- 可能影响后续决策质量
-
-**实施建议**:
-```python
-class ActionDataSeparator:
-    def microcompact(self, messages):
-        """保留决策，清除数据"""
-        result = []
-        for msg in messages:
-            if msg.role == "assistant" and msg.tool_calls:
-                # 保留 tool_use 块（决策）
-                result.append(msg)
-            elif msg.role == "tool":
-                # 清除 tool_result（数据）
-                result.append(Message(
-                    role="tool",
-                    content="[Tool result cleared]",
-                    tool_name=msg.tool_name,
-                ))
-            else:
-                result.append(msg)
-        return result
-```
-
-**优先级**: 🟠 **中高**（提高压缩质量）
-
----
-
 ## 优先级排序
 
 | 优先级 | 功能 | 影响 | 实施难度 | 建议时间 |
 |--------|------|------|---------|---------|
 | 🔴 **高** | Context Editing API | 成本、性能 | 中 | Phase 8 |
 | 🟠 **中高** | Prompt-too-long 恢复 | 鲁棒性 | 低 | Phase 9 |
-| 🟠 **中高** | "行动 > 数据"区分 | 压缩质量 | 低 | Phase 9 |
 | 🟡 **中** | Context Awareness | LLM 行为 | 低 | Phase 10 |
 | 🟡 **中** | Reactive Compaction | 稳定性 | 中 | Phase 10 |
 | 🟡 **中** | mostly-append 持久化 | 可审计性 | 高 | Phase 11 |
+
+**已实现（不再列为差距）**:
+- ✅ "行动 > 数据"区分 — Layer 3 Microcompact 已实现
+- ✅ Layer 5 LLM 语义摘要 — 已集成 LLMSummarizer
+- ✅ Context Collapse 时间线保留 — 借鉴 RCC/CogCanvas
+- ✅ WorkingMemory token 级淘汰 — `_evict_to_budget()`
 
 ---
 
@@ -376,20 +361,18 @@ class ActionDataSeparator:
 - 降低成本 20-30%
 - 提高性能
 
-### Phase 9: 恢复与质量 (2 周)
+### Phase 9: 恢复机制 (1-2 周)
 
-**目标**: 提高鲁棒性和压缩质量
+**目标**: 提高鲁棒性
 
 **任务**:
 1. 实现 `PromptTooLongRecovery` 类
-2. 实现 `ActionDataSeparator` 类
-3. 集成到压缩管线
-4. 添加测试
+2. 集成到 LLM 调用错误处理
+3. 添加测试
 
 **预期效果**:
 - 减少 API 错误
-- 提高压缩质量
-- 保留决策信息
+- 提高用户体验
 
 ### Phase 10: 感知与稳定 (2 周)
 
@@ -423,35 +406,42 @@ class ActionDataSeparator:
 
 ## 总结
 
-### 当前对齐度
+### 当前对齐度（2026-07-07 更新）
 
 | 类别 | 对齐度 | 说明 |
 |------|--------|------|
-| 渐进压缩 | 100% | Phase 2-5 |
+| 渐进压缩 | **100%+** | Phase 2-5 + Layer 5 LLM 集成 + Context Collapse 时间线 |
 | 缓存感知 | 100% | Phase 6 |
-| 工作记忆 | 100% | Phase 1 |
-| Agent 集成 | 100% | Phase 7 |
-| **总体** | **100%** | 核心功能完全对齐 |
+| 工作记忆 | **100%+** | Phase 1 + token 级淘汰 |
+| Agent 集成 | 100% | Phase 7 + Channel 2 预算截断 |
+| **总体** | **100%+** | 核心功能完全对齐，部分功能超越 |
 
 ### 剩余差距
 
 | 类别 | 差距数 | 优先级 |
 |------|--------|--------|
 | 服务端编辑 | 1 | 🔴 高 |
-| 恢复机制 | 2 | 🟠 中高 |
+| 恢复机制 | 1 | 🟠 中高 |
 | 感知与稳定 | 2 | 🟡 中 |
 | 持久化 | 1 | 🟡 中 |
-| **总计** | **6** | |
+| **总计** | **5** | |
+
+### 最新改进（2026-07-07）
+
+1. **Layer 5 LLM 语义摘要** — 集成 `LLMSummarizer`，完全对齐 Claude Code
+2. **Context Collapse 时间线保留** — 借鉴 RCC/CogCanvas，生成时间线视图
+3. **WorkingMemory token 级淘汰** — `_evict_to_budget()` 按优先级淘汰
+4. **研究资料文档** — `wiki/runtime/context-compression-research.md`
 
 ### 建议
 
 1. **Phase 8 优先实施 Context Editing API** - 影响最大（成本和性能）
-2. **Phase 9 实施恢复和区分** - 提高鲁棒性和质量
+2. **Phase 9 实施恢复机制** - 提高鲁棒性
 3. **Phase 10-11 实施剩余功能** - 完善系统
 
-**预计总时间**: 9-12 周（Phase 8-11）
+**预计总时间**: 8-11 周（Phase 8-11）
 
 ---
 
-**最后更新**: 2026-07-06  
-**版本**: Helen v1.15
+**最后更新**: 2026-07-07  
+**版本**: Helen v1.15 (最新)
