@@ -899,21 +899,26 @@ class LlmMixin:
         memory growth in long REPL sessions.
         P3: Sets model on message for accurate token counting.
         Phase 7: Update working memory from message content.
+        Phase 10: Append to TranscriptStore if enabled.
         """
         # P3: Set model on message for tiktoken encoding selection
         model = getattr(self._history_manager, '_model', None)
         msg = HistoryMessage(role=role, content=content, _model=model)
         self._history.append(msg)
 
+        # Phase 10: Append to TranscriptStore if enabled
+        agent_ctx = getattr(self, '_agent_context', None)
+        if agent_ctx is not None and agent_ctx.transcript_store is not None:
+            agent_ctx.transcript_store.append(msg)
+
         # Phase 7: Update working memory from message
-        if hasattr(self, '_agent_context') and self._agent_context is not None:
-            self._agent_context.update_from_message(content, role)
+        if agent_ctx is not None:
+            agent_ctx.update_from_message(content, role)
 
         # P2: Enforce history size limit after each addition.
         # Skip when AgentContextManager is managing compression — it runs
         # graduated/traditional compression in prepare_context() and
         # calling enforce_limit() here would double-compress the history.
-        agent_ctx = getattr(self, '_agent_context', None)
         if agent_ctx is None or not agent_ctx.compression_enabled:
             trimmed = self._history_manager.enforce_limit(self._history)
             if len(trimmed) < len(self._history):

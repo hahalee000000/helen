@@ -34,6 +34,9 @@ _WHITESPACE: Final[frozenset] = frozenset(" \t\r")
 # ── CJK character ranges for Chinese identifiers ───────────────────────────
 # These ranges cover the most common CJK Unified Ideographs blocks.
 # We use range checks instead of frozenset to avoid huge memory usage.
+# Note: For complete CJK detection, use helen.runtime.token_utils.is_cjk()
+# which covers all CJK ranges (Japanese, Korean, etc.). This local version
+# is kept for performance in the lexer hot path and covers the most common cases.
 _CJK_RANGES: Final[list[tuple[int, int]]] = [
     (0x4E00, 0x9FFF),   # CJK Unified Ideographs (common)
     (0x3400, 0x4DBF),   # CJK Unified Ideographs Extension A
@@ -56,8 +59,13 @@ _CHINESE_QUOTE_OPEN: Final[frozenset] = frozenset(_CHINESE_QUOTE_PAIRS.keys())
 _FULLWIDTH_QUOTE: Final[str] = "\uff02"
 
 
-def _is_cjk(codepoint: int) -> bool:
-    """Return True if the codepoint is in a CJK Unified Ideograph range."""
+def _is_cjk(c: str) -> bool:
+    """Return True if the character is a CJK Unified Ideograph.
+
+    Uses local _CJK_RANGES for performance (lexer hot path).
+    For comprehensive CJK detection, use helen.runtime.token_utils.is_cjk().
+    """
+    codepoint = ord(c)
     return any(lo <= codepoint <= hi for lo, hi in _CJK_RANGES)
 
 
@@ -65,14 +73,14 @@ def _is_alpha_char(c: str) -> bool:
     """Return True if c is an ASCII alpha/underscore or a CJK character."""
     if c in _ALPHA:
         return True
-    return _is_cjk(ord(c))
+    return _is_cjk(c)
 
 
 def _is_alnum_char(c: str) -> bool:
     """Return True if c is ASCII alphanumeric/underscore or a CJK character."""
     if c in _ALNUM:
         return True
-    return _is_cjk(ord(c))
+    return _is_cjk(c)
 
 # ── Single-character dispatch table ────────────────────────────────────────
 _SINGLE_CHAR_TOKENS: Final[dict[str, TokenType]] = {

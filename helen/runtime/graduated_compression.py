@@ -54,7 +54,7 @@ CONTEXT_COLLAPSE_THRESHOLD = 20    # Number of turns before collapse
 def graduated_compress(
     history: list[Message],
     usage_ratio: float,
-    max_tokens: int = 131072,
+    max_tokens: int | None = None,
     llm_client: Callable | None = None,
 ) -> tuple[list[Message], str]:
     """Graduated compression pipeline - cheapest move first.
@@ -63,8 +63,8 @@ def graduated_compress(
 
     Args:
         history: Conversation history
-        usage_ratio: Current usage ratio (0.0 - 1.0)
-        max_tokens: Maximum context window tokens
+        usage_ratio: Current usage ratio (0.0-1.0)
+        max_tokens: Maximum context window tokens. Defaults to DEFAULT_CONTEXT_WINDOW.
         llm_client: Optional LLM client for Layer 5 semantic summarization.
                     If None, Layer 5 falls back to structural summarization.
                     Expected signature: llm_client(messages) -> str
@@ -82,6 +82,10 @@ def graduated_compress(
         - Layer 5 only triggers when all previous layers are insufficient
         - Layer 5 uses LLM when llm_client is provided, otherwise structural
     """
+    from helen.runtime.token_utils import DEFAULT_CONTEXT_WINDOW
+    if max_tokens is None:
+        max_tokens = DEFAULT_CONTEXT_WINDOW
+
     if not history:
         return history, LAYER_NONE
 

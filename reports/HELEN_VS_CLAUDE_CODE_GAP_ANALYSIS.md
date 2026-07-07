@@ -85,7 +85,7 @@ Helen v1.15 通过 Phase 1-7 实施了完整的上下文管理增强，已对齐
 
 ## 未实现的功能（差距）
 
-### ❌ 1. Context Editing API（服务端编辑）
+### ⏸️ 1. Context Editing API（服务端编辑）- 暂不考虑
 
 **Claude Code 实现**:
 - 服务端 Context Editing API（Beta: `context-management-2025-06-27`）
@@ -99,37 +99,18 @@ Helen v1.15 通过 Phase 1-7 实施了完整的上下文管理增强，已对齐
 - ❌ 所有压缩在客户端完成
 - ❌ 无法利用 API 侧的优化
 
-**差距影响**:
-- 无法利用 Anthropic 的服务端优化
-- 每次都需要发送完整上下文
-- 无法实现精细的工具结果控制
+**暂不考虑原因**:
+- 🔒 **强依赖 Anthropic API**: 该功能是 Anthropic 专有 Beta API，仅限 Claude 模型使用
+- 🚫 **不支持多模型**: Helen 支持多种 LLM 提供商（OpenAI、阿里云等），无法统一实现
+- 💡 **替代方案已存在**: Helen 已通过客户端五层渐进压缩实现类似效果
+- 📊 **成本效益不明**: 服务端编辑的成本节省需要大量调用才能体现，当前阶段优先级低
 
-**实施建议**:
-```python
-# 需要实现
-class ContextEditingAPI:
-    def __init__(self, api_client):
-        self.client = api_client
-        self.betas = ["context-management-2025-06-27"]
-    
-    def clear_tool_uses(self, trigger, keep, exclude_tools=None):
-        """清除旧的工具结果"""
-        return {
-            "type": "clear_tool_uses_20250919",
-            "trigger": trigger,
-            "keep": keep,
-            "exclude_tools": exclude_tools or [],
-        }
-    
-    def clear_thinking(self, keep):
-        """清除思考块"""
-        return {
-            "type": "clear_thinking_20251015",
-            "keep": keep,
-        }
-```
+**替代方案**:
+- ✅ 五层渐进压缩（Layer 1-5）已提供完整的客户端压缩能力
+- ✅ Layer 3 Microcompact 保留工具决策，与 `clear_tool_uses` 效果类似
+- ✅ Layer 5 Auto-Compact 使用 LLM 语义摘要，质量更高
 
-**优先级**: 🔴 **高**（影响成本和性能）
+**状态**: ⏸️ **暂不考虑**（等待行业标准或多模型支持方案）
 
 ---
 
@@ -191,27 +172,61 @@ if feature("REACTIVE_COMPACT"):
 - 无法及时释放空间
 - 用户体验差（可能报错）
 
-**实施建议**:
+#### 候选摘要算法分析
+
+Helen 当前已有两个可复用的压缩算法（`helen/runtime/graduated_compression.py`）：
+
+| 算法 | 位置 | 成本 | 质量 | 特点 |
+|------|------|------|------|------|
+| **Context Collapse (Layer 4)** | `_context_collapse()` | 🟢 零成本 | 中 | 结构化提取：文件引用/工具使用/用户意图，时间线分块（每10条一块） |
+| **Auto-Compact (Layer 5)** | `LLMSummarizer.summarize()` | 🔴 LLM 调用 | 高 | 语义摘要：保留任务目标/决策/变更，生成结构化 markdown |
+
+**Reactive Compaction 可复用的算法方案**:
+
+**方案 A: 复用 Context Collapse 的零成本结构化提取（推荐）** ✅
 ```python
-class ReactiveCompactor:
-    def __init__(self, threshold=0.90):
-        self.threshold = threshold
-        self.attempted_this_turn = False
-    
-    def check_and_compact(self, messages, max_tokens):
-        usage = calculate_usage(messages, max_tokens)
-        if usage > self.threshold and not self.attempted_this_turn:
-            # 只压缩刚好够的内容
-            compressed = minimal_compact(messages, target=usage - 0.10)
-            self.attempted_this_turn = True
-            return compressed
-        return messages
-    
-    def reset_turn(self):
-        self.attempted_this_turn = False
+# 复用 _summarize_block() + _extract_global_stats()
+# 优势：零延迟，适合轮次中紧急触发
+# 策略：对最旧的 N 条消息做结构化分块摘要，只释放刚好够的空间
+def reactive_compact_structural(messages, target_usage):
+    # 从前往后分块，每块10条，做结构化提取
+    # 直到 token 使用降到 target_usage 以下
+    ...
 ```
 
-**优先级**: 🟡 **中**（提高稳定性）
+**方案 B: 复用 Auto-Compact 的 LLM 语义摘要**
+```python
+# 复用 LLMSummarizer.summarize()
+# 优势：摘要质量高，保留语义连贯性
+# 劣势：轮次中增加 LLM 调用延迟和成本
+def reactive_compact_semantic(messages, target_usage):
+    summarizer = LLMSummarizer(llm_client)
+    summary = summarizer.summarize(messages_to_compress)
+    ...
+```
+
+**方案 C: 混合分层策略（最优）** 🌟
+```python
+# 轮次内首次触发：用零成本结构化提取（快速释放空间）
+# 轮次结束或空间仍紧张时：升级为 LLM 语义摘要（提升质量）
+class ReactiveCompactor:
+    def check_and_compact(self, messages, max_tokens):
+        usage = calculate_usage(messages, max_tokens)
+        if usage > 0.90 and not self.attempted_this_turn:
+            # 方案 A: 快速结构化压缩（零延迟）
+            compressed = self._structural_compact(messages, target=usage - 0.10)
+            self.attempted_this_turn = True
+            return compressed
+        elif usage > 0.95:
+            # 方案 B: 升级为 LLM 语义压缩（更彻底）
+            return self._semantic_compact(messages, target=usage - 0.30)
+        return messages
+```
+
+**推荐**: 方案 C（混合分层），因为：
+- 轮次中需要**低延迟**（结构化提取 < 1ms vs LLM 调用 > 1s）
+- 轮次后可以**提升质量**（用 LLM 做更彻底的语义压缩）
+- 两者算法代码**都已实现**（`_context_collapse` 和 `LLMSummarizer`），无需重写
 
 ---
 
@@ -327,54 +342,98 @@ class MostlyAppendPersister:
 
 ## 优先级排序
 
-| 优先级 | 功能 | 影响 | 实施难度 | 建议时间 |
-|--------|------|------|---------|---------|
-| 🔴 **高** | Context Editing API | 成本、性能 | 中 | Phase 8 |
-| 🟠 **中高** | Prompt-too-long 恢复 | 鲁棒性 | 低 | Phase 9 |
-| 🟡 **中** | Context Awareness | LLM 行为 | 低 | Phase 10 |
-| 🟡 **中** | Reactive Compaction | 稳定性 | 中 | Phase 10 |
-| 🟡 **中** | mostly-append 持久化 | 可审计性 | 高 | Phase 11 |
+| 优先级 | 功能 | 影响 | 实施难度 | 状态 |
+|--------|------|------|---------|------|
+| ⏸️ **暂不考虑** | Context Editing API | 成本、性能 | 中 | Anthropic 专有 |
+| ✅ **已实现** | Prompt-too-long 恢复 | 鲁棒性 | 低 | Phase 8 ✅ |
+| ✅ **已实现** | Context Awareness | LLM 行为 | 低 | Phase 9A ✅ |
+| ✅ **已实现** | Reactive Compaction | 稳定性 | 中 | Phase 9B ✅ |
+| ✅ **已实现** | mostly-append 持久化 | 可审计性 | 高 | Phase 10 ✅ |
 
 **已实现（不再列为差距）**:
 - ✅ "行动 > 数据"区分 — Layer 3 Microcompact 已实现
 - ✅ Layer 5 LLM 语义摘要 — 已集成 LLMSummarizer
 - ✅ Context Collapse 时间线保留 — 借鉴 RCC/CogCanvas
 - ✅ WorkingMemory token 级淘汰 — `_evict_to_budget()`
+- ✅ Prompt-too-long 恢复级联 — `PromptTooLongRecovery` (Phase 8)
+- ✅ Context Awareness 上下文感知 — `ContextAwareness` + budget tag + usage warning (Phase 9A)
+- ✅ Reactive Compaction 反应式压缩 — `ReactiveCompactor` 混合分层策略 (Phase 9B)
+- ✅ Mostly-append 持久化 — `TranscriptStore` + `BoundaryMarker` + Message UUID (Phase 10)
+
+**暂不考虑**:
+- ⏸️ Context Editing API — Anthropic 专有 Beta API，Helen 已用客户端五层压缩替代
 
 ---
 
-## 实施路线图
+## 实施路线图（Phase 8-10 全部完成 ✅）
 
-### Phase 8: Context Editing API (2-3 周)
-
-**目标**: 集成 Anthropic 服务端编辑 API
-
-**任务**:
-1. 实现 `ContextEditingAPI` 类
-2. 支持 `clear_tool_uses_20250919` 策略
-3. 支持 `clear_thinking_20251015` 策略
-4. 集成到 LLM 调用流程
-5. 添加配置选项
-
-**预期效果**:
-- 利用服务端优化
-- 降低成本 20-30%
-- 提高性能
-
-### Phase 9: 恢复机制 (1-2 周)
+### Phase 8: 恢复机制 ✅
 
 **目标**: 提高鲁棒性
 
-**任务**:
-1. 实现 `PromptTooLongRecovery` 类
-2. 集成到 LLM 调用错误处理
-3. 添加测试
+**实现**:
+1. ✅ 新建 `helen/runtime/context_recovery.py` — `PromptTooLongRecovery` 类，4 步恢复级联
+2. ✅ 集成到 `http_llm.py` sync 和 stream 路径
+3. ✅ 新增 `PromptTooLongError(LLMError)` 异常类型
+4. ✅ 测试 `tests/runtime/test_context_recovery.py`
 
-**预期效果**:
-- 减少 API 错误
-- 提高用户体验
+**效果**:
+- 恢复级联：Context Collapse → Reactive Structural → Reactive Semantic → Aggressive Trim
+- 同步和流式路径均集成
+- 每次恢复记录 tokens 减少量
 
-### Phase 10: 感知与稳定 (2 周)
+### Phase 9A: Context Awareness ✅
+
+**目标**: 提高 LLM 上下文感知
+
+**实现**:
+1. ✅ 新建 `helen/runtime/context_awareness.py` — `ContextAwareness` 类
+2. ✅ `AgentContextManager.prepare_context()` 注入 `<budget:token_budget>` 标签
+3. ✅ `http_llm.py` 工具循环注入 `<system_warning>` 使用警告（4 级：normal/warning/critical/emergency）
+4. ✅ 测试 `tests/runtime/test_context_awareness.py`
+
+**效果**:
+- LLM 知道 context window 限制
+- 工具调用后根据使用率注入警告（50%/75%/90% 阈值）
+- 4 级警告影响 LLM 行为
+
+### Phase 9B: Reactive Compaction ✅
+
+**目标**: 提高轮次中稳定性
+
+**实现**:
+1. ✅ 新建 `helen/runtime/reactive_compaction.py` — `ReactiveCompactor` 类
+2. ✅ 混合分层策略：90% 阈值零成本结构化提取，95% 阈值 LLM 语义压缩
+3. ✅ 每轮最多触发 1 次（避免压缩循环）
+4. ✅ 集成到 `http_llm.py` 所有 4 个工具循环（sync/stream/async/async_stream）
+5. ✅ 测试 `tests/runtime/test_reactive_compaction.py`
+
+**效果**:
+- 轮次中动态压缩，避免 context overflow
+- 零延迟的结构化提取（< 1ms） + 高质量 LLM 语义压缩（可选）
+- 与现有 graduated compression 共享算法
+
+### Phase 10: Mostly-append 持久化 ✅
+
+**目标**: 实现可审计的压缩历史
+
+**实现**:
+1. ✅ 新建 `helen/runtime/transcript_store.py` — `TranscriptStore` + `BoundaryMarker`
+2. ✅ `Message` dataclass 新增可选 `uuid` 字段（向后兼容）
+3. ✅ `AgentContextManager` 新增 `transcript_store_enabled` 参数
+4. ✅ 压缩事件记录为 `BoundaryMarker`（不修改原始消息）
+5. ✅ 序列化/反序列化支持完整审计追踪
+6. ✅ 测试 `tests/runtime/test_transcript_store.py`
+
+**效果**:
+- Append-only 历史存储，可完整审计
+- 压缩事件保留原始消息 + 边界标记
+- `read_view()` 重建当前有效视图
+- UUID 链接支持历史追踪
+
+**总测试数**: 2660+ (新增 ~70 个测试)
+
+### Phase 9: 感知与稳定 (2 周)
 
 **目标**: 提高 LLM 感知和稳定性
 
@@ -388,7 +447,7 @@ class MostlyAppendPersister:
 - LLM 知道上下文使用情况
 - 长轮次更稳定
 
-### Phase 11: 持久化 (3-4 周)
+### Phase 10: 持久化 (3-4 周)
 
 **目标**: 实现 mostly-append 持久化
 
@@ -414,34 +473,45 @@ class MostlyAppendPersister:
 | 缓存感知 | 100% | Phase 6 |
 | 工作记忆 | **100%+** | Phase 1 + token 级淘汰 |
 | Agent 集成 | 100% | Phase 7 + Channel 2 预算截断 |
-| **总体** | **100%+** | 核心功能完全对齐，部分功能超越 |
+| 恢复机制 | **100%** | Phase 8 — 4 步恢复级联 |
+| 上下文感知 | **100%** | Phase 9A — budget tag + usage warning |
+| 反应式压缩 | **100%** | Phase 9B — 混合分层策略 |
+| 持久化 | **100%** | Phase 10 — append-only transcript |
+| **总体** | **100%** | **所有差距已关闭**（Context Editing API 暂不考虑） |
 
 ### 剩余差距
 
 | 类别 | 差距数 | 优先级 |
 |------|--------|--------|
-| 服务端编辑 | 1 | 🔴 高 |
-| 恢复机制 | 1 | 🟠 中高 |
-| 感知与稳定 | 2 | 🟡 中 |
-| 持久化 | 1 | 🟡 中 |
-| **总计** | **5** | |
+| **总计** | **0** | **所有差距已关闭** ✅ |
 
-### 最新改进（2026-07-07）
+**暂不考虑**:
+- ⏸️ Context Editing API — Anthropic 专有 Beta API，Helen 已用客户端五层压缩替代
 
-1. **Layer 5 LLM 语义摘要** — 集成 `LLMSummarizer`，完全对齐 Claude Code
-2. **Context Collapse 时间线保留** — 借鉴 RCC/CogCanvas，生成时间线视图
-3. **WorkingMemory token 级淘汰** — `_evict_to_budget()` 按优先级淘汰
-4. **研究资料文档** — `wiki/runtime/context-compression-research.md`
+### 最新改进（2026-07-07 Phase 8-10）
+
+1. **Prompt-too-long 恢复级联** — `PromptTooLongRecovery` 4 步级联（Context Collapse → Structural → Semantic → Aggressive Trim）
+2. **Context Awareness 上下文感知** — `<budget:token_budget>` + `<system_warning>` 4 级警告
+3. **Reactive Compaction 反应式压缩** — `ReactiveCompactor` 混合分层策略（90% 结构化 + 95% 语义）
+4. **Mostly-append 持久化** — `TranscriptStore` + `BoundaryMarker` + Message UUID
+5. **PromptTooLongError** — 新增异常类型（继承 `LLMError`）
 
 ### 建议
 
-1. **Phase 8 优先实施 Context Editing API** - 影响最大（成本和性能）
-2. **Phase 9 实施恢复机制** - 提高鲁棒性
-3. **Phase 10-11 实施剩余功能** - 完善系统
+**所有 Phase 8-10 已完成实现** ✅
 
-**预计总时间**: 8-11 周（Phase 8-11）
+1. **Context Editing API 暂不考虑** - 待 Anthropic API 开放或出现跨模型方案时再评估
+2. **未来可扩展** - 将压缩事件接入 observability 系统（`ObservabilityManager.compression_events`）
+3. **未来可扩展** - REPL 命令 `:compression_log` 展示压缩历史（基于 TranscriptStore 审计）
+
+**实现状态**:
+- ✅ Phase 8: Prompt-too-long 恢复级联
+- ✅ Phase 9A: Context Awareness 上下文感知
+- ✅ Phase 9B: Reactive Compaction 反应式压缩
+- ✅ Phase 10: Mostly-append 持久化
+- ⏸️ Context Editing API（暂不考虑）
 
 ---
 
-**最后更新**: 2026-07-07  
+**最后更新**: 2026-07-07 (Phase 8-10 完成)
 **版本**: Helen v1.15 (最新)

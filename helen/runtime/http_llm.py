@@ -377,10 +377,12 @@ class HttpLLMRuntime(LLMRuntime):
     enable_concurrent_tools: bool = True
     enable_message_sanitization: bool = True
     enable_tool_truncation: bool = True
+    enable_reactive_compaction: bool = True
     _last_error: str | None = field(default=None, repr=False)
     _client: Any = field(default=None, repr=False, init=False)
     _async_client: Any = field(default=None, repr=False, init=False)
     _tool_pool: Any = field(default=None, repr=False, init=False)
+    _reactive_compactor: Any = field(default=None, repr=False, init=False)
 
     def __post_init__(self):
         """Auto-load configuration from Helen or Hermes config."""
@@ -392,6 +394,11 @@ class HttpLLMRuntime(LLMRuntime):
                 self.api_key = hermes_env.get("DASHSCOPE_API_KEY", "")
             if not self.default_model:
                 self.default_model = "qwen3.7-plus"
+
+        # Initialize reactive compactor for mid-turn compression
+        if self.enable_reactive_compaction:
+            from helen.runtime.reactive_compaction import ReactiveCompactor
+            self._reactive_compactor = ReactiveCompactor()
 
         # Persistent HTTP client with connection pooling (keeps TCP+TLS alive)
         self._client = httpx.Client(
@@ -516,6 +523,10 @@ class HttpLLMRuntime(LLMRuntime):
         max_empty_retries = 2
 
         while budget.consume():
+            # Phase 9B: Reset reactive compactor per-turn state
+            if getattr(self, '_reactive_compactor', None) is not None:
+                self._reactive_compactor.reset_turn()
+
             # Message sanitization before each API call
             if self.enable_message_sanitization:
                 sanitized = _sanitize_messages(messages)
@@ -576,6 +587,24 @@ class HttpLLMRuntime(LLMRuntime):
                         "result": result[:500] if len(result) > 500 else result,
                     })
 
+                # Phase 9B: Reactive compaction check after tool results
+                if getattr(self, 'enable_reactive_compaction', False) and \
+                   getattr(self, '_reactive_compactor', None) is not None:
+                    use_model = model or self.default_model
+                    from helen.runtime.history import get_model_context_window
+                    max_tokens = get_model_context_window(use_model)
+                    messages, rc_layer = self._reactive_compactor.check_and_compact(
+                        messages, max_tokens,
+                    )
+                    if rc_layer:
+                        logger.info(
+                            "Reactive compaction triggered during tool loop: %s",
+                            rc_layer,
+                        )
+
+                # Phase 9A: Context awareness — inject usage warning if needed
+                self._inject_usage_warning_if_needed(messages)
+
                 # Reset empty response counter after successful tool execution
                 empty_response_retries = 0
                 continue
@@ -627,8 +656,11 @@ class HttpLLMRuntime(LLMRuntime):
         """Send a chat completion request with retry logic.
 
         Retries on transient errors (timeout, 5xx) with exponential backoff.
-        On context-too-large errors, automatically trims oldest messages and
-        retries once (P1: context overflow auto-recovery).
+        On context-too-large errors, uses multi-step recovery cascade:
+        1. Context Collapse overflow recovery (zero-cost)
+        2. Reactive Compaction — structural (zero-cost)
+        3. Reactive Compaction — semantic (if llm_client available)
+        4. Aggressive trim (last resort)
         """
         context_overflow_retried = False
 
@@ -639,18 +671,30 @@ class HttpLLMRuntime(LLMRuntime):
 
             error = self._last_error or ""
 
-            # P1: Context overflow auto-recovery
-            # Detect context-too-large errors and trim messages, then retry ONCE
+            # P1: Context overflow auto-recovery (multi-step cascade)
             if not context_overflow_retried and _is_context_length_error(error):
                 context_overflow_retried = True
                 if len(messages) > 2:
                     logger.warning(
-                        "Context length exceeded (%s) — trimming oldest messages and retrying",
+                        "Context length exceeded (%s) — starting recovery cascade",
                         error[:100],
                     )
-                    # Drop oldest non-system messages (2 at a time)
-                    messages[:] = _trim_messages_for_recovery(messages, drop_count=2)
-                    continue
+                    # Use multi-step recovery cascade
+                    from helen.runtime.context_recovery import PromptTooLongRecovery
+                    max_tokens = self._get_model_context_window(model)
+                    recovery = PromptTooLongRecovery(max_tokens=max_tokens)
+                    recovery_result = recovery.recover(messages, max_tokens=max_tokens)
+                    if recovery_result.success:
+                        messages[:] = recovery_result.messages
+                        logger.info(
+                            "Recovery succeeded via %s (reduced ~%d tokens)",
+                            recovery_result.strategy, recovery_result.tokens_reduced,
+                        )
+                        continue
+                    else:
+                        logger.error(
+                            "All recovery strategies exhausted — cannot reduce context"
+                        )
                 else:
                     logger.warning(
                         "Context length exceeded but only %d messages remain — cannot trim further",
@@ -683,6 +727,45 @@ class HttpLLMRuntime(LLMRuntime):
             break
 
         return None
+
+    def _get_model_context_window(self, model: str | None = None) -> int:
+        """Get the context window size for the current model."""
+        from helen.runtime.history import get_model_context_window
+        use_model = model or self.default_model
+        return get_model_context_window(use_model)
+
+    def _inject_usage_warning_if_needed(self, messages: list[dict[str, Any]]) -> None:
+        """Phase 9A: Inject usage warning into messages if context is getting tight.
+
+        Modifies messages list in-place. If the last message is already a usage
+        warning (system message starting with <system_warning>), replaces it.
+        Otherwise, appends a new warning.
+
+        Args:
+            messages: Messages list (modified in-place)
+        """
+        try:
+            from helen.runtime.context_awareness import ContextAwareness
+
+            max_tokens = self._get_model_context_window()
+            awareness = ContextAwareness(max_tokens=max_tokens)
+            warning = awareness.build_usage_warning(messages)
+
+            if warning is None:
+                # Remove any existing warning if usage is now normal
+                if messages and messages[-1].get("role") == "system" and \
+                   messages[-1].get("content", "").startswith("<system_warning>"):
+                    messages.pop()
+                return
+
+            # Replace or append warning
+            if messages and messages[-1].get("role") == "system" and \
+               messages[-1].get("content", "").startswith("<system_warning>"):
+                messages[-1]["content"] = warning
+            else:
+                messages.append({"role": "system", "content": warning})
+        except Exception as e:
+            logger.debug("Usage warning injection failed (non-fatal): %s", e)
 
     def _chat(
         self,
@@ -837,6 +920,10 @@ class HttpLLMRuntime(LLMRuntime):
         max_stream_retries = self.max_retries  # Same as non-streaming (default 3)
 
         while budget.consume():
+            # Phase 9B: Reset reactive compactor per-turn state
+            if getattr(self, '_reactive_compactor', None) is not None:
+                self._reactive_compactor.reset_turn()
+
             # Message sanitization before each API call
             if self.enable_message_sanitization:
                 sanitized = _sanitize_messages(messages)
@@ -1014,6 +1101,25 @@ class HttpLLMRuntime(LLMRuntime):
                             "content": result,
                         })
 
+                    # Phase 9B: Reactive compaction check after tool results (stream)
+                    if getattr(self, 'enable_reactive_compaction', False) and \
+                       getattr(self, '_reactive_compactor', None) is not None:
+                        use_model = model or self.default_model
+                        from helen.runtime.history import get_model_context_window
+                        max_tokens = get_model_context_window(use_model)
+                        messages, rc_layer = self._reactive_compactor.check_and_compact(
+                            messages, max_tokens,
+                        )
+                        if rc_layer:
+                            logger.info(
+                                "Reactive compaction triggered in stream tool loop: %s",
+                                rc_layer,
+                            )
+                            yield {"type": "compaction", "strategy": rc_layer}
+
+                    # Phase 9A: Context awareness — inject usage warning if needed
+                    self._inject_usage_warning_if_needed(messages)
+
                     # Reset empty response counter after successful tool execution
                     empty_response_retries = 0
                     stream_retry = 0  # P2: Reset stream retry counter
@@ -1056,18 +1162,34 @@ class HttpLLMRuntime(LLMRuntime):
                     error_code = api_error.get("code", "")
                     full_error = f"API error ({e.response.status_code} {error_code}): {error_msg}"
 
-                    # P1: Context overflow auto-recovery for streaming
+                    # P1: Context overflow auto-recovery for streaming (multi-step cascade)
                     if _is_context_length_error(error_msg) and len(messages) > 2:
                         logger.warning(
-                            "Context length exceeded in stream (%s) — trimming and retrying",
+                            "Context length exceeded in stream (%s) — starting recovery cascade",
                             error_msg[:100],
                         )
-                        messages[:] = _trim_messages_for_recovery(messages, drop_count=2)
-                        # Reset tool call accumulation for retry
-                        tool_calls_acc.clear()
-                        full_chunks.clear()
-                        stream_retry = 0  # Reset stream retry counter
-                        continue  # Retry with trimmed messages
+                        from helen.runtime.context_recovery import PromptTooLongRecovery
+                        use_model = model or self.default_model
+                        from helen.runtime.history import get_model_context_window
+                        max_tokens = get_model_context_window(use_model)
+                        recovery = PromptTooLongRecovery(max_tokens=max_tokens)
+                        recovery_result = recovery.recover(messages, max_tokens=max_tokens)
+                        if recovery_result.success:
+                            messages[:] = recovery_result.messages
+                            logger.info(
+                                "Stream recovery succeeded via %s (reduced ~%d tokens)",
+                                recovery_result.strategy, recovery_result.tokens_reduced,
+                            )
+                            # Reset tool call accumulation for retry
+                            tool_calls_acc.clear()
+                            full_chunks.clear()
+                            stream_retry = 0  # Reset stream retry counter
+                            continue  # Retry with recovered messages
+                        else:
+                            logger.error(
+                                "All stream recovery strategies exhausted — yielding error"
+                            )
+                            yield {"type": "error", "message": full_error}
 
                     # P2: Retry on 5xx and 429 rate limit errors
                     is_retryable_status = (
@@ -1165,6 +1287,10 @@ class HttpLLMRuntime(LLMRuntime):
         max_empty_retries = 2
 
         while budget.consume():
+            # Phase 9B: Reset reactive compactor per-turn state
+            if getattr(self, '_reactive_compactor', None) is not None:
+                self._reactive_compactor.reset_turn()
+
             if self.enable_message_sanitization:
                 _sanitize_messages(messages)
                 _repair_message_sequence(messages)
@@ -1215,6 +1341,25 @@ class HttpLLMRuntime(LLMRuntime):
                         "tool_call_id": tc["id"],
                         "content": result,
                     })
+
+                # Phase 9B: Reactive compaction check after tool results (async)
+                if getattr(self, 'enable_reactive_compaction', False) and \
+                   getattr(self, '_reactive_compactor', None) is not None:
+                    use_model_async = model or self.default_model
+                    from helen.runtime.history import get_model_context_window
+                    max_tokens_async = get_model_context_window(use_model_async)
+                    messages, rc_layer = self._reactive_compactor.check_and_compact(
+                        messages, max_tokens_async,
+                    )
+                    if rc_layer:
+                        logger.info(
+                            "Reactive compaction triggered in async tool loop: %s",
+                            rc_layer,
+                        )
+
+                # Phase 9A: Context awareness — inject usage warning if needed
+                self._inject_usage_warning_if_needed(messages)
+
                 empty_response_retries = 0
                 continue
 
@@ -1275,6 +1420,10 @@ class HttpLLMRuntime(LLMRuntime):
         max_empty_retries = 2
 
         while budget.consume():
+            # Phase 9B: Reset reactive compactor per-turn state
+            if getattr(self, '_reactive_compactor', None) is not None:
+                self._reactive_compactor.reset_turn()
+
             if self.enable_message_sanitization:
                 _sanitize_messages(messages)
                 _repair_message_sequence(messages)
@@ -1411,6 +1560,26 @@ class HttpLLMRuntime(LLMRuntime):
                             "tool_call_id": tc["id"],
                             "content": result,
                         })
+
+                    # Phase 9B: Reactive compaction check after tool results (async stream)
+                    if getattr(self, 'enable_reactive_compaction', False) and \
+                       getattr(self, '_reactive_compactor', None) is not None:
+                        use_model_as = model or self.default_model
+                        from helen.runtime.history import get_model_context_window
+                        max_tokens_as = get_model_context_window(use_model_as)
+                        messages, rc_layer = self._reactive_compactor.check_and_compact(
+                            messages, max_tokens_as,
+                        )
+                        if rc_layer:
+                            logger.info(
+                                "Reactive compaction triggered in async stream tool loop: %s",
+                                rc_layer,
+                            )
+                            yield {"type": "compaction", "strategy": rc_layer}
+
+                    # Phase 9A: Context awareness — inject usage warning if needed
+                    self._inject_usage_warning_if_needed(messages)
+
                     empty_response_retries = 0
                     continue
 

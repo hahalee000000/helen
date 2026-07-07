@@ -200,6 +200,8 @@ def _clear_context() -> dict:
     - Resetting context after an error
     - Managing memory in long-running agents
 
+    Phase 11: Unified through AgentContextManager.
+
     Returns:
         dict with status and cleared message count:
         {
@@ -224,24 +226,31 @@ def _clear_context() -> dict:
             "cleared_messages": 0,
         }
 
-    # Calculate total tokens using Message.token_count property (lazy-cached)
+    # Calculate tokens before clearing
     estimated_tokens = sum(msg.token_count for msg in _interpreter_history if hasattr(msg, 'token_count'))
-
     cleared_count = len(_interpreter_history)
-    _interpreter_history.clear()
 
-    # Also clear working memory to avoid stale data leaking across context resets
+    # Phase 11: Use AgentContextManager for unified clearing
     if _interpreter_agent_context is not None:
-        working_memory = getattr(_interpreter_agent_context, "working_memory", None)
-        if working_memory is not None:
-            working_memory.clear()
-
-    return {
-        "status": "ok",
-        "cleared_messages": cleared_count,
-        "cleared_tokens": estimated_tokens,
-        "warning": "LLM will lose all previous context",
-    }
+        result = _interpreter_agent_context.clear_context()
+        # Also clear the history list itself
+        _interpreter_history.clear()
+        return {
+            "status": "ok",
+            "cleared_messages": cleared_count,
+            "cleared_tokens": estimated_tokens,
+            "cleared_items": result.get("cleared_items", []),
+            "warning": "LLM will lose all previous context",
+        }
+    else:
+        # Fallback: clear directly
+        _interpreter_history.clear()
+        return {
+            "status": "ok",
+            "cleared_messages": cleared_count,
+            "cleared_tokens": estimated_tokens,
+            "warning": "LLM will lose all previous context",
+        }
 
 
 def _compress_context(strategy: str = "auto") -> dict:
@@ -250,9 +259,12 @@ def _compress_context(strategy: str = "auto") -> dict:
     Triggers context compression using the specified strategy. This reduces
     token usage while preserving important context.
 
+    Phase 11: When called without strategy (or "auto"), uses AgentContextManager
+    to perform LLM-based compression (Layer 5 functionality).
+
     Args:
         strategy: Compression strategy to use:
-            - "auto": Let HistoryManager decide (default, based on token threshold)
+            - "auto": Use AgentContextManager (Layer 5, LLM if available)
             - "summarize": Use LLM to summarize old messages
             - "truncate": Keep only the most recent N messages
             - "none": No compression (no-op)
@@ -269,18 +281,18 @@ def _compress_context(strategy: str = "auto") -> dict:
         }
 
     Example:
-        // Auto-compress when context is large
-        let result = compress_context("auto")
+        // Auto-compress (uses Layer 5 via AgentContextManager)
+        let result = compress_context()
         if result["status"] == "ok" {
             print("Compressed from " + str(result["original_tokens"]) +
                   " to " + str(result["compressed_tokens"]) + " tokens")
         }
 
-        // Force summarize compression
+        // Force summarize compression (legacy)
         compress_context("summarize")
 
     Note:
-        - "auto" strategy only compresses if token count exceeds threshold
+        - "auto" uses AgentContextManager with LLM if available
         - "summarize" may call LLM (slow but preserves context)
         - "truncate" is fast but loses old messages
         - Returns original == compressed if no compression was needed
@@ -294,6 +306,23 @@ def _compress_context(strategy: str = "auto") -> dict:
             "strategy": strategy,
         }
 
+    # Phase 11: Use AgentContextManager for "auto" strategy (Layer 5)
+    if strategy == "auto" and _interpreter_agent_context is not None:
+        original_count = len(_interpreter_history)
+        result = _interpreter_agent_context.compress_context()
+
+        return {
+            "status": result.get("status", "ok"),
+            "reason": result.get("reason", ""),
+            "original_messages": original_count,
+            "compressed_messages": len(_interpreter_history),
+            "original_tokens": result.get("original_tokens", 0),
+            "compressed_tokens": result.get("compressed_tokens", 0),
+            "saved_tokens": result.get("saved_tokens", 0),
+            "strategy": result.get("strategy", "llm_semantic"),
+        }
+
+    # Legacy strategies (for backward compatibility)
     if strategy == "none":
         # Calculate tokens using Message.token_count property
         total_tokens = sum(msg.token_count for msg in _interpreter_history if hasattr(msg, 'token_count'))

@@ -196,7 +196,7 @@ class TestAgentContextManagerIntegration:
         interp = Interpreter()
         interp._agent_context.update_from_tool_call(
             "read_file",
-            {"file_path": "/test/file.py"},
+            {"path": "/test/file.py"},
             "file contents"
         )
         assert "/test/file.py" in interp._agent_context.working_memory.active_files

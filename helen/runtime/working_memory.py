@@ -343,7 +343,7 @@ def build_three_channel_context(
     working_memory: WorkingMemory,
     history: list,
     budget: dict[str, float] | None = None,
-    max_tokens: int = 131072,
+    max_tokens: int | None = None,
 ) -> list[dict]:
     """Build three-channel context for LLM submission.
 
@@ -361,6 +361,10 @@ def build_three_channel_context(
     Returns:
         List of messages ready for LLM submission
     """
+    from helen.runtime.token_utils import DEFAULT_CONTEXT_WINDOW
+    if max_tokens is None:
+        max_tokens = DEFAULT_CONTEXT_WINDOW
+
     if budget is None:
         budget = {
             "system": 0.15,

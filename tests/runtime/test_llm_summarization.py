@@ -1,16 +1,14 @@
 """Tests for Phase 3: LLM-based semantic compression.
 
-Tests the Auto-Compact layer that uses LLM to generate intelligent summaries.
+Tests the LLMSummarizer class that uses LLM to generate intelligent summaries.
+Note: auto_compact() was removed as dead code - its functionality is now in
+graduated_compression._auto_compact().
 """
 
 import pytest
 from unittest.mock import Mock, MagicMock
 from helen.runtime.history import Message
-from helen.runtime.llm_summarizer import (
-    LLMSummarizer,
-    auto_compact,
-    calculate_next_compaction_threshold,
-)
+from helen.runtime.llm_summarizer import LLMSummarizer
 
 
 class TestLLMSummarizer:
@@ -82,78 +80,3 @@ class TestLLMSummarizer:
         assert "User message" in user_msg
         # System prompt should not be in the conversation text
         assert "System prompt" not in user_msg or user_msg.count("System prompt") == 0
-
-
-class TestAutoCompact:
-    """Tests for auto_compact function."""
-
-    def test_auto_compact_creates_summary(self):
-        """Test that auto_compact creates a summary message."""
-        mock_llm = Mock(return_value="## Summary\nTest summary")
-
-        history = [
-            Message(role="user", content="Hello", tool_calls=[], tool_call_id=None, _token_count=10, _model="qwen3.7-plus"),
-            Message(role="assistant", content="Hi", tool_calls=[], tool_call_id=None, _token_count=10, _model="qwen3.7-plus"),
-        ]
-
-        result = auto_compact(history, mock_llm, target_tokens=1000)
-
-        # Should have summary message at the start
-        assert len(result) > 0
-        assert result[0].role == "system"
-        assert "summary" in result[0].content.lower()
-
-    def test_auto_compact_marks_old_messages(self):
-        """Test that auto_compact marks old messages as compressed."""
-        mock_llm = Mock(return_value="## Summary\nTest summary")
-
-        history = [
-            Message(role="user", content="Hello", tool_calls=[], tool_call_id=None, _token_count=10, _model="qwen3.7-plus"),
-            Message(role="assistant", content="Hi", tool_calls=[], tool_call_id=None, _token_count=10, _model="qwen3.7-plus"),
-        ]
-
-        result = auto_compact(history, mock_llm, target_tokens=1000)
-
-        # Old messages should be marked as compressed
-        for msg in result[1:]:  # Skip the summary message
-            assert msg.compressed is True
-
-    def test_auto_compact_handles_empty_history(self):
-        """Test that auto_compact handles empty history."""
-        mock_llm = Mock()
-
-        result = auto_compact([], mock_llm, target_tokens=1000)
-
-        assert result == []
-        mock_llm.assert_not_called()
-
-
-class TestSixtyPercentRule:
-    """Tests for the 60% rule calculation."""
-
-    def test_calculate_next_threshold(self):
-        """Test that next threshold is calculated correctly."""
-        # After compaction at 30%, next threshold should be ~72%
-        # 30% + 60% × 70% = 30% + 42% = 72%
-        max_tokens = 100000
-        current_usage = 30000  # 30% after compaction
-
-        next_threshold = calculate_next_compaction_threshold(current_usage, max_tokens)
-
-        # Expected: 30000 + 0.60 * (100000 - 30000) = 30000 + 42000 = 72000
-        expected = 72000
-        assert abs(next_threshold - expected) < 100  # Allow small floating point error
-
-    def test_calculate_next_threshold_with_different_usage(self):
-        """Test threshold calculation with different usage levels."""
-        max_tokens = 131072  # Standard Qwen window
-
-        # The function always assumes post-compaction usage is 30%
-        # regardless of current_usage parameter
-        current_usage = 0.40 * max_tokens
-        next_threshold = calculate_next_compaction_threshold(current_usage, max_tokens)
-
-        # Expected: always based on 30% post-compaction
-        # 30% + 60% × 70% = 30% + 42% = 72%
-        expected = 0.72 * max_tokens
-        assert abs(next_threshold - expected) < 100

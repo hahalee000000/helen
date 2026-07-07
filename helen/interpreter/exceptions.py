@@ -135,6 +135,36 @@ class ModelError(LLMError):
 
 
 @dataclass
+class PromptTooLongError(LLMError):
+    """Prompt exceeds model context window — all recovery attempts exhausted.
+
+    Raised when the LLM API returns a context-too-large error and the
+    recovery cascade (context collapse + reactive compaction) cannot
+    reduce the context enough.
+
+    Inherits from LLMError so that ``catch LLMError`` catches it.
+
+    Attributes:
+        tokens_used: Estimated tokens in the prompt that was too long.
+        tokens_limit: Model's maximum context window tokens.
+    """
+
+    tokens_used: int = 0
+    tokens_limit: int = 0
+
+    def __init__(
+        self,
+        message: str = "prompt too long",
+        tokens_used: int = 0,
+        tokens_limit: int = 0,
+        span: SourceSpan | None = None,
+    ) -> None:
+        super().__init__(message, span)
+        self.tokens_used = tokens_used
+        self.tokens_limit = tokens_limit
+
+
+@dataclass
 class AgentError(LLMError):
     """Agent call failed — wraps underlying cause with agent context.
 
@@ -229,6 +259,7 @@ _PREDEFINED_EXCEPTIONS: dict[str, type[HelenRuntimeError]] = {
     "LLMError": LLMError,
     "TimeoutError": TimeoutError,
     "ModelError": ModelError,
+    "PromptTooLongError": PromptTooLongError,
     "AgentError": AgentError,
     "ToolError": ToolError,
     "RuntimeError": RuntimeError,

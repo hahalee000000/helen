@@ -32,7 +32,7 @@ Usage:
     messages = agent_context.prepare_context(
         system_prompt="...",
         history=history,
-        max_tokens=131072
+        max_tokens=None  # Uses DEFAULT_CONTEXT_WINDOW
     )
 """
 
@@ -83,6 +83,7 @@ class AgentContextManager:
         llm_client: Any | None = None,
         *,
         compression_enabled: bool | None = None,
+        transcript_store_enabled: bool = False,
     ):
         """Initialize agent context manager.
 
@@ -99,6 +100,10 @@ class AgentContextManager:
             compression_enabled: (deprecated) Backward compat shim.
                 True → "graduated", False → "none".
                 Only used when compression_strategy is not explicitly set.
+            transcript_store_enabled: Enable mostly-append transcript storage.
+                When enabled, all messages are preserved in an append-only
+                transcript, and compression events are recorded as boundary
+                markers rather than modifying/deleting messages.
         """
         # Backward compatibility: compression_enabled → compression_strategy
         if compression_enabled is not None:
@@ -118,6 +123,17 @@ class AgentContextManager:
         self.llm_client = llm_client
         self._last_usage_ratio = 0.0
         self._last_cache_stats: CacheStats | None = None
+
+        # Phase 10: Mostly-append transcript storage
+        self._transcript_store = None
+        if transcript_store_enabled:
+            from helen.runtime.transcript_store import TranscriptStore
+            self._transcript_store = TranscriptStore()
+
+    @property
+    def transcript_store(self):
+        """Access the transcript store (None if not enabled)."""
+        return self._transcript_store
 
     # -- Backward compatibility property for compression_enabled --
 
@@ -201,18 +217,18 @@ class AgentContextManager:
             return
 
         if tool_name == "read_file":
-            file_path = tool_args.get("file_path", "")
+            file_path = tool_args.get("path", "")
             if file_path:
                 self.working_memory._add_active_file(file_path)
 
         elif tool_name == "write_file":
-            file_path = tool_args.get("file_path", "")
+            file_path = tool_args.get("path", "")
             if file_path:
                 self.working_memory._add_active_file(file_path)
                 self.working_memory._add_decision(f"Modified {file_path}")
 
         elif tool_name == "patch_file":
-            file_path = tool_args.get("file_path", "")
+            file_path = tool_args.get("path", "")
             if file_path:
                 self.working_memory._add_active_file(file_path)
                 self.working_memory._add_decision(f"Patched {file_path}")
@@ -244,6 +260,7 @@ class AgentContextManager:
         Applies:
         1. Compression to history (via unified _compress_history)
         2. Three-channel context building (if working memory enabled)
+        3. Budget tag injection (Phase 9A: Context Awareness)
 
         Args:
             system_prompt: System prompt text
@@ -257,10 +274,13 @@ class AgentContextManager:
         # Apply compression via unified entry point
         compressed_history = self._compress_history(history, max_tokens)
 
+        # Phase 9A: Inject budget tag into system prompt
+        enhanced_system_prompt = self._inject_budget_tag(system_prompt, max_tokens)
+
         # Build three-channel context if working memory enabled
         if self.working_memory_enabled:
             messages = build_three_channel_context(
-                system_prompt=system_prompt or "",
+                system_prompt=enhanced_system_prompt or "",
                 working_memory=self.working_memory,
                 history=compressed_history,
                 max_tokens=max_tokens,
@@ -268,8 +288,8 @@ class AgentContextManager:
         else:
             # Fallback: just system + history
             messages = []
-            if system_prompt:
-                messages.append({"role": "system", "content": system_prompt})
+            if enhanced_system_prompt:
+                messages.append({"role": "system", "content": enhanced_system_prompt})
 
             for msg in compressed_history:
                 messages.append({
@@ -278,6 +298,23 @@ class AgentContextManager:
                 })
 
         return messages
+
+    def _inject_budget_tag(self, system_prompt: str | None, max_tokens: int) -> str:
+        """Inject token budget tag into system prompt.
+
+        Phase 9A: Context Awareness — tells the LLM how much context it has.
+
+        Args:
+            system_prompt: Current system prompt
+            max_tokens: Maximum context window tokens
+
+        Returns:
+            System prompt with budget tag prepended
+        """
+        budget_tag = f"<budget:token_budget>{max_tokens}</budget:token_budget>"
+        if system_prompt:
+            return f"{budget_tag}\n\n{system_prompt}"
+        return budget_tag
 
     def _compress_history(
         self,
@@ -334,7 +371,87 @@ class AgentContextManager:
         if layer != "none":
             logger.debug(f"Applied graduated compression: {layer}")
             self._last_usage_ratio = _calculate_usage_ratio(compressed, max_tokens)
+
+            # Phase 10: Record compression event in TranscriptStore
+            if self._transcript_store is not None:
+                self._record_transcript_compression(history, compressed, layer)
+
         return compressed
+
+    def _record_transcript_compression(
+        self,
+        original: list[Message],
+        compressed: list[Message],
+        layer: str,
+    ) -> None:
+        """Record a compression event in the TranscriptStore.
+
+        Identifies which messages were compressed and records a boundary marker.
+
+        Args:
+            original: Original history before compression
+            compressed: History after compression
+            layer: Name of the compression layer that was applied
+        """
+        if self._transcript_store is None:
+            return
+
+        # Find the boundary between compressed and preserved messages
+        # by matching the first few recent messages
+        if len(compressed) <= 1:
+            return  # Nothing meaningful to record
+
+        # Find anchor: first message in compressed that exists in original
+        anchor_uuid = ""
+        head_uuid = ""
+        tail_uuid = ""
+
+        # Find messages with UUIDs (assigned by TranscriptStore)
+        original_with_uuid = [m for m in original if m.uuid]
+        compressed_with_uuid = [m for m in compressed if m.uuid]
+
+        if not original_with_uuid or not compressed_with_uuid:
+            return
+
+        # The first message in compressed is usually the summary
+        # Find the first "real" message in compressed that matches original
+        for msg in compressed:
+            if msg.uuid and msg.uuid in {m.uuid for m in original_with_uuid}:
+                anchor_uuid = msg.uuid
+                break
+
+        if not anchor_uuid:
+            return
+
+        # Find the range of compressed messages (those in original but not in compressed)
+        compressed_uuids = {m.uuid for m in compressed_with_uuid}
+        compressed_original = [m for m in original_with_uuid if m.uuid not in compressed_uuids]
+
+        if compressed_original:
+            head_uuid = compressed_original[0].uuid
+            tail_uuid = compressed_original[-1].uuid
+
+            # Calculate token counts
+            original_tokens = sum(m.token_count for m in original)
+            compressed_tokens = sum(m.token_count for m in compressed)
+
+            # Find a summary (look for a system message in compressed that contains summary)
+            summary = "Compressed conversation"
+            for msg in compressed:
+                if msg.role == "system" and msg.content and len(msg.content) > 10:
+                    if "summary" in msg.content.lower() or "collapse" in msg.content.lower():
+                        summary = msg.content[:200]
+                        break
+
+            self._transcript_store.record_compression(
+                head_uuid=head_uuid,
+                tail_uuid=tail_uuid,
+                anchor_uuid=anchor_uuid,
+                summary=summary,
+                layer=layer,
+                original_token_count=original_tokens,
+                compressed_token_count=compressed_tokens,
+            )
 
     def _apply_traditional(
         self,
@@ -583,4 +700,175 @@ class AgentContextManager:
         }
         if self._last_cache_stats is not None:
             stats["cache_stats"] = self._last_cache_stats.to_dict()
+        if self._transcript_store is not None:
+            stats["transcript_store"] = {
+                "enabled": True,
+                "total_items": self._transcript_store.get_transcript_size(),
+                "message_count": self._transcript_store.get_message_count(),
+                "boundary_count": self._transcript_store.get_boundary_count(),
+            }
         return stats
+
+    # -----------------------------------------------------------------------
+    # Phase 11: Unified Context Management API
+    # -----------------------------------------------------------------------
+
+    def clear_context(self) -> dict[str, Any]:
+        """Clear the current conversation context.
+
+        This is the unified entry point for the stdlib clear_context() function.
+        Clears working memory, resets compression state, and (if TranscriptStore
+        is enabled) records a boundary marker.
+
+        Returns:
+            Dict with operation results:
+            {
+                "status": "ok" | "error",
+                "cleared_items": list of what was cleared
+            }
+        """
+        cleared = []
+
+        # Clear working memory
+        if self.working_memory_enabled:
+            self.working_memory.active_files.clear()
+            self.working_memory.recent_decisions.clear()
+            self.working_memory.pending_todos.clear()
+            self.working_memory.error_history.clear()
+            cleared.append("working_memory")
+
+        # Reset compression state
+        self._last_usage_ratio = 0.0
+        self._last_cache_stats = None
+        cleared.append("compression_state")
+
+        # Record boundary in TranscriptStore if enabled
+        if self._transcript_store is not None:
+            from helen.runtime.transcript_store import BoundaryMarker, _generate_uuid
+            marker = BoundaryMarker(
+                anchor_uuid="",
+                head_uuid="",
+                tail_uuid="",
+                summary="[Context Cleared]",
+                layer="clear_context",
+            )
+            self._transcript_store.transcript.append(marker)
+            self._transcript_store._uuid_index[marker.uuid] = len(self._transcript_store.transcript) - 1
+            cleared.append("transcript_boundary")
+
+        logger.info("Context cleared: %s", ", ".join(cleared))
+
+        return {
+            "status": "ok",
+            "cleared_items": cleared,
+        }
+
+    def compress_context(self, llm_client: Any | None = None) -> dict[str, Any]:
+        """Compress the current conversation context using LLM.
+
+        This is the unified entry point for the stdlib compress_context() function.
+        Uses Layer 5 (Auto-Compact) functionality from graduated compression.
+
+        Args:
+            llm_client: Optional LLM client for semantic compression.
+                       Expected signature: llm_client(messages) -> str
+                       If None and AgentContextManager has no llm_client,
+                       falls back to structural compression.
+
+        Returns:
+            Dict with operation results:
+            {
+                "status": "ok" | "error" | "skipped",
+                "reason": str (if skipped),
+                "original_tokens": int,
+                "compressed_tokens": int,
+                "saved_tokens": int,
+                "strategy": str
+            }
+        """
+        from helen.runtime.history import Message
+
+        # Get the history reference from stdlib/context.py
+        try:
+            from helen.stdlib.context import _interpreter_history
+        except ImportError:
+            _interpreter_history = None
+
+        if _interpreter_history is None or len(_interpreter_history) < 4:
+            return {
+                "status": "skipped",
+                "reason": "Not enough messages to compress",
+                "original_tokens": 0,
+                "compressed_tokens": 0,
+                "saved_tokens": 0,
+                "strategy": "none",
+            }
+
+        # Calculate original token count
+        original_tokens = sum(m.token_count for m in _interpreter_history)
+
+        # Use Layer 5 compression (reuses graduated compression logic)
+        from helen.runtime.graduated_compression import _auto_compact
+
+        # Determine which llm_client to use
+        client = llm_client or self.llm_client
+
+        # Apply compression
+        compressed_history = _auto_compact(
+            _interpreter_history,
+            keep_recent=4,
+            llm_client=client,
+            target_tokens=2000,
+        )
+
+        # Calculate compressed token count
+        compressed_tokens = sum(m.token_count for m in compressed_history)
+
+        # Replace history in-place
+        _interpreter_history[:] = compressed_history
+
+        # Record in TranscriptStore if enabled
+        if self._transcript_store is not None:
+            # Find UUIDs for boundary recording
+            original_uuids = [m.uuid for m in _interpreter_history if m.uuid]
+            compressed_uuids = [m.uuid for m in compressed_history if m.uuid]
+
+            # Find anchor (first preserved message)
+            anchor_uuid = compressed_uuids[0] if compressed_uuids else ""
+            compressed_msgs = [m for m in _interpreter_history if m.uuid and m.uuid not in compressed_uuids]
+
+            if compressed_msgs and anchor_uuid:
+                head_uuid = compressed_msgs[0].uuid
+                tail_uuid = compressed_msgs[-1].uuid
+
+                # Get summary from the summary message
+                summary = "LLM-compressed conversation"
+                for msg in compressed_history:
+                    if msg.role == "system" and msg.content:
+                        summary = msg.content[:200]
+                        break
+
+                self._transcript_store.record_compression(
+                    head_uuid=head_uuid,
+                    tail_uuid=tail_uuid,
+                    anchor_uuid=anchor_uuid,
+                    summary=summary,
+                    layer="compress_context_llm" if client else "compress_context_structural",
+                    original_token_count=original_tokens,
+                    compressed_token_count=compressed_tokens,
+                )
+
+        saved_tokens = max(0, original_tokens - compressed_tokens)
+
+        logger.info(
+            "Context compressed: %d -> %d tokens (saved %d)",
+            original_tokens, compressed_tokens, saved_tokens,
+        )
+
+        return {
+            "status": "ok",
+            "original_tokens": original_tokens,
+            "compressed_tokens": compressed_tokens,
+            "saved_tokens": saved_tokens,
+            "strategy": "llm_semantic" if client else "structural",
+        }

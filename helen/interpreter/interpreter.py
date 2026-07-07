@@ -741,7 +741,8 @@ class Interpreter(LlmMixin, Visitor[object]):
     def __init__(self, errors: ErrorReporter | None = None,
                  llm_runtime: LLMRuntime | None = None,
                  import_resolver: ImportResolver | None = None,
-                 program_args: list[str] | None = None) -> None:
+                 program_args: list[str] | None = None,
+                 transcript_store_enabled: bool = False) -> None:
         self.errors = errors or ErrorReporter()
         self.environment = Environment()
         self._functions: dict[str, FunctionDeclNode] = {}
@@ -750,6 +751,7 @@ class Interpreter(LlmMixin, Visitor[object]):
         self._current_agent: AgentDeclNode | None = None
         self.import_resolver = import_resolver or ImportResolver()
         self._program_args: list[str] = list(program_args) if program_args else []
+        self._transcript_store_enabled = transcript_store_enabled
         # AI-native observability (P0-P3)
         self.observability = ObservabilityManager()
         # Merge imported agents/functions into local registries
@@ -774,6 +776,7 @@ class Interpreter(LlmMixin, Visitor[object]):
             compression_strategy="graduated",
             working_memory_enabled=True,
             cache_aware_enabled=True,
+            transcript_store_enabled=self._transcript_store_enabled,
         )
         # P2: Initialize PromptBuilder for unified prompt construction
         from helen.runtime.prompt_builder import PromptBuilder

@@ -129,20 +129,12 @@ def get_model_context_window(model: str | None) -> int:
 # ---------------------------------------------------------------------------
 
 def _is_cjk(char: str) -> bool:
-    """Check if a character is CJK (Chinese/Japanese/Korean)."""
-    cp = ord(char)
-    return (
-        0x4E00 <= cp <= 0x9FFF      # CJK Unified Ideographs
-        or 0x3400 <= cp <= 0x4DBF   # CJK Extension A
-        or 0x20000 <= cp <= 0x2A6DF # CJK Extension B
-        or 0x2A700 <= cp <= 0x2B73F # CJK Extension C
-        or 0x2B740 <= cp <= 0x2B81F # CJK Extension D
-        or 0xF900 <= cp <= 0xFAFF   # CJK Compatibility Ideographs
-        or 0x3000 <= cp <= 0x303F   # CJK Symbols and Punctuation
-        or 0x3040 <= cp <= 0x309F   # Hiragana
-        or 0x30A0 <= cp <= 0x30FF   # Katakana
-        or 0xAC00 <= cp <= 0xD7AF   # Hangul Syllables
-    )
+    """Check if a character is CJK (Chinese/Japanese/Korean).
+
+    Delegates to shared token_utils module for consistency.
+    """
+    from helen.runtime.token_utils import is_cjk
+    return is_cjk(char)
 
 
 def estimate_tokens(text: str, model: str | None = None) -> int:
@@ -277,6 +269,7 @@ class Message:
 
     P3: Supports model-aware token counting via optional model field.
     Phase 1: Supports message classification for selective compression.
+    Phase 10: Optional UUID for mostly-append transcript storage.
     """
 
     role: str  # "system" | "user" | "assistant" | "tool"
@@ -292,6 +285,11 @@ class Message:
     message_type: str | None = field(default=None, repr=False)  # Auto-inferred type
     priority: int = field(default=50, repr=False)               # Priority (1-100, higher = more important)
     compressed: bool = field(default=False, repr=False)         # Whether message has been compressed
+
+    # Phase 10: Mostly-append transcript storage
+    # UUID is assigned on first append; preserved across compression.
+    # Empty string means no UUID (backward compatible with existing messages).
+    uuid: str = field(default="", repr=False)
 
     @property
     def token_count(self) -> int:
@@ -800,7 +798,7 @@ class HistoryManager:
         from datetime import datetime
 
         data = {
-            "version": 1,
+            "version": 2,
             "model": self._model,
             "saved_at": datetime.utcnow().isoformat() + "Z",
             "messages": [
@@ -809,6 +807,7 @@ class HistoryManager:
                     "content": msg.content,
                     "tool_calls": msg.tool_calls,
                     "tool_call_id": msg.tool_call_id,
+                    "uuid": msg.uuid,
                 }
                 for msg in history
             ],
@@ -846,6 +845,7 @@ class HistoryManager:
                     tool_calls=msg_data.get("tool_calls", []),
                     tool_call_id=msg_data.get("tool_call_id"),
                     _model=self._model,
+                    uuid=msg_data.get("uuid", ""),
                 )
                 messages.append(msg)
 
