@@ -211,3 +211,145 @@ class TestCompressContextBugFix:
 
         assert result["status"] == "error"
         assert "Unknown compression strategy" in result["error"]
+
+
+class TestCompressContextActuallyCompresses:
+    """Regression: compress_context() must actually modify the history (BUG-1 fix).
+
+    Previously, enforce_limit() / _summarize_compress() / _truncate_compress()
+    return a new list but the return value was discarded. The history remained
+    unchanged. The fix uses slice-assignment to mutate in place.
+    """
+
+    def test_auto_strategy_mutates_history(self):
+        """'auto' strategy must replace history contents via slice assignment."""
+        msg1 = Message("user", "old msg 1", _token_count=1000)
+        msg2 = Message("user", "old msg 2", _token_count=1000)
+        msg3 = Message("assistant", "recent", _token_count=50)
+        history = [msg1, msg2, msg3]
+
+        # Mock manager that returns a truncated list (simulating compression)
+        compressed = [msg3]  # only the recent message survives
+        mock_manager = MagicMock()
+        mock_manager.enforce_limit = MagicMock(return_value=compressed)
+
+        _set_interpreter_context(history, mock_manager)
+
+        result = _compress_context(strategy="auto")
+
+        # History must actually be modified in place
+        assert len(history) == 1
+        assert history[0] is msg3
+        assert result["status"] == "ok"
+        assert result["compressed_messages"] == 1
+
+    def test_summarize_strategy_mutates_history(self):
+        """'summarize' strategy must replace history contents."""
+        msg1 = Message("user", "old", _token_count=1000)
+        msg2 = Message("assistant", "recent", _token_count=50)
+        history = [msg1, msg2]
+
+        summary_msg = Message("user", "[summary]", _token_count=20)
+        mock_manager = MagicMock()
+        mock_manager.MAX_TOKENS = 100
+        mock_manager._summarize_compress = MagicMock(return_value=[summary_msg])
+
+        _set_interpreter_context(history, mock_manager)
+
+        result = _compress_context(strategy="summarize")
+
+        assert len(history) == 1
+        assert history[0] is summary_msg
+        assert result["status"] == "ok"
+
+    def test_truncate_strategy_mutates_history(self):
+        """'truncate' strategy must replace history contents."""
+        msg1 = Message("user", "old", _token_count=1000)
+        msg2 = Message("assistant", "recent", _token_count=50)
+        history = [msg1, msg2]
+
+        truncated = [msg2]
+        mock_manager = MagicMock()
+        mock_manager.MAX_TOKENS = 100
+        mock_manager._truncate_compress = MagicMock(return_value=truncated)
+
+        _set_interpreter_context(history, mock_manager)
+
+        result = _compress_context(strategy="truncate")
+
+        assert len(history) == 1
+        assert history[0] is msg2
+        assert result["status"] == "ok"
+
+
+class TestClearContextClearsWorkingMemory:
+    """Regression: clear_context() must clear working memory (BUG-2 fix)."""
+
+    def test_clear_context_clears_working_memory(self):
+        """After clear_context(), working memory should be empty."""
+        from helen.interpreter.agent_context import AgentContextManager
+
+        agent_ctx = AgentContextManager()
+        agent_ctx.working_memory._add_active_file("test.py")
+        agent_ctx.working_memory._add_decision("Use async")
+        agent_ctx.working_memory._add_todo("Write tests")
+        agent_ctx.working_memory._add_error("pytest", "failed")
+
+        history = [Message("user", "test", _token_count=10)]
+        _set_interpreter_context(history, MagicMock(), agent_ctx)
+
+        result = _clear_context()
+
+        assert result["status"] == "ok"
+        assert len(history) == 0
+        # Working memory must be cleared
+        assert agent_ctx.working_memory.active_files == []
+        assert agent_ctx.working_memory.recent_decisions == []
+        assert agent_ctx.working_memory.pending_todos == []
+        assert agent_ctx.working_memory.error_history == []
+
+    def test_clear_context_works_without_agent_context(self):
+        """clear_context() should still work when no agent_context is wired."""
+        history = [Message("user", "test", _token_count=10)]
+        _set_interpreter_context(history, MagicMock())  # no agent_context
+
+        result = _clear_context()
+
+        assert result["status"] == "ok"
+        assert len(history) == 0
+
+
+class TestTokenCountUsesProperty:
+    """Regression: token estimation must use msg.token_count property (BUG-4 fix).
+
+    msg._token_count is the raw backing field (default 0).
+    msg.token_count is a lazy-computing property that returns accurate values.
+    """
+
+    def test_clear_context_uses_property(self):
+        """clear_context should compute tokens via property, not raw field."""
+        # Create a message where _token_count=0 but content suggests real tokens
+        msg = Message("user", "x" * 100, _token_count=0)
+        # Accessing token_count should compute and cache
+        real_tokens = msg.token_count
+        assert real_tokens > 0  # property computed something
+
+        history = [msg]
+        _set_interpreter_context(history, MagicMock())
+
+        result = _clear_context()
+        assert result["cleared_tokens"] == real_tokens
+
+    def test_compress_context_reports_accurate_tokens(self):
+        """compress_context stats should use property-computed tokens."""
+        msg = Message("user", "x" * 100, _token_count=0)
+        real_tokens = msg.token_count
+
+        mock_manager = MagicMock()
+        mock_manager.enforce_limit = MagicMock(return_value=[msg])
+
+        history = [msg]
+        _set_interpreter_context(history, mock_manager)
+
+        result = _compress_context(strategy="auto")
+        assert result["original_tokens"] == real_tokens

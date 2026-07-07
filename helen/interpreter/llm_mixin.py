@@ -909,11 +909,15 @@ class LlmMixin:
         if hasattr(self, '_agent_context') and self._agent_context is not None:
             self._agent_context.update_from_message(content, role)
 
-        # P2: Enforce history size limit after each addition
-        # This prevents unbounded memory growth in long REPL sessions.
-        trimmed = self._history_manager.enforce_limit(self._history)
-        if len(trimmed) < len(self._history):
-            self._history[:] = trimmed
+        # P2: Enforce history size limit after each addition.
+        # Skip when AgentContextManager is managing compression — it runs
+        # graduated/traditional compression in prepare_context() and
+        # calling enforce_limit() here would double-compress the history.
+        agent_ctx = getattr(self, '_agent_context', None)
+        if agent_ctx is None or not agent_ctx.compression_enabled:
+            trimmed = self._history_manager.enforce_limit(self._history)
+            if len(trimmed) < len(self._history):
+                self._history[:] = trimmed
 
     def _record_llm_response_to_history(self: Any, response: Any) -> None:
         """Record LLM response (with tool calls) to conversation history.

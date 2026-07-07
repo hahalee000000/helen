@@ -46,11 +46,21 @@ class WorkingMemory:
                 within the budget. Priority order (highest first):
                 Current Task > Recent Errors > Active Files >
                 Recent Decisions > Pending TODOs.
-                If None, all sections are included without budget enforcement.
+                If None, max_tokens * 4 is used as the hard upper bound.
 
         Returns:
             Formatted string representation of working memory
         """
+        # max_tokens acts as a hard upper bound on output size.
+        # When no explicit budget is given, use max_tokens as the limit.
+        effective_budget = budget_chars
+        if self.max_tokens > 0:
+            max_chars = self.max_tokens * 4  # Rough 4 chars/token estimate
+            if effective_budget is None:
+                effective_budget = max_chars
+            else:
+                effective_budget = min(effective_budget, max_chars)
+
         # Build sections in priority order (highest priority first).
         # When over budget, sections are dropped from the END first.
         # Each entry: (section_header_lines, section_body_lines)
@@ -86,7 +96,7 @@ class WorkingMemory:
             body.append("")
             sections.append((["## Pending TODOs"], body))
 
-        if budget_chars is None:
+        if effective_budget is None:
             # No budget — include everything
             parts: list[str] = []
             for header, body in sections:
@@ -102,7 +112,7 @@ class WorkingMemory:
             for i in included
         ) if included else 0
 
-        while total_chars > budget_chars and len(included) > 1:
+        while total_chars > effective_budget and len(included) > 1:
             # Drop the lowest-priority section still included
             # Keep at least one section — body truncation handles the rest
             dropped = included.pop()
@@ -113,7 +123,7 @@ class WorkingMemory:
         # If even the highest-priority section alone exceeds budget,
         # truncate its body content to fit.
         parts = []
-        remaining_chars = budget_chars
+        remaining_chars = effective_budget
         for idx in included:
             header, body = sections[idx]
             header_str = "\n".join(header)

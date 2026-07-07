@@ -384,30 +384,18 @@ let result = compress_context(target="stale_turns", keep_recent=8)
 
 > 以下是当前架构中的已知问题，按严重程度排列。
 
-### 9.1 Bug
-
-| 问题 | 位置 | 影响 |
-|------|------|------|
-| `compress_context()` 返回值被丢弃 | `stdlib/context.py` | 用户调用该函数后历史实际未改变 |
-| `clear_context()` 不清工作记忆 | `stdlib/context.py` | 清除上下文后工作记忆残留旧数据 |
-| `_compress_context_target()` 读 `msg._token_count` | `stdlib/context.py` | 应为 `msg.token_count`（延迟计算属性），否则 `saved_tokens` 报告为 0 |
-
-### 9.2 架构问题
+### 9.1 架构问题
 
 | 问题 | 说明 |
 |------|------|
-| **双重压缩** | `_add_to_history()` 调用 `HistoryManager.enforce_limit()` 后，`_prepare_history_for_llm()` 又运行渐进管线。同一历史被两种算法各压一次 |
-| **短历史跳过基于消息数** | `len(history) <= 10` 跳过压缩，不考虑 token 使用率。10 条 50K 消息会撑爆上下文 |
-| **cache-aware 基础压缩浪费** | 当 `cache_aware_enabled=True` 时，`_compress_history()` 先运行完整的基础压缩得到 `base_compressed`，然后 `_apply_cache_aware_wrap()` 从原始历史重新压缩——`base_compressed` 被丢弃 |
-| **`WorkingMemory.max_tokens` 不强制执行** | 只有列表长度限制生效，token 级淘汰未实现 |
 | **`LLMSummarizer` 未集成** | `runtime/llm_summarizer.py` 提供 LLM 语义摘要，但未被压缩管线或任何生产路径调用 |
+| **`WorkingMemory` 列表长度限制** | 仅依赖硬编码的列表长度上限（10/10/20/5），无 token 级淘汰策略 |
 
-### 9.3 文档与代码不符
+### 9.2 文档与代码不符
 
 | 文档 | 不符内容 |
 |------|---------|
 | `wiki/runtime/working_memory.md` | 描述了不存在的方法 (`has_content()`, `format_for_context()`) |
-| `wiki/runtime/graduated_compression.md` | Layer 5 描述为"LLM 语义压缩"，实际是零成本结构摘要 |
 | `wiki/runtime/history.md` | `estimate_tokens` 描述为 `len(text)//4`，实际有字符类型感知和 CJK 支持 |
 
 ---

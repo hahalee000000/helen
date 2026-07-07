@@ -15,9 +15,12 @@ from typing import Any
 # Global reference to interpreter's history manager (set by interpreter)
 _interpreter_history_manager = None
 _interpreter_history = None
+_interpreter_agent_context = None
 
 
-def _set_interpreter_context(history: list, history_manager: Any) -> None:
+def _set_interpreter_context(
+    history: list, history_manager: Any, agent_context: Any = None
+) -> None:
     """Set the interpreter's history and history manager for context management.
 
     Called by the interpreter during initialization to provide stdlib functions
@@ -26,10 +29,12 @@ def _set_interpreter_context(history: list, history_manager: Any) -> None:
     Args:
         history: The interpreter's _history list
         history_manager: The interpreter's HistoryManager instance
+        agent_context: The interpreter's AgentContextManager instance (optional)
     """
-    global _interpreter_history, _interpreter_history_manager
+    global _interpreter_history, _interpreter_history_manager, _interpreter_agent_context
     _interpreter_history = history
     _interpreter_history_manager = history_manager
+    _interpreter_agent_context = agent_context
 
 
 def _classify_message(message: Any) -> dict:
@@ -109,7 +114,7 @@ def _compress_context_target(target: str, keep_recent: int = 5) -> dict:
         }
 
     # Calculate initial token count
-    initial_tokens = sum(msg._token_count for msg in _interpreter_history if hasattr(msg, '_token_count'))
+    initial_tokens = sum(msg.token_count for msg in _interpreter_history if hasattr(msg, 'token_count'))
 
     if target == "tool_results":
         # Compress old tool results, preserve tool_use decisions
@@ -130,7 +135,6 @@ def _compress_context_target(target: str, keep_recent: int = 5) -> dict:
                 msg = _interpreter_history[idx]
                 if hasattr(msg, 'compressed') and not msg.compressed:
                     # Replace content with placeholder
-                    original_tokens = msg._token_count
                     msg.content = f"[Tool result cleared: {msg.tool_call_id}]"
                     msg.compressed = True
                     msg._token_count = 10  # Minimal tokens for placeholder
@@ -157,14 +161,13 @@ def _compress_context_target(target: str, keep_recent: int = 5) -> dict:
                         continue
 
                     # Mark as compressed and reduce content
-                    original_tokens = msg._token_count
                     if msg.role == "user":
-                        msg.content = f"[Earlier user message cleared]"
+                        msg.content = "[Earlier user message cleared]"
                     elif msg.role == "assistant":
                         if msg.tool_calls:
-                            msg.content = f"[Earlier assistant tool call cleared]"
+                            msg.content = "[Earlier assistant tool call cleared]"
                         else:
-                            msg.content = f"[Earlier assistant response cleared]"
+                            msg.content = "[Earlier assistant response cleared]"
                     elif msg.role == "tool":
                         msg.content = f"[Earlier tool result cleared: {msg.tool_call_id}]"
 
@@ -177,7 +180,7 @@ def _compress_context_target(target: str, keep_recent: int = 5) -> dict:
             kept_count = len(_interpreter_history)
 
     # Calculate final token count
-    final_tokens = sum(msg._token_count for msg in _interpreter_history if hasattr(msg, '_token_count'))
+    final_tokens = sum(msg.token_count for msg in _interpreter_history if hasattr(msg, 'token_count'))
     saved_tokens = initial_tokens - final_tokens
 
     return {
@@ -221,12 +224,17 @@ def _clear_context() -> dict:
             "cleared_messages": 0,
         }
 
-    # Calculate total tokens using Message.token_count attribute
-    # Each message has a cached _token_count that is lazily computed
-    estimated_tokens = sum(msg._token_count for msg in _interpreter_history if hasattr(msg, '_token_count'))
+    # Calculate total tokens using Message.token_count property (lazy-cached)
+    estimated_tokens = sum(msg.token_count for msg in _interpreter_history if hasattr(msg, 'token_count'))
 
     cleared_count = len(_interpreter_history)
     _interpreter_history.clear()
+
+    # Also clear working memory to avoid stale data leaking across context resets
+    if _interpreter_agent_context is not None:
+        working_memory = getattr(_interpreter_agent_context, "working_memory", None)
+        if working_memory is not None:
+            working_memory.clear()
 
     return {
         "status": "ok",
@@ -287,8 +295,8 @@ def _compress_context(strategy: str = "auto") -> dict:
         }
 
     if strategy == "none":
-        # Calculate tokens using Message._token_count
-        total_tokens = sum(msg._token_count for msg in _interpreter_history if hasattr(msg, '_token_count'))
+        # Calculate tokens using Message.token_count property
+        total_tokens = sum(msg.token_count for msg in _interpreter_history if hasattr(msg, 'token_count'))
         return {
             "status": "ok",
             "original_messages": len(_interpreter_history),
@@ -298,24 +306,24 @@ def _compress_context(strategy: str = "auto") -> dict:
             "strategy": "none",
         }
 
-    # Get stats before compression (using Message._token_count)
+    # Get stats before compression
     original_count = len(_interpreter_history)
-    original_tokens = sum(msg._token_count for msg in _interpreter_history if hasattr(msg, '_token_count'))
+    original_tokens = sum(msg.token_count for msg in _interpreter_history if hasattr(msg, 'token_count'))
 
     # Perform compression
     if strategy == "auto":
         # Use HistoryManager's enforce_limit (respects compression_mode setting)
-        _interpreter_history_manager.enforce_limit(_interpreter_history)
+        _interpreter_history[:] = _interpreter_history_manager.enforce_limit(_interpreter_history)
     elif strategy == "summarize":
         # Force summarize compression with default budget
         from helen.runtime.history import HISTORY_BUDGET_RATIO
         budget = int(_interpreter_history_manager.MAX_TOKENS * HISTORY_BUDGET_RATIO)
-        _interpreter_history_manager._summarize_compress(_interpreter_history, budget)
+        _interpreter_history[:] = _interpreter_history_manager._summarize_compress(_interpreter_history, budget)
     elif strategy == "truncate":
         # Force truncate compression with default budget
         from helen.runtime.history import HISTORY_BUDGET_RATIO
         budget = int(_interpreter_history_manager.MAX_TOKENS * HISTORY_BUDGET_RATIO)
-        _interpreter_history_manager._truncate_compress(_interpreter_history, budget)
+        _interpreter_history[:] = _interpreter_history_manager._truncate_compress(_interpreter_history, budget)
     else:
         return {
             "status": "error",
@@ -325,9 +333,9 @@ def _compress_context(strategy: str = "auto") -> dict:
             "strategy": strategy,
         }
 
-    # Get stats after compression (using Message._token_count)
+    # Get stats after compression
     compressed_count = len(_interpreter_history)
-    compressed_tokens = sum(msg._token_count for msg in _interpreter_history if hasattr(msg, '_token_count'))
+    compressed_tokens = sum(msg.token_count for msg in _interpreter_history if hasattr(msg, 'token_count'))
 
     return {
         "status": "ok",

@@ -460,12 +460,13 @@ class TestUnifiedCompressionArchitecture:
         assert "cache_aware+traditional" in mgr._last_cache_stats.compression_strategy
 
     def test_short_history_skips_compression(self):
-        """History with <=10 messages skips compression regardless of strategy."""
+        """Small histories (below threshold) skip compression."""
         from helen.interpreter.agent_context import AgentContextManager
         from helen.runtime.history import Message
 
         for strategy in ["graduated", "traditional"]:
             mgr = AgentContextManager(compression_strategy=strategy)
+            # 5 tiny messages with large max_tokens → well under any threshold
             history = [Message("user", f"msg {i}") for i in range(5)]
             result = mgr._compress_history(history, max_tokens=131072)
             assert result is history

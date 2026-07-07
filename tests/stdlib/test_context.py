@@ -71,9 +71,10 @@ class TestCompressContext:
         # Create a mock history manager
         self.mock_manager = MagicMock()
         self.mock_manager.estimate_tokens.side_effect = lambda h: len(h) * 10
-        self.mock_manager.enforce_limit.return_value = None
-        self.mock_manager._summarize_compress.return_value = None
-        self.mock_manager._truncate_compress.return_value = None
+        # Compression methods must return an iterable (slice-assigned back into history)
+        self.mock_manager.enforce_limit.return_value = list(self.mock_history)
+        self.mock_manager._summarize_compress.return_value = list(self.mock_history)
+        self.mock_manager._truncate_compress.return_value = list(self.mock_history)
         self.mock_manager.MAX_TOKENS = 128000
 
     def test_compress_context_auto(self):

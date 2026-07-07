@@ -810,7 +810,7 @@ class Interpreter(LlmMixin, Visitor[object]):
         # Connect observability manager to stdlib debug functions
         _set_interpreter_observability(self.observability)
         # Connect history to stdlib context management functions
-        _set_interpreter_context(self._history, self._history_manager)
+        _set_interpreter_context(self._history, self._history_manager, self._agent_context)
         for name in stdlib.names:
             builtin = stdlib.lookup(name)
             if builtin is not None:

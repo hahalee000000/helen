@@ -346,6 +346,29 @@ class TestWorkingMemoryBudgetTruncation:
         if most_restrictive:
             assert "## Current Task" in most_restrictive or len(most_restrictive) == 0
 
+    def test_max_tokens_enforced_without_explicit_budget(self):
+        """max_tokens acts as a hard upper bound even without explicit budget_chars."""
+        # Use very small max_tokens to force truncation
+        wm = WorkingMemory(
+            task_description="x" * 200,  # ~800 chars
+            active_files=[f"file_{i}.py" for i in range(5)],
+            pending_todos=[f"TODO {i}" for i in range(10)],
+            max_tokens=50,  # 50 * 4 = 200 chars hard bound
+        )
+        result = wm.to_context()  # No explicit budget
+        # Should respect max_tokens (200 chars)
+        assert len(result) <= 220  # Allow small overhead from formatting
+
+    def test_explicit_budget_capped_by_max_tokens(self):
+        """When both budget_chars and max_tokens are set, the smaller wins."""
+        wm = WorkingMemory(
+            task_description="x" * 200,
+            max_tokens=30,  # 30 * 4 = 120 chars
+        )
+        # Pass a larger explicit budget — max_tokens should cap it
+        result = wm.to_context(budget_chars=10000)
+        assert len(result) <= 140  # 120 + overhead
+
 
 class TestThreeChannelBudgetEnforcement:
     """Tests for build_three_channel_context Channel 2 budget enforcement."""
