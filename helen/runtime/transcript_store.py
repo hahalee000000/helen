@@ -32,11 +32,15 @@ Usage:
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import time
 import uuid as uuid_module
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any
+from pathlib import Path
+from typing import Any, Optional
 
 from helen.runtime.history import Message
 
@@ -112,6 +116,160 @@ class BoundaryMarker:
 
 
 # ---------------------------------------------------------------------------
+# Transcript Store Backend (Persistence Abstraction)
+# ---------------------------------------------------------------------------
+
+class TranscriptStoreBackend(ABC):
+    """Abstract backend for transcript persistence.
+
+    Backends are responsible for durably storing transcript items
+    (messages and boundary markers) so they can survive process restarts.
+    """
+
+    @abstractmethod
+    def append(self, item: Message | BoundaryMarker) -> None:
+        """Append item to persistent storage (sync).
+
+        Implementations should be fast (<1ms per call on SSD).
+        Failures should be logged but not raised — the in-memory
+        transcript is the primary data structure.
+        """
+        pass
+
+    @abstractmethod
+    def load_all(self) -> list[Message | BoundaryMarker]:
+        """Load all items from persistent storage.
+
+        Returns:
+            List of Message and BoundaryMarker objects in order.
+        """
+        pass
+
+    @abstractmethod
+    def close(self) -> None:
+        """Close backend resources (file handles, connections)."""
+        pass
+
+
+class JSONLBackend(TranscriptStoreBackend):
+    """JSONL file backend for transcript persistence.
+
+    Each item is stored as a single JSON line, making the format:
+    - Append-only (fast writes, no seeks)
+    - Human-readable (one JSON object per line)
+    - Crash-safe (only the last line may be corrupted)
+    - Easy to tail/grep for debugging
+
+    Format:
+        {"type": "message", "role": "user", "content": "...", "uuid": "...", ...}
+        {"type": "boundary_marker", "uuid": "...", "layer": "...", ...}
+
+    Thread safety: Each append opens/flushes the file independently,
+    so concurrent appends are safe (though not recommended).
+    """
+
+    def __init__(self, path: Path | str):
+        """Initialize JSONL backend.
+
+        Args:
+            path: Path to the JSONL file. Parent directories will be created.
+        """
+        self.path = Path(path) if isinstance(path, str) else path
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._file = None  # Lazy-open on first append
+
+    def append(self, item: Message | BoundaryMarker) -> None:
+        """Append item as a JSON line."""
+        try:
+            if self._file is None:
+                self._file = open(self.path, "a", encoding="utf-8")
+
+            line = json.dumps(_item_to_dict(item), ensure_ascii=False)
+            self._file.write(line + "\n")
+            self._file.flush()
+        except OSError as e:
+            logger.warning("JSONLBackend: failed to append to %s: %s", self.path, e)
+
+    def load_all(self) -> list[Message | BoundaryMarker]:
+        """Load all items from the JSONL file."""
+        if not self.path.exists():
+            return []
+
+        items: list[Message | BoundaryMarker] = []
+        try:
+            with open(self.path, encoding="utf-8") as f:
+                for line_num, line in enumerate(f, start=1):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        data = json.loads(line)
+                        item = _item_from_dict(data)
+                        if item is not None:
+                            items.append(item)
+                    except json.JSONDecodeError as e:
+                        logger.warning(
+                            "JSONLBackend: corrupted line %d in %s: %s",
+                            line_num, self.path, e,
+                        )
+                        # Continue reading — only the last line is expected to corrupt
+        except OSError as e:
+            logger.warning("JSONLBackend: failed to load from %s: %s", self.path, e)
+
+        return items
+
+    def close(self) -> None:
+        """Close the file handle."""
+        if self._file is not None:
+            try:
+                self._file.close()
+            except OSError:
+                pass
+            self._file = None
+
+
+def _item_to_dict(item: Message | BoundaryMarker) -> dict[str, Any]:
+    """Convert a Message or BoundaryMarker to a JSON-serializable dict."""
+    if isinstance(item, BoundaryMarker):
+        return item.to_dict()
+    elif isinstance(item, Message):
+        return {
+            "type": "message",
+            "role": item.role,
+            "content": item.content,
+            "tool_calls": item.tool_calls,
+            "tool_call_id": item.tool_call_id,
+            "uuid": item.uuid,
+            "message_type": item.message_type,
+            "priority": item.priority,
+            "compressed": item.compressed,
+        }
+    else:
+        raise TypeError(f"Unknown item type: {type(item)}")
+
+
+def _item_from_dict(data: dict[str, Any]) -> Message | BoundaryMarker | None:
+    """Reconstruct a Message or BoundaryMarker from a dict."""
+    item_type = data.get("type")
+    if item_type == "message":
+        return Message(
+            role=data.get("role", "user"),
+            content=data.get("content", ""),
+            tool_calls=data.get("tool_calls", []),
+            tool_call_id=data.get("tool_call_id"),
+            uuid=data.get("uuid", ""),
+            message_type=data.get("message_type"),
+            priority=data.get("priority", 50),
+            compressed=data.get("compressed", False),
+        )
+    elif item_type == "boundary_marker":
+        return BoundaryMarker.from_dict(data)
+    else:
+        logger.warning("Unknown item type in transcript: %r", item_type)
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Transcript Store
 # ---------------------------------------------------------------------------
 
@@ -122,19 +280,32 @@ class TranscriptStore:
     objects. read_view() returns the current "effective" message list by
     applying all boundary markers.
 
+    Optionally backed by a persistence backend (e.g., JSONLBackend) for
+    crash-safe durability and session replay.
+
     Attributes:
         transcript: Append-only list of Message and BoundaryMarker objects
     """
 
-    def __init__(self):
-        """Initialize transcript store."""
+    def __init__(self, backend: TranscriptStoreBackend | None = None):
+        """Initialize transcript store.
+
+        Args:
+            backend: Optional persistence backend. When provided, all appends
+                     are also written to the backend for durability.
+        """
         self.transcript: list[Message | BoundaryMarker] = []
         self._uuid_index: dict[str, int] = {}  # UUID -> transcript index
+        self._backend = backend
+        # View cache (invalidated on append/record_compression)
+        self._dirty = True
+        self._cached_view: list[Message] | None = None
 
     def append(self, message: Message) -> Message:
         """Append a message to the transcript.
 
         Assigns a UUID if the message doesn't have one.
+        If a backend is configured, also persists the message.
 
         Args:
             message: Message to append
@@ -148,6 +319,11 @@ class TranscriptStore:
         index = len(self.transcript)
         self.transcript.append(message)
         self._uuid_index[message.uuid] = index
+        self._dirty = True  # Invalidate view cache
+
+        # Persist to backend
+        if self._backend is not None:
+            self._backend.append(message)
 
         return message
 
@@ -204,6 +380,11 @@ class TranscriptStore:
         index = len(self.transcript)
         self.transcript.append(marker)
         self._uuid_index[marker.uuid] = index
+        self._dirty = True  # Invalidate view cache
+
+        # Persist to backend
+        if self._backend is not None:
+            self._backend.append(marker)
 
         logger.info(
             "Transcript compression recorded: layer=%s, head=%s..tail=%s, "
@@ -216,16 +397,23 @@ class TranscriptStore:
         return marker
 
     def read_view(self) -> list[Message]:
-        """Reconstruct the current effective message list.
+        """Reconstruct the current effective message list (cached).
 
         Applies all boundary markers to produce the compressed view:
         - Messages that fall within compressed regions are replaced by summaries
         - System messages before compressed regions are preserved
         - Messages after all compression boundaries are preserved as-is
 
+        Uses a dirty flag to cache the view, avoiding re-computation
+        when no appends have occurred.
+
         Returns:
             List of Message objects representing the current view
         """
+        # Return cached view if no changes
+        if not self._dirty and self._cached_view is not None:
+            return self._cached_view
+
         # Collect all compressed UUID ranges
         compressed_ranges: list[tuple[str, str, str, str]] = []  # (head, tail, anchor, summary)
         for item in self.transcript:
@@ -236,7 +424,10 @@ class TranscriptStore:
 
         if not compressed_ranges:
             # No compression — return all messages as-is
-            return [item for item in self.transcript if isinstance(item, Message)]
+            result = [item for item in self.transcript if isinstance(item, Message)]
+            self._cached_view = result
+            self._dirty = False
+            return result
 
         # Build set of compressed UUIDs
         compressed_uuids: set[str] = set()
@@ -276,6 +467,8 @@ class TranscriptStore:
                         added_summaries.add(anchor_uuid)
                 result.append(item)
 
+        self._cached_view = result
+        self._dirty = False
         return result
 
     def get_transcript_size(self) -> int:
@@ -353,6 +546,34 @@ class TranscriptStore:
                 store.transcript.append(marker)
                 store._uuid_index[marker.uuid] = index
 
+        return store
+
+    def close(self) -> None:
+        """Close the backend (release file handles, connections)."""
+        if self._backend is not None:
+            self._backend.close()
+
+    @classmethod
+    def load_from_backend(cls, backend: TranscriptStoreBackend) -> "TranscriptStore":
+        """Load a TranscriptStore from a persistence backend.
+
+        Used for session recovery — reconstructs the in-memory transcript
+        from the on-disk JSONL/SQLite log.
+
+        Args:
+            backend: Backend to load from
+
+        Returns:
+            A new TranscriptStore populated from the backend
+        """
+        store = cls(backend=backend)
+        items = backend.load_all()
+        for item in items:
+            index = len(store.transcript)
+            store.transcript.append(item)
+            if item.uuid:
+                store._uuid_index[item.uuid] = index
+        store._dirty = True  # View needs to be computed on first access
         return store
 
 

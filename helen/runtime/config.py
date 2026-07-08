@@ -133,6 +133,35 @@ def get_locale_aliases() -> dict[str, str]:
     return all_locales.get(locale, {})
 
 
+def get_transcript_config() -> dict[str, Any]:
+    """Get transcript configuration.
+
+    Returns:
+        Dict with transcript settings:
+        - enabled: bool (default: True)
+        - backend: str (default: "jsonl")
+        - session_dir: str (default: "~/.helen/sessions")
+        - max_memory_items: int (default: 1000)
+
+    Example config.yaml:
+        transcript:
+          enabled: true
+          backend: "jsonl"
+          session_dir: "~/.helen/sessions"
+          max_memory_items: 1000
+    """
+    config = load_config()
+    transcript_config = config.get("transcript", {})
+
+    # Apply defaults
+    return {
+        "enabled": transcript_config.get("enabled", True),
+        "backend": transcript_config.get("backend", "jsonl"),
+        "session_dir": transcript_config.get("session_dir", str(HELEN_HOME / "sessions")),
+        "max_memory_items": transcript_config.get("max_memory_items", 1000),
+    }
+
+
 def load_config() -> dict[str, Any]:
     """Load Helen configuration.
 
@@ -194,6 +223,18 @@ def _load_yaml_config(path: Path) -> dict[str, Any]:
                 config["temperature"] = float(llm["temperature"])
             if "timeout" in llm:
                 config["timeout"] = int(llm["timeout"])
+        # Transcript configuration
+        if "transcript" in data:
+            transcript = data["transcript"]
+            config["transcript"] = {}
+            if "enabled" in transcript:
+                config["transcript"]["enabled"] = bool(transcript["enabled"])
+            if "backend" in transcript:
+                config["transcript"]["backend"] = str(transcript["backend"])
+            if "session_dir" in transcript:
+                config["transcript"]["session_dir"] = str(transcript["session_dir"])
+            if "max_memory_items" in transcript:
+                config["transcript"]["max_memory_items"] = int(transcript["max_memory_items"])
         # Locale setting (top-level)
         if "locale" in data:
             config["locale"] = str(data["locale"])

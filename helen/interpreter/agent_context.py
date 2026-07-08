@@ -83,7 +83,8 @@ class AgentContextManager:
         llm_client: Any | None = None,
         *,
         compression_enabled: bool | None = None,
-        transcript_store_enabled: bool = False,
+        transcript_store_enabled: bool = True,
+        session_id: str | None = None,
     ):
         """Initialize agent context manager.
 
@@ -104,6 +105,10 @@ class AgentContextManager:
                 When enabled, all messages are preserved in an append-only
                 transcript, and compression events are recorded as boundary
                 markers rather than modifying/deleting messages.
+                Defaults to True (Phase 1 SSOT).
+            session_id: Optional session ID for transcript persistence.
+                If None and transcript_store_enabled is True, a new session
+                is automatically created.
         """
         # Backward compatibility: compression_enabled → compression_strategy
         if compression_enabled is not None:
@@ -124,16 +129,67 @@ class AgentContextManager:
         self._last_usage_ratio = 0.0
         self._last_cache_stats: CacheStats | None = None
 
-        # Phase 10: Mostly-append transcript storage
+        # Phase 1 SSOT: Mostly-append transcript storage with persistence
+        self._session_id: str | None = None
         self._transcript_store = None
         if transcript_store_enabled:
-            from helen.runtime.transcript_store import TranscriptStore
-            self._transcript_store = TranscriptStore()
+            self._init_transcript_store(session_id)
 
     @property
     def transcript_store(self):
         """Access the transcript store (None if not enabled)."""
         return self._transcript_store
+
+    @property
+    def session_id(self) -> str | None:
+        """Get the current transcript session ID (None if not enabled)."""
+        return self._session_id
+
+    def _init_transcript_store(self, session_id: str | None = None) -> None:
+        """Initialize TranscriptStore with persistence backend.
+
+        Args:
+            session_id: Optional session ID. If None, creates a new session.
+        """
+        from helen.runtime.config import get_transcript_config
+        from helen.runtime.session_manager import SessionManager
+        from helen.runtime.transcript_store import JSONLBackend, TranscriptStore
+
+        try:
+            config = get_transcript_config()
+            session_dir = config.get("session_dir")
+            backend_type = config.get("backend", "jsonl")
+
+            # Create or reuse session
+            manager = SessionManager(base_dir=session_dir)
+            if session_id is None:
+                session_id = manager.create_session()
+
+            self._session_id = session_id
+            transcript_path = manager.get_session_path(session_id)
+
+            # Create backend (currently only JSONL is supported)
+            if backend_type == "jsonl":
+                backend = JSONLBackend(transcript_path)
+            else:
+                logger.warning(
+                    f"Unknown transcript backend {backend_type!r}, using jsonl"
+                )
+                backend = JSONLBackend(transcript_path)
+
+            # Load existing transcript if resuming, or create new
+            if manager.session_exists(session_id):
+                self._transcript_store = TranscriptStore.load_from_backend(backend)
+                logger.info("Resumed transcript session: %s", session_id)
+            else:
+                self._transcript_store = TranscriptStore(backend=backend)
+                logger.info("Created new transcript session: %s", session_id)
+
+        except Exception as e:
+            logger.error("Failed to initialize TranscriptStore: %s", e)
+            # Fall back to in-memory only
+            self._transcript_store = TranscriptStore()
+            self._session_id = None
 
     # -- Backward compatibility property for compression_enabled --
 
@@ -372,86 +428,40 @@ class AgentContextManager:
             logger.debug(f"Applied graduated compression: {layer}")
             self._last_usage_ratio = _calculate_usage_ratio(compressed, max_tokens)
 
-            # Phase 10: Record compression event in TranscriptStore
+            # Phase 2 SSOT: Record compression directly in TranscriptStore
             if self._transcript_store is not None:
-                self._record_transcript_compression(history, compressed, layer)
+                # Find compressed messages (in history but not in compressed)
+                compressed_uuids = {m.uuid for m in compressed if m.uuid}
+                compressed_msgs = [m for m in history if m.uuid and m.uuid not in compressed_uuids]
+
+                if compressed_msgs:
+                    # Find anchor: first message in compressed that's also in history
+                    anchor_uuid = ""
+                    for msg in compressed:
+                        if msg.uuid and msg.uuid in {m.uuid for m in history if m.uuid}:
+                            anchor_uuid = msg.uuid
+                            break
+
+                    if anchor_uuid:
+                        # Extract summary from compressed (usually first system message)
+                        summary = "Compressed conversation"
+                        for msg in compressed:
+                            if msg.role == "system" and msg.content:
+                                summary = msg.content[:200]
+                                break
+
+                        # Record compression directly (NO UUID matching helper)
+                        self._transcript_store.record_compression(
+                            head_uuid=compressed_msgs[0].uuid,
+                            tail_uuid=compressed_msgs[-1].uuid,
+                            anchor_uuid=anchor_uuid,
+                            summary=summary,
+                            layer=layer,
+                            original_token_count=sum(m.token_count for m in history),
+                            compressed_token_count=sum(m.token_count for m in compressed),
+                        )
 
         return compressed
-
-    def _record_transcript_compression(
-        self,
-        original: list[Message],
-        compressed: list[Message],
-        layer: str,
-    ) -> None:
-        """Record a compression event in the TranscriptStore.
-
-        Identifies which messages were compressed and records a boundary marker.
-
-        Args:
-            original: Original history before compression
-            compressed: History after compression
-            layer: Name of the compression layer that was applied
-        """
-        if self._transcript_store is None:
-            return
-
-        # Find the boundary between compressed and preserved messages
-        # by matching the first few recent messages
-        if len(compressed) <= 1:
-            return  # Nothing meaningful to record
-
-        # Find anchor: first message in compressed that exists in original
-        anchor_uuid = ""
-        head_uuid = ""
-        tail_uuid = ""
-
-        # Find messages with UUIDs (assigned by TranscriptStore)
-        original_with_uuid = [m for m in original if m.uuid]
-        compressed_with_uuid = [m for m in compressed if m.uuid]
-
-        if not original_with_uuid or not compressed_with_uuid:
-            return
-
-        # The first message in compressed is usually the summary
-        # Find the first "real" message in compressed that matches original
-        for msg in compressed:
-            if msg.uuid and msg.uuid in {m.uuid for m in original_with_uuid}:
-                anchor_uuid = msg.uuid
-                break
-
-        if not anchor_uuid:
-            return
-
-        # Find the range of compressed messages (those in original but not in compressed)
-        compressed_uuids = {m.uuid for m in compressed_with_uuid}
-        compressed_original = [m for m in original_with_uuid if m.uuid not in compressed_uuids]
-
-        if compressed_original:
-            head_uuid = compressed_original[0].uuid
-            tail_uuid = compressed_original[-1].uuid
-
-            # Calculate token counts
-            original_tokens = sum(m.token_count for m in original)
-            compressed_tokens = sum(m.token_count for m in compressed)
-
-            # Find a summary (look for a system message in compressed that contains summary)
-            summary = "Compressed conversation"
-            for msg in compressed:
-                if msg.role == "system" and msg.content and len(msg.content) > 10:
-                    if "summary" in msg.content.lower() or "collapse" in msg.content.lower():
-                        summary = msg.content[:200]
-                        break
-
-            self._transcript_store.record_compression(
-                head_uuid=head_uuid,
-                tail_uuid=tail_uuid,
-                anchor_uuid=anchor_uuid,
-                summary=summary,
-                layer=layer,
-                original_token_count=original_tokens,
-                compressed_token_count=compressed_tokens,
-            )
 
     def _apply_traditional(
         self,

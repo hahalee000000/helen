@@ -138,6 +138,15 @@ from helen.stdlib.context import (
     _classify_message, _compress_context_target,  # Phase 1: Message classification
 )
 
+# Import transcript functions (Phase 1 SSOT)
+from helen.stdlib.transcript import (
+    get_session_id as _get_session_id,
+    list_sessions as _list_sessions,
+    replay_transcript as _replay_transcript,
+    export_transcript as _export_transcript,
+    get_compression_audit as _get_compression_audit,
+)
+
 
 @dataclass
 class BuiltinFunction:
@@ -1027,6 +1036,13 @@ def _register_builtins() -> None:
         # Phase 1: Message classification and selective compression
         BuiltinFunction("classify_message", "Classify message type and priority", "classify_message(message)", _classify_message, "context"),
         BuiltinFunction("compress_context_target", "Compress context by target type", "compress_context_target(target, keep_recent?)", _compress_context_target, "context"),
+
+        # Transcript management (Phase 1 SSOT)
+        BuiltinFunction("get_session_id", "Get current transcript session ID", "get_session_id()", _get_session_id, "transcript"),
+        BuiltinFunction("list_sessions", "List all transcript sessions", "list_sessions()", _list_sessions, "transcript"),
+        BuiltinFunction("replay_transcript", "Replay transcript messages", "replay_transcript(session_id?, include_compressed?)", _replay_transcript, "transcript"),
+        BuiltinFunction("export_transcript", "Export transcript to file", "export_transcript(output_path, format?, session_id?)", _export_transcript, "transcript"),
+        BuiltinFunction("get_compression_audit", "Get compression event history", "get_compression_audit()", _get_compression_audit, "transcript"),
     ]
 
     for func in builtins:

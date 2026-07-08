@@ -762,7 +762,8 @@ class Interpreter(LlmMixin, Visitor[object]):
             self._functions[name] = func
         # Conversation history for LLM context (HLD 3.6.6, 3.12)
         # Initialize HistoryManager with model-aware context window
-        self._history: list[HistoryMessage] = []
+        # Phase 2 SSOT: Use _interpreter_history as fallback when TranscriptStore disabled
+        self._interpreter_history: list[HistoryMessage] = []
         try:
             from helen.runtime.config import load_config
             config = load_config()
@@ -800,6 +801,22 @@ class Interpreter(LlmMixin, Visitor[object]):
         # Define `argv` as a pre-defined const (CLI arguments after the filename)
         self.environment.define("argv", self._program_args, is_const=True)
 
+    @property
+    def _history(self) -> list[HistoryMessage]:
+        """Phase 2 SSOT: _history is now a read-only derived view.
+
+        When TranscriptStore is enabled, returns transcript_store.read_view()
+        which applies all BoundaryMarkers to reconstruct the effective message list.
+
+        When TranscriptStore is disabled, returns _interpreter_history (fallback).
+
+        This property is read-only — all writes go directly to TranscriptStore.
+        """
+        if self._agent_context is not None and self._agent_context.transcript_store is not None:
+            return self._agent_context.transcript_store.read_view()
+        else:
+            return self._interpreter_history
+
     @contextmanager
     def _push_scope(self, set_to: Environment | None = None):
         """Context manager for temporary scope/environment switch.
@@ -827,10 +844,14 @@ class Interpreter(LlmMixin, Visitor[object]):
         from helen.stdlib import stdlib  # noqa: PLC0415
         from helen.stdlib import _set_interpreter_observability  # noqa: PLC0415
         from helen.stdlib import _set_interpreter_context  # noqa: PLC0415
+        from helen.stdlib.transcript import _set_transcript_context  # noqa: PLC0415
         # Connect observability manager to stdlib debug functions
         _set_interpreter_observability(self.observability)
         # Connect history to stdlib context management functions
-        _set_interpreter_context(self._history, self._history_manager, self._agent_context)
+        # Phase 2 SSOT: Use _interpreter_history as the underlying storage
+        _set_interpreter_context(self._interpreter_history, self._history_manager, self._agent_context)
+        # Connect agent context to stdlib transcript functions
+        _set_transcript_context(self._agent_context)
         for name in stdlib.names:
             builtin = stdlib.lookup(name)
             if builtin is not None:

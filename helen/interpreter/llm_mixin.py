@@ -868,34 +868,40 @@ class LlmMixin:
     def _add_to_history(self: Any, role: str, content: str) -> None:
         """Add a message to the conversation history.
 
-        P2: After adding, enforce history size limit to prevent unbounded
-        memory growth in long REPL sessions.
+        Phase 2 SSOT: When TranscriptStore is enabled, write ONLY to it.
+                      _history is a read-only derived view (property).
+                      When disabled, write to _interpreter_history (fallback).
+
         P3: Sets model on message for accurate token counting.
         Phase 7: Update working memory from message content.
-        Phase 10: Append to TranscriptStore if enabled.
         """
+        agent_ctx = getattr(self, '_agent_context', None)
+
         # P3: Set model on message for tiktoken encoding selection
         model = getattr(self._history_manager, '_model', None)
         msg = HistoryMessage(role=role, content=content, _model=model)
-        self._history.append(msg)
 
-        # Phase 10: Append to TranscriptStore if enabled
-        agent_ctx = getattr(self, '_agent_context', None)
+        # Phase 2 SSOT: Write to TranscriptStore when enabled (NO dual-write)
         if agent_ctx is not None and agent_ctx.transcript_store is not None:
+            # Write ONLY to TranscriptStore (SSOT)
             agent_ctx.transcript_store.append(msg)
+        else:
+            # Fallback: write to _interpreter_history when TranscriptStore disabled
+            self._interpreter_history.append(msg)
 
         # Phase 7: Update working memory from message
         if agent_ctx is not None:
             agent_ctx.update_from_message(content, role)
 
-        # P2: Enforce history size limit after each addition.
-        # Skip when AgentContextManager is managing compression — it runs
-        # graduated/traditional compression in prepare_context() and
-        # calling enforce_limit() here would double-compress the history.
-        if agent_ctx is None or not agent_ctx.compression_enabled:
-            trimmed = self._history_manager.enforce_limit(self._history)
-            if len(trimmed) < len(self._history):
-                self._history[:] = trimmed
+        # Phase 2 SSOT: NO destructive in-place replacement.
+        # Compression is handled by AgentContextManager.prepare_context() which
+        # records BoundaryMarkers in TranscriptStore.
+        # When TranscriptStore is disabled, use old enforce_limit logic on fallback storage.
+        if agent_ctx is None or agent_ctx.transcript_store is None:
+            if agent_ctx is None or not agent_ctx.compression_enabled:
+                trimmed = self._history_manager.enforce_limit(self._interpreter_history)
+                if len(trimmed) < len(self._interpreter_history):
+                    self._interpreter_history[:] = trimmed
 
     def _record_llm_response_to_history(self: Any, response: Any) -> None:
         """Record LLM response (with tool calls) to conversation history.
@@ -968,6 +974,9 @@ class LlmMixin:
         Phase 7: Uses AgentContextManager to build three-channel context
         with working memory and graduated compression.
 
+        Phase 3 SSOT: When TranscriptStore is enabled, uses read_view() to get
+        the current effective message list (with compression applied via BoundaryMarkers).
+
         Uses HistoryManager to calculate budget, trim to fit context window,
         and convert to OpenAI messages format.
 
@@ -978,22 +987,29 @@ class LlmMixin:
         Returns:
             List of message dicts for API, or None if history is empty.
         """
-        if not self._history:
+        # Phase 3 SSOT: Use TranscriptStore view when available
+        agent_ctx = getattr(self, '_agent_context', None)
+        if agent_ctx is not None and agent_ctx.transcript_store is not None:
+            history_for_compression = agent_ctx.transcript_store.read_view()
+        else:
+            history_for_compression = self._history
+
+        if not history_for_compression:
             return None
 
         # Phase 7: Use AgentContextManager if available
-        if hasattr(self, '_agent_context') and self._agent_context is not None:
+        if agent_ctx is not None:
             max_tokens = self._history_manager.MAX_TOKENS
-            return self._agent_context.prepare_context(
+            return agent_ctx.prepare_context(
                 system_prompt=system_prompt,
-                history=self._history,
+                history=history_for_compression,
                 max_tokens=max_tokens,
                 current_prompt=current_prompt,
             )
 
         # Fallback: Use HistoryManager (Phase 1-6 behavior)
         return self._history_manager.prepare_for_llm(
-            self._history, system_prompt, current_prompt
+            history_for_compression, system_prompt, current_prompt
         )
 
     @property
@@ -1002,8 +1018,19 @@ class LlmMixin:
         return list(self._history)
 
     def clear_history(self: Any) -> None:
-        """Clear the conversation history."""
-        self._history.clear()
+        """Clear the conversation history.
+
+        Phase 2 SSOT: Clears the underlying storage (_interpreter_history or TranscriptStore).
+        """
+        agent_ctx = getattr(self, '_agent_context', None)
+        if agent_ctx is not None and agent_ctx.transcript_store is not None:
+            # Clear TranscriptStore
+            agent_ctx.transcript_store.transcript.clear()
+            agent_ctx.transcript_store._uuid_index.clear()
+            agent_ctx.transcript_store._dirty = True
+        else:
+            # Clear fallback storage
+            self._interpreter_history.clear()
 
     # ------------------------------------------------------------------
     # Context Statistics (for REPL display)

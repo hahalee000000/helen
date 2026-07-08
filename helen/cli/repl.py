@@ -233,6 +233,11 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
         print("  :last_error [-v]  Show structured context of last error (-v for trace)")
         print("  :llm_log [n] [-v] Show last n LLM calls (-v for verbose)")
         print("  :stats            Show context window usage statistics (P4)")
+        print("  :transcript       Show current transcript (SSOT)")
+        print("  :transcript --full  Show full transcript including compressed")
+        print("  :transcript --audit Show compression audit trail")
+        print("  :sessions         List transcript sessions")
+        print("  :session_id       Show current session ID")
         print("  exit              Exit the REPL")
         return True
 
@@ -370,6 +375,98 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
             print("Context stats not available (interpreter too old?)")
         except Exception as e:
             print(f"Error getting stats: {e}")
+        return True
+
+    # Phase 1 SSOT: Transcript commands
+    if cmd == ":transcript":
+        agent_ctx = getattr(interp, "_agent_context", None)
+        if agent_ctx is None or agent_ctx.transcript_store is None:
+            print("TranscriptStore is not enabled.")
+            return True
+
+        store = agent_ctx.transcript_store
+
+        if "--audit" in arg:
+            # Show compression audit trail
+            audit = store.get_compression_audit()
+            if not audit:
+                print("No compression events recorded yet.")
+            else:
+                print(f"Compression audit ({len(audit)} events):")
+                for i, event in enumerate(audit, 1):
+                    print(f"\n  [{i}] Layer: {event.get('layer', 'unknown')}")
+                    print(f"      UUID: {event.get('uuid', '')[:12]}")
+                    print(f"      Range: {event.get('head_uuid', '')[:8]}..{event.get('tail_uuid', '')[:8]}")
+                    print(f"      Anchor: {event.get('anchor_uuid', '')[:8]}")
+                    print(f"      Tokens: {event.get('original_token_count', 0)} -> {event.get('compressed_token_count', 0)}")
+                    summary = event.get('summary', '')
+                    if summary:
+                        print(f"      Summary: {summary[:100]}{'...' if len(summary) > 100 else ''}")
+        elif "--full" in arg:
+            # Show full transcript including compressed messages
+            from helen.runtime.transcript_store import BoundaryMarker, Message
+            print(f"Full transcript ({store.get_transcript_size()} items):")
+            for i, item in enumerate(store.transcript, 1):
+                if isinstance(item, Message):
+                    content = item.content[:100]
+                    if len(item.content) > 100:
+                        content += "..."
+                    print(f"  [{i}] [{item.role}] {content}")
+                elif isinstance(item, BoundaryMarker):
+                    print(f"  [{i}] --- Compression Boundary ({item.layer}) ---")
+                    print(f"       Range: {item.head_uuid[:8]}..{item.tail_uuid[:8]}")
+                    summary = item.summary[:80] if item.summary else ""
+                    if summary:
+                        print(f"       Summary: {summary}{'...' if len(item.summary) > 80 else ''}")
+        else:
+            # Show current effective view
+            view = store.read_view()
+            print(f"Current transcript view ({len(view)} messages):")
+            for i, msg in enumerate(view, 1):
+                content = msg.content[:100]
+                if len(msg.content) > 100:
+                    content += "..."
+                print(f"  [{i}] [{msg.role}] {content}")
+
+            # Show stats
+            total = store.get_transcript_size()
+            msg_count = store.get_message_count()
+            boundary_count = store.get_boundary_count()
+            print(f"\nStats: {total} total items, {msg_count} messages, {boundary_count} compression boundaries")
+
+        return True
+
+    if cmd == ":sessions":
+        from helen.runtime.config import get_transcript_config
+        from helen.runtime.session_manager import SessionManager
+
+        config = get_transcript_config()
+        session_dir = config.get("session_dir")
+        manager = SessionManager(base_dir=session_dir)
+        sessions = manager.list_sessions()
+
+        if not sessions:
+            print("No transcript sessions found.")
+        else:
+            print(f"Transcript sessions ({len(sessions)} total):")
+            for i, session in enumerate(sessions[:20], 1):  # Show first 20
+                from datetime import datetime
+                modified = datetime.fromtimestamp(session["modified_at"]).strftime("%Y-%m-%d %H:%M:%S")
+                size_kb = session["size_bytes"] / 1024
+                print(f"  [{i}] {session['session_id']}")
+                print(f"       Modified: {modified}, Size: {size_kb:.1f} KB, Messages: ~{session['message_count']}")
+
+            if len(sessions) > 20:
+                print(f"  ... and {len(sessions) - 20} more")
+
+        return True
+
+    if cmd == ":session_id":
+        agent_ctx = getattr(interp, "_agent_context", None)
+        if agent_ctx is None or agent_ctx.session_id is None:
+            print("No active session (TranscriptStore not enabled).")
+        else:
+            print(f"Current session: {agent_ctx.session_id}")
         return True
 
     print(f"Unknown command: {cmd}. Type :help for available commands.")
