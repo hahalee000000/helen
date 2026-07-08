@@ -156,39 +156,73 @@ class AgentContextManager:
         from helen.runtime.transcript_store import JSONLBackend, SQLiteBackend, TranscriptStore
 
         try:
+            # Check for HELEN_TRANSCRIPT_LOG environment variable (CLI --transcript-log flag)
+            import os
+            transcript_log_env = os.environ.get("HELEN_TRANSCRIPT_LOG")
+
             config = get_transcript_config()
-            session_dir = config.get("session_dir")
             backend_type = config.get("backend", "jsonl")
             max_memory_items = config.get("max_memory_items", 1000)
 
-            # Create or reuse session
-            manager = SessionManager(base_dir=session_dir)
-            if session_id is None:
-                session_id = manager.create_session()
+            if transcript_log_env:
+                # Use custom transcript log path from environment variable
+                from pathlib import Path
+                transcript_path = Path(transcript_log_env)
+                transcript_path.parent.mkdir(parents=True, exist_ok=True)
 
-            self._session_id = session_id
-            transcript_path = manager.get_session_path(session_id)
+                # Create backend based on file extension or config
+                if transcript_path.suffix == ".db" or backend_type == "sqlite":
+                    sqlite_path = transcript_path if transcript_path.suffix == ".db" else transcript_path.with_suffix(".db")
+                    backend = SQLiteBackend(sqlite_path)
+                else:
+                    backend = JSONLBackend(transcript_path)
 
-            # Create backend based on config
-            if backend_type == "sqlite":
-                # Use SQLite backend (Phase 4: better performance, indexing)
-                sqlite_path = transcript_path.with_suffix(".db")
-                backend = SQLiteBackend(sqlite_path)
+                # Use a simple session ID based on filename
+                self._session_id = f"custom_{transcript_path.stem}"
+
+                # Load existing transcript if file exists, or create new
+                if transcript_path.exists():
+                    self._transcript_store = TranscriptStore.load_from_backend(
+                        backend, max_memory_items=max_memory_items
+                    )
+                    logger.info("Resumed custom transcript: %s", transcript_path)
+                else:
+                    self._transcript_store = TranscriptStore(
+                        backend=backend, max_memory_items=max_memory_items
+                    )
+                    logger.info("Created custom transcript: %s", transcript_path)
             else:
-                # Default: JSONL backend (simpler, human-readable)
-                backend = JSONLBackend(transcript_path)
+                # Use default session management
+                session_dir = config.get("session_dir")
 
-            # Load existing transcript if resuming, or create new
-            if manager.session_exists(session_id):
-                self._transcript_store = TranscriptStore.load_from_backend(
-                    backend, max_memory_items=max_memory_items
-                )
-                logger.info("Resumed transcript session: %s", session_id)
-            else:
-                self._transcript_store = TranscriptStore(
-                    backend=backend, max_memory_items=max_memory_items
-                )
-                logger.info("Created new transcript session: %s", session_id)
+                # Create or reuse session
+                manager = SessionManager(base_dir=session_dir)
+                if session_id is None:
+                    session_id = manager.create_session()
+
+                self._session_id = session_id
+                transcript_path = manager.get_session_path(session_id)
+
+                # Create backend based on config
+                if backend_type == "sqlite":
+                    # Use SQLite backend (Phase 4: better performance, indexing)
+                    sqlite_path = transcript_path.with_suffix(".db")
+                    backend = SQLiteBackend(sqlite_path)
+                else:
+                    # Default: JSONL backend (simpler, human-readable)
+                    backend = JSONLBackend(transcript_path)
+
+                # Load existing transcript if resuming, or create new
+                if manager.session_exists(session_id):
+                    self._transcript_store = TranscriptStore.load_from_backend(
+                        backend, max_memory_items=max_memory_items
+                    )
+                    logger.info("Resumed transcript session: %s", session_id)
+                else:
+                    self._transcript_store = TranscriptStore(
+                        backend=backend, max_memory_items=max_memory_items
+                    )
+                    logger.info("Created new transcript session: %s", session_id)
 
         except Exception as e:
             logger.error("Failed to initialize TranscriptStore: %s", e)

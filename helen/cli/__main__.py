@@ -31,6 +31,28 @@ def run_command(file: str, program_args: list[str] | None = None) -> int:
     Returns:
         0 on success, 1 on syntax error, 2 on semantic error, 3 on runtime error.
     """
+    # Parse --transcript-log flag from program_args
+    transcript_log_path = None
+    filtered_args = []
+    i = 0
+    while i < len(program_args or []):
+        arg = program_args[i]
+        if arg == "--transcript-log" and i + 1 < len(program_args):
+            transcript_log_path = program_args[i + 1]
+            i += 2
+        elif arg.startswith("--transcript-log="):
+            transcript_log_path = arg.split("=", 1)[1]
+            i += 1
+        else:
+            filtered_args.append(arg)
+            i += 1
+
+    # Set environment variable for transcript log path if specified
+    if transcript_log_path:
+        os.environ["HELEN_TRANSCRIPT_LOG"] = str(Path(transcript_log_path).absolute())
+
+    program_args = filtered_args
+
     source_path = Path(file)
     if not source_path.exists():
         print(f"Error: file not found: {file}", file=sys.stderr)

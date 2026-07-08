@@ -238,6 +238,7 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
         print("  :transcript --audit Show compression audit trail")
         print("  :sessions         List transcript sessions")
         print("  :session_id       Show current session ID")
+        print("  :resume <id>      Resume a previous transcript session")
         print("  exit              Exit the REPL")
         return True
 
@@ -467,6 +468,28 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
             print("No active session (TranscriptStore not enabled).")
         else:
             print(f"Current session: {agent_ctx.session_id}")
+        return True
+
+    if cmd == ":resume":
+        if not arg:
+            print("Usage: :resume <session_id>")
+            return True
+
+        agent_ctx = getattr(interp, "_agent_context", None)
+        if agent_ctx is None or agent_ctx.transcript_store is None:
+            print("TranscriptStore is not enabled.")
+            return True
+
+        # Import resume_session from stdlib
+        from helen.stdlib.transcript import resume_session
+
+        success = resume_session(arg)
+        if success:
+            print(f"Session resumed: {arg}")
+            print("Transcript loaded. Use :transcript to view.")
+        else:
+            print(f"Failed to resume session: {arg}")
+            print("Session may not exist or transcript file may be corrupted.")
         return True
 
     print(f"Unknown command: {cmd}. Type :help for available commands.")

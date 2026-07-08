@@ -655,7 +655,12 @@ class TranscriptStore:
         ]
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize transcript to dict for persistence."""
+        """Serialize transcript to dict for persistence.
+
+        .. deprecated:: v1.16
+            Use Backend persistence (JSONLBackend/SQLiteBackend) instead.
+            This method is retained for backward compatibility and testing only.
+        """
         items = []
         for item in self.transcript:
             if isinstance(item, Message):
@@ -680,7 +685,12 @@ class TranscriptStore:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "TranscriptStore":
-        """Deserialize transcript from dict."""
+        """Deserialize transcript from dict.
+
+        .. deprecated:: v1.16
+            Use Backend persistence (JSONLBackend/SQLiteBackend) instead.
+            This method is retained for backward compatibility and testing only.
+        """
         store = cls()
         for item_data in data.get("items", []):
             item_type = item_data.get("type")

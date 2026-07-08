@@ -145,6 +145,7 @@ from helen.stdlib.transcript import (
     replay_transcript as _replay_transcript,
     export_transcript as _export_transcript,
     get_compression_audit as _get_compression_audit,
+    resume_session as _resume_session,
 )
 
 
@@ -1043,6 +1044,7 @@ def _register_builtins() -> None:
         BuiltinFunction("replay_transcript", "Replay transcript messages", "replay_transcript(session_id?, include_compressed?)", _replay_transcript, "transcript"),
         BuiltinFunction("export_transcript", "Export transcript to file", "export_transcript(output_path, format?, session_id?)", _export_transcript, "transcript"),
         BuiltinFunction("get_compression_audit", "Get compression event history", "get_compression_audit()", _get_compression_audit, "transcript"),
+        BuiltinFunction("resume_session", "Resume a previous transcript session", "resume_session(session_id)", _resume_session, "transcript"),
     ]
 
     for func in builtins:

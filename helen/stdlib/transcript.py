@@ -270,15 +270,70 @@ def get_compression_audit() -> list[dict[str, Any]]:
     return store.get_compression_audit()
 
 
-# Register stdlib functions
-def register_transcript_functions(register_func):
-    """Register transcript stdlib functions.
+def resume_session(session_id: str) -> bool:
+    """Resume a previous transcript session.
+
+    Loads the transcript from a previous session into the current TranscriptStore,
+    allowing continuation of a past conversation.
 
     Args:
-        register_func: Function to register a stdlib function
+        session_id: The session ID to resume
+
+    Returns:
+        True if session was successfully resumed, False otherwise
+
+    Example:
+        let success = resume_session("session_1783492628_d9d9c0aa")
+        if success {
+            print("Session resumed successfully")
+        } else {
+            print("Failed to resume session")
+        }
     """
-    register_func("get_session_id", get_session_id)
-    register_func("list_sessions", list_sessions)
-    register_func("replay_transcript", replay_transcript)
-    register_func("export_transcript", export_transcript)
-    register_func("get_compression_audit", get_compression_audit)
+    if _interpreter_agent_context is None:
+        return False
+
+    store = getattr(_interpreter_agent_context, "transcript_store", None)
+    if store is None:
+        return False
+
+    # Import required modules
+    from helen.runtime.config import get_transcript_config
+    from helen.runtime.session_manager import SessionManager
+    from helen.runtime.transcript_store import JSONLBackend, SQLiteBackend, TranscriptStore
+
+    try:
+        config = get_transcript_config()
+        session_dir = config.get("session_dir")
+        backend_type = config.get("backend", "jsonl")
+
+        manager = SessionManager(base_dir=session_dir)
+
+        # Check if session exists
+        if not manager.session_exists(session_id):
+            return False
+
+        # Get transcript path
+        transcript_path = manager.get_session_path(session_id)
+
+        # Create backend based on config
+        if backend_type == "sqlite":
+            sqlite_path = transcript_path.with_suffix(".db")
+            backend = SQLiteBackend(sqlite_path)
+        else:
+            backend = JSONLBackend(transcript_path)
+
+        # Load transcript from backend
+        max_memory_items = config.get("max_memory_items", 1000)
+        loaded_store = TranscriptStore.load_from_backend(backend, max_memory_items)
+
+        # Replace current store with loaded store
+        _interpreter_agent_context._transcript_store = loaded_store
+        _interpreter_agent_context._session_id = session_id
+
+        return True
+
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error("Failed to resume session %s: %s", session_id, e)
+        return False
