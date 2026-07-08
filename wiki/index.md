@@ -1,7 +1,7 @@
 # Helen 语言 Wiki 索引
 
 > **Helen** — A Prompt-first Agent Programming Language
-> 版本: v1.15 | 状态: Phase 0-10 全部实现 + Phase 1-7 上下文管理增强 + 中文语法 + Agent 作用域隔离 | 测试: 2606 passed
+> 版本: v1.16 | 状态: Phase 0-10 全部实现 + Phase 1-7 上下文管理增强 + TranscriptStore SSOT + 中文语法 + Agent 作用域隔离 | 测试: 2750 passed
 
 ---
 
@@ -31,6 +31,7 @@
 - [[runtime/llm-runtime|LLM 运行时]] — route/choose/act 接口、取消机制
 - [[runtime/prompt-builder|提示词构建]] — 两层渐进式披露、模板渲染
 - [[runtime/memory|内存系统]] — FileMemoryProvider、InMemoryProvider
+- [[runtime/transcript-store|TranscriptStore SSOT]] — 消息唯一真实来源、SQLite/JSONL 后端、LRU 缓存、UUID 寻址、非破坏性压缩（**v1.16 新特性**）
 - [[runtime/context-management|上下文管理架构]] — 统一入口、三通道、渐进压缩、缓存感知、工作记忆（**权威文档**）
 - [[runtime/context-compression-research|上下文压缩研究资料]] — RCC、CogCanvas、DAST 等学术借鉴
 - [[runtime/history|历史管理]] — Token 预算、截断策略、conversation_summary
@@ -45,7 +46,7 @@
 - [[toolchain/quality|质量评估]] — 7 维框架、安全评分、CI 集成
 - [[toolchain/lsp|语言服务器]] — `helen lsp`、JSON-RPC 2.0、诊断/补全/跳转
 - [[toolchain/vscode|VS Code 扩展]] — 语法高亮、LSP 集成、代码补全、跳转定义
-- [[toolchain/stdlib|标准库]] — 200 builtins (230+ 中文别名) (core/string/data/collection/network/time/math/file/system/crypto/io/test/quality/context)
+- [[toolchain/stdlib|标准库]] — 203 builtins (230+ 中文别名) (core/string/data/collection/network/time/math/file/system/crypto/io/test/quality/context/transcript)
 - [[toolchain/error-format|错误格式化]] — HLD 3.11.2 诊断输出
 
 ### 七、教程
