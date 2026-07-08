@@ -137,20 +137,6 @@ class TestErrorSnapshot:
         assert snapshot.error_type == "RuntimeError"
         assert snapshot.message == "division by zero"
 
-    def test_snapshot_to_json(self):
-        """Test JSON serialization."""
-        snapshot = ErrorSnapshot(
-            error_type="ValueError",
-            message="invalid value",
-            location="test.helen:5:1",
-            call_stack=[],
-            scope={"data": [1, 2, 3]},
-        )
-
-        json_str = snapshot.to_json()
-        assert "ValueError" in json_str
-        assert "invalid value" in json_str
-
     def test_format_text(self):
         """Test human-readable format."""
         snapshot = ErrorSnapshot(
@@ -228,10 +214,6 @@ class TestLLMAuditLog:
 
         assert len(log.entries) == 3
 
-    def test_format_summary(self):
-        """Test summary formatting."""
-        log = LLMAuditLog()
-
         entry = LLMAuditEntry(
             timestamp=1234567890.0,
             call_type="act",
@@ -244,9 +226,7 @@ class TestLLMAuditLog:
         )
         log.log(entry)
 
-        summary = log.format_summary()
-        assert "Total calls: 1" in summary
-        assert "100" in summary  # tokens_in
+        assert len(log.entries) == 3
 
 
 # ---------------------------------------------------------------------------

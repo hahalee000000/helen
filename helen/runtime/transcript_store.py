@@ -508,19 +508,6 @@ class TranscriptStore:
             return self.transcript[index]
         return None
 
-    def append_many(self, messages: list[Message]) -> list[Message]:
-        """Append multiple messages.
-
-        Args:
-            messages: Messages to append
-
-        Returns:
-            The same messages (with UUIDs assigned)
-        """
-        for msg in messages:
-            self.append(msg)
-        return messages
-
     def record_compression(
         self,
         head_uuid: str,
@@ -704,40 +691,6 @@ class TranscriptStore:
             "version": 1,
             "items": items,
         }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "TranscriptStore":
-        """Deserialize transcript from dict.
-
-        .. deprecated:: v1.16
-            Use Backend persistence (JSONLBackend/SQLiteBackend) instead.
-            This method is retained for backward compatibility and testing only.
-        """
-        store = cls()
-        for item_data in data.get("items", []):
-            item_type = item_data.get("type")
-            if item_type == "message":
-                msg = Message(
-                    role=item_data.get("role", "user"),
-                    content=item_data.get("content", ""),
-                    tool_calls=item_data.get("tool_calls", []),
-                    tool_call_id=item_data.get("tool_call_id"),
-                    uuid=item_data.get("uuid", ""),
-                    message_type=item_data.get("message_type"),
-                    priority=item_data.get("priority", 50),
-                    compressed=item_data.get("compressed", False),
-                )
-                index = len(store.transcript)
-                store.transcript.append(msg)
-                if msg.uuid:
-                    store._uuid_index[msg.uuid] = index
-            elif item_type == "boundary_marker":
-                marker = BoundaryMarker.from_dict(item_data)
-                index = len(store.transcript)
-                store.transcript.append(marker)
-                store._uuid_index[marker.uuid] = index
-
-        return store
 
     def close(self) -> None:
         """Close the backend (release file handles, connections)."""

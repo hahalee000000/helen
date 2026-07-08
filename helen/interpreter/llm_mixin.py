@@ -598,7 +598,9 @@ class LlmMixin:
                     param_type = "boolean"
                 elif type_name in ("list", "array"):
                     param_type = "array"
-                    # TODO: infer items type if available
+                    # Note: Helen doesn't support generic types yet (e.g., list[int]),
+                    # so we can't infer item types. Leaving `items` unspecified means
+                    # the array can contain any type, which is valid JSON Schema.
                 elif type_name in ("map", "dict", "object"):
                     param_type = "object"
                 else:

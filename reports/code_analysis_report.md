@@ -1,10 +1,11 @@
 # Helen 代码分析报告
 
 > 生成日期: 2026-07-08
-> 修复日期: 2026-07-08
+> 验证日期: 2026-07-08（v1.15/v1.16 更新后重新验证，修正行号与死代码状态）
+> 死代码清理: 2026-07-08（删除 9 个废弃函数 + 9 个测试，减少 ~250 行）
 > 范围: `/home/user/helen/helen/` 源码目录
 > 方法: 全量静态分析 + grep 模式搜索 + 交叉引用验证
-> 验证: 2700 个 pytest 全部通过 (0 失败)
+> 验证: 2740 个 pytest 通过 (1 个测试隔离问题，单独运行通过)
 
 ---
 
@@ -20,7 +21,9 @@
 | ⑥ | `is_python_module` 检测逻辑 → `is_helen_data_file()` 共享函数 | `core/__init__.py`, `interpreter.py`, `analyzer.py` | ~8 行 | 通过 |
 | ① | Shared Store / Channel 合并 → `_shared_container()` 通用方法 | `parser.py`, `analyzer.py`, `interpreter.py` | ~120 行 | 通过 |
 | 死代码 | 删除 7 个完全未被调用的函数（prompt_builder 3 个 + llm_mixin 4 个） | `prompt_builder.py`, `llm_mixin.py` | ~100 行 | 通过 |
-| **合计** | | **6 个文件** | **~400+ 行** | **2700/2700 通过** |
+| v1.16 | TranscriptStore SSOT 集成：`read_view()` / `get_compression_audit()` 接入 stdlib + REPL + interpreter | `transcript_store.py`, `stdlib/transcript.py`, `cli/repl.py`, `interpreter.py` | — | 通过 |
+| **死代码清理** | **删除 10 个废弃/未实现函数 + 9 个相关测试** | **5 个源文件 + 3 个测试文件** | **~250 行** | **通过** |
+| **合计** | | **11 个文件** | **~650+ 行** | **2740/2745 通过** |
 
 ### 不修复项（代码重复）
 
@@ -28,7 +31,7 @@
 
 | # | 项目 | 不修复原因 |
 |---|------|-----------|
-| ② | `_collect_variable_refs` 手工分发（225 行） | 涉及 AST 节点全量遍历重构，风险过高；当前实现正确且性能可接受 |
+| ② | `_collect_variable_refs` 手工分发（227 行） | 涉及 AST 节点全量遍历重构，风险过高；当前实现正确且性能可接受 |
 | ⑦ | `json.dumps(..., ensure_ascii=False)` 重复 34 次 | 每处都是简单调用，抽象为 helper 收益有限，且不利于 IDE 搜索 |
 | ⑧ | `copy.deepcopy` 可变类型深拷贝（7 处） | `_is_mutable_type` helper 已存在，模式清晰，无需进一步抽象 |
 | ⑨ | Named arg 回溯模板（3 处） | 解析器内部逻辑，各场景略有差异，强行统一反而降低可读性 |
@@ -53,16 +56,19 @@
 
 ### 1.1 TODO 注释
 
-| 文件:行号 | 关键词 | 上下文 |
-|-----------|--------|--------|
-| `helen/interpreter/llm_mixin.py:628` | `TODO` | 在 `llm act` 工具参数生成中，list/array 类型参数默认使用 `"array"` 类型，缺少 item type 推断 |
+**已清理** — 无残留 TODO 注释。
+
+原 `llm_mixin.py:601` 的 TODO（list item type 推断）已于 2026-07-08 解决：
+- Helen 当前不支持泛型类型（如 `list[int]`），无法从类型注解推断 item 类型
+- 不指定 `items` 字段是有效的 JSON Schema，表示数组可包含任意类型
+- 添加注释说明设计决策，移除 TODO 标记
 
 ### 1.2 明确标注的未实现功能
 
 | 文件:行号 | 说明 |
 |-----------|------|
-| `helen/runtime/hermes_cli_llm.py:105` | CLI LLM 后端不传递 tool schemas（CLI 进程不支持） |
-| `helen/runtime/hermes_cli_llm.py:109` | CLI LLM 后端不传递对话历史（CLI 进程不支持） |
+| `helen/runtime/hermes_cli_llm.py:104` | CLI LLM 后端不传递 tool schemas（CLI 进程不支持） |
+| `helen/runtime/hermes_cli_llm.py:108` | CLI LLM 后端不传递对话历史（CLI 进程不支持） |
 
 ### 1.3 检查结果：无问题项
 
@@ -104,7 +110,7 @@
 | `interpreter/llm_mixin.py` | `search_history()` | 已删除 — 同上 |
 | `interpreter/llm_mixin.py` | `get_context_stats()` | 已删除 — `format_context_stats()` 已覆盖 REPL 需求 |
 
-> 保留的方法：`format_context_stats()` 被 `cli/repl.py:367` 调用，非死代码。
+> 保留的方法：`format_context_stats()` 被 `cli/repl.py:373` 调用，非死代码。
 
 ### 2.2 中等置信度：深度分析
 
@@ -118,43 +124,52 @@
 |------|------|---------|------|
 | `history.py` | `check_budget()` | `prepare_for_llm()` 内部调用 | 预算检查是 `prepare_for_llm()` → `llm_mixin.py:995` 的一部分 |
 | `history.py` | `trim_history()` | `prepare_for_llm()` 内部调用 | 历史裁剪通过同一管道运作 |
-| `observability.py` | `ErrorSnapshot.to_json()` | `capture_error()` 内部调用 | `capture_error` 在 `interpreter.py` 多处被调用 |
 | `observability.py` | `to_list()` (CallStackTracker/ExecutionTracer/LLMAuditLog) | `capture_error()` 内部调用 | 序列化用于错误快照构建 |
 | `context_awareness.py` | `get_usage_level()` | `build_usage_warning()` 内部调用 | `http_llm.py:752` 调用 `build_usage_warning()` |
+| `transcript_store.py` | `read_view()` | SSOT 核心方法 | v1.16 接入生产：`stdlib/transcript.py`、`cli/repl.py`、`interpreter.py`、`llm_mixin.py` 均调用 |
+| `transcript_store.py` | `get_compression_audit()` | stdlib 暴露 | v1.16 接入生产：`stdlib/transcript.py`、`cli/repl.py` 直接调用 |
+| `transcript_store.py` | `BoundaryMarker.from_dict()` | 后端加载 | v1.16 接入：`_item_from_dict()` 内部调用，用于 JSONL/SQLite 后端反序列化 |
 
-#### (b) 功能未实现 / 已废弃
+#### (b) 功能未实现 / 已废弃 — **已清理** ✅
 
-方法已定义，测试覆盖逻辑正确，但生产代码从未调用。
+以下函数已于 2026-07-08 清理删除（含 9 个相关测试）：
+
+| 文件 | 函数 | 原状态 | 删除原因 |
+|------|------|--------|---------|
+| `history.py` | `set_compression_mode()` | 废弃 | 压缩模式通过构造函数设置，运行时切换无需求 |
+| `history.py` | `get_tool_history()` | 未实现 | P4 特性，无调用者 |
+| `observability.py` | `ErrorSnapshot.to_json()` | 废弃 | REPL 使用 `format_text()`，`to_json()` 无调用者 |
+| `observability.py` | `format_summary()` | 废弃 | LLM 审计日志格式化，无调用者 |
+| `observability.py` | `CallStackTracker.frames` | 废弃 | 生产代码只用 `push()`/`pop()`，不读取帧列表 |
+| `transcript_store.py` | `append_many()` | 废弃 | 生产只调用 `append()` 单条追加 |
+| `transcript_store.py` | `TranscriptStore.from_dict()` | 未实现 | `BoundaryMarker.from_dict()` 已接入，类方法无调用者 |
+| `context_awareness.py` | `inject_budget_tag()` | 其他路径 | `agent_context.py` 有独立实现 |
+| `cache_aware_compression.py` | `estimate_cache_improvement()` | 未实现 | 公开工具函数，无生产调用者 |
+
+**保留项**：
 
 | 文件 | 函数 | 状态 | 说明 |
 |------|------|------|------|
-| `history.py` | `set_compression_mode()` | **废弃** | 压缩模式通过 `HistoryManager.__init__(compression_mode=...)` 构造时设置，运行时切换无需求 |
-| `history.py` | `get_tool_history()` | **未实现** | P4 特性 — 从对话历史中提取工具调用，无调用者 |
-| `observability.py` | `format_summary()` | **废弃** | 格式化 LLM 审计日志为人类可读文本，无调用者 |
-| `observability.py` | `CallStackTracker.frames` | **废弃** | 生产代码只调用 `push()`/`pop()`，从不读取完整帧列表 |
-| `transcript_store.py` | `append_many()` | **废弃** | 便利方法，生产只调用 `append()` 单条追加 |
-| `transcript_store.py` | `read_view()` | **未实现** | 重建压缩后的 transcript 视图。压缩事件被记录（`record_compression`），但视图重建从未被消费 — 实际压缩走 `agent_context.py` 的 `_compress_history` |
-| `transcript_store.py` | `get_compression_audit()` | **未实现** | 压缩审计功能，压缩被记录但审计检索无调用者 |
-| `transcript_store.py` | `from_dict()` | **未实现** | Transcript 持久化反序列化，无代码加载已保存的 transcript |
-| `context_awareness.py` | `inject_budget_tag()` | **其他路径** | 预算标签注入功能已由 `agent_context.py:302` 的独立实现提供，`context_awareness.py` 版本是测试用的抽象 |
-| `memory.py` | `list_keys()` | **未实现** | `MemoryProvider` 抽象接口的一部分，两个实现类都提供了，但 Helen stdlib（`get_memory`/`set_memory`）只用 get/set/delete，从不枚举 key |
+| `memory.py` | `list_keys()` | **保留** | `MemoryProvider` 抽象接口的一部分，为接口完整性保留 |
 
 #### 中等置信度分析汇总
 
-| 模块 | 总数 | (a) 功能已实现 | (b) 功能未实现/废弃 |
-|------|------|----------------|-------------------|
-| `history.py` | 4 | 2 (check_budget, trim_history) | 2 (set_compression_mode, get_tool_history) |
-| `observability.py` | 4 | 2 (to_json, to_list) | 2 (format_summary, frames) |
-| `transcript_store.py` | 4 | 0 | 4 (append_many, read_view, get_compression_audit, from_dict) |
-| `context_awareness.py` | 2 | 1 (get_usage_level) | 1 (inject_budget_tag — 其他路径) |
-| `memory.py` | 1 | 0 | 1 (list_keys) |
-| **合计** | **15** | **5** | **10** |
+| 模块 | 清理前 | 清理后 | 说明 |
+|------|--------|--------|------|
+| `history.py` | 4 (2a+2b) | 2 (2a+0b) | 删除 2 个废弃函数 |
+| `observability.py` | 4 (1a+3b) | 1 (1a+0b) | 删除 3 个废弃函数 |
+| `transcript_store.py` | 4 (3a+1b) | 3 (3a+0b) | 删除 2 个未使用函数 |
+| `context_awareness.py` | 2 (1a+1b) | 1 (1a+0b) | 删除 1 个重复路径函数 |
+| `memory.py` | 1 (0a+1b) | 1 (0a+1b) | 保留 `list_keys()` — 接口完整性 |
+| `cache_aware_compression.py` | 1 (0a+1b) | 0 (0a+0b) | 删除 1 个未使用函数 |
+| **合计** | **16 (7a+9b)** | **8 (7a+1b)** | **净删除 9 个废弃函数 + 9 个测试** |
 
 #### 关键发现
 
-1. **`transcript_store.py` 是"半成品"最集中的模块** — 4 个函数全部未在生产中使用。压缩、持久化、审计功能已写入代码但从未被消费。
-2. **`history.py` 和 `observability.py` 的功能是正常的** — 测试直接调用底层方法验证逻辑，生产走 `prepare_for_llm()` / `capture_error()` 高层封装。
-3. **`memory.py` 的 `list_keys()` 是接口完整性产物** — 抽象接口要求有 `get/set/delete/list_keys`，但实际只用了前三个。
+1. **`transcript_store.py` 已大幅改善** — v1.16 SSOT 集成后，`read_view()` 和 `get_compression_audit()` 已接入 4 个生产路径（stdlib/repl/interpreter/llm_mixin），`BoundaryMarker.from_dict()` 用于后端反序列化。`append_many()` 和 `TranscriptStore.from_dict()` 已清理删除。
+2. **`history.py` 和 `observability.py` 的功能是正常的** — 测试直接调用底层方法验证逻辑，生产走 `prepare_for_llm()` / `capture_error()` 高层封装。废弃函数已清理。
+3. **`memory.py` 的 `list_keys()` 保留** — 虽然当前 stdlib 只用 get/set/delete，但作为抽象接口的一部分，为未来扩展性保留。
+4. **死代码清理完成** — 2026-07-08 清理了 9 个废弃/未实现函数和 9 个相关测试，减少约 250 行代码。
 
 ### 2.3 误报验证（确认非死代码）
 
@@ -187,9 +202,9 @@
 
 > 提取 `_shared_container_decl(kind)` 通用方法至 parser/analyzer/interpreter，~120 行消除。
 
-#### ② `_collect_variable_refs` — 225 行手工 if-elif 分发（`interpreter.py:491-716`）
+#### ② `_collect_variable_refs` — 227 行手工 if-elif 分发（`interpreter.py:492-718`）
 
-**问题**: 单个 225 行函数，对每个 AST 节点类型写一个 `isinstance` 分支来递归收集变量引用。
+**问题**: 单个 227 行函数，对每个 AST 节点类型写一个 `isinstance` 分支来递归收集变量引用。
 
 ```python
 def _collect_variable_refs(node, bound, used):
@@ -253,10 +268,10 @@ def _collect_variable_refs(node, bound, used):
 |--------|---------|------|-----------|
 | `_is_cjk` 工具函数 | `lexer.py`, `history.py`, `reactive_compaction.py`, `context_recovery.py`, `context_awareness.py` | 5 | 私有 helper，各模块独立维护，提取到 core 会增加耦合 |
 | `_estimate_tokens` 工具函数 | `reactive_compaction.py`, `context_recovery.py`, `context_awareness.py` | 3 | 同上，上下文感知模块私有实现 |
-| "cannot modify read-only parameter" 错误消息 | `interpreter.py:288` (ReadOnlyView), `interpreter.py:980` (visit_binary_op) | 2 | 两个不同类中的独立错误消息，无需共享 |
-| Agent scope isolation 错误模板 | `analyzer.py:649`, `783`, `794` | 3 变体 | 语义不同的 3 个错误场景，文本自然不同 |
+| "cannot modify read-only parameter" 错误消息 | `interpreter.py:289` (ReadOnlyView), `interpreter.py:1018` (visit_binary_op) | 2 | 两个不同类中的独立错误消息，无需共享 |
+| Agent scope isolation 错误模板 | `analyzer.py:558`, `692`, `703` | 3 变体 | 语义不同的 3 个错误场景，文本自然不同 |
 | Contract 文件 vs 实现文件 | `stdlib/*_contracts.py` vs `stdlib/*.py` | 签名级 | Protocol 设计所需，非无意重复 |
-| `_call_agent` old_env 模式 | `interpreter.py:2712` | 1 | 结构太复杂（env switch 在 try 外），安全考虑保留 |
+| `_call_agent` old_env 模式 | `interpreter.py:2604` | 1 | 结构太复杂（env switch 在 try 外），安全考虑保留 |
 
 ---
 
@@ -265,7 +280,7 @@ def _collect_variable_refs(node, bound, used):
 | # | 重复内容 | 状态 |
 |---|---------|------|
 | ~~1~~ | ~~Shared Store / Channel 四重实现~~ | ✅ **已修复** |
-| 2 | `_collect_variable_refs` 手工分发（225 行） | 不修复 — 风险过高 |
+| 2 | `_collect_variable_refs` 手工分发（227 行） | 不修复 — 风险过高 |
 | ~~3~~ | ~~`old_env` 模板~~ | ✅ **已修复** |
 | ~~4~~ | ~~LLMAuditEntry 构建~~ | ✅ **已修复** |
 | ~~5~~ | ~~`_shared_vars` 惰性初始化~~ | ✅ **已修复** |
@@ -314,6 +329,9 @@ def _collect_variable_refs(node, bound, used):
 | ⑥ | `is_helen_data_file()` | interpreter.py + analyzer.py → core/__init__.py |
 | ① | Store / Channel 合并 | parser.py + analyzer.py + interpreter.py 各提取通用方法 |
 | 死代码 | 删除 7 个未调用函数 | prompt_builder.py 3 个 + llm_mixin.py 4 个 |
+| v1.16 | TranscriptStore SSOT 接入 | `read_view()` / `get_compression_audit()` / `BoundaryMarker.from_dict()` 已接入 stdlib + REPL + interpreter + llm_mixin（4 个生产路径） |
+| **死代码清理** | **删除 9 个废弃函数 + 9 个测试** | history.py (2) + observability.py (3) + transcript_store.py (2) + context_awareness.py (1) + cache_aware_compression.py (1)，减少 ~250 行 |
+| TODO 清理 | 移除 `llm_mixin.py:601` list item type 推断 TODO | Helen 不支持泛型类型，不指定 `items` 是有效 JSON Schema，添加说明注释 |
 
 ### 不修复项（已确认决定）
 
@@ -325,18 +343,15 @@ def _collect_variable_refs(node, bound, used):
 | 代码重复 | ⑨ Named arg 回溯模板 | 不修复 — 差异大 |
 | 代码重复 | ⑩ `_register_stdlib` 模式 | 不修复 — 不同阶段 |
 | 代码重复 | `_is_cjk` / `_estimate_tokens` | 不修复 — 增加耦合 |
-| 代码重复 | `_call_agent` old_env | 不修复 — 结构复杂 |
+| 代码重复 | `_call_agent` old_env | 不修复 — 结构复杂（interpreter.py:2604） |
 
 ### 待处理（功能缺口与增强）
 
 | 项目 | 说明 |
 |------|------|
-| TODO: list item type 推断 (`llm_mixin.py:628`) | 功能增强，非 bug 修复 |
-| CLI LLM 后端缺失 (hermes_cli_llm.py:105/109) | CLI 进程限制，非代码问题 |
-| `transcript_store.py` 半成品模块 | `read_view()`、`from_dict()`、`get_compression_audit()` 已写但未接入生产 — 实际压缩走 `agent_context.py` 的独立路径 |
-| `history.py` get_tool_history | P4 特性，从对话历史提取工具调用，无调用者 |
-| `memory.py` list_keys | 接口完整性设计，stdlib 只用了 get/set/delete |
-| `observability.py` format_summary / frames | 审计日志格式化与调用栈读取，无调用者 |
+| CLI LLM 后端缺失 (hermes_cli_llm.py:104/108) | CLI 进程限制，非代码问题 |
+| `memory.py` list_keys | 接口完整性设计，stdlib 只用了 get/set/delete，保留为抽象接口 |
+| 测试隔离问题 | `test_get_session_id_no_interpreter` 在全量测试中失败（全局变量污染），单独运行通过 |
 
 ---
 

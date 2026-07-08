@@ -127,11 +127,6 @@ class CallStackTracker:
         """Current call stack depth."""
         return len(self._stack)
 
-    @property
-    def frames(self) -> list[CallFrame]:
-        """Get a copy of the current call stack (bottom to top)."""
-        return list(self._stack)
-
     def to_list(self) -> list[dict[str, Any]]:
         """Convert call stack to JSON-serializable list."""
         return [frame.to_dict() for frame in self._stack]
@@ -307,10 +302,6 @@ class ErrorSnapshot:
             "timestamp": self.timestamp,
         }
 
-    def to_json(self, indent: int = 2) -> str:
-        """Convert to JSON string."""
-        return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False)
-
     def format_text(self, verbose: bool = False) -> str:
         """Format as human-readable error context.
 
@@ -464,37 +455,6 @@ class LLMAuditLog:
     def to_list(self) -> list[dict[str, Any]]:
         """Convert audit log to JSON-serializable list."""
         return [entry.to_dict() for entry in self._entries]
-
-    def format_summary(self) -> str:
-        """Format a summary of LLM calls."""
-        if not self._entries:
-            return "(no LLM calls recorded)"
-
-        total_calls = len(self._entries)
-        total_tokens_in = sum(e.tokens_in for e in self._entries)
-        total_tokens_out = sum(e.tokens_out for e in self._entries)
-        total_duration = sum(e.duration_ms for e in self._entries)
-        errors = sum(1 for e in self._entries if e.error)
-
-        lines = [
-            "LLM Call Summary:",
-            f"  Total calls: {total_calls}",
-            f"  Total tokens: {total_tokens_in} in / {total_tokens_out} out",
-            f"  Total duration: {total_duration:.0f}ms",
-            f"  Errors: {errors}",
-        ]
-
-        if self._entries:
-            lines.append("")
-            lines.append("Recent calls:")
-            for entry in self._entries[-5:]:
-                status = "❌" if entry.error else "✅"
-                lines.append(
-                    f"  {status} [{entry.call_type}] {entry.agent_name or 'anonymous'} "
-                    f"({entry.tokens_in}+{entry.tokens_out} tokens, {entry.duration_ms:.0f}ms)"
-                )
-
-        return "\n".join(lines)
 
     def clear(self) -> None:
         """Clear all audit entries."""

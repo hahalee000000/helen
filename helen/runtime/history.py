@@ -395,17 +395,6 @@ class HistoryManager:
         self._model = model
         self.compression_mode = compression_mode
 
-    def set_compression_mode(self, mode: str) -> None:
-        """Update the compression mode.
-
-        Args:
-            mode: One of "summarize", "truncate", "none".
-        """
-        if mode in (COMPRESSION_MODE_SUMMARIZE, COMPRESSION_MODE_TRUNCATE, COMPRESSION_MODE_NONE):
-            self.compression_mode = mode
-        else:
-            logger.warning("Unknown compression mode: %s, keeping current", mode)
-
     def set_model(self, model: str | None) -> None:
         """Update the model and recalculate context window.
 
@@ -913,39 +902,6 @@ class HistoryManager:
             results.append(msg)
 
         return results
-
-    def get_tool_history(
-        self,
-        history: list[Message],
-        tool_name: str | None = None,
-    ) -> list[dict[str, Any]]:
-        """Extract tool call history for review.
-
-        P4: Returns a list of tool calls with their results, optionally
-        filtered by tool name.
-
-        Args:
-            history: List of messages to extract from.
-            tool_name: Optional filter for specific tool name.
-
-        Returns:
-            List of dicts with keys: name, args, result, timestamp (if available).
-        """
-        tool_calls = []
-
-        for msg in history:
-            for tc in getattr(msg, 'tool_calls', []):
-                name = tc.get("name", "unknown")
-                if tool_name and name.lower() != tool_name.lower():
-                    continue
-                tool_calls.append({
-                    "name": name,
-                    "args": tc.get("args", {}),
-                    "result": tc.get("result", ""),
-                    "role": msg.role,
-                })
-
-        return tool_calls
 
     # ------------------------------------------------------------------
     # P4: Context Usage Visualization

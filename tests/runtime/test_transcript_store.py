@@ -65,19 +65,6 @@ class TestTranscriptStore:
 
         assert result.uuid == "existing_uuid"
 
-    def test_append_many(self):
-        store = TranscriptStore()
-        msgs = [
-            Message(role="user", content="Hi"),
-            Message(role="assistant", content="Hello"),
-        ]
-
-        result = store.append_many(msgs)
-
-        assert len(result) == 2
-        assert all(m.uuid != "" for m in result)
-        assert store.get_message_count() == 2
-
     def test_record_compression(self):
         store = TranscriptStore()
 
@@ -157,44 +144,6 @@ class TestTranscriptStore:
         assert len(audit) == 1
         assert audit[0]["summary"] == "Test summary"
         assert audit[0]["layer"] == "test_layer"
-
-    def test_serialization_roundtrip(self):
-        store = TranscriptStore()
-        msg1 = store.append(Message(role="user", content="Hello"))
-        msg2 = store.append(Message(role="assistant", content="Hi"))
-
-        # Serialize
-        data = store.to_dict()
-        assert data["version"] == 1
-        assert len(data["items"]) == 2
-
-        # Deserialize
-        restored = TranscriptStore.from_dict(data)
-        assert restored.get_message_count() == 2
-        view = restored.read_view()
-        assert view[0].content == "Hello"
-        assert view[1].content == "Hi"
-
-    def test_serialization_with_boundaries(self):
-        store = TranscriptStore()
-        msg1 = store.append(Message(role="user", content="Q1"))
-        msg2 = store.append(Message(role="assistant", content="A1"))
-        msg3 = store.append(Message(role="user", content="Q2"))
-
-        store.record_compression(
-            head_uuid=msg1.uuid,
-            tail_uuid=msg2.uuid,
-            anchor_uuid=msg3.uuid,
-            summary="Summary",
-            layer="test",
-        )
-
-        data = store.to_dict()
-        assert len(data["items"]) == 4  # 3 msgs + 1 boundary
-
-        restored = TranscriptStore.from_dict(data)
-        assert restored.get_message_count() == 3
-        assert restored.get_boundary_count() == 1
 
 
 class TestMessageUUID:

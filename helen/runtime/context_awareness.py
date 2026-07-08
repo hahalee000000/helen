@@ -63,24 +63,6 @@ class ContextAwareness:
         from helen.runtime.token_utils import DEFAULT_CONTEXT_WINDOW
         self.max_tokens = max_tokens if max_tokens is not None else DEFAULT_CONTEXT_WINDOW
 
-    def inject_budget_tag(self, system_prompt: str | None) -> str:
-        """Inject token budget tag into system prompt.
-
-        The tag tells the LLM how much context it has:
-        <budget:token_budget>131072</budget:token_budget>
-
-        Args:
-            system_prompt: Current system prompt (may be None)
-
-        Returns:
-            System prompt with budget tag prepended
-        """
-        budget_tag = f"<budget:token_budget>{self.max_tokens}</budget:token_budget>"
-
-        if system_prompt:
-            return f"{budget_tag}\n\n{system_prompt}"
-        return budget_tag
-
     def build_usage_warning(
         self,
         messages: list[dict[str, Any]],

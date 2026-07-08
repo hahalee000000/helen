@@ -16,23 +16,6 @@ from helen.runtime.context_awareness import (
 class TestContextAwareness:
     """Test ContextAwareness class."""
 
-    def test_budget_tag_injection(self):
-        """Budget tag is injected into system prompt."""
-        awareness = ContextAwareness(max_tokens=131072)
-
-        result = awareness.inject_budget_tag("You are helpful.")
-
-        assert "<budget:token_budget>131072</budget:token_budget>" in result
-        assert "You are helpful." in result
-
-    def test_budget_tag_with_none_prompt(self):
-        """Budget tag works with None system prompt."""
-        awareness = ContextAwareness(max_tokens=131072)
-
-        result = awareness.inject_budget_tag(None)
-
-        assert "<budget:token_budget>131072</budget:token_budget>" == result
-
     def test_no_warning_at_normal_usage(self):
         """No warning when usage is normal (< 50%)."""
         awareness = ContextAwareness(max_tokens=100_000)

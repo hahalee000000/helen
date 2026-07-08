@@ -305,38 +305,3 @@ def cache_aware_compress(
     """
     compressor = CacheAwareCompressor(cache_zone_ratio=cache_zone_ratio)
     return compressor.compress(history, max_tokens)
-
-
-def estimate_cache_improvement(
-    original_history: list[Message],
-    compressed_history: list[Message],
-    cache_zone_size: int,
-) -> dict[str, float]:
-    """Estimate cache improvement metrics.
-
-    Args:
-        original_history: Original conversation history
-        compressed_history: Compressed conversation history
-        cache_zone_size: Number of messages in cache zone
-
-    Returns:
-        Dictionary with cache improvement metrics
-    """
-    if not original_history:
-        return {"cache_hit_rate": 0.0, "token_savings": 0.0}
-
-    # Calculate cache hit rate
-    # Cache hit rate = cache_zone_size / total_messages
-    cache_hit_rate = cache_zone_size / len(original_history)
-
-    # Calculate token savings
-    original_tokens = sum(msg.token_count for msg in original_history)
-    compressed_tokens = sum(msg.token_count for msg in compressed_history)
-    token_savings = (original_tokens - compressed_tokens) / original_tokens
-
-    return {
-        "cache_hit_rate": cache_hit_rate,
-        "token_savings": token_savings,
-        "estimated_cost_reduction": cache_hit_rate * 0.7,  # 70% cost reduction on cache hits
-        "estimated_latency_reduction": cache_hit_rate * 0.4,  # 40% latency reduction
-    }

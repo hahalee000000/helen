@@ -14,7 +14,6 @@ from helen.runtime.cache_aware_compression import (
     CacheAwareCompressor,
     CacheStats,
     cache_aware_compress,
-    estimate_cache_improvement,
     DEFAULT_CACHE_ZONE_RATIO,
     MIN_CACHE_ZONE_MESSAGES,
     BATCH_COMPRESSION_THRESHOLD,
@@ -311,42 +310,6 @@ class TestCacheHitEstimation:
         ]
         # Verify cache zone is preserved
         assert stats.cache_zone_preserved is True
-
-
-class TestCacheImprovementEstimation:
-    """Tests for cache improvement estimation."""
-
-    def test_estimate_improvement(self):
-        """Test cache improvement estimation."""
-        original = []
-        for i in range(50):
-            original.append(Message(
-                role="user",
-                content=f"Message {i}",
-                tool_calls=[],
-                tool_call_id=None,
-                _token_count=50,
-                _model="qwen3.7-plus",
-            ))
-
-        compressed = original[:20]  # Simulate compression
-
-        metrics = estimate_cache_improvement(original, compressed, cache_zone_size=15)
-
-        assert "cache_hit_rate" in metrics
-        assert "token_savings" in metrics
-        assert "estimated_cost_reduction" in metrics
-        assert "estimated_latency_reduction" in metrics
-
-        # Cache hit rate should be 15/50 = 0.3
-        assert abs(metrics["cache_hit_rate"] - 0.3) < 0.01
-
-    def test_estimate_empty_history(self):
-        """Test estimation with empty history."""
-        metrics = estimate_cache_improvement([], [], cache_zone_size=0)
-
-        assert metrics["cache_hit_rate"] == 0.0
-        assert metrics["token_savings"] == 0.0
 
 
 class TestConvenienceFunction:
