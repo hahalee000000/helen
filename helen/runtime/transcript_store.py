@@ -443,6 +443,9 @@ class TranscriptStore:
 
         Phase 4: Memory efficiency - keep only last N items in memory,
         older items remain in backend storage.
+
+        Important: Never evict messages that are referenced by BoundaryMarkers
+        still in memory, as this would break read_view() consistency.
         """
         if len(self.transcript) <= self._max_memory_items:
             return
@@ -454,9 +457,28 @@ class TranscriptStore:
         if items_to_evict <= 0:
             return
 
+        # Find all UUIDs referenced by BoundaryMarkers in memory
+        # These messages must NOT be evicted to maintain read_view() consistency
+        protected_uuids: set[str] = set()
+        for item in self.transcript:
+            if isinstance(item, BoundaryMarker):
+                protected_uuids.add(item.head_uuid)
+                protected_uuids.add(item.tail_uuid)
+                protected_uuids.add(item.anchor_uuid)
+
         # Remove oldest items from memory (they're already in backend)
-        evicted = self.transcript[:items_to_evict]
-        self.transcript = self.transcript[items_to_evict:]
+        # But skip any messages protected by BoundaryMarkers
+        evicted = []
+        kept = []
+        for item in self.transcript[:items_to_evict]:
+            if isinstance(item, Message) and item.uuid in protected_uuids:
+                # This message is referenced by a BoundaryMarker, keep it
+                kept.append(item)
+            else:
+                evicted.append(item)
+
+        # Rebuild transcript: kept items + remaining items
+        self.transcript = kept + self.transcript[items_to_evict:]
         self._offloaded_count += len(evicted)
 
         # Update UUID index (shift indices)
@@ -468,8 +490,8 @@ class TranscriptStore:
         self._dirty = True
 
         logger.debug(
-            "TranscriptStore: evicted %d items from memory, %d offloaded total",
-            len(evicted), self._offloaded_count,
+            "TranscriptStore: evicted %d items from memory (%d protected by boundaries), %d offloaded total",
+            len(evicted), len(kept), self._offloaded_count,
         )
 
     def get(self, uuid: str) -> Message | BoundaryMarker | None:

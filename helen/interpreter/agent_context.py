@@ -467,40 +467,63 @@ class AgentContextManager:
             logger.debug(f"Applied graduated compression: {layer}")
             self._last_usage_ratio = _calculate_usage_ratio(compressed, max_tokens)
 
-            # Phase 2 SSOT: Record compression directly in TranscriptStore
-            if self._transcript_store is not None:
-                # Find compressed messages (in history but not in compressed)
-                compressed_uuids = {m.uuid for m in compressed if m.uuid}
-                compressed_msgs = [m for m in history if m.uuid and m.uuid not in compressed_uuids]
-
-                if compressed_msgs:
-                    # Find anchor: first message in compressed that's also in history
-                    anchor_uuid = ""
-                    for msg in compressed:
-                        if msg.uuid and msg.uuid in {m.uuid for m in history if m.uuid}:
-                            anchor_uuid = msg.uuid
-                            break
-
-                    if anchor_uuid:
-                        # Extract summary from compressed (usually first system message)
-                        summary = "Compressed conversation"
-                        for msg in compressed:
-                            if msg.role == "system" and msg.content:
-                                summary = msg.content[:200]
-                                break
-
-                        # Record compression directly (NO UUID matching helper)
-                        self._transcript_store.record_compression(
-                            head_uuid=compressed_msgs[0].uuid,
-                            tail_uuid=compressed_msgs[-1].uuid,
-                            anchor_uuid=anchor_uuid,
-                            summary=summary,
-                            layer=layer,
-                            original_token_count=sum(m.token_count for m in history),
-                            compressed_token_count=sum(m.token_count for m in compressed),
-                        )
+            # Phase 2 SSOT: Record compression in TranscriptStore
+            self._record_compression_ssot(history, compressed, layer)
 
         return compressed
+
+    def _record_compression_ssot(
+        self,
+        original: list[Message],
+        compressed: list[Message],
+        layer: str,
+    ) -> None:
+        """Record compression event in TranscriptStore (SSOT).
+
+        Helper method to avoid duplication across different compression strategies.
+
+        Args:
+            original: Original history before compression
+            compressed: History after compression
+            layer: Compression layer name (e.g., "graduated", "traditional", "cache_aware+graduated")
+        """
+        if self._transcript_store is None or len(compressed) >= len(original):
+            return
+
+        # Find compressed messages (in original but not in compressed)
+        compressed_uuids = {m.uuid for m in compressed if m.uuid}
+        compressed_msgs = [m for m in original if m.uuid and m.uuid not in compressed_uuids]
+
+        if not compressed_msgs:
+            return
+
+        # Find anchor: first message in compressed that's also in original
+        anchor_uuid = ""
+        for msg in compressed:
+            if msg.uuid and msg.uuid in {m.uuid for m in original if m.uuid}:
+                anchor_uuid = msg.uuid
+                break
+
+        if not anchor_uuid:
+            return
+
+        # Extract summary from compressed (usually first system message)
+        summary = "Compressed conversation"
+        for msg in compressed:
+            if msg.role == "system" and msg.content:
+                summary = msg.content[:200]
+                break
+
+        # Record compression
+        self._transcript_store.record_compression(
+            head_uuid=compressed_msgs[0].uuid,
+            tail_uuid=compressed_msgs[-1].uuid,
+            anchor_uuid=anchor_uuid,
+            summary=summary,
+            layer=layer,
+            original_token_count=sum(m.token_count for m in original),
+            compressed_token_count=sum(m.token_count for m in compressed),
+        )
 
     def _apply_traditional(
         self,
@@ -533,7 +556,12 @@ class AgentContextManager:
             pass
 
         manager = HistoryManager(context_window=max_tokens, compression_mode=mode)
-        return manager.enforce_limit(list(history))
+        compressed = manager.enforce_limit(list(history))
+
+        # Phase 3 SSOT: Record compression in TranscriptStore if enabled
+        self._record_compression_ssot(history, compressed, "traditional")
+
+        return compressed
 
     def _apply_cache_aware_wrap(
         self,
@@ -598,6 +626,11 @@ class AgentContextManager:
             messages_modified=messages_modified,
             cache_zone_preserved=True,
             compression_strategy=f"cache_aware+{self._compression_strategy}",
+        )
+
+        # Phase 3 SSOT: Record compression in TranscriptStore if enabled
+        self._record_compression_ssot(
+            compressible, compressed_zone, f"cache_aware+{self._compression_strategy}"
         )
 
         return cache_zone + compressed_zone

@@ -306,6 +306,48 @@ def _compress_context(strategy: str = "auto") -> dict:
             "strategy": strategy,
         }
 
+    # Phase 2 SSOT: When TranscriptStore is enabled, delegate to AgentContextManager
+    # which properly records BoundaryMarkers instead of doing destructive in-place replacement.
+    if _interpreter_agent_context is not None and _interpreter_agent_context.transcript_store is not None:
+        # Get the current view from TranscriptStore (this is the real history)
+        current_history = _interpreter_agent_context.transcript_store.read_view()
+
+        if len(current_history) <= 1:
+            return {
+                "status": "ok",
+                "original_messages": len(current_history),
+                "compressed_messages": len(current_history),
+                "original_tokens": sum(getattr(msg, 'token_count', 0) for msg in current_history),
+                "compressed_tokens": sum(getattr(msg, 'token_count', 0) for msg in current_history),
+                "strategy": strategy,
+            }
+
+        # Get stats before compression
+        original_count = len(current_history)
+        original_tokens = sum(getattr(msg, 'token_count', 0) for msg in current_history)
+
+        # Determine max_tokens (use AgentContextManager's context window)
+        from helen.runtime.graduated_compression import DEFAULT_CONTEXT_WINDOW
+        max_tokens = DEFAULT_CONTEXT_WINDOW
+
+        # Use AgentContextManager's _compress_history which records BoundaryMarkers
+        compressed = _interpreter_agent_context._compress_history(current_history, max_tokens)
+
+        # Get stats after compression
+        compressed_count = len(compressed)
+        compressed_tokens = sum(getattr(msg, 'token_count', 0) for msg in compressed)
+
+        return {
+            "status": "ok",
+            "original_messages": original_count,
+            "compressed_messages": compressed_count,
+            "original_tokens": original_tokens,
+            "compressed_tokens": compressed_tokens,
+            "strategy": strategy,
+        }
+
+    # Fallback: Legacy path for when TranscriptStore is not enabled.
+    # This performs destructive in-place replacement on _interpreter_history.
     # Phase 11: Use AgentContextManager for "auto" strategy (Layer 5)
     if strategy == "auto" and _interpreter_agent_context is not None:
         original_count = len(_interpreter_history)

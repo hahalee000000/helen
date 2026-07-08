@@ -743,7 +743,7 @@ class Interpreter(LlmMixin, Visitor[object]):
                  llm_runtime: LLMRuntime | None = None,
                  import_resolver: ImportResolver | None = None,
                  program_args: list[str] | None = None,
-                 transcript_store_enabled: bool = False) -> None:
+                 transcript_store_enabled: bool = True) -> None:
         self.errors = errors or ErrorReporter()
         self.environment = Environment()
         self._functions: dict[str, FunctionDeclNode] = {}
