@@ -4,14 +4,15 @@
 
 | 字段 | 内容 |
 |------|------|
-| **文档状态** | Draft |
-| **版本** | v1.0 |
+| **文档状态** | ✅ **COMPLETE** (All 4 phases implemented) |
+| **版本** | v2.0 |
 | **创建日期** | 2026-07-08 |
+| **完成日期** | 2026-07-08 |
 | **作者** | Helen Core Team |
 | **审核人** | TBD |
-| **关联模块** | `helen/runtime/transcript_store.py`, `helen/interpreter/agent_context.py`, `helen/interpreter/llm_mixin.py`, `helen/runtime/history.py` |
-| **关联 PR** | TBD |
-| **关联 Issue** | TranscriptStore 半成品清理 |
+| **关联模块** | `helen/runtime/transcript_store.py`, `helen/runtime/session_manager.py`, `helen/interpreter/agent_context.py`, `helen/interpreter/llm_mixin.py`, `helen/runtime/history.py`, `helen/stdlib/transcript.py` |
+| **关联 PR** | Merged (commit 372b845, 7038e90) |
+| **关联 Issue** | TranscriptStore 半成品清理 ✅ RESOLVED |
 
 ---
 

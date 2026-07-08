@@ -24,7 +24,7 @@ helen check <file.helen>        # Validate syntax/semantics without executing
 helen repl                      # Interactive REPL
 
 # Testing
-pytest                              # Run all 2624+ tests
+pytest                              # Run all 2750+ tests
 pytest tests/core/                  # Run tests for a specific module
 pytest tests/execution/test_functions.py::test_function_call -v  # Single test
 helen test <file.helen>             # Run Helen's built-in test framework
@@ -52,10 +52,11 @@ Layer 2: Runtime (LLM integration)
   LLMRuntime (abstract) → HttpLLMRuntime (httpx connection pool + async, OpenAI-compatible API)
   Tools (10 built-in: web_search, web_fetch, read/write/patch_file, shell_exec, calculate, load_skill, find_files, search_files)
   ImportResolver (.helen/.json/.yaml/.md/.txt/Python), Config, History (with compression)
+  TranscriptStore (v1.16: SSOT for all messages, SQLite/JSONL backends, LRU cache, UUID addressing)
 
 Layer 3: Toolchain
   CLI (run/check/repl/test/quality/doc/init/lsp)
-  REPL (multi-line, :help/:reset/:ask/:agent/:trace/:stats/:llm_log/:last_error)
+  REPL (multi-line, :help/:reset/:ask/:agent/:trace/:stats/:llm_log/:last_error/:transcript/:sessions/:session_id)
   LSP (diagnostics, completion, go-to-definition, alias-aware)
   VS Code Extension (syntax highlighting + LSP)
 ```
@@ -70,7 +71,9 @@ helen/
 ├── runtime/       # llm_runtime.py, http_llm.py, tools.py, config.py, import_resolver.py
 │                  # prompt_builder.py (system prompt + skill index), history.py, observability.py
 │                  # fuzzy_match.py (9-strategy file patching)
-├── stdlib/        # 198+ built-in functions (string, math, crypto, collections, test, quality, context, etc.)
+│                  # transcript_store.py (v1.16: SSOT, SQLiteBackend, JSONLBackend, LRU cache)
+│                  # session_manager.py (v1.16: session lifecycle, path management)
+├── stdlib/        # 203+ built-in functions (string, math, crypto, collections, test, quality, context, transcript, etc.)
 │                  # locales/zh.py (230+ Chinese aliases)
 ├── ffi/           # Python FFI for importing Python modules from Helen
 ├── cli/           # __main__.py (entry point), repl.py, formatter.py, docgen.py
@@ -124,6 +127,23 @@ skills/            # 16 built-in skills (SKILL.md + references/)
   - **Cache-Aware Compression**: Preserves stable prefix (30%), improves cache hit rate from 10-20% to 70-80%
   - **Three-Channel Context**: System instructions (15%) + Working memory (50%) + Conversation history (35%)
   - **Agent context configuration**: `context { compression "graduated" cache-aware true working-memory true working-memory-tokens 5000 }`
+- **TranscriptStore SSOT (v1.16)**: Single Source of Truth for all conversation messages
+  - **Persistent Sessions**: All conversations auto-saved to `~/.helen/sessions/<session_id>/`
+  - **Dual Backends**: JSONL (simple, human-readable) or SQLite (WAL mode, indexed, fast)
+  - **LRU Cache**: Memory-efficient (configurable `max_memory_items`, default 1000)
+  - **UUID Addressing**: O(1) lookups via `get(uuid)`, no list index dependencies
+  - **Non-Destructive Compression**: BoundaryMarkers record compression events, full audit trail
+  - **View Caching**: Dirty flag + cached view for O(1) reads
+  - **REPL Commands**: `:transcript [--full|--audit]`, `:sessions`, `:session_id`
+  - **Stdlib Functions**: `get_session_id()`, `list_sessions()`, `replay_transcript()`, `export_transcript()`, `get_compression_audit()`
+  - **Configuration**:
+    ```yaml
+    transcript:
+      enabled: true              # Default: true (SSOT enabled)
+      backend: "sqlite"          # or "jsonl"
+      session_dir: "~/.helen/sessions"
+      max_memory_items: 1000     # LRU cache size
+    ```
 
 ## Configuration
 
@@ -133,6 +153,12 @@ llm:
   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   api_key: "your-key"
   model: "qwen3.7-plus"
+
+transcript:
+  enabled: true
+  backend: "sqlite"
+  session_dir: "~/.helen/sessions"
+  max_memory_items: 1000
 ```
 Also supports `.env` format and falls back to `~/.hermes/.env`.
 
@@ -143,15 +169,15 @@ Tests in `tests/` mirror the source structure:
 - `semantic/` — Semantic analyzer, agent scope isolation
 - `interpreter/` — Interpreter, async, isolation (v1.12)
 - `execution/` — End-to-end (agents, async, control flow, functions, imports, match, exceptions, v1.12 isolation)
-- `runtime/` — LLM runtime, tools, memory, history, config, imports, working memory, graduated compression, cache-aware compression
-- `stdlib/` — Standard library functions, context management
+- `runtime/` — LLM runtime, tools, memory, history, config, imports, working memory, graduated compression, cache-aware compression, transcript store, session manager
+- `stdlib/` — Standard library functions, context management, transcript functions
 - `language/` — Feature tests (v16-v18: pattern matching, closures, protocols)
 - `performance/` — Benchmarks
 - `integration/` — Full agent integration
 - `lsp/` — Language Server
 - `cli/` — CLI and REPL
 
-**2624+ tests passing** (Python pytest)
+**2750+ tests passing** (Python pytest)
 
 Helen also has a built-in test framework (`helen/stdlib/test.py`) with `test()`, `assert_equal()`, `assert_true()`, `assert_throws()`, expect chains, suites, filtering, JSON output, watch mode, and coverage tracking.
 
