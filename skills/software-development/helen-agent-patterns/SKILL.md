@@ -1,10 +1,10 @@
 ---
 name: helen-agent-patterns
-description: "Helen Agent 设计模式 — 单 Agent、多 Agent 协作、作用域隔离、共享变量、路由、流式处理、历史管理、上下文管理"
-version: 1.15.0
+description: "Helen Agent 设计模式 — 单 Agent、多 Agent 协作、作用域隔离、共享变量、路由、流式处理、历史管理、上下文管理、Transcript 会话记录"
+version: 1.16.0
 author: Helen Team
 license: MIT
-tags: [helen, agent, patterns, design, llm, scope-isolation, shared-let, v1.12, closure, concurrency, history, persistence, context-window, context-management]
+tags: [helen, agent, patterns, design, llm, scope-isolation, shared-let, v1.12, closure, concurrency, history, persistence, context-window, context-management, transcript, session, v1.16]
 ---
 
 # Helen Agent 设计模式
@@ -126,6 +126,63 @@ agent SmartAssistant {
 | `"none"` | 不压缩 | 短对话 |
 | `"graduated"` | 五层渐进压缩（默认） | 长对话 |
 | `"traditional"` | 传统截断 | 快速场景 |
+
+#### Transcript 配置 (v1.16+)
+
+Helen v1.16 引入了 TranscriptStore，自动保存所有对话历史。可以在 agent 中通过 stdlib 函数访问：
+
+```helen
+agent ChatBot {
+    description "Chat bot with transcript management"
+    
+    main {
+        // 获取当前会话 ID
+        let session_id = get_session_id()
+        print("会话 ID: " + session_id)
+        
+        // 列出所有会话
+        let sessions = list_sessions()
+        for s in sessions {
+            print("{s.session_id}: {s.message_count} 条消息")
+        }
+        
+        // 回放当前会话
+        let messages = replay_transcript()
+        for msg in messages {
+            print("{msg.role}: {msg.content}")
+        }
+        
+        // 导出会话
+        export_transcript("chat_log.json", "json")
+        
+        // 获取压缩审计
+        let audit = get_compression_audit()
+        for event in audit {
+            print("{event.layer}: {event.original_token_count} -> {event.compressed_token_count}")
+        }
+        
+        return llm act "Hello!"
+    }
+}
+```
+
+**使用场景**：
+- **会话恢复**: 使用 `resume_session(session_id)` 恢复之前的对话
+- **审计追踪**: 使用 `get_compression_audit()` 分析压缩效率
+- **会话导出**: 使用 `export_transcript()` 保存对话记录
+- **多会话管理**: 使用 `list_sessions()` 管理多个会话
+
+**配置**：在 `~/.helen/config.yaml` 中配置 transcript：
+
+```yaml
+transcript:
+  enabled: true              # 默认启用
+  backend: "jsonl"           # 或 "sqlite"
+  session_dir: "~/.helen/sessions"
+  max_memory_items: 1000
+```
+
+详见 [TranscriptStore 文档](../../docs/transcript_store_user_guide.md)。
 
 ## Agent vs Skill：本质区别
 

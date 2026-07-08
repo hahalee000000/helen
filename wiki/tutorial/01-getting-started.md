@@ -94,6 +94,52 @@ HELEN_MODEL=qwen3.7-plus
 | 2 | `~/.hermes/skills/` | Hermes 回退 |
 | 3 | `~/.hermes/hermes-agent/skills/` | Hermes agent skill |
 
+### Transcript 配置 (v1.16)
+
+Helen v1.16 引入了 TranscriptStore，自动保存所有对话历史。默认启用，无需配置即可使用：
+
+```yaml
+# ~/.helen/config.yaml
+
+llm:
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  api_key: "your-api-key-here"
+  model: "qwen3.7-plus"
+
+# Transcript 配置（可选，以下为默认值）
+transcript:
+  enabled: true              # 启用 TranscriptStore（默认 true）
+  backend: "jsonl"           # 后端类型："jsonl" 或 "sqlite"
+  session_dir: "~/.helen/sessions"  # 会话存储目录
+  max_memory_items: 1000     # LRU 缓存大小
+```
+
+**默认行为**：
+- TranscriptStore 默认启用，所有对话自动保存到 `~/.helen/sessions/`
+- 使用 JSONL 后端（人类可读，崩溃安全）
+- LRU 缓存限制内存使用（1000 条消息）
+
+**自定义配置**：
+- 设置 `enabled: false` 禁用 TranscriptStore
+- 设置 `backend: "sqlite"` 使用高性能 SQLite 后端
+- 设置 `session_dir` 自定义存储位置
+
+**CLI 参数**：
+```bash
+# 自定义 transcript 输出路径
+$ helen chat.helen --transcript-log=/tmp/my_chat.jsonl
+```
+
+**REPL 命令**：
+```
+>>> :sessions              # 列出所有会话
+>>> :session_id            # 显示当前会话 ID
+>>> :transcript            # 显示当前 transcript
+>>> :resume <session_id>   # 恢复到指定会话
+```
+
+详见 [TranscriptStore 文档](../runtime/transcript-store.md) 和 [标准库参考](10-stdlib.md#transcript-函数-6-v116)。
+
 ---
 
 ## Hello, World!

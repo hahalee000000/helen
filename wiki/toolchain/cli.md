@@ -114,6 +114,7 @@ HELEN_MODEL=qwen3.7-plus
 ```
 $ helen main.helen
 $ helen main.helen --verbose --output=json --port=8080 input.txt
+$ helen main.helen --transcript-log=/tmp/my_transcript.jsonl
 ```
 
 执行完整编译链：
@@ -123,6 +124,36 @@ $ helen main.helen --verbose --output=json --port=8080 input.txt
 4. Interpreter → 解释执行
 
 退出码：`0`=成功 `1`=词法错误 `2`=语法错误 `3`=语义/运行时错误
+
+### Transcript 日志 (v1.16)
+
+使用 `--transcript-log` 参数将对话记录保存到指定文件：
+
+```bash
+$ helen chat.helen --transcript-log=/tmp/chat_session.jsonl
+$ helen agent.helen --transcript-log=/var/log/helen/agent.db
+```
+
+**参数格式**：
+- `--transcript-log <path>` — 指定 transcript 输出路径
+- `--transcript-log=<path>` — 等号格式也支持
+
+**文件类型**：
+- `.jsonl` 扩展名 — 使用 JSONL 后端（人类可读）
+- `.db` 扩展名 — 使用 SQLite 后端（高性能）
+
+**用途**：
+- 调试对话历史
+- 导出会话记录
+- 自定义存储位置
+- 生产环境审计
+
+**配置优先级**：
+1. `--transcript-log` CLI 参数（最高）
+2. `~/.helen/config.yaml` 中的 `transcript.session_dir`
+3. 默认值 `~/.helen/sessions/`
+
+详见 [TranscriptStore 文档](../runtime/transcript-store.md)。
 
 ### 程序参数（argv）
 
@@ -223,10 +254,59 @@ In multi-line mode (...), press Enter on empty line or Ctrl+C to cancel
 :trace show [n]     显示最近 n 条追踪记录（默认 50）
 :last_error [-v]    显示上次错误的结构化上下文（-v 显示执行追踪）
 :llm_log [n] [-v]   显示最近 n 次 LLM 调用审计日志（-v 显示详细信息）
+:stats              显示上下文窗口使用统计（Phase 4）
+:transcript         显示当前 transcript（SSOT 有效视图）
+:transcript --full  显示完整 transcript（包括压缩的消息）
+:transcript --audit 显示压缩审计追踪
+:sessions           列出所有 transcript 会话
+:session_id         显示当前会话 ID
+:resume <id>        恢复到指定的 transcript 会话
 exit                退出 REPL
 ```
 
 > **注意**：REPL 中调用栈追踪和执行追踪默认开启，无需手动 `:trace on`。
+
+#### Transcript 命令 (v1.16)
+
+Transcript 命令用于管理和查看对话历史记录：
+
+```
+>>> :session_id
+Current session: session_1783503886_67a17b79
+
+>>> :sessions
+Transcript sessions (3 total):
+  [1] session_1783503886_67a17b79
+       Modified: 2026-07-08 17:30:00, Size: 2.5 KB, Messages: ~50
+  [2] session_1783503800_abc12345
+       Modified: 2026-07-08 16:00:00, Size: 1.2 KB, Messages: ~20
+  ...
+
+>>> :transcript
+Current transcript view (15 messages):
+  [1] [user] Hello
+  [2] [assistant] Hi there
+  ...
+Stats: 20 total items, 15 messages, 5 compression boundaries
+
+>>> :transcript --audit
+Compression audit (3 events):
+  [1] Layer: auto_compact
+      UUID: a1b2c3d4e5f6
+      Range: abc123..def456
+      Anchor: ghi789
+      Tokens: 500 -> 100
+      Summary: Compressed conversation...
+```
+
+**恢复会话**：
+```
+>>> :resume session_1783503800_abc12345
+Session resumed: session_1783503800_abc12345
+Transcript loaded. Use :transcript to view.
+```
+
+详见 [TranscriptStore 文档](../runtime/transcript-store.md)。
 
 #### :ask — AI 助手
 

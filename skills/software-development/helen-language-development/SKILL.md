@@ -1,10 +1,10 @@
 ---
 name: helen-language-development
-description: "Helen 语言实现模式 — AST/解析器/解释器扩展、async/await、异常层级、作用域隔离、共享变量、v1.14 特性（Shared Store、Channel、llm act 流式统一）"
-version: 1.14.0
+description: "Helen 语言实现模式 — AST/解析器/解释器扩展、async/await、异常层级、作用域隔离、共享变量、v1.14 特性（Shared Store、Channel、llm act 流式统一）、v1.16 TranscriptStore SSOT"
+version: 1.16.0
 author: Helen Team
 license: MIT
-tags: [helen, language-design, interpreter, async, parser, streaming, tool-calls, ffi, python-integration, contract-first, stdlib, closures, protocols, pipe-operator, pattern-matching, chinese-keywords, scope-isolation, shared-let, shared-store, channel, v1.10, v1.11, v1.12, v1.13, v1.14]
+tags: [helen, language-design, interpreter, async, parser, streaming, tool-calls, ffi, python-integration, contract-first, stdlib, closures, protocols, pipe-operator, pattern-matching, chinese-keywords, scope-isolation, shared-let, shared-store, channel, v1.10, v1.11, v1.12, v1.13, v1.14, v1.16, transcript, ssot]
 ---
 
 # Helen Language Development
@@ -461,6 +461,95 @@ task = Task.pending(snapshot=snapshot)
 # Wrong (mutations between snapshot and task creation)
 task = Task.pending()  # Too late!
 snapshot = self.env.snapshot()
+```
+
+## TranscriptStore SSOT (v1.16)
+
+### Architecture Overview
+
+TranscriptStore 是 v1.16 引入的消息唯一真实来源（Single Source of Truth），替代了之前的双写架构：
+
+```
+helen/runtime/
+├── transcript_store.py    # TranscriptStore + BoundaryMarker + Backends
+├── session_manager.py     # 会话生命周期管理
+└── config.py              # get_transcript_config()
+
+helen/interpreter/
+├── agent_context.py       # _init_transcript_store() + _record_compression_ssot()
+└── interpreter.py         # _history @property (read-only view)
+
+helen/stdlib/
+└── transcript.py          # 6 个 stdlib 函数
+```
+
+### Key Components
+
+1. **TranscriptStore**: append-only 存储，支持 JSONL/SQLite 后端
+2. **BoundaryMarker**: 记录压缩事件（非破坏性压缩）
+3. **SessionManager**: 会话创建/恢复/清理
+4. **LRU Cache**: 内存优化（边界感知驱逐）
+5. **View Cache**: dirty flag + 缓存，O(1) 读取
+
+### Implementation Patterns
+
+**Adding stdlib function**:
+```python
+# 1. helen/stdlib/transcript.py
+def my_function() -> str:
+    """My transcript function."""
+    if _interpreter_agent_context is None:
+        return ""
+    store = getattr(_interpreter_agent_context, "transcript_store", None)
+    if store is None:
+        return ""
+    return store.my_method()
+
+# 2. helen/stdlib/__init__.py
+from helen.stdlib.transcript import my_function as _my_function
+
+BuiltinFunction("my_function", "...", "my_function()", _my_function, "transcript")
+
+# 3. helen/stdlib/locales/zh.py
+"我的函数": "my_function",
+```
+
+**Recording compression**:
+```python
+# In agent_context.py:_compress_history()
+if self._transcript_store is not None:
+    self._record_compression_ssot(
+        original=history,
+        compressed=compressed,
+        layer=layer_name,
+    )
+```
+
+**SSOT property**:
+```python
+# In interpreter.py
+@property
+def _history(self) -> list[HistoryMessage]:
+    """Read-only view from TranscriptStore."""
+    if self._agent_context.transcript_store is not None:
+        return self._agent_context.transcript_store.read_view()
+    return self._interpreter_history
+```
+
+### Testing
+
+```bash
+# TranscriptStore tests
+pytest tests/runtime/test_transcript_store.py
+pytest tests/runtime/test_transcript_persistence.py
+pytest tests/runtime/test_session_manager.py
+pytest tests/runtime/test_phase4_features.py
+
+# Integration tests
+pytest tests/integration/test_phase1_ssot.py
+
+# Stdlib tests
+pytest tests/stdlib/test_transcript.py
 ```
 
 ## Related Skills

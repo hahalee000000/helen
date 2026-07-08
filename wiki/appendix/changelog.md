@@ -1,6 +1,6 @@
 # 版本历史
 
-> Helen v1.16 | TranscriptStore SSOT — 消息唯一真实来源，SQLite/JSONL 后端，LRU 缓存，UUID 寻址，非破坏性压缩
+> Helen v1.16 | TranscriptStore SSOT — 消息唯一真实来源，SQLite/JSONL 后端，LRU 缓存，UUID 寻址，非破坏性压缩，6 stdlib 函数，6 REPL 命令，CLI 参数支持
 
 ---
 
@@ -17,18 +17,21 @@
 - **SessionManager**: 会话生命周期管理，自动创建/恢复会话
 - **JSONLBackend**: 崩溃安全的持久化后端（append-only）
 - **配置支持**: `~/.helen/config.yaml` 添加 `transcript` 配置段
-- **Stdlib 函数**: 5 个新函数
+- **Stdlib 函数**: 6 个新函数
   - `get_session_id()` — 获取当前会话 ID
   - `list_sessions()` — 列出所有会话
   - `replay_transcript()` — 回放会话消息
   - `export_transcript()` — 导出 transcript（JSON/Markdown/Text）
   - `get_compression_audit()` — 获取压缩审计追踪
-- **REPL 命令**: 5 个新命令
+  - `resume_session()` — 恢复到指定会话
+- **REPL 命令**: 6 个新命令
   - `:transcript` — 显示当前 transcript 视图
   - `:transcript --full` — 显示完整 transcript
   - `:transcript --audit` — 显示压缩审计
   - `:sessions` — 列出所有会话
   - `:session_id` — 显示当前会话 ID
+  - `:resume <session_id>` — 恢复到指定会话
+- **CLI 参数**: `--transcript-log <path>` — 自定义 transcript 输出路径
 
 #### Phase 2: SSOT 切换 ✅
 

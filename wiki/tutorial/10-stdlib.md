@@ -640,6 +640,47 @@ if success {
 - 在 REPL 中继续之前的工作
 - 加载历史会话进行分析
 
+### 中文别名
+
+Transcript 函数支持中文别名，可以直接使用中文函数名：
+
+| 英文 | 中文 | 说明 |
+|------|------|------|
+| `get_session_id` | `获取会话id` | 获取当前会话 ID |
+| `list_sessions` | `列出会话` | 列出所有会话 |
+| `replay_transcript` | `回放会话` | 回放会话消息 |
+| `export_transcript` | `导出会话` | 导出会话到文件 |
+| `get_compression_audit` | `压缩审计` | 获取压缩历史 |
+| `resume_session` | `恢复会话` | 恢复到指定会话 |
+
+**使用示例**：
+
+```helen
+// 使用中文函数名
+let 会话id = 获取会话id()
+print("当前会话: " + 会话id)
+
+// 列出所有会话
+let 会话列表 = 列出会话()
+for 会话 in 会话列表 {
+    print(会话["session_id"] + ": " + str(会话["message_count"]) + " 条消息")
+}
+
+// 回放当前会话
+let 消息 = 回放会话()
+for 消息 in 消息 {
+    print(消息["role"] + ": " + 消息["content"])
+}
+
+// 导出会话
+导出会话("我的对话.json", "json")
+
+// 恢复会话
+let 成功 = 恢复会话("session_1783492628_d9d9c0aa")
+```
+
+> **提示**：中文别名和英文函数名可以混合使用，Helen 会在启动时全量加载所有别名。完整别名列表见 `helen/stdlib/locales/zh.py`。
+
 ### REPL 命令
 
 除了 stdlib 函数，还可以在 REPL 中使用以下命令：
