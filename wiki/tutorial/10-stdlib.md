@@ -20,6 +20,7 @@ Helen 标准库提供 200 个内置函数，分为 10 大类别：
 | **Crypto** | 11 | 哈希、随机数 |
 | **IO** | 5 | 流式输出控制 |
 | **Context** | 2 | 上下文管理（v1.15 新增） |
+| **Transcript** | 6 | 会话记录管理（v1.16 新增） |
 
 ## 多语言 stdlib (v1.10)
 
@@ -507,6 +508,168 @@ agent ChatBot {
     }
 }
 ```
+
+## Transcript 函数 (6) (v1.16)
+
+会话记录管理函数，用于访问和操作 Helen 的 TranscriptStore（v1.16 SSOT 架构）。TranscriptStore 是所有对话消息的唯一真实来源，提供持久化、会话恢复和压缩审计功能。
+
+### 获取会话 ID
+
+```helen
+// 获取当前会话 ID
+let session_id = get_session_id()
+print("当前会话: " + session_id)
+// 返回: "session_1783492628_d9d9c0aa"
+```
+
+**使用场景**：
+- 记录会话标识符用于调试
+- 在日志中标记会话
+- 会话恢复时验证 ID
+
+### 列出所有会话
+
+```helen
+// 列出所有 transcript 会话
+let sessions = list_sessions()
+for session in sessions {
+    print(session["session_id"] + ": " + str(session["message_count"]) + " 条消息")
+}
+// 返回: [{"session_id": "...", "message_count": 50, "size_bytes": 2500, ...}]
+```
+
+**返回字段**：
+- `session_id`：会话 ID
+- `message_count`：消息数量
+- `size_bytes`：文件大小（字节）
+- `created_at`：创建时间
+- `modified_at`：最后修改时间
+
+### 回放会话
+
+```helen
+// 回放当前会话（仅有效视图）
+let messages = replay_transcript()
+for msg in messages {
+    print(msg["role"] + ": " + msg["content"])
+}
+
+// 回放指定会话，包括压缩的消息
+let full = replay_transcript("session_1783492628_d9d9c0aa", true)
+```
+
+**参数**：
+- `session_id`（可选）：要回放的会话 ID，默认当前会话
+- `include_compressed`（可选）：是否包括被压缩的消息，默认 false
+
+**返回**：消息列表，每条消息包含 `role`、`content`、`uuid`、`timestamp`
+
+### 导出会话
+
+```helen
+// 导出为 JSON
+export_transcript("my_chat.json", "json")
+
+// 导出为 Markdown
+export_transcript("my_chat.md", "markdown")
+
+// 导出为纯文本
+export_transcript("my_chat.txt", "text")
+
+// 导出指定会话
+export_transcript("old_chat.json", "json", "session_1783492600_abc12345")
+```
+
+**参数**：
+- `output_path`：输出文件路径
+- `format`：导出格式（"json"、"markdown"、"text"）
+- `session_id`（可选）：要导出的会话 ID
+
+**返回**：输出文件路径（成功）或空字符串（失败）
+
+### 获取压缩审计
+
+```helen
+// 获取所有压缩事件的审计追踪
+let audit = get_compression_audit()
+for event in audit {
+    print("层级: " + event["layer"])
+    print("压缩前: " + str(event["original_token_count"]) + " tokens")
+    print("压缩后: " + str(event["compressed_token_count"]) + " tokens")
+    print("摘要: " + event["summary"])
+}
+```
+
+**返回字段**：
+- `uuid`：边界标记 UUID
+- `layer`：压缩层级（"graduated"、"traditional"、"cache_aware+graduated" 等）
+- `head_uuid`：压缩范围起始消息 UUID
+- `tail_uuid`：压缩范围结束消息 UUID
+- `anchor_uuid`：锚点消息 UUID
+- `summary`：压缩摘要
+- `original_token_count`：压缩前 token 数
+- `compressed_token_count`：压缩后 token 数
+- `timestamp`：压缩时间戳
+
+**使用场景**：
+- 分析压缩效率
+- 调试压缩问题
+- 审计对话历史
+
+### 恢复会话
+
+```helen
+// 恢复到指定会话
+let success = resume_session("session_1783492628_d9d9c0aa")
+if success {
+    print("会话已恢复")
+    let messages = replay_transcript()
+    print("已加载 " + str(len(messages)) + " 条消息")
+} else {
+    print("恢复失败，会话可能不存在")
+}
+```
+
+**参数**：
+- `session_id`：要恢复的会话 ID
+
+**返回**：true（成功）或 false（失败）
+
+**使用场景**：
+- 恢复之前的对话
+- 在 REPL 中继续之前的工作
+- 加载历史会话进行分析
+
+### REPL 命令
+
+除了 stdlib 函数，还可以在 REPL 中使用以下命令：
+
+```
+:transcript           # 显示当前 transcript 视图
+:transcript --full    # 显示完整 transcript（包括压缩的消息）
+:transcript --audit   # 显示压缩审计追踪
+:sessions             # 列出所有会话
+:session_id           # 显示当前会话 ID
+:resume <session_id>  # 恢复到指定会话
+```
+
+### 配置
+
+在 `~/.helen/config.yaml` 中配置 transcript：
+
+```yaml
+transcript:
+  enabled: true              # 启用 TranscriptStore（默认 true）
+  backend: "sqlite"          # 后端类型："jsonl" 或 "sqlite"
+  session_dir: "~/.helen/sessions"
+  max_memory_items: 1000     # LRU 缓存大小
+```
+
+**后端选择**：
+- `jsonl`：简单、人类可读、崩溃安全（默认）
+- `sqlite`：高性能、索引优化、WAL 模式
+
+**详细文档**：见 [[runtime/transcript-store]]
 
 ## File 函数 (18)
 

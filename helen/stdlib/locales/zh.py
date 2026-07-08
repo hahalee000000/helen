@@ -303,6 +303,14 @@ ALIASES: dict[str, str] = {
     "消息分类": "classify_message",
     "定向压缩": "compress_context_target",
 
+    # ── Transcript (会话记录) ──────────────────────────────────────
+    "获取会话id": "get_session_id",
+    "列出会话": "list_sessions",
+    "回放会话": "replay_transcript",
+    "导出会话": "export_transcript",
+    "压缩审计": "get_compression_audit",
+    "恢复会话": "resume_session",
+
     # ── File Search (文件搜索) ────────────────────────────────────
     "查找文件": "glob_files",
     "搜索内容": "grep_files",
