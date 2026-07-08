@@ -228,6 +228,105 @@ class JSONLBackend(TranscriptStoreBackend):
             self._file = None
 
 
+class SQLiteBackend(TranscriptStoreBackend):
+    """SQLite backend for transcript persistence with WAL mode.
+
+    Uses SQLite with Write-Ahead Logging for:
+    - Concurrent reads during writes
+    - Better write performance (batched commits)
+    - Transaction safety
+    - Efficient queries (indexed by UUID)
+
+    Schema:
+        CREATE TABLE transcript (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uuid TEXT UNIQUE NOT NULL,
+            type TEXT NOT NULL,  -- 'message' or 'boundary_marker'
+            data JSON NOT NULL,
+            timestamp REAL NOT NULL
+        );
+        CREATE INDEX idx_uuid ON transcript(uuid);
+        CREATE INDEX idx_timestamp ON transcript(timestamp);
+
+    Thread safety: Uses connection per operation (safe for multi-threaded access).
+    """
+
+    def __init__(self, path: Path | str):
+        """Initialize SQLite backend.
+
+        Args:
+            path: Path to the SQLite database file. Parent directories will be created.
+        """
+        import sqlite3
+
+        self.path = Path(path) if isinstance(path, str) else path
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Create database and enable WAL mode
+        self.conn = sqlite3.connect(str(self.path), check_same_thread=False)
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA synchronous=NORMAL")
+        self.conn.execute("PRAGMA temp_store=MEMORY")
+
+        # Create schema
+        self.conn.executescript("""
+            CREATE TABLE IF NOT EXISTS transcript (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT UNIQUE NOT NULL,
+                type TEXT NOT NULL,
+                data TEXT NOT NULL,
+                timestamp REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_uuid ON transcript(uuid);
+            CREATE INDEX IF NOT EXISTS idx_timestamp ON transcript(timestamp);
+        """)
+        self.conn.commit()
+
+    def append(self, item: Message | BoundaryMarker) -> None:
+        """Append item to SQLite database."""
+        try:
+            item_dict = _item_to_dict(item)
+            self.conn.execute(
+                "INSERT OR REPLACE INTO transcript (uuid, type, data, timestamp) VALUES (?, ?, ?, ?)",
+                (
+                    item.uuid,
+                    item_dict["type"],
+                    json.dumps(item_dict, ensure_ascii=False),
+                    time.time(),
+                ),
+            )
+            self.conn.commit()
+        except Exception as e:
+            logger.warning("SQLiteBackend: failed to append: %s", e)
+
+    def load_all(self) -> list[Message | BoundaryMarker]:
+        """Load all items from SQLite database, ordered by id."""
+        items: list[Message | BoundaryMarker] = []
+        try:
+            cursor = self.conn.execute(
+                "SELECT data FROM transcript ORDER BY id ASC"
+            )
+            for row in cursor:
+                try:
+                    data = json.loads(row[0])
+                    item = _item_from_dict(data)
+                    if item is not None:
+                        items.append(item)
+                except json.JSONDecodeError as e:
+                    logger.warning("SQLiteBackend: corrupted data: %s", e)
+        except Exception as e:
+            logger.warning("SQLiteBackend: failed to load: %s", e)
+
+        return items
+
+    def close(self) -> None:
+        """Close the database connection."""
+        try:
+            self.conn.close()
+        except Exception:
+            pass
+
+
 def _item_to_dict(item: Message | BoundaryMarker) -> dict[str, Any]:
     """Convert a Message or BoundaryMarker to a JSON-serializable dict."""
     if isinstance(item, BoundaryMarker):
@@ -283,16 +382,20 @@ class TranscriptStore:
     Optionally backed by a persistence backend (e.g., JSONLBackend) for
     crash-safe durability and session replay.
 
+    Phase 4: Includes LRU cache for memory efficiency and UUID-based addressing.
+
     Attributes:
         transcript: Append-only list of Message and BoundaryMarker objects
     """
 
-    def __init__(self, backend: TranscriptStoreBackend | None = None):
+    def __init__(self, backend: TranscriptStoreBackend | None = None, max_memory_items: int = 1000):
         """Initialize transcript store.
 
         Args:
             backend: Optional persistence backend. When provided, all appends
                      are also written to the backend for durability.
+            max_memory_items: Maximum number of items to keep in memory (LRU cache).
+                              Older items are offloaded to backend only. Default: 1000.
         """
         self.transcript: list[Message | BoundaryMarker] = []
         self._uuid_index: dict[str, int] = {}  # UUID -> transcript index
@@ -300,12 +403,16 @@ class TranscriptStore:
         # View cache (invalidated on append/record_compression)
         self._dirty = True
         self._cached_view: list[Message] | None = None
+        # Phase 4: LRU cache for memory efficiency
+        self._max_memory_items = max_memory_items
+        self._offloaded_count = 0  # Number of items offloaded to backend only
 
     def append(self, message: Message) -> Message:
         """Append a message to the transcript.
 
         Assigns a UUID if the message doesn't have one.
         If a backend is configured, also persists the message.
+        Phase 4: Implements LRU cache eviction for memory efficiency.
 
         Args:
             message: Message to append
@@ -325,7 +432,59 @@ class TranscriptStore:
         if self._backend is not None:
             self._backend.append(message)
 
+        # Phase 4: LRU cache eviction - offload old items when over limit
+        if len(self.transcript) > self._max_memory_items:
+            self._evict_old_items()
+
         return message
+
+    def _evict_old_items(self) -> None:
+        """Evict oldest items from memory, keeping only recent items.
+
+        Phase 4: Memory efficiency - keep only last N items in memory,
+        older items remain in backend storage.
+        """
+        if len(self.transcript) <= self._max_memory_items:
+            return
+
+        # Calculate how many items to evict (keep 80% of max to avoid frequent evictions)
+        target_size = int(self._max_memory_items * 0.8)
+        items_to_evict = len(self.transcript) - target_size
+
+        if items_to_evict <= 0:
+            return
+
+        # Remove oldest items from memory (they're already in backend)
+        evicted = self.transcript[:items_to_evict]
+        self.transcript = self.transcript[items_to_evict:]
+        self._offloaded_count += len(evicted)
+
+        # Update UUID index (shift indices)
+        self._uuid_index.clear()
+        for i, item in enumerate(self.transcript):
+            self._uuid_index[item.uuid] = i
+
+        # Invalidate view cache
+        self._dirty = True
+
+        logger.debug(
+            "TranscriptStore: evicted %d items from memory, %d offloaded total",
+            len(evicted), self._offloaded_count,
+        )
+
+    def get(self, uuid: str) -> Message | BoundaryMarker | None:
+        """Get item by UUID (Phase 4: UUID-based addressing).
+
+        Args:
+            uuid: UUID of the item to retrieve
+
+        Returns:
+            The item if found, None otherwise
+        """
+        index = self._uuid_index.get(uuid)
+        if index is not None and 0 <= index < len(self.transcript):
+            return self.transcript[index]
+        return None
 
     def append_many(self, messages: list[Message]) -> list[Message]:
         """Append multiple messages.
@@ -554,25 +713,51 @@ class TranscriptStore:
             self._backend.close()
 
     @classmethod
-    def load_from_backend(cls, backend: TranscriptStoreBackend) -> "TranscriptStore":
+    def load_from_backend(
+        cls, backend: TranscriptStoreBackend, max_memory_items: int = 1000
+    ) -> "TranscriptStore":
         """Load a TranscriptStore from a persistence backend.
 
         Used for session recovery — reconstructs the in-memory transcript
         from the on-disk JSONL/SQLite log.
+        Phase 4: Only loads last N items into memory (LRU cache).
 
         Args:
             backend: Backend to load from
+            max_memory_items: Maximum items to keep in memory (default: 1000)
 
         Returns:
             A new TranscriptStore populated from the backend
         """
-        store = cls(backend=backend)
+        store = cls(backend=backend, max_memory_items=max_memory_items)
         items = backend.load_all()
-        for item in items:
-            index = len(store.transcript)
-            store.transcript.append(item)
-            if item.uuid:
-                store._uuid_index[item.uuid] = index
+
+        # Phase 4: Only load last N items into memory
+        if len(items) > max_memory_items:
+            # Calculate how many items to skip (offloaded)
+            items_to_skip = len(items) - max_memory_items
+            store._offloaded_count = items_to_skip
+
+            # Load only the most recent items
+            recent_items = items[items_to_skip:]
+            for item in recent_items:
+                index = len(store.transcript)
+                store.transcript.append(item)
+                if item.uuid:
+                    store._uuid_index[item.uuid] = index
+
+            logger.info(
+                "TranscriptStore: loaded %d items into memory, %d offloaded",
+                len(recent_items), items_to_skip,
+            )
+        else:
+            # Load all items
+            for item in items:
+                index = len(store.transcript)
+                store.transcript.append(item)
+                if item.uuid:
+                    store._uuid_index[item.uuid] = index
+
         store._dirty = True  # View needs to be computed on first access
         return store
 

@@ -153,12 +153,13 @@ class AgentContextManager:
         """
         from helen.runtime.config import get_transcript_config
         from helen.runtime.session_manager import SessionManager
-        from helen.runtime.transcript_store import JSONLBackend, TranscriptStore
+        from helen.runtime.transcript_store import JSONLBackend, SQLiteBackend, TranscriptStore
 
         try:
             config = get_transcript_config()
             session_dir = config.get("session_dir")
             backend_type = config.get("backend", "jsonl")
+            max_memory_items = config.get("max_memory_items", 1000)
 
             # Create or reuse session
             manager = SessionManager(base_dir=session_dir)
@@ -168,21 +169,25 @@ class AgentContextManager:
             self._session_id = session_id
             transcript_path = manager.get_session_path(session_id)
 
-            # Create backend (currently only JSONL is supported)
-            if backend_type == "jsonl":
-                backend = JSONLBackend(transcript_path)
+            # Create backend based on config
+            if backend_type == "sqlite":
+                # Use SQLite backend (Phase 4: better performance, indexing)
+                sqlite_path = transcript_path.with_suffix(".db")
+                backend = SQLiteBackend(sqlite_path)
             else:
-                logger.warning(
-                    f"Unknown transcript backend {backend_type!r}, using jsonl"
-                )
+                # Default: JSONL backend (simpler, human-readable)
                 backend = JSONLBackend(transcript_path)
 
             # Load existing transcript if resuming, or create new
             if manager.session_exists(session_id):
-                self._transcript_store = TranscriptStore.load_from_backend(backend)
+                self._transcript_store = TranscriptStore.load_from_backend(
+                    backend, max_memory_items=max_memory_items
+                )
                 logger.info("Resumed transcript session: %s", session_id)
             else:
-                self._transcript_store = TranscriptStore(backend=backend)
+                self._transcript_store = TranscriptStore(
+                    backend=backend, max_memory_items=max_memory_items
+                )
                 logger.info("Created new transcript session: %s", session_id)
 
         except Exception as e:
