@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+import helen.stdlib.transcript as transcript_module
 from helen.stdlib.transcript import (
     export_transcript,
     get_compression_audit,
@@ -18,6 +19,20 @@ from helen.stdlib.transcript import (
 
 class TestTranscriptStdlib:
     """Test transcript stdlib functions."""
+
+    @pytest.fixture(autouse=True)
+    def reset_global_state(self):
+        """Reset global interpreter context before each test."""
+        # Save original state
+        original_context = transcript_module._interpreter_agent_context
+
+        # Reset to None for clean test state
+        transcript_module._interpreter_agent_context = None
+
+        yield
+
+        # Restore original state after test
+        transcript_module._interpreter_agent_context = original_context
 
     def test_get_session_id_no_interpreter(self):
         """Test get_session_id with no active interpreter."""
