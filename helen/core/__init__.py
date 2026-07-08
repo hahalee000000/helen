@@ -14,4 +14,13 @@ __all__ = [
     "Token",
     "TokenType",
     "keywords",
+    "is_helen_data_file",
 ]
+
+# Helen data file extensions recognized by the import resolver
+_HELEN_DATA_EXTS = ('.helen', '.json', '.md', '.txt', '.yaml', '.yml')
+
+
+def is_helen_data_file(path: str) -> bool:
+    """Check if a module path refers to a Helen data file (not a Python module)."""
+    return any(path.endswith(ext) for ext in _HELEN_DATA_EXTS)

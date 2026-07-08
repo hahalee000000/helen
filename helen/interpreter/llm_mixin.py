@@ -17,6 +17,7 @@ The mixin expects the host class (Interpreter) to provide:
 from __future__ import annotations
 
 import os
+import time
 from typing import Any
 
 from helen.core.ast import (
@@ -253,11 +254,33 @@ class LlmMixin:
             return self._visit_llm_act_sync(node, user_prompt, model, temperature, max_turns,
                                             tools, system_prompt, history_for_llm)
 
+    def _log_llm_audit(self: Any, call_type: str, prompt: str, audit_start: float,
+                       agent_name: str | None, model: str,
+                       response: str | None = None, error: str | None = None,
+                       tokens_in: int = 0, tokens_out: int = 0,
+                       tool_calls: list | None = None) -> None:
+        """Build and log an LLMAuditEntry (deduplicates 5 identical audit sites)."""
+        actual_model = model or getattr(self.llm_runtime, 'default_model', None) or 'default'
+        duration_ms = (time.time() - audit_start) * 1000
+        entry = LLMAuditEntry(
+            timestamp=audit_start,
+            call_type=call_type,
+            agent_name=agent_name,
+            model=actual_model,
+            prompt=prompt,
+            response=response,
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+            duration_ms=duration_ms,
+            error=error,
+            tool_calls=tool_calls,
+        )
+        self.observability.llm_audit.log(entry)
+
     def _visit_llm_act_sync(self: Any, node: LlmActExprNode, prompt: str,
                             model: str, temperature: float, max_turns: int,
                             tools: list, system_prompt: str, history_for_llm: list) -> object:
         """Synchronous llm act: call act() and return response text."""
-        import time
         audit_start = time.time()
         agent_name = self._current_agent.name if self._current_agent else None
 
@@ -272,56 +295,26 @@ class LlmMixin:
                 history=history_for_llm,
                 dispatch_fn=dispatch_fn,
             )
-            audit_duration = (time.time() - audit_start) * 1000
 
             # Log to audit trail
-            actual_model = model or getattr(self.llm_runtime, 'default_model', None) or 'default'
-            audit_entry = LLMAuditEntry(
-                timestamp=audit_start,
-                call_type="act",
-                agent_name=agent_name,
-                model=actual_model,
-                prompt=prompt,
+            self._log_llm_audit(
+                "act", prompt, audit_start, agent_name, model,
                 response=response.text if response else None,
                 tokens_in=getattr(response, 'usage', {}).get('prompt_tokens', 0) if response else 0,
                 tokens_out=getattr(response, 'usage', {}).get('completion_tokens', 0) if response else 0,
-                duration_ms=audit_duration,
             )
-            self.observability.llm_audit.log(audit_entry)
 
             # P1: Record tool calls + final response to history
             if response:
                 self._record_llm_response_to_history(response)
             return response.text if response else None
         except HelenRuntimeError as e:
-            audit_duration = (time.time() - audit_start) * 1000
-            actual_model = model or getattr(self.llm_runtime, 'default_model', None) or 'default'
-            audit_entry = LLMAuditEntry(
-                timestamp=audit_start,
-                call_type="act",
-                agent_name=agent_name,
-                model=actual_model,
-                prompt=prompt,
-                duration_ms=audit_duration,
-                error=str(e),
-            )
-            self.observability.llm_audit.log(audit_entry)
+            self._log_llm_audit("act", prompt, audit_start, agent_name, model, error=str(e))
             return None
         except RuntimeError as e:
             # Python RuntimeError from LLM runtime (e.g. API errors) —
             # wrap in HelenRuntimeError so it propagates to the user
-            audit_duration = (time.time() - audit_start) * 1000
-            actual_model = model or getattr(self.llm_runtime, 'default_model', None) or 'default'
-            audit_entry = LLMAuditEntry(
-                timestamp=audit_start,
-                call_type="act",
-                agent_name=agent_name,
-                model=actual_model,
-                prompt=prompt,
-                duration_ms=audit_duration,
-                error=str(e),
-            )
-            self.observability.llm_audit.log(audit_entry)
+            self._log_llm_audit("act", prompt, audit_start, agent_name, model, error=str(e))
             raise HelenRuntimeError(str(e), node.span) from e
 
     def _visit_llm_act_streaming(self: Any, node: LlmActExprNode, prompt: str,
@@ -374,7 +367,6 @@ class LlmMixin:
                 return None
 
         # Audit log entry
-        import time
         audit_start = time.time()
         agent_name = self._current_agent.name if self._current_agent else None
 
@@ -448,36 +440,17 @@ class LlmMixin:
                 self._record_llm_response_to_history(stream_resp)
 
             # Log to audit trail
-            audit_duration = (time.time() - audit_start) * 1000
-            actual_model = model or getattr(self.llm_runtime, 'default_model', None) or 'default'
-            audit_entry = LLMAuditEntry(
-                timestamp=audit_start,
-                call_type="act_stream",
-                agent_name=agent_name,
-                model=actual_model,
-                prompt=prompt,
+            self._log_llm_audit(
+                "act_stream", prompt, audit_start, agent_name, model,
                 response=full_text,
                 tokens_in=stream_usage.get("prompt_tokens", 0),
                 tokens_out=stream_usage.get("completion_tokens", 0),
-                duration_ms=audit_duration,
                 tool_calls=tool_calls_log,
             )
-            self.observability.llm_audit.log(audit_entry)
 
             return full_text
         except Exception as e:
-            audit_duration = (time.time() - audit_start) * 1000
-            actual_model = model or getattr(self.llm_runtime, 'default_model', None) or 'default'
-            audit_entry = LLMAuditEntry(
-                timestamp=audit_start,
-                call_type="act_stream",
-                agent_name=agent_name,
-                model=actual_model,
-                prompt=prompt,
-                duration_ms=audit_duration,
-                error=str(e),
-            )
-            self.observability.llm_audit.log(audit_entry)
+            self._log_llm_audit("act_stream", prompt, audit_start, agent_name, model, error=str(e))
 
             self.errors.error(
                 ErrorCode.RUNTIME_ERROR,
@@ -1033,49 +1006,8 @@ class LlmMixin:
         self._history.clear()
 
     # ------------------------------------------------------------------
-    # P4: History Persistence, Search, Visualization (delegated to HistoryManager)
+    # Context Statistics (for REPL display)
     # ------------------------------------------------------------------
-
-    def save_history(self: Any, filepath: str) -> None:
-        """Save conversation history to a JSON file.
-
-        P4: Enables cross-session history persistence.
-        """
-        self._history_manager.save_to_file(self._history, filepath)
-
-    def load_history(self: Any, filepath: str) -> int:
-        """Load conversation history from a JSON file.
-
-        P4: Restores history from a previously saved file.
-        Returns the number of messages loaded.
-        """
-        loaded = self._history_manager.load_from_file(filepath)
-        if loaded:
-            self._history.extend(loaded)
-        return len(loaded)
-
-    def search_history(
-        self: Any,
-        query: str | None = None,
-        role: str | None = None,
-        tool_name: str | None = None,
-        limit: int = 20,
-    ) -> list[HistoryMessage]:
-        """Search conversation history for matching messages.
-
-        P4: Enables agents to query historical context.
-        """
-        return self._history_manager.search(
-            self._history, query=query, role=role,
-            tool_name=tool_name, limit=limit,
-        )
-
-    def get_context_stats(self: Any, system_prompt: str | None = None) -> dict:
-        """Get context usage statistics.
-
-        P4: Returns detailed context window usage information.
-        """
-        return self._history_manager.get_usage_stats(self._history, system_prompt)
 
     def format_context_stats(self: Any, system_prompt: str | None = None) -> str:
         """Get formatted context usage string for display.

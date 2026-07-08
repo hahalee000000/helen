@@ -863,14 +863,18 @@ class Parser:
                              has_streaming=has_streaming,
                              context_config=context_config)
 
-    def _shared_store_decl(self) -> "SharedStoreDeclNode":
-        """Parse a shared store declaration: shared store Name { fields, methods }.
+    def _shared_container_decl(self, kind: str) -> object:
+        """Parse a shared store or channel declaration.
 
-        v1.12: Provides controlled shared mutable state for agent collaboration.
+        v1.12/v1.13: Both structures are parsed identically;
+        the difference is semantic (state container vs communication endpoint).
         """
-        from .ast import SharedStoreDeclNode
-        name_tok = self._consume(TokenType.IDENTIFIER, "Expected store name after 'shared store'.")
-        self._consume(TokenType.LEFT_BRACE, "Expected '{' after store name.")
+        from .ast import ChannelDeclNode, SharedStoreDeclNode  # noqa: PLC0415
+
+        node_cls = SharedStoreDeclNode if kind == "store" else ChannelDeclNode
+        label = "store" if kind == "store" else "channel"
+        name_tok = self._consume(TokenType.IDENTIFIER, f"Expected {label} name after 'shared {label}'.")
+        self._consume(TokenType.LEFT_BRACE, f"Expected '{{' after {label} name.")
 
         fields: list = []
         methods: list = []
@@ -882,50 +886,25 @@ class Parser:
                 self._advance()  # consume let/const
                 fields.append(self._var_decl())
             else:
-                self._error(f"Expected 'fn', 'let', or 'const' inside shared store, got {self._current().type.name}")
+                self._error(f"Expected 'fn', 'let', or 'const' inside shared {label}, got {self._current().type.name}")
                 self._synchronize()
 
-        end = self._consume(TokenType.RIGHT_BRACE, "Expected '}' after shared store body.")
+        end = self._consume(TokenType.RIGHT_BRACE, f"Expected '}}' after shared {label} body.")
 
-        return SharedStoreDeclNode(
+        return node_cls(
             name=name_tok.lexeme,
             fields=fields,
             methods=methods,
             span=self._make_span(name_tok, end),
         )
+
+    def _shared_store_decl(self) -> "SharedStoreDeclNode":
+        """Parse a shared store declaration (delegates to shared container)."""
+        return self._shared_container_decl("store")
 
     def _channel_decl(self) -> "ChannelDeclNode":
-        """Parse a channel declaration: channel Name { fields, methods }.
-
-        v1.13: Channels provide typed, thread-safe communication between agents.
-        Structurally identical to shared store but semantically represents a
-        communication endpoint.
-        """
-        from .ast import ChannelDeclNode
-        name_tok = self._consume(TokenType.IDENTIFIER, "Expected channel name after 'channel'.")
-        self._consume(TokenType.LEFT_BRACE, "Expected '{' after channel name.")
-
-        fields: list = []
-        methods: list = []
-
-        while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF):
-            if self._match(TokenType.FN):
-                methods.append(self._function_decl())
-            elif self._check(TokenType.LET, TokenType.CONST):
-                self._advance()  # consume let/const
-                fields.append(self._var_decl())
-            else:
-                self._error(f"Expected 'fn', 'let', or 'const' inside channel, got {self._current().type.name}")
-                self._synchronize()
-
-        end = self._consume(TokenType.RIGHT_BRACE, "Expected '}' after channel body.")
-
-        return ChannelDeclNode(
-            name=name_tok.lexeme,
-            fields=fields,
-            methods=methods,
-            span=self._make_span(name_tok, end),
-        )
+        """Parse a channel declaration (delegates to shared container)."""
+        return self._shared_container_decl("channel")
 
     def _agent_param(self) -> AgentParamNode:
         """Parse an agent parameter: name: Type? = expr?."""

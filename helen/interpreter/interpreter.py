@@ -13,6 +13,7 @@ import asyncio
 import concurrent.futures
 import copy
 import types
+from contextlib import contextmanager
 from typing import Callable, Mapping
 from helen.core.ast import (
     AccessNode,
@@ -790,6 +791,7 @@ class Interpreter(LlmMixin, Visitor[object]):
             self._prompt_builder._runtime = HelenHermesRuntime()
         except Exception:
             pass
+        self._shared_vars: set[str] = set()
         # Register stdlib builtins in global environment (HLD M15)
         self._register_stdlib()
         # Set CLI args in the stdlib module (for get_cli_args/parse_cli_args)
@@ -797,6 +799,21 @@ class Interpreter(LlmMixin, Visitor[object]):
         _set_cli_args(self._program_args)
         # Define `argv` as a pre-defined const (CLI arguments after the filename)
         self.environment.define("argv", self._program_args, is_const=True)
+
+    @contextmanager
+    def _push_scope(self, set_to: Environment | None = None):
+        """Context manager for temporary scope/environment switch.
+
+        Usage:
+            with self._push_scope():                # create child scope
+            with self._push_scope(module_env):      # switch to specific env
+        """
+        old_env = self.environment
+        self.environment = set_to if set_to is not None else old_env.enter_scope()
+        try:
+            yield
+        finally:
+            self.environment = old_env
 
     def _register_stdlib(self) -> None:
         """Inject all stdlib functions into the global environment.
@@ -1389,87 +1406,41 @@ class Interpreter(LlmMixin, Visitor[object]):
         self.environment.define(node.name, value, is_const=is_const)
         # v1.10: Track shared variables for cross-agent visibility
         if node.shared:
-            if not hasattr(self, '_shared_vars'):
-                self._shared_vars: set[str] = set()
             self._shared_vars.add(node.name)
         return value
 
+    def _visit_shared_container(self, node: object, node_cls: type) -> object:
+        """Execute a shared store or channel declaration.
+
+        v1.12/v1.13: Both create a SharedStore instance at runtime.
+        """
+        if not isinstance(node, node_cls):
+            return None
+
+        fields: dict[str, object] = {}
+        for field_node in node.fields:
+            value = None
+            if field_node.initializer is not None:
+                value = field_node.initializer.accept(self)
+            fields[field_node.name] = value
+
+        container = SharedStore(node.name, fields, {})
+        for method_node in node.methods:
+            container._methods[method_node.name] = SharedStoreMethod(method_node, container, self)
+
+        self.environment.define(node.name, container, is_const=True)
+        self._shared_vars.add(node.name)
+        return container
+
     def visit_shared_store_decl(self, node: object) -> object:
-        """Execute a shared store declaration: shared store Name { fields, methods }.
+        """Execute a shared store declaration."""
+        from helen.core.ast import SharedStoreDeclNode  # noqa: PLC0415
+        return self._visit_shared_container(node, SharedStoreDeclNode)
 
-        v1.12: Creates a SharedStore instance with private fields and public methods.
-        """
-        from helen.core.ast import SharedStoreDeclNode
-        if not isinstance(node, SharedStoreDeclNode):
-            return None
-
-        # Initialize field values
-        fields: dict[str, object] = {}
-        for field_node in node.fields:
-            value = None
-            if field_node.initializer is not None:
-                value = field_node.initializer.accept(self)
-            fields[field_node.name] = value
-
-        # Create method closures
-        # Each method needs access to the store's fields
-        store = SharedStore(node.name, fields, {})
-
-        # Create method implementations that have access to store fields
-        for method_node in node.methods:
-            method_name = method_node.name
-            # Create a callable wrapper for the method
-            store._methods[method_name] = SharedStoreMethod(method_node, store, self)
-
-        # Register the store in the environment
-        self.environment.define(node.name, store, is_const=True)
-
-        # Track as shared for cross-agent visibility
-        if not hasattr(self, '_shared_vars'):
-            self._shared_vars: set[str] = set()
-        self._shared_vars.add(node.name)
-
-        return store
-
-    def visit_channel_decl(self, node: "ChannelDeclNode") -> object:
-        """Execute a channel declaration.
-
-        v1.13: Channels are structurally identical to shared stores at runtime.
-        They create a SharedStore instance with private fields and public methods,
-        protected by an internal lock for thread safety.
-
-        The semantic difference is that channels represent communication endpoints
-        between agents, while shared stores represent shared mutable state.
-        """
-        from helen.core.ast import ChannelDeclNode
-        if not isinstance(node, ChannelDeclNode):
-            return None
-
-        # Initialize field values
-        fields: dict[str, object] = {}
-        for field_node in node.fields:
-            value = None
-            if field_node.initializer is not None:
-                value = field_node.initializer.accept(self)
-            fields[field_node.name] = value
-
-        # Create channel instance (uses SharedStore at runtime)
-        channel = SharedStore(node.name, fields, {})
-
-        # Create method implementations that have access to channel fields
-        for method_node in node.methods:
-            method_name = method_node.name
-            channel._methods[method_name] = SharedStoreMethod(method_node, channel, self)
-
-        # Register the channel in the environment
-        self.environment.define(node.name, channel, is_const=True)
-
-        # Track as shared for cross-agent visibility
-        if not hasattr(self, '_shared_vars'):
-            self._shared_vars: set[str] = set()
-        self._shared_vars.add(node.name)
-
-        return channel
+    def visit_channel_decl(self, node: object) -> object:
+        """Execute a channel declaration."""
+        from helen.core.ast import ChannelDeclNode  # noqa: PLC0415
+        return self._visit_shared_container(node, ChannelDeclNode)
 
     # ------------------------------------------------------------------
     # Control flow
@@ -1497,9 +1468,7 @@ class Interpreter(LlmMixin, Visitor[object]):
             # Create a new scope for each iteration? No -- Helen uses
             # block scope: one scope for the entire loop body.
             # We'll use a fresh scope per loop to match semantic analysis.
-            old_env = self.environment
-            self.environment = self.environment.enter_scope()
-            try:
+            with self._push_scope():
                 if node.iterator is not None:
                     self.environment.define(node.iterator.name, item)
                 result = self._execute(node.body)
@@ -1509,8 +1478,6 @@ class Interpreter(LlmMixin, Visitor[object]):
                     continue
                 if isinstance(result, ReturnSentinel):
                     return result
-            finally:
-                self.environment = old_env
 
         return result
 
@@ -1535,9 +1502,7 @@ class Interpreter(LlmMixin, Visitor[object]):
         async def _async_iterate():
             result = None
             async for item in iterable:
-                old_env = self.environment
-                self.environment = self.environment.enter_scope()
-                try:
+                with self._push_scope():
                     if node.iterator is not None:
                         self.environment.define(node.iterator.name, item)
                     result = self._execute(node.body)
@@ -1547,8 +1512,6 @@ class Interpreter(LlmMixin, Visitor[object]):
                         continue
                     if isinstance(result, ReturnSentinel):
                         return result
-                finally:
-                    self.environment = old_env
             return result
 
         # Run the async iteration
@@ -1703,12 +1666,8 @@ class Interpreter(LlmMixin, Visitor[object]):
 
     def visit_main_block(self, node: MainBlockNode) -> object:
         """Execute a main block."""
-        old_env = self.environment
-        self.environment = self.environment.enter_scope()
-        try:
+        with self._push_scope():
             return self._execute_stmts(node.body)
-        finally:
-            self.environment = old_env
 
     # ------------------------------------------------------------------
     # Match
@@ -1750,35 +1709,23 @@ class Interpreter(LlmMixin, Visitor[object]):
             # Check guard condition if present
             if matched and case.guard is not None:
                 # Enter scope with bindings before evaluating guard
-                old_env = self.environment
-                self.environment = self.environment.enter_scope()
-                try:
+                with self._push_scope():
                     # Bind variables for guard evaluation
                     for name, value in bindings.items():
                         self.environment.define(name, value, is_const=False)
                     guard_result = case.guard.accept(self)
                     matched = self._truthy(guard_result)
-                finally:
-                    self.environment = old_env
 
             if matched:
-                old_env = self.environment
-                self.environment = self.environment.enter_scope()
-                try:
+                with self._push_scope():
                     # Bind variables in the case scope
                     for name, value in bindings.items():
                         self.environment.define(name, value, is_const=False)
                     return self._execute_stmts(case.body)
-                finally:
-                    self.environment = old_env
         # Default branch
         if node.default:
-            old_env = self.environment
-            self.environment = self.environment.enter_scope()
-            try:
+            with self._push_scope():
                 return self._execute_stmts(node.default)
-            finally:
-                self.environment = old_env
         return None
 
     def visit_match_expr(self, node: MatchExprNode) -> object:
@@ -1813,20 +1760,14 @@ class Interpreter(LlmMixin, Visitor[object]):
                         matched = self._equal(subject, pattern)
 
             if matched and case.guard is not None:
-                old_env = self.environment
-                self.environment = self.environment.enter_scope()
-                try:
+                with self._push_scope():
                     for name, value in bindings.items():
                         self.environment.define(name, value, is_const=False)
                     guard_result = case.guard.accept(self)
                     matched = self._truthy(guard_result)
-                finally:
-                    self.environment = old_env
 
             if matched:
-                old_env = self.environment
-                self.environment = self.environment.enter_scope()
-                try:
+                with self._push_scope():
                     for name, value in bindings.items():
                         self.environment.define(name, value, is_const=False)
                     # Body is a single ExprStmtNode — evaluate its expression
@@ -1834,8 +1775,6 @@ class Interpreter(LlmMixin, Visitor[object]):
                     if isinstance(body_stmt, ExprStmtNode):
                         return body_stmt.expression.accept(self)
                     return self._execute_stmts(case.body)
-                finally:
-                    self.environment = old_env
 
         # Default branch
         if node.default_body is not None:
@@ -1891,12 +1830,8 @@ class Interpreter(LlmMixin, Visitor[object]):
 
         # Execute try body
         try:
-            old_env = self.environment
-            self.environment = self.environment.enter_scope()
-            try:
+            with self._push_scope():
                 result = self._execute_stmts(node.body)
-            finally:
-                self.environment = old_env
         except HelenRuntimeError as exc:
             caught = True
             exc_to_rethrow = exc
@@ -1905,9 +1840,7 @@ class Interpreter(LlmMixin, Visitor[object]):
             for clause in node.catch_clauses:
                 error_type_name = clause.error_type.name
                 if error_matches(exc, error_type_name):
-                    old_env = self.environment
-                    self.environment = self.environment.enter_scope()
-                    try:
+                    with self._push_scope():
                         self.environment.define(clause.error_name, exc)
                         catch_result = self._execute_stmts(clause.body)
                         if isinstance(catch_result, ReturnSentinel):
@@ -1915,35 +1848,25 @@ class Interpreter(LlmMixin, Visitor[object]):
                             caught = False
                             return result
                         result = catch_result
-                    finally:
-                        self.environment = old_env
                     caught = False
                     break
 
             # Try catch-all if no typed catch matched
             if caught and node.catch_all is not None:
-                old_env = self.environment
-                self.environment = self.environment.enter_scope()
-                try:
+                with self._push_scope():
                     catch_result = self._execute_stmts(node.catch_all.body)
                     if isinstance(catch_result, ReturnSentinel):
                         result = catch_result.value
                         caught = False
                         return result
                     result = catch_result
-                finally:
-                    self.environment = old_env
                 caught = False
 
         finally:
             # Finally block always executes (HLD 3.6.4)
             if node.finally_block is not None:
-                old_env = self.environment
-                self.environment = self.environment.enter_scope()
-                try:
+                with self._push_scope():
                     self._execute_stmts(node.finally_block.body)
-                finally:
-                    self.environment = old_env
 
             # Re-raise if not caught
             if caught and exc_to_rethrow is not None:
@@ -2044,13 +1967,9 @@ class Interpreter(LlmMixin, Visitor[object]):
         # Check if this is a Python module import
         # Python modules: no extension, or .py extension, or dotted names like "os.path"
         # Helen/data files: .helen, .json, .md, .txt, .yaml, .yml
-        path = node.module_path
-        is_python_module = (
-            path.endswith('.py') or  # Explicit .py extension
-            not any(path.endswith(ext) for ext in ('.helen', '.json', '.md', '.txt', '.yaml', '.yml'))
-        )
+        from helen.core import is_helen_data_file  # noqa: PLC0415
 
-        if is_python_module:
+        if not is_helen_data_file(node.module_path):
             # Python module import via FFI
             return self._import_python_module(node)
 
@@ -2081,12 +2000,8 @@ class Interpreter(LlmMixin, Visitor[object]):
                 for name, data in self.import_resolver.data.items():
                     if isinstance(data, _VDN) and (not data.mutable or data.shared):
                         if data.initializer is not None:
-                            old_env = self.environment
-                            self.environment = module_env
-                            try:
+                            with self._push_scope(module_env):
                                 value = data.initializer.accept(self)
-                            finally:
-                                self.environment = old_env
                         else:
                             value = None
                         module_env.define(name, value, is_const=not data.mutable)
@@ -2152,20 +2067,14 @@ class Interpreter(LlmMixin, Visitor[object]):
                     # Fall back to evaluating the initializer. Use module_env
                     # as context so const references from the same module resolve.
                     if module_env is not None:
-                        old_env = self.environment
-                        self.environment = module_env
-                        try:
+                        with self._push_scope(module_env):
                             value = var_node.initializer.accept(self)
-                        finally:
-                            self.environment = old_env
                     else:
                         value = var_node.initializer.accept(self)
                     resolved = True
                 if not resolved:
                     value = None
                 self.environment.define(name, value)
-                if not hasattr(self, '_shared_vars'):
-                    self._shared_vars: set[str] = set()
                 self._shared_vars.add(name)
 
     def _register_imported_consts_and_shared(self, module_env: Environment | None = None) -> None:
@@ -2192,18 +2101,12 @@ class Interpreter(LlmMixin, Visitor[object]):
                             value = module_env.lookup(name)
                         except NameError:
                             # Not in module_env yet, evaluate initializer in module_env
-                            old_env = self.environment
-                            self.environment = module_env
-                            try:
+                            with self._push_scope(module_env):
                                 value = const_node.initializer.accept(self)
-                            finally:
-                                self.environment = old_env
                     else:
                         value = const_node.initializer.accept(self)
                     self.environment.define(name, value, is_const=not const_node.mutable)
                     if const_node.shared:
-                        if not hasattr(self, '_shared_vars'):
-                            self._shared_vars: set[str] = set()
                         self._shared_vars.add(name)
 
     def _create_module_object(self, result: ImportResult) -> dict:
@@ -2233,12 +2136,8 @@ class Interpreter(LlmMixin, Visitor[object]):
                 # Evaluate const and shared let initializers in the module env
                 if data.initializer is not None:
                     # Temporarily use module_env for evaluation so const refs resolve
-                    old_env = self.environment
-                    self.environment = module_env
-                    try:
+                    with self._push_scope(module_env):
                         value = data.initializer.accept(self)
-                    finally:
-                        self.environment = old_env
                 else:
                     value = None
                 module_env.define(name, value, is_const=not data.mutable)
@@ -2612,31 +2511,29 @@ class Interpreter(LlmMixin, Visitor[object]):
                 call_env.define(param.name, None)
 
         # Execute function body in the new environment
-        old_env = self.environment
-        self.environment = call_env
-        try:
-            result = self._execute_stmts(func.body.body)
-            if isinstance(result, ReturnSentinel):
-                self.observability.tracer.trace("return", func.span, {"function": func.name, "value": result.value})
-                return result.value
-            self.observability.tracer.trace("return", func.span, {"function": func.name})
-            return result
-        except Exception as e:
-            # Capture error snapshot with call stack
-            scope_vars = {}
-            for k in call_args.keys():
-                try:
-                    scope_vars[k] = call_env.lookup(k)
-                except NameError:
-                    pass
-            self.observability.capture_error(
-                type(e).__name__, str(e), func.span,
-                scope=scope_vars
-            )
-            raise
-        finally:
-            self.environment = old_env
-            self.observability.call_stack.pop()
+        with self._push_scope(call_env):
+            try:
+                result = self._execute_stmts(func.body.body)
+                if isinstance(result, ReturnSentinel):
+                    self.observability.tracer.trace("return", func.span, {"function": func.name, "value": result.value})
+                    return result.value
+                self.observability.tracer.trace("return", func.span, {"function": func.name})
+                return result
+            except Exception as e:
+                # Capture error snapshot with call stack
+                scope_vars = {}
+                for k in call_args.keys():
+                    try:
+                        scope_vars[k] = call_env.lookup(k)
+                    except NameError:
+                        pass
+                self.observability.capture_error(
+                    type(e).__name__, str(e), func.span,
+                    scope=scope_vars
+                )
+                raise
+            finally:
+                self.observability.call_stack.pop()
 
     def _call_closure(self, closure: Closure, args: list[object]) -> object:
         """Call a closure (lambda expression) with the given arguments.
@@ -2677,15 +2574,11 @@ class Interpreter(LlmMixin, Visitor[object]):
                 call_env.define(param.name, None)
 
         # Execute lambda body in the new environment
-        old_env = self.environment
-        self.environment = call_env
-        try:
+        with self._push_scope(call_env):
             result = self._execute_stmts(lambda_node.body.body)
             if isinstance(result, ReturnSentinel):
                 return result.value
             return result
-        finally:
-            self.environment = old_env
 
     def _call_agent(self, agent: AgentDeclNode, args: dict[str, object]) -> object:
         """Call an agent with the given arguments (HLD 3.5.2, 3.6.2).

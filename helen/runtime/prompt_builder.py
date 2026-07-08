@@ -1,16 +1,12 @@
 """Prompt Builder for Helen (HLD 3.7).
 
 Handles template rendering, Skill Index injection (Tier 1), and
-System/User prompt construction for LLM calls.
+route prompt construction for LLM calls.
 
-P2 unification: This module is now the single source of truth for
-prompt construction. LlmMixin uses PromptBuilder for:
+LlmMixin uses PromptBuilder for:
 - Template rendering (with nested variable access)
 - Skill Index construction (with mtime-based caching)
-- System/User prompt assembly
-
-Previously, llm_mixin.py had its own inline implementations of these
-features. They are now consolidated here for maintainability.
+- System prompt section building (framework instructions, Helen conventions)
 """
 
 from __future__ import annotations
@@ -22,7 +18,6 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from helen.runtime import Runtime, SkillMeta
-    from helen.core.ast import AgentDeclNode
 
 
 # Regex to match {{var_name}} or {{var.path}} templates (supports nested access)
@@ -38,7 +33,7 @@ class PromptBuilder:
     Features:
     - Single-pass template rendering ({{var}} and {{a.b.c}} substitution)
     - Skill Index Tier 1 injection (lightweight name + description + tags)
-    - System/User prompt assembly from AgentDeclNode
+    - System prompt section building (framework instructions, conventions)
     - mtime-based Skill Index caching (avoid rebuilding on every call)
     """
 
@@ -122,51 +117,6 @@ class PromptBuilder:
             return str(value)
 
         return _TEMPLATE_RE.sub(_replacer, template)
-
-    def build_system_prompt(self, agent_decl: "AgentDeclNode") -> str:
-        """Build the System Prompt for an agent (HLD 3.7.1).
-
-        P2: System/User role separation.
-        System prompt contains: framework instructions, Helen conventions,
-        agent description, and skill index. Agent's prompt field is NOT
-        included here — it's used as user prompt (task description).
-
-        Components:
-        1. Framework instructions (tool use, skills, parallel calls, completion)
-        2. Helen language conventions and best practices
-        3. Agent description (role definition)
-        4. Skill Index Tier 1 (<available_skills>)
-
-        Per HLD 3.7.1 progressive disclosure:
-        - Tier 1: Skill Index (lightweight) in System Prompt
-        - Tier 2: Full SKILL.md loaded on-demand via load_skill tool
-        """
-        parts = []
-
-        # 1. Framework instructions (P0+P1: tool use, skills, parallel, completion)
-        framework = self._build_framework_instructions()
-        if framework:
-            parts.append(framework)
-
-        # 2. Helen language conventions (always included)
-        helen_conventions = self._build_helen_conventions()
-        if helen_conventions:
-            parts.append(helen_conventions)
-
-        # 3. Agent description (role definition, NOT the prompt field)
-        for decl in agent_decl.declarations:
-            if decl.description is not None:
-                from helen.core.ast import LiteralNode
-                if isinstance(decl.description, LiteralNode):
-                    parts.append(decl.description.value)
-                    break
-
-        # 4. Skill Index (Tier 1)
-        skill_index = self.build_skill_index()
-        if skill_index:
-            parts.append(skill_index)
-
-        return "\n\n".join(parts)
 
     def _build_framework_instructions(self) -> str:
         """Build framework-level behavioral instructions (P0+P1).
@@ -298,52 +248,6 @@ agent MyAgent(input: str) {
 ```
 </helen_conventions>"""
 
-    def build_user_prompt(
-        self, agent_decl: "AgentDeclNode", context: str | None = None
-    ) -> str:
-        """Build the User Prompt for an agent.
-
-        Renders the agent's prompt template with current environment
-        variables and optional conversation context.
-
-        Args:
-            agent_decl: The parsed agent declaration.
-            context: Optional conversation summary.
-
-        Returns:
-            Rendered User Prompt string.
-        """
-        # Get prompt content from agent declaration
-        if agent_decl.prompt is None:
-            return ""
-
-        template = agent_decl.prompt.content
-
-        # Build env from agent declarations
-        env: dict[str, object] = {}
-        for decl in agent_decl.declarations:
-            from helen.core.ast import LiteralNode
-            field_map = {
-                "description": "description",
-                "model": "model",
-                "temperature": "temperature",
-                "max_turns": "max_turns",
-            }
-            for field_name, var_name in field_map.items():
-                value = getattr(decl, field_name, None)
-                if value is not None and isinstance(value, LiteralNode):
-                    env[var_name] = value.value
-
-        # Inject _memory_content if available
-        if "_memory_content" not in env:
-            env["_memory_content"] = ""
-
-        # Inject context
-        if context is not None:
-            env["conversation_summary"] = context
-
-        return self.render(template, env)
-
     def build_route_prompt(
         self, description: str, branches: list[str], context: str | None = None
     ) -> str:
@@ -437,8 +341,3 @@ agent MyAgent(input: str) {
                 except Exception:
                     pass
         return max_mtime
-
-    def invalidate_skill_cache(self) -> None:
-        """Force rebuild of skill index on next call."""
-        self._skill_index_cache = None
-        self._skill_index_mtime = 0.0
