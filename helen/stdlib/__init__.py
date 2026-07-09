@@ -128,13 +128,13 @@ from helen.stdlib.quality import (
 # Import tool wrapper functions
 from helen.stdlib.tools import (
     # Tool wrappers
-    _web_search, _web_fetch, _read_file as _tool_read_file, _write_file as _tool_write_file,
+    _web_search, _web_fetch,
     _shell_exec, _calculate, _patch_file, _load_skill,
 )
 
 # Import context management functions
 from helen.stdlib.context import (
-    _clear_context, _compress_context, _set_interpreter_context,
+    _clear_context, _compress_context, _set_interpreter_context,  # noqa: F401 — re-exported
     _classify_message, _compress_context_target,  # Phase 1: Message classification
 )
 

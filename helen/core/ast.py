@@ -160,6 +160,10 @@ class Visitor(ABC, Generic[R]):
         """Visit an AgentParamNode."""
 
     @abstractmethod
+    def visit_detach_stmt(self, node: DetachStmtNode) -> R:
+        """Visit a DetachStmtNode."""
+
+    @abstractmethod
     def visit_async_call_stmt(self, node: AsyncCallStmtNode) -> R:
         """Visit an AsyncCallStmtNode."""
 
@@ -1395,6 +1399,10 @@ class ASTPrinter(Visitor[str]):
     def visit_agent_param(self, node: AgentParamNode) -> str:
         """Visit an AgentParamNode."""
         return "(param " + node.name + ")"
+
+    def visit_detach_stmt(self, node: DetachStmtNode) -> str:
+        """Visit a DetachStmtNode."""
+        return self._parenthesize("detach", node.call)
 
     def visit_async_call_stmt(self, node: AsyncCallStmtNode) -> str:
         """Visit an AsyncCallStmtNode."""

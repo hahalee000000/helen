@@ -32,7 +32,6 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import time
@@ -40,7 +39,7 @@ import uuid as uuid_module
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from helen.runtime.config import get_multimodal_config
 from helen.runtime.history import Message

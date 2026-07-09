@@ -17,8 +17,7 @@ Expected Benefits:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 from helen.runtime.history import Message
 from helen.runtime.graduated_compression import (
@@ -227,7 +226,6 @@ class CacheAwareCompressor:
         cache_zone = history[:cache_zone_end]
         compressible_zone = history[cache_zone_end:]
 
-        initial_tokens = sum(msg.token_count for msg in compressible_zone)
         messages_modified = 0
 
         # Strategy 1: Microcompact compressible zone only

@@ -12,9 +12,8 @@ import os
 import asyncio
 import concurrent.futures
 import copy
-import types
 from contextlib import contextmanager
-from typing import Callable, Mapping
+from typing import Callable
 from helen.core.ast import (
     AccessNode,
     AgentDeclNode,
@@ -34,7 +33,6 @@ from helen.core.ast import (
     DeclarationNode,
     DetachStmtNode,
     ExprStmtNode,
-    ExpressionNode,
     FinallyBlockNode,
     FnBlockNode,
     ForStmtNode,
@@ -147,6 +145,11 @@ class Closure:
     def __init__(self, lambda_node: LambdaNode, captured_env: Environment):
         self.lambda_node = lambda_node
         self.captured_env = captured_env
+        # v1.18: For recursive closures — when assigned as
+        # ``let f = fn(...) { ... f(...) ... }`` the variable name is stored
+        # here so that _call_closure can inject the closure back into the
+        # call environment under that name, enabling self-recursion.
+        self._self_name: str | None = None
 
     def __repr__(self):
         return f"<closure with {len(self.lambda_node.params)} params>"
@@ -723,7 +726,7 @@ def _collect_pattern_bindings(pattern: object, bound: set[str]) -> None:
         pattern: The pattern AST node.
         bound: Set to add bound variable names to.
     """
-    from helen.core.ast import VariablePatternNode, WildcardPatternNode
+    from helen.core.ast import VariablePatternNode
     if isinstance(pattern, VariablePatternNode):
         bound.add(pattern.name)
     # WildcardPatternNode doesn't bind anything
@@ -1421,9 +1424,24 @@ class Interpreter(LlmMixin, Visitor[object]):
     def visit_var_decl(self, node: VarDeclNode) -> object:
         """Execute a variable declaration: let/const name = expr."""
         value = None
+        is_const = not node.mutable
+
+        # v1.18: Recursive closure support.
+        # When a let/const is initialized with a lambda, pre-define the
+        # variable so the lambda body can reference its own name
+        # (e.g. ``let factorial = fn(n) { ... factorial(n-1) ... }``).
+        # After evaluation, the closure's _self_name is set so that
+        # _call_closure injects the real closure into the call environment.
+        is_lambda_init = isinstance(node.initializer, LambdaNode)
+        if is_lambda_init:
+            self.environment.define(node.name, None)
+
         if node.initializer is not None:
             value = node.initializer.accept(self)
-        is_const = not node.mutable
+
+        if is_lambda_init and isinstance(value, Closure):
+            value._self_name = node.name
+
         self.environment.define(node.name, value, is_const=is_const)
         # v1.10: Track shared variables for cross-agent visibility
         if node.shared:
@@ -2582,6 +2600,13 @@ class Interpreter(LlmMixin, Visitor[object]):
         # This is the key to closures - we use closure.captured_env, not self.environment
         call_env = closure.captured_env.enter_scope()
 
+        # v1.18: Recursive closure support.
+        # When a closure was assigned as ``let f = fn(...){...f(...)}``,
+        # inject the closure itself into the call environment so the body
+        # can call itself by name (overrides the _PLACEHOLDER captured value).
+        if closure._self_name is not None:
+            call_env.define(closure._self_name, closure)
+
         # Bind parameters
         for i, param in enumerate(lambda_node.params):
             if i < len(args):
@@ -2923,7 +2948,7 @@ class Interpreter(LlmMixin, Visitor[object]):
         # Use asyncio.get_running_loop() which raises RuntimeError if no loop is running
         in_event_loop = False
         try:
-            _loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             in_event_loop = True
         except RuntimeError:
             # No running event loop
@@ -2981,14 +3006,6 @@ class Interpreter(LlmMixin, Visitor[object]):
             )
 
         return results
-
-    def _error_matches(self, exc: Exception, type_name: str) -> bool:
-        """Check if a runtime error matches a catch type name.
-
-        Deprecated: use error_matches() from exceptions module instead.
-        Kept for backward compatibility.
-        """
-        return error_matches(exc, type_name)
 
     def _runtime_error(self, span: SourceSpan | None, message: str) -> None:
         """Report a runtime error and raise an exception.

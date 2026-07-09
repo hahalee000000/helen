@@ -60,38 +60,7 @@ main {{
         
         assert result.returncode == 0 or "OK" in result.stdout, \
             f"Should support module function access: {result.stdout}"
-    
-    @pytest.mark.xfail(reason="Direct function import syntax not yet implemented (v1.6+)")
-    def test_import_function_directly(self, temp_helen_file, helen_dir):
-        """Should support: import "module.helen" { greet, VERSION }"""
-        module = temp_helen_file("""
-fn greet(name: str): str {
-    return "Hello, " + name
-}
 
-const VERSION = "1.0"
-""", "module.helen")
-        
-        main = temp_helen_file(f"""
-import "{module}" {{ greet, VERSION }}
-
-main {{
-    let result = greet("World")
-    print(result)
-    print(VERSION)
-}}
-""", "main.helen")
-        
-        result = subprocess.run(
-            ["helen", "check", str(main)],
-            capture_output=True,
-            text=True,
-            cwd=helen_dir
-        )
-        
-        assert result.returncode == 0 or "OK" in result.stdout, \
-            f"Should support direct function import: {result.stdout}"
-    
     def test_module_function_execution(self, temp_helen_file, helen_dir):
         """Module functions should be callable and return correct values."""
         module = temp_helen_file("""

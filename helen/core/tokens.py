@@ -76,7 +76,7 @@ class TokenType(Enum):
     TEMPLATE_OPEN = auto()  # {{
     TEMPLATE_CLOSE = auto()  # }}
 
-    # === Keywords (42 total) ===
+    # === Keywords (46 total, including context-only: MEMORY, WILDCARD) ===
     AGENT = auto()
     DESCRIPTION = auto()
     MODEL = auto()
@@ -131,7 +131,9 @@ class TokenType(Enum):
 # Type alias for literal values a token can carry
 LiteralValue = Union[str, int, float, bool, None]
 
-# Keyword → TokenType mapping (40 entries)
+# Keyword → TokenType mapping (94 entries)
+# Note: MEMORY and WILDCARD are context keywords — handled by lexer/parser directly,
+# not via this map, so they can also be used as variable names.
 _KEYWORD_MAP: dict[str, TokenType] = {
     "agent": TokenType.AGENT,
     "description": TokenType.DESCRIPTION,

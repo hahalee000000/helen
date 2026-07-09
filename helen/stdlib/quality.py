@@ -190,7 +190,6 @@ class HelenCodeAnalyzer:
         i = 0
         while i < len(self.lines):
             line = self.lines[i]
-            stripped = line.strip()
 
             # Track agent blocks
             agent_match = re.match(r'^\s*agent\s+(\w+)', line)
@@ -398,7 +397,8 @@ class HelenCodeAnalyzer:
         complexity = 1
 
         # Helen keywords that add branches (NOT elif — Helen doesn't have it)
-        branch_keywords = ['if', 'for', 'while', 'case', 'catch']
+        # 'if' is handled separately to avoid double-counting 'else if'
+        _branch_keywords = ['for', 'while', 'case', 'catch']
 
         for i in range(start, end + 1):
             line = self.lines[i].strip()
@@ -419,7 +419,7 @@ class HelenCodeAnalyzer:
                     complexity += 1
 
             # Other branch keywords
-            for keyword in ['for', 'while', 'case', 'catch']:
+            for keyword in _branch_keywords:
                 if re.search(rf'\b{keyword}\b', line):
                     complexity += 1
 

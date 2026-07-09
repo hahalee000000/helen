@@ -1,6 +1,6 @@
 """Helen Agent 包装器 - 将 Helen agent 包装为 Python 类"""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from pathlib import Path
 
 

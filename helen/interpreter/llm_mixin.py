@@ -870,7 +870,6 @@ class LlmMixin:
 
         Creates a new scope, binds arguments to parameters, and executes the function body.
         """
-        from helen.core.ast import AgentParamNode
 
         # Create a new scope for the function
         old_env = self.environment

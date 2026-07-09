@@ -221,6 +221,10 @@ class MockVisitor(Visitor[str]):
         self.calls.append("visit_agent_param")
         return "<agent_param>"
 
+    def visit_detach_stmt(self, node) -> str:
+        self.calls.append("visit_detach_stmt")
+        return "<detach>"
+
     def visit_async_call_stmt(self, node) -> str:
         self.calls.append("visit_async_call_stmt")
         return "<async_call>"

@@ -538,9 +538,7 @@ class Parser:
 
         # v1.12: Parse decorators (@sandbox, @open, @strict) before declarations
         isolation_level = "standard"
-        decorator_span = None
         if self._check(TokenType.AT):
-            decorator_span = self._current().span
             isolation_level = self._parse_decorator()
 
         # async statement modifier detection (HLD 3.3.3)
@@ -561,7 +559,6 @@ class Parser:
             if isolation_level != "standard":
                 self._error(f"Decorator '@{isolation_level}' can only be applied to agent declarations.")
             # shared let / shared const / shared store — cross-agent visible
-            is_shared = True
             if self._match(TokenType.LET, TokenType.CONST):
                 return self._var_decl(shared=True)
             if self._match(TokenType.STORE):
@@ -946,11 +943,11 @@ class Parser:
             span=self._make_span(name_tok, end),
         )
 
-    def _shared_store_decl(self) -> "SharedStoreDeclNode":
+    def _shared_store_decl(self):
         """Parse a shared store declaration (delegates to shared container)."""
         return self._shared_container_decl("store")
 
-    def _channel_decl(self) -> "ChannelDeclNode":
+    def _channel_decl(self):
         """Parse a channel declaration (delegates to shared container)."""
         return self._shared_container_decl("channel")
 

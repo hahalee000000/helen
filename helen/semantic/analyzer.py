@@ -273,15 +273,15 @@ class SemanticAnalyzer(Visitor[None]):
 
     def _check_match_completeness(self, node: MatchStmtNode) -> None:
         """Validate that match has a default branch or wildcard/variable pattern.
-        
+
         A match statement must be exhaustive. This is satisfied if:
         - There is an explicit default branch, OR
         - At least one case has a wildcard pattern (_), OR
         - At least one case has a variable pattern (binds any value)
-        
+
         Args:
             node: The MatchStmtNode to validate.
-            
+
         Reports:
             MATCH_NO_DEFAULT error if no exhaustive pattern found.
         """
@@ -292,6 +292,31 @@ class SemanticAnalyzer(Visitor[None]):
         )
         self._check_branch_completeness(
             bool(node.default) or has_default_pattern,
+            node.span,
+            "match"
+        )
+
+    def _check_match_expr_completeness(self, node: MatchExprNode) -> None:
+        """Validate that a match expression has a default branch or wildcard/variable pattern.
+
+        Match expressions must be exhaustive because they produce a value.
+        This is satisfied if:
+        - There is an explicit default body, OR
+        - At least one case has a wildcard pattern (_), OR
+        - At least one case has a variable pattern (binds any value)
+
+        Args:
+            node: The MatchExprNode to validate.
+
+        Reports:
+            MATCH_NO_DEFAULT error if no exhaustive pattern found.
+        """
+        has_default_pattern = any(
+            isinstance(case.pattern, (WildcardPatternNode, VariablePatternNode))
+            for case in node.cases
+        )
+        self._check_branch_completeness(
+            node.default_body is not None or has_default_pattern,
             node.span,
             "match"
         )
@@ -377,6 +402,20 @@ class SemanticAnalyzer(Visitor[None]):
     # ------------------------------------------------------------------
 
     def visit_var_decl(self, node: VarDeclNode) -> None:
+        # v1.18: Recursive closure support.
+        # When a let/const is initialized with a lambda, pre-define the
+        # symbol so the lambda body can reference its own name without
+        # raising "undeclared variable".
+        is_lambda_init = isinstance(node.initializer, LambdaNode)
+        if is_lambda_init:
+            fwd_symbol = Symbol(
+                name=node.name,
+                kind="variable",
+                type_node=node.type_annotation,
+                is_const=not node.mutable,
+            )
+            self.symbols.define(node.name, fwd_symbol)
+
         # Evaluate initializer first
         if node.initializer is not None:
             node.initializer.accept(self)
@@ -392,24 +431,25 @@ class SemanticAnalyzer(Visitor[None]):
                     node.span,
                 )
 
-        # Define symbol
-        symbol = Symbol(
-            name=node.name,
-            kind="variable",
-            type_node=node.type_annotation,
-            is_const=not node.mutable,
-        )
-        existing = self.symbols.define(node.name, symbol)
-        if existing is not None:
-            # Allow shadowing stdlib builtins (e.g. `let len = ...` shadows `len()`)
-            if existing.kind == "builtin":
-                pass  # shadowing allowed
-            else:
-                self.errors.error(
-                    ErrorCode.DUPLICATE_SYMBOL,
-                    f"duplicate declaration of '{node.name}'",
-                    node.span,
-                )
+        # Define symbol (skip re-definition if pre-defined for recursive closure)
+        if not is_lambda_init:
+            symbol = Symbol(
+                name=node.name,
+                kind="variable",
+                type_node=node.type_annotation,
+                is_const=not node.mutable,
+            )
+            existing = self.symbols.define(node.name, symbol)
+            if existing is not None:
+                # Allow shadowing stdlib builtins (e.g. `let len = ...` shadows `len()`)
+                if existing.kind == "builtin":
+                    pass  # shadowing allowed
+                else:
+                    self.errors.error(
+                        ErrorCode.DUPLICATE_SYMBOL,
+                        f"duplicate declaration of '{node.name}'",
+                        node.span,
+                    )
 
         # v1.10: Track shared let variable names for cross-agent visibility
         if node.shared:
@@ -1603,6 +1643,7 @@ class SemanticAnalyzer(Visitor[None]):
             case.accept(self)
         if node.default_body is not None:
             node.default_body.accept(self)
+        self._check_match_expr_completeness(node)
 
     def visit_case(self, node: CaseNode) -> None:
         node.pattern.accept(self)

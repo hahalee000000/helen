@@ -22,7 +22,7 @@ def _map(lst: list[Any], fn: Callable[[Any], Any]) -> list[Any]:
     Returns:
         New list with transformed elements
     """
-    from helen.interpreter.exceptions import HelenRuntimeError, RuntimeError as HelenRuntimeErrorClass, RuntimeError as HelenRuntimeErrorClass
+    from helen.interpreter.exceptions import HelenRuntimeError, RuntimeError as HelenRuntimeErrorClass
 
     result = []
     for i, item in enumerate(lst):

@@ -835,7 +835,7 @@ class AgentContextManager:
 
         # Record boundary in TranscriptStore if enabled
         if self._transcript_store is not None:
-            from helen.runtime.transcript_store import BoundaryMarker, _generate_uuid
+            from helen.runtime.transcript_store import BoundaryMarker
             marker = BoundaryMarker(
                 anchor_uuid="",
                 head_uuid="",
@@ -877,7 +877,7 @@ class AgentContextManager:
                 "strategy": str
             }
         """
-        from helen.runtime.history import Message, _message_text
+        from helen.runtime.history import _message_text
 
         # Get the history reference from stdlib/context.py
         try:
@@ -921,7 +921,6 @@ class AgentContextManager:
         # Record in TranscriptStore if enabled
         if self._transcript_store is not None:
             # Find UUIDs for boundary recording
-            original_uuids = [m.uuid for m in _interpreter_history if m.uuid]
             compressed_uuids = [m.uuid for m in compressed_history if m.uuid]
 
             # Find anchor (first preserved message)

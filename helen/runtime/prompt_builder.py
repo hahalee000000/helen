@@ -17,7 +17,7 @@ import re
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from helen.runtime import Runtime, SkillMeta
+    from helen.runtime import Runtime
 
 
 # Regex to match {{var_name}} or {{var.path}} templates (supports nested access)

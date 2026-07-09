@@ -93,8 +93,8 @@ expect(value)
     .toBeGreaterThan(n)       // 大于
     .toBeLessThan(n)          // 小于
     .toMatch(pattern)         // 正则匹配
-    .toStartWith(prefix)      // 以...开头
-    .toEndWith(suffix)        // 以...结尾
+    .toStartWith(prefix)      // 开头是
+    .toEndWith(suffix)        // 结尾是
     .toHaveLength(n)          // 长度
     .toHaveProperty(key)      // 属性存在
     .toThrow()                // 抛出异常

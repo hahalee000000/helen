@@ -63,15 +63,15 @@ class TestHelenHermesRuntimeSkills:
         with pytest.raises(FileNotFoundError):
             runtime.load_skill("__nonexistent_skill_xyz__")
 
-    def test_load_hellen_language_skill(self) -> None:
+    def test_load_helen_language_development_skill(self) -> None:
         """Test loading a known skill that should exist."""
         runtime = HelenHermesRuntime()
         try:
-            content = runtime.load_skill("helen-language")
+            content = runtime.load_skill("helen-language-development")
             assert isinstance(content, str)
             assert len(content) > 0
         except FileNotFoundError:
-            pytest.skip("helen-language skill not installed")
+            pytest.skip("helen-language-development skill not installed")
 
 
 class TestHelenHermesRuntimeTools:

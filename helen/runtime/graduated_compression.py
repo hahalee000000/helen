@@ -20,7 +20,7 @@ v1.17: Supports multimodal content (Message.content can be str or list[dict]).
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from typing import Callable
 
 from helen.runtime.history import Message, _message_text
 

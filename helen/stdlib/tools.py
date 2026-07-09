@@ -6,9 +6,6 @@ This allows agent functions to use built-in tools like web_search, read_file, et
 
 from __future__ import annotations
 
-import json
-from typing import Any
-
 
 def _web_search(query: str, num_results: int = 3) -> str:
     """Search the web and return results.

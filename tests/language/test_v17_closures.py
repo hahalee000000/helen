@@ -323,8 +323,7 @@ main {
         )
         assert result.returncode == 0
         assert "7" in result.stdout
-    
-    @pytest.mark.xfail(reason="Recursive closures require forward reference support in lambda expressions")
+
     def test_closure_recursive(self, temp_helen_file, helen_dir):
         """测试递归闭包"""
         test_file = temp_helen_file("""
@@ -348,6 +347,52 @@ main {
         )
         assert result.returncode == 0
         assert "120" in result.stdout
+
+    def test_closure_recursive_fibonacci(self, temp_helen_file, helen_dir):
+        """递归闭包 — 斐波那契（多次递归分支）"""
+        test_file = temp_helen_file("""
+let fib = fn(n) {
+    if n <= 1 {
+        return n
+    }
+    return fib(n - 1) + fib(n - 2)
+}
+
+main {
+    print(fib(10))
+}
+""")
+        result = subprocess.run(
+            ["helen", str(test_file)],
+            capture_output=True,
+            text=True,
+            cwd=helen_dir
+        )
+        assert result.returncode == 0
+        assert "55" in result.stdout
+
+    def test_closure_recursive_const(self, temp_helen_file, helen_dir):
+        """const 初始化的递归闭包"""
+        test_file = temp_helen_file("""
+const repeat = fn(s: str, n: int): str {
+    if n <= 0 {
+        return ""
+    }
+    return s + repeat(s, n - 1)
+}
+
+main {
+    print(repeat("ab", 3))
+}
+""")
+        result = subprocess.run(
+            ["helen", str(test_file)],
+            capture_output=True,
+            text=True,
+            cwd=helen_dir
+        )
+        assert result.returncode == 0
+        assert "ababab" in result.stdout
 
 
 if __name__ == "__main__":

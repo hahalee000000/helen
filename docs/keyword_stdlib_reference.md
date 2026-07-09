@@ -126,8 +126,8 @@
 | `strip` | `去除空白` | `strip(s)` | 去除首尾空白 |
 | `split` | `分割` | `split(s, sep?)` | 按分隔符分割 |
 | `join` | `连接` | `join(items, sep)` | 连接字符串列表 |
-| `startswith` | `以...开头` | `startswith(s, prefix)` | 检查前缀 |
-| `endswith` | `以...结尾` | `endswith(s, suffix)` | 检查后缀 |
+| `startswith` | `开头是` | `startswith(s, prefix)` | 检查前缀 |
+| `endswith` | `结尾是` | `endswith(s, suffix)` | 检查后缀 |
 | `replace` | `替换` | `replace(s, old, new)` | 替换子串 |
 | `find` | `查找` | `find(s, sub)` | 查找子串索引（未找到返回 -1） |
 | `contains` | `包含` | `contains(s, sub)` | 检查是否包含子串 |

@@ -9,7 +9,7 @@ to create high-quality summaries of conversation history.
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from typing import Callable
 
 from helen.runtime.history import _message_text
 

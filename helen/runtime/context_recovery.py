@@ -102,7 +102,6 @@ class PromptTooLongRecovery:
         Returns:
             RecoveryResult with success status and recovered messages
         """
-        effective_max_tokens = max_tokens or self.max_tokens
 
         # Calculate initial token estimate
         initial_tokens = self._estimate_total_tokens(messages)
