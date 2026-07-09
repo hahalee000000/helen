@@ -405,12 +405,15 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
                         print(f"      Summary: {summary[:100]}{'...' if len(summary) > 100 else ''}")
         elif "--full" in arg:
             # Show full transcript including compressed messages
+            from helen.runtime.history import _message_text
             from helen.runtime.transcript_store import BoundaryMarker, Message
             print(f"Full transcript ({store.get_transcript_size()} items):")
             for i, item in enumerate(store.transcript, 1):
                 if isinstance(item, Message):
-                    content = item.content[:100]
-                    if len(item.content) > 100:
+                    # v1.17: Use _message_text for multimodal content safety
+                    text_content = _message_text(item.content)
+                    content = text_content[:100]
+                    if len(text_content) > 100:
                         content += "..."
                     print(f"  [{i}] [{item.role}] {content}")
                 elif isinstance(item, BoundaryMarker):
@@ -421,11 +424,14 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
                         print(f"       Summary: {summary}{'...' if len(item.summary) > 80 else ''}")
         else:
             # Show current effective view
+            from helen.runtime.history import _message_text
             view = store.read_view()
             print(f"Current transcript view ({len(view)} messages):")
             for i, msg in enumerate(view, 1):
-                content = msg.content[:100]
-                if len(msg.content) > 100:
+                # v1.17: Use _message_text for multimodal content safety
+                text_content = _message_text(msg.content)
+                content = text_content[:100]
+                if len(text_content) > 100:
                     content += "..."
                 print(f"  [{i}] [{msg.role}] {content}")
 

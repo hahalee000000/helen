@@ -11,6 +11,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable
 
+from helen.runtime.history import _message_text
+
 logger = logging.getLogger(__name__)
 
 
@@ -93,7 +95,8 @@ class LLMSummarizer:
         conversation_text = []
         for msg in history:
             role = msg.role
-            content = msg.content
+            # v1.17: Use _message_text for multimodal content safety
+            content = _message_text(msg.content)
 
             # Skip system messages in the summary
             if role == "system":

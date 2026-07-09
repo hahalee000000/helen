@@ -311,6 +311,12 @@ ALIASES: dict[str, str] = {
     "压缩审计": "get_compression_audit",
     "恢复会话": "resume_session",
 
+    # ── Media/Multimodal (媒体/多模态) ────────────────────────────
+    "媒体": "media",
+    "媒体base64": "media_base64",
+    "是媒体": "is_media",
+    "媒体类型": "media_type",
+
     # ── File Search (文件搜索) ────────────────────────────────────
     "查找文件": "glob_files",
     "搜索内容": "grep_files",

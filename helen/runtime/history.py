@@ -270,10 +270,11 @@ class Message:
     P3: Supports model-aware token counting via optional model field.
     Phase 1: Supports message classification for selective compression.
     Phase 10: Optional UUID for mostly-append transcript storage.
+    v1.17: content can be str (plain text) or list[dict] (multimodal content parts).
     """
 
     role: str  # "system" | "user" | "assistant" | "tool"
-    content: str
+    content: str | list[dict[str, Any]]
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
     tool_call_id: str | None = None
     # Cached token count (lazily computed)
@@ -295,7 +296,20 @@ class Message:
     def token_count(self) -> int:
         """Lazily computed token count (model-aware when tiktoken available)."""
         if self._token_count == 0 and self.content:
-            self._token_count = estimate_tokens(self.content, self._model)
+            # For multimodal content (list), estimate tokens from text parts only
+            if isinstance(self.content, list):
+                text_parts = []
+                for part in self.content:
+                    if isinstance(part, dict) and part.get("type") == "text":
+                        text_parts.append(part.get("text", ""))
+                text = "\n".join(text_parts)
+                # Add token estimate for non-text media parts (images ~85 tokens avg)
+                media_parts = [p for p in self.content
+                               if isinstance(p, dict) and p.get("type") != "text"]
+                self._token_count = estimate_tokens(text, self._model) or 0
+                self._token_count += len(media_parts) * 85
+            else:
+                self._token_count = estimate_tokens(self.content, self._model) or 0
             # Add overhead for message structure (role, tool_calls, etc.)
             # OpenAI counts ~4 tokens per message overhead
             self._token_count += 4
@@ -354,6 +368,25 @@ class Message:
             return 20
         else:
             return 50
+
+
+def _message_text(content: str | list[dict[str, Any]]) -> str:
+    """Extract plain text from message content (handles multimodal lists).
+
+    For multimodal content (list of content parts), concatenates all text parts.
+    For plain text content, returns as-is.
+
+    v1.17: Supports multimodal content for MediaPart handling.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        text_parts = []
+        for part in content:
+            if isinstance(part, dict) and part.get("type") == "text":
+                text_parts.append(part.get("text", ""))
+        return "\n".join(text_parts)
+    return str(content) if content else ""
 
 
 class HistoryManager:
@@ -651,7 +684,8 @@ class HistoryManager:
         for msg in reversed(messages):
             if not msg.content:
                 continue
-            line = f"[{msg.role}] {msg.content}"
+            text = _message_text(msg.content)
+            line = f"[{msg.role}] {text}"
             line_tokens = estimate_tokens(line)
             if total_tokens + line_tokens > max_tokens:
                 break
@@ -666,9 +700,10 @@ class HistoryManager:
             if newest.content:
                 # Take roughly max_tokens worth of content
                 approx_chars = max_tokens * 3  # Rough chars-per-token
-                if len(newest.content) > approx_chars:
-                    return f"[{newest.role}] {newest.content[:approx_chars]}... [truncated]"
-                return f"[{newest.role}] {newest.content}"
+                text = _message_text(newest.content)
+                if len(text) > approx_chars:
+                    return f"[{newest.role}] {text[:approx_chars]}... [truncated]"
+                return f"[{newest.role}] {text}"
             return ""
 
         return "\n".join(lines)
@@ -703,7 +738,8 @@ class HistoryManager:
         truncated = 0
 
         for msg in reversed(history):
-            line = f"[{msg.role}] {msg.content}"
+            text = _message_text(msg.content)
+            line = f"[{msg.role}] {text}"
             line_tokens = estimate_tokens(line)
             if total_tokens + line_tokens > max_tokens:
                 truncated += 1
@@ -885,7 +921,7 @@ class HistoryManager:
                 continue
 
             # Text search (case-insensitive)
-            if query and query.lower() not in msg.content.lower():
+            if query and query.lower() not in _message_text(msg.content).lower():
                 # Also check tool results
                 if not any(query.lower() in tc.get("result", "").lower()
                           for tc in getattr(msg, 'tool_calls', [])):
@@ -896,7 +932,7 @@ class HistoryManager:
                 if not any(tool_name.lower() in tc.get("name", "").lower()
                           for tc in getattr(msg, 'tool_calls', [])):
                     # Also check content for tool summaries
-                    if tool_name.lower() not in msg.content.lower():
+                    if tool_name.lower() not in _message_text(msg.content).lower():
                         continue
 
             results.append(msg)
@@ -944,8 +980,9 @@ class HistoryManager:
             by_role["system_prompt"] = system_tokens
 
         # Check for compression
+        # v1.17: Use _message_text for multimodal content safety
         summary_count = sum(1 for msg in history
-                          if msg.role == "system" and msg.content.startswith("[Previous conversation summary]"))
+                          if msg.role == "system" and _message_text(msg.content).startswith("[Previous conversation summary]"))
 
         usage_percent = (total_tokens / self.MAX_TOKENS * 100) if self.MAX_TOKENS > 0 else 0
 

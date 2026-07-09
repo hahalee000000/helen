@@ -1094,7 +1094,7 @@ class LlmIfStmtNode(StatementNode):
 
 @dataclass(frozen=True)
 class LlmActExprNode(ExpressionNode):
-    """LLM act as an expression: llm act <prompt_expr>? [on_chunk <cb>] [on_complete <cb>].
+    """LLM act as an expression: llm act <prompt_expr>? [media(...)]* [on_chunk <cb>] [on_complete <cb>] [on_media <cb>] [on_generate <cb>]* [provider(<expr>)].
 
     Without callbacks: synchronous LLM call, returns response text.
     With callbacks: streaming LLM call, calls on_chunk for each chunk,
@@ -1103,16 +1103,30 @@ class LlmActExprNode(ExpressionNode):
     When prompt is None (bare ``llm act``), the agent's rendered prompt template
     is used as the user message automatically (HLD 3.6.5).
 
+    Multimodal support (v1.17):
+    - media: List of media expressions (MediaPart objects)
+    - on_media: Callback to adapt media to provider-specific format
+    - on_generate: List of callbacks for media generation tools
+    - provider: Provider hint for default adaptation
+
     Syntax:
         llm act                                  # Bare form (in agent main)
         llm act "prompt"                         # Sync, returns text
+        llm act "prompt" media("./img.png")      # With media input
         llm act "prompt" on_chunk callback       # Streaming with chunk callback
         llm act "prompt" on_complete callback    # Streaming with completion callback
+        llm act "prompt" on_media fn(...)        # Custom media adapter
+        llm act "prompt" on_generate fn(...)     # Media generation tool
+        llm act "prompt" provider("openai")      # Provider hint
         let result = llm act "prompt"            # Capture full response
     """
     prompt: ExpressionNode | None
+    media: list[ExpressionNode] = field(default_factory=list)
     on_chunk: ExpressionNode | None = None
     on_complete: ExpressionNode | None = None
+    on_media: ExpressionNode | None = None
+    on_generate: list[ExpressionNode] = field(default_factory=list)
+    provider: ExpressionNode | None = None
     span: SourceSpan = None  # type: ignore[assignment]
 
     def accept(self, visitor: Visitor[R]) -> R:
@@ -1452,7 +1466,18 @@ class ASTPrinter(Visitor[str]):
 
     def visit_llm_act_expr(self, node: LlmActExprNode) -> str:
         """Visit a LlmActExprNode."""
-        return self._parenthesize("llm-act", node.prompt, node.on_chunk, node.on_complete)
+        parts = [node.prompt]
+        parts.extend(node.media)
+        if node.on_chunk:
+            parts.append(node.on_chunk)
+        if node.on_complete:
+            parts.append(node.on_complete)
+        if node.on_media:
+            parts.append(node.on_media)
+        parts.extend(node.on_generate)
+        if node.provider:
+            parts.append(node.provider)
+        return self._parenthesize("llm-act", *parts)
 
     def visit_match_stmt(self, node: MatchStmtNode) -> str:
         """Visit a MatchStmtNode."""

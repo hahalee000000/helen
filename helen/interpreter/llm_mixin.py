@@ -144,7 +144,10 @@ class LlmMixin:
         return self._execute_stmts(node.body)
 
     def visit_llm_act_expr(self: Any, node: LlmActExprNode) -> object:
-        """Execute llm act expression: llm act <prompt_expr>? [on_chunk <cb>] [on_complete <cb>].
+        """Execute llm act expression with multimodal support.
+
+        Syntax: llm act <prompt_expr>? [media(...)]* [on_chunk <cb>] [on_complete <cb>]
+                [on_media <cb>] [on_generate <cb>]* [provider(<expr>)]
 
         Without callbacks: synchronous LLM call, returns response text.
         With callbacks: streaming LLM call, calls on_chunk for each chunk,
@@ -153,7 +156,15 @@ class LlmMixin:
         Bare form (``llm act`` with no expression, or ``llm act ""``):
         When inside an agent context, the agent's rendered prompt template
         is used as the user message automatically (HLD 3.6.5).
+
+        Multimodal support (v1.17):
+        - media: Evaluate media expressions to MediaPart objects
+        - on_media: Custom adapter for provider-specific format
+        - on_generate: Register as tools for media generation
+        - provider: Hint for default adaptation
         """
+        from helen.runtime.media import MediaPart
+
         # Evaluate the prompt expression
         if node.prompt is not None:
             prompt = node.prompt.accept(self)
@@ -162,12 +173,30 @@ class LlmMixin:
         else:
             prompt = ""
 
+        # Track bare form: prompt is empty (either no expression or empty string)
+        # and we're inside an agent context. In this case we'll use the rendered
+        # agent prompt as the user message, and must NOT re-render it below.
+        is_bare_form = (not prompt) and (self._current_agent is not None)
+
         # Bare form: if prompt is empty and we're inside an agent,
         # use the rendered agent prompt as the user message
-        if not prompt and self._current_agent is not None:
+        if is_bare_form:
             rendered = self._get_rendered_agent_prompt()
             if rendered:
                 prompt = rendered
+
+        # Evaluate media expressions (v1.17)
+        media_parts = []
+        for media_expr in node.media:
+            media_val = media_expr.accept(self)
+            if isinstance(media_val, MediaPart):
+                media_parts.append(media_val)
+            elif media_val is not None:
+                self.errors.error(
+                    ErrorCode.SEMANTIC_TYPE_ERROR,
+                    f"media() must return MediaPart, got {type(media_val).__name__}",
+                    media_expr.span if hasattr(media_expr, 'span') else None,
+                )
 
         # Extract agent settings if inside an agent context
         model = self._get_agent_setting("model")
@@ -189,12 +218,55 @@ class LlmMixin:
         if model:
             self._history_manager.set_model(model)
 
+        # Evaluate provider expression (v1.17) - do this first, needed for generate tools
+        provider_hint = None
+        if node.provider is not None:
+            provider_val = node.provider.accept(self)
+            if isinstance(provider_val, str):
+                provider_hint = provider_val
+
         # Build tools list: always include load_skill + agent-declared tools
         tools = self._build_tools_list()
+
+        # Register on_generate callbacks as tools (v1.17)
+        generate_tools = []
+        for gen_expr in node.on_generate:
+            gen_fn = gen_expr.accept(self)
+            if callable(gen_fn):
+                generate_tools.append(gen_fn)
+            else:
+                self.errors.error(
+                    ErrorCode.SEMANTIC_TYPE_ERROR,
+                    f"on_generate callback must be callable, got {type(gen_fn).__name__}",
+                    gen_expr.span if hasattr(gen_expr, 'span') else None,
+                )
+
+        # Register generate tools if any
+        generate_tool_defs = []
+        if generate_tools:
+            generate_tool_defs = self._build_generate_tools(generate_tools, provider_hint)
+            tools.extend(generate_tool_defs)
+
+        # Store generate tools for dispatch (v1.17)
+        # Save previous value to handle recursive llm act calls
+        prev_generate_tools = getattr(self, '_current_generate_tools', None)
+        self._current_generate_tools = generate_tool_defs
 
         # When tools are available, ensure at least 3 turns (tool call + tool result + response)
         if tools and max_turns < 3:
             max_turns = 3
+
+        # Evaluate on_media callback (v1.17)
+        on_media_fn = None
+        if node.on_media is not None:
+            on_media_fn = node.on_media.accept(self)
+            if not callable(on_media_fn):
+                self.errors.error(
+                    ErrorCode.SEMANTIC_TYPE_ERROR,
+                    f"on_media callback must be callable, got {type(on_media_fn).__name__}",
+                    node.on_media.span if hasattr(node.on_media, 'span') else None,
+                )
+                on_media_fn = None
 
         # P2: System/User prompt role separation
         # System prompt: framework + helen_conventions + description + skill_index
@@ -223,11 +295,16 @@ class LlmMixin:
 
         system_prompt = "\n\n".join(system_prompt_parts) if system_prompt_parts else None
 
-        # User prompt: rendered agent prompt (task description) + llm act expression (query)
+        # User prompt construction:
+        # - Bare form (no prompt expression OR empty prompt): `prompt` already contains
+        #   the rendered agent prompt from above, so use it directly.
+        # - Non-bare form (user provided a prompt expression): `prompt` contains that string,
+        #   and we prepend the agent's rendered prompt template (if any) as task description.
         user_prompt_parts = []
 
-        # If agent has a prompt field, render it as task description
-        if node.prompt is not None:
+        # Only render agent prompt template when NOT in bare form
+        # (bare form already has the rendered template in `prompt`)
+        if not is_bare_form and node.prompt is not None:
             rendered_agent_prompt = self._get_rendered_agent_prompt()
             if rendered_agent_prompt:
                 user_prompt_parts.append(rendered_agent_prompt)
@@ -238,21 +315,44 @@ class LlmMixin:
 
         user_prompt = "\n\n".join(user_prompt_parts) if user_prompt_parts else prompt
 
-        # Record user message to history
-        self._add_to_history("user", user_prompt)
+        # Build user message with multimodal content if media is present (v1.17)
+        user_message = self._build_user_message(user_prompt, media_parts, on_media_fn, provider_hint)
+
+        # Record user message to history (v1.17: store multimodal content in TranscriptStore SSOT)
+        # When media is present, store the full multimodal content (list[dict])
+        # Otherwise store plain text. This ensures session restore preserves media.
+        if media_parts:
+            self._add_to_history("user", user_message["content"])
+        else:
+            self._add_to_history("user", user_prompt)
 
         # P0: Prepare history for LLM call (trim to fit context window)
         history_for_llm = self._prepare_history_for_llm(system_prompt, user_prompt)
 
+        # If we have multimodal content, modify the last user message in history
+        if media_parts and history_for_llm:
+            # Replace the last user message with multimodal content
+            for i in range(len(history_for_llm) - 1, -1, -1):
+                if history_for_llm[i].get("role") == "user":
+                    history_for_llm[i] = user_message
+                    break
+
         # Determine streaming vs synchronous path
         has_streaming = node.on_chunk is not None or node.on_complete is not None
 
-        if has_streaming:
-            return self._visit_llm_act_streaming(node, user_prompt, model, temperature, max_turns,
-                                                   tools, system_prompt, history_for_llm)
-        else:
-            return self._visit_llm_act_sync(node, user_prompt, model, temperature, max_turns,
-                                            tools, system_prompt, history_for_llm)
+        try:
+            if has_streaming:
+                return self._visit_llm_act_streaming(node, user_prompt, model, temperature, max_turns,
+                                                       tools, system_prompt, history_for_llm)
+            else:
+                return self._visit_llm_act_sync(node, user_prompt, model, temperature, max_turns,
+                                                tools, system_prompt, history_for_llm)
+        finally:
+            # Restore previous generate tools to handle recursive llm act calls (v1.17)
+            if prev_generate_tools is not None:
+                self._current_generate_tools = prev_generate_tools
+            elif hasattr(self, '_current_generate_tools'):
+                delattr(self, '_current_generate_tools')
 
     def _log_llm_audit(self: Any, call_type: str, prompt: str, audit_start: float,
                        agent_name: str | None, model: str,
@@ -328,11 +428,12 @@ class LlmMixin:
                 "LLM runtime does not support streaming. Using fallback.",
                 node.span,
             )
-            # Fallback to non-streaming
+            # Fallback to non-streaming (v1.17: pass tools for on_generate support)
             response = self.llm_runtime.act(
-                prompt, model=model, temperature=temperature,
+                prompt, tools=tools, model=model, temperature=temperature,
                 system_prompt=system_prompt,
                 history=history_for_llm,
+                dispatch_fn=self._create_dispatch_fn(),
             )
             if response and response.text:
                 if node.on_chunk is not None:
@@ -630,18 +731,59 @@ class LlmMixin:
 
         Returns a function with signature (name: str, args: dict) -> str.
         When called:
-        1. First checks if the name matches an agent's Helen function
-        2. If yes, executes the Helen function and returns the result as JSON
-        3. If no, falls back to the default Python tool dispatch
+        1. First checks if the name matches a generate_media tool (v1.17)
+        2. Then checks if the name matches an agent's Helen function
+        3. If yes, executes the Helen function and returns the result as JSON
+        4. If no, falls back to the default Python tool dispatch
         """
         from helen.runtime.tools import dispatch_tool as default_dispatch
+        from helen.runtime.media import MediaPart
         import json
 
         # Capture current agent context
         agent = self._current_agent
         interpreter = self
 
+        # Capture generate tools from current llm act node (v1.17)
+        generate_tools_map = {}
+        if hasattr(self, '_current_generate_tools') and self._current_generate_tools:
+            for tool in self._current_generate_tools:
+                if "_helen_generate_fn" in tool:
+                    tool_name = tool["function"]["name"]
+                    generate_tools_map[tool_name] = {
+                        "fn": tool["_helen_generate_fn"],
+                        "provider_hint": tool.get("_helen_provider_hint"),
+                    }
+
         def dispatch(name: str, args: dict) -> str:
+            # Check if this is a generate_media tool (v1.17)
+            if name in generate_tools_map:
+                gen_info = generate_tools_map[name]
+                gen_fn = gen_info["fn"]
+                try:
+                    # Call the generate callback with params
+                    result = gen_fn(args)
+
+                    # Handle MediaPart result
+                    if isinstance(result, MediaPart):
+                        # Save media to file and return path info
+                        path = interpreter._save_generate_media(result, args.get("prompt", ""))
+                        return json.dumps({
+                            "status": "success",
+                            "message": f"媒体已保存到: {path}",
+                            "path": path,
+                            "media_type": result.media_type,
+                            "mime": result.mime,
+                        }, ensure_ascii=False)
+                    elif isinstance(result, str):
+                        return result
+                    else:
+                        return json.dumps(result, ensure_ascii=False, default=str)
+                except Exception as e:
+                    return json.dumps({
+                        "error": f"Generate tool '{name}' failed: {e}"
+                    }, ensure_ascii=False)
+
             # Check if this is an agent's Helen function
             if agent is not None and agent.functions:
                 for fn_decl in agent.functions:
@@ -660,6 +802,68 @@ class LlmMixin:
             return default_dispatch(name, args)
 
         return dispatch
+
+    def _save_generate_media(self: Any, media: Any, prompt: str) -> str:
+        """Save generated media to a file.
+
+        Args:
+            media: MediaPart object to save
+            prompt: The generation prompt (for naming)
+
+        Returns:
+            Path where the media was saved
+        """
+        import os
+        import base64
+        import hashlib
+        from pathlib import Path
+
+        from helen.runtime.media import MediaPart
+
+        if not isinstance(media, MediaPart):
+            return str(media)
+
+        # Determine output directory
+        output_dir = Path.home() / ".helen" / "generated_media"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generate filename from prompt hash + media type
+        prompt_hash = hashlib.md5(prompt.encode()).hexdigest()[:8]
+        ext_map = {
+            "image/png": "png",
+            "image/jpeg": "jpg",
+            "image/gif": "gif",
+            "image/webp": "webp",
+            "video/mp4": "mp4",
+            "audio/mp3": "mp3",
+            "audio/wav": "wav",
+        }
+        ext = ext_map.get(media.mime, media.media_type)
+        filename = f"{media.media_type}_{prompt_hash}.{ext}"
+        output_path = output_dir / filename
+
+        # Save based on source type
+        if media.source == "url":
+            # Download from URL
+            try:
+                import urllib.request
+                urllib.request.urlretrieve(media.content, output_path)
+            except Exception:
+                # If download fails, just save the URL as text
+                output_path.write_text(media.content)
+        elif media.source == "base64":
+            # Decode and save
+            data = base64.b64decode(media.content)
+            output_path.write_bytes(data)
+        elif media.source == "file":
+            # Copy file
+            import shutil
+            if os.path.exists(media.content):
+                shutil.copy2(media.content, output_path)
+            else:
+                output_path.write_text(media.content)
+
+        return str(output_path)
 
     def _execute_agent_function(self: Any, fn_decl: Any, args: dict) -> Any:
         """Execute an agent's Helen function with the given arguments.
@@ -867,7 +1071,7 @@ class LlmMixin:
             return None
         return self._history_manager.build_conversation_summary(self._history)
 
-    def _add_to_history(self: Any, role: str, content: str) -> None:
+    def _add_to_history(self: Any, role: str, content: str | list[dict]) -> None:
         """Add a message to the conversation history.
 
         Phase 2 SSOT: When TranscriptStore is enabled, write ONLY to it.
@@ -876,6 +1080,7 @@ class LlmMixin:
 
         P3: Sets model on message for accurate token counting.
         Phase 7: Update working memory from message content.
+        v1.17: content can be str (plain text) or list[dict] (multimodal content parts).
         """
         agent_ctx = getattr(self, '_agent_context', None)
 
@@ -892,8 +1097,11 @@ class LlmMixin:
             self._interpreter_history.append(msg)
 
         # Phase 7: Update working memory from message
+        # For multimodal content, extract text portion for working memory
+        from helen.runtime.history import _message_text
+        text_content = _message_text(content)
         if agent_ctx is not None:
-            agent_ctx.update_from_message(content, role)
+            agent_ctx.update_from_message(text_content, role)
 
         # Phase 2 SSOT: NO destructive in-place replacement.
         # Compression is handled by AgentContextManager.prepare_context() which
@@ -1013,6 +1221,179 @@ class LlmMixin:
         return self._history_manager.prepare_for_llm(
             history_for_compression, system_prompt, current_prompt
         )
+
+    # ------------------------------------------------------------------
+    # Multimodal Support (v1.17)
+    # ------------------------------------------------------------------
+
+    def _build_user_message(self: Any, text: str, media_parts: list,
+                            on_media_fn: callable | None, provider_hint: str | None) -> dict:
+        """Build a user message with optional multimodal content.
+
+        Args:
+            text: Text content of the message
+            media_parts: List of MediaPart objects
+            on_media_fn: Optional custom adapter function
+            provider_hint: Optional provider hint for default adaptation
+
+        Returns:
+            Message dict with 'role' and 'content' fields.
+            content is either str (text only) or list[dict] (with media).
+        """
+        if not media_parts:
+            return {"role": "user", "content": text}
+
+        # With media: build content parts array
+        if on_media_fn is not None:
+            # User-provided adapter
+            try:
+                content_parts = on_media_fn(media_parts, provider_hint or "default")
+            except Exception as e:
+                # Fall back to default adapter on error
+                self.errors.error(
+                    ErrorCode.RUNTIME_ERROR,
+                    f"on_media callback error: {e}. Using default adapter.",
+                    None,
+                )
+                content_parts = self._default_media_adapter(media_parts, provider_hint)
+        else:
+            # Default OpenAI-compatible adapter
+            content_parts = self._default_media_adapter(media_parts, provider_hint)
+
+        # Prepend text content
+        full_content = [{"type": "text", "text": text}] + content_parts
+        return {"role": "user", "content": full_content}
+
+    def _default_media_adapter(self: Any, media_parts: list, provider_hint: str | None) -> list[dict]:
+        """Default media adapter: OpenAI-compatible format.
+
+        Converts MediaPart objects to content parts suitable for OpenAI API.
+        This works with most providers (OpenAI, Azure, etc.)
+
+        Args:
+            media_parts: List of MediaPart objects
+            provider_hint: Optional provider hint (currently unused)
+
+        Returns:
+            List of content part dicts
+        """
+        from helen.runtime.media import MediaPart
+
+        parts = []
+        for m in media_parts:
+            if not isinstance(m, MediaPart):
+                continue
+
+            if m.media_type == "image":
+                if m.source == "url":
+                    parts.append({
+                        "type": "image_url",
+                        "image_url": {"url": m.content}
+                    })
+                elif m.source == "base64":
+                    parts.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{m.mime};base64,{m.content}"}
+                    })
+                elif m.source == "file":
+                    # Read file and encode as base64
+                    import base64
+                    try:
+                        with open(m.content, "rb") as f:
+                            data = f.read()
+                        b64 = base64.b64encode(data).decode("utf-8")
+                        parts.append({
+                            "type": "image_url",
+                            "image_url": {"url": f"data:{m.mime};base64,{b64}"}
+                        })
+                    except Exception as e:
+                        # Skip this media on error
+                        continue
+
+            elif m.media_type == "video":
+                # Video: Most LLM providers don't yet support native video input.
+                # Fall back to a text placeholder describing the video.
+                # Users can provide a custom on_media adapter for provider-specific formats.
+                video_desc = f"[视频: {m.content if m.source == 'url' else m.media_type}]"
+                parts.append({
+                    "type": "text",
+                    "text": video_desc
+                })
+
+            elif m.media_type == "audio":
+                if m.source == "url":
+                    parts.append({
+                        "type": "audio_url",
+                        "audio_url": {"url": m.content}
+                    })
+                elif m.source in ("base64", "file"):
+                    data = m.content
+                    if m.source == "file":
+                        import base64
+                        try:
+                            with open(m.content, "rb") as f:
+                                data = base64.b64encode(f.read()).decode("utf-8")
+                        except Exception:
+                            continue
+                    parts.append({
+                        "type": "input_audio",
+                        "input_audio": {"data": data, "format": m.mime}
+                    })
+
+        return parts
+
+    def _build_generate_tools(self: Any, generate_fns: list, provider_hint: str | None) -> list[dict]:
+        """Build tool definitions for on_generate callbacks.
+
+        Each on_generate callback becomes a 'generate_media' tool.
+        Multiple callbacks create multiple tools with different internal handlers.
+
+        Args:
+            generate_fns: List of callable generate functions
+            provider_hint: Optional provider hint
+
+        Returns:
+            List of tool definition dicts
+        """
+        tools = []
+        for i, gen_fn in enumerate(generate_fns):
+            # Create unique tool name for each generate callback
+            tool_name = "generate_media" if len(generate_fns) == 1 else f"generate_media_{i+1}"
+
+            tool_def = {
+                "type": "function",
+                "function": {
+                    "name": tool_name,
+                    "description": "根据描述生成图片或视频。用户会在 prompt 中指定保存路径和格式要求。",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "prompt": {
+                                "type": "string",
+                                "description": "生成内容的详细描述"
+                            },
+                            "size": {
+                                "type": "string",
+                                "description": "尺寸，如 1024x1024"
+                            },
+                            "duration": {
+                                "type": "integer",
+                                "description": "视频时长（秒）"
+                            },
+                            "format": {
+                                "type": "string",
+                                "description": "输出格式，如 png, jpg, mp4"
+                            }
+                        },
+                        "required": ["prompt"]
+                    }
+                },
+                # Internal: store the callback for execution
+                "_helen_generate_fn": gen_fn,
+                "_helen_provider_hint": provider_hint,
+            }
+            tools.append(tool_def)
+        return tools
 
     @property
     def history(self: Any) -> list[HistoryMessage]:

@@ -162,6 +162,38 @@ def get_transcript_config() -> dict[str, Any]:
     }
 
 
+def get_multimodal_config() -> dict[str, Any]:
+    """Get multimodal configuration (v1.17 Phase 3).
+
+    Returns:
+        Dict with multimodal settings:
+        - max_media_size_mb: float (default: 20) - Maximum single media size
+        - max_media_per_request: int (default: 10) - Maximum media per llm act
+        - media_external_threshold_mb: float (default: 1.0) - Threshold for external storage
+        - media_cache_dir: str (default: "~/.helen/media_cache")
+        - video_frame_interval: float (default: 1.0) - Video frame extraction interval
+
+    Example config.yaml:
+        multimodal:
+          max_media_size_mb: 20
+          max_media_per_request: 10
+          media_external_threshold_mb: 1.0
+          media_cache_dir: "~/.helen/media_cache"
+          video_frame_interval: 1.0
+    """
+    config = load_config()
+    multimodal_config = config.get("multimodal", {})
+
+    # Apply defaults
+    return {
+        "max_media_size_mb": multimodal_config.get("max_media_size_mb", 20.0),
+        "max_media_per_request": multimodal_config.get("max_media_per_request", 10),
+        "media_external_threshold_mb": multimodal_config.get("media_external_threshold_mb", 1.0),
+        "media_cache_dir": multimodal_config.get("media_cache_dir", str(HELEN_HOME / "media_cache")),
+        "video_frame_interval": multimodal_config.get("video_frame_interval", 1.0),
+    }
+
+
 def load_config() -> dict[str, Any]:
     """Load Helen configuration.
 
@@ -235,6 +267,20 @@ def _load_yaml_config(path: Path) -> dict[str, Any]:
                 config["transcript"]["session_dir"] = str(transcript["session_dir"])
             if "max_memory_items" in transcript:
                 config["transcript"]["max_memory_items"] = int(transcript["max_memory_items"])
+        # Multimodal configuration (v1.17)
+        if "multimodal" in data:
+            multimodal = data["multimodal"]
+            config["multimodal"] = {}
+            if "max_media_size_mb" in multimodal:
+                config["multimodal"]["max_media_size_mb"] = float(multimodal["max_media_size_mb"])
+            if "max_media_per_request" in multimodal:
+                config["multimodal"]["max_media_per_request"] = int(multimodal["max_media_per_request"])
+            if "media_external_threshold_mb" in multimodal:
+                config["multimodal"]["media_external_threshold_mb"] = float(multimodal["media_external_threshold_mb"])
+            if "media_cache_dir" in multimodal:
+                config["multimodal"]["media_cache_dir"] = str(multimodal["media_cache_dir"])
+            if "video_frame_interval" in multimodal:
+                config["multimodal"]["video_frame_interval"] = float(multimodal["video_frame_interval"])
         # Locale setting (top-level)
         if "locale" in data:
             config["locale"] = str(data["locale"])

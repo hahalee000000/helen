@@ -132,6 +132,61 @@ agent 智能助手 {
 - `async` — 异步执行
 - `await` — 等待异步任务完成
 
+### 多模态支持 (v1.17)
+
+Helen v1.17 支持多模态输入和生成，采用**回调即适配器**设计：
+
+**核心概念**：
+- `MediaPart` — 一等公民数据类型，表示媒体内容
+- `media()` — stdlib 函数，创建 MediaPart 对象
+- `on_media` — 多模态输入适配器回调
+- `on_generate` — 媒体生成工具注册回调
+
+**语法**：
+```helen
+# 创建 MediaPart
+let img = media("file:///path/to/image.png")
+let remote = media("https://example.com/image.jpg")
+let b64 = media_base64(base64_data, "image/png")
+
+# llm act 传递媒体
+let result = llm act "描述这张图片" media(img)
+let result = llm act "比较这些图片" media(img1, img2)
+
+# on_media 回调（媒体适配器）
+let result = llm act "分析图片"
+    media(img)
+    on_media fn(parts, provider) {
+        # parts: MediaPart 列表
+        # provider: 当前 provider 名称
+        # 返回: provider 特定格式的内容列表
+        返回 parts.map(fn(part) {
+            返回 {"type": "image_url", "image_url": {"url": part.content}}
+        })
+    }
+
+# on_generate 回调（媒体生成）
+let result = llm act "生成一张日落图"
+    on_generate fn(params) {
+        # params: {"prompt": "...", "size": "...", ...}
+        # 调用生成 API，返回 MediaPart
+        返回 media("url://" + call_api(params["prompt"]))
+    }
+
+# provider 子句
+let result = llm act "分析" media(img) provider("claude")
+```
+
+**中文别名**：
+- `media()` → `媒体()`
+- `media_base64()` → `媒体base64()`
+- `is_media()` → `是媒体()`
+- `media_type()` → `媒体类型()`
+- `on_media` → `处理媒体`
+- `on_generate` → `生成`
+
+**设计原则**：协议差异由用户回调处理，Helen 核心不内置 provider 格式。新增模态/协议无需修改语言核心。
+
 ### 控制流
 - `if` / `else` — 条件分支
 - `for` / `in` — 循环

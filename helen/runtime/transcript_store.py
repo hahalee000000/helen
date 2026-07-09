@@ -42,7 +42,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
+from helen.runtime.config import get_multimodal_config
 from helen.runtime.history import Message
+from helen.runtime.media_storage import MediaStorage
 
 logger = logging.getLogger(__name__)
 
@@ -384,11 +386,25 @@ class TranscriptStore:
 
     Phase 4: Includes LRU cache for memory efficiency and UUID-based addressing.
 
+    v1.17: Supports multimodal content (Message.content can be str or list[dict]).
+           All multimodal messages are persisted and restored transparently.
+
+    Future optimization (Phase 3 of multimodal proposal):
+    - Large media (>= 1MB base64) should be extracted to separate files
+      in session media directory, with JSONL storing media_ref pointers.
+    - This prevents JSONL bloat when dealing with large images/videos.
+    - Currently all media is inline in JSONL (correct but may bloat for large files).
+
     Attributes:
         transcript: Append-only list of Message and BoundaryMarker objects
     """
 
-    def __init__(self, backend: TranscriptStoreBackend | None = None, max_memory_items: int = 1000):
+    def __init__(
+        self,
+        backend: TranscriptStoreBackend | None = None,
+        max_memory_items: int = 1000,
+        session_dir: Path | str | None = None,
+    ):
         """Initialize transcript store.
 
         Args:
@@ -396,6 +412,8 @@ class TranscriptStore:
                      are also written to the backend for durability.
             max_memory_items: Maximum number of items to keep in memory (LRU cache).
                               Older items are offloaded to backend only. Default: 1000.
+            session_dir: Session directory for media storage (v1.17 Phase 3).
+                         If provided, enables external storage for large media.
         """
         self.transcript: list[Message | BoundaryMarker] = []
         self._uuid_index: dict[str, int] = {}  # UUID -> transcript index
@@ -407,12 +425,20 @@ class TranscriptStore:
         self._max_memory_items = max_memory_items
         self._offloaded_count = 0  # Number of items offloaded to backend only
 
+        # v1.17 Phase 3: Media storage for large content
+        self._media_storage: MediaStorage | None = None
+        if session_dir is not None:
+            multimodal_config = get_multimodal_config()
+            threshold_mb = multimodal_config.get("media_external_threshold_mb", 1.0)
+            self._media_storage = MediaStorage(session_dir, threshold_mb)
+
     def append(self, message: Message) -> Message:
         """Append a message to the transcript.
 
         Assigns a UUID if the message doesn't have one.
         If a backend is configured, also persists the message.
         Phase 4: Implements LRU cache eviction for memory efficiency.
+        v1.17 Phase 3: Extracts large media to external storage.
 
         Args:
             message: Message to append
@@ -422,6 +448,10 @@ class TranscriptStore:
         """
         if not message.uuid:
             message.uuid = _generate_uuid()
+
+        # v1.17 Phase 3: Extract large media to external storage
+        if self._media_storage is not None and isinstance(message.content, list):
+            message.content = self._media_storage.process_content_parts(message.content)
 
         index = len(self.transcript)
         self.transcript.append(message)
@@ -593,6 +623,9 @@ class TranscriptStore:
         if not compressed_ranges:
             # No compression — return all messages as-is
             result = [item for item in self.transcript if isinstance(item, Message)]
+            # v1.17 Phase 3: Restore media references
+            if self._media_storage is not None:
+                result = self._restore_media_in_messages(result)
             self._cached_view = result
             self._dirty = False
             return result
@@ -635,9 +668,51 @@ class TranscriptStore:
                         added_summaries.add(anchor_uuid)
                 result.append(item)
 
+        # v1.17 Phase 3: Restore media references
+        if self._media_storage is not None:
+            result = self._restore_media_in_messages(result)
+
         self._cached_view = result
         self._dirty = False
         return result
+
+    def _restore_media_in_messages(self, messages: list[Message]) -> list[Message]:
+        """Restore media references in message content.
+
+        v1.17 Phase 3: Replaces media_ref with original base64 content.
+
+        Args:
+            messages: List of Message objects
+
+        Returns:
+            Messages with media_ref restored to original format
+        """
+        if self._media_storage is None:
+            return messages
+
+        restored_messages = []
+        for msg in messages:
+            if isinstance(msg.content, list):
+                # Create a copy to avoid modifying the original
+                restored_content = self._media_storage.restore_content_parts(msg.content)
+                # Create a new Message with restored content
+                restored_msg = Message(
+                    role=msg.role,
+                    content=restored_content,
+                    tool_calls=msg.tool_calls,
+                    tool_call_id=msg.tool_call_id,
+                    _token_count=msg._token_count,
+                    _model=msg._model,
+                    message_type=msg.message_type,
+                    priority=msg.priority,
+                    compressed=msg.compressed,
+                    uuid=msg.uuid,
+                )
+                restored_messages.append(restored_msg)
+            else:
+                restored_messages.append(msg)
+
+        return restored_messages
 
     def get_transcript_size(self) -> int:
         """Get the total number of items in the transcript."""
@@ -699,22 +774,27 @@ class TranscriptStore:
 
     @classmethod
     def load_from_backend(
-        cls, backend: TranscriptStoreBackend, max_memory_items: int = 1000
+        cls,
+        backend: TranscriptStoreBackend,
+        max_memory_items: int = 1000,
+        session_dir: Path | str | None = None,
     ) -> "TranscriptStore":
         """Load a TranscriptStore from a persistence backend.
 
         Used for session recovery — reconstructs the in-memory transcript
         from the on-disk JSONL/SQLite log.
         Phase 4: Only loads last N items into memory (LRU cache).
+        v1.17 Phase 3: Supports session_dir for media restoration.
 
         Args:
             backend: Backend to load from
             max_memory_items: Maximum items to keep in memory (default: 1000)
+            session_dir: Session directory for media storage (v1.17 Phase 3)
 
         Returns:
             A new TranscriptStore populated from the backend
         """
-        store = cls(backend=backend, max_memory_items=max_memory_items)
+        store = cls(backend=backend, max_memory_items=max_memory_items, session_dir=session_dir)
         items = backend.load_all()
 
         # Phase 4: Only load last N items into memory

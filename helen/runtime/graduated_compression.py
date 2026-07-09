@@ -12,6 +12,9 @@ Thresholds:
 - 80%: Layer 3 - Microcompact
 - 90%: Layer 4 - Context Collapse
 - 95%: Layer 5 - LLM Semantic Summarization
+
+v1.17: Supports multimodal content (Message.content can be str or list[dict]).
+       All content accesses use _message_text() helper for safe string extraction.
 """
 
 from __future__ import annotations
@@ -19,7 +22,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable
 
-from helen.runtime.history import Message
+from helen.runtime.history import Message, _message_text
 
 logger = logging.getLogger(__name__)
 
@@ -170,13 +173,15 @@ def _budget_reduction(history: list[Message]) -> list[Message]:
     """
     result = []
     for msg in history:
-        if msg.role == "tool" and len(msg.content) > BUDGET_REDUCTION_MAX_CHARS:
+        # v1.17: Use _message_text to handle both str and list[dict] content
+        content_text = _message_text(msg.content)
+        if msg.role == "tool" and len(content_text) > BUDGET_REDUCTION_MAX_CHARS:
             # Replace large output with pointer
             tool_id = msg.tool_call_id or "unknown"
-            preview = msg.content[:200]
+            preview = content_text[:200]
             msg_copy = Message(
                 role=msg.role,
-                content=f"[Tool result cleared: {tool_id}, {len(msg.content)} chars]\nPreview: {preview}...",
+                content=f"[Tool result cleared: {tool_id}, {len(content_text)} chars]\nPreview: {preview}...",
                 tool_calls=msg.tool_calls,
                 tool_call_id=msg.tool_call_id,
                 _token_count=0,  # Will be recalculated
@@ -187,7 +192,7 @@ def _budget_reduction(history: list[Message]) -> list[Message]:
             )
             result.append(msg_copy)
             logger.debug("Budget reduction: Replaced tool result %s (%d chars)",
-                        tool_id, len(msg.content))
+                        tool_id, len(content_text))
         else:
             result.append(msg)
 
@@ -398,9 +403,11 @@ def _summarize_block(block: list[Message], start_idx: int, end_idx: int) -> str 
     # Extract file references
     file_refs = set()
     for msg in block:
+        # v1.17: Use _message_text for multimodal content support
+        content_text = _message_text(msg.content)
         matches = re.finditer(
             r'[\w./-]+\.(?:py|js|ts|json|yaml|yml|md|txt|helen|rs|go|java|c|cpp|h|hpp)',
-            msg.content
+            content_text
         )
         for m in matches:
             file_refs.add(m.group())
@@ -423,7 +430,9 @@ def _summarize_block(block: list[Message], start_idx: int, end_idx: int) -> str 
     user_intents = []
     for msg in block:
         if msg.role == "user" and msg.content:
-            first_line = msg.content.split('\n')[0][:60].strip()
+            # v1.17: Use _message_text for multimodal content support
+            content_text = _message_text(msg.content)
+            first_line = content_text.split('\n')[0][:60].strip()
             if first_line and first_line not in user_intents:
                 user_intents.append(first_line)
     if user_intents:
@@ -460,9 +469,10 @@ def _extract_global_stats(old_msgs: list[Message]) -> str | None:
         stats_parts.append(f"Tool calls: {total_tools}")
 
     # Error count
+    # v1.17: Use _message_text for multimodal content support
     errors = sum(
         1 for m in old_msgs
-        if m.role == "tool" and "error" in m.content.lower()
+        if m.role == "tool" and "error" in _message_text(m.content).lower()
     )
     if errors > 0:
         stats_parts.append(f"Errors: {errors}")
@@ -578,10 +588,11 @@ def _structural_auto_compact(
     file_refs = set()
     import re
     for msg in old_msgs:
-        # Find file paths in content
+        # Find file paths in content (v1.17: use _message_text for multimodal)
+        content_text = _message_text(msg.content)
         matches = re.finditer(
             r'[\w./-]+\.(?:py|js|ts|json|yaml|yml|md|txt|helen|rs|go|java|c|cpp|h|hpp)',
-            msg.content
+            content_text
         )
         for m in matches:
             file_refs.add(m.group())
@@ -606,7 +617,9 @@ def _structural_auto_compact(
     user_intents = []
     for msg in old_msgs:
         if msg.role == "user" and msg.content:
-            first_line = msg.content.split('\n')[0][:100].strip()
+            # v1.17: Use _message_text for multimodal content support
+            content_text = _message_text(msg.content)
+            first_line = content_text.split('\n')[0][:100].strip()
             if first_line and first_line not in user_intents:
                 user_intents.append(first_line)
     if user_intents:
@@ -615,8 +628,10 @@ def _structural_auto_compact(
     # Extract errors
     errors = []
     for msg in old_msgs:
-        if msg.role == "tool" and "error" in msg.content.lower():
-            preview = msg.content[:80].strip()
+        # v1.17: Use _message_text for multimodal content support
+        content_text = _message_text(msg.content)
+        if msg.role == "tool" and "error" in content_text.lower():
+            preview = content_text[:80].strip()
             if preview:
                 errors.append(preview)
     if errors:

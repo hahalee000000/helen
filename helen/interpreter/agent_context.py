@@ -48,7 +48,7 @@ from helen.runtime.cache_aware_compression import (
     DEFAULT_CACHE_ZONE_RATIO,
     MIN_CACHE_ZONE_MESSAGES,
 )
-from helen.runtime.history import Message
+from helen.runtime.history import Message, _message_text
 
 logger = logging.getLogger(__name__)
 
@@ -181,14 +181,18 @@ class AgentContextManager:
                 self._session_id = f"custom_{transcript_path.stem}"
 
                 # Load existing transcript if file exists, or create new
+                # v1.17 Phase 3: Pass session_dir for media storage
+                session_dir_for_media = transcript_path.parent
                 if transcript_path.exists():
                     self._transcript_store = TranscriptStore.load_from_backend(
-                        backend, max_memory_items=max_memory_items
+                        backend, max_memory_items=max_memory_items,
+                        session_dir=session_dir_for_media,
                     )
                     logger.info("Resumed custom transcript: %s", transcript_path)
                 else:
                     self._transcript_store = TranscriptStore(
-                        backend=backend, max_memory_items=max_memory_items
+                        backend=backend, max_memory_items=max_memory_items,
+                        session_dir=session_dir_for_media,
                     )
                     logger.info("Created custom transcript: %s", transcript_path)
             else:
@@ -213,14 +217,18 @@ class AgentContextManager:
                     backend = JSONLBackend(transcript_path)
 
                 # Load existing transcript if resuming, or create new
+                # v1.17 Phase 3: Pass session_dir for media storage
+                session_dir_for_media = transcript_path.parent
                 if manager.session_exists(session_id):
                     self._transcript_store = TranscriptStore.load_from_backend(
-                        backend, max_memory_items=max_memory_items
+                        backend, max_memory_items=max_memory_items,
+                        session_dir=session_dir_for_media,
                     )
                     logger.info("Resumed transcript session: %s", session_id)
                 else:
                     self._transcript_store = TranscriptStore(
-                        backend=backend, max_memory_items=max_memory_items
+                        backend=backend, max_memory_items=max_memory_items,
+                        session_dir=session_dir_for_media,
                     )
                     logger.info("Created new transcript session: %s", session_id)
 
@@ -508,10 +516,11 @@ class AgentContextManager:
             return
 
         # Extract summary from compressed (usually first system message)
+        # v1.17: Use _message_text for multimodal content safety
         summary = "Compressed conversation"
         for msg in compressed:
             if msg.role == "system" and msg.content:
-                summary = msg.content[:200]
+                summary = _message_text(msg.content)[:200]
                 break
 
         # Record compression
@@ -868,7 +877,7 @@ class AgentContextManager:
                 "strategy": str
             }
         """
-        from helen.runtime.history import Message
+        from helen.runtime.history import Message, _message_text
 
         # Get the history reference from stdlib/context.py
         try:
@@ -924,10 +933,11 @@ class AgentContextManager:
                 tail_uuid = compressed_msgs[-1].uuid
 
                 # Get summary from the summary message
+                # v1.17: Use _message_text for multimodal content safety
                 summary = "LLM-compressed conversation"
                 for msg in compressed_history:
                     if msg.role == "system" and msg.content:
-                        summary = msg.content[:200]
+                        summary = _message_text(msg.content)[:200]
                         break
 
                 self._transcript_store.record_compression(

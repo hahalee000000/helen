@@ -17,6 +17,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
+from helen.runtime.history import _message_text
+
 logger = logging.getLogger(__name__)
 
 
@@ -406,7 +408,8 @@ def build_three_channel_context(
     used_chars = 0
     # Iterate from most recent to oldest, keep until budget exhausted
     for msg in reversed(history):
-        msg_chars = len(msg.content)
+        # v1.17: Use _message_text for multimodal content length calculation
+        msg_chars = len(_message_text(msg.content))
         if used_chars + msg_chars <= history_budget_chars:
             selected_history.insert(0, msg)
             used_chars += msg_chars

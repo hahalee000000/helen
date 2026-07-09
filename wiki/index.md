@@ -1,7 +1,7 @@
 # Helen 语言 Wiki 索引
 
 > **Helen** — A Prompt-first Agent Programming Language
-> 版本: v1.16 | 状态: Phase 0-10 全部实现 + Phase 1-7 上下文管理增强 + TranscriptStore SSOT + 中文语法 + Agent 作用域隔离 | 测试: 2750 passed
+> 版本: v1.17 | 状态: Phase 0-10 全部实现 + Phase 1-7 上下文管理增强 + TranscriptStore SSOT + 多模态支持 + 中文语法 + Agent 作用域隔离 | 测试: 2822 passed
 
 ---
 
@@ -46,7 +46,7 @@
 - [[toolchain/quality|质量评估]] — 7 维框架、安全评分、CI 集成
 - [[toolchain/lsp|语言服务器]] — `helen lsp`、JSON-RPC 2.0、诊断/补全/跳转
 - [[toolchain/vscode|VS Code 扩展]] — 语法高亮、LSP 集成、代码补全、跳转定义
-- [[toolchain/stdlib|标准库]] — 203 builtins (230+ 中文别名) (core/string/data/collection/network/time/math/file/system/crypto/io/test/quality/context/transcript)
+- [[toolchain/stdlib|标准库]] — 207 builtins (234+ 中文别名) (core/string/data/collection/network/time/math/file/system/crypto/io/test/quality/context/transcript/media)
 - [[toolchain/error-format|错误格式化]] — HLD 3.11.2 诊断输出
 
 ### 七、教程
@@ -66,6 +66,7 @@
 - [[tutorial/14-observability|AI 原生可观测性]] — assert、debug()、trace、LLM 审计
 - [[tutorial/15-python-bridge|Python Bridge]] — 让 Python 直接使用 Helen Agent
 - [[tutorial/16-quality-assessment|质量评估]] — 7 维框架、安全评分、CI 集成
+- [[tutorial/17-multimodal|多模态支持]] — MediaPart、on_media/on_generate 回调、媒体适配（**v1.17 新特性**）
 
 ### 八、附录
 - [[appendix/error-codes|错误码参考]] — 42 ErrorCode 完整列表

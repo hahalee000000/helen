@@ -148,6 +148,11 @@ from helen.stdlib.transcript import (
     resume_session as _resume_session,
 )
 
+# Import media functions (multimodal support)
+from helen.stdlib.media import (
+    _media, _media_base64, _is_media, _media_type_fn,
+)
+
 
 @dataclass
 class BuiltinFunction:
@@ -1045,6 +1050,12 @@ def _register_builtins() -> None:
         BuiltinFunction("export_transcript", "Export transcript to file", "export_transcript(output_path, format?, session_id?)", _export_transcript, "transcript"),
         BuiltinFunction("get_compression_audit", "Get compression event history", "get_compression_audit()", _get_compression_audit, "transcript"),
         BuiltinFunction("resume_session", "Resume a previous transcript session", "resume_session(session_id)", _resume_session, "transcript"),
+
+        # Media/multimodal functions (v1.17)
+        BuiltinFunction("media", "Create media from file/URL", "media(source, type?)", _media, "media"),
+        BuiltinFunction("media_base64", "Create media from base64 data", "media_base64(data, mime, type?)", _media_base64, "media"),
+        BuiltinFunction("is_media", "Check if value is MediaPart", "is_media(value)", _is_media, "media"),
+        BuiltinFunction("media_type", "Get media type", "media_type(value)", _media_type_fn, "media"),
     ]
 
     for func in builtins:

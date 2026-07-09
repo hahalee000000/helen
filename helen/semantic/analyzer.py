@@ -1562,13 +1562,29 @@ class SemanticAnalyzer(Visitor[None]):
             self.symbols.exit_scope()
 
     def visit_llm_act_expr(self, node: LlmActExprNode) -> None:
-        """Visit llm act expression: analyze prompt and optional callbacks."""
+        """Visit llm act expression: analyze prompt, media, and all callbacks."""
         if node.prompt is not None:
             node.prompt.accept(self)
+
+        # Analyze media expressions
+        for media_expr in node.media:
+            media_expr.accept(self)
+
+        # Analyze callbacks
         if node.on_chunk is not None:
             node.on_chunk.accept(self)
         if node.on_complete is not None:
             node.on_complete.accept(self)
+        if node.on_media is not None:
+            node.on_media.accept(self)
+
+        # Analyze on_generate callbacks
+        for gen_expr in node.on_generate:
+            gen_expr.accept(self)
+
+        # Analyze provider expression
+        if node.provider is not None:
+            node.provider.accept(self)
 
     # ------------------------------------------------------------------
     # Match

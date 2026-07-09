@@ -294,23 +294,32 @@ class Parser:
             return LiteralNode(value=None, span=self._make_span(start, self._previous()))
 
     def _llm_act_expr(self) -> ExpressionNode:
-        """Parse an llm act expression: llm act <expression>? [on_chunk <cb>] [on_complete <cb>].
+        """Parse an llm act expression with multimodal support.
+
+        Syntax:
+            llm act <prompt>?
+                [media(...)]*
+                [on_chunk <cb>]
+                [on_complete <cb>]
+                [on_media <cb>]
+                [on_generate <cb>]*
+                [provider(<expr>)]
 
         Supports bare ``llm act`` (no expression) inside an agent context,
         where the agent's rendered prompt template is used automatically.
-
-        With optional on_chunk/on_complete callbacks, the LLM response is streamed
-        chunk by chunk. Without callbacks, the call is synchronous.
 
         Bare form detection:
         - Statement terminators: }, ;, EOF
         - Statement keywords: return, let, if, for, etc.
         - Newline: if the next token is on a different line than 'act'
-        - Callback keywords: on_chunk, on_complete (bare form with callbacks)
+        - Clause keywords: on_chunk, on_complete, on_media, on_generate, provider, media (bare form with clauses)
         """
         start = self._previous()  # LLM token
         self._consume(TokenType.ACT, "Expected 'act' after 'llm'.")
         act_token = self._previous()
+
+        # Clause keywords that indicate bare form
+        clause_keywords = ("on_chunk", "on_complete", "on_media", "on_generate", "provider")
 
         # Check if there's an expression following 'llm act'.
         # If we hit a statement terminator or a new statement keyword, treat as bare form.
@@ -320,29 +329,68 @@ class Parser:
         # This handles: let result = llm act\nprint(...)
         elif self._current().line > act_token.line:
             prompt_expr = None
-        # Bare form with callbacks: on_chunk/on_complete are keywords, not prompt
+        # Bare form with clauses: clause keywords, not prompt
         elif (self._check(TokenType.IDENTIFIER)
-              and self._current().lexeme in ("on_chunk", "on_complete")):
+              and self._current().lexeme in clause_keywords):
+            prompt_expr = None
+        # Also check for media() as a bare form indicator
+        elif (self._check(TokenType.IDENTIFIER)
+              and self._current().lexeme in ("media", "媒体")
+              and self._peek_next().type == TokenType.LEFT_PAREN):
             prompt_expr = None
         else:
             prompt_expr = self._expression()
 
-        # Optional on_chunk callback
-        on_chunk_expr = None
-        if self._check(TokenType.IDENTIFIER) and self._current().lexeme == "on_chunk":
-            self._advance()
-            on_chunk_expr = self._expression()
+        # Parse suffix clauses (order-independent)
+        media_exprs: list[ExpressionNode] = []
+        on_chunk_expr: ExpressionNode | None = None
+        on_complete_expr: ExpressionNode | None = None
+        on_media_expr: ExpressionNode | None = None
+        on_generate_exprs: list[ExpressionNode] = []
+        provider_expr: ExpressionNode | None = None
 
-        # Optional on_complete callback
-        on_complete_expr = None
-        if self._check(TokenType.IDENTIFIER) and self._current().lexeme == "on_complete":
-            self._advance()
-            on_complete_expr = self._expression()
+        while not self._at_end() and not self._check(*BARE_FORM_TOKENS):
+            # media(...) call
+            if (self._check(TokenType.IDENTIFIER)
+                    and self._current().lexeme in ("media", "媒体")
+                    and self._peek_next().type == TokenType.LEFT_PAREN):
+                media_exprs.append(self._expression())
+            # on_chunk callback
+            elif (self._check(TokenType.IDENTIFIER)
+                  and self._current().lexeme in ("on_chunk",)):
+                self._advance()
+                on_chunk_expr = self._expression()
+            # on_complete callback
+            elif (self._check(TokenType.IDENTIFIER)
+                  and self._current().lexeme in ("on_complete",)):
+                self._advance()
+                on_complete_expr = self._expression()
+            # on_media callback
+            elif (self._check(TokenType.IDENTIFIER)
+                  and self._current().lexeme in ("on_media", "处理媒体")):
+                self._advance()
+                on_media_expr = self._expression()
+            # on_generate callback
+            elif (self._check(TokenType.IDENTIFIER)
+                  and self._current().lexeme in ("on_generate", "生成")):
+                self._advance()
+                on_generate_exprs.append(self._expression())
+            # provider hint
+            elif (self._check(TokenType.IDENTIFIER)
+                  and self._current().lexeme in ("provider",)):
+                self._advance()
+                provider_expr = self._expression()
+            else:
+                break
 
         return LlmActExprNode(
             prompt=prompt_expr,
+            media=media_exprs,
             on_chunk=on_chunk_expr,
             on_complete=on_complete_expr,
+            on_media=on_media_expr,
+            on_generate=on_generate_exprs,
+            provider=provider_expr,
             span=self._make_span(start, self._previous())
         )
 
@@ -1304,13 +1352,17 @@ class Parser:
                              span=self._make_span(start, self._previous()))
 
     def _llm_act_stmt(self) -> StatementNode:
-        """Parse an llm act statement.
+        """Parse an llm act statement with multimodal support.
 
         Syntax:
         - llm act "prompt"                         — direct LLM invocation (sync)
         - llm act                                  — bare form, uses rendered agent prompt
+        - llm act "prompt" media("./img.png")      — with media input
         - llm act "prompt" on_chunk callback       — streaming with chunk callback
         - llm act "prompt" on_complete callback    — streaming with completion callback
+        - llm act "prompt" on_media fn(...)        — custom media adapter
+        - llm act "prompt" on_generate fn(...)     — media generation tool
+        - llm act "prompt" provider("openai")      — provider hint
 
         Note: The statement form `llm act Agent(args) "desc"` is deprecated; use `call Agent(args)` instead.
         """
@@ -1318,16 +1370,20 @@ class Parser:
         self._consume(TokenType.ACT, "Expected 'act' after 'llm'.")
         act_token = self._previous()
 
+        # Clause keywords that indicate bare form
+        clause_keywords = ("on_chunk", "on_complete", "on_media", "on_generate", "provider")
+
         # 检查是否误用语句形式：llm act Agent(args) "desc"
         # 如果下一个 token 是 IDENTIFIER 且后面跟着 ( 或 STRING，报错
         if self._check(TokenType.IDENTIFIER):
             saved_pos = self._pos
             ident_tok = self._advance()
             if self._check(TokenType.LEFT_PAREN) or self._check(TokenType.STRING):
-                self._error(
-                    f"'llm act {ident_tok.lexeme}(...)' is deprecated. "
-                    f"Use 'call {ident_tok.lexeme}(...)' instead."
-                )
+                if ident_tok.lexeme not in ("media", "媒体"):  # Allow media()
+                    self._error(
+                        f"'llm act {ident_tok.lexeme}(...)' is deprecated. "
+                        f"Use 'call {ident_tok.lexeme}(...)' instead."
+                    )
             self._pos = saved_pos
 
         # 解析表达式形式：llm act <expr>?
@@ -1338,28 +1394,67 @@ class Parser:
             # 换行边界
             prompt_expr = None
         elif (self._check(TokenType.IDENTIFIER)
-              and self._current().lexeme in ("on_chunk", "on_complete")):
-            # bare form with callbacks — on_chunk/on_complete are keywords, not prompt
+              and self._current().lexeme in clause_keywords):
+            # bare form with clauses — clause keywords are not prompt
+            prompt_expr = None
+        elif (self._check(TokenType.IDENTIFIER)
+              and self._current().lexeme in ("media", "媒体")
+              and self._peek_next().type == TokenType.LEFT_PAREN):
+            # bare form with media() clause
             prompt_expr = None
         else:
             prompt_expr = self._expression()
 
-        # Optional on_chunk callback
-        on_chunk_expr = None
-        if self._check(TokenType.IDENTIFIER) and self._current().lexeme == "on_chunk":
-            self._advance()  # consume 'on_chunk'
-            on_chunk_expr = self._expression()
+        # Parse suffix clauses (order-independent)
+        media_exprs: list[ExpressionNode] = []
+        on_chunk_expr: ExpressionNode | None = None
+        on_complete_expr: ExpressionNode | None = None
+        on_media_expr: ExpressionNode | None = None
+        on_generate_exprs: list[ExpressionNode] = []
+        provider_expr: ExpressionNode | None = None
 
-        # Optional on_complete callback
-        on_complete_expr = None
-        if self._check(TokenType.IDENTIFIER) and self._current().lexeme == "on_complete":
-            self._advance()  # consume 'on_complete'
-            on_complete_expr = self._expression()
+        while not self._at_end() and not self._check(*BARE_FORM_TOKENS):
+            # media(...) call
+            if (self._check(TokenType.IDENTIFIER)
+                    and self._current().lexeme in ("media", "媒体")
+                    and self._peek_next().type == TokenType.LEFT_PAREN):
+                media_exprs.append(self._expression())
+            # on_chunk callback
+            elif (self._check(TokenType.IDENTIFIER)
+                  and self._current().lexeme in ("on_chunk",)):
+                self._advance()
+                on_chunk_expr = self._expression()
+            # on_complete callback
+            elif (self._check(TokenType.IDENTIFIER)
+                  and self._current().lexeme in ("on_complete",)):
+                self._advance()
+                on_complete_expr = self._expression()
+            # on_media callback
+            elif (self._check(TokenType.IDENTIFIER)
+                  and self._current().lexeme in ("on_media", "处理媒体")):
+                self._advance()
+                on_media_expr = self._expression()
+            # on_generate callback
+            elif (self._check(TokenType.IDENTIFIER)
+                  and self._current().lexeme in ("on_generate", "生成")):
+                self._advance()
+                on_generate_exprs.append(self._expression())
+            # provider hint
+            elif (self._check(TokenType.IDENTIFIER)
+                  and self._current().lexeme in ("provider",)):
+                self._advance()
+                provider_expr = self._expression()
+            else:
+                break
 
         return ExprStmtNode(
             expression=LlmActExprNode(prompt=prompt_expr,
+                                      media=media_exprs,
                                       on_chunk=on_chunk_expr,
                                       on_complete=on_complete_expr,
+                                      on_media=on_media_expr,
+                                      on_generate=on_generate_exprs,
+                                      provider=provider_expr,
                                       span=self._make_span(start, self._previous())),
             span=self._make_span(start, self._previous())
         )
@@ -1663,6 +1758,12 @@ class Parser:
     def _peek(self) -> Token:
         """Peek at the current token (without consuming it)."""
         return self._current()
+
+    def _peek_next(self) -> Token:
+        """Peek at the next token (one ahead of current)."""
+        if self._pos + 1 < len(self.tokens):
+            return self.tokens[self._pos + 1]
+        return self.tokens[-1]  # EOF token
 
     def _previous(self) -> Token:
         """Return the previously consumed token."""

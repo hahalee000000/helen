@@ -89,6 +89,16 @@ def _sanitize_messages(messages: list[dict[str, Any]]) -> int:
             if cleaned != content:
                 msg["content"] = cleaned
                 count += 1
+        elif isinstance(content, list):
+            # v1.17: Sanitize text parts within multimodal content
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "text":
+                    text = part.get("text", "")
+                    if isinstance(text, str):
+                        cleaned = _sanitize_surrogates(text)
+                        if cleaned != text:
+                            part["text"] = cleaned
+                            count += 1
         # Also sanitize tool call arguments
         for tc in msg.get("tool_calls", []):
             fn = tc.get("function", {})
@@ -101,12 +111,34 @@ def _sanitize_messages(messages: list[dict[str, Any]]) -> int:
     return count
 
 
+def _merge_content(prev: Any, curr: Any) -> Any:
+    """Merge two message content values, handling both str and list[dict].
+
+    v1.17: Supports multimodal content merging.
+    """
+    # Both strings: simple concat
+    if isinstance(prev, str) and isinstance(curr, str):
+        return prev + "\n\n" + curr
+    # Both lists: concatenate
+    if isinstance(prev, list) and isinstance(curr, list):
+        return prev + [{"type": "text", "text": ""}] + curr
+    # Mixed: convert string to text part, then concatenate
+    if isinstance(prev, str) and isinstance(curr, list):
+        return [{"type": "text", "text": prev}] + curr
+    if isinstance(prev, list) and isinstance(curr, str):
+        return prev + [{"type": "text", "text": "\n\n" + curr}]
+    # Fallback: convert both to strings
+    return str(prev) + "\n\n" + str(curr)
+
+
 def _repair_message_sequence(messages: list[dict[str, Any]]) -> int:
     """Repair role-alternation violations before API call.
 
     Most providers require: system → user → assistant → tool → assistant → ...
     Catches tool→user or user→user sequences that cause empty responses.
     Returns count of repairs made.
+
+    v1.17: Handles multimodal content (list[dict]) properly via _merge_content.
     """
     count = 0
     i = 1
@@ -125,13 +157,44 @@ def _repair_message_sequence(messages: list[dict[str, Any]]) -> int:
         if prev_role == "user" and curr_role == "user":
             prev_content = messages[i - 1].get("content", "")
             curr_content = messages[i].get("content", "")
-            messages[i - 1]["content"] = prev_content + "\n\n" + curr_content
+            messages[i - 1]["content"] = _merge_content(prev_content, curr_content)
             messages.pop(i)
             count += 1
             continue
 
         i += 1
     return count
+
+
+def _last_user_message_matches(messages: list[dict[str, Any]], prompt: Any) -> bool:
+    """Check if the last message is a user message with content matching prompt.
+
+    v1.17: Handles multimodal list content by comparing text portions only.
+    Used to avoid appending duplicate user messages.
+
+    Args:
+        messages: List of message dicts.
+        prompt: The prompt to compare against (str or any type).
+
+    Returns:
+        True if last message is a user with matching content.
+    """
+    if not messages:
+        return False
+    last_msg = messages[-1]
+    if last_msg.get("role") != "user":
+        return False
+    last_content = last_msg.get("content", "")
+    # For multimodal list content, extract text for comparison
+    if isinstance(last_content, list):
+        last_text = "\n".join(
+            p.get("text", "") for p in last_content
+            if isinstance(p, dict) and p.get("type") == "text"
+        )
+    else:
+        last_text = last_content
+    prompt_text = prompt if isinstance(prompt, str) else str(prompt)
+    return last_text == prompt_text
 
 
 # ---------------------------------------------------------------------------
@@ -509,7 +572,8 @@ class HttpLLMRuntime(LLMRuntime):
         # and _prepare_history_for_llm includes it in the returned list.
         # Without this check, the user message would appear twice (repaired by
         # _repair_message_sequence, but that's a code smell we're eliminating).
-        if not messages or messages[-1].get("role") != "user" or messages[-1].get("content") != prompt:
+        # v1.17: Compare content properly for multimodal (list) content.
+        if not messages or not _last_user_message_matches(messages, prompt):
             messages.append({"role": "user", "content": prompt})
 
         use_model = model or self.default_model or "default"
@@ -905,7 +969,8 @@ class HttpLLMRuntime(LLMRuntime):
             messages.extend(history)
         # P0 fix: Only append user message if not already the last message in history.
         # See act() for detailed rationale.
-        if not messages or messages[-1].get("role") != "user" or messages[-1].get("content") != prompt:
+        # v1.17: Use helper for proper multimodal content comparison.
+        if not messages or not _last_user_message_matches(messages, prompt):
             messages.append({"role": "user", "content": prompt})
 
         url = f"{self.base_url}/chat/completions"
@@ -1276,7 +1341,8 @@ class HttpLLMRuntime(LLMRuntime):
         if history:
             messages.extend(history)
         # P0 fix: Only append user message if not already the last message in history.
-        if not messages or messages[-1].get("role") != "user" or messages[-1].get("content") != prompt:
+        # v1.17: Use helper for proper multimodal content comparison.
+        if not messages or not _last_user_message_matches(messages, prompt):
             messages.append({"role": "user", "content": prompt})
 
         use_model = model or self.default_model or "default"
@@ -1410,7 +1476,8 @@ class HttpLLMRuntime(LLMRuntime):
         if history:
             messages.extend(history)
         # P0 fix: Only append user message if not already the last message in history.
-        if not messages or messages[-1].get("role") != "user" or messages[-1].get("content") != prompt:
+        # v1.17: Use helper for proper multimodal content comparison.
+        if not messages or not _last_user_message_matches(messages, prompt):
             messages.append({"role": "user", "content": prompt})
 
         url = f"{self.base_url}/chat/completions"
