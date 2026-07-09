@@ -103,21 +103,21 @@ alias len as 我的长度
 ### Core（核心）
 
 ```helen
-# 类型转换
+// 类型转换
 let num = int("42")           # 字符串 → 整数
 let text = str(3.14)          # 浮点数 → 字符串
 let flt = float("2.5")        # 字符串 → 浮点数
 
-# 长度与范围
+// 长度与范围
 let length = len([1, 2, 3])   # 3
 let items = range(0, 10, 2)   # [0, 2, 4, 6, 8]
 
-# 数学基础
+// 数学基础
 let maximum = max(1, 2, 3)    # 3
 let minimum = min(1, 2, 3)    # 1
 let absolute = abs(-42)       # 42
 
-# 类型检查
+// 类型检查
 if isinstance(value, str) {
     print("是字符串")
 }
@@ -126,57 +126,57 @@ if isinstance(value, str) {
 ### String（字符串）
 
 ```helen
-# 大小写转换
+// 大小写转换
 let upper = upper("hello")    # "HELLO"
 let lower = lower("WORLD")    # "world"
 
-# 分割与连接
+// 分割与连接
 let parts = split("a,b,c", ",")  # ["a", "b", "c"]
 let joined = join(["a", "b"], "-")  # "a-b"
 
-# 查找与替换
+// 查找与替换
 let found = find("hello world", "world")  # 6
 let replaced = replace("foo bar", "foo", "baz")  # "baz bar"
 
-# 正则表达式
+// 正则表达式
 if regex_match("hello123", r"\d+") {
     print("包含数字")
 }
 let cleaned = regex_replace("a1b2c3", r"\d", "")  # "abc"
 
-# 空白处理
+// 空白处理
 let trimmed = strip("  hello  ")  # "hello"
 let padded = pad_start("42", 5, "0")  # "00042"
 
-# 浮点数格式化
+// 浮点数格式化
 let formatted1 = format_float(8.5, 1)      # "8.5"
 let formatted2 = format_float(7.857, 2)    # "7.86" (四舍五入)
 let formatted3 = format_float(3.14159, 3)  # "3.142"
 let formatted4 = format_float(100, 0)      # "100"
 
-# 中文别名
+// 中文别名
 let formatted = 格式化浮点(8.5, 1)  # "8.5"
 ```
 
 ### Data（数据格式）
 
 ```helen
-# JSON
+// JSON
 let data = json_parse('{"name": "Helen", "version": 1}')
 let json = json_stringify(data, indent=2)
 
-# YAML
+// YAML
 let config = yaml_parse("key: value\nlist:\n  - item1\n  - item2")
 
-# CSV
+// CSV
 let rows = csv_parse("name,age\nAlice,30\nBob,25")
-# [["name", "age"], ["Alice", "30"], ["Bob", "25"]]
+// [["name", "age"], ["Alice", "30"], ["Bob", "25"]]
 
-# URL 编码
+// URL 编码
 let encoded = url_encode("hello world&foo=bar")
 let decoded = url_decode(encoded)
 
-# Base64
+// Base64
 let encoded = base64_encode("secret data")
 let decoded = base64_decode(encoded)
 ```
@@ -184,47 +184,47 @@ let decoded = base64_decode(encoded)
 ### Media（多模态）(v1.17)
 
 ```helen
-# 创建 MediaPart - 从文件
+// 创建 MediaPart - 从文件
 let img = media("file:///path/to/image.png")
 
-# 创建 MediaPart - 从 URL
+// 创建 MediaPart - 从 URL
 let remote = media("https://example.com/image.jpg")
 
-# 创建 MediaPart - 从 base64
+// 创建 MediaPart - 从 base64
 let b64_data = base64_encode(read_file_bytes("image.png"))
 let inline = media_base64(b64_data, "image/png")
 
-# 检查是否为 MediaPart
+// 检查是否为 MediaPart
 如果 是媒体(img) {
     打印("这是一个媒体对象")
 }
 
-# 获取媒体类型
+// 获取媒体类型
 let type = 媒体类型(img)  # "image"
 
-# 类型谓词 — 精确判断媒体类型
+// 类型谓词 — 精确判断媒体类型
 如果 是图片(img) { 打印("图片") }
 如果 是视频(vid) { 打印("视频") }
 如果 是音频(aud) { 打印("音频") }
 
-# 在 llm act 中使用
+// 在 llm act 中使用
 let result = llm act "描述这张图片" media(img)
 let result = llm act "比较这些图片" media(img1, img2)
 
-# 内置格式适配器 — 一行完成 provider 格式转换
+// 内置格式适配器 — 一行完成 provider 格式转换
 let result = llm act "分析图片"
     media(img)
     on_media fn(parts, provider) { 转Claude格式(parts) }
 
-# 可用适配器: 转OpenAI格式(parts), 转Claude格式(parts), 转Gemini格式(parts)
-# 注意: 转Claude格式 不支持视频/音频（会抛出 ValueError）
+// 可用适配器: 转OpenAI格式(parts), 转Claude格式(parts), 转Gemini格式(parts)
+// 注意: 转Claude格式 不支持视频/音频（会抛出 ValueError）
 
-# 媒体工具函数
+// 媒体工具函数
 let b64 = 媒体转base64(img)             # 任意 source → 纯 base64
 let path = 保存媒体(img, "/tmp/out.png") # 保存到指定路径
 let path2 = 保存媒体(img)                # 自动命名保存到 ~/.helen/generated_media/
 
-# on_media 回调（自定义媒体适配 — 仅非标准 provider 需要）
+// on_media 回调（自定义媒体适配 — 仅非标准 provider 需要）
 let result = llm act "分析图片"
     media(img)
     on_media fn(parts, provider) {
@@ -233,7 +233,7 @@ let result = llm act "分析图片"
         })
     }
 
-# on_generate 回调（媒体生成）
+// on_generate 回调（媒体生成）
 let result = llm act "生成一张图"
     on_generate fn(params) {
         let url = call_generation_api(params["prompt"])
@@ -253,84 +253,84 @@ let result = llm act "生成一张图"
 ### Collection（集合操作）
 
 ```helen
-# 排序与去重
+// 排序与去重
 let sorted = sort([3, 1, 4, 1, 5])  # [1, 1, 3, 4, 5]
 let unique_items = unique([1, 2, 2, 3])  # [1, 2, 3]
 
-# 映射与过滤
+// 映射与过滤
 let doubled = map([1, 2, 3], x => x * 2)  # [2, 4, 6]
 let evens = filter([1, 2, 3, 4], x => x % 2 == 0)  # [2, 4]
 
-# 归约
+// 归约
 let sum = reduce([1, 2, 3, 4], (acc, x) => acc + x, 0)  # 10
 
-# 分组
+// 分组
 let grouped = group_by(users, u => u["role"])
-# {"admin": [...], "user": [...]}
+// {"admin": [...], "user": [...]}
 
-# 分块
+// 分块
 let chunks = chunk([1, 2, 3, 4, 5], 2)
-# [[1, 2], [3, 4], [5]]
+// [[1, 2], [3, 4], [5]]
 
-# 集合运算
+// 集合运算
 let common = intersection([1, 2, 3], [2, 3, 4])  # [2, 3]
 ```
 
 ### Network（网络请求）
 
 ```helen
-# HTTP GET
+// HTTP GET
 let response = http_get("https://api.example.com/data")
 let data = json_parse(response["body"])
 
-# HTTP POST
+// HTTP POST
 let result = http_post(
     "https://api.example.com/submit",
     headers={"Content-Type": "application/json"},
     body=json_stringify({"name": "Helen"})
 )
 
-# 下载文件
+// 下载文件
 http_download("https://example.com/file.pdf", "/tmp/file.pdf")
 ```
 
 ### Time（时间日期）
 
 ```helen
-# 当前时间
+// 当前时间
 let now_ts = now()                    # Unix 时间戳（秒）
 let now_ms = timestamp()              # Unix 时间戳（毫秒）
 
-# 格式化
+// 格式化
 let formatted = date_format(now(), "%Y-%m-%d %H:%M:%S")
-# "2026-06-19 17:30:00"
+// "2026-06-19 17:30:00"
 
-# 解析
+// 解析
 let parsed = date_parse("2026-06-19", "%Y-%m-%d")
 
-# 计时
+// 计时
 let sw = stopwatch_start()
-# ... 执行操作 ...
+// ... 执行操作 ...
 let elapsed = stopwatch_elapsed(sw)   # 秒（浮点数）
 
-# 休眠
+// 休眠
 sleep(1.5)  # 休眠 1.5 秒
 ```
 
 ### Math（数学运算）
 
 ```helen
-# 基础数学
+// 基础数学
 let rounded = round(3.14159, 2)   # 3.14
 let squared = pow(2, 10)          # 1024
 let root = sqrt(16)               # 4.0
 
-# 统计
+// 统计
 let avg = mean([1, 2, 3, 4, 5])   # 3.0
 let mid = median([1, 2, 3, 4, 5]) # 3
 let std = stddev([1, 2, 3, 4, 5]) # 1.414...
 
-# 随机数
+// 随机数
 let rand_int = random_int(1, 100)      # 1-100 的随机整数
 let rand_float = random_float(0, 1)    # 0-1 的随机浮点数
 ```
@@ -338,56 +338,56 @@ let rand_float = random_float(0, 1)    # 0-1 的随机浮点数
 ### File（文件操作）
 
 ```helen
-# 读写文件
+// 读写文件
 let content = read_file("/path/to/file.txt")
 write_file("/path/to/output.txt", "Hello, World!")
 append_file("/path/to/log.txt", "New log entry\n")
 
-# 文件信息
+// 文件信息
 if file_exists("/path/to/file.txt") {
     let size = file_size("/path/to/file.txt")
     print("文件大小: " + str(size) + " bytes")
 }
 
-# 目录操作
+// 目录操作
 let files = list_dir("/path/to/dir")
 mkdir("/path/to/new/dir")
 copy_file("/src/file.txt", "/dst/file.txt")
 delete_file("/path/to/file.txt")
 
-# 文件搜索（v1.15 新增）
-# 递归查找所有 Python 文件
+// 文件搜索（v1.15 新增）
+// 递归查找所有 Python 文件
 let py_files = glob_files("src", "*.py")
-# 返回: ["main.py", "utils/helper.py", "tests/test_main.py"]
+// 返回: ["main.py", "utils/helper.py", "tests/test_main.py"]
 
-# 使用 ** 显式递归
+// 使用 ** 显式递归
 let md_files = glob_files("docs", "**/*.md")
 
-# 搜索文件内容（字面量）
+// 搜索文件内容（字面量）
 let matches = grep_files("src/", "TODO")
-# 返回: [{"file": "main.py", "line": 42, "text": "    # TODO: fix this"}]
+// 返回: [{"file": "main.py", "line": 42, "text": "    # TODO: fix this"}]
 
-# 搜索文件内容（正则）
+// 搜索文件内容（正则）
 let functions = grep_files("src/", "def \\w+\\(", regex=true)
 
-# 大小写不敏感搜索
+// 大小写不敏感搜索
 let errors = grep_files("logs/", "error", case_sensitive=false)
 ```
 
 ### System（系统操作）
 
 ```helen
-# 环境变量
+// 环境变量
 let home = env_get("HOME")
 env_set("MY_VAR", "value")
 let all_env = env_list()  # 敏感值自动掩码
 
-# CLI 参数（预定义常量 argv + 解析函数）
-# 命令行: helen tool.helen --verbose --output=json input.txt
+// CLI 参数（预定义常量 argv + 解析函数）
+// 命令行: helen tool.helen --verbose --output=json input.txt
 print(argv)  # ["--verbose", "--output=json", "input.txt"]
 
 let parsed = parse_cli_args()           # 自动解析
-# {verbose: true, output: "json", _positional: ["input.txt"]}
+// {verbose: true, output: "json", _positional: ["input.txt"]}
 
 let spec = {
     "verbose": {"type": "flag", "default": false},
@@ -395,26 +395,26 @@ let spec = {
 }
 let config = parse_cli_args(spec)       # 结构化解析（带类型+默认值）
 
-# Shell 命令（默认 shell=True，支持完整 shell 语法）
-# 使用 /bin/bash 执行，支持 brace expansion 等 bash 特性
-# 所有 shell 语法都支持：&&、||、|、>、<、;、$()、{} 等
+// Shell 命令（默认 shell=True，支持完整 shell 语法）
+// 使用 /bin/bash 执行，支持 brace expansion 等 bash 特性
+// 所有 shell 语法都支持：&&、||、|、>、<、;、$()、{} 等
 let result = shell_exec("ls -la")
 let result = shell_exec("mkdir -p ~/project/{src,tests,contracts}")  # 创建三个目录
 let result = shell_exec("cat file.txt | grep pattern | wc -l")
 let result = shell_exec("echo 'hello' > output.txt")
 print(result["output"])
 
-# 安全模式：shell=False 用于处理不可信输入
-# 当命令包含用户输入时，使用 shell=False 防止 shell 注入
+// 安全模式：shell=False 用于处理不可信输入
+// 当命令包含用户输入时，使用 shell=False 防止 shell 注入
 let user_input = "some_input"
 let result = shell_exec("echo " + user_input, shell=false)
 
-# 系统信息
+// 系统信息
 let pid = process_id()
 let os = platform()        # "linux", "darwin", "windows"
 let host = hostname()
 
-# 日志
+// 日志
 log_info("Application started")
 log_error("Something went wrong", category="app")
 ```
@@ -422,18 +422,18 @@ log_error("Something went wrong", category="app")
 ### Crypto（加密哈希）
 
 ```helen
-# 哈希
+// 哈希
 let md5 = hash_md5("data")
 let sha256 = hash_sha256("data")
 let sha512 = hash_sha512("data")
 
-# HMAC
+// HMAC
 let sig = hmac_sha256("message", "secret_key")
 
-# UUID
+// UUID
 let id = uuid_generate()  # "550e8400-e29b-41d4-a716-446655440000"
 
-# 随机字节
+// 随机字节
 let bytes = random_bytes(16)  # 16 字节随机数据
 ```
 
@@ -442,20 +442,20 @@ let bytes = random_bytes(16)  # 16 字节随机数据
 AI 原生可观测性函数，为 AI Agent 提供结构化调试上下文。
 
 ```helen
-# debug() — 结构化调试输出到 stderr
+// debug() — 结构化调试输出到 stderr
 let x = 42
 debug("variable value", x)
-# 输出: [DEBUG] variable value {"value": 42}
+// 输出: [DEBUG] variable value {"value": 42}
 
 debug("checkpoint reached")
-# 输出: [DEBUG] checkpoint reached
+// 输出: [DEBUG] checkpoint reached
 
-# trace_on() / trace_off() — 开启/关闭执行追踪
+// trace_on() / trace_off() — 开启/关闭执行追踪
 trace_on()
 let result = compute_something()
 trace_off()
 
-# get_trace() — 获取最近执行追踪记录
+// get_trace() — 获取最近执行追踪记录
 let trace = get_trace(10)
 print(trace)
 ```
@@ -465,19 +465,19 @@ print(trace)
 管理 LLM 对话上下文的函数，用于长对话 agent 的上下文控制。
 
 ```helen
-# clear_context() — 清空当前对话上下文
-# 用于重新开始对话或重置上下文
+// clear_context() — 清空当前对话上下文
+// 用于重新开始对话或重置上下文
 let result = clear_context()
 print("已清空 " + str(result["cleared_messages"]) + " 条消息")
 print("释放约 " + str(result["cleared_tokens"]) + " tokens")
-# 返回: {"status": "ok", "cleared_messages": 5, "cleared_tokens": 1200, "warning": "..."}
+// 返回: {"status": "ok", "cleared_messages": 5, "cleared_tokens": 1200, "warning": "..."}
 
-# compress_context() — 压缩当前对话上下文
-# 用于减少 token 消耗，保留重要上下文
+// compress_context() — 压缩当前对话上下文
+// 用于减少 token 消耗，保留重要上下文
 let result = compress_context("auto")
-# 策略: "auto" (自动), "summarize" (LLM 摘要), "truncate" (截断), "none" (不压缩)
+// 策略: "auto" (自动), "summarize" (LLM 摘要), "truncate" (截断), "none" (不压缩)
 print("从 " + str(result["original_tokens"]) + " 压缩到 " + str(result["compressed_tokens"]) + " tokens")
-# 返回: {"status": "ok", "original_messages": 10, "compressed_messages": 5, ...}
+// 返回: {"status": "ok", "original_messages": 10, "compressed_messages": 5, ...}
 ```
 
 **使用场景**：
@@ -504,11 +504,11 @@ print("从 " + str(result["original_tokens"]) + " 压缩到 " + str(result["comp
 ### assert 语句
 
 ```helen
-# 运行时断言
+// 运行时断言
 assert x > 0
 assert x > 0, "x must be positive"
 
-# 断言失败抛出 AssertionError，可捕获
+// 断言失败抛出 AssertionError，可捕获
 try {
     assert false, "test"
 } catch AssertionError as e {

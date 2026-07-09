@@ -216,10 +216,10 @@ Helen provides **AI-native observability** instead of traditional interactive de
 ### assert Statement
 
 ```helen
-# Runtime assertion with optional message
+// Runtime assertion with optional message
 assert x > 0, "x must be positive"
 
-# Catchable — throws AssertionError
+// Catchable — throws AssertionError
 try {
     assert false, "test"
 } catch AssertionError e {
@@ -230,16 +230,16 @@ try {
 ### debug() Function
 
 ```helen
-# Structured debug output to stderr (JSON format)
+// Structured debug output to stderr (JSON format)
 let x = 42
 debug("variable value", x)
-# Output: [DEBUG] variable value {"value": 42}
+// Output: [DEBUG] variable value {"value": 42}
 ```
 
 ### Execution Tracing
 
 ```helen
-# Programmatic control
+// Programmatic control
 trace_on()
 let result = compute()
 trace_off()

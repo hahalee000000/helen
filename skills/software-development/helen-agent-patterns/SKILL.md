@@ -25,7 +25,7 @@ agent SimpleAgent {
     }
 }
 
-# 调用
+// 调用
 let result = SimpleAgent()
 print(result)
 ```
@@ -44,7 +44,7 @@ agent Translator(text: str, target_lang: str) {
     }
 }
 
-# 调用
+// 调用
 let result = Translator("Hello", "Chinese")
 print(result)  # "你好"
 ```
@@ -479,7 +479,7 @@ agent MathExpert {
 **场景**：根据输入内容路由到不同的专家 Agent
 
 ```helen
-# 定义专家
+// 定义专家
 agent TechSupport(query: str) {
     description "Technical support specialist"
     prompt "You are a technical support expert."
@@ -504,7 +504,7 @@ agent GeneralSupport(query: str) {
     }
 }
 
-# 路由 Agent
+// 路由 Agent
 agent SupportRouter(query: str) {
     description "Route support queries to specialists"
     
@@ -523,9 +523,9 @@ agent SupportRouter(query: str) {
     }
 }
 
-# 使用
+// 使用
 let response = SupportRouter("I can't login to my account")
-# 路由到 TechSupport
+// 路由到 TechSupport
 ```
 
 ### 模式 3: 管道 Agent
@@ -562,25 +562,25 @@ agent Editor(content: str) {
     }
 }
 
-# 管道
+// 管道
 agent ContentPipeline(topic: str) {
     description "Research → Write → Edit pipeline"
     
     main {
-        # 阶段 1: 研究
+        // 阶段 1: 研究
         let research = Researcher(topic)
         
-        # 阶段 2: 写作
+        // 阶段 2: 写作
         let draft = Writer(topic, research)
         
-        # 阶段 3: 编辑
+        // 阶段 3: 编辑
         let final = Editor(draft)
         
         return final
     }
 }
 
-# 使用
+// 使用
 let article = ContentPipeline("Helen programming language")
 ```
 
@@ -602,15 +602,15 @@ agent DataAggregator {
     description "Aggregate data from multiple sources"
     
     main {
-        # 并发获取数据
+        // 并发获取数据
         let task1 = async DataFetcher("https://api.source1.com/data")
         let task2 = async DataFetcher("https://api.source2.com/data")
         let task3 = async DataFetcher("https://api.source3.com/data")
         
-        # 等待所有完成
+        // 等待所有完成
         let results = await [task1, task2, task3]
         
-        # 聚合结果
+        // 聚合结果
         return llm act "Aggregate these results: " + str(results)
     }
 }
@@ -635,7 +635,7 @@ agent StreamingWriter(topic: str) {
     }
 }
 
-# 使用 — 用户立即看到输出，无需等待完整响应
+// 使用 — 用户立即看到输出，无需等待完整响应
 StreamingWriter("The future of AI")
 ```
 
@@ -731,19 +731,19 @@ agent ConversationalAssistant {
     prompt "You are a helpful conversational assistant. Remember context from previous messages."
     
     main {
-        # 自动维护对话历史
-        # 每次调用 llm act 都会记录到历史
+        // 自动维护对话历史
+        // 每次调用 llm act 都会记录到历史
         let response = llm act "Remember this context"
         
-        # 后续调用可以引用之前的内容
+        // 后续调用可以引用之前的内容
         let followup = llm act "Based on what I said before, what do you think?"
         
         return followup
     }
 }
 
-# 在 REPL 中，对话历史自动维护
-# 每次 :ask 都会记住之前的对话
+// 在 REPL 中，对话历史自动维护
+// 每次 :ask 都会记住之前的对话
 ```
 
 ## 高级模式
@@ -755,7 +755,7 @@ agent DynamicRouter(input: str) {
     description "Dynamically select agent based on input"
     
     main {
-        # 使用 LLM 决定路由
+        // 使用 LLM 决定路由
         let decision = llm act "Classify this input into one of: tech, billing, general. Input: " + input
         
         if decision == "tech" {
@@ -772,7 +772,7 @@ agent DynamicRouter(input: str) {
 ### Agent 组合与继承
 
 ```helen
-# 基础 Agent
+// 基础 Agent
 agent BaseAgent {
     description "Base agent with common configuration"
     model "gpt-4"
@@ -783,13 +783,13 @@ agent BaseAgent {
     }
 }
 
-# 组合多个 Agent 的能力
+// 组合多个 Agent 的能力
 agent MultiSkillAgent(task: str) {
     description "Agent that can use multiple skills"
     tools = ["web_search", "read_file", "write_file", "shell_exec"]
     
     main {
-        # 根据任务动态选择策略
+        // 根据任务动态选择策略
         llm if task {
             case "research, search, find" {
                 return llm act "Research: " + task
@@ -824,7 +824,7 @@ agent RobustAgent(task: str) {
                 if attempt >= max_retries {
                     throw RuntimeError("Failed after " + str(max_retries) + " attempts: " + e.message)
                 }
-                # 等待后重试
+                // 等待后重试
                 sleep(2)
             }
         }
@@ -840,10 +840,10 @@ Agent 调用失败时抛出 `AgentError`，携带结构化上下文（agent_name
 try {
     let result = Contractor(req, dir)
 } catch AgentError err {
-    # err.message    — "Agent 'Contractor' failed: ..."
-    # err.agent_name — "Contractor"
-    # err.agent_args — {req: "...", dir: "..."}
-    # err.cause      — 底层异常
+    // err.message    — "Agent 'Contractor' failed: ..."
+    // err.agent_name — "Contractor"
+    // err.agent_args — {req: "...", dir: "..."}
+    // err.cause      — 底层异常
     error("失败: " + err.message)
 }
 ```
@@ -855,23 +855,23 @@ try {
 ### 1. 清晰的 description
 
 ```helen
-# ✅ 好的 description
+// ✅ 好的 description
 agent CodeReviewer {
     description "Review code for bugs, security issues, and best practices"
-    # ...
+    // ...
 }
 
-# ❌ 模糊的 description
+// ❌ 模糊的 description
 agent Helper {
     description "Helps with stuff"
-    # ...
+    // ...
 }
 ```
 
 ### 2. 具体的 prompt
 
 ```helen
-# ✅ 具体的 prompt
+// ✅ 具体的 prompt
 agent DataAnalyst {
     prompt """
     You are a data analyst with expertise in Python, SQL, and statistics.
@@ -884,7 +884,7 @@ agent DataAnalyst {
     """
 }
 
-# ❌ 模糊的 prompt
+// ❌ 模糊的 prompt
 agent Analyst {
     prompt "You analyze things."
 }
@@ -893,17 +893,17 @@ agent Analyst {
 ### 3. 合理的 temperature
 
 ```helen
-# 创造性任务：高 temperature
+// 创造性任务：高 temperature
 agent CreativeWriter {
     temperature 0.9
 }
 
-# 精确任务：低 temperature
+// 精确任务：低 temperature
 agent CodeGenerator {
     temperature 0.2
 }
 
-# 平衡任务：中等 temperature
+// 平衡任务：中等 temperature
 agent GeneralAssistant {
     temperature 0.7
 }
@@ -912,12 +912,12 @@ agent GeneralAssistant {
 ### 4. 适当的 max-turns
 
 ```helen
-# 简单问答：少轮次
+// 简单问答：少轮次
 agent QuickAnswer {
     max-turns 3
 }
 
-# 复杂任务：多轮次
+// 复杂任务：多轮次
 agent ComplexSolver {
     max-turns 15
 }
@@ -926,12 +926,12 @@ agent ComplexSolver {
 ### 5. 最小权限工具
 
 ```helen
-# ✅ 只授予需要的工具
+// ✅ 只授予需要的工具
 agent FileReader {
     tools = ["read_file"]  # 只需要读取
 }
 
-# ❌ 授予过多工具
+// ❌ 授予过多工具
 agent SimpleAgent {
     tools = ["read_file", "write_file", "shell_exec", "web_search"]  # 太多
 }
@@ -940,7 +940,7 @@ agent SimpleAgent {
 ### 6. 正确使用作用域（v1.10/v1.12）
 
 ```helen
-# ✅ 使用 shared let 进行跨 agent 共享（v1.12: 只允许值类型）
+// ✅ 使用 shared let 进行跨 agent 共享（v1.12: 只允许值类型）
 shared let cache_hits = 0
 shared let cache_misses = 0
 
@@ -955,18 +955,18 @@ agent CacheReader(key: str, cache: map) {
     }
 }
 
-# ❌ 错误 v1：期望模块级 let 在 agent main 中可见
+// ❌ 错误 v1：期望模块级 let 在 agent main 中可见
 let local_cache = {}  // 模块级 let
 
 agent BadCacheReader(key: str) {
     main {
-        # 编译错误！local_cache 在 agent main 中不可见
+        // 编译错误！local_cache 在 agent main 中不可见
         return local_cache[key]
     }
 }
 
-# ❌ 错误 v2：v1.12 起 shared let 不能使用引用类型
-# shared let bad_cache = {}  # 语义错误！
+// ❌ 错误 v2：v1.12 起 shared let 不能使用引用类型
+// shared let bad_cache = {}  # 语义错误！
 ```
 
 ## 调试技巧
