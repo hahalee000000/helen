@@ -108,9 +108,18 @@ skills/            # 16 built-in skills (SKILL.md + references/)
   - dict methods: `keys()`, `values()`, `items()`, `get()`
 - **Agent scope isolation (v1.10)**: `agent main {}` runs in isolated environment. Module-level `let` is **not** visible inside agent main (compile-time error). Module-level `const` is auto-visible (read-only sharing). Use `shared let` for cross-agent visible mutable variables. Closures in agent main can capture local variables.
 - **Closure value capture**: Closures capture a **deep copy** of reference-type variables (snapshot semantics, immune to subsequent modifications)
-- **LLM primitives**: `llm act` (tool-calling loop + optional streaming via on_chunk/on_complete callbacks since v1.14, usable as expression since v1.10), `llm if` (LLM-routed branching)
+- **LLM primitives**: `llm act` (tool-calling loop + optional callbacks, usable as expression since v1.10), `llm if` (LLM-routed branching)
   - v1.14: `llm stream` **deleted** — streaming merged into `llm act` with optional callbacks
-  - Syntax: `llm act "prompt" on_chunk fn(chunk) {...} on_complete fn() {...}`
+  - v1.17: 新增 `on_media` / `on_generate` / `provider` 子句，支持多模态输入与文生图/视频
+  - Syntax: `llm act "prompt" [media(...)] [provider("...")] [on_media fn(...)] [on_generate fn(...)] [on_chunk fn(...)] [on_complete fn(...)]`
+- **Multimodal support (v1.17)**: 回调即适配器——协议差异由用户回调处理，Helen 核心不内置 provider 格式
+  - **`media()` stdlib 函数**：普通函数（非关键字），返回 `MediaPart` 对象，自动识别文件路径/URL/base64
+  - **`MediaPart` 数据类型**：一等公民，可赋值、传参、存入列表；字段：`source`/`content`/`mime`/`media_type`/`metadata`
+  - **`on_media fn(parts, provider)`**：多模态输入适配器，将 `MediaPart` 列表转换为 provider 特定格式（Content Parts）；不指定时使用默认 OpenAI 兼容适配器
+  - **`on_generate fn(params)`**：将生成能力注册为工具，LLM 在工具循环中决定是否调用；支持文生图、文生视频等，协议差异完全由回调处理
+  - **设计原则**：协议未统一时不固化进语法；未来新模态/新协议无需修改语言核心，用户更新回调或 skill 即可
+  - **配套 skill**：`multimodal-providers` 提供各主流 provider（OpenAI/Claude/Gemini/Seedance/Kling 等）的标准回调写法模板
+  - **中文别名**：`媒体()`, `媒体base64()`, `是媒体()`, `媒体类型()`, `处理媒体 fn(...)`, `生成 fn(...)`
 - **Async/await**: `async call` for concurrent agent execution, `await [list]` for Promise.all. HTTP layer has true async: `act_async()` / `act_stream_async()` via `httpx.AsyncClient` (v1.10)
 - **Short-circuit evaluation (v1.10)**: `&&` and `||` short-circuit
 - **Type system**: 14 types including Optional (`str?`), Union (`int | str`), Protocol, Agent, Literal. Return type annotation uses `:` syntax only (`fn foo(): int {}`); `->` syntax removed (v1.10)
@@ -159,6 +168,12 @@ transcript:
   backend: "sqlite"
   session_dir: "~/.helen/sessions"
   max_memory_items: 1000
+
+multimodal:                          # v1.17
+  max_media_size_mb: 20              # 单个媒体最大 20MB
+  max_media_per_request: 10          # 每次最多 10 个媒体
+  video_frame_interval: 1.0          # 默认视频抽帧间隔（秒）
+  media_cache_dir: "~/.helen/media_cache"
 ```
 Also supports `.env` format and falls back to `~/.hermes/.env`.
 
