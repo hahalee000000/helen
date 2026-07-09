@@ -77,29 +77,42 @@ let result = llm act "比较这两张图片" media(img1, img2)
 
 ### on_media 回调（媒体适配器）
 
-`on_media` 回调用于将 `MediaPart` 列表转换为特定 provider 所需的格式：
+`on_media` 回调用于将 `MediaPart` 列表转换为特定 provider 所需的格式。Helen 内置了三个格式适配器 stdlib 函数，绝大多数场景无需手写 JSON：
 
 ```helen
-agent 自定义媒体处理 {
+agent Claude媒体处理 {
     main {
         let img = media("diagram.png")
         
+        # 推荐：使用内置格式适配器（一行搞定）
         let result = llm act "解释这个图表" 
             media(img)
-            on_media fn(parts, provider) {
-                # 自定义转换逻辑
-                如果 provider == "openai" {
-                    返回 parts.map(fn(part) {
-                        返回 {"type": "image_url", "image_url": {"url": part.content}}
-                    })
-                } 否则 {
-                    # 其他 provider 的格式
-                    返回 parts.map(fn(part) {
-                        返回 {"type": "image", "source": part.content}
-                    })
-                }
-            }
+            on_media fn(parts, provider) { 转Claude格式(parts) }
     }
+}
+```
+
+**内置格式适配器**：
+
+| 函数 | 说明 |
+|------|------|
+| `to_openai_parts(parts)` / `转OpenAI格式(parts)` | OpenAI 兼容格式（默认，通常无需手动指定） |
+| `to_claude_parts(parts)` / `转Claude格式(parts)` | Anthropic Claude Messages API 格式 |
+| `to_gemini_parts(parts)` / `转Gemini格式(parts)` | Google Gemini inline_data 格式 |
+
+**自定义适配器**：仅当使用非标准 provider 或需要特殊处理时才需手写：
+
+```helen
+on_media fn(parts, provider) {
+    # 仅为非标准 provider 手写
+    返回 parts.map(fn(part) {
+        返回 {
+            "type": "media",
+            "mime_type": part.mime,
+            "data": 媒体转base64(part),
+            "encoding": "base64"
+        }
+    })
 }
 ```
 
@@ -108,7 +121,7 @@ agent 自定义媒体处理 {
 - `provider`: 当前使用的 provider 名称（如 "openai"、"claude"）
 - **返回值**: 转换后的内容部分列表（provider 特定格式）
 
-**默认行为**：如果不指定 `on_media`，Helen 使用默认的 OpenAI 兼容适配器。
+**默认行为**：如果不指定 `on_media`，Helen 使用默认的 OpenAI 兼容适配器（内部调用 `to_openai_parts()`）。
 
 ### on_generate 回调（媒体生成）
 
@@ -184,6 +197,54 @@ let result = llm act "详细描述这张图片"
 | `media_type()` | `媒体类型()` |
 | `on_media fn(...)` | `处理媒体 fn(...)` |
 | `on_generate fn(...)` | `生成 fn(...)` |
+| `to_openai_parts()` | `转OpenAI格式()` |
+| `to_claude_parts()` | `转Claude格式()` |
+| `to_gemini_parts()` | `转Gemini格式()` |
+| `media_to_base64()` | `媒体转base64()` |
+| `save_media()` | `保存媒体()` |
+| `is_image()` | `是图片()` |
+| `is_video()` | `是视频()` |
+| `is_audio()` | `是音频()` |
+
+## 内置 stdlib 函数参考
+
+### 格式适配器
+
+将 `MediaPart` 列表转换为特定 provider 的内容格式：
+
+```helen
+# OpenAI 兼容格式（默认，通常无需手动指定）
+let parts = to_openai_parts(media_list)
+
+# Anthropic Claude Messages API 格式
+let parts = to_claude_parts(media_list)
+# 注意：Claude 不支持视频和音频输入，会抛出 ValueError
+
+# Google Gemini inline_data 格式
+let parts = to_gemini_parts(media_list)
+```
+
+### 媒体工具
+
+```helen
+# 将任意 MediaPart 转为纯 base64 字符串（无论 source 是 file/url/base64）
+let b64 = media_to_base64(img)
+
+# 保存 MediaPart 到文件（path 可选，默认保存到 ~/.helen/generated_media/）
+let path = save_media(img, "/tmp/output.png")
+let path2 = save_media(img)  # 自动命名
+```
+
+### 类型谓词
+
+```helen
+如果 是图片(part) { 打印("这是图片") }
+如果 是视频(part) { 打印("这是视频") }
+如果 是音频(part) { 打印("这是音频") }
+
+# 非 MediaPart 安全：返回假，不抛异常
+是图片("不是媒体")  # 返回: 假
+```
 
 ## 完整示例
 
@@ -255,6 +316,25 @@ agent 创意图像生成器 {
 
 ### 自定义 Provider 适配
 
+使用内置格式适配器（推荐）：
+
+```helen
+agent Claude分析 {
+    main {
+        let img = media("chart.png")
+        
+        # 使用内置 Claude 适配器 — 一行搞定
+        let result = llm act "分析这个图表"
+            media(img)
+            on_media fn(parts, provider) { 转Claude格式(parts) }
+        
+        print(result)
+    }
+}
+```
+
+为非标准 provider 手写适配器：
+
 ```helen
 agent 自定义媒体处理 {
     main {
@@ -264,12 +344,12 @@ agent 自定义媒体处理 {
             media(img)
             provider("custom_provider")
             on_media fn(parts, provider) {
-                # 为自定义 provider 转换格式
+                # 使用媒体转base64辅助，手写 provider 特定格式
                 返回 parts.map(fn(part) {
                     返回 {
                         "type": "media",
                         "mime_type": part.mime,
-                        "data": part.content,
+                        "data": 媒体转base64(part),
                         "encoding": "base64"
                     }
                 })
@@ -300,18 +380,54 @@ multimodal:
 
 ## 最佳实践
 
-### 1. 使用默认适配器
+### 1. 使用内置格式适配器
 
-大多数情况下，使用默认的 OpenAI 兼容适配器即可：
+对于主流 provider，直接使用内置适配器，无需手写 JSON：
 
 ```helen
-# 推荐：使用默认适配器
+# OpenAI 兼容 provider（默认，无需 on_media）
 let result = llm act "分析图片" media(img)
 
-# 仅在需要自定义时使用 on_media
-let result = llm act "分析图片" 
+# Claude — 一行适配器
+let result = llm act "分析图片"
     media(img)
-    on_media fn(parts, provider) { ... }
+    on_media fn(parts, provider) { 转Claude格式(parts) }
+
+# Gemini
+let result = llm act "分析图片"
+    media(img)
+    on_media fn(parts, provider) { 转Gemini格式(parts) }
+
+# 仅在需要非标准 provider 时才手写 on_media
+```
+
+### 1.5 利用媒体工具函数
+
+`media_to_base64()` 和 `save_media()` 在 `on_generate` 回调中特别有用：
+
+```helen
+on_generate fn(params) {
+    let resp = http_post("https://api.example.com/generate", {...})
+    let img = media_base64(resp.image_data, "image/png")
+    
+    # 保存到指定路径
+    保存媒体(img, params["output_path"])
+    
+    # 或获取 base64 做进一步处理
+    let b64 = 媒体转base64(img)
+    
+    返回 img
+}
+```
+
+### 1.6 使用类型谓词过滤
+
+处理混合媒体列表时，类型谓词可以精确过滤：
+
+```helen
+let parts = [img1, video1, audio1, img2]
+let images = parts.filter(是图片)    # 只保留图片
+let videos = parts.filter(是视频)    # 只保留视频
 ```
 
 ### 2. 合理管理大媒体

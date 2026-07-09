@@ -7,12 +7,15 @@ semantic analysis, and interpreter multimodal handling.
 import os
 import tempfile
 import base64
+from unittest.mock import patch, MagicMock
 import pytest
 
 from helen.runtime.media import MediaPart
 from helen.stdlib.media import (
     _media, _media_base64, _is_media, _media_type_fn,
     _guess_media_type, _guess_mime_from_url,
+    _read_media_as_base64, _to_openai_parts, _to_claude_parts, _to_gemini_parts,
+    _media_to_base64, _save_media, _is_image, _is_video, _is_audio,
 )
 
 
@@ -703,6 +706,470 @@ class TestTranscriptStoreIntegration:
         assert _message_text([]) == ""
         assert _message_text(None) == ""
         assert _message_text(42) == "42"
+
+
+# ── _read_media_as_base64 ─────────────────────────────────────────────────────
+
+class TestReadMediaAsBase64:
+    """Tests for _read_media_as_base64 helper."""
+
+    def test_base64_source_returns_as_is(self):
+        b64 = base64.b64encode(b"test data").decode("utf-8")
+        part = MediaPart("base64", b64, "image/png", "image")
+        assert _read_media_as_base64(part) == b64
+
+    def test_file_source_reads_and_encodes(self):
+        raw = b"\x89PNG\r\n\x1a\n" + b"\x00" * 50
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            f.write(raw)
+            f.flush()
+            try:
+                part = MediaPart("file", f.name, "image/png", "image")
+                result = _read_media_as_base64(part)
+                assert result == base64.b64encode(raw).decode("utf-8")
+            finally:
+                os.unlink(f.name)
+
+    def test_url_source_downloads_and_encodes(self):
+        raw = b"fake image bytes from url"
+        expected_b64 = base64.b64encode(raw).decode("utf-8")
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = raw
+        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("helen.stdlib.media.urllib.request.urlopen", return_value=mock_resp):
+            part = MediaPart("url", "https://example.com/img.png", "image/png", "image")
+            result = _read_media_as_base64(part)
+            assert result == expected_b64
+
+    def test_missing_file_raises_value_error(self):
+        part = MediaPart("file", "/nonexistent/path.png", "image/png", "image")
+        with pytest.raises(ValueError, match="not found"):
+            _read_media_as_base64(part)
+
+    def test_non_mediapart_raises_type_error(self):
+        with pytest.raises(TypeError, match="Expected MediaPart"):
+            _read_media_as_base64("not a media")
+        with pytest.raises(TypeError):
+            _read_media_as_base64(42)
+        with pytest.raises(TypeError):
+            _read_media_as_base64(None)
+
+    def test_url_download_failure_raises_value_error(self):
+        with patch("helen.stdlib.media.urllib.request.urlopen", side_effect=Exception("network error")):
+            part = MediaPart("url", "https://example.com/bad.png", "image/png", "image")
+            with pytest.raises(ValueError, match="Failed to download"):
+                _read_media_as_base64(part)
+
+
+# ── to_openai_parts ───────────────────────────────────────────────────────────
+
+class TestToOpenaiParts:
+    """Tests for _to_openai_parts format adapter."""
+
+    def test_image_url(self):
+        part = MediaPart("url", "https://example.com/img.png", "image/png", "image")
+        result = _to_openai_parts([part])
+        assert len(result) == 1
+        assert result[0]["type"] == "image_url"
+        assert result[0]["image_url"]["url"] == "https://example.com/img.png"
+
+    def test_image_base64(self):
+        b64 = base64.b64encode(b"test").decode("utf-8")
+        part = MediaPart("base64", b64, "image/png", "image")
+        result = _to_openai_parts([part])
+        assert len(result) == 1
+        assert result[0]["type"] == "image_url"
+        assert result[0]["image_url"]["url"] == f"data:image/png;base64,{b64}"
+
+    def test_image_file(self):
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            f.write(b"\x89PNG\r\n\x1a\n" + b"\x00" * 10)
+            f.flush()
+            try:
+                part = MediaPart("file", f.name, "image/png", "image")
+                result = _to_openai_parts([part])
+                assert len(result) == 1
+                assert result[0]["type"] == "image_url"
+                assert "data:image/png;base64," in result[0]["image_url"]["url"]
+            finally:
+                os.unlink(f.name)
+
+    def test_video_text_placeholder(self):
+        part = MediaPart("url", "https://example.com/video.mp4", "video/mp4", "video")
+        result = _to_openai_parts([part])
+        assert len(result) == 1
+        assert result[0]["type"] == "text"
+        assert "视频" in result[0]["text"]
+
+    def test_audio_url(self):
+        part = MediaPart("url", "https://example.com/audio.mp3", "audio/mp3", "audio")
+        result = _to_openai_parts([part])
+        assert len(result) == 1
+        assert result[0]["type"] == "audio_url"
+        assert result[0]["audio_url"]["url"] == "https://example.com/audio.mp3"
+
+    def test_audio_base64(self):
+        b64 = base64.b64encode(b"audio data").decode("utf-8")
+        part = MediaPart("base64", b64, "audio/mp3", "audio")
+        result = _to_openai_parts([part])
+        assert len(result) == 1
+        assert result[0]["type"] == "input_audio"
+        assert result[0]["input_audio"]["data"] == b64
+        assert result[0]["input_audio"]["format"] == "audio/mp3"
+
+    def test_audio_file(self):
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+            f.write(b"\xff\xfb\x90\x00" + b"\x00" * 10)
+            f.flush()
+            try:
+                part = MediaPart("file", f.name, "audio/mpeg", "audio")
+                result = _to_openai_parts([part])
+                assert len(result) == 1
+                assert result[0]["type"] == "input_audio"
+                assert "data" in result[0]["input_audio"]
+            finally:
+                os.unlink(f.name)
+
+    def test_skips_non_mediapart(self):
+        result = _to_openai_parts(["not a media", 42, None, {"type": "image"}])
+        assert result == []
+
+    def test_empty_list(self):
+        assert _to_openai_parts([]) == []
+
+    def test_mixed_media_types(self):
+        b64 = base64.b64encode(b"img").decode("utf-8")
+        parts = [
+            MediaPart("url", "https://example.com/img.png", "image/png", "image"),
+            MediaPart("base64", b64, "image/jpeg", "image"),
+            MediaPart("url", "https://example.com/vid.mp4", "video/mp4", "video"),
+        ]
+        result = _to_openai_parts(parts)
+        assert len(result) == 3
+        assert result[0]["type"] == "image_url"
+        assert result[1]["type"] == "image_url"
+        assert result[2]["type"] == "text"
+
+    def test_file_read_error_skipped(self):
+        part = MediaPart("file", "/nonexistent/img.png", "image/png", "image")
+        result = _to_openai_parts([part])
+        assert result == []
+
+
+# ── to_claude_parts ───────────────────────────────────────────────────────────
+
+class TestToClaudeParts:
+    """Tests for _to_claude_parts format adapter."""
+
+    def test_image_url(self):
+        part = MediaPart("url", "https://example.com/img.png", "image/png", "image")
+        result = _to_claude_parts([part])
+        assert len(result) == 1
+        assert result[0]["type"] == "image"
+        assert result[0]["source"]["type"] == "url"
+        assert result[0]["source"]["url"] == "https://example.com/img.png"
+
+    def test_image_base64(self):
+        b64 = base64.b64encode(b"test").decode("utf-8")
+        part = MediaPart("base64", b64, "image/png", "image")
+        result = _to_claude_parts([part])
+        assert len(result) == 1
+        assert result[0]["type"] == "image"
+        assert result[0]["source"]["type"] == "base64"
+        assert result[0]["source"]["media_type"] == "image/png"
+        assert result[0]["source"]["data"] == b64
+
+    def test_image_file(self):
+        raw = b"\x89PNG\r\n\x1a\n" + b"\x00" * 10
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            f.write(raw)
+            f.flush()
+            try:
+                part = MediaPart("file", f.name, "image/png", "image")
+                result = _to_claude_parts([part])
+                assert len(result) == 1
+                assert result[0]["type"] == "image"
+                assert result[0]["source"]["type"] == "base64"
+                assert result[0]["source"]["media_type"] == "image/png"
+                assert result[0]["source"]["data"] == base64.b64encode(raw).decode("utf-8")
+            finally:
+                os.unlink(f.name)
+
+    def test_video_raises_error(self):
+        part = MediaPart("url", "https://example.com/vid.mp4", "video/mp4", "video")
+        with pytest.raises(ValueError, match="does not support video"):
+            _to_claude_parts([part])
+
+    def test_audio_raises_error(self):
+        part = MediaPart("base64", "SGVsbG8=", "audio/mp3", "audio")
+        with pytest.raises(ValueError, match="does not support audio"):
+            _to_claude_parts([part])
+
+    def test_skips_non_mediapart(self):
+        result = _to_claude_parts(["not a media", 42, None])
+        assert result == []
+
+    def test_empty_list(self):
+        assert _to_claude_parts([]) == []
+
+    def test_file_read_error_skipped(self):
+        part = MediaPart("file", "/nonexistent/img.png", "image/png", "image")
+        result = _to_claude_parts([part])
+        assert result == []
+
+    def test_mixed_valid_and_invalid_raises(self):
+        """Video validation happens before any conversion."""
+        img = MediaPart("url", "https://example.com/img.png", "image/png", "image")
+        vid = MediaPart("url", "https://example.com/vid.mp4", "video/mp4", "video")
+        with pytest.raises(ValueError, match="video"):
+            _to_claude_parts([img, vid])
+
+
+# ── to_gemini_parts ───────────────────────────────────────────────────────────
+
+class TestToGeminiParts:
+    """Tests for _to_gemini_parts format adapter."""
+
+    def test_image_inline_data(self):
+        b64 = base64.b64encode(b"img").decode("utf-8")
+        part = MediaPart("base64", b64, "image/png", "image")
+        result = _to_gemini_parts([part])
+        assert len(result) == 1
+        assert "inline_data" in result[0]
+        assert result[0]["inline_data"]["mime_type"] == "image/png"
+        assert result[0]["inline_data"]["data"] == b64
+
+    def test_video_inline_data(self):
+        b64 = base64.b64encode(b"vid").decode("utf-8")
+        part = MediaPart("base64", b64, "video/mp4", "video")
+        result = _to_gemini_parts([part])
+        assert len(result) == 1
+        assert result[0]["inline_data"]["mime_type"] == "video/mp4"
+
+    def test_audio_inline_data(self):
+        b64 = base64.b64encode(b"aud").decode("utf-8")
+        part = MediaPart("base64", b64, "audio/mp3", "audio")
+        result = _to_gemini_parts([part])
+        assert len(result) == 1
+        assert result[0]["inline_data"]["mime_type"] == "audio/mp3"
+
+    def test_file_source_reads_and_encodes(self):
+        raw = b"\x89PNG\r\n\x1a\n" + b"\x00" * 10
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            f.write(raw)
+            f.flush()
+            try:
+                part = MediaPart("file", f.name, "image/png", "image")
+                result = _to_gemini_parts([part])
+                assert len(result) == 1
+                assert result[0]["inline_data"]["data"] == base64.b64encode(raw).decode("utf-8")
+            finally:
+                os.unlink(f.name)
+
+    def test_url_source_downloads_and_encodes(self):
+        raw = b"url image data"
+        expected_b64 = base64.b64encode(raw).decode("utf-8")
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = raw
+        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("helen.stdlib.media.urllib.request.urlopen", return_value=mock_resp):
+            part = MediaPart("url", "https://example.com/img.png", "image/png", "image")
+            result = _to_gemini_parts([part])
+            assert len(result) == 1
+            assert result[0]["inline_data"]["data"] == expected_b64
+
+    def test_skips_non_mediapart(self):
+        assert _to_gemini_parts(["not media", None]) == []
+
+    def test_empty_list(self):
+        assert _to_gemini_parts([]) == []
+
+
+# ── media_to_base64 ───────────────────────────────────────────────────────────
+
+class TestMediaToBase64:
+    """Tests for _media_to_base64 utility."""
+
+    def test_base64_source(self):
+        b64 = base64.b64encode(b"test").decode("utf-8")
+        part = MediaPart("base64", b64, "image/png", "image")
+        assert _media_to_base64(part) == b64
+
+    def test_file_source(self):
+        raw = b"file content bytes"
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            f.write(raw)
+            f.flush()
+            try:
+                part = MediaPart("file", f.name, "image/png", "image")
+                assert _media_to_base64(part) == base64.b64encode(raw).decode("utf-8")
+            finally:
+                os.unlink(f.name)
+
+    def test_url_source(self):
+        raw = b"url bytes"
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = raw
+        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("helen.stdlib.media.urllib.request.urlopen", return_value=mock_resp):
+            part = MediaPart("url", "https://example.com/img.png", "image/png", "image")
+            assert _media_to_base64(part) == base64.b64encode(raw).decode("utf-8")
+
+    def test_non_mediapart_raises_type_error(self):
+        with pytest.raises(TypeError, match="Expected MediaPart"):
+            _media_to_base64("not a media")
+        with pytest.raises(TypeError):
+            _media_to_base64(None)
+
+
+# ── save_media ────────────────────────────────────────────────────────────────
+
+class TestSaveMedia:
+    """Tests for _save_media utility."""
+
+    def test_save_base64_to_explicit_path(self):
+        raw = b"saved image data"
+        b64 = base64.b64encode(raw).decode("utf-8")
+        part = MediaPart("base64", b64, "image/png", "image")
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            out_path = f.name
+        try:
+            result = _save_media(part, out_path)
+            assert result == out_path
+            with open(out_path, "rb") as f:
+                assert f.read() == raw
+        finally:
+            if os.path.exists(out_path):
+                os.unlink(out_path)
+
+    def test_save_base64_to_default_dir(self):
+        b64 = base64.b64encode(b"default dir test").decode("utf-8")
+        part = MediaPart("base64", b64, "image/png", "image")
+        result = _save_media(part)
+        try:
+            assert os.path.exists(result)
+            assert ".helen/generated_media/" in result
+            assert result.endswith(".png")
+        finally:
+            if os.path.exists(result):
+                os.unlink(result)
+
+    def test_save_file_source_copies(self):
+        raw = b"original file content"
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as src:
+            src.write(raw)
+            src.flush()
+            src_path = src.name
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as dst:
+            dst_path = dst.name
+        try:
+            part = MediaPart("file", src_path, "image/png", "image")
+            result = _save_media(part, dst_path)
+            assert result == dst_path
+            with open(dst_path, "rb") as f:
+                assert f.read() == raw
+        finally:
+            os.unlink(src_path)
+            if os.path.exists(dst_path):
+                os.unlink(dst_path)
+
+    def test_save_url_source_downloads(self):
+        raw = b"downloaded content"
+        with patch("helen.stdlib.media.urllib.request.urlretrieve") as mock_retrieve:
+            def fake_retrieve(url, path):
+                with open(path, "wb") as f:
+                    f.write(raw)
+            mock_retrieve.side_effect = fake_retrieve
+
+            part = MediaPart("url", "https://example.com/img.png", "image/png", "image")
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as dst:
+                dst_path = dst.name
+            try:
+                result = _save_media(part, dst_path)
+                assert result == dst_path
+                with open(dst_path, "rb") as f:
+                    assert f.read() == raw
+            finally:
+                if os.path.exists(dst_path):
+                    os.unlink(dst_path)
+
+    def test_non_mediapart_raises_type_error(self):
+        with pytest.raises(TypeError, match="Expected MediaPart"):
+            _save_media("not a media")
+        with pytest.raises(TypeError):
+            _save_media(None)
+
+    def test_creates_parent_directories(self):
+        b64 = base64.b64encode(b"nested dir test").decode("utf-8")
+        part = MediaPart("base64", b64, "image/png", "image")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            nested = os.path.join(tmpdir, "a", "b", "c", "out.png")
+            result = _save_media(part, nested)
+            assert result == nested
+            assert os.path.exists(nested)
+
+
+# ── is_image / is_video / is_audio ────────────────────────────────────────────
+
+class TestIsImage:
+    """Tests for _is_image predicate."""
+
+    def test_image_returns_true(self):
+        part = MediaPart("file", "img.png", "image/png", "image")
+        assert _is_image(part) is True
+
+    def test_video_returns_false(self):
+        part = MediaPart("file", "vid.mp4", "video/mp4", "video")
+        assert _is_image(part) is False
+
+    def test_audio_returns_false(self):
+        part = MediaPart("file", "aud.mp3", "audio/mp3", "audio")
+        assert _is_image(part) is False
+
+    def test_non_mediapart_returns_false(self):
+        assert _is_image("not media") is False
+        assert _is_image(42) is False
+        assert _is_image(None) is False
+        assert _is_image({"media_type": "image"}) is False
+
+
+class TestIsVideo:
+    """Tests for _is_video predicate."""
+
+    def test_video_returns_true(self):
+        part = MediaPart("file", "vid.mp4", "video/mp4", "video")
+        assert _is_video(part) is True
+
+    def test_image_returns_false(self):
+        part = MediaPart("file", "img.png", "image/png", "image")
+        assert _is_video(part) is False
+
+    def test_non_mediapart_returns_false(self):
+        assert _is_video("not media") is False
+        assert _is_video(None) is False
+
+
+class TestIsAudio:
+    """Tests for _is_audio predicate."""
+
+    def test_audio_returns_true(self):
+        part = MediaPart("file", "aud.mp3", "audio/mp3", "audio")
+        assert _is_audio(part) is True
+
+    def test_image_returns_false(self):
+        part = MediaPart("file", "img.png", "image/png", "image")
+        assert _is_audio(part) is False
+
+    def test_non_mediapart_returns_false(self):
+        assert _is_audio("not media") is False
+        assert _is_audio(None) is False
+        assert _is_audio(42) is False
 
 
 if __name__ == "__main__":

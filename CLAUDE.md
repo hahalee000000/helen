@@ -24,7 +24,7 @@ helen check <file.helen>        # Validate syntax/semantics without executing
 helen repl                      # Interactive REPL
 
 # Testing
-pytest                              # Run all 2750+ tests
+pytest                              # Run all 2875+ tests
 pytest tests/core/                  # Run tests for a specific module
 pytest tests/execution/test_functions.py::test_function_call -v  # Single test
 helen test <file.helen>             # Run Helen's built-in test framework
@@ -73,8 +73,8 @@ helen/
 │                  # fuzzy_match.py (9-strategy file patching)
 │                  # transcript_store.py (v1.16: SSOT, SQLiteBackend, JSONLBackend, LRU cache)
 │                  # session_manager.py (v1.16: session lifecycle, path management)
-├── stdlib/        # 203+ built-in functions (string, math, crypto, collections, test, quality, context, transcript, etc.)
-│                  # locales/zh.py (230+ Chinese aliases)
+├── stdlib/        # 255 built-in functions (string, math, crypto, collections, test, quality, context, transcript, media, etc.)
+│                  # locales/zh.py (255 Chinese aliases)
 ├── ffi/           # Python FFI for importing Python modules from Helen
 ├── cli/           # __main__.py (entry point), repl.py, formatter.py, docgen.py
 ├── lsp/           # Language Server Protocol (JSON-RPC 2.0 over stdio)
@@ -192,7 +192,7 @@ Tests in `tests/` mirror the source structure:
 - `lsp/` — Language Server
 - `cli/` — CLI and REPL
 
-**2750+ tests passing** (Python pytest)
+**2875+ tests passing** (Python pytest)
 
 Helen also has a built-in test framework (`helen/stdlib/test.py`) with `test()`, `assert_equal()`, `assert_true()`, `assert_throws()`, expect chains, suites, filtering, JSON output, watch mode, and coverage tracking.
 

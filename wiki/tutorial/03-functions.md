@@ -270,7 +270,7 @@ alias <canonical> as <alias_name>
 
 ### 给 stdlib 起别名
 
-Helen 的 stdlib 已经内置 230+ 个中文别名（`长度`、`打印`、`排序` 等），可以直接使用。也可以用 `alias` 添加自定义别名：
+Helen 的 stdlib 已经内置 255 个中文别名（`长度`、`打印`、`排序` 等），可以直接使用。也可以用 `alias` 添加自定义别名：
 
 ```helen
 alias len as 我的长度

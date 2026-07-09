@@ -12,7 +12,7 @@
 │  ┌─────────┐ ┌──────────┐ ┌──────────┐ ┌───────┐ ┌──────┐ │
 │  │ CLI M11 │ │ LSP M12  │ │ VSCode   │ │Stdlib  │ │DocGen│ │
 │  │run/check│ │diagnose  │ │ M13      │ │ M15    │ │      │ │
-│  │/repl/doc│ │/complete │ │highlight │ │185 fn  │ │      │ │
+│  │/repl/doc│ │/complete │ │highlight │ │255 fn  │ │      │ │
 │  └────┬────┘ └────┬─────┘ └────┬─────┘ └───┬───┘ └──┬───┘ │
 ├───────┼───────────┼────────────┼───────────┼─────────┼────┤
 │                    Runtime 运行时层                         │
@@ -206,21 +206,28 @@ $ helen init               # 初始化 ~/.helen/ 配置目录
 - `language-configuration.json` — 括号配对、自动闭合、缩进规则
 - `package.json` — 扩展清单
 
-### 标准库 (185 builtins)
+### 标准库 (255 builtins)
 
 | 类别 | 数量 | 代表函数 |
 |---|---|---|
 | **Core** | 11 | `print`, `len`, `str`, `int`, `float`, `abs`, `min`, `max`, `range`, `type`, `isinstance` |
-| **String** | 36 | `upper`, `lower`, `strip`, `split`, `join`, `replace`, `find`, `reverse`, `repeat`, `pad_start`, `regex_match`, `regex_replace` |
+| **String** | 37 | `upper`, `lower`, `strip`, `split`, `join`, `replace`, `find`, `reverse`, `repeat`, `regex_match`, `regex_replace` |
 | **Data** | 25 | `json_parse`, `json_stringify`, `yaml_parse`, `toml_parse`, `csv_parse`, `xml_parse`, `html_escape`, `url_encode`, `base64_encode` |
 | **Collection** | 22 | `sort`, `reverse`, `unique`, `flatten`, `zip`, `map`, `filter`, `reduce`, `group_by`, `chunk`, `intersection` |
 | **Network** | 9 | `http_get`, `http_post`, `http_put`, `http_delete`, `http_download`, `url_parse` |
 | **Time** | 13 | `now`, `timestamp`, `date_format`, `date_parse`, `sleep`, `stopwatch_start`, `stopwatch_elapsed` |
 | **Math** | 15 | `round`, `sqrt`, `floor`, `ceil`, `pow`, `log`, `sin`, `cos`, `random_int`, `random_float`, `mean`, `median`, `stddev` |
-| **File** | 16 | `read_file`, `write_file`, `append_file`, `file_exists`, `list_dir`, `mkdir`, `copy_file`, `delete_file`, `file_size` |
-| **System** | 16 | `env_get`, `env_set`, `shell_exec`, `process_id`, `platform`, `hostname`, `log_info`, `log_error` |
+| **File** | 18 | `read_file`, `write_file`, `append_file`, `file_exists`, `list_dir`, `mkdir`, `copy_file`, `delete_file`, `file_size` |
+| **System** | 18 | `env_get`, `env_set`, `shell_exec`, `process_id`, `platform`, `hostname`, `log_info`, `log_error` |
 | **Crypto** | 11 | `hash_md5`, `hash_sha256`, `hash_sha512`, `hmac_sha256`, `uuid_generate`, `random_bytes` |
 | **IO** | 5 | `read_line`, `prompt`, `format_table`, `progress_bar`, `terminal_width` |
+| **Observability** | 4 | `debug`, `trace_on`, `trace_off`, `get_trace` |
+| **Context** | 2 | `clear_context`, `compress_context` |
+| **Transcript** | 6 | `get_session_id`, `list_sessions`, `replay_transcript`, `export_transcript` |
+| **Media** | 12 | `media`, `media_base64`, `to_openai_parts`, `to_claude_parts`, `to_gemini_parts`, `media_to_base64`, `save_media`, `is_image` |
+| **Test** | 14 | `test_suite`, `assert_true`, `assert_equal`, `expect`, `run_tests` |
+| **Quality** | 4 | `analyze_code`, `check_security`, `quality_score`, `quality_report` |
+| **Tools** | 24 | `web_search`, `web_fetch`, `read_file`, `write_file`, `shell_exec` |
 
 详见 [stdlib.md](../toolchain/stdlib.md)。
 

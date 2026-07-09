@@ -232,7 +232,7 @@ python3 scripts/build_tutorial.py
 - Token 类型数量: 83
 - AST 节点数量: 63
 - Visitor 方法数量: 58
-- 内置函数数量: 200（230+ 中文别名）
+- 内置函数数量: 255（255 中文别名）
 - 新特性列表（见 changelog.md）
 
 ---

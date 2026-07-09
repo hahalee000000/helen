@@ -1267,8 +1267,9 @@ class LlmMixin:
     def _default_media_adapter(self: Any, media_parts: list, provider_hint: str | None) -> list[dict]:
         """Default media adapter: OpenAI-compatible format.
 
-        Converts MediaPart objects to content parts suitable for OpenAI API.
-        This works with most providers (OpenAI, Azure, etc.)
+        Delegates to :func:`helen.stdlib.media._to_openai_parts` so the
+        conversion logic is shared with the user-facing ``to_openai_parts``
+        stdlib function.
 
         Args:
             media_parts: List of MediaPart objects
@@ -1277,70 +1278,8 @@ class LlmMixin:
         Returns:
             List of content part dicts
         """
-        from helen.runtime.media import MediaPart
-
-        parts = []
-        for m in media_parts:
-            if not isinstance(m, MediaPart):
-                continue
-
-            if m.media_type == "image":
-                if m.source == "url":
-                    parts.append({
-                        "type": "image_url",
-                        "image_url": {"url": m.content}
-                    })
-                elif m.source == "base64":
-                    parts.append({
-                        "type": "image_url",
-                        "image_url": {"url": f"data:{m.mime};base64,{m.content}"}
-                    })
-                elif m.source == "file":
-                    # Read file and encode as base64
-                    import base64
-                    try:
-                        with open(m.content, "rb") as f:
-                            data = f.read()
-                        b64 = base64.b64encode(data).decode("utf-8")
-                        parts.append({
-                            "type": "image_url",
-                            "image_url": {"url": f"data:{m.mime};base64,{b64}"}
-                        })
-                    except Exception as e:
-                        # Skip this media on error
-                        continue
-
-            elif m.media_type == "video":
-                # Video: Most LLM providers don't yet support native video input.
-                # Fall back to a text placeholder describing the video.
-                # Users can provide a custom on_media adapter for provider-specific formats.
-                video_desc = f"[视频: {m.content if m.source == 'url' else m.media_type}]"
-                parts.append({
-                    "type": "text",
-                    "text": video_desc
-                })
-
-            elif m.media_type == "audio":
-                if m.source == "url":
-                    parts.append({
-                        "type": "audio_url",
-                        "audio_url": {"url": m.content}
-                    })
-                elif m.source in ("base64", "file"):
-                    data = m.content
-                    if m.source == "file":
-                        import base64
-                        try:
-                            with open(m.content, "rb") as f:
-                                data = base64.b64encode(f.read()).decode("utf-8")
-                        except Exception:
-                            continue
-                    parts.append({
-                        "type": "input_audio",
-                        "input_audio": {"data": data, "format": m.mime}
-                    })
-
-        return parts
+        from helen.stdlib.media import _to_openai_parts
+        return _to_openai_parts(media_parts)
 
     def _build_generate_tools(self: Any, generate_fns: list, provider_hint: str | None) -> list[dict]:
         """Build tool definitions for on_generate callbacks.

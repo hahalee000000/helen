@@ -10,8 +10,12 @@ This module provides stdlib functions for creating and inspecting MediaPart obje
 from __future__ import annotations
 
 import base64
+import hashlib
 import mimetypes
 import os
+import shutil
+import urllib.request
+from pathlib import Path
 from typing import Any
 
 from helen.runtime.media import MediaPart
@@ -149,3 +153,330 @@ def _guess_mime_from_url(url: str) -> str | None:
     # Remove query string and fragment
     path = url.split("?")[0].split("#")[0]
     return mimetypes.guess_type(path)[0]
+
+
+# ── Internal helpers ──────────────────────────────────────────────────────────
+
+def _read_media_as_base64(part: MediaPart) -> str:
+    """Resolve any MediaPart source to a raw base64 string.
+
+    Args:
+        part: A MediaPart object
+
+    Returns:
+        Raw base64-encoded string (no ``data:`` prefix)
+
+    Raises:
+        TypeError: If part is not a MediaPart
+        ValueError: If file not found or URL download fails
+    """
+    if not isinstance(part, MediaPart):
+        raise TypeError(f"Expected MediaPart, got {type(part).__name__}")
+
+    if part.source == "base64":
+        return part.content
+
+    if part.source == "file":
+        if not os.path.exists(part.content):
+            raise ValueError(f"Media file not found: {part.content}")
+        if not os.path.isfile(part.content):
+            raise ValueError(f"Media path is not a file: {part.content}")
+        with open(part.content, "rb") as f:
+            return base64.b64encode(f.read()).decode("utf-8")
+
+    if part.source == "url":
+        try:
+            req = urllib.request.Request(part.content)
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = resp.read()
+            return base64.b64encode(data).decode("utf-8")
+        except Exception as e:
+            raise ValueError(f"Failed to download media from URL: {part.content}: {e}")
+
+    raise ValueError(f"Unknown MediaPart source: {part.source!r}")
+
+
+# ── Format adapters ───────────────────────────────────────────────────────────
+
+def _to_openai_parts(parts: list) -> list[dict]:
+    """Convert MediaPart list to OpenAI-compatible content parts.
+
+    Produces the content array format used by OpenAI Chat Completions API
+    and most compatible providers (Azure, OpenRouter, etc.).
+
+    Args:
+        parts: List of MediaPart objects (non-MediaPart items are skipped)
+
+    Returns:
+        List of content part dicts in OpenAI format
+
+    Note:
+        - Images: ``{type: "image_url", image_url: {url: ...}}``
+        - Audio URL: ``{type: "audio_url", audio_url: {url: ...}}``
+        - Audio inline: ``{type: "input_audio", input_audio: {data, format}}``
+        - Video: falls back to text placeholder ``[视频: ...]``
+        - File read errors are silently skipped
+    """
+    result = []
+    for m in parts:
+        if not isinstance(m, MediaPart):
+            continue
+
+        if m.media_type == "image":
+            if m.source == "url":
+                result.append({
+                    "type": "image_url",
+                    "image_url": {"url": m.content},
+                })
+            elif m.source == "base64":
+                result.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{m.mime};base64,{m.content}"},
+                })
+            elif m.source == "file":
+                try:
+                    b64 = _read_media_as_base64(m)
+                    result.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{m.mime};base64,{b64}"},
+                    })
+                except (ValueError, OSError):
+                    continue
+
+        elif m.media_type == "video":
+            # Most LLM providers don't support native video input.
+            video_desc = f"[视频: {m.content if m.source == 'url' else m.media_type}]"
+            result.append({"type": "text", "text": video_desc})
+
+        elif m.media_type == "audio":
+            if m.source == "url":
+                result.append({
+                    "type": "audio_url",
+                    "audio_url": {"url": m.content},
+                })
+            elif m.source in ("base64", "file"):
+                data = m.content
+                if m.source == "file":
+                    try:
+                        data = _read_media_as_base64(m)
+                    except (ValueError, OSError):
+                        continue
+                result.append({
+                    "type": "input_audio",
+                    "input_audio": {"data": data, "format": m.mime},
+                })
+
+    return result
+
+
+def _to_claude_parts(parts: list) -> list[dict]:
+    """Convert MediaPart list to Anthropic Claude content blocks.
+
+    Produces the content block format used by the Anthropic Messages API.
+
+    Args:
+        parts: List of MediaPart objects (non-MediaPart items are skipped)
+
+    Returns:
+        List of content block dicts in Claude format
+
+    Raises:
+        ValueError: If any part is a video or audio (not supported by Claude Messages API)
+
+    Note:
+        - Image URL: ``{type: "image", source: {type: "url", url: ...}}``
+        - Image inline: ``{type: "image", source: {type: "base64", media_type, data}}``
+        - Claude Messages API does not support video or audio input
+    """
+    # Validate: Claude doesn't support video or audio
+    for m in parts:
+        if not isinstance(m, MediaPart):
+            continue
+        if m.media_type == "video":
+            raise ValueError(
+                "Claude Messages API does not support video input. "
+                "Consider extracting key frames as images instead."
+            )
+        if m.media_type == "audio":
+            raise ValueError(
+                "Claude Messages API does not support audio input. "
+                "Consider transcribing the audio first."
+            )
+
+    result = []
+    for m in parts:
+        if not isinstance(m, MediaPart):
+            continue
+        if m.media_type != "image":
+            continue
+
+        if m.source == "url":
+            result.append({
+                "type": "image",
+                "source": {"type": "url", "url": m.content},
+            })
+        else:
+            # base64 or file → both resolve to base64
+            try:
+                b64 = _read_media_as_base64(m)
+            except (ValueError, OSError):
+                continue
+            result.append({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": m.mime,
+                    "data": b64,
+                },
+            })
+
+    return result
+
+
+def _to_gemini_parts(parts: list) -> list[dict]:
+    """Convert MediaPart list to Google Gemini inline_data parts.
+
+    Produces the inline_data format used by the Gemini API.
+    All media types (image, video, audio) use the same ``inline_data`` structure.
+
+    Args:
+        parts: List of MediaPart objects (non-MediaPart items are skipped)
+
+    Returns:
+        List of content part dicts in Gemini format
+
+    Note:
+        - All types: ``{inline_data: {mime_type, data}}``
+        - All data is base64-encoded (files read, URLs downloaded)
+        - File/URL errors are silently skipped
+    """
+    result = []
+    for m in parts:
+        if not isinstance(m, MediaPart):
+            continue
+        try:
+            b64 = _read_media_as_base64(m)
+        except (ValueError, OSError):
+            continue
+        result.append({
+            "inline_data": {
+                "mime_type": m.mime,
+                "data": b64,
+            },
+        })
+
+    return result
+
+
+# ── Media utility functions ───────────────────────────────────────────────────
+
+def _media_to_base64(part: MediaPart) -> str:
+    """Convert any MediaPart content to a raw base64 string.
+
+    Regardless of the source type (file, URL, or base64), returns
+    the raw base64-encoded content without a ``data:`` prefix.
+
+    Args:
+        part: A MediaPart object
+
+    Returns:
+        Raw base64 string
+
+    Raises:
+        TypeError: If part is not a MediaPart
+        ValueError: If file not found or URL download fails
+    """
+    return _read_media_as_base64(part)
+
+
+def _save_media(part: MediaPart, path: str | None = None) -> str:
+    """Save a MediaPart to a file.
+
+    Args:
+        part: A MediaPart object to save
+        path: Destination file path. If None, saves to
+              ``~/.helen/generated_media/{media_type}_{hash}.{ext}``
+
+    Returns:
+        The actual file path where the media was saved
+
+    Raises:
+        TypeError: If part is not a MediaPart
+    """
+    if not isinstance(part, MediaPart):
+        raise TypeError(f"Expected MediaPart, got {type(part).__name__}")
+
+    # Determine output path
+    if path is None:
+        output_dir = Path.home() / ".helen" / "generated_media"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generate filename from content hash
+        content_hash = hashlib.md5(part.content.encode()).hexdigest()[:8]
+        ext_map = {
+            "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif",
+            "image/webp": "webp", "video/mp4": "mp4",
+            "audio/mp3": "mp3", "audio/wav": "wav", "audio/mpeg": "mp3",
+        }
+        ext = ext_map.get(part.mime, part.media_type)
+        filename = f"{part.media_type}_{content_hash}.{ext}"
+        output_path = output_dir / filename
+    else:
+        output_path = Path(path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Save based on source type
+    if part.source == "url":
+        try:
+            urllib.request.urlretrieve(part.content, str(output_path))
+        except Exception:
+            # If download fails, save the URL as text
+            output_path.write_text(part.content)
+    elif part.source == "base64":
+        data = base64.b64decode(part.content)
+        output_path.write_bytes(data)
+    elif part.source == "file":
+        if os.path.exists(part.content):
+            shutil.copy2(part.content, str(output_path))
+        else:
+            output_path.write_text(part.content)
+
+    return str(output_path)
+
+
+# ── Media type predicates ─────────────────────────────────────────────────────
+
+def _is_image(value: Any) -> bool:
+    """Check if a value is an image MediaPart.
+
+    Args:
+        value: Any value to check
+
+    Returns:
+        True if value is a MediaPart with media_type "image", False otherwise
+    """
+    return isinstance(value, MediaPart) and value.media_type == "image"
+
+
+def _is_video(value: Any) -> bool:
+    """Check if a value is a video MediaPart.
+
+    Args:
+        value: Any value to check
+
+    Returns:
+        True if value is a MediaPart with media_type "video", False otherwise
+    """
+    return isinstance(value, MediaPart) and value.media_type == "video"
+
+
+def _is_audio(value: Any) -> bool:
+    """Check if a value is an audio MediaPart.
+
+    Args:
+        value: Any value to check
+
+    Returns:
+        True if value is a MediaPart with media_type "audio", False otherwise
+    """
+    return isinstance(value, MediaPart) and value.media_type == "audio"

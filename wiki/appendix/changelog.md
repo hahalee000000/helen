@@ -1,10 +1,73 @@
 # 版本历史
 
-> Helen v1.16 | TranscriptStore SSOT — 消息唯一真实来源，SQLite/JSONL 后端，LRU 缓存，UUID 寻址，非破坏性压缩，6 stdlib 函数，6 REPL 命令，CLI 参数支持
+> Helen v1.17 | 多模态格式适配器 — 8 个新 stdlib 函数将 provider 格式知识从 skill 文档提升为一等公民 API，`_default_media_adapter` 重构为委托调用
 
 ---
 
-## v1.16: TranscriptStore SSOT (当前)
+## v1.17: 多模态格式适配器 stdlib (当前)
+
+**发布日期**: 2026-07-09  
+**核心特性**: 将 provider 格式转换作为 stdlib 纯函数暴露，程序员不再需要手写 provider 特定 JSON 形状
+
+### 背景
+
+v1.17-alpha 引入了 `MediaPart` 数据类型和 `on_media`/`on_generate` 回调机制，采用"回调即适配器"设计。但 provider 格式知识仅存在于提案文档和 skill 中，程序员在 `on_media` 回调中必须从零手写 JSON 格式。本次更新将这些知识提升为 stdlib 函数。
+
+### 新增 stdlib 函数 (8)
+
+#### 格式适配器
+
+| 函数 | 中文别名 | 说明 |
+|------|---------|------|
+| `to_openai_parts(parts)` | `转OpenAI格式(parts)` | MediaPart[] → OpenAI content_parts 格式 |
+| `to_claude_parts(parts)` | `转Claude格式(parts)` | MediaPart[] → Anthropic content_blocks 格式 |
+| `to_gemini_parts(parts)` | `转Gemini格式(parts)` | MediaPart[] → Gemini inline_data 格式 |
+
+#### 媒体工具
+
+| 函数 | 中文别名 | 说明 |
+|------|---------|------|
+| `media_to_base64(part)` | `媒体转base64(part)` | 任意 source → 纯 base64 字符串 |
+| `save_media(part, path?)` | `保存媒体(part, path?)` | 保存 MediaPart 到文件，返回路径 |
+
+#### 类型谓词
+
+| 函数 | 中文别名 | 说明 |
+|------|---------|------|
+| `is_image(value)` | `是图片(value)` | 是否为图片 MediaPart |
+| `is_video(value)` | `是视频(value)` | 是否为视频 MediaPart |
+| `is_audio(value)` | `是音频(value)` | 是否为音频 MediaPart |
+
+### 内部重构
+
+- `_default_media_adapter`（`llm_mixin.py`）从 77 行内联代码重构为委托调用 `_to_openai_parts()`
+- 行为 100% 一致，现有测试无回归
+
+### 使用效果
+
+```helen
+# 重构前：手写 15 行 JSON 构造
+on_media fn(parts, provider) {
+    parts.map(fn(p) {
+        {type: "image", source: {type: "base64", media_type: p.mime, data: ???}}
+    })
+}
+
+# 重构后：一行
+on_media fn(parts, provider) { 转Claude格式(parts) }
+```
+
+### 测试
+
+- 53 个新测试（8 个测试类），总计 2875 passed
+
+### 设计原则
+
+stdlib 提供**确定性数据变换**（纯函数），skill 教授**编排模式**（HTTP 调用、轮询、错误恢复）。`to_claude_parts()` 之于"回调即适配器"，正如 `json_parse()` 之于"HTTP 由用户处理"——不违反设计原则。
+
+---
+
+## v1.16: TranscriptStore SSOT
 
 **发布日期**: 2026-07-08  
 **核心特性**: 将 TranscriptStore 作为所有对话消息的唯一真实来源（Single Source of Truth）

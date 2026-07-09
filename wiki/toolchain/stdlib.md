@@ -1,6 +1,6 @@
 # 标准库 (Stdlib)
 
-> 模块 M15 | `helen/stdlib/__init__.py` | **200 builtins** | 测试: `tests/stdlib/`
+> 模块 M15 | `helen/stdlib/__init__.py` | **255 builtins** | 测试: `tests/stdlib/`
 
 ---
 
@@ -51,7 +51,12 @@ class BuiltinFunction:
 | **Test** | 14 | `test.py` |
 | **Quality** | 4 | `quality.py` |
 | **IO** | 5 | `__init__.py` |
-| **总计** | **200** | - |
+| **Observability** | 4 | `observability.py` |
+| **Context** | 2 | `context.py` |
+| **Transcript** | 6 | `transcript.py` |
+| **Media** | 12 | `media.py` |
+| **Tools** | 24 | `tools.py` |
+| **总计** | **255** | - |
 
 ---
 
@@ -452,6 +457,25 @@ class BuiltinFunction:
 | `progress_bar` | `progress_bar(current, total, width?)` → str | 进度条 |
 | `stream_cursor_up` | `stream_cursor_up(n?)` → str | 光标上移 |
 | `stream_cursor_down` | `stream_cursor_down(n?)` → str | 光标下移 |
+
+---
+
+## Media (12) (v1.17)
+
+| 函数 | 签名 | 说明 |
+|---|---|---|
+| `media` | `media(source, type?)` → MediaPart | 从文件路径或 URL 创建媒体 |
+| `media_base64` | `media_base64(data, mime, type?)` → MediaPart | 从 base64 数据创建媒体 |
+| `is_media` | `is_media(value)` → bool | 检查是否为 MediaPart |
+| `media_type` | `media_type(value)` → str? | 获取媒体类型 |
+| `to_openai_parts` | `to_openai_parts(parts)` → list[map] | 转 OpenAI content_parts 格式 |
+| `to_claude_parts` | `to_claude_parts(parts)` → list[map] | 转 Claude content_blocks 格式 |
+| `to_gemini_parts` | `to_gemini_parts(parts)` → list[map] | 转 Gemini inline_data 格式 |
+| `media_to_base64` | `media_to_base64(part)` → str | 任意 source → 纯 base64 |
+| `save_media` | `save_media(part, path?)` → str | 保存媒体到文件 |
+| `is_image` | `is_image(value)` → bool | 是否为图片 MediaPart |
+| `is_video` | `is_video(value)` → bool | 是否为视频 MediaPart |
+| `is_audio` | `is_audio(value)` → bool | 是否为音频 MediaPart |
 
 ---
 

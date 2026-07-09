@@ -554,7 +554,7 @@ alias greet as 打招呼
 主函 { 我的长度([1, 2, 3]) }
 ```
 
-Helen 的 stdlib 内置 230+ 个中文别名，启动时自动加载，不需要手动 alias：
+Helen 的 stdlib 内置 255 个中文别名，启动时自动加载，不需要手动 alias：
 
 ```helen
 // 直接用中文 stdlib 函数名

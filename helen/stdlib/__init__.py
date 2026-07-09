@@ -151,6 +151,9 @@ from helen.stdlib.transcript import (
 # Import media functions (multimodal support)
 from helen.stdlib.media import (
     _media, _media_base64, _is_media, _media_type_fn,
+    _to_openai_parts, _to_claude_parts, _to_gemini_parts,
+    _media_to_base64, _save_media,
+    _is_image, _is_video, _is_audio,
 )
 
 
@@ -1056,6 +1059,20 @@ def _register_builtins() -> None:
         BuiltinFunction("media_base64", "Create media from base64 data", "media_base64(data, mime, type?)", _media_base64, "media"),
         BuiltinFunction("is_media", "Check if value is MediaPart", "is_media(value)", _is_media, "media"),
         BuiltinFunction("media_type", "Get media type", "media_type(value)", _media_type_fn, "media"),
+
+        # Media format adapters (v1.17)
+        BuiltinFunction("to_openai_parts", "Convert MediaParts to OpenAI content format", "to_openai_parts(parts)", _to_openai_parts, "media"),
+        BuiltinFunction("to_claude_parts", "Convert MediaParts to Claude content format", "to_claude_parts(parts)", _to_claude_parts, "media"),
+        BuiltinFunction("to_gemini_parts", "Convert MediaParts to Gemini content format", "to_gemini_parts(parts)", _to_gemini_parts, "media"),
+
+        # Media utilities (v1.17)
+        BuiltinFunction("media_to_base64", "Convert MediaPart content to base64 string", "media_to_base64(part)", _media_to_base64, "media"),
+        BuiltinFunction("save_media", "Save MediaPart to file", "save_media(part, path?)", _save_media, "media"),
+
+        # Media type predicates (v1.17)
+        BuiltinFunction("is_image", "Check if MediaPart is an image", "is_image(value)", _is_image, "media"),
+        BuiltinFunction("is_video", "Check if MediaPart is a video", "is_video(value)", _is_video, "media"),
+        BuiltinFunction("is_audio", "Check if MediaPart is audio", "is_audio(value)", _is_audio, "media"),
     ]
 
     for func in builtins:

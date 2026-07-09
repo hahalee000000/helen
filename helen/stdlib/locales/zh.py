@@ -317,6 +317,16 @@ ALIASES: dict[str, str] = {
     "是媒体": "is_media",
     "媒体类型": "media_type",
 
+    # ── Media format adapters & utilities (格式适配/工具) ──────
+    "转OpenAI格式": "to_openai_parts",
+    "转Claude格式": "to_claude_parts",
+    "转Gemini格式": "to_gemini_parts",
+    "媒体转base64": "media_to_base64",
+    "保存媒体": "save_media",
+    "是图片": "is_image",
+    "是视频": "is_video",
+    "是音频": "is_audio",
+
     # ── File Search (文件搜索) ────────────────────────────────────
     "查找文件": "glob_files",
     "搜索内容": "grep_files",
