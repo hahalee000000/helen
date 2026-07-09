@@ -19,7 +19,7 @@ Enhanced features (borrowed from Hermes):
 
 Usage:
     from helen.runtime.http_llm import HttpLLMRuntime
-    runtime = HttpLLMRuntime()  # Auto-loads from ~/.helen/config.yaml or ~/.hermes/.env
+    runtime = HttpLLMRuntime()  # Auto-loads from ~/.helen/config.yaml
     response = runtime.act("Translate: hello")
     response = runtime.act("Search for Python docs", tools=[...])
 """
@@ -41,30 +41,8 @@ from helen.runtime.llm_runtime import LLMResponse, LLMRuntime
 logger = logging.getLogger(__name__)
 
 
-def _load_hermes_env() -> dict[str, str]:
-    """Load environment variables from Helen or Hermes config.
-
-    Priority:
-    1. ~/.helen/config.yaml
-    2. ~/.helen/.env
-    3. ~/.hermes/.env (fallback)
-
-    Returns dict with keys like DASHSCOPE_API_KEY, DASHSCOPE_BASE_URL for
-    backward compatibility.
-    """
-    from helen.runtime.config import load_config
-    config = load_config()
-    # Convert config to env-style dict for compatibility
-    env = {}
-    if "api_key" in config:
-        env["DASHSCOPE_API_KEY"] = config["api_key"]
-    if "base_url" in config:
-        env["DASHSCOPE_BASE_URL"] = config["base_url"]
-    return env
-
-
 # ---------------------------------------------------------------------------
-# Message Sanitization (borrowed from Hermes)
+# Message Sanitization
 # ---------------------------------------------------------------------------
 
 # Matches lone surrogate characters (U+D800-U+DFFF)
@@ -447,15 +425,16 @@ class HttpLLMRuntime(LLMRuntime):
     _reactive_compactor: Any = field(default=None, repr=False, init=False)
 
     def __post_init__(self):
-        """Auto-load configuration from Helen or Hermes config."""
+        """Auto-load configuration from Helen config."""
         if not self.base_url or not self.api_key:
-            hermes_env = _load_hermes_env()
+            from helen.runtime.config import load_config
+            config = load_config()
             if not self.base_url:
-                self.base_url = hermes_env.get("DASHSCOPE_BASE_URL", "https://coding.dashscope.aliyuncs.com/v1")
+                self.base_url = config.get("base_url", "https://coding.dashscope.aliyuncs.com/v1")
             if not self.api_key:
-                self.api_key = hermes_env.get("DASHSCOPE_API_KEY", "")
+                self.api_key = config.get("api_key", "")
             if not self.default_model:
-                self.default_model = "qwen3.7-plus"
+                self.default_model = config.get("model", "qwen3.7-plus")
 
         # Initialize reactive compactor for mid-turn compression
         if self.enable_reactive_compaction:

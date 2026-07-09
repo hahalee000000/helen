@@ -32,21 +32,17 @@ import helen.runtime.config as config_module
 
 @pytest.fixture()
 def isolated_helen(tmp_path, monkeypatch):
-    """Redirect HELEN_HOME / HERMES_HOME to tmp_path so tests are isolated."""
+    """Redirect HELEN_HOME to tmp_path so tests are isolated."""
     helen_home = tmp_path / ".helen"
-    hermes_home = tmp_path / ".hermes"
     helen_home.mkdir()
-    hermes_home.mkdir()
 
     monkeypatch.setattr(config_module, "HELEN_HOME", helen_home)
-    monkeypatch.setattr(config_module, "HERMES_HOME", hermes_home)
-    monkeypatch.setattr(config_module, "HERMES_ENV", hermes_home / ".env")
     monkeypatch.setattr(
         config_module,
         "CONFIG_FILES",
         [helen_home / "config.yaml", helen_home / "config.yml", helen_home / ".env"],
     )
-    return types.SimpleNamespace(helen_home=helen_home, hermes_home=hermes_home)
+    return types.SimpleNamespace(helen_home=helen_home)
 
 
 # ── get_helen_home ───────────────────────────────────────────────────────────
@@ -280,20 +276,6 @@ class TestLoadConfig:
         # Other keys still have defaults
         assert result["model"] == DEFAULT_LLM_CONFIG["model"]
 
-    def test_loads_from_hermes_env(self, isolated_helen):
-        env = isolated_helen.hermes_home / ".env"
-        env.write_text("HELEN_MODEL=hermes-model\n")
-        result = load_config()
-        assert result["model"] == "hermes-model"
-
-    def test_helen_env_overrides_hermes_env(self, isolated_helen):
-        hermes_env = isolated_helen.hermes_home / ".env"
-        hermes_env.write_text("HELEN_MODEL=old-model\n")
-        helen_env = isolated_helen.helen_home / ".env"
-        helen_env.write_text("HELEN_MODEL=new-model\n")
-        result = load_config()
-        assert result["model"] == "new-model"
-
     def test_yaml_overrides_env(self, isolated_helen):
         env = isolated_helen.helen_home / ".env"
         env.write_text("HELEN_MODEL=env-model\n")
@@ -318,12 +300,12 @@ class TestLoadConfig:
         assert "api_key" not in result or result.get("api_key") == DEFAULT_LLM_CONFIG.get("api_key")
 
     def test_all_sources_merged(self, isolated_helen):
-        hermes_env = isolated_helen.hermes_home / ".env"
-        hermes_env.write_text("HELEN_TIMEOUT=100\n")
         helen_env = isolated_helen.helen_home / ".env"
-        helen_env.write_text("HELEN_TEMPERATURE=0.2\n")
-        yml = isolated_helen.helen_home / "config.yaml"
-        yml.write_text("llm:\n  model: merged-model\n")
+        helen_env.write_text("HELEN_TIMEOUT=100\n")
+        yml = isolated_helen.helen_home / "config.yml"
+        yml.write_text("llm:\n  temperature: 0.2\n")
+        yaml_file = isolated_helen.helen_home / "config.yaml"
+        yaml_file.write_text("llm:\n  model: merged-model\n")
         result = load_config()
         assert result["timeout"] == 100
         assert result["temperature"] == 0.2
@@ -404,17 +386,6 @@ class TestGetSkillDirs:
         result = get_skill_dirs()
         assert isolated_helen.helen_home / "skills" in result
 
-    def test_hermes_skills_dir(self, isolated_helen):
-        (isolated_helen.hermes_home / "skills").mkdir()
-        result = get_skill_dirs()
-        assert isolated_helen.hermes_home / "skills" in result
-
-    def test_hermes_agent_skills_dir(self, isolated_helen):
-        agent_skills = isolated_helen.hermes_home / "hermes-agent" / "skills"
-        agent_skills.mkdir(parents=True)
-        result = get_skill_dirs()
-        assert agent_skills in result
-
     def test_project_level_skills(self, isolated_helen, monkeypatch, tmp_path):
         # Create project-level skills
         project_skills = tmp_path / ".helen" / "skills"
@@ -434,18 +405,20 @@ class TestGetSkillDirs:
             result = get_skill_dirs()
             assert builtin_skills in result
 
-    def test_priority_order(self, isolated_helen):
-        (isolated_helen.helen_home / "skills").mkdir()
-        (isolated_helen.hermes_home / "skills").mkdir()
-        agent_skills = isolated_helen.hermes_home / "hermes-agent" / "skills"
-        agent_skills.mkdir(parents=True)
+    def test_priority_order(self, isolated_helen, monkeypatch, tmp_path):
+        # Create a separate project directory with its own .helen/skills
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        project_skills = project_dir / ".helen" / "skills"
+        project_skills.mkdir(parents=True)
+        # Create user-level skills dir (distinct from project)
+        (isolated_helen.helen_home / "skills").mkdir(exist_ok=True)
+        monkeypatch.chdir(project_dir)
         result = get_skill_dirs()
-        # Check that all expected dirs are present
+        # Both should be present
+        assert project_skills in result
         assert isolated_helen.helen_home / "skills" in result
-        assert isolated_helen.hermes_home / "skills" in result
-        assert agent_skills in result
-        # Check relative order: user-level should come before hermes fallback
+        # Project-level should come before user-level
+        project_idx = result.index(project_skills)
         user_idx = result.index(isolated_helen.helen_home / "skills")
-        hermes_idx = result.index(isolated_helen.hermes_home / "skills")
-        agent_idx = result.index(agent_skills)
-        assert user_idx < hermes_idx < agent_idx
+        assert project_idx < user_idx

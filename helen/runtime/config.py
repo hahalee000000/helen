@@ -4,8 +4,6 @@ Helen uses its own configuration directory (~/.helen/) for:
 - API keys and LLM endpoint configuration
 - Skill directories
 - Runtime settings
-
-Falls back to Hermes configuration (~/.hermes/) for backward compatibility.
 """
 
 from __future__ import annotations
@@ -23,10 +21,6 @@ CONFIG_FILES = [
     HELEN_HOME / "config.yml",
     HELEN_HOME / ".env",
 ]
-
-# Hermes fallback
-HERMES_HOME = Path.home() / ".hermes"
-HERMES_ENV = HERMES_HOME / ".env"
 
 # Default LLM settings
 DEFAULT_LLM_CONFIG = {
@@ -51,8 +45,6 @@ def get_skill_dirs() -> list[Path]:
         1. <project>/.helen/skills/ (project-level, highest priority)
         2. ~/.helen/skills/ (user-level)
         3. <helen-install>/skills/ (built-in, distributed with language)
-        4. ~/.hermes/skills/ (Hermes fallback)
-        5. ~/.hermes/hermes-agent/skills/ (Hermes agent skills)
     """
     dirs = []
 
@@ -79,15 +71,6 @@ def get_skill_dirs() -> list[Path]:
     builtin_skills = helen_package / "skills"
     if builtin_skills.exists() and builtin_skills not in dirs:
         dirs.append(builtin_skills)
-
-    # 4. Hermes fallback
-    hermes_skills = HERMES_HOME / "skills"
-    if hermes_skills.exists() and hermes_skills not in dirs:
-        dirs.append(hermes_skills)
-
-    hermes_agent_skills = HERMES_HOME / "hermes-agent" / "skills"
-    if hermes_agent_skills.exists() and hermes_agent_skills not in dirs:
-        dirs.append(hermes_agent_skills)
 
     return dirs
 
@@ -198,10 +181,9 @@ def load_config() -> dict[str, Any]:
     """Load Helen configuration.
 
     Loads from multiple sources and merges them:
-    1. ~/.hermes/.env (base fallback)
-    2. ~/.helen/.env (Helen .env)
-    3. ~/.helen/config.yml (Helen YAML)
-    4. ~/.helen/config.yaml (Helen YAML, highest priority)
+    1. ~/.helen/.env (Helen .env)
+    2. ~/.helen/config.yml (Helen YAML)
+    3. ~/.helen/config.yaml (Helen YAML, highest priority)
 
     Later sources override earlier ones.
 
@@ -217,7 +199,6 @@ def load_config() -> dict[str, Any]:
 
     # Load from all sources in order (later overrides earlier)
     sources = [
-        (HERMES_ENV, _load_env_config),
         (HELEN_HOME / ".env", _load_env_config),
         (HELEN_HOME / "config.yml", _load_yaml_config),
         (HELEN_HOME / "config.yaml", _load_yaml_config),

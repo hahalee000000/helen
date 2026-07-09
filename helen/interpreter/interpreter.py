@@ -791,8 +791,8 @@ class Interpreter(LlmMixin, Visitor[object]):
             from helen.runtime.config import get_skill_dirs
             self._prompt_builder.set_skill_dirs([str(d) for d in get_skill_dirs()])
             # Set runtime for skill listing
-            from helen.runtime import HelenHermesRuntime
-            self._prompt_builder._runtime = HelenHermesRuntime()
+            from helen.runtime import HelenRuntime
+            self._prompt_builder._runtime = HelenRuntime()
         except Exception:
             pass
         self._shared_vars: set[str] = set()

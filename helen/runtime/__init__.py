@@ -1,8 +1,8 @@
-"""Runtime API interface and default Hermes implementation (HLD 3.8.1).
+"""Runtime API interface and default implementation (HLD 3.8.1).
 
 Runtime provides the abstraction layer between Helen Core and external
 services (LLM APIs, Memory, Skills, Tools). Core code never imports
-Hermes directly — it only uses this interface.
+from any specific LLM provider — it only uses this interface.
 """
 
 from __future__ import annotations
@@ -41,8 +41,8 @@ class Runtime(ABC):
     """Helen Runtime abstract interface (HLD 3.8.1).
 
     This interface defines all operations that Helen Core needs from
-    the runtime layer. The default implementation (HelenHermesRuntime)
-    provides concrete adapters for the Hermes Agent infrastructure.
+    the runtime layer. The default implementation (HelenRuntime)
+    provides concrete adapters for skill management, memory, and LLM calls.
     """
 
     # --- Tool & Skill Management ---
@@ -158,7 +158,7 @@ class Runtime(ABC):
 
 
 # ---------------------------------------------------------------------------
-# Concrete Implementation: HelenHermesRuntime (HLD 3.8.3)
+# Concrete Implementation: HelenRuntime (HLD 3.8.3)
 # ---------------------------------------------------------------------------
 
 
@@ -172,8 +172,8 @@ class _CallHandle:
         self.done = threading.Event()
 
 
-class HelenHermesRuntime(Runtime):
-    """Default Hermes-based implementation of the Helen Runtime (HLD 3.8.3).
+class HelenRuntime(Runtime):
+    """Default implementation of the Helen Runtime (HLD 3.8.3).
 
     Wraps an LLMRuntime (or similar provider) and adds:
     - Cancellable LLM calls via threading.Event
@@ -274,9 +274,9 @@ class HelenHermesRuntime(Runtime):
         """Find all directories that contain SKILL.md files.
 
         Uses Helen config module to get skill directories in priority order:
-        1. ~/.helen/skills/ (Helen native)
-        2. ~/.hermes/skills/ (Hermes fallback)
-        3. ~/.hermes/hermes-agent/skills/ (Hermes agent skills)
+        1. ~/.helen/skills/ (user-level)
+        2. <project>/.helen/skills/ (project-level)
+        3. <helen-install>/skills/ (built-in)
 
         Skills can be nested (e.g. mlops/inference/serving-llms-vllm/SKILL.md),
         so we recursively walk the skill base directories.
@@ -522,3 +522,8 @@ class CancelledError(Exception):
     def __init__(self, call_id: str) -> None:
         self.call_id = call_id
         super().__init__(f"LLM call {call_id} was cancelled")
+
+
+# Backward compatibility alias (legacy name)
+HelenHermesRuntime = HelenRuntime
+

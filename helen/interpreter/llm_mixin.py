@@ -966,10 +966,10 @@ class LlmMixin:
             return self._skill_index_cache
 
         # Rebuild the index
-        from helen.runtime import HelenHermesRuntime
+        from helen.runtime import HelenRuntime
 
         try:
-            runtime = HelenHermesRuntime()
+            runtime = HelenRuntime()
             skills = runtime.list_skills()
             if not skills:
                 self._skill_index_cache = ""
