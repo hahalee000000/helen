@@ -2343,17 +2343,34 @@ class Interpreter(LlmMixin, Visitor[object]):
         Starts the agent call in a background thread without waiting for completion.
         No Task object is returned - completely detached from the main flow.
 
+        Thread Safety (v1.16 fix): Creates an environment snapshot for isolation,
+        preventing race conditions when the detached agent accesses variables.
+
         Example: detach Worker("input")
 
         Returns:
             None (fire-and-forget)
         """
         import threading
+        import copy
 
-        # Create a thread that will execute the call
+        # Create environment snapshot for thread safety (prevents race conditions)
+        env_snapshot = self.environment.snapshot()
+
+        # Create a thread that will execute the call with isolated environment
         def run_detached():
             try:
-                node.call.accept(self)
+                # Create a new interpreter instance with the snapshot for full isolation
+                detached_interpreter = Interpreter(
+                    errors=self.errors,
+                    llm_runtime=self.llm_runtime,
+                    import_resolver=self.import_resolver,
+                )
+                # Replace the environment with the snapshot
+                detached_interpreter.environment = env_snapshot
+
+                # Execute the call in the isolated interpreter
+                node.call.accept(detached_interpreter)
             except Exception as e:
                 # Log error but don't propagate - fire-and-forget
                 import sys
