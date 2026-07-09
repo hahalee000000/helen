@@ -1,0 +1,14 @@
+// Test: 06-llm-statements.md:209
+
+agent Poet(topic: str) {
+    description "Write poetry"
+    temperature 0.9
+    prompt """
+    Write a poem about: {{topic}}
+    """
+
+    main {
+        fn print_chunk(chunk: str) { stream_print(chunk) }
+        llm act on_chunk print_chunk    // bare form：使用渲染后的 prompt
+    }
+}

@@ -1,0 +1,7 @@
+// Test: 06-llm-statements.md:64
+
+main {
+    let review = "This product is amazing!"
+    let result = llm act "Analyze sentiment of: " + review
+    print(result)
+}

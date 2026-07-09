@@ -1,0 +1,55 @@
+// Test: 17-multimodal.md:409
+
+// === Context from preceding blocks ===
+agent 图像分析 {
+    description "分析图像内容"
+    
+}
+
+let img1 = media("image1.png")
+let img2 = media("image2.png")
+let result = llm act "比较这两张图片" media(img1, img2)
+
+agent Claude媒体处理 {
+}
+
+agent 图像生成器 {
+    description "根据描述生成图像"
+    
+}
+
+agent 图像分析助手 {
+    description "专业的图像分析助手，能够理解和描述图像内容"
+    model "qwen-vl-max"
+    
+}
+
+agent 图像比较器 {
+    description "比较多个图像的差异"
+    
+}
+
+agent 创意图像生成器 {
+    description "根据文字描述生成图像"
+    
+}
+
+agent Claude分析 {
+}
+
+agent 自定义媒体处理 {
+}
+
+// === Test code ===
+on_generate fn(params) {
+    let resp = http_post("https://api.example.com/generate", {...})
+    let img = media_base64(resp.image_data, "image/png")
+    
+    # 保存到指定路径
+    保存媒体(img, params["output_path"])
+    
+    # 或获取 base64 做进一步处理
+    let b64 = 媒体转base64(img)
+    
+    返回 img
+}

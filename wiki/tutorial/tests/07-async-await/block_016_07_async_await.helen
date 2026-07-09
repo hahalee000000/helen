@@ -1,0 +1,82 @@
+// Test: 07-async-await.md:364
+
+// === Context from preceding blocks ===
+agent Researcher {
+    description "Research a topic"
+    prompt "Research and summarize:"
+}
+
+agent Analyst {
+    description "Analyze data"
+    prompt "Analyze the following data:"
+}
+
+let task = async MyAgent(input)
+
+// Task 方法 (未来版本支持)
+// task.is_success() → bool
+// task.get_result() → Any
+// task.get_error() → Exception
+
+// results = [result1, result2, result3]
+
+agent NewsSearcher {
+    description "Search latest news"
+    prompt "Search for news about:"
+}
+
+agent AcademicSearcher {
+    description "Search academic papers"
+    prompt "Find papers about:"
+}
+
+agent SocialSearcher {
+    description "Search social media"
+    prompt "Find social media posts about:"
+}
+
+agent Synthesizer {
+    description "Synthesize information from multiple sources"
+    prompt "Synthesize the following sources into a coherent report:"
+}
+
+agent Streamer(topic: str) {
+    description "Stream a long response"
+    streaming true
+    prompt "Write a detailed essay about: {{topic}}"
+}
+
+agent AsyncAgent {
+}
+
+agent ConcurrentTranslator {
+}
+
+agent StreamAgent {
+}
+
+agent BatchProcessor {
+}
+
+agent SafeAsyncAgent {
+}
+
+agent MixedAgent {
+}
+
+// === Test code ===
+// async call: 并发调用多个 agent
+async call AgentA()
+async call AgentB()
+let results = await [agentA, agentB]
+
+// await llm act_async: 并发调用 LLM
+let [r1, r2] = await [
+  llm act_async Task1 "First",
+  llm act_async Task2 "Second"
+]
+
+// 可以混合使用
+async call AgentA()
+let llm_result = await llm act_async Task "Task"
+let agent_result = await agentA

@@ -1,0 +1,42 @@
+// Test: 07-async-await.md:84
+
+agent NewsSearcher {
+    description "Search latest news"
+    prompt "Search for news about:"
+}
+
+agent AcademicSearcher {
+    description "Search academic papers"
+    prompt "Find papers about:"
+}
+
+agent SocialSearcher {
+    description "Search social media"
+    prompt "Find social media posts about:"
+}
+
+agent Synthesizer {
+    description "Synthesize information from multiple sources"
+    prompt "Synthesize the following sources into a coherent report:"
+}
+
+main {
+    let topic = "quantum computing breakthroughs"
+
+    // 并发搜索三个源
+    let news_task = async NewsSearcher(topic)
+    let academic_task = async AcademicSearcher(topic)
+    let social_task = async SocialSearcher(topic)
+
+    // 等待全部结果
+    try {
+        let sources = await [news_task, academic_task, social_task]
+
+        // 综合所有结果
+        let report = Synthesizer(sources[0] + "\n" + sources[1] + "\n" + sources[2])
+        print(report)
+    } catch AggregateError(err) {
+        print("Some sources failed to load")
+        // 仍然可以使用成功的结果
+    }
+}

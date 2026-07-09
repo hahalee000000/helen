@@ -1,0 +1,21 @@
+// Test: 17-multimodal.md:131
+
+agent 图像生成器 {
+    description "根据描述生成图像"
+    
+    main {
+        let result = llm act "创建一张日落风景图"
+            on_generate fn(params) {
+                # params 包含: prompt, size, model 等
+                let prompt = params["prompt"]
+                
+                # 调用图像生成 API
+                let image_url = call_image_generation_api(prompt)
+                
+                # 返回生成的媒体
+                返回 media("url://" + image_url)
+            }
+        
+        print("生成的图像: " + result)
+    }
+}

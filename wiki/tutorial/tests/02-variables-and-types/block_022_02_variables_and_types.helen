@@ -1,0 +1,6 @@
+// Test: 02-variables-and-types.md:284
+
+let x = 42
+let t = type(x)            // "int"
+let is_int = isinstance(x, "int")    // true
+let is_str = isinstance(x, "str")    // false

@@ -1,0 +1,14 @@
+// Test: 07-async-await.md:256
+
+agent ConcurrentTranslator {
+  main {
+    // 并发翻译多个文本
+    let [r1, r2, r3] = await [
+      llm act_async Translate "Hello",
+      llm act_async Translate "World",
+      llm act_async Translate "Helen"
+    ]
+    
+    print("Results: " + str([r1, r2, r3]))
+  }
+}

@@ -1,0 +1,31 @@
+// Test: 07-async-await.md:69
+
+// === Context from preceding blocks ===
+agent Researcher {
+    description "Research a topic"
+    prompt "Research and summarize:"
+}
+
+agent Analyst {
+    description "Analyze data"
+    prompt "Analyze the following data:"
+}
+
+let task = async MyAgent(input)
+
+// Task 方法 (未来版本支持)
+// task.is_success() → bool
+// task.get_result() → Any
+// task.get_error() → Exception
+
+// results = [result1, result2, result3]
+
+// === Test code ===
+try {
+    let results = await [task1, task2, task3]
+} catch AggregateError(err) {
+    // err.errors = [(index, exception), ...]
+    for error_info in err.errors {
+        print("Task " + str(error_info[0]) + " failed: " + str(error_info[1]))
+    }
+}

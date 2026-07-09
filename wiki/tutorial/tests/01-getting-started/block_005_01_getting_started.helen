@@ -1,0 +1,27 @@
+// Test: 01-getting-started.md:471
+
+// === Context from preceding blocks ===
+fn greet(name: string): string {
+    return "Hello, " + name + "!"
+}
+
+// === Test code ===
+// 纯中文 Hello World
+主函 {
+    print("你好，世界！")
+}
+
+// 中文变量和函数
+定义 姓名 = "张三"
+函数 打招呼(名字: str) {
+    print("你好, " + 名字)
+}
+打招呼(姓名)
+
+// 中英混合
+let 年龄 = 30
+如果 年龄 >= 18 {
+    print("成年")
+} 否则 {
+    print("未成年")
+}

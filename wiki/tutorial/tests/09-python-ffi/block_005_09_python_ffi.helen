@@ -1,0 +1,12 @@
+// Test: 09-python-ffi.md:119
+// @skip: needs Python module import
+
+import "os.path" as path
+
+main {
+    let joined = path.join("home", "user", "docs")
+    print(joined)    // home/user/docs
+    
+    let ext = path.splitext("file.txt")
+    print(ext)       // ["file", ".txt"]
+}

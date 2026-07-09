@@ -1,0 +1,35 @@
+// Test: 05-agents.md:213
+
+// === Context from preceding blocks ===
+agent Assistant {
+    description "Helpful assistant"
+    tools = ["web_search", "read_file"]   // LLM 可以自主调用这两个
+    functions {
+        fn fetch_summary(url: str): str {  // 在 functions 里声明
+            let content = read_file(url)
+            return summarize(content)
+        }
+        fn dangerous_op() { ... }          // LLM 看不到
+    }
+}
+
+agent SmartAssistant {
+    description "Smart assistant with custom context config"
+    
+    context {
+        compression "graduated"      // 压缩策略
+        cache-aware true             // 缓存感知
+        working-memory true          // 工作记忆
+        working-memory-tokens 5000   // 工作记忆令牌预算
+    }
+    
+    tools ["read_file", "web_search"]
+    prompt "You are a helpful assistant."
+    
+}
+
+// === Test code ===
+context {
+    working-memory true
+    working-memory-tokens 5000  // 工作记忆预算
+}

@@ -1,0 +1,37 @@
+// Test: 03-functions.md:318
+
+// === Context from preceding blocks ===
+fn greet(name) {
+    print("Hello, " + name + "!")
+}
+
+fn add(a, b) {
+    return a + b
+}
+
+fn factorial(n: int): int {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+let global_x = 100
+
+fn test() {
+    let local_x = 200
+    print(global_x)    // ✅ 可以访问全局变量
+    print(local_x)     // ✅ 可以访问局部变量
+}
+
+alias <canonical> as <alias_name>
+
+// === Test code ===
+函数 foo() { 返回 1 }
+alias foo as bar
+函数 foo() { 返回 2 }   // 重新定义 foo
+
+主函 {
+    foo()   // 2 - 使用新的 foo
+    bar()   // 1 - bar 仍指向旧的 foo
+}

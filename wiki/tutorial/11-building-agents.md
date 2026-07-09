@@ -124,6 +124,18 @@ main {
 ## 第三步：添加并发优化
 
 ```helen
+// 知识库查询 agent
+agent KnowledgeBase(query: str) {
+    description "Search knowledge base"
+    prompt "Search knowledge base for: {{query}}"
+}
+
+// 历史查询 agent
+agent HistoryLookup(topic: str) {
+    description "Lookup relevant history"
+    prompt "Find relevant history for: {{topic}}"
+}
+
 // 优化的版本：并发查询知识库
 main {
     let question = "How do I reset my password?"
@@ -239,6 +251,12 @@ agent ProductExpert {
 工作记忆自动跟踪 agent 执行过程中的关键信息：
 
 ```helen
+// 辅助函数：修复代码
+fn fix_code(code: str): str {
+    // 实际的代码修复逻辑
+    return code  // 简化示例
+}
+
 agent CodeReviewer {
     description "Review code changes"
     
@@ -247,6 +265,13 @@ agent CodeReviewer {
     }
     
     tools ["read_file", "write_file", "patch_file"]
+    
+    functions {
+        fn fix_code(code: str): str {
+            // 实际的代码修复逻辑
+            return code  // 简化示例
+        }
+    }
     
     main {
         // 自动跟踪：读取的文件

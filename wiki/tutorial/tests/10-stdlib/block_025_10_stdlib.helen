@@ -1,0 +1,22 @@
+// Test: 10-stdlib.md:520
+
+// === Context from preceding blocks ===
+let args = get_cli_args()  // 与 argv 相同
+
+let parsed = parse_cli_args()
+// 输入: --verbose --output=json --port 8080 input.txt
+// 结果: {
+//   verbose: true,
+//   output: "json",
+//   port: "8080",
+//   _positional: ["input.txt"]
+// }
+
+agent ChatBot {
+}
+
+// === Test code ===
+// 获取当前会话 ID
+let session_id = get_session_id()
+print("当前会话: " + session_id)
+// 返回: "session_1783492628_d9d9c0aa"

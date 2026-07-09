@@ -1,0 +1,9 @@
+// Test: 13-skills.md:34
+
+agent Developer {
+    tools = ["load_skill"]
+    main {
+        let guide = load_skill("helen-testing")
+        return llm act "Follow: " + guide
+    }
+}

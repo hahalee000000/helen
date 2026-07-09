@@ -1,0 +1,14 @@
+// Test: 07-async-await.md:133
+
+agent Streamer(topic: str) {
+    description "Stream a long response"
+    streaming true
+    prompt "Write a detailed essay about: {{topic}}"
+}
+
+main {
+    let response = async Streamer("the history of computing")
+    for await chunk in response {
+        stream_print(chunk)
+    }
+}

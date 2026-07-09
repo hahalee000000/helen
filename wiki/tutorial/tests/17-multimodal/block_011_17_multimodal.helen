@@ -1,0 +1,27 @@
+// Test: 17-multimodal.md:241
+
+// === Context from preceding blocks ===
+agent 图像分析 {
+    description "分析图像内容"
+    
+}
+
+let img1 = media("image1.png")
+let img2 = media("image2.png")
+let result = llm act "比较这两张图片" media(img1, img2)
+
+agent Claude媒体处理 {
+}
+
+agent 图像生成器 {
+    description "根据描述生成图像"
+    
+}
+
+// === Test code ===
+如果 是图片(part) { 打印("这是图片") }
+如果 是视频(part) { 打印("这是视频") }
+如果 是音频(part) { 打印("这是音频") }
+
+# 非 MediaPart 安全：返回假，不抛异常
+是图片("不是媒体")  # 返回: 假

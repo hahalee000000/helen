@@ -1,0 +1,22 @@
+// Test: 17-multimodal.md:339
+
+agent 自定义媒体处理 {
+    main {
+        let img = media("chart.png")
+        
+        let result = llm act "分析这个图表"
+            media(img)
+            provider("custom_provider")
+            on_media fn(parts, provider) {
+                # 使用媒体转base64辅助，手写 provider 特定格式
+                返回 parts.map(fn(part) {
+                    返回 {
+                        "type": "media",
+                        "mime_type": part.mime,
+                        "data": 媒体转base64(part),
+                        "encoding": "base64"
+                    }
+                })
+            }
+    }
+}

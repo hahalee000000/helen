@@ -1,0 +1,18 @@
+// Test: 05-agents.md:605
+
+agent Translator {
+    description "Translate text"
+
+    // 参数声明 (未来版本支持类型检查)
+    // text: str — 要翻译的文本
+    // target_lang: str — 目标语言
+
+    prompt """
+    Translate: {{text}}
+    Target language: {{target_lang}}
+    """
+}
+
+main {
+    let result = Translator("Hello", "French")
+}

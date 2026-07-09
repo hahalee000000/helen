@@ -1,0 +1,21 @@
+// Test: 10-stdlib.md:193
+
+// 匹配
+let m = regex_match(r"\d+", "123abc")
+print(m.match)                // "123"
+
+// 搜索
+let s = regex_search(r"\d+", "abc123def")
+print(s.match)                // "123"
+
+// 替换
+regex_replace(r"\d+", "abc123def", "NUM")
+// "abcNUMdef"
+
+// 分割
+regex_split(r"\s+", "a  b  c")
+// ["a", "b", "c"]
+
+// 查找所有
+regex_findall(r"\d+", "a1b2c3")
+// ["1", "2", "3"]

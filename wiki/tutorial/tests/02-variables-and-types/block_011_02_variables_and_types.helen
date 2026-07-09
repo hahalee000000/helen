@@ -1,0 +1,47 @@
+// Test: 02-variables-and-types.md:111
+
+// === Context from preceding blocks ===
+let number = 42         // int
+let float_num = 3.14    // float
+let text = "hello"      // str
+let flag = true         // bool
+let nothing = null      // null
+
+let numbers = [1, 2, 3]                     // list<int>
+let mixed = [1, "two", true]                // list<any>
+let person = {"name": "Alice", "age": 30}   // map<str, any>
+
+let name: str = "Alice"
+let age: int = 30
+let score: float = 95.5
+let active: bool = true
+
+let a = 10 + 3      // 13
+let b = 10 - 3      // 7
+let c = 10 * 3      // 30
+let d = 10 / 3      // 3.333...
+let e = 10 % 3      // 1
+
+let eq = 5 == 5     // true
+let ne = 5 != 3     // true
+let gt = 5 > 3      // true
+let ge = 5 >= 5     // true
+let lt = 3 < 5      // true
+let le = 5 <= 5     // true
+
+// === Test code ===
+let and = true && false   // false
+let or = true || false    // true
+let not = !true           // false
+
+// 实际使用示例
+let x = 5
+if x > 0 && x < 10 {
+    print("x is between 0 and 10")
+}
+
+// 文件存在性检查示例
+let file = "config.txt"
+if !path_exists(file) {
+    print("File not found")
+}

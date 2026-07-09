@@ -1,0 +1,21 @@
+// Test: 09-python-ffi.md:160
+// @skip: needs Python module import
+
+import "os.path" as path
+
+main {
+    let filepath = "/home/user/documents/report.txt"
+    
+    // 提取文件名
+    let basename = path.basename(filepath)
+    print(basename)    // report.txt
+    
+    // 提取目录
+    let dirname = path.dirname(filepath)
+    print(dirname)     // /home/user/documents
+    
+    // 分离扩展名
+    let parts = path.splitext(filepath)
+    print(parts[0])    // /home/user/documents/report
+    print(parts[1])    // .txt
+}

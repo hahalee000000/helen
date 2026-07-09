@@ -1,0 +1,6 @@
+// Test: 05-agents.md:21
+
+agent Translator {
+    description "Translate text"
+    prompt "You are a translator..."
+}

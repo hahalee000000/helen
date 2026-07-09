@@ -1,0 +1,18 @@
+// Test: 03-functions.md:191
+
+// === Context from preceding blocks ===
+fn greet(name) {
+    print("Hello, " + name + "!")
+}
+
+// === Test code ===
+// 匿名函数赋值给变量
+let add = fn(a, b) { return a + b }
+print(add(2, 3))  // 5
+
+// 直接作为参数传递
+let doubled = map([1, 2, 3], fn(x) { return x * 2 })
+print(doubled)  // [2, 4, 6]
+
+let evens = filter([1, 2, 3, 4, 5], fn(x) { return x % 2 == 0 })
+print(evens)  // [2, 4]

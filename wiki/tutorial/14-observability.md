@@ -177,6 +177,12 @@ main {
 ### 上下文管理调试
 
 ```helen
+// 辅助函数：修复代码
+fn fix_code(code: str): str {
+    // 实际的代码修复逻辑
+    return code  // 简化示例
+}
+
 agent DebugHelper {
     context {
         compression "graduated"
@@ -184,6 +190,13 @@ agent DebugHelper {
     }
     
     tools ["read_file", "write_file"]
+    
+    functions {
+        fn fix_code(code: str): str {
+            // 实际的代码修复逻辑
+            return code  // 简化示例
+        }
+    }
     
     main {
         // 工作记忆自动跟踪文件操作

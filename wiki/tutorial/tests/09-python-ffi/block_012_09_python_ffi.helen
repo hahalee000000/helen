@@ -1,0 +1,13 @@
+// Test: 09-python-ffi.md:286
+// @skip: needs Python module import
+
+import "math" as math
+
+main {
+    try {
+        let result = math.sqrt(-1)
+        print(result)
+    } catch RuntimeError err {
+        print("Error: " + err.message)
+    }
+}

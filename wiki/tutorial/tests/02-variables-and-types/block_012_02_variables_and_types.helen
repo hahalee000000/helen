@@ -1,0 +1,4 @@
+// Test: 02-variables-and-types.md:133
+
+let greeting = "Hello, " + "World!"    // "Hello, World!"
+let message = "Score: " + 42           // "Score: 42"

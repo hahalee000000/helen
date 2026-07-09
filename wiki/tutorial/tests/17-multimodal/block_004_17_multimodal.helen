@@ -1,0 +1,12 @@
+// Test: 17-multimodal.md:83
+
+agent Claude媒体处理 {
+    main {
+        let img = media("diagram.png")
+        
+        # 推荐：使用内置格式适配器（一行搞定）
+        let result = llm act "解释这个图表" 
+            media(img)
+            on_media fn(parts, provider) { 转Claude格式(parts) }
+    }
+}

@@ -1,0 +1,6 @@
+// Test: 14-observability.md:52
+
+main {
+    let x = 42
+    debug("variable value", x)
+}

@@ -1,0 +1,25 @@
+// Test: 10-stdlib.md:463
+
+// === Context from preceding blocks ===
+let args = get_cli_args()  // 与 argv 相同
+
+let parsed = parse_cli_args()
+// 输入: --verbose --output=json --port 8080 input.txt
+// 结果: {
+//   verbose: true,
+//   output: "json",
+//   port: "8080",
+//   _positional: ["input.txt"]
+// }
+
+// === Test code ===
+// 自动压缩（基于 token 阈值）
+let result = compress_context("auto")
+print("从 " + str(result["original_tokens"]) + " 压缩到 " + str(result["compressed_tokens"]))
+// 返回: {"status": "ok", "original_messages": 10, "compressed_messages": 5, ...}
+
+// 强制使用 LLM 摘要压缩
+compress_context("summarize")
+
+// 截断保留最近 10 条消息
+compress_context("truncate")

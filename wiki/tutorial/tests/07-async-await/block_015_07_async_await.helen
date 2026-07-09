@@ -1,0 +1,17 @@
+// Test: 07-async-await.md:337
+
+agent MixedAgent {
+  main {
+    // 同步调用：简单任务
+    let simple = llm act SimpleTask "Quick task"
+    
+    // 异步调用：复杂任务
+    let complex = await llm act_async ComplexTask "Long task"
+    
+    // 并发异步：多个任务
+    let [r1, r2] = await [
+      llm act_async Task1 "First",
+      llm act_async Task2 "Second"
+    ]
+  }
+}

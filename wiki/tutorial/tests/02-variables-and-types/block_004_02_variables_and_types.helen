@@ -1,0 +1,5 @@
+// Test: 02-variables-and-types.md:37
+
+let numbers = [1, 2, 3]                     // list<int>
+let mixed = [1, "two", true]                // list<any>
+let person = {"name": "Alice", "age": 30}   // map<str, any>

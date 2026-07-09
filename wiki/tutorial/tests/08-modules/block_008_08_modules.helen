@@ -1,0 +1,18 @@
+// Test: 08-modules.md:131
+// @skip: needs external file import
+
+// a.helen
+import "./b.helen"
+fn from_a() { return "A" }
+
+// b.helen
+import "./a.helen"    // 循环导入，静默跳过
+fn from_b() { return "B" }
+
+// main.helen
+import "./a.helen"
+
+main {
+    from_a()    // ✅
+    from_b()    // ✅ (b.helen 从 main 导入)
+}

@@ -1,0 +1,23 @@
+// Test: 12-testing.md:21
+
+// calculator_test.helen
+
+fn add(a, b) { return a + b }
+fn subtract(a, b) { return a - b }
+
+fn test_add() {
+    assert_equal(add(2, 3), 5)
+    assert_equal(add(-1, 1), 0)
+}
+
+fn test_subtract() {
+    assert_equal(subtract(10, 4), 6)
+    assert_equal(subtract(0, 0), 0)
+}
+
+test_suite("Calculator")
+test_case("adds numbers", test_add)
+test_case("subtracts numbers", test_subtract)
+test_end_suite()
+
+run_tests()

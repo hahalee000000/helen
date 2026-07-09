@@ -1,0 +1,21 @@
+// Test: 07-async-await.md:19
+
+agent Researcher {
+    description "Research a topic"
+    prompt "Research and summarize:"
+    main {
+        let topic = "AI in healthcare"
+        let research_task = async Researcher(topic)
+        let data_task = async Analyst(topic)
+        let results = await [research_task, data_task]
+        let research = results[0]
+        let analysis = results[1]
+        print("Research: " + research)
+        print("Analysis: " + analysis)
+    }
+}
+
+agent Analyst {
+    description "Analyze data"
+    prompt "Analyze the following data:"
+}

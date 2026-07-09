@@ -1,0 +1,5 @@
+// Test: 08-modules.md:120
+// @should_fail
+
+import "../../secrets.helen"    // ❌ 路径越界
+import "/etc/passwd"             // ❌ 绝对路径

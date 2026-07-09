@@ -1,0 +1,9 @@
+// Test: 06-llm-statements.md:336
+
+agent Researcher(topic) {
+    description "Research assistant"
+    tools = ["web_search", "read_file"]
+    main {
+        return llm act "Research about: " + topic
+    }
+}

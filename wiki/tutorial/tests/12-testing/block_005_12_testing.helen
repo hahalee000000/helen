@@ -1,0 +1,18 @@
+// Test: 12-testing.md:162
+
+fn setup() {
+    // 重置全局状态、初始化数据
+    print("Setting up...")
+}
+
+fn teardown() {
+    // 清理资源
+    print("Tearing down...")
+}
+
+test_suite("With Hooks")
+before_each(setup)
+after_each(teardown)
+test_case("test1", test_something)
+test_case("test2", test_another)
+test_end_suite()

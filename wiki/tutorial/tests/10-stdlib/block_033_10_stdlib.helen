@@ -1,0 +1,46 @@
+// Test: 10-stdlib.md:751
+
+// === Context from preceding blocks ===
+let args = get_cli_args()  // 与 argv 相同
+
+let parsed = parse_cli_args()
+// 输入: --verbose --output=json --port 8080 input.txt
+// 结果: {
+//   verbose: true,
+//   output: "json",
+//   port: "8080",
+//   _positional: ["input.txt"]
+// }
+
+agent ChatBot {
+}
+
+// 查找所有 Python 文件（递归）
+let py_files = glob_files("src", "*.py")
+// 返回: ["main.py", "utils/helper.py", "tests/test_main.py"]
+
+// 查找特定模式的文件
+let test_files = glob_files(".", "*test*.py")
+// 返回: ["test_main.py", "tests/test_utils.py"]
+
+// 使用 ** 显式递归
+let md_files = glob_files("docs", "**/*.md")
+// 返回: ["readme.md", "guide/intro.md", "api/reference.md"]
+
+// 复杂模式
+let config_files = glob_files("config", "**/*.{json,yaml,yml}")
+// 返回配置文件列表
+
+// === Test code ===
+fn 统计代码行数(目录: str) {
+    let files = glob_files(目录, "*.py")
+    let total_lines = 0
+    for file in files {
+        let content = read_file(file)
+        total_lines += len(split(content, "\n"))
+    }
+    return {"files": len(files), "lines": total_lines}
+}
+
+let stats = 统计代码行数("src")
+print("找到 " + str(stats["files"]) + " 个文件，共 " + str(stats["lines"]) + " 行")

@@ -1,0 +1,48 @@
+// Test: 02-variables-and-types.md:242
+
+// === Context from preceding blocks ===
+let number = 42         // int
+let float_num = 3.14    // float
+let text = "hello"      // str
+let flag = true         // bool
+let nothing = null      // null
+
+let numbers = [1, 2, 3]                     // list<int>
+let mixed = [1, "two", true]                // list<any>
+let person = {"name": "Alice", "age": 30}   // map<str, any>
+
+let name: str = "Alice"
+let age: int = 30
+let score: float = 95.5
+let active: bool = true
+
+let a = 10 + 3      // 13
+let b = 10 - 3      // 7
+let c = 10 * 3      // 30
+let d = 10 / 3      // 3.333...
+let e = 10 % 3      // 1
+
+let eq = 5 == 5     // true
+let ne = 5 != 3     // true
+let gt = 5 > 3      // true
+let ge = 5 >= 5     // true
+let lt = 3 < 5      // true
+let le = 5 <= 5     // true
+
+let greeting = "Hello, " + "World!"    // "Hello, World!"
+let message = "Score: " + 42           // "Score: 42"
+
+let nums = [1, 2, 3]
+let first = nums[0]        // 1
+let len = len(nums)        // 3
+let range_nums = range(5)  // [0, 1, 2, 3, 4]
+
+let person = {"name": "Alice", "age": 30}
+let name = person["name"]  // "Alice"
+
+// === Test code ===
+let matrix = [[1, 2], [3, 4]]
+matrix[0][1] = 99  // ✅ matrix 变为 [[1, 99], [3, 4]]
+
+let data = {"users": [{"name": "Alice"}, {"name": "Bob"}]}
+data["users"][0]["name"] = "Charlie"  // ✅ 嵌套修改

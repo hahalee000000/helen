@@ -1,0 +1,38 @@
+// Test: 06-llm-statements.md:138
+
+// === Context from preceding blocks ===
+agent Translator(text: str, target: str) {
+    description "Translate text"
+    model "qwen-plus"
+    temperature 0.3
+    prompt """
+    Translate to {{target}}:
+    {{text}}
+    """
+
+}
+
+// === Test code ===
+let query = "How do I reset my password?"
+
+llm if "Classify query type" {
+    branch "question" {
+        llm if "Identify question category" {
+            branch "technical" {
+                TechSupport(query)
+            }
+            branch "billing" {
+                BillingSupport(query)
+            }
+            default {
+                GeneralSupport(query)
+            }
+        }
+    }
+    branch "command" {
+        execute_command(query)
+    }
+    default {
+        print("I don't understand")
+    }
+}

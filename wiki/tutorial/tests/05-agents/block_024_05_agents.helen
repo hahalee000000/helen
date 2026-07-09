@@ -1,0 +1,163 @@
+// Test: 05-agents.md:714
+
+// === Context from preceding blocks ===
+agent Assistant {
+    description "Helpful assistant"
+    tools = ["web_search", "read_file"]   // LLM 可以自主调用这两个
+    functions {
+        fn fetch_summary(url: str): str {  // 在 functions 里声明
+            let content = read_file(url)
+            return summarize(content)
+        }
+        fn dangerous_op() { ... }          // LLM 看不到
+    }
+}
+
+agent SmartAssistant {
+    description "Smart assistant with custom context config"
+    
+    context {
+        compression "graduated"      // 压缩策略
+        cache-aware true             // 缓存感知
+        working-memory true          // 工作记忆
+        working-memory-tokens 5000   // 工作记忆令牌预算
+    }
+    
+    tools ["read_file", "web_search"]
+    prompt "You are a helpful assistant."
+    
+}
+
+agent Researcher(topic: str) {
+    description "Research assistant with optimized context"
+    
+    // 优化上下文管理
+    context {
+        compression "graduated"      // 渐进压缩
+        cache-aware true             // 缓存感知
+        working-memory true          // 跟踪研究文件
+        working-memory-tokens 8000   // 更大的工作记忆
+    }
+    
+    tools ["web_search", "web_fetch", "read_file", "write_file"]
+    
+    prompt """
+    你是研究助手。
+    研究主题：{{topic}}
+    
+    使用工具搜索和整理信息。
+    """
+    
+}
+
+agent ChatBot {
+    description "Chat bot with transcript management"
+    prompt "You are a helpful chat assistant."
+    
+}
+
+agent CodingAgent {
+    description "A coding assistant"
+    prompt "You are a Python expert. Help me with coding."
+    tools ["read_file", "write_file"]
+    
+}
+
+agent Translator(text: str, target: str) {
+    description "Translate text"
+    model "gpt-4"
+    temperature 0.3
+    prompt """
+    Translate to {{target}}:
+    {{text}}
+    """
+    
+    functions {
+        let default_format = "formal"
+        const MAX_LENGTH = 1000
+        
+        fn validate_input(s: str): bool {
+            return len(s) > 0
+        }
+        
+        fn format_output(text: str): str {
+            if default_format == "formal" {
+                return text.upper()
+            }
+            return text
+        }
+    }
+    
+}
+
+// 调用方式（推荐函数式调用）：
+let translated = Translator(text="Hello", target="French")
+// 函数式调用：let translated = Translator(text="Hello", target="French")
+
+agent Translator {
+    description "Translate text"
+
+    // 参数声明 (未来版本支持类型检查)
+    // text: str — 要翻译的文本
+    // target_lang: str — 目标语言
+
+    prompt """
+    Translate: {{text}}
+    Target language: {{target_lang}}
+    """
+}
+
+agent Summarizer {
+    description "Summarize text"
+    prompt "Summarize the following:"
+}
+
+agent EmailClassifier {
+    description "Classify emails into categories"
+    model "gpt-4"
+    temperature 0.1
+    prompt """
+    Classify the email into one of:
+    - urgent: Requires immediate attention
+    - meeting: Calendar-related
+    - informational: FYI only
+    - spam: Unwanted email
+    """
+}
+
+agent UrgentResponder {
+    description "Draft response to urgent emails"
+    prompt "Draft a professional response..."
+}
+
+agent EmailClassifier {
+    description "Classify emails"
+    prompt "Classify this email..."
+}
+
+// === Test code ===
+agent ResearchAssistant {
+    description "Long-running research agent"
+    
+    // v1.15: 上下文配置
+    context {
+        compression "graduated"      // "none" | "graduated" | "traditional"
+        cache-aware true             // 启用缓存感知压缩
+        working-memory true          // 启用工作记忆
+        working-memory-tokens 8000   // 工作记忆令牌预算
+    }
+    
+    tools ["read_file", "write_file", "web_search"]
+    
+    prompt "You are a research assistant. Help the user find and summarize information."
+}
+
+// 中文关键字等价
+agent 研究助手 {
+    上下文 {
+        压缩 "graduated"
+        缓存感知 true
+        工作记忆 true
+        工作记忆令牌 8000
+    }
+}

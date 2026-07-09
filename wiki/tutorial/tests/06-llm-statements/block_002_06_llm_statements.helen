@@ -1,0 +1,22 @@
+// Test: 06-llm-statements.md:37
+
+agent Translator(text: str, target: str) {
+    description "Translate text"
+    model "qwen-plus"
+    temperature 0.3
+    prompt """
+    Translate to {{target}}:
+    {{text}}
+    """
+
+    main {
+        // bare form：自动使用渲染后的 prompt
+        let result = llm act
+        return result
+    }
+}
+
+main {
+    let translated = Translator(text="Hello", target="French")
+    print(translated)
+}

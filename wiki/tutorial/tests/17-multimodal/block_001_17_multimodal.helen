@@ -1,0 +1,17 @@
+// Test: 17-multimodal.md:23
+
+# 从文件创建
+let img = media("file:///path/to/image.png")
+
+# 从 URL 创建
+let remote_img = media("https://example.com/image.jpg")
+
+# 从 base64 创建
+let b64_data = read_file_base64("image.png")
+let inline_img = media_base64(b64_data, "image/png")
+
+# 检查是否为 MediaPart
+是媒体(img)  # 返回: 真
+
+# 获取媒体类型
+媒体类型(img)  # 返回: "image"

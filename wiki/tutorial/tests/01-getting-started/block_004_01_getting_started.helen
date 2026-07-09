@@ -1,0 +1,10 @@
+// Test: 01-getting-started.md:255
+
+fn greet(name: string): string {
+    return "Hello, " + name + "!"
+}
+
+main {
+    let msg = greet("Helen")
+    print(msg)
+}

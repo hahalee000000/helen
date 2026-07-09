@@ -1,0 +1,13 @@
+// Test: 08-modules.md:169
+// @skip: needs external file import
+
+// main.helen
+import "./agents/translator.helen"
+import "./agents/summarizer.helen"
+import "./agents/classifier.helen"
+import "./utils/text.helen" as text_utils
+import "./config.json" as config
+
+main {
+    // 使用所有导入的 Agent 和工具
+}

@@ -1,0 +1,12 @@
+// Test: 09-python-ffi.md:53
+// @skip: needs Python module import
+
+import "math" as math
+
+main {
+    let pi = math.pi
+    print(pi)             // 3.141592653589793
+    
+    let e = math.e
+    print(e)              // 2.718281828459045
+}

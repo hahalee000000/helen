@@ -1,0 +1,17 @@
+// Test: 08-modules.md:48
+// @skip: needs external file import
+
+// config.json
+{
+    "model": "gpt-4",
+    "temperature": 0.7,
+    "max_turns": 3
+}
+
+// main.helen
+import "./config.json" as cfg
+
+main {
+    // cfg 包含解析后的 JSON 数据
+    // (在 v1 中通过环境变量或运行时访问)
+}

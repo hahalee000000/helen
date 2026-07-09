@@ -1,0 +1,17 @@
+// Test: 10-stdlib.md:725
+
+// 查找所有 Python 文件（递归）
+let py_files = glob_files("src", "*.py")
+// 返回: ["main.py", "utils/helper.py", "tests/test_main.py"]
+
+// 查找特定模式的文件
+let test_files = glob_files(".", "*test*.py")
+// 返回: ["test_main.py", "tests/test_utils.py"]
+
+// 使用 ** 显式递归
+let md_files = glob_files("docs", "**/*.md")
+// 返回: ["readme.md", "guide/intro.md", "api/reference.md"]
+
+// 复杂模式
+let config_files = glob_files("config", "**/*.{json,yaml,yml}")
+// 返回配置文件列表

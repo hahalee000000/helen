@@ -1,0 +1,32 @@
+// Test: 06-llm-statements.md:114
+
+// === Context from preceding blocks ===
+agent Translator(text: str, target: str) {
+    description "Translate text"
+    model "qwen-plus"
+    temperature 0.3
+    prompt """
+    Translate to {{target}}:
+    {{text}}
+    """
+
+}
+
+// === Test code ===
+llm if "Classify email priority" {
+    branch "urgent" {
+        print("🚨 URGENT — notify on-call immediately")
+    }
+    branch "high" {
+        print("🔴 HIGH — address within 1 hour")
+    }
+    branch "normal" {
+        print("🟢 NORMAL — handle in next sprint")
+    }
+    branch "low" {
+        print("⚪ LOW — handle when convenient")
+    }
+    default {
+        print("❓ Unknown priority")
+    }
+}

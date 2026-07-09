@@ -1,0 +1,7 @@
+// Test: 05-agents.md:74
+
+agent Interviewer {
+    description "Conduct an interview"
+    max-turns 5    // 最多 5 轮对话
+    prompt "Ask follow-up questions..."
+}

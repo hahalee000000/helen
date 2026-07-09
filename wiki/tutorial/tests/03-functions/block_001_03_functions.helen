@@ -1,0 +1,9 @@
+// Test: 03-functions.md:8
+
+fn greet(name) {
+    print("Hello, " + name + "!")
+}
+
+main {
+    greet("Alice")    // Hello, Alice!
+}

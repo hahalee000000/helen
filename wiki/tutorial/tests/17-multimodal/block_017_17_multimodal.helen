@@ -1,0 +1,56 @@
+// Test: 17-multimodal.md:388
+
+// === Context from preceding blocks ===
+agent 图像分析 {
+    description "分析图像内容"
+    
+}
+
+let img1 = media("image1.png")
+let img2 = media("image2.png")
+
+agent Claude媒体处理 {
+}
+
+agent 图像生成器 {
+    description "根据描述生成图像"
+    
+}
+
+agent 图像分析助手 {
+    description "专业的图像分析助手，能够理解和描述图像内容"
+    model "qwen-vl-max"
+    
+}
+
+agent 图像比较器 {
+    description "比较多个图像的差异"
+    
+}
+
+agent 创意图像生成器 {
+    description "根据文字描述生成图像"
+    
+}
+
+agent Claude分析 {
+}
+
+agent 自定义媒体处理 {
+}
+
+// === Test code ===
+# OpenAI 兼容 provider（默认，无需 on_media）
+let result = llm act "分析图片" media(img)
+
+# Claude — 一行适配器
+let result = llm act "分析图片"
+    media(img)
+    on_media fn(parts, provider) { 转Claude格式(parts) }
+
+# Gemini
+let result = llm act "分析图片"
+    media(img)
+    on_media fn(parts, provider) { 转Gemini格式(parts) }
+
+# 仅在需要非标准 provider 时才手写 on_media

@@ -1,0 +1,39 @@
+// Test: 05-agents.md:528
+
+agent Translator(text: str, target: str) {
+    description "Translate text"
+    model "gpt-4"
+    temperature 0.3
+    prompt """
+    Translate to {{target}}:
+    {{text}}
+    """
+    
+    functions {
+        let default_format = "formal"
+        const MAX_LENGTH = 1000
+        
+        fn validate_input(s: str): bool {
+            return len(s) > 0
+        }
+        
+        fn format_output(text: str): str {
+            if default_format == "formal" {
+                return text.upper()
+            }
+            return text
+        }
+    }
+    
+    main {
+        if validate_input(text) {
+            let result = llm act    // bare form：自动使用渲染后的 prompt
+            return format_output(result)
+        }
+        return "输入为空"
+    }
+}
+
+// 调用方式（推荐函数式调用）：
+let translated = Translator(text="Hello", target="French")
+// 函数式调用：let translated = Translator(text="Hello", target="French")

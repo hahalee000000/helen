@@ -1,0 +1,19 @@
+// Test: 08-modules.md:87
+// @skip: needs external file import
+
+// lib.helen
+fn utility() {
+    return "useful"
+}
+
+main {
+    print("This will NOT run when imported!")
+}
+
+// main.helen
+import "./lib.helen"
+
+main {
+    utility()    // ✅ 可以使用函数
+    // lib.helen 的 main 不会执行
+}

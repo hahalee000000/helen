@@ -1,0 +1,7 @@
+// Test: 06-llm-statements.md:25
+
+main {
+    let result = llm act "Translate 'Hello, world!' to French"
+    print(result)
+    // Bonjour, le monde!
+}

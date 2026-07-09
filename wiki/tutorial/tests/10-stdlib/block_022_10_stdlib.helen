@@ -1,0 +1,20 @@
+// Test: 10-stdlib.md:448
+
+// === Context from preceding blocks ===
+let args = get_cli_args()  // 与 argv 相同
+
+let parsed = parse_cli_args()
+// 输入: --verbose --output=json --port 8080 input.txt
+// 结果: {
+//   verbose: true,
+//   output: "json",
+//   port: "8080",
+//   _positional: ["input.txt"]
+// }
+
+// === Test code ===
+// 清空当前对话历史
+let result = clear_context()
+print("已清空 " + str(result["cleared_messages"]) + " 条消息")
+print("释放约 " + str(result["cleared_tokens"]) + " tokens")
+// 返回: {"status": "ok", "cleared_messages": 5, "cleared_tokens": 1200, "warning": "..."}

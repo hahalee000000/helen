@@ -1,0 +1,20 @@
+// Test: 17-multimodal.md:254
+
+agent 图像分析助手 {
+    description "专业的图像分析助手，能够理解和描述图像内容"
+    model "qwen-vl-max"
+    
+    main {
+        # 从用户获取图像路径
+        let image_path = input("请输入图像路径: ")
+        
+        # 创建 MediaPart
+        let img = media(image_path)
+        
+        # 分析图像
+        let analysis = llm act "请详细描述这张图片的内容、风格和可能的用途"
+            media(img)
+        
+        print("\n分析结果:\n" + analysis)
+    }
+}

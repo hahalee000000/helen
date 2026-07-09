@@ -1,0 +1,7 @@
+// Test: 05-agents.md:48
+
+agent SmartTranslator {
+    description "High-quality translation"
+    model "gpt-4"
+    prompt "Translate carefully..."
+}

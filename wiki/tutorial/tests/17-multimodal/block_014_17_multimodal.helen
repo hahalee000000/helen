@@ -1,0 +1,22 @@
+// Test: 17-multimodal.md:295
+
+agent 创意图像生成器 {
+    description "根据文字描述生成图像"
+    
+    main {
+        let description = input("描述你想生成的图像: ")
+        
+        let result = llm act description
+            on_generate fn(params) {
+                # 这里应该调用实际的图像生成 API
+                # 示例使用占位符
+                let prompt = params["prompt"]
+                let api_response = call_dalle_api(prompt, size="1024x1024")
+                
+                # 返回生成的图像
+                返回 media(api_response["url"])
+            }
+        
+        print("生成的图像: " + result)
+    }
+}

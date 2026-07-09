@@ -1,0 +1,14 @@
+// Test: 08-modules.md:67
+// @skip: needs external file import
+
+// prompt.md
+You are a helpful assistant.
+Always respond in a friendly tone.
+Be concise but thorough.
+
+// main.helen
+import "./prompt.md" as system_prompt
+
+main {
+    // system_prompt 包含纯文本内容
+}

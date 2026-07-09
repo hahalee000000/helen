@@ -1,0 +1,13 @@
+// Test: 10-stdlib.md:276
+
+// 解析
+let data = json_parse('{"name": "Alice", "age": 30}')
+print(data.name)              // "Alice"
+
+// 生成
+let json_str = json_stringify({"name": "Alice"})
+// '{"name": "Alice"}'
+
+// 文件操作
+json_save("data.json", data)
+let loaded = json_load("data.json")

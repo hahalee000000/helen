@@ -1,0 +1,19 @@
+// Test: 05-agents.md:92
+
+agent Assistant {
+    description "Helpful assistant"
+    tools = ["web_search", "read_file"]   // LLM 可以自主调用这两个
+    functions {
+        fn fetch_summary(url: str): str {  // 在 functions 里声明
+            let content = read_file(url)
+            return summarize(content)
+        }
+        fn dangerous_op() { ... }          // LLM 看不到
+    }
+    main {
+        // main 可以调用 functions 里任意函数（不受 tools 限制）
+        let summary = fetch_summary("http://example.com")
+        dangerous_op()                      // ✅ main 可以调
+        return llm act "..."                // LLM 只能调 web_search/read_file/fetch_summary
+    }
+}

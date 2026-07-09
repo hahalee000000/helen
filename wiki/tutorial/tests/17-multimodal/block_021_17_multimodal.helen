@@ -1,0 +1,52 @@
+// Test: 17-multimodal.md:450
+
+// === Context from preceding blocks ===
+agent 图像分析 {
+    description "分析图像内容"
+    
+}
+
+let img1 = media("image1.png")
+let img2 = media("image2.png")
+
+agent Claude媒体处理 {
+}
+
+agent 图像生成器 {
+    description "根据描述生成图像"
+    
+}
+
+agent 图像分析助手 {
+    description "专业的图像分析助手，能够理解和描述图像内容"
+    model "qwen-vl-max"
+    
+}
+
+agent 图像比较器 {
+    description "比较多个图像的差异"
+    
+}
+
+agent 创意图像生成器 {
+    description "根据文字描述生成图像"
+    
+}
+
+agent Claude分析 {
+}
+
+agent 自定义媒体处理 {
+}
+
+let parts = [img1, video1, audio1, img2]
+let images = parts.filter(是图片)    # 只保留图片
+let videos = parts.filter(是视频)    # 只保留视频
+
+// === Test code ===
+尝试 {
+    let img = media("可能不存在的文件.png")
+    let result = llm act "分析" media(img)
+} 捕获 err {
+    print("媒体加载失败: " + err.消息)
+}

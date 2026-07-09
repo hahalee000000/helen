@@ -1,0 +1,46 @@
+// Test: 05-agents.md:641
+
+agent EmailClassifier {
+    description "Classify emails into categories"
+    model "gpt-4"
+    temperature 0.1
+    prompt """
+    Classify the email into one of:
+    - urgent: Requires immediate attention
+    - meeting: Calendar-related
+    - informational: FYI only
+    - spam: Unwanted email
+    """
+}
+
+agent UrgentResponder {
+    description "Draft response to urgent emails"
+    prompt "Draft a professional response..."
+}
+
+agent EmailClassifier {
+    description "Classify emails"
+    prompt "Classify this email..."
+    main {
+        let email = "URGENT: Server down in production!"
+
+        llm if "Classify this email" {
+            branch "urgent" {
+                print("🚨 URGENT email detected!")
+                UrgentResponder(email)
+            }
+            branch "meeting" {
+                print("📅 Meeting request")
+            }
+            branch "informational" {
+                print("📧 FYI email")
+            }
+            branch "spam" {
+                print("🗑️ Spam, ignoring")
+            }
+            default {
+                print("📬 Uncategorized")
+            }
+        }
+    }
+}

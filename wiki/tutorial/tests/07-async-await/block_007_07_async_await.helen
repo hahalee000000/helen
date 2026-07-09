@@ -1,0 +1,12 @@
+// Test: 07-async-await.md:152
+
+main {
+    let response = async Streamer("long essay")
+    
+    // 过滤：只处理长 chunk
+    for await chunk in response {
+        if len(chunk) > 10 {
+            stream_print(chunk)
+        }
+    }
+}

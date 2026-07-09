@@ -1,0 +1,27 @@
+// Test: 17-multimodal.md:106
+
+// === Context from preceding blocks ===
+agent 图像分析 {
+    description "分析图像内容"
+    
+}
+
+let img1 = media("image1.png")
+let img2 = media("image2.png")
+let result = llm act "比较这两张图片" media(img1, img2)
+
+agent Claude媒体处理 {
+}
+
+// === Test code ===
+on_media fn(parts, provider) {
+    # 仅为非标准 provider 手写
+    返回 parts.map(fn(part) {
+        返回 {
+            "type": "media",
+            "mime_type": part.mime,
+            "data": 媒体转base64(part),
+            "encoding": "base64"
+        }
+    })
+}

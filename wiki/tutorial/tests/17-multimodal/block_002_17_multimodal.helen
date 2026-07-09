@@ -1,0 +1,11 @@
+// Test: 17-multimodal.md:57
+
+agent 图像分析 {
+    description "分析图像内容"
+    
+    main {
+        let img = media("photo.jpg")
+        let result = llm act "描述这张图片" media(img)
+        print(result)
+    }
+}

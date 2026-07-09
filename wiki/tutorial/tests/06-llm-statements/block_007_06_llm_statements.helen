@@ -1,0 +1,9 @@
+// Test: 06-llm-statements.md:174
+
+fn handle_chunk(chunk) {
+    stream_print("[" + chunk + "]")
+}
+
+main {
+    llm act "Explain recursion in one paragraph" on_chunk handle_chunk
+}

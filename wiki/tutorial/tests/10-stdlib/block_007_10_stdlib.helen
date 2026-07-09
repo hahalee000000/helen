@@ -1,0 +1,35 @@
+// Test: 10-stdlib.md:155
+
+// 大小写
+upper("hello")                // "HELLO"
+lower("HELLO")                // "hello"
+
+// 修剪
+strip("  hello  ")            // "hello"
+trim_prefix("hello", "he")    // "llo"
+trim_suffix("hello", "lo")    // "hel"
+
+// 分割与连接
+split("a,b,c", ",")           // ["a", "b", "c"]
+join("-", ["a", "b", "c"])    // "a-b-c"
+
+// 检查
+startswith("hello", "hel")    // true
+endswith("hello", "lo")       // true
+
+// 查找与替换
+find("hello", "ell")          // 1
+replace("hello", "l", "L")    // "heLLo"
+substring("hello", 1, 3)      // "el"
+
+// 字符串插值（v1.8.1+）
+let template = "Hello, {{name}}! You are {{age}} years old."
+let vars = {"name": "Alice", "age": 30}
+interpolate(template, vars)
+// "Hello, Alice! You are 30 years old."
+
+// 支持嵌套属性访问
+let template2 = "User: {{user.name}}, Email: {{user.email}}"
+let vars2 = {"user": {"name": "Bob", "email": "bob@example.com"}}
+interpolate(template2, vars2)
+// "User: Bob, Email: bob@example.com"

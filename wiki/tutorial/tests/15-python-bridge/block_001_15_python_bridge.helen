@@ -1,0 +1,10 @@
+// Test: 15-python-bridge.md:16
+
+agent TranslatorAgent(text: str, target: str) {
+    description "翻译文本到目标语言"
+    prompt "Translate '{{text}}' to {{target}}"
+    
+    main {
+        return llm act "Translate '{{text}}' to {{target}}"
+    }
+}

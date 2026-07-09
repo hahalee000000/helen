@@ -1,0 +1,40 @@
+// Test: 03-functions.md:140
+
+// === Context from preceding blocks ===
+fn greet(name) {
+    print("Hello, " + name + "!")
+}
+
+fn add(a, b) {
+    return a + b
+}
+
+fn factorial(n: int): int {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+// === Test code ===
+agent DataProcessor {
+    description "Process and analyze data"
+
+    functions {
+        fn validate(data) {
+            if len(data) == 0 {
+                return false
+            }
+            return true
+        }
+
+        fn transform(data) {
+            // 数据转换逻辑
+            return data
+        }
+    }
+
+    prompt """
+    Process the given data after validation.
+    """
+}

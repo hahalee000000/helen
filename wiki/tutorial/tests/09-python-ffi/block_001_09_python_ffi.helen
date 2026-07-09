@@ -1,0 +1,6 @@
+// Test: 09-python-ffi.md:25
+// @skip: needs Python module import
+
+import "math" as math
+import "json" as json
+import "os.path" as path

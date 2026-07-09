@@ -1,0 +1,6 @@
+// Test: 08-modules.md:112
+// @skip: needs external file import
+
+import "./utils.helen"          // ✅ 当前目录
+import "./lib/helpers.helen"    // ✅ 子目录
+import "../sibling/utils.helen" // ✅ 同级目录（在安全范围内）

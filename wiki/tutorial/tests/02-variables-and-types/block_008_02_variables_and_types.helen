@@ -1,0 +1,6 @@
+// Test: 02-variables-and-types.md:78
+// @should_fail
+
+let id: int | str = 42      // 可以是 int 或 str
+id = "ABC-123"              // ✅
+id = true                   // ❌

@@ -1,0 +1,39 @@
+// Test: 11-building-agents.md:254
+
+// 辅助函数：修复代码
+fn fix_code(code: str): str {
+    // 实际的代码修复逻辑
+    return code  // 简化示例
+}
+
+agent CodeReviewer {
+    description "Review code changes"
+    
+    context {
+        working-memory true  // 自动跟踪文件操作
+    }
+    
+    tools ["read_file", "write_file", "patch_file"]
+    
+    functions {
+        fn fix_code(code: str): str {
+            // 实际的代码修复逻辑
+            return code  // 简化示例
+        }
+    }
+    
+    main {
+        // 自动跟踪：读取的文件
+        let code = read_file("src/main.py")
+        
+        // 自动跟踪：修改的文件
+        let fixed = fix_code(code)
+        write_file("src/main.py", fixed)
+        
+        // LLM 现在知道哪些文件被修改了
+        return llm act "Review the changes"
+        // 工作记忆包含：
+        // - 活跃文件: src/main.py
+        // - 最近决策: Modified src/main.py
+    }
+}

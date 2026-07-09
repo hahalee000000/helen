@@ -1,0 +1,7 @@
+// Test: 04-control-flow.md:103
+
+// && 优先级高于 ||
+let result = a || b && c  // 等价于 a || (b && c)
+
+// 使用括号明确意图
+let result = (a || b) && c  // 明确分组

@@ -1,0 +1,8 @@
+// Test: TUTORIAL_TEST_REPORT.md:76
+// @should_fail
+
+// Context from previous block
+let a = [1, 2]
+
+// Current block
+let a = [3, 4]  // Error: duplicate declaration

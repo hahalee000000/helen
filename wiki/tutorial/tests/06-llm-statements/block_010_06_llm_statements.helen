@@ -1,0 +1,10 @@
+// Test: 06-llm-statements.md:226
+
+fn print_chunk(chunk: str) {
+    stream_print(chunk)
+}
+
+main {
+    let topic = "the beauty of recursion"
+    llm act "Write a haiku about " + topic on_chunk print_chunk
+}

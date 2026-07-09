@@ -1,0 +1,7 @@
+// Test: 09-python-ffi.md:265
+
+import "nonexistent_module" as bad
+
+main {
+    // 运行时错误：Cannot import Python module 'nonexistent_module'
+}

@@ -1,0 +1,15 @@
+// Test: 17-multimodal.md:277
+
+agent 图像比较器 {
+    description "比较多个图像的差异"
+    
+    main {
+        let img1 = media("before.png")
+        let img2 = media("after.png")
+        
+        let comparison = llm act "比较这两张图片，指出主要的变化和差异"
+            media(img1, img2)
+        
+        print(comparison)
+    }
+}

@@ -1,0 +1,12 @@
+// Test: 03-functions.md:73
+// @should_fail
+
+fn add(a: int, b: int): int {
+    return a + b
+}
+
+let x = 1.5
+add(x, 2)        // ❌ 运行时错误：argument 1 type 'FloatType' is not compatible with parameter type 'IntType'
+
+let y = 10
+add(y, 2)        // ✅ 正确

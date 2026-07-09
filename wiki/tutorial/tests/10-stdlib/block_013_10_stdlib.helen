@@ -1,0 +1,12 @@
+// Test: 10-stdlib.md:292
+
+// 提取文本
+html_text("<p>Hello <b>World</b></p>")
+// "Hello World"
+
+// 提取链接
+html_links('<a href="http://example.com">Link</a>')
+// ["http://example.com"]
+
+// 解析
+let dom = html_parse("<div>content</div>")

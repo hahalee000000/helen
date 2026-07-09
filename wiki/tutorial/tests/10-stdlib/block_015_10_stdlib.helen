@@ -1,0 +1,13 @@
+// Test: 10-stdlib.md:319
+
+// 解析
+let rows = csv_parse("name,age\nAlice,30")
+// [["name", "age"], ["Alice", "30"]]
+
+// 生成
+csv_stringify([["a", "b"], ["1", "2"]])
+// "a,b\n1,2\n"
+
+// 文件操作
+csv_save("data.csv", rows)
+let loaded = csv_load("data.csv")

@@ -1,0 +1,13 @@
+// Test: 12-testing.md:74
+
+fn test_assertions() {
+    assert_true(10 > 5)
+    assert_equal("hello" + " world", "hello world")
+    assert_not_equal(1, 2)
+    
+    try {
+        assert_throws(fn() { throw RuntimeError("boom") })
+    } catch AssertionError e {
+        // 断言失败本身也是 AssertionError
+    }
+}

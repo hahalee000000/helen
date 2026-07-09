@@ -1,0 +1,23 @@
+// Test: 10-stdlib.md:427
+
+// === Context from preceding blocks ===
+let args = get_cli_args()  // 与 argv 相同
+
+let parsed = parse_cli_args()
+// 输入: --verbose --output=json --port 8080 input.txt
+// 结果: {
+//   verbose: true,
+//   output: "json",
+//   port: "8080",
+//   _positional: ["input.txt"]
+// }
+
+// === Test code ===
+let spec = {
+    "verbose": {"type": "flag", "default": false},
+    "output": {"type": "string", "default": "text"},
+    "port": {"type": "int", "default": 3000}
+}
+let config = parse_cli_args(spec)
+// port 自动转为 int 类型
+print(type(config["port"]))  // "int"

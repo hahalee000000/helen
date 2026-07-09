@@ -1,0 +1,11 @@
+// Test: 10-stdlib.md:260
+
+repeat("ab", 3)               // "ababab"
+reverse("hello")              // "olleh"
+
+pad_left("42", 5, "0")        // "00042"
+pad_right("hi", 5)            // "hi   "
+center("hi", 6)               // "  hi  "
+
+count("hello", "l")           // 2
+index("hello", "ll")          // 2

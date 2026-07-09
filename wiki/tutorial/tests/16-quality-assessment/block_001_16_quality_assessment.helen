@@ -1,0 +1,21 @@
+// Test: 16-quality-assessment.md:28
+
+let source = read_file("my_program.helen")
+
+// 获取代码指标
+let metrics = analyze_code(source, "my_program.helen")
+print("Functions: " + str(metrics["function_count"]))
+print("Complexity: " + str(metrics["avg_complexity"]))
+
+// 安全检查
+let issues = check_security(source)
+print("Security issues: " + str(len(issues)))
+
+// 质量评分
+let scores = quality_score(source, "my_program.helen")
+print("Total score: " + str(scores["total"]))
+print("Grade: " + scores["grade"])
+
+// 完整报告
+let report = quality_report(source, "my_program.helen")
+print(report)

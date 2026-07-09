@@ -1,0 +1,28 @@
+// Test: 03-functions.md:124
+
+// === Context from preceding blocks ===
+fn greet(name) {
+    print("Hello, " + name + "!")
+}
+
+fn add(a, b) {
+    return a + b
+}
+
+fn factorial(n: int): int {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+// === Test code ===
+fn double(x) {
+    return x * 2
+}
+
+fn apply(op, value) {
+    // 在 v1 中，函数通过名称引用
+    // 注意：不能用 'fn' 作为参数名（它是关键字）
+    print(double(value))
+}

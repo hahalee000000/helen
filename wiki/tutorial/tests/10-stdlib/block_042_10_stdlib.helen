@@ -1,0 +1,77 @@
+// Test: 10-stdlib.md:910
+
+// === Context from preceding blocks ===
+let args = get_cli_args()  // 与 argv 相同
+
+let parsed = parse_cli_args()
+// 输入: --verbose --output=json --port 8080 input.txt
+// 结果: {
+//   verbose: true,
+//   output: "json",
+//   port: "8080",
+//   _positional: ["input.txt"]
+// }
+
+agent ChatBot {
+}
+
+// 查找所有 Python 文件（递归）
+let py_files = glob_files("src", "*.py")
+// 返回: ["main.py", "utils/helper.py", "tests/test_main.py"]
+
+// 查找特定模式的文件
+let test_files = glob_files(".", "*test*.py")
+// 返回: ["test_main.py", "tests/test_utils.py"]
+
+// 使用 ** 显式递归
+let md_files = glob_files("docs", "**/*.md")
+// 返回: ["readme.md", "guide/intro.md", "api/reference.md"]
+
+// 复杂模式
+let config_files = glob_files("config", "**/*.{json,yaml,yml}")
+// 返回配置文件列表
+
+// 字面量搜索
+let matches = grep_files("src/", "TODO")
+// 返回: [{"file": "main.py", "line": 42, "text": "    # TODO: fix this"}]
+
+// 正则搜索
+let functions = grep_files("src/", "def \\w+\\(", regex=true)
+// 返回所有函数定义
+
+// 大小写不敏感搜索
+let errors = grep_files("logs/", "error", case_sensitive=false)
+// 返回所有包含 "error"（不区分大小写）的行
+
+// 限制结果数量
+let first_10 = grep_files(".", "pattern", max_results=10)
+
+agent 异常检查助手 {
+    description "检查代码中未处理的异常"
+}
+
+// 路径拼接
+let full_path = path_join("src", "utils", "helper.py")
+// 返回: "src/utils/helper.py"
+
+// 提取路径组件
+let base = path_basename("/path/to/file.txt")  // "file.txt"
+let dir = path_dirname("/path/to/file.txt")    // "/path/to"
+
+// 路径检查
+let exists = path_exists("config.json")
+let is_dir = path_is_dir("src")
+let is_file = path_is_file("main.py")
+
+// === Test code ===
+try {
+    let x = len(42)           // Python TypeError
+} catch RuntimeError err {
+    print(err.message)        // "Python TypeError: object of type 'int' has no len()"
+}
+
+try {
+    let data = read_file("/nonexistent")
+} catch RuntimeError err {
+    print(err.message)        // "Python FileNotFoundError: [Errno 2] ..."
+}

@@ -1,0 +1,41 @@
+// Test: 05-agents.md:301
+
+agent ChatBot {
+    description "Chat bot with transcript management"
+    prompt "You are a helpful chat assistant."
+    
+    main {
+        // 获取当前会话 ID
+        let session_id = get_session_id()
+        print("当前会话: " + session_id)
+        
+        // 列出所有会话
+        let sessions = list_sessions()
+        for s in sessions {
+            print("{s.session_id}: {s.message_count} 条消息")
+        }
+        
+        // 回放当前会话
+        let messages = replay_transcript()
+        for msg in messages {
+            print("{msg.role}: {msg.content}")
+        }
+        
+        // 导出会话到文件
+        export_transcript("chat_log.json", "json")
+        
+        // 获取压缩审计（分析压缩效率）
+        let audit = get_compression_audit()
+        for event in audit {
+            print("{event.layer}: {event.original_token_count} -> {event.compressed_token_count}")
+        }
+        
+        // 恢复到之前的会话
+        let success = resume_session("session_1783492628_d9d9c0aa")
+        if success {
+            print("会话已恢复")
+        }
+        
+        return llm act "Hello!"
+    }
+}

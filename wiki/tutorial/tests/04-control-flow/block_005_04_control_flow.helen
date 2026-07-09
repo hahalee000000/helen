@@ -1,0 +1,9 @@
+// Test: 04-control-flow.md:91
+
+// 如果左侧为 true，右侧不会执行
+let result = true || expensiveFunction()  // expensiveFunction() 不会执行
+
+// 实际应用：默认值
+let config = loadConfig() || defaultConfig()  // 只在加载失败时使用默认值
+
+let user = getUser() || createDefaultUser()  // 如果获取失败，创建默认用户

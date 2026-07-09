@@ -1,0 +1,34 @@
+// Test: 12-testing.md:92
+
+fn test_expect_chain() {
+    // 基本断言
+    expect(42).toBe(42)
+    expect([1, 2, 3]).toContain(2)
+    expect("hello world").toStartWith("hello")
+    expect("hello world").toEndWith("world")
+    expect([1, 2, 3]).toHaveLength(3)
+    
+    // 数值比较
+    expect(10).toBeGreaterThan(5)
+    expect(3).toBeLessThan(7)
+    
+    // 类型检查
+    expect("hello").toBeType("str")
+    expect(42).toBeType("int")
+    
+    // 否定
+    expect(42).not_.toBe(0)
+    expect([]).not_.toContain(1)
+    
+    // 深度相等
+    expect({"a": 1, "b": 2}).toEqual({"b": 2, "a": 1})
+    
+    // 正则匹配
+    expect("hello123").toMatch("hello\\d+")
+    
+    // 空值检查
+    expect("").toBeEmpty()
+    expect([]).toBeEmpty()
+    expect("hello").toBeTruthy()
+    expect(null).toBeFalsy()
+}

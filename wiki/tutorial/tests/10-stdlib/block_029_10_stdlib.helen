@@ -1,0 +1,26 @@
+// Test: 10-stdlib.md:594
+
+// === Context from preceding blocks ===
+let args = get_cli_args()  // 与 argv 相同
+
+let parsed = parse_cli_args()
+// 输入: --verbose --output=json --port 8080 input.txt
+// 结果: {
+//   verbose: true,
+//   output: "json",
+//   port: "8080",
+//   _positional: ["input.txt"]
+// }
+
+agent ChatBot {
+}
+
+// === Test code ===
+// 获取所有压缩事件的审计追踪
+let audit = get_compression_audit()
+for event in audit {
+    print("层级: " + event["layer"])
+    print("压缩前: " + str(event["original_token_count"]) + " tokens")
+    print("压缩后: " + str(event["compressed_token_count"]) + " tokens")
+    print("摘要: " + event["summary"])
+}

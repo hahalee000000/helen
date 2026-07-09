@@ -1,0 +1,4 @@
+// Test: 10-stdlib.md:146
+
+type(42)                      // "int"
+isinstance(42, "int")         // true

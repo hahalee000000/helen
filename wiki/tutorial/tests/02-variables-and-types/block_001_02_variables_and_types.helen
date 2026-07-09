@@ -1,0 +1,5 @@
+// Test: 02-variables-and-types.md:10
+
+let x = 42
+x = 100       // ✅ 可以修改
+print(x)      // 100

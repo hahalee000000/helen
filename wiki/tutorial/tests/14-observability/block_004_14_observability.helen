@@ -1,0 +1,11 @@
+// Test: 14-observability.md:78
+
+main {
+    trace_on()
+    let x = compute_value()
+    let y = transform(x)
+    trace_off()
+    
+    let trace = get_trace(10)
+    print(trace)
+}

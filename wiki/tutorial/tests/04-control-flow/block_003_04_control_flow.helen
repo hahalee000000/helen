@@ -1,0 +1,30 @@
+// Test: 04-control-flow.md:44
+
+fn expensiveFunction(): str {
+    // 模拟耗时操作
+    return "result"
+}
+
+fn getUser(): map? {
+    return {"name": "Alice"}
+}
+
+fn isValid(): bool {
+    return true
+}
+
+fn processData(): str {
+    return "processed"
+}
+
+fn loadConfig(): map? {
+    return null
+}
+
+fn defaultConfig(): map {
+    return {"debug": false}
+}
+
+fn createDefaultUser(): map {
+    return {"name": "Guest"}
+}

@@ -1,0 +1,16 @@
+// Test: 03-functions.md:33
+
+// === Context from preceding blocks ===
+fn greet(name) {
+    print("Hello, " + name + "!")
+}
+
+fn add(a, b) {
+    return a + b
+}
+
+// === Test code ===
+fn say_hello() {
+    print("Hello!")
+    // 隐式返回 null
+}

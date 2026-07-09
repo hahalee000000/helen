@@ -214,7 +214,7 @@ agent DataAnalyzer(data: list) {
     """
     
     functions {
-        fn calculate_stats() -> map {
+        fn calculate_stats(): map {
             let n = len(data)
             let sum = 0
             for value in data {

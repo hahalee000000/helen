@@ -1,0 +1,13 @@
+// Test: 06-llm-statements.md:263
+
+main {
+    // 自动记录: [user] "Classify email priority"
+    llm if "Classify email priority" {
+        branch "urgent" { print("Urgent!") }
+        default { print("Other") }
+    }
+    // 自动记录: [assistant] "[routed to: urgent]"
+
+    // 下次 LLM 调用会包含上面的历史作为上下文
+    llm act "Draft response for the email"
+}

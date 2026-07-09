@@ -1,0 +1,9 @@
+// Test: 03-functions.md:60
+// @should_fail
+
+fn add(a: int, b: int): int {
+    return a + b
+}
+
+add(1.5, 2.7)    // ❌ 编译错误：argument 1 type 'FloatType' is not compatible with parameter type 'IntType'
+add(1, 2)        // ✅ 正确

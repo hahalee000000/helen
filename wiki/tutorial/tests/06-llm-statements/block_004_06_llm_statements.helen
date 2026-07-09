@@ -1,0 +1,29 @@
+// Test: 06-llm-statements.md:76
+
+// === Context from preceding blocks ===
+agent Translator(text: str, target: str) {
+    description "Translate text"
+    model "qwen-plus"
+    temperature 0.3
+    prompt """
+    Translate to {{target}}:
+    {{text}}
+    """
+
+}
+
+// === Test code ===
+// 顶层直接调用
+llm act "translate hello to chinese."
+
+// 在函数中使用
+fn translate(text, target) {
+    return llm act "translate " + text + " to " + target
+}
+
+// 赋值给变量
+let result = llm act "summarize this article"
+
+// 字符串拼接构建 prompt
+let topic = "climate change"
+let analysis = llm act "analyze the impact of " + topic

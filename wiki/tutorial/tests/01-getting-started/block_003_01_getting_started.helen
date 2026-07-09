@@ -1,0 +1,11 @@
+// Test: 01-getting-started.md:185
+
+// tool.helen — 运行: helen tool.helen --verbose --output=json file.txt
+let config = parse_cli_args({
+    "verbose": {"type": "flag", "default": false},
+    "output": {"type": "string", "default": "text"}
+})
+
+if config["verbose"] {
+    print("Verbose mode on, output=" + config["output"])
+}

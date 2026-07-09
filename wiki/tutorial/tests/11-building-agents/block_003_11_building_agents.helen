@@ -1,0 +1,38 @@
+// Test: 11-building-agents.md:127
+
+// 知识库查询 agent
+agent KnowledgeBase(query: str) {
+    description "Search knowledge base"
+    prompt "Search knowledge base for: {{query}}"
+}
+
+// 历史查询 agent
+agent HistoryLookup(topic: str) {
+    description "Lookup relevant history"
+    prompt "Find relevant history for: {{topic}}"
+}
+
+// 优化的版本：并发查询知识库
+main {
+    let question = "How do I reset my password?"
+
+    // 并发获取上下文
+    let kb_task = async KnowledgeBase(question)
+    let history_task = async HistoryLookup("password reset")
+
+    // 先分类（串行，需要结果路由）
+    llm if "Classify customer question" {
+        branch "technical" {
+            // 等待上下文
+            let context = await [kb_task, history_task]
+            let full_context = context[0] + "\n" + context[1]
+            let answer = TechSupport(question + "\nContext: " + full_context)
+        }
+        default {
+            let answer = "I'll help you with that."
+        }
+    }
+
+    let polished = ResponsePolisher(answer)
+    print(polished)
+}

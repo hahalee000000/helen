@@ -1,0 +1,27 @@
+// Test: 10-stdlib.md:623
+
+// === Context from preceding blocks ===
+let args = get_cli_args()  // 与 argv 相同
+
+let parsed = parse_cli_args()
+// 输入: --verbose --output=json --port 8080 input.txt
+// 结果: {
+//   verbose: true,
+//   output: "json",
+//   port: "8080",
+//   _positional: ["input.txt"]
+// }
+
+agent ChatBot {
+}
+
+// === Test code ===
+// 恢复到指定会话
+let success = resume_session("session_1783492628_d9d9c0aa")
+if success {
+    print("会话已恢复")
+    let messages = replay_transcript()
+    print("已加载 " + str(len(messages)) + " 条消息")
+} else {
+    print("恢复失败，会话可能不存在")
+}

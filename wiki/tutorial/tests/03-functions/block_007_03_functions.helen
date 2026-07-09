@@ -1,0 +1,16 @@
+// Test: 03-functions.md:91
+// @should_fail
+
+fn processFloat(x: float): float {
+    return x * 2
+}
+
+processFloat(10)     // ✅ int 可以转换为 float
+processFloat(10.5)   // ✅ float 直接匹配
+
+fn processInt(x: int): int {
+    return x + 1
+}
+
+processInt(10)       // ✅ int 直接匹配
+processInt(10.5)     // ❌ float 不能转换为 int

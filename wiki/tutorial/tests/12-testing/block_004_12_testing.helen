@@ -1,0 +1,13 @@
+// Test: 12-testing.md:131
+
+test_suite("String Utils")
+test_case("uppercase", test_upper)
+test_case("lowercase", test_lower)
+test_end_suite()
+
+test_suite("Math Utils")
+test_case("add", test_add)
+test_case("multiply", test_multiply)
+test_end_suite()
+
+run_tests()

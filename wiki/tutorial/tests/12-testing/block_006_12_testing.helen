@@ -1,0 +1,6 @@
+// Test: 12-testing.md:185
+
+test_suite("Feature")
+test_case("completed feature", test_done)
+test_case_skip("work in progress", test_wip)    // 跳过
+test_end_suite()

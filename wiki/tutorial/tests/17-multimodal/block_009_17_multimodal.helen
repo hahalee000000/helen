@@ -1,0 +1,30 @@
+// Test: 17-multimodal.md:216
+
+// === Context from preceding blocks ===
+agent 图像分析 {
+    description "分析图像内容"
+    
+}
+
+let img1 = media("image1.png")
+let img2 = media("image2.png")
+let result = llm act "比较这两张图片" media(img1, img2)
+
+agent Claude媒体处理 {
+}
+
+agent 图像生成器 {
+    description "根据描述生成图像"
+    
+}
+
+// === Test code ===
+# OpenAI 兼容格式（默认，通常无需手动指定）
+let parts = to_openai_parts(media_list)
+
+# Anthropic Claude Messages API 格式
+let parts = to_claude_parts(media_list)
+# 注意：Claude 不支持视频和音频输入，会抛出 ValueError
+
+# Google Gemini inline_data 格式
+let parts = to_gemini_parts(media_list)

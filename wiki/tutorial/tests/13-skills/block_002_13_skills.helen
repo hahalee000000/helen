@@ -1,0 +1,10 @@
+// Test: 13-skills.md:124
+
+agent Researcher(query) {
+    description: "Research topics using web search"
+    
+    main {
+        // LLM 在这里可以看到所有可用技能
+        llm act "Research: " + query
+    }
+}

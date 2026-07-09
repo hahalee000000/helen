@@ -1,0 +1,23 @@
+// Test: 07-async-await.md:294
+
+agent BatchProcessor {
+  main {
+    let items = ["item1", "item2", "item3", "item4", "item5"]
+    
+    // 同步方式：串行处理
+    let sync_results = []
+    for item in items {
+      let result = llm act Process(item)
+      sync_results.push(result)
+    }
+    // 耗时：5 * 1.5s = 7.5s
+    
+    // 异步方式：并发处理
+    let async_tasks = []
+    for item in items {
+      async_tasks.push(llm act_async Process(item))
+    }
+    let async_results = await async_tasks
+    // 耗时：~1.8s（提升 76%）
+  }
+}

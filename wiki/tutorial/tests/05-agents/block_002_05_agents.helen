@@ -1,0 +1,9 @@
+// Test: 05-agents.md:32
+
+agent Translator {
+    description "Translate text between languages"
+    prompt """
+    You are a professional translator.
+    Translate the given text accurately.
+    """
+}

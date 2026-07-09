@@ -1,0 +1,29 @@
+// Test: 10-stdlib.md:571
+
+// === Context from preceding blocks ===
+let args = get_cli_args()  // 与 argv 相同
+
+let parsed = parse_cli_args()
+// 输入: --verbose --output=json --port 8080 input.txt
+// 结果: {
+//   verbose: true,
+//   output: "json",
+//   port: "8080",
+//   _positional: ["input.txt"]
+// }
+
+agent ChatBot {
+}
+
+// === Test code ===
+// 导出为 JSON
+export_transcript("my_chat.json", "json")
+
+// 导出为 Markdown
+export_transcript("my_chat.md", "markdown")
+
+// 导出为纯文本
+export_transcript("my_chat.txt", "text")
+
+// 导出指定会话
+export_transcript("old_chat.json", "json", "session_1783492600_abc12345")

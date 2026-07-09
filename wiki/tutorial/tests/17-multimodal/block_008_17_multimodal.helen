@@ -1,0 +1,28 @@
+// Test: 17-multimodal.md:178
+
+// === Context from preceding blocks ===
+agent 图像分析 {
+    description "分析图像内容"
+    
+}
+
+let img1 = media("image1.png")
+let img2 = media("image2.png")
+
+agent Claude媒体处理 {
+}
+
+agent 图像生成器 {
+    description "根据描述生成图像"
+    
+}
+
+// === Test code ===
+let result = llm act "详细描述这张图片"
+    media(img)
+    on_chunk fn(chunk) {
+        print(chunk, flush=false)
+    }
+    on_complete fn(full_text) {
+        print("\n完成!")
+    }

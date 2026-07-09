@@ -1,0 +1,4 @@
+// Test: 03-functions.md:333
+// @should_fail
+
+alias nonexistent as foo   // ❌ Error: cannot alias 'nonexistent': name not found

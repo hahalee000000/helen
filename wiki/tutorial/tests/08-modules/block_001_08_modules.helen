@@ -1,0 +1,20 @@
+// Test: 08-modules.md:10
+// @skip: needs external file import
+
+// utils.helen
+fn double(x) {
+    return x * 2
+}
+
+agent Helper {
+    description "A helper agent"
+    prompt "Help the user."
+}
+
+// main.helen
+import "./utils.helen"
+
+main {
+    let result = double(21)    // 42
+    Helper()              // 使用导入的 Agent
+}

@@ -1,0 +1,8 @@
+// Test: 07-async-await.md:47
+
+let task = async MyAgent(input)
+
+// Task 方法 (未来版本支持)
+// task.is_success() → bool
+// task.get_result() → Any
+// task.get_error() → Exception

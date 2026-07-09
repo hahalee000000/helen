@@ -1,0 +1,4 @@
+// Test: 07-async-await.md:62
+
+let results = await [task1, task2, task3]
+// results = [result1, result2, result3]

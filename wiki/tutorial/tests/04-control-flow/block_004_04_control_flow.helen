@@ -1,0 +1,11 @@
+// Test: 04-control-flow.md:77
+
+// 如果左侧为 false，右侧不会执行
+let result = false && expensiveFunction()  // expensiveFunction() 不会执行
+
+// 实际应用：安全访问
+let user = getUser()
+let name = user != null && user.getName()  // 如果 user 为 null，不会调用 getName()
+
+// 条件执行
+let valid = isValid() && processData()  // 只在 valid 时处理

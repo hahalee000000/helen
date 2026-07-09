@@ -1,0 +1,10 @@
+// Test: 03-functions.md:20
+
+fn add(a, b) {
+    return a + b
+}
+
+main {
+    let result = add(3, 5)
+    print(result)    // 8
+}

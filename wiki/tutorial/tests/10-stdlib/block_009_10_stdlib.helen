@@ -1,0 +1,28 @@
+// Test: 10-stdlib.md:217
+
+// 分词
+tokenize("Hello, world!")     // ["Hello", "world"]
+
+// 词频统计
+word_count("hello world hello")
+// {"hello": 2, "world": 1}
+
+// 编辑距离
+levenshtein("hello", "hallo") // 1
+
+// 相似度
+similarity("hello", "hallo")  // 0.8
+
+// 去除标点
+remove_punctuation("Hello!")  // "Hello"
+
+// 标准化空白
+normalize_whitespace("a  b  c")  // "a b c"
+
+// 提取 URL
+extract_urls("Visit https://example.com")
+// ["https://example.com"]
+
+// 提取邮箱
+extract_emails("Contact user@example.com")
+// ["user@example.com"]

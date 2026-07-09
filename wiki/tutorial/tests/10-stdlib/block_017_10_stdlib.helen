@@ -1,0 +1,13 @@
+// Test: 10-stdlib.md:351
+
+// 解析
+let data = toml_parse("name = \"Alice\"\nage = 30")
+// {"name": "Alice", "age": 30}
+
+// 生成
+toml_stringify({"name": "Alice"})
+// "name = \"Alice\"\n"
+
+// 文件操作
+toml_save("config.toml", data)
+let loaded = toml_load("config.toml")

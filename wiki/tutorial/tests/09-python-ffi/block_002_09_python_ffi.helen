@@ -1,0 +1,12 @@
+// Test: 09-python-ffi.md:39
+// @skip: needs Python module import
+
+import "math" as math
+
+main {
+    let sqrt_result = math.sqrt(16)
+    print(sqrt_result)    // 4.0
+    
+    let power = math.pow(2, 10)
+    print(power)          // 1024.0
+}

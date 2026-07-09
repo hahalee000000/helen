@@ -1,0 +1,27 @@
+// Test: 11-building-agents.md:170
+// @should_fail
+
+main {
+    let question = "How do I reset my password?"
+
+    try {
+        llm if "Classify customer question" {
+            branch "technical" {
+                let answer = TechSupport(question)
+                let polished = ResponsePolisher(answer)
+                print(polished)
+            }
+            default {
+                print("I'll help you with that.")
+            }
+        }
+    } catch TimeoutError err {
+        print("⏱️ The service is taking too long. Please try again.")
+    } catch RuntimeError err {
+        print("⚠️ Something went wrong: " + str(err))
+        print("A human agent will contact you shortly.")
+    } catch {
+        print("❌ An unexpected error occurred.")
+        print("Please try again or contact support@company.com")
+    }
+}

@@ -1,0 +1,27 @@
+// Test: 05-agents.md:243
+
+agent Researcher(topic: str) {
+    description "Research assistant with optimized context"
+    
+    // 优化上下文管理
+    context {
+        compression "graduated"      // 渐进压缩
+        cache-aware true             // 缓存感知
+        working-memory true          // 跟踪研究文件
+        working-memory-tokens 8000   // 更大的工作记忆
+    }
+    
+    tools ["web_search", "web_fetch", "read_file", "write_file"]
+    
+    prompt """
+    你是研究助手。
+    研究主题：{{topic}}
+    
+    使用工具搜索和整理信息。
+    """
+    
+    main {
+        let result = llm act "开始研究"
+        return result
+    }
+}

@@ -1,0 +1,29 @@
+// Test: 10-stdlib.md:484
+
+agent ChatBot {
+    main {
+        let message_count = 0
+        while true {
+            let input = prompt("you> ")
+            let response = llm act { ... }
+            
+            message_count += 1
+            
+            // 每 10 轮对话自动压缩
+            if message_count % 10 == 0 {
+                let result = compress_context("auto")
+                if result["status"] == "ok" {
+                    print("已压缩上下文，节省 " + 
+                          str(result["original_tokens"] - result["compressed_tokens"]) + 
+                          " tokens")
+                }
+            }
+            
+            // 用户命令：/clear 清空上下文
+            if input == "/clear" {
+                clear_context()
+                print("上下文已清空")
+            }
+        }
+    }
+}

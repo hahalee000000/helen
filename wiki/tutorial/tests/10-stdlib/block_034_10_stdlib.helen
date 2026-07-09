@@ -1,0 +1,16 @@
+// Test: 10-stdlib.md:768
+
+// 字面量搜索
+let matches = grep_files("src/", "TODO")
+// 返回: [{"file": "main.py", "line": 42, "text": "    # TODO: fix this"}]
+
+// 正则搜索
+let functions = grep_files("src/", "def \\w+\\(", regex=true)
+// 返回所有函数定义
+
+// 大小写不敏感搜索
+let errors = grep_files("logs/", "error", case_sensitive=false)
+// 返回所有包含 "error"（不区分大小写）的行
+
+// 限制结果数量
+let first_10 = grep_files(".", "pattern", max_results=10)

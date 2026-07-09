@@ -1,0 +1,6 @@
+// Test: 01-getting-started.md:171
+
+// greet.helen
+for name in argv {
+    print("Hello, " + name + "!")
+}

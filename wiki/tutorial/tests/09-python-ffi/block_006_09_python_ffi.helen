@@ -1,0 +1,21 @@
+// Test: 09-python-ffi.md:137
+// @skip: needs Python module import
+
+import "math" as math
+
+main {
+    // 三角函数
+    let angle = math.pi / 4
+    let sin_val = math.sin(angle)
+    let cos_val = math.cos(angle)
+    print("sin(π/4) = " + str(sin_val))
+    print("cos(π/4) = " + str(cos_val))
+    
+    // 对数
+    let log_val = math.log(100, 10)
+    print("log₁₀(100) = " + str(log_val))
+    
+    // 取整
+    print(math.floor(3.7))    // 3
+    print(math.ceil(3.2))     // 4
+}

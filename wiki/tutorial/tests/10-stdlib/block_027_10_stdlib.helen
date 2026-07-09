@@ -1,0 +1,26 @@
+// Test: 10-stdlib.md:552
+
+// === Context from preceding blocks ===
+let args = get_cli_args()  // 与 argv 相同
+
+let parsed = parse_cli_args()
+// 输入: --verbose --output=json --port 8080 input.txt
+// 结果: {
+//   verbose: true,
+//   output: "json",
+//   port: "8080",
+//   _positional: ["input.txt"]
+// }
+
+agent ChatBot {
+}
+
+// === Test code ===
+// 回放当前会话（仅有效视图）
+let messages = replay_transcript()
+for msg in messages {
+    print(msg["role"] + ": " + msg["content"])
+}
+
+// 回放指定会话，包括压缩的消息
+let full = replay_transcript("session_1783492628_d9d9c0aa", true)

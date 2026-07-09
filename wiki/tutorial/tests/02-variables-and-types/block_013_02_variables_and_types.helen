@@ -1,0 +1,6 @@
+// Test: 02-variables-and-types.md:140
+
+let nums = [1, 2, 3]
+let first = nums[0]        // 1
+let len = len(nums)        // 3
+let range_nums = range(5)  // [0, 1, 2, 3, 4]

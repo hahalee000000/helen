@@ -1,0 +1,13 @@
+// Test: 10-stdlib.md:335
+
+// 解析
+let data = yaml_parse("name: Alice\nage: 30")
+// {"name": "Alice", "age": 30}
+
+// 生成
+yaml_stringify({"name": "Alice"})
+// "name: Alice\n"
+
+// 文件操作
+yaml_save("config.yaml", data)
+let loaded = yaml_load("config.yaml")

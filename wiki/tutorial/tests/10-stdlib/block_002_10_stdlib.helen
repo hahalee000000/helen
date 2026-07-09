@@ -1,0 +1,11 @@
+// Test: 10-stdlib.md:79
+
+// 给 stdlib 函数起自定义别名
+alias len as 我的长度
+alias print as 输出
+
+// 给用户函数起别名
+函数 greet(name: str): str {
+    返回 "Hello, " + name
+}
+alias greet as 打招呼

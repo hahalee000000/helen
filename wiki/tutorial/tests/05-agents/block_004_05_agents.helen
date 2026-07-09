@@ -1,0 +1,13 @@
+// Test: 05-agents.md:58
+
+agent CreativeWriter {
+    description "Write creative stories"
+    temperature 0.9    // 高创造性
+    prompt "Write a story..."
+}
+
+agent DataExtractor {
+    description "Extract structured data"
+    temperature 0.1    // 低随机性，精确输出
+    prompt "Extract data..."
+}

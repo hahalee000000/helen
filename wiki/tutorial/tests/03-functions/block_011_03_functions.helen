@@ -1,0 +1,14 @@
+// Test: 03-functions.md:166
+
+let global_x = 100
+
+fn test() {
+    let local_x = 200
+    print(global_x)    // ✅ 可以访问全局变量
+    print(local_x)     // ✅ 可以访问局部变量
+}
+
+main {
+    print(global_x)    // ✅ 100
+    test()
+}

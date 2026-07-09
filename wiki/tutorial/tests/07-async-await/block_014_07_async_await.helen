@@ -1,0 +1,14 @@
+// Test: 07-async-await.md:320
+
+agent SafeAsyncAgent {
+  main {
+    try {
+      let result = await llm act_async Task "Complex task"
+      print("Success: " + str(result))
+    } catch LLMError as e {
+      print("LLM Error: " + e.message)
+    } catch TimeoutError as e {
+      print("Timeout: " + e.message)
+    }
+  }
+}

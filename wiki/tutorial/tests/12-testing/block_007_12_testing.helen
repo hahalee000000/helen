@@ -1,0 +1,15 @@
+// Test: 12-testing.md:196
+
+// 我们想实现一个 FizzBuzz
+fn test_fizzbuzz() {
+    expect(fizzbuzz(3)).toBe("Fizz")
+    expect(fizzbuzz(5)).toBe("Buzz")
+    expect(fizzbuzz(15)).toBe("FizzBuzz")
+    expect(fizzbuzz(7)).toBe("7")
+}
+
+test_suite("FizzBuzz")
+test_case("returns correct string", test_fizzbuzz)
+test_end_suite()
+
+run_tests()

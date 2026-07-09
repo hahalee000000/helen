@@ -1,0 +1,11 @@
+// Test: 05-agents.md:471
+
+agent CodingAgent {
+    description "A coding assistant"
+    prompt "You are a Python expert. Help me with coding."
+    tools ["read_file", "write_file"]
+    
+    main {
+        llm act "How do I sort a list?"
+    }
+}

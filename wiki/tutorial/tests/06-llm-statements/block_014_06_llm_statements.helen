@@ -1,0 +1,14 @@
+// Test: 06-llm-statements.md:391
+
+agent Translator(text) {
+    description "Professional translator"
+    prompt """
+    Translate the following text to {{target}}:
+    {{text}}
+    """
+    main {
+        // prompt 渲染后 → system_prompt
+        // "Translate the following text to French:\nHello"
+        return llm act "Please translate accurately"
+    }
+}

@@ -1,0 +1,51 @@
+// Test: 09-python-ffi.md:208
+// @skip: needs Python module import
+
+import "math" as math
+
+agent DataAnalyzer(data: list) {
+    description "Analyze numerical data"
+    prompt """
+    Analyze the following data: {{data}}
+    """
+    
+    functions {
+        fn calculate_stats(): map {
+            let n = len(data)
+            let sum = 0
+            for value in data {
+                sum = sum + value
+            }
+            let mean = sum / n
+            
+            // 使用 Python 的 math.sqrt
+            let variance = 0
+            for value in data {
+                let diff = value - mean
+                variance = variance + diff * diff
+            }
+            variance = variance / n
+            let std_dev = math.sqrt(variance)
+            
+            return {
+                "mean": mean,
+                "std_dev": std_dev,
+                "min": min(data),
+                "max": max(data)
+            }
+        }
+    }
+    
+    main {
+        let stats = calculate_stats()
+        return "Mean: " + str(stats["mean"]) + 
+               ", Std Dev: " + str(stats["std_dev"])
+    }
+}
+
+main {
+    let data = [10, 20, 30, 40, 50]
+    let analyzer = DataAnalyzer(data)
+    let result = analyzer()
+    print(result)
+}

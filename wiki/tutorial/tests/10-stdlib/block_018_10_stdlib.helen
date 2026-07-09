@@ -1,0 +1,15 @@
+// Test: 10-stdlib.md:377
+
+// 直接访问
+print(argv)  // ["--verbose", "--output=json", "--port=8080", "input.txt"]
+print(len(argv))  // 4
+
+// 检查特定参数
+if contains(argv, "--verbose") {
+    print("详细模式已开启")
+}
+
+// 遍历所有参数
+for arg in argv {
+    print("参数: " + arg)
+}

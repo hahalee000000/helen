@@ -1,0 +1,8 @@
+// Test: 08-modules.md:34
+// @skip: needs external file import
+
+import "./math_utils.helen" as math
+
+main {
+    let result = math.add(1, 2)
+}

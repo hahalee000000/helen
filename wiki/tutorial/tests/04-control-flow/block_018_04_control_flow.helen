@@ -1,0 +1,49 @@
+// Test: 04-control-flow.md:278
+
+// === Context from preceding blocks ===
+// 如果左侧为 false，右侧不会执行
+
+// 实际应用：安全访问
+let user = getUser()
+let name = user != null && user.getName()  // 如果 user 为 null，不会调用 getName()
+
+// 条件执行
+let valid = isValid() && processData()  // 只在 valid 时处理
+
+// 如果左侧为 true，右侧不会执行
+
+// 实际应用：默认值
+let config = loadConfig() || defaultConfig()  // 只在加载失败时使用默认值
+
+let user = getUser() || createDefaultUser()  // 如果获取失败，创建默认用户
+
+// && 优先级高于 ||
+
+// 使用括号明确意图
+
+// 安全的列表访问
+let items = [1, 2, 3]
+let first = len(items) > 0 && items[0]  // 避免空列表错误
+
+// 缓存检查
+let cached = cache.get(key)
+
+// 权限检查
+let canAccess = isLoggedIn() && hasPermission("admin")
+
+// === Test code ===
+fn validate_age(age: int) {
+    if (age < 0) {
+        throw RuntimeError("age cannot be negative")
+    }
+    if (age > 150) {
+        throw RuntimeError("age seems unrealistic")
+    }
+    return age
+}
+
+try {
+    let result = validate_age(-5)
+} catch RuntimeError err {
+    print("Validation failed: " + err.message)
+}

@@ -1,0 +1,15 @@
+// Test: 10-stdlib.md:796
+
+agent 异常检查助手 {
+    description "检查代码中未处理的异常"
+    main {
+        let todos = grep_files("src/", "TODO.*exception", regex=true)
+        if len(todos) > 0 {
+            print("发现 " + str(len(todos)) + " 处待处理的异常:")
+            for match in todos {
+                print("  " + match["file"] + ":" + str(match["line"]))
+                print("    " + match["text"])
+            }
+        }
+    }
+}

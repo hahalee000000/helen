@@ -118,6 +118,8 @@ if x > 0 && x < 10 {
     print("x is between 0 and 10")
 }
 
+// 文件存在性检查示例
+let file = "config.txt"
 if !path_exists(file) {
     print("File not found")
 }

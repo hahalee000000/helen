@@ -1,0 +1,23 @@
+// Test: 09-python-ffi.md:183
+// @skip: needs Python module import
+
+import "json" as json
+
+main {
+    // 创建数据
+    let users = [
+        {"name": "Alice", "age": 30},
+        {"name": "Bob", "age": 25},
+        {"name": "Charlie", "age": 35}
+    ]
+    
+    // 序列化为 JSON
+    let json_data = json.dumps(users)
+    print(json_data)
+    
+    // 解析 JSON
+    let parsed = json.loads(json_data)
+    for user in parsed {
+        print(user["name"] + " is " + str(user["age"]) + " years old")
+    }
+}

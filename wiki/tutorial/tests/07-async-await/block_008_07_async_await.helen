@@ -1,0 +1,10 @@
+// Test: 07-async-await.md:167
+
+main {
+    let response = async Streamer("essay")
+    let total_length = 0
+    for await chunk in response {
+        total_length = total_length + len(chunk)
+    }
+    print("Total length: " + total_length)
+}

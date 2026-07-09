@@ -1,0 +1,46 @@
+// Test: 03-functions.md:234
+
+// === Context from preceding blocks ===
+fn greet(name) {
+    print("Hello, " + name + "!")
+}
+
+fn add(a, b) {
+    return a + b
+}
+
+fn factorial(n: int): int {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+let global_x = 100
+
+fn test() {
+    let local_x = 200
+    print(global_x)    // ✅ 可以访问全局变量
+    print(local_x)     // ✅ 可以访问局部变量
+}
+
+// === Test code ===
+let nums = [1, 2, 3, 4, 5]
+
+// 使用闭包进行数据转换
+let squared = map(nums, fn(n) { return n * n })
+print(squared)  // [1, 4, 9, 16, 25]
+
+// 使用闭包进行过滤
+let large = filter(nums, fn(n) { return n > 3 })
+print(large)  // [4, 5]
+
+// 使用闭包进行聚合
+let sum = reduce(nums, fn(acc, n) { return acc + n }, 0)
+print(sum)  // 15
+
+// 链式调用
+let result = nums
+    |> filter(fn(n) { return n % 2 == 0 })
+    |> map(fn(n) { return n * 10 })
+print(result)  // [20, 40]

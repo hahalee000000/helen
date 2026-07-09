@@ -1,0 +1,36 @@
+// Test: 03-functions.md:276
+
+// === Context from preceding blocks ===
+fn greet(name) {
+    print("Hello, " + name + "!")
+}
+
+fn add(a, b) {
+    return a + b
+}
+
+fn factorial(n: int): int {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+let global_x = 100
+
+fn test() {
+    let local_x = 200
+    print(global_x)    // ✅ 可以访问全局变量
+    print(local_x)     // ✅ 可以访问局部变量
+}
+
+alias <canonical> as <alias_name>
+
+// === Test code ===
+alias len as 我的长度
+alias print as 输出
+
+主函 {
+    我的长度([1, 2, 3])   // 3
+    输出("hello")
+}

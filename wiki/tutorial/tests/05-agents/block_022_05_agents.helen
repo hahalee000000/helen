@@ -1,0 +1,12 @@
+// Test: 05-agents.md:626
+
+agent Summarizer {
+    description "Summarize text"
+    prompt "Summarize the following:"
+}
+
+main {
+    let text = "Long article content here..."
+    let summary = Summarizer(text)
+    print(summary)
+}

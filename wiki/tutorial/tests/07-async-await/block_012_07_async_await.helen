@@ -1,0 +1,9 @@
+// Test: 07-async-await.md:273
+
+agent StreamAgent {
+  main {
+    // 异步流式获取完整文本
+    let full_text = await llm act_stream_async WriteStory "A cat named Luna"
+    print(full_text)
+  }
+}

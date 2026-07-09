@@ -1,0 +1,7 @@
+// Test: README_TUTORIAL_TESTS.md:45
+
+// Wrong:
+fn greet(name: string) -> string { ... }
+
+// Correct:
+fn greet(name: string): string { ... }

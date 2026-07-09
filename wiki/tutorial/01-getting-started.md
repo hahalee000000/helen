@@ -252,7 +252,7 @@ helen help
 创建 `test.helen`：
 
 ```helen
-fn greet(name: string) -> string {
+fn greet(name: string): string {
     return "Hello, " + name + "!"
 }
 

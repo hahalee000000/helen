@@ -38,6 +38,39 @@ if [1] { print("会执行") }        // 非空列表 → true
 
 `&&` 和 `||` 运算符支持**短路求值**，避免不必要的计算：
 
+首先定义一些示例函数：
+
+```helen
+fn expensiveFunction(): str {
+    // 模拟耗时操作
+    return "result"
+}
+
+fn getUser(): map? {
+    return {"name": "Alice"}
+}
+
+fn isValid(): bool {
+    return true
+}
+
+fn processData(): str {
+    return "processed"
+}
+
+fn loadConfig(): map? {
+    return null
+}
+
+fn defaultConfig(): map {
+    return {"debug": false}
+}
+
+fn createDefaultUser(): map {
+    return {"name": "Guest"}
+}
+```
+
 #### && 短路
 
 ```helen

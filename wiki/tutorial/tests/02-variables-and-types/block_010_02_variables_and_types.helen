@@ -1,0 +1,8 @@
+// Test: 02-variables-and-types.md:98
+
+let eq = 5 == 5     // true
+let ne = 5 != 3     // true
+let gt = 5 > 3      // true
+let ge = 5 >= 5     // true
+let lt = 3 < 5      // true
+let le = 5 <= 5     // true

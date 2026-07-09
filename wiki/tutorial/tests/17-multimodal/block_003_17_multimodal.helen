@@ -1,0 +1,5 @@
+// Test: 17-multimodal.md:73
+
+let img1 = media("image1.png")
+let img2 = media("image2.png")
+let result = llm act "比较这两张图片" media(img1, img2)

@@ -1,0 +1,9 @@
+// Test: 10-stdlib.md:248
+
+// Base64
+base64_encode("Hello")        // "SGVsbG8="
+base64_decode("SGVsbG8=")     // "Hello"
+
+// HTML 转义
+html_escape("<script>")       // "&lt;script&gt;"
+html_unescape("&lt;")         // "<"

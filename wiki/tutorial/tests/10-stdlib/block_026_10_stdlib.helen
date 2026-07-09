@@ -1,0 +1,24 @@
+// Test: 10-stdlib.md:534
+
+// === Context from preceding blocks ===
+let args = get_cli_args()  // 与 argv 相同
+
+let parsed = parse_cli_args()
+// 输入: --verbose --output=json --port 8080 input.txt
+// 结果: {
+//   verbose: true,
+//   output: "json",
+//   port: "8080",
+//   _positional: ["input.txt"]
+// }
+
+agent ChatBot {
+}
+
+// === Test code ===
+// 列出所有 transcript 会话
+let sessions = list_sessions()
+for session in sessions {
+    print(session["session_id"] + ": " + str(session["message_count"]) + " 条消息")
+}
+// 返回: [{"session_id": "...", "message_count": 50, "size_bytes": 2500, ...}]

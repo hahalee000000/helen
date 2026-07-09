@@ -1,0 +1,9 @@
+// Test: 07-async-await.md:244
+
+agent AsyncAgent {
+  main {
+    // 单次异步调用
+    let result = await llm act_async Translate "Hello, World!"
+    print(result)
+  }
+}

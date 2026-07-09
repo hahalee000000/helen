@@ -1,0 +1,11 @@
+// Test: TUTORIAL_TEST_REPORT.md:45
+
+// Tutorial (WRONG):
+fn greet(name: string) -> string {
+    return "Hello, " + name + "!"
+}
+
+// Helen (CORRECT):
+fn greet(name: string): string {
+    return "Hello, " + name + "!"
+}

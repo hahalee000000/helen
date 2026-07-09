@@ -1,0 +1,27 @@
+// Test: 17-multimodal.md:230
+
+// === Context from preceding blocks ===
+agent 图像分析 {
+    description "分析图像内容"
+    
+}
+
+let img1 = media("image1.png")
+let img2 = media("image2.png")
+let result = llm act "比较这两张图片" media(img1, img2)
+
+agent Claude媒体处理 {
+}
+
+agent 图像生成器 {
+    description "根据描述生成图像"
+    
+}
+
+// === Test code ===
+# 将任意 MediaPart 转为纯 base64 字符串（无论 source 是 file/url/base64）
+let b64 = media_to_base64(img)
+
+# 保存 MediaPart 到文件（path 可选，默认保存到 ~/.helen/generated_media/）
+let path = save_media(img, "/tmp/output.png")
+let path2 = save_media(img)  # 自动命名

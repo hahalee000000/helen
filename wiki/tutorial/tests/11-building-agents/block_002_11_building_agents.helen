@@ -1,0 +1,36 @@
+// Test: 11-building-agents.md:86
+
+main {
+    let customer_question = "How do I reset my password?"
+
+    // 第一步：分类
+    llm if "Classify customer question" {
+        branch "product" {
+            print("📦 Product question")
+            let answer = ProductExpert(customer_question)
+        }
+        branch "billing" {
+            print("💰 Billing question")
+            let answer = BillingExpert(customer_question)
+        }
+        branch "technical" {
+            print("🔧 Technical question")
+            let answer = TechSupport(customer_question)
+        }
+        branch "account" {
+            print("👤 Account question")
+            let answer = TechSupport(customer_question)
+        }
+        default {
+            print("📋 General question")
+            let answer = "Thank you for your question. Let me help you."
+        }
+    }
+
+    // 第三步：润色回复
+    let polished = ResponsePolisher(answer)
+
+    // 第四步：输出
+    print("\n--- Response to Customer ---")
+    print(polished)
+}

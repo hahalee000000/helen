@@ -577,7 +577,7 @@ agent MyAgent {
         let config = "default"
         const MAX_RETRIES = 3
         
-        fn get_config() -> str {
+        fn get_config(): str {
             return config  // ✅ 可以访问
         }
         
@@ -757,6 +757,12 @@ agent 研究助手 {
 - **错误历史** — shell 命令失败记录
 
 ```helen
+// 辅助函数：修复代码
+fn fix_code(code: str): str {
+    // 实际的代码修复逻辑
+    return code  // 简化示例
+}
+
 agent CodeReviewer {
     context {
         working-memory true
@@ -764,6 +770,13 @@ agent CodeReviewer {
     }
     
     tools ["read_file", "write_file", "patch_file"]
+    
+    functions {
+        fn fix_code(code: str): str {
+            // 实际的代码修复逻辑
+            return code  // 简化示例
+        }
+    }
     
     main {
         // 自动跟踪：这些操作会更新工作记忆

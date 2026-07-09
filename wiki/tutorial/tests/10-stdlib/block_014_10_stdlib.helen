@@ -1,0 +1,9 @@
+// Test: 10-stdlib.md:307
+
+// 转 HTML
+markdown_to_html("# Title\n\nParagraph")
+// "<h1>Title</h1><p>Paragraph</p>"
+
+// 提取标题
+markdown_extract_headings("# H1\n## H2")
+// [{"level": 1, "text": "H1"}, {"level": 2, "text": "H2"}]

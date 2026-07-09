@@ -1,0 +1,49 @@
+// Test: 17-multimodal.md:463
+
+// === Context from preceding blocks ===
+agent 图像分析 {
+    description "分析图像内容"
+    
+}
+
+let img1 = media("image1.png")
+let img2 = media("image2.png")
+let result = llm act "比较这两张图片" media(img1, img2)
+
+agent Claude媒体处理 {
+}
+
+agent 图像生成器 {
+    description "根据描述生成图像"
+    
+}
+
+agent 图像分析助手 {
+    description "专业的图像分析助手，能够理解和描述图像内容"
+    model "qwen-vl-max"
+    
+}
+
+agent 图像比较器 {
+    description "比较多个图像的差异"
+    
+}
+
+agent 创意图像生成器 {
+    description "根据文字描述生成图像"
+    
+}
+
+agent Claude分析 {
+}
+
+agent 自定义媒体处理 {
+}
+
+let parts = [img1, video1, audio1, img2]
+let videos = parts.filter(是视频)    # 只保留视频
+
+// === Test code ===
+# 默认每次最多 10 个媒体
+let images = [media("img1.png"), media("img2.png"), ...]
+让 result = llm act "分析这些图片" media(images...)

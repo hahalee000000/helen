@@ -1,0 +1,13 @@
+// Test: 06-llm-statements.md:186
+
+fn handle_chunk(chunk) {
+    print(chunk, end="")
+}
+
+fn on_done() {
+    print("\n\n✅ 流式传输完成")
+}
+
+main {
+    llm act "Write a short story" on_chunk handle_chunk on_complete on_done
+}
