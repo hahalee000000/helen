@@ -2820,17 +2820,20 @@ agent Researcher(topic) {
 3. 循环直到 LLM 输出最终文本响应
 4. 达到 `max_turns - 1` 时自动注入 nudge 提示，强制 LLM 输出最终答案
 
-**内置工具列表：**
+**内置工具列表（10 个）：**
 
-| 工具 | 功能 |
-|------|------|
-| `web_search` | Wikipedia 搜索 |
-| `web_fetch` | 获取网页内容 |
-| `read_file` | 读取文件 |
-| `write_file` | 写入文件（覆盖） |
-| `patch_file` | 精确修改文件（9 种模糊匹配策略） |
-| `shell_exec` | 执行 shell 命令 |
-| `calculate` | 数学计算 |
+| 工具 | 功能 | 参数 |
+|------|------|------|
+| `web_search` | 搜索网页（Bing） | `query: str` |
+| `web_fetch` | 获取网页内容 | `url: str` |
+| `read_file` | 读取文件 | `path: str` |
+| `write_file` | 写入文件（覆盖） | `path: str, content: str` |
+| `patch_file` | 精确修改文件（9 种模糊匹配策略） | `path: str, old_string: str, new_string: str` |
+| `shell_exec` | 执行 shell 命令 | `command: str` |
+| `calculate` | 数学计算 | `expression: str` |
+| `find_files` | 按 glob 模式查找文件 | `path: str, pattern: str = "**/*", max_results: int = 200` |
+| `search_files` | 按内容搜索文件（文本/正则） | `path: str, pattern: str, regex: bool = false, case_sensitive: bool = true, max_results: int = 100` |
+| `load_skill` | 加载技能文档（总是可用） | `name: str` |
 
 ### patch_file 模糊匹配
 

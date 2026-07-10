@@ -406,7 +406,7 @@ agent Researcher {
 
 > ⚠️ 不支持 agent 内部 const、不支持表达式拼接（如 `A + B`）——这是**安全设计**，不是缺陷。工具是 LLM 的能力边界，必须静态可审计。
 
-**可用内建工具：**
+**可用内建工具（10 个）：**
 
 | 工具 | 功能 | 参数 |
 |------|------|------|
@@ -414,11 +414,59 @@ agent Researcher {
 | `web_fetch` | 获取网页内容 | `url: str` |
 | `read_file` | 读取文件 | `path: str` |
 | `write_file` | 写入文件 | `path: str, content: str` |
+| `patch_file` | 精确修改文件（9 种模糊匹配策略） | `path: str, old_string: str, new_string: str` |
 | `shell_exec` | 执行 shell 命令 | `command: str` |
 | `calculate` | 数学计算 | `expression: str` |
+| `find_files` | 按 glob 模式查找文件（`**` 递归） | `path: str, pattern: str = "**/*", max_results: int = 200` |
+| `search_files` | 按内容搜索文件（文本/正则） | `path: str, pattern: str, regex: bool = false, case_sensitive: bool = true, max_results: int = 100` |
 | `load_skill` | 加载技能文档 | `name: str` |
 
 > **注意**：`load_skill` 总是可用（即使不在 `tools` 列表中），用于加载技能文档。
+
+### 文件搜索工具使用示例（v1.15+）
+
+`find_files` 和 `search_files` 让 LLM 能够探索代码库结构：
+
+```helen
+agent CodeExplorer {
+    description "Explore and understand codebases"
+    tools = ["find_files", "search_files", "read_file"]
+    prompt "Explore the codebase to answer the user's question."
+}
+
+// LLM 可以自主决定：
+// 1. find_files("src/", "**/*.py")  → 列出所有 Python 文件
+// 2. search_files("src/", "def process", regex=false)  → 搜索函数定义
+// 3. read_file("src/processor.py")  → 读取相关文件
+```
+
+**`find_files` — 按模式查找文件**
+
+```helen
+// 查找所有 Python 文件
+find_files("src/", "**/*.py")
+
+// 查找所有测试文件
+find_files("tests/", "**/test_*.py")
+
+// 查找配置文件
+find_files(".", "**/*.{json,yaml,toml}")
+```
+
+**`search_files` — 按内容搜索**
+
+```helen
+// 文本搜索（默认）
+search_files("src/", "TODO")
+
+// 正则搜索
+search_files("src/", "def \\w+Handler", regex=true)
+
+// 大小写不敏感
+search_files("docs/", "warning", case_sensitive=false)
+```
+
+**中文别名**：stdlib 中对应函数为 `查找文件()` 和 `搜索内容()`。
 
 ## Agent 系统提示词架构（v1.15+）
 

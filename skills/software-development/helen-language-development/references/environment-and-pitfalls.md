@@ -665,9 +665,14 @@ When renaming the language/project (e.g., `hellen` → `helen`), check ALL these
 10. **pip editable install**: re-run `pip install -e .` (updates `direct_url.json`)
 11. **Git remote**: verify remote URL after rename
 
-### `search_files` with `target="files"` Returns 0 Results
+### `find_files` vs `search_files` — 正确用法
 
-Ripgrep-based `search_files(pattern='*.py', target='files')` returns 0 results in this codebase. Use `read_file` with explicit paths or `read_file` on `pyproject.toml` first for structure.
+两个文件搜索工具有不同用途：
+
+- **`find_files(path, pattern)`**：按 glob 模式查找文件（类似 `find` 命令）。示例：`find_files(path="src/", pattern="**/*.py")`
+- **`search_files(path, pattern, regex=false)`**：按内容搜索文件（类似 `grep`）。示例：`search_files(path="src/", pattern="def process")`
+
+注意：`search_files` 没有 `target` 或 `file_glob` 参数。要查找文件名匹配的特定文件，用 `find_files`。
 
 ### Import Bug: `node.path` vs `node.module_path`
 

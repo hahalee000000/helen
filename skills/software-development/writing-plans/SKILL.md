@@ -143,20 +143,20 @@ Read and understand:
 
 ### Step 2: Explore the Codebase
 
-Use Hermes tools to understand the project:
+Use Helen tools to understand the project:
 
 ```python
-# Understand project structure
-search_files("*.py", target="files", path="src/")
+# Understand project structure (find all Python files)
+find_files(path="src/", pattern="**/*.py")
 
-# Look at similar features
-search_files("similar_pattern", path="src/", file_glob="*.py")
+# Look at similar features (search file contents)
+search_files(path="src/", pattern="similar_pattern")
 
 # Check existing tests
-search_files("*.py", target="files", path="tests/")
+find_files(path="tests/", pattern="**/test_*.py")
 
 # Read key files
-read_file("src/app.py")
+read_file(path="src/app.py")
 ```
 
 ### Step 3: Design Approach
