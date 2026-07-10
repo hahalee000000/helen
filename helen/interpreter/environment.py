@@ -298,8 +298,15 @@ class Environment:
         v1.12 fix: Mutable values (list, dict) are deep-copied to prevent
         async tasks from sharing mutable references. Without this, concurrent
         tasks could race on the same list/dict objects.
+
+        v1.17 fix: SharedStore instances (shared store/channel) are NOT deep-copied.
+        They maintain reference semantics to allow detached agents to access and
+        update shared state. Thread safety is guaranteed by SharedStore's internal
+        RLock mechanism.
         """
         import copy
+        # Import here to avoid circular dependency
+        from helen.interpreter.interpreter import SharedStore
 
         # First, snapshot the parent chain (if any)
         parent_snapshot = None
@@ -311,7 +318,11 @@ class Environment:
         # Deep copy mutable values to prevent cross-task mutation
         new_store: dict = {}
         for key, value in self._store.items():
-            if isinstance(value, (list, dict)):
+            if isinstance(value, SharedStore):
+                # SharedStore maintains reference (designed for cross-agent sharing)
+                # Thread safety guaranteed by SharedStore's internal RLock
+                new_store[key] = value
+            elif isinstance(value, (list, dict)):
                 new_store[key] = copy.deepcopy(value)
             else:
                 new_store[key] = value

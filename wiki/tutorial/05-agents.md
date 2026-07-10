@@ -835,6 +835,154 @@ agent CodeReviewer {
 | 快速响应 | `compression "none"` + `working-memory false` | 短对话，低延迟 |
 | 多轮对话 | `cache-aware true` + `working-memory-tokens 8000` | 高缓存命中率 |
 
+## 共享状态与通信（v1.12 / v1.13）
+
+多 Agent 系统经常需要共享状态或相互通信。Helen 提供两种机制：**shared store**（共享仓库）和 **channel**（通道）。
+
+### Shared Store：结构化共享状态
+
+`shared store` 用于跨 Agent 共享**可变状态**，特别是引用类型（list、dict）。
+
+```helen
+shared store TaskRegistry {
+    let tasks: list = []
+    let counter: int = 0
+    
+    fn register(task_name: str) {
+        counter = counter + 1
+        tasks.append(task_name)
+    }
+    
+    fn count(): int { return counter }
+    
+    fn getTask(index: int): str { return tasks[index] }
+}
+
+// 所有 Agent 都能访问
+agent Worker() {
+    main {
+        TaskRegistry.register("my-task")
+        print("Total tasks: " + str(TaskRegistry.count()))
+    }
+}
+```
+
+**关键特性**：
+- ✅ 线程安全：所有方法调用自动加锁（RLock）
+- ✅ 所有 Agent 默认可见
+- ✅ 支持 list、dict 等引用类型
+- ❌ 不能直接访问 `_` 前缀的私有字段
+
+**私有字段**（`_` 前缀）：
+
+```helen
+shared store BankAccount {
+    let balance: int = 1000
+    _transactionLog: list = []  // 私有：外部不可见
+    
+    fn withdraw(amount: int) {
+        balance -= amount
+        _transactionLog.append("withdraw: " + str(amount))
+    }
+    
+    fn getHistory(): list {
+        return _transactionLog  // 方法内可访问
+    }
+}
+
+// ✅ 公开接口
+BankAccount.withdraw(100)
+print(BankAccount.balance)  // 输出: 900
+
+// ❌ 私有字段
+print(BankAccount._transactionLog)  // 错误！
+```
+
+### Channel：Agent 间通信端点
+
+`channel` 用于 Agent 间的**消息传递**，语法和 shared store 相同，但语义不同。
+
+```helen
+channel MessageQueue {
+    let messages: list = []
+    
+    fn send(msg: str) {
+        messages.append(msg)
+    }
+    
+    fn receive(): str {
+        if (len(messages) == 0) {
+            return ""
+        }
+        return messages.shift()
+    }
+    
+    fn pending(): int {
+        return len(messages)
+    }
+}
+
+// 生产者
+agent Producer() {
+    main {
+        MessageQueue.send("task-1")
+        MessageQueue.send("task-2")
+    }
+}
+
+// 消费者
+agent Consumer() {
+    main {
+        let msg = MessageQueue.receive()
+        if (msg != "") {
+            print("Processing: " + msg)
+        }
+    }
+}
+```
+
+**Shared Store vs Channel**：
+
+| 特性 | Shared Store | Channel |
+|------|--------------|---------|
+| 语义 | 共享状态容器 | 消息传递端点 |
+| 典型用途 | Counter、Cache、Config | Queue、EventBus、Signal |
+| 运行时 | 相同（SharedStore 类） | 相同（SharedStore 类） |
+| 线程安全 | ✅ RLock | ✅ RLock |
+
+选择建议：
+- 需要**共享引用类型**（list/dict）+ 方法封装 → `shared store`
+- 构建**消息/事件系统** → `channel`
+
+### Detach 与共享状态（v1.17+）
+
+`detach` 语句可以在后台执行任务，同时访问 shared store 和 channel：
+
+```helen
+shared store Counter {
+    let count: int = 0
+    fn increment() { count = count + 1 }
+}
+
+agent Worker() {
+    main {
+        // 启动 3 个后台任务，共享同一个 Counter
+        detach Counter.increment()
+        detach Counter.increment()
+        detach Counter.increment()
+    }
+}
+
+Worker()
+sleep(100)  // 等待后台任务
+print(Counter.count)  // 输出: 3
+```
+
+**线程安全保证**：
+- SharedStore 内部使用 RLock 保护所有字段访问
+- 多个 detached agent 并发调用方法时，自动序列化执行
+- 主线程和 detached agent 可以同时访问同一个 SharedStore
+
 ---
 
 > **下一步**: [[tutorial/06-llm-statements|LLM 语句实战]]

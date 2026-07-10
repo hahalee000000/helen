@@ -380,5 +380,127 @@ let agent_result = await agentA
 
 ---
 
-**最后更新**: 2026-07-01  
-**版本**: v1.10
+## Detach: Fire-and-Forget 后台任务（v1.12+）
+
+`detach` 语句用于启动**后台任务**，不等待完成，立即返回。适合不需要结果的异步操作。
+
+### 基本用法
+
+```helen
+agent Logger(message: str) {
+    description "Log message in background"
+    main {
+        // 模拟日志写入
+        print("Logging: " + message)
+    }
+}
+
+// 启动后台任务，不等待
+detach Logger("user login")
+detach Logger("data processed")
+
+// 主程序继续执行
+print("Main program continues...")
+```
+
+### 与 async/await 的区别
+
+| 特性 | `detach` | `async call` |
+|------|----------|--------------|
+| 返回值 | `None`（fire-and-forget） | `Task` 对象 |
+| 等待机制 | 无（立即返回） | `await` 等待结果 |
+| 错误处理 | 打印到 stderr | 通过 Task 捕获 |
+| 使用场景 | 日志、监控、清理 | 需要结果的并发任务 |
+
+```helen
+// detach: 不需要结果
+detach LogEvent("cleanup started")
+
+// async/await: 需要结果
+let task = async DataProcessor("input")
+let result = await task
+```
+
+### Detach 与共享状态（v1.17+）
+
+Detached agent 可以访问和更新 `shared store` / `channel`：
+
+```helen
+shared store Counter {
+    let count: int = 0
+    fn increment() { count = count + 1 }
+    fn get(): int { return count }
+}
+
+// 启动多个后台任务
+detach Counter.increment()
+detach Counter.increment()
+detach Counter.increment()
+
+// 等待后台任务完成
+sleep(100)
+
+print(Counter.get())  // 输出: 3
+```
+
+**线程安全保证**：
+- SharedStore 内部使用 RLock 保护所有字段访问
+- 多个 detached agent 并发调用时，自动序列化执行
+- 主线程和 detached agent 可以同时安全访问
+
+### 使用场景
+
+**✅ 适合 detach**：
+- 日志记录（不影响主流程）
+- 后台监控（异步收集指标）
+- 临时文件清理
+- 异步通知（发送邮件、消息）
+
+**❌ 不适合 detach**：
+- 需要返回值 → 用 `async call` + `await`
+- 需要错误处理 → 用 `async call` + `try-catch`
+- 需要等待完成 → 用 `async call` + `await`
+
+### 完整示例：异步日志系统
+
+```helen
+shared store LogBuffer {
+    let logs: list = []
+    
+    fn add(level: str, message: str) {
+        logs.append("[" + level + "] " + message)
+    }
+    
+    fn flush(): list {
+        let result = logs
+        logs = []  // 清空缓冲区
+        return result
+    }
+    
+    fn size(): int { return len(logs) }
+}
+
+agent AsyncLogger(level: str, message: str) {
+    description "Async logging agent"
+    main {
+        LogBuffer.add(level, message)
+    }
+}
+
+// 主程序
+detach AsyncLogger("INFO", "Application started")
+detach AsyncLogger("DEBUG", "Loading configuration")
+detach AsyncLogger("INFO", "Server listening on port 8080")
+
+// 等待日志写入
+sleep(100)
+
+print("Log entries: " + str(LogBuffer.size()))
+let allLogs = LogBuffer.flush()
+print("Flushed " + str(len(allLogs)) + " logs")
+```
+
+---
+
+**最后更新**: 2026-07-10  
+**版本**: v1.17

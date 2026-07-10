@@ -326,6 +326,130 @@ agent CodeReviewer {
 
 ---
 
+## 第八步：多 Agent 协作模式（v1.12+）
+
+在实际应用中，多个 Agent 经常需要**共享状态**或**相互通信**。Helen 提供两种机制：`shared store` 和 `channel`。
+
+### 使用 Shared Store 共享状态
+
+假设我们的客服系统需要跟踪所有会话的统计信息：
+
+```helen
+shared store SessionStats {
+    let totalSessions: int = 0
+    let resolvedSessions: int = 0
+    let activeSessions: list = []
+    
+    fn startSession(sessionId: str) {
+        totalSessions = totalSessions + 1
+        activeSessions.append(sessionId)
+    }
+    
+    fn endSession(sessionId: str) {
+        resolvedSessions = resolvedSessions + 1
+        activeSessions.remove(sessionId)
+    }
+    
+    fn getResolutionRate(): str {
+        if (totalSessions == 0) {
+            return "0%"
+        }
+        let rate = resolvedSessions * 100 / totalSessions
+        return str(rate) + "%"
+    }
+}
+
+agent CustomerService(sessionId: str, question: str) {
+    description "Handle customer session"
+    main {
+        SessionStats.startSession(sessionId)
+        
+        // 处理客户问题...
+        let response = llm act Assistant "Question: " + question
+        
+        SessionStats.endSession(sessionId)
+        return response
+    }
+}
+
+// 多个 Agent 并发运行，共享统计信息
+async call CustomerService("session-1", "How to reset password?")
+async call CustomerService("session-2", "Billing issue")
+async call CustomerService("session-3", "Technical support")
+
+sleep(500)  // 等待所有会话完成
+print("Resolution rate: " + SessionStats.getResolutionRate())
+```
+
+### 使用 Channel 传递消息
+
+假设我们需要一个后台任务处理队列：
+
+```helen
+channel TaskQueue {
+    let tasks: list = []
+    
+    fn enqueue(task: str) {
+        tasks.append(task)
+    }
+    
+    fn dequeue(): str {
+        if (len(tasks) == 0) {
+            return ""
+        }
+        return tasks.shift()
+    }
+    
+    fn pending(): int {
+        return len(tasks)
+    }
+}
+
+agent TaskProducer() {
+    description "Produce tasks"
+    main {
+        TaskQueue.enqueue("send-email-1")
+        TaskQueue.enqueue("send-email-2")
+        TaskQueue.enqueue("send-email-3")
+    }
+}
+
+agent TaskConsumer() {
+    description "Consume tasks"
+    main {
+        let task = TaskQueue.dequeue()
+        if (task != "") {
+            print("Processing: " + task)
+            // 处理任务...
+        }
+    }
+}
+
+// 生产者和消费者并发运行
+async call TaskProducer()
+sleep(100)  // 等待任务入队
+
+// 消费所有任务
+for (let i = 0; i < 3; i = i + 1) {
+    async call TaskConsumer()
+}
+```
+
+### 协作模式选择
+
+| 模式 | 适用场景 | 示例 |
+|------|---------|------|
+| **Shared Store** | 多个 Agent 读写同一份数据 | 统计计数器、缓存、配置 |
+| **Channel** | Agent 间传递消息/事件 | 任务队列、事件总线、信号 |
+
+**最佳实践**：
+- ✅ 用 `shared store` 管理**全局状态**（统计、配置、缓存）
+- ✅ 用 `channel` 构建**消息系统**（队列、事件、信号）
+- ✅ 结合 `async/await` 实现并发协作
+- ✅ 结合 `detach` 实现后台任务（v1.17+）
+
+---
+
 ## 项目结构
 
 ```
