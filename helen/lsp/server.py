@@ -124,7 +124,7 @@ HELLEN_KEYWORDS = [
     # Literals
     "true", "false", "null",
     # Chinese keywords (v1.10 — bilingual support)
-    "定义", "常量", "函数", "返回",       # let, const, fn, return
+    "设", "定义", "常量", "函数", "返回",    # let (设 primary, 定义 legacy), const, fn, return
     "如果", "否则", "对于", "属于", "当",  # if, else, for, in, while
     "中断", "继续",                     # break, continue
     "匹配", "情况", "默认", "分支",       # match, case, default, branch

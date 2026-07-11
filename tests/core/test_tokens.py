@@ -139,13 +139,25 @@ class TestKeywords:
     def test_keyword_count(self):
         """Test that the keyword map contains the expected number of entries."""
         kw = keywords()
-        assert len(kw) == 94  # 46 English + 46 Chinese keywords; MEMORY/WILDCARD are context-only
+        assert len(kw) == 95  # 47 English + 48 Chinese keywords (含 定义 legacy alias)
 
     def test_all_keywords_map_to_token_types(self) -> None:
         """Every keyword value should be a TokenType member."""
         kw = keywords()
         for key, val in kw.items():
             assert isinstance(val, TokenType), f"{key} -> {val}"
+
+    def test_she_is_primary_let_keyword(self):
+        """设 is the primary Chinese keyword for let; 定义 is a legacy alias.
+
+        v1.17: '设' matches the Chinese math tradition '设 x = 5'
+        (Let x be 5), and corresponds to 'let' better than the prior
+        '定义' (define).
+        """
+        from helen.core.tokens import keywords
+        kw = keywords()
+        assert kw["设"] == TokenType.LET
+        assert kw["定义"] == TokenType.LET  # legacy alias preserved
 
     def test_specific_mappings(self) -> None:
         """Spot-check known keyword → TokenType mappings."""

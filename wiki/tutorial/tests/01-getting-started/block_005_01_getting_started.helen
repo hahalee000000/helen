@@ -12,7 +12,7 @@ fn greet(name: string): string {
 }
 
 // 中文变量和函数
-定义 姓名 = "张三"
+设 姓名 = "张三"
 函数 打招呼(名字: str) {
     print("你好, " + 名字)
 }

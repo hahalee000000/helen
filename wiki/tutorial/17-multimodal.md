@@ -462,7 +462,7 @@ let large_img = media("high_res_photo.png")
 ```helen
 # 默认每次最多 10 个媒体
 let images = [media("img1.png"), media("img2.png"), ...]
-让 result = llm act "分析这些图片" media(images...)
+设 result = llm act "分析这些图片" media(images...)
 ```
 
 ## 限制和注意事项

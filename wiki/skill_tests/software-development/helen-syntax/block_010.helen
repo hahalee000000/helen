@@ -1,15 +1,15 @@
 // 来源: skills/software-development/helen-syntax/SKILL.md (代码块 10)
 
 // 纯中文代码，全程中文输入法
-让 x ＝ 10
+设 x = 10
 常量 Y ＝ 20
 函数 加（甲： int， 乙： int）： int ｛
     返回 甲 ＋ 乙
 ｝
 如果 x ＞ 0 ｛
-    让 结果 ＝ 加（x， Y）
+    设 结果 = 加（x， Y）
 ｝ 否则 ｛
-    让 结果 ＝ 0
+    设 结果 = 0
 ｝
 
 // 全角比较和逻辑
@@ -18,4 +18,4 @@
 ｝
 
 // 全角管道
-让 result ＝ 5 ｜＞ double
+设 result = 5 ｜＞ double

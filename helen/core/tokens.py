@@ -185,7 +185,8 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "null": TokenType.NULL_KW,
     # === Chinese keywords (中文关键字) ===
     # Variable/function
-    "定义": TokenType.LET,
+    "设": TokenType.LET,
+    "定义": TokenType.LET,       # legacy alias (v1.17: 设 是主关键字)
     "常量": TokenType.CONST,
     "函数": TokenType.FN,
     "返回": TokenType.RETURN,

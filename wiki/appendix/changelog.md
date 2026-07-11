@@ -987,7 +987,7 @@ agent Chat {
 }
 
 // 中英混合
-定义 结果 = 斐波那契(10)
+设 结果 = 斐波那契(10)
 const LIMIT = 100
 如果 结果 < LIMIT {
     print("OK")

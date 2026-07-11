@@ -9,7 +9,7 @@ channel Counter {
 
 // 中文
 通道 计数器 {
-  定义 count: int = 0
+  设 count: int = 0
   函数 increment() { count = count + 1 }
   函数 get(): int { 返回 count }
 }
