@@ -319,6 +319,18 @@ class AgentContextManager:
         if not self.working_memory_enabled:
             return
 
+        # Defensive: tool_args may arrive as a JSON string (e.g. from raw API
+        # tool_calls) or as a dict (tests / programmatic callers). Normalize
+        # to dict so downstream .get() calls don't crash on strings.
+        if isinstance(tool_args, str):
+            try:
+                import json as _json
+                tool_args = _json.loads(tool_args)
+            except (ValueError, TypeError):
+                tool_args = {}
+        if not isinstance(tool_args, dict):
+            tool_args = {}
+
         if tool_name == "read_file":
             file_path = tool_args.get("path", "")
             if file_path:

@@ -201,6 +201,46 @@ class TestAgentContextManagerIntegration:
         )
         assert "/test/file.py" in interp._agent_context.working_memory.active_files
 
+    def test_update_working_memory_from_tool_call_string_args(self):
+        """Regression: update_from_tool_call must accept JSON-string args.
+
+        The production caller in llm_mixin._record_llm_response_to_history passes
+        args_raw (a JSON-encoded string from the API's tool_calls), not a dict.
+        Previously this crashed with "'str' object has no attribute 'get'".
+        """
+        from helen.interpreter.interpreter import Interpreter
+
+        interp = Interpreter()
+
+        # read_file with JSON string args
+        interp._agent_context.update_from_tool_call(
+            "read_file",
+            '{"path": "/from/json.py"}',
+            "file contents"
+        )
+        assert "/from/json.py" in interp._agent_context.working_memory.active_files
+
+        # shell_exec with JSON string args — this was the specific crash site
+        interp._agent_context.update_from_tool_call(
+            "shell_exec",
+            '{"command": "date"}',
+            "2026-07-11"
+        )
+        # Should not crash; error tracking only fires on non-zero exit or
+        # "error" in result, so no assertion needed beyond "didn't raise".
+
+        # Malformed JSON falls back to empty dict — no crash
+        interp._agent_context.update_from_tool_call(
+            "write_file",
+            'not-json',
+            "ok"
+        )
+
+        # Non-string, non-dict args (int, list) also tolerated
+        interp._agent_context.update_from_tool_call("read_file", 42, "ok")
+        interp._agent_context.update_from_tool_call("read_file", [], "ok")
+        interp._agent_context.update_from_tool_call("read_file", None, "ok")
+
     def test_prepare_context_with_working_memory(self):
         """Test prepare_context returns messages with working memory."""
         from helen.interpreter.interpreter import Interpreter
