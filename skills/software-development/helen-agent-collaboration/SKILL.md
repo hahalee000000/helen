@@ -798,3 +798,7 @@ print("缓存未命中: " + str(cache_misses))
 - **helen-agent-patterns** — Agent 设计模式详解
 - **helen-syntax** — Helen 语法（shared let、const、agent main 等）
 - **subagent-driven-development** — 子代理驱动开发工作流
+
+## 延伸阅读
+
+- **[[Agent 提示词工程完全指南]]**（`wiki/reference/agent-system-prompt-guide.md`）— 来自 Claude Code 逆向工程的 agent prompt 设计方法论。编排者 agent 的 prompt 尤其需要遵循该指南的"原则优先于流程"和"注入环境事实"两条。

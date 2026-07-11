@@ -566,6 +566,10 @@ User:   You are a Python expert.             ← prompt (任务描述)
 
 系统提示词约占 1300 tokens（~13%），在典型 32k-128k 上下文窗口中完全可接受。
 
+### 深入阅读
+
+本节覆盖了 Helen 提示词架构的"形式"（System 和 User 分别装什么）。关于如何**写好** `prompt` 和 `description` 的内容——结构布局、写作原则、反模式、Token 预算分配、缓存友好设计、中途注入机制——请参阅 [[../reference/agent-system-prompt-guide|Agent 提示词工程完全指南]]。那份指南来自对 Claude Code 系统提示词的逆向工程，是把 agent 质量从"能跑"提升到"可靠"的关键知识。
+
 ---
 
 ## Agent main 块

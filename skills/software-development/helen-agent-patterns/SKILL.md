@@ -1342,6 +1342,10 @@ pip install "helen[accurate-tokens]"
 - **helen-testing** — Agent 测试策略
 - **helen-quality** — Agent 代码质量评估
 
+## 延伸阅读
+
+- **[[Agent 提示词工程完全指南]]**（`wiki/reference/agent-system-prompt-guide.md`）— 来自 Claude Code 系统提示词逆向工程的设计方法论：结构布局、写作原则、反模式、Token 预算、缓存设计、中途注入机制。本技能 § 最佳实践 7（注入环境事实）的原则即来源于此。
+
 
 
 ### 模式：LLM 结构化输出 + JSON 降级

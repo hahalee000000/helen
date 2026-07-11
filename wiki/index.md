@@ -68,7 +68,12 @@
 - [[tutorial/16-quality-assessment|质量评估]] — 7 维框架、安全评分、CI 集成
 - [[tutorial/17-multimodal|多模态支持]] — MediaPart、on_media/on_generate 回调、媒体适配（**v1.17 新特性**）
 
-### 八、附录
+### 八、参考资料
+- [[reference/claude-code-context-management|Claude Code 上下文管理技术详解]] — 5 层渐进压缩管线、TranscriptStore SSOT、缓存感知
+- [[reference/claude-code-budget-reduction-and-context-collapse|Claude Code 预算削减与上下文折叠]] — Layer 1-4 零成本压缩策略
+- [[reference/agent-system-prompt-guide|Agent 提示词工程完全指南]] ⭐ — 来自 Claude Code 逆向工程的启示：结构布局、写作原则、反模式、Token 预算、缓存设计、中途注入（**v1.17 新增**）
+
+### 九、附录
 - [[appendix/error-codes|错误码参考]] — 42 ErrorCode 完整列表
 - [[appendix/exceptions|异常层次]] — 异常类继承树
 - [[appendix/changelog|版本历史]] — Phase 0-10 变更记录

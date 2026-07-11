@@ -504,5 +504,6 @@ $ helen doc customer-service/main.helen --format markdown
 
 - 探索 LSP 在 IDE 中的补全和诊断功能
 - 使用 `helen repl` 快速原型
+- 阅读 [[../reference/agent-system-prompt-guide|Agent 提示词工程完全指南]] — 来自 Claude Code 逆向工程的 agent prompt 设计方法论
 - 阅读 [[overview/design-philosophy|设计哲学]] 深入了解语言理念
 - 查看 [[appendix/error-codes|错误码参考]] 排查问题
