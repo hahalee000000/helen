@@ -205,7 +205,7 @@ agent TechSupport {
     description "Provide technical support"
     model "gpt-4"
     
-    // Phase 7: 上下文配置
+    // 上下文配置
     context {
         compression "graduated"      // 渐进压缩
         cache-aware true             // 缓存感知
@@ -289,16 +289,6 @@ agent CodeReviewer {
     }
 }
 ```
-
-### 三通道上下文
-
-启用工作记忆后，LLM 看到的上下文分为三个通道：
-
-| 通道 | 比例 | 内容 |
-|------|------|------|
-| 系统指令 | 15% | 框架指令、agent 描述、技能索引 |
-| 工作记忆 | 50% | 活跃文件、最近决策、待办事项、错误历史 |
-| 对话历史 | 35% | 压缩后的对话消息 |
 
 ---
 

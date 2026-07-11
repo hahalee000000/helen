@@ -512,7 +512,7 @@ agent ChatBot {
 
 ## Transcript 函数 (6) (v1.16)
 
-会话记录管理函数，用于访问和操作 Helen 的 TranscriptStore（v1.16 SSOT 架构）。TranscriptStore 是所有对话消息的唯一真实来源，提供持久化、会话恢复和压缩审计功能。
+会话记录管理函数，用于访问和操作 Helen 的对话历史（v1.16+）。提供持久化、会话恢复和压缩审计功能。
 
 ### 获取会话 ID
 
@@ -602,11 +602,7 @@ for event in audit {
 ```
 
 **返回字段**：
-- `uuid`：边界标记 UUID
-- `layer`：压缩层级（"graduated"、"traditional"、"cache_aware+graduated" 等）
-- `head_uuid`：压缩范围起始消息 UUID
-- `tail_uuid`：压缩范围结束消息 UUID
-- `anchor_uuid`：锚点消息 UUID
+- `layer`：压缩策略（"graduated"、"traditional" 等）
 - `summary`：压缩摘要
 - `original_token_count`：压缩前 token 数
 - `compressed_token_count`：压缩后 token 数
@@ -701,15 +697,14 @@ let 成功 = 恢复会话("session_1783492628_d9d9c0aa")
 
 ```yaml
 transcript:
-  enabled: true              # 启用 TranscriptStore（默认 true）
+  enabled: true              # 启用会话记录（默认 true）
   backend: "sqlite"          # 后端类型："jsonl" 或 "sqlite"
   session_dir: "~/.helen/sessions"
-  max_memory_items: 1000     # LRU 缓存大小
 ```
 
 **后端选择**：
 - `jsonl`：简单、人类可读、崩溃安全（默认）
-- `sqlite`：高性能、索引优化、WAL 模式
+- `sqlite`：高性能、索引优化（适合大型会话）
 
 **详细文档**：见 [[runtime/transcript-store]]
 

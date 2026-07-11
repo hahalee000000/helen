@@ -262,14 +262,6 @@ from helen.python_bridge import uninstall_import_hook
 uninstall_import_hook()
 ```
 
-## 实现原理
-
-1. **Import Hook**: 使用 Python 的 `sys.meta_path` 拦截模块导入
-2. **动态类生成**: 解析 Helen 文件，为每个 agent 动态创建 Python 类
-3. **类型转换**: 自动在 Python 和 Helen 类型之间转换
-4. **参数验证**: 检查参数类型和必需参数
-5. **异步支持**: 提供 `async_call` 方法用于异步调用
-
 ## 限制
 
 - 需要 Python 3.10+（因为 Helen 使用 match 语句）

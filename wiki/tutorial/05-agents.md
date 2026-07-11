@@ -159,15 +159,7 @@ context {
 
 **2. `"graduated"` — 渐进压缩（默认）**
 
-五层渐进策略，自动根据上下文使用率应用：
-
-| 层级 | 使用率阈值 | 策略 | 说明 |
-|------|-----------|------|------|
-| Layer 1 | 60% | Budget Reduction | 替换大工具输出为引用指针 |
-| Layer 2 | 70% | Snip | 丢弃过时轮次 |
-| Layer 3 | 80% | Microcompact | 清除旧工具结果，保留决策 |
-| Layer 4 | 90% | Context Collapse | 归档并投射折叠视图 |
-| Layer 5 | 95% | Auto-Compact | LLM 语义压缩 |
+多层渐进策略，随上下文使用率自动升级压缩强度。大多数场景用默认值即可。
 
 ```helen
 context {
@@ -187,16 +179,12 @@ context {
 
 #### 缓存感知压缩
 
-启用 `cache-aware` 后，压缩算法会考虑 prompt cache，提高缓存命中率：
-
-- **稳定前缀**：保留前 30% 消息不变（缓存友好区）
-- **批量阈值**：使用率达到 75% 才触发压缩
-- **仅后缀修改**：只在缓存区域外进行修改
+启用 `cache-aware` 后，压缩算法会配合 LLM 提供方的 prompt cache，减少重复 token 的成本和延迟：
 
 ```helen
 context {
     compression "graduated"
-    cache-aware true  // 提高缓存命中率 70-80%
+    cache-aware true  // 配合 provider 缓存，降低成本
 }
 ```
 
@@ -283,19 +271,9 @@ agent DefaultAgent {
 }
 ```
 
-#### 三通道上下文
-
-启用工作记忆后，LLM 看到的上下文分为三个通道：
-
-1. **系统指令（15%）**：框架指令、语言规范、agent 描述
-2. **工作记忆（50%）**：活跃文件、最近决策、待办事项、错误历史
-3. **对话历史（35%）**：压缩后的对话消息
-
-这种结构确保 LLM 始终了解当前上下文，同时保持历史连贯性。
-
 #### Transcript 会话记录（v1.16+）
 
-Helen v1.16 引入了 TranscriptStore，自动保存所有对话历史。可以在 agent 中通过 stdlib 函数访问和管理会话：
+Helen 自动保存所有对话历史。可以在 agent 中通过 stdlib 函数访问和管理会话：
 
 ```helen
 agent ChatBot {
@@ -352,7 +330,6 @@ transcript:
   enabled: true              # 默认启用
   backend: "jsonl"           # 或 "sqlite"
   session_dir: "~/.helen/sessions"
-  max_memory_items: 1000     # LRU 缓存大小
 ```
 
 **CLI 参数**：使用 `--transcript-log` 自定义输出路径：
@@ -468,107 +445,38 @@ search_files("docs/", "warning", case_sensitive=false)
 
 **中文别名**：stdlib 中对应函数为 `查找文件()` 和 `搜索内容()`。
 
-## Agent 系统提示词架构（v1.15+）
+## Agent 提示词结构（v1.15+）
 
-Helen v1.15 引入了清晰的 System/User 角色分离，使 agent 的提示词架构符合 LLM 最佳实践。
+Helen 自动把 agent 的 `description` 和 `prompt` 放到 LLM 消息的正确位置：
 
-### System Prompt（行为规则层）
-
-System prompt 自动注入以下内容，定义 agent 的行为规则和能力边界：
-
-```
-1. Framework Instructions (P0+P1 框架指令)
-   - Tool Use (CRITICAL): MUST use tools, not describe
-   - Skills (CRITICAL): MUST load relevant skills
-   - Parallel Tool Calls: batch independent calls
-   - Completion Criteria: working artifact, not description
-   - Memory Management: save durable facts, skip trivial
-
-2. Helen Language Conventions (语言规范)
-   - Core Principles (agent-centric design)
-   - Skill-Driven Development (load skills before coding)
-   - Code Generation Best Practices
-   - Common Pitfalls to Avoid
-   - Quick Reference (testing syntax, agent structure)
-
-3. Agent Description (角色定义)
-   - 来自 agent 的 description 字段
-
-4. Skill Index (技能索引)
-   - <available_skills> 列表
-   - MUST load 指令
-```
-
-### User Prompt（任务层）
-
-User prompt 包含具体的任务描述和查询：
-
-```
-1. Rendered Agent Prompt (任务描述)
-   - 来自 agent 的 prompt 字段（渲染后）
-   - 如果 prompt 包含 {{var}}，会被替换为实际值
-
-2. LLM Act Expression (实际查询)
-   - 来自 llm act 后面的表达式
-   - 例如：llm act "How do I sort a list?"
-```
-
-### 示例
+- **`description`** → 系统级行为规则（角色、能力边界）
+- **`prompt`** → 任务级上下文（具体指示、`{{}}` 渲染后的内容）
+- **`llm act "..."`** → 实际查询（用户当前的问题）
 
 ```helen
 agent CodingAgent {
     description "A coding assistant"
     prompt "You are a Python expert. Help me with coding."
     tools ["read_file", "write_file"]
-    
+
     main {
         llm act "How do I sort a list?"
     }
 }
 ```
 
-**LLM 看到的消息结构**：
+LLM 收到的消息大致是：
 
 ```
-System: <framework_instructions>
-        You MUST use your tools to take action...
-        You MUST load relevant skills...
-        </framework_instructions>
-        
-        <helen_conventions>
-        Helen language rules and best practices...
-        </helen_conventions>
-        
-        A coding assistant                    ← description
-        
-        <available_skills>
-        Before replying, scan skills below...
-        You MUST load relevant skills...
-        </available_skills>
-
-User:   You are a Python expert.             ← prompt (任务描述)
-        Help me with coding.
-        
-        How do I sort a list?                ← llm act expression (查询)
+System: <自动注入的框架指令> + description ("A coding assistant")
+User:   prompt ("You are a Python expert...") + llm act 查询
 ```
 
-### 设计原则
-
-| 原则 | 说明 |
-|------|------|
-| **角色清晰** | System = 行为规则，User = 具体任务 |
-| **自动注入** | Framework 和 Conventions 对所有 agent 自动生效 |
-| **技能驱动** | 强制要求加载相关技能再生成代码 |
-| **执行导向** | 强制要求使用工具执行，而不是描述 |
-| **向后兼容** | 所有现有 agent 定义继续工作 |
-
-### Token 预算
-
-系统提示词约占 1300 tokens（~13%），在典型 32k-128k 上下文窗口中完全可接受。
+你不需要关心框架指令的具体内容——它们对所有 agent 自动生效，保证工具使用、技能加载等基础行为正确。你只需要写好 `description` 和 `prompt`。
 
 ### 深入阅读
 
-本节覆盖了 Helen 提示词架构的"形式"（System 和 User 分别装什么）。关于如何**写好** `prompt` 和 `description` 的内容——结构布局、写作原则、反模式、Token 预算分配、缓存友好设计、中途注入机制——请参阅 [[../reference/agent-system-prompt-guide|Agent 提示词工程完全指南]]。那份指南来自对 Claude Code 系统提示词的逆向工程，是把 agent 质量从"能跑"提升到"可靠"的关键知识。
+关于如何**写好** `prompt` 和 `description`——结构布局、写作原则、反模式、Token 预算分配、缓存友好设计、中途注入机制——请参阅 [[../reference/agent-system-prompt-guide|Agent 提示词工程完全指南]]。那份指南来自对 Claude Code 系统提示词的逆向工程，是把 agent 质量从"能跑"提升到"可靠"的关键知识。
 
 ---
 
@@ -641,15 +549,6 @@ agent MyAgent {
     }
 }
 ```
-
-**执行流程：**
-1. `Translator(text="Hello", target="French")` 创建隔离 Environment
-2. 绑定参数：`text="Hello"`, `target="French"`
-3. 执行 `main` 块
-4. `main` 中的 `llm act`（bare form）触发 LLM 调用：
-   - `prompt` 模板渲染 → `system_prompt` + `user` 消息
-   - 工具调用循环（如果有 `tools`）
-5. 返回结果
 
 ## Agent 参数
 
@@ -743,149 +642,6 @@ agent EmailClassifier {
 3. 创建一个多 Agent 系统：分类器 + 响应器 + 总结器
 
 ---
-
-## Agent 上下文管理 (v1.15)
-
-Helen v1.15 引入了完整的上下文管理增强，让 Agent 在长时间运行中保持高效和稳定。
-
-### 概述
-
-上下文管理系统包含三层：
-
-| 组件 | 作用 | 说明 |
-|------|------|------|
-| **工作记忆** | 自动跟踪关键信息 | 活跃文件、最近决策、待办事项、错误历史 |
-| **渐进压缩** | 五层压缩管线 | 从 60% 到 95% 使用率，逐层升级 |
-| **缓存感知压缩** | 优化缓存命中 | 保留前缀不变，仅修改后缀 |
-
-### `context {}` 配置块
-
-在 Agent 声明中使用 `context {}` 配置上下文策略：
-
-```helen
-agent ResearchAssistant {
-    description "Long-running research agent"
-    
-    // v1.15: 上下文配置
-    context {
-        compression "graduated"      // "none" | "graduated" | "traditional"
-        cache-aware true             // 启用缓存感知压缩
-        working-memory true          // 启用工作记忆
-        working-memory-tokens 8000   // 工作记忆令牌预算
-    }
-    
-    tools ["read_file", "write_file", "web_search"]
-    
-    prompt "You are a research assistant. Help the user find and summarize information."
-}
-
-// 中文关键字等价
-agent 研究助手 {
-    上下文 {
-        压缩 "graduated"
-        缓存感知 true
-        工作记忆 true
-        工作记忆令牌 8000
-    }
-}
-```
-
-**配置选项**：
-
-| 选项 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `compression` | str | `"graduated"` | 压缩策略 |
-| `cache-aware` | bool | `true` | 缓存感知压缩 |
-| `working-memory` | bool | `true` | 工作记忆开关 |
-| `working-memory-tokens` | int | `5000` | 工作记忆预算 |
-
-### 工作记忆
-
-启用 `working-memory true` 后，Agent 自动跟踪：
-
-- **活跃文件** — 通过 `read_file`、`write_file` 操作的文件
-- **最近决策** — Assistant 做出的关键选择（如 "Modified src/main.py"）
-- **待办事项** — 从 TODO/FIXME/`[ ]` 注释中提取
-- **错误历史** — shell 命令失败记录
-
-```helen
-// 辅助函数：修复代码
-fn fix_code(code: str): str {
-    // 实际的代码修复逻辑
-    return code  // 简化示例
-}
-
-agent CodeReviewer {
-    context {
-        working-memory true
-        working-memory-tokens 6000
-    }
-    
-    tools ["read_file", "write_file", "patch_file"]
-    
-    functions {
-        fn fix_code(code: str): str {
-            // 实际的代码修复逻辑
-            return code  // 简化示例
-        }
-    }
-    
-    main {
-        // 自动跟踪：这些操作会更新工作记忆
-        let code = read_file("src/main.py")
-        let fixed = fix_code(code)
-        write_file("src/main.py", fixed)
-        
-        // LLM 现在知道哪些文件被修改了
-        return llm act "Review the changes"
-    }
-}
-```
-
-### 渐进压缩 (五层管线)
-
-当上下文使用率增长时，自动应用逐层压缩：
-
-| 层级 | 阈值 | 策略 | 成本 |
-|------|:----:|------|:----:|
-| Layer 1: Budget Reduction | 60% | 替换大工具输出为引用 | 零 |
-| Layer 2: Snip | 70% | 丢弃旧的对话轮次 | 零 |
-| Layer 3: Microcompact | 80% | 清除旧工具结果，保留决策 | 零 |
-| Layer 4: Context Collapse | 90% | 归档并生成结构摘要 | 零 |
-| Layer 5: Auto-Compact | 95% | 激进压缩（最后手段） | 零 |
-
-所有层都是零推理成本（不调用 LLM）。
-
-### 缓存感知压缩
-
-启用 `cache-aware true` 后，压缩策略变为缓存友好：
-
-- **稳定前缀**（30%）— 前 N 条消息完全不变，最大化缓存命中
-- **可压缩后缀**（70%）— 仅在后缀区域应用压缩
-- **批量阈值**（75%）— 使用率低于 75% 时不触发压缩
-
-预期效果：
-- 缓存命中率：10-20% → **70-80%**
-- 成本降低：**50-70%**
-- 延迟降低：**30-50%**
-
-### 三通道上下文
-
-启用工作记忆后，LLM 看到的上下文分为三个通道：
-
-| 通道 | 比例 | 内容 |
-|------|:----:|------|
-| 系统指令 | 15% | 框架指令、Agent 描述、技能索引 |
-| 工作记忆 | 50% | 活跃文件、决策、待办、错误 |
-| 对话历史 | 35% | 压缩后的对话消息 |
-
-### 最佳实践
-
-| Agent 类型 | 推荐配置 | 说明 |
-|-----------|---------|------|
-| 研究型 Agent | `compression "graduated"` + `working-memory true` | 长对话，需跟踪文件 |
-| 快速响应 | `compression "none"` + `working-memory false` | 短对话，低延迟 |
-| 多轮对话 | `cache-aware true` + `working-memory-tokens 8000` | 高缓存命中率 |
 
 ## 共享状态与通信（v1.12 / v1.13）
 

@@ -273,19 +273,14 @@ main {
 }
 ```
 
-### 上下文窗口保护 (HLD 3.12)
+### 上下文窗口保护
 
-对话历史会**自动裁剪后传给 LLM**（之前版本存在 bug：history 只累积但从未传给 API，现在已修复）。
+对话历史会自动裁剪后传给 LLM，你不需要手动管理上下文长度：
 
-| 保护 | 行为 |
-|---|---|
-| Model-aware context window | 根据模型自动选择 context window 大小（qwen3.7-plus=131072、gpt-4o=128000 等）|
-| 自动裁剪 | 每次 LLM 调用前，根据 system prompt + 当前 prompt 计算剩余预算，删除最旧消息 |
-| 自动压缩 | 历史超过 context window 80% 时，旧消息压缩成 `[Previous conversation summary]` 系统消息 |
-| 工具结果上限 | 单次工具循环最多 10 个结果（`MAX_TOOL_RESULTS_PER_TURN=10`）|
-| 上下文超限恢复 | API 返回 context-too-large 错误时，自动删除最老消息并重试一次 |
-
-Token 估算使用字符类型感知（CJK 1.2 字符/token，拉丁 4 字符/token），误差约 15%。
+- **自动裁剪**：每次 LLM 调用前，根据上下文窗口大小自动删除最旧消息
+- **自动压缩**：历史过长时，旧消息会被压缩成摘要
+- **工具结果上限**：单次工具循环的结果数量有上限，避免上下文爆炸
+- **上下文超限恢复**：API 返回 context-too-large 错误时，自动重试
 
 ---
 
@@ -302,10 +297,11 @@ $ helen repl
 '4'
 ```
 
-**性能：**
-- REPL 和脚本模式均使用 `HttpLLMRuntime`，直接调用 API
-- 响应时间：7-11秒（取决于网络和模型）
+**说明：**
+- REPL 和脚本模式都直接调用 LLM API
+- 响应时间：7-11 秒（取决于网络和模型）
 - 自动从 `~/.helen/config.yaml` 或 `~/.helen/.env` 读取配置
+- 向后兼容 `~/.hermes/.env` 配置
 
 **配置：**
 确保 `~/.helen/config.yaml` 包含：
@@ -321,10 +317,6 @@ llm:
 HELEN_API_KEY=***
 HELEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 ```
-
-**注意：**
-- 脚本执行（`helen <file>`）和 REPL 均直接使用 `HttpLLMRuntime` 调用真实 LLM
-- 向后兼容 `~/.hermes/.env` 配置
 
 ---
 
@@ -357,7 +349,7 @@ agent Researcher(topic) {
 | `web_fetch` | 获取网页内容 | `url: str` |
 | `read_file` | 读取文件 | `path: str` |
 | `write_file` | 写入文件（覆盖） | `path: str, content: str` |
-| `patch_file` | 精确修改文件（9 种模糊匹配策略） | `path: str, old_string: str, new_string: str` |
+| `patch_file` | 精确修改文件（自动处理空白/缩进等差异） | `path: str, old_string: str, new_string: str` |
 | `shell_exec` | 执行 shell 命令 | `command: str` |
 | `calculate` | 数学计算 | `expression: str` |
 | `find_files` | 按 glob 模式查找文件 | `path: str, pattern: str = "**/*", max_results: int = 200` |
@@ -366,23 +358,14 @@ agent Researcher(topic) {
 
 ### patch_file 模糊匹配
 
-`patch_file` 使用 `old_string` → `new_string` 模式精确修改文件，内置 9 种匹配策略处理 LLM 生成代码的常见差异：
+`patch_file` 使用 `old_string` → `new_string` 模式精确修改文件，内置多种匹配策略处理 LLM 生成代码的常见差异（空白、缩进、转义、Unicode 等）：
 
 ```helen
 // 修改文件中的特定函数
 llm act "Read /tmp/main.py and change the function name from 'foo' to 'bar'"
 ```
 
-匹配策略（按优先级）：
-1. **Exact** — 精确字符串匹配
-2. **Line-trimmed** — 行首尾空格差异
-3. **Whitespace-normalized** — 多个空格/tab 归一化
-4. **Indentation-flexible** — 缩进完全忽略
-5. **Escape-normalized** — `\n` `\t` 转义差异
-6. **Trimmed-boundary** — 首尾行空白修剪
-7. **Unicode-normalized** — 智能引号、破折号等
-8. **Block-anchor** — SequenceMatcher 相似度 (50%/70%)
-9. **Context-aware** — 逐行相似度 (80% 阈值，50% 行匹配)
+通常你不需要关心匹配细节——LLM 生成的代码即使和原文有细微差异，`patch_file` 也能正确处理。
 
 ---
 

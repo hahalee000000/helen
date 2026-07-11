@@ -108,20 +108,18 @@ llm:
 
 # Transcript 配置（可选，以下为默认值）
 transcript:
-  enabled: true              # 启用 TranscriptStore（默认 true）
+  enabled: true              # 启用会话记录（默认 true）
   backend: "jsonl"           # 后端类型："jsonl" 或 "sqlite"
   session_dir: "~/.helen/sessions"  # 会话存储目录
-  max_memory_items: 1000     # LRU 缓存大小
 ```
 
 **默认行为**：
-- TranscriptStore 默认启用，所有对话自动保存到 `~/.helen/sessions/`
+- 会话记录默认启用，所有对话自动保存到 `~/.helen/sessions/`
 - 使用 JSONL 后端（人类可读，崩溃安全）
-- LRU 缓存限制内存使用（1000 条消息）
 
 **自定义配置**：
-- 设置 `enabled: false` 禁用 TranscriptStore
-- 设置 `backend: "sqlite"` 使用高性能 SQLite 后端
+- 设置 `enabled: false` 禁用会话记录
+- 设置 `backend: "sqlite"` 使用 SQLite 后端（适合大型会话）
 - 设置 `session_dir` 自定义存储位置
 
 **CLI 参数**：
