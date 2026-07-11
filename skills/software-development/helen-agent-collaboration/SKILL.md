@@ -1,10 +1,10 @@
 ---
 name: helen-agent-collaboration
 description: "Helen Agent 协作模式 — 多 Agent 协作、编排、分工、数据流、共享状态、作用域隔离"
-version: 1.14.0
+version: 1.17.0
 author: Helen Team
 license: MIT
-tags: [helen, agent, collaboration, orchestration, workflow, multi-agent, shared-let, scope-isolation, v1.12, read-only-params]
+tags: [helen, agent, collaboration, orchestration, workflow, multi-agent, shared-let, scope-isolation, v1.12, read-only-params, ground-truth-injection, v1.17]
 ---
 
 # Helen Agent 协作模式
@@ -663,6 +663,34 @@ main {
 | Agent 间传递消息/任务 | Channel |
 | 需要类型安全的接口 | Channel |
 | 需要线程安全的字段访问 | 两者都支持 |
+
+### 6. 向下游 Agent 传播环境事实（v1.17）
+
+编排者（orchestrator）最常见的失误：**自己掌握环境事实，却不在 prompt 中传给下游 Agent**。LLM 看不见运行时环境，缺什么就会编什么。
+
+```helen
+// ✅ Orchestrator resolves ground truth once, fans out via {{}}
+agent Orchestrator(task: str) {
+    main {
+        let cwd = shell_exec("pwd")
+        let git_branch = shell_exec("git branch --show-current")
+        let now = now()
+        return Worker(task, cwd, git_branch, now)
+    }
+}
+
+agent Worker(task: str, cwd: str, branch: str, now: str) {
+    prompt """
+    Task: {{task}}
+    Working directory: {{cwd}}
+    Git branch: {{branch}}
+    Current time: {{now}}
+    """
+    main { return llm act }
+}
+```
+
+原则：**谁拥有事实，谁负责注入**。共享的 `shared store` 适合状态，但时间/OS/路径等不可变事实直接走 `{{}}` 进 prompt，开销最低、最不容易出错。详见 **helen-agent-patterns § 最佳实践 7**。
 
 ## 错误处理
 

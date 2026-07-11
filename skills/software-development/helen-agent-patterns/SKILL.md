@@ -1,10 +1,10 @@
 ---
 name: helen-agent-patterns
 description: "Helen Agent 设计模式 — 单 Agent、多 Agent 协作、作用域隔离、共享变量、路由、流式处理、历史管理、上下文管理、Transcript 会话记录"
-version: 1.16.0
+version: 1.17.0
 author: Helen Team
 license: MIT
-tags: [helen, agent, patterns, design, llm, scope-isolation, shared-let, v1.12, closure, concurrency, history, persistence, context-window, context-management, transcript, session, v1.16]
+tags: [helen, agent, patterns, design, llm, scope-isolation, shared-let, v1.12, closure, concurrency, history, persistence, context-window, context-management, transcript, session, v1.16, ground-truth-injection, v1.17]
 ---
 
 # Helen Agent 设计模式
@@ -968,6 +968,66 @@ agent BadCacheReader(key: str) {
 // ❌ 错误 v2：v1.12 起 shared let 不能使用引用类型
 // shared let bad_cache = {}  # 语义错误！
 ```
+
+### 7. Inject task-relevant ground truth via `{{}}`
+
+**Principle: an agent cannot know what you do not tell it. If a runtime fact matters for correctness, inject it — never let the LLM guess.**
+
+LLMs have no access to the current environment: the clock, the working directory, the OS, the git branch, the file layout. When a task depends on such facts and they are absent from the prompt, the model will **confabulate plausible-sounding but wrong values** — silently, with high confidence. This is the single most common source of subtle agent bugs.
+
+The fix is mechanical: **resolve the fact in Helen, interpolate it into the prompt via `{{}}`.** The prompt is the agent's entire world — anything missing from it is effectively unknowable.
+
+```helen
+// ✅ Ground truth injected — LLM sees real values
+agent DevAgent(cwd: str) {
+    description "Programming assistant"
+    prompt """
+    You are a senior engineer working in {{cwd}}.
+    Current time: {{now()}}
+    OS: {{os_name()}}
+    Working directory: {{cwd}}
+
+    Answer only based on these facts; if something is not provided, say so.
+    """
+    tools = ["read_file", "write_file", "shell_exec"]
+
+    main {
+        return llm act "Review the project layout"
+    }
+}
+
+// ❌ Ground truth missing — LLM will fabricate
+agent VagueDevAgent {
+    description "Programming assistant"
+    prompt "You are a senior engineer. Help with code."
+    // No cwd, no time, no OS → LLM invents them
+}
+```
+
+**Rule of thumb — ask "what does this agent need to be true about the world?" then inject it:**
+
+| Task domain | Inject via `{{}}` |
+|-------------|-------------------|
+| Programming | `cwd`, `os_name()`, `shell_exec("git branch --show-current")` |
+| Scheduling / reminders | `now()`, `timezone()` |
+| File operations | directory listing, absolute paths |
+| Database agents | schema excerpt, connection target |
+| Data analysis | row counts, column names, sample rows |
+| Multi-agent pipelines | upstream agent outputs, shared state snapshot |
+
+**Two anti-patterns to avoid:**
+
+```helen
+// ❌ Anti-pattern 1: asking the LLM to "assume" environment facts
+prompt "Assume you are in /home/user/project on Linux at 2026-07-11."
+// Wrong the moment the assumption drifts from reality.
+
+// ❌ Anti-pattern 2: putting dynamic facts in `description`
+description "Agent for /home/rxx/helen"  // baked at parse time, not runtime
+// `description` is static — use `prompt` with `{{}}` for dynamic facts.
+```
+
+**Why this matters more than it sounds:** LLMs are trained to be helpful, not to refuse. When asked "what file am I in?" without context, they will answer — and the answer will be wrong. Injecting ground truth turns a hallucination failure mode into a non-issue.
 
 ## 调试技巧
 
