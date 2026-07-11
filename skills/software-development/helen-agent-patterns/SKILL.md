@@ -1119,7 +1119,7 @@ agent SmartResearcher {
 
 ## 上下文管理（v1.15 新增）
 
-Helen v1.15 引入了完整的上下文管理增强，通过 7 个 Phase 实施，对齐 Claude Code 的上下文管理能力。
+Helen v1.15 引入了完整的上下文管理增强，让 agent 在长时间运行中保持高效和稳定。
 
 ### 设计模式：高性能研究 Agent
 
@@ -1131,7 +1131,7 @@ agent Researcher(topic: str) {
     
     // 上下文配置
     context {
-        compression "graduated"      // 五层渐进压缩
+        compression "graduated"      // 渐进压缩（自动按上下文使用率升级强度）
         cache-aware true             // 缓存感知（提高缓存命中率）
         working-memory true          // 自动跟踪文件操作
         working-memory-tokens 8000   // 更大的工作记忆
@@ -1174,37 +1174,27 @@ agent QuickResponder {
 }
 ```
 
-### 三通道上下文
+### 上下文组成
 
-启用工作记忆后，LLM 看到的上下文分为三个通道：
+启用工作记忆后，LLM 看到的上下文由三部分组成：
 
-| 通道 | 比例 | 内容 |
-|------|------|------|
-| 系统指令 | 15% | 框架指令、agent 描述、技能索引 |
-| 工作记忆 | 50% | 活跃文件、最近决策、待办事项、错误历史 |
-| 对话历史 | 35% | 压缩后的对话消息 |
+- **系统指令**：框架指令、agent 描述、技能索引
+- **工作记忆**：活跃文件、最近决策、待办事项、错误历史
+- **对话历史**：压缩后的对话消息
 
-### 渐进压缩管线
+各部分比例由框架根据上下文窗口动态调整，用户无需手动分配。
 
-五层渐进压缩策略，"最廉价动作优先"原则：
+### 压缩策略
 
-| 层级 | 使用率阈值 | 策略 | 说明 |
-|------|-----------|------|------|
-| Layer 1 | 60% | Budget Reduction | 替换大工具输出为引用指针 |
-| Layer 2 | 70% | Snip | 丢弃过时轮次 |
-| Layer 3 | 80% | Microcompact | 清除旧工具结果，保留决策 |
-| Layer 4 | 90% | Context Collapse | 归档并投射折叠视图 |
-| Layer 5 | 95% | Auto-Compact | LLM 语义压缩 |
+`compression` 选项控制对话历史的压缩方式：
+
+- `"graduated"`（默认）：按"廉价动作优先"原则逐级压缩——从替换大工具输出开始，到 LLM 语义压缩结束。压缩层级和触发阈值由框架自动管理。
+- `"traditional"`：单层 summarize/truncate。
+- `"none"`：不压缩（短对话场景）。
 
 ### 缓存感知压缩
 
-考虑 prompt cache 的缓存友好策略：
-
-- **稳定前缀**：保留前 30% 消息不变（缓存友好区）
-- **批量阈值**：使用率达到 75% 才触发压缩
-- **仅后缀修改**：只在缓存区域外进行修改
-
-**效果**：缓存命中率从 10-20% 提升到 70-80%
+`cache-aware true`（默认开启）让压缩算法在修改上下文时尽量保留前缀稳定区，提高 LLM 提供方的 prompt cache 命中率，降低成本和延迟。用户无需额外配置。
 
 ### 工作记忆
 
@@ -1263,18 +1253,12 @@ agent CodeReviewer {
 ╚══════════════════════════════════════╝
 ```
 
-### 程序化访问
+### 程序化控制
+
+在 Helen 代码中可以手动控制上下文：
 
 ```helen
 main {
-    // 获取上下文统计
-    let stats = context_stats()
-    print("Token usage: " + stats["usage_ratio"])
-    
-    // 获取工作记忆快照
-    let wm = working_memory_snapshot()
-    print("Active files: " + wm["active_files"])
-    
     // 手动触发压缩
     compress_context("graduated")
     
@@ -1292,7 +1276,6 @@ Helen v1.15 的上下文管理增强包括：
 1. ✅ **自动集成**：所有 agent 默认使用渐进压缩和工作记忆
 2. ✅ **可配置性**：每个 agent 可以独立配置上下文策略
 3. ✅ **向后兼容**：现有代码无需修改
-4. ✅ **对齐 Claude Code**：100% 对齐
 
 ### REPL 调试
 
@@ -1320,9 +1303,10 @@ Helen v1.15 的上下文管理增强包括：
 | `truncate` | 直接丢弃旧消息 | 简洁场景 |
 | `none` | 不压缩 | 短对话/测试 |
 
-```python
-# Python API 动态切换
-interpreter._history_manager.set_compression_mode("truncate")
+在 Helen 代码中切换压缩模式：
+
+```helen
+compress_context("truncate")
 ```
 
 ### Token 精确计数
@@ -1333,7 +1317,7 @@ interpreter._history_manager.set_compression_mode("truncate")
 pip install "helen[accurate-tokens]"
 ```
 
-未安装时使用字符级启发式（~15% 精度）。
+未安装时使用字符级启发式估算。
 
 ## 相关技能
 

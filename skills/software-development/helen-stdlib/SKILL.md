@@ -61,7 +61,7 @@ Helen 内置 230+ 个中文别名，覆盖全部 stdlib 分类。常用示例：
 | `write_file` | `写文件` | File |
 | `shell_exec` | `执行命令` | System |
 
-完整列表见 `helen/stdlib/locales/zh.py`。
+完整别名列表可通过 REPL 的 `:stdlib` 命令查看。
 
 ### 使用示例
 
@@ -96,7 +96,6 @@ alias len as 我的长度
 - **一套机制**：stdlib 别名和用户 `alias` 使用相同的 Environment binding
 - **全量加载**：所有 locale 的别名表启动时全部注册，不按 locale 过滤
 - **locale 只影响展示**：`~/.helen/config.yaml` 中的 `locale: zh` 只影响 docs/LSP/错误消息的语言
-- **扩展新语言**：添加新语言只需创建 `helen/stdlib/locales/<code>.py`
 
 ## 常用函数示例
 

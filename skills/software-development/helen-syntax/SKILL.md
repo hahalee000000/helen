@@ -471,7 +471,7 @@ MyAgent("test")       // 推荐，更简洁
 
 ### Agent 作用域隔离（v1.10）
 
-Agent `main {}` 运行在完全隔离的环境中（HLD 3.5.2），**不能**直接访问模块级的普通 `let` 变量。`helen check` 会在编译期检测并报 `SCOPE_VIOLATION` 错误。
+Agent `main {}` 运行在完全隔离的环境中，**不能**直接访问模块级的普通 `let` 变量。`helen check` 会在编译期检测并报 `SCOPE_VIOLATION` 错误。
 
 **三种跨 Agent 数据共享方式**（按推荐顺序）：
 

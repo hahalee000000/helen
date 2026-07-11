@@ -9,6 +9,12 @@ tags: [helen, language-design, interpreter, async, parser, streaming, tool-calls
 
 # Helen Language Development
 
+> **📌 本文档面向 Helen 核心开发者** —— 想要扩展 Helen 语言本身（添加新关键字、修改解析器、扩展解释器、增加 stdlib 函数）的开发者。
+>
+> 如果你只是想**使用** Helen 编写 Agent 程序，请参阅 `helen-syntax`、`helen-agent-patterns` 等面向用户的技能。
+>
+> 本文档包含 AST 节点、内部类名、Python 文件路径、压缩管线实现等实现细节——这些是扩展语言所必需的知识，但对编写 Helen 程序的用户毫无帮助，且可能随版本变化。
+
 Development patterns and pitfalls for the Helen programming language (~/helen/).
 
 ## Quick Start & Environment
