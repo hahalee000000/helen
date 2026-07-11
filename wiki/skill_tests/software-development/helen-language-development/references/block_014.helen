@@ -1,0 +1,13 @@
+// 来源: skills/software-development/helen-language-development/references/environment-and-pitfalls.md (代码块 14)
+
+const FILE_TOOLS = ["read_file", "write_file"]
+
+agent Researcher(query: str) {
+    tools = FILE_TOOLS                    // 引用模块级 const（静态可审计）
+    main { return llm act query }
+}
+
+agent SimpleAgent(text: str) {
+    // no tools declaration — LLM has NO tools (only load_skill)
+    main { return llm act text }
+}

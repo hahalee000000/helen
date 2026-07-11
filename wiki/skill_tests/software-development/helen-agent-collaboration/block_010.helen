@@ -1,0 +1,14 @@
+// 来源: skills/software-development/helen-agent-collaboration/SKILL.md (代码块 10)
+
+// ✅ 正确：常量配置
+const API_URL = "https://api.example.com"
+const MAX_RETRIES = 3
+const TIMEOUT = 30
+
+agent ApiClient(endpoint: str) {
+    main {
+        // const 在 agent main 中自动可见
+        let url = API_URL + "/" + endpoint
+        return llm act "调用 API: " + url
+    }
+}

@@ -1,0 +1,23 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 11)
+
+agent DataProcessor(data: list) {
+    description "Process data with closure"
+    
+    main {
+        let threshold = 10  // 局部变量
+        
+        // 闭包可以捕获局部变量
+        fn filter_data(items: list): list {
+            let result = []
+            for item in items {
+                if item > threshold {  // ✅ 捕获外层局部变量
+                    result.append(item)
+                }
+            }
+            return result
+        }
+        
+        let filtered = filter_data(data)
+        return llm act "Filtered data: " + str(filtered)
+    }
+}

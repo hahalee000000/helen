@@ -1,0 +1,13 @@
+// 来源: skills/software-development/helen-testing/SKILL.md (代码块 20)
+
+fn test_complex_logic() {
+    let input = [1, 2, 3, 4, 5]
+    
+    debug("Input: " + str(input))
+    
+    let result = process(input)
+    
+    debug("Result: " + str(result))
+    
+    assert_equal(result, [2, 4, 6, 8, 10])
+}

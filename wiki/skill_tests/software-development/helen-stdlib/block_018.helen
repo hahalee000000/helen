@@ -1,0 +1,10 @@
+// 来源: skills/software-development/helen-stdlib/SKILL.md (代码块 18)
+
+fn test_expect() {
+    expect(42).toBe(42)
+    expect("hello").toContain("ell")
+    expect([1, 2, 3]).toHaveLength(3)
+    expect(10).toBeGreaterThan(5)
+    expect("test123").toMatch("[0-9]+")
+    expect(5).not_.toBe(6)
+}

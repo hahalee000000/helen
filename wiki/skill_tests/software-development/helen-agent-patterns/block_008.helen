@@ -1,0 +1,20 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 8)
+
+// L0: @open — 模块级 let 可见（调试用）
+@open agent DebugAgent() {
+    main { return module_let }
+}
+
+// L1: 标准隔离（默认）
+agent NormalAgent() { ... }
+
+// L2: @strict — 深拷贝参数和返回值
+@strict agent StrictAgent(data: list) {
+    main {
+        data.append(4)  // 安全：data 是副本
+        return data     // 返回值也是副本
+    }
+}
+
+// L3: @sandbox — 最严格
+@sandbox agent SafeAgent() { ... }

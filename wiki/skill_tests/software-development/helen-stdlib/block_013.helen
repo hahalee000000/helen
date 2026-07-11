@@ -1,0 +1,15 @@
+// 来源: skills/software-development/helen-stdlib/SKILL.md (代码块 13)
+
+# 哈希
+let md5 = hash_md5("data")
+let sha256 = hash_sha256("data")
+let sha512 = hash_sha512("data")
+
+# HMAC
+let sig = hmac_sha256("message", "secret_key")
+
+# UUID
+let id = uuid_generate()  # "550e8400-e29b-41d4-a716-446655440000"
+
+# 随机字节
+let bytes = random_bytes(16)  # 16 字节随机数据

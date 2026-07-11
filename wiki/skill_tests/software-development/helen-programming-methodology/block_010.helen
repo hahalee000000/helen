@@ -1,0 +1,14 @@
+// 来源: skills/software-development/helen-programming-methodology/SKILL.md (代码块 10)
+
+// ✅ 正确（函数式调用）
+fn call_my_agent(param: str): str {
+    return MyAgent(param)
+}
+
+// ❌ 错误（使用 call 关键字）
+fn call_my_agent(param: str): str {
+    return call MyAgent(param)  // 解析错误：Expected expression, got CALL
+}
+
+// ❌ 错误（不能在 prompt 中直接调用）
+// prompt 中写 "MyAgent()" 会报错

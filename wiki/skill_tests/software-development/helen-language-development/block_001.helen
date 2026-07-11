@@ -1,0 +1,5 @@
+// 来源: skills/software-development/helen-language-development/SKILL.md (代码块 1)
+
+// && and || short-circuit
+let result = a && b  // b not evaluated if a is false
+let result = a || b  // b not evaluated if a is true

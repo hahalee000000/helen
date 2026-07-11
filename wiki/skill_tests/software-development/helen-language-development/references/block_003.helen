@@ -1,0 +1,11 @@
+// 来源: skills/software-development/helen-language-development/references/python-ffi-implementation.md (代码块 3)
+
+import "os.path" as path
+
+main {
+    let joined = path.join("a", "b", "c")
+    print(joined)  // a/b/c
+    
+    let ext = path.splitext("file.txt")
+    print(ext)  // ["file", ".txt"]
+}

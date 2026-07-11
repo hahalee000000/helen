@@ -1,0 +1,17 @@
+// 来源: skills/software-development/helen-programming-methodology/SKILL.md (代码块 13)
+
+// ❌ 不安全
+fn process_user_input(input: str): map {
+    let query = "SELECT * FROM users WHERE name = '" + input + "'"
+    // SQL 注入风险
+}
+
+// ✅ 安全
+fn process_user_input(input: str): map {
+    if !is_valid_input(input) {
+        return create_error(ERROR_INVALID_INPUT, "Invalid input")
+    }
+    let query = "SELECT * FROM users WHERE name = ?"
+    let params = [input]
+    // 使用参数化查询
+}

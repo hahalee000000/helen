@@ -1,0 +1,14 @@
+// 来源: skills/software-development/helen-programming-methodology/SKILL.md (代码块 5)
+
+// 调用质量评估
+let file_path = "src/my_module.helen"
+let quality = get_quality_scores(file_path)
+
+// 检查结果
+if quality["scores"]["overall"] < 7.5 {
+    print("⚠️ 质量分数低于阈值，需要改进")
+    print("安全性: " + str(quality["scores"]["security"]))
+    print("正确性: " + str(quality["scores"]["correctness"]))
+    print("可维护性: " + str(quality["scores"]["maintainability"]))
+    // ... 其他维度
+}

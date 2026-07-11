@@ -1,0 +1,50 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 15)
+
+agent Translator {
+    description "Translate text between languages"
+    prompt "You are a professional translator."
+    model "gpt-4"
+    temperature 0.3
+    tools = ["web_search"]
+    
+    main {
+        return llm act "Translate: Hello"
+    }
+}
+
+// tools = CONST_NAME — 复用工具集（静态可审计，安全边界清晰）
+const FILE_TOOLS = ["read_file", "write_file", "path_exists"]
+agent Builder {
+    tools = FILE_TOOLS           // 引用模块级 const
+    main { ... }
+}
+
+// 严格校验：
+// ✅ 模块级 const 引用 + 字面量列表
+// ❌ 可变变量、函数、agent、未定义标识符、重复声明、表达式拼接
+
+// Agent functions 块支持变量定义
+agent MyAgent {
+    description "Example agent"
+    prompt "..."
+    
+    functions {
+        let config = "default"
+        const MAX_RETRIES = 3
+        
+        fn get_config(): str {
+            return config  // 可以访问 functions 块变量
+        }
+    }
+    
+    main {
+        print(get_config())
+    }
+}
+
+// 流式 Agent（返回 StreamingResponse，可用 for await 迭代）
+agent Streamer(topic: str) {
+    description "Stream a long response"
+    streaming true
+    prompt "Write a detailed essay about: {{topic}}"
+}

@@ -1,0 +1,11 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 17)
+
+agent Streamer {
+    main {
+        let buf = ""
+        let cb = fn(chunk) {
+            buf = buf + chunk   // ✅ 闭包捕获 agent 环境
+        }
+        llm act "..." on_chunk cb
+    }
+}

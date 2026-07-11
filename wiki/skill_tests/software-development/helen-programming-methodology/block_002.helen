@@ -1,0 +1,21 @@
+// 来源: skills/software-development/helen-programming-methodology/SKILL.md (代码块 2)
+
+// tests/test_my_module.helen
+
+import "contracts/my_module.helen"
+
+fn test_process_data_valid_input() {
+    let result = process_data("valid input")
+    assert_equal(result["status"], "success")
+}
+
+fn test_process_data_empty_input() {
+    let result = process_data("")
+    assert_equal(result["error_code"], ERROR_INVALID_INPUT)
+}
+
+fn test_validate_config_missing_field() {
+    let config = {"name": "test"}  // 缺少 required_field
+    let result = validate_config(config)
+    assert_equal(result, false)
+}

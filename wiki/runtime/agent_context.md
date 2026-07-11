@@ -287,7 +287,7 @@ agent SmartAssistant {
         compression "graduated"      // 压缩策略
         cache-aware true             // 缓存感知
         working-memory true          // 工作记忆
-        working-memory-tokens 5000   // 工作记忆令牌预算
+        working-memory-tokens 5000   // 工作记忆词元预算
     }
     
     tools ["read_file", "web_search"]
@@ -305,7 +305,7 @@ agent SmartAssistant {
 | `compression` | str | `"graduated"` | 压缩策略：`"none"` / `"graduated"` / `"traditional"` |
 | `cache-aware` | bool | `true` | 启用缓存感知压缩 |
 | `working-memory` | bool | `true` | 启用工作记忆 |
-| `working-memory-tokens` | int | `5000` | 工作记忆令牌预算 |
+| `working-memory-tokens` | int | `5000` | 工作记忆词元预算 |
 
 ### 中文关键字
 
@@ -315,7 +315,7 @@ agent 智能助手 {
         压缩 "graduated"
         缓存感知 true
         工作记忆 true
-        工作记忆令牌 5000
+        工作记忆词元 5000
     }
 }
 ```
@@ -413,7 +413,7 @@ Skill Index:
 
 ## 性能优化
 
-### 1. 令牌计算缓存
+### 1. 词元计算缓存
 
 ```python
 class AgentContextManager:

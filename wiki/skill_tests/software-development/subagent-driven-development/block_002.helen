@@ -1,0 +1,28 @@
+// 来源: skills/software-development/subagent-driven-development/SKILL.md (代码块 2)
+
+import "os" as os
+import "json" as json
+
+agent TaskRunner(task_id: str, context: str) {
+    main {
+        // Each agent runs in its own subprocess via async
+        let result = os.exec(["helen", "agent_script.helen"], 
+                             env={"TASK_ID": task_id, "CONTEXT": context})
+        return result
+    }
+}
+
+main {
+    // Create pending tasks (not executed yet)
+    let task1 = async TaskRunner("task-1", "Implement User model")
+    let task2 = async TaskRunner("task-2", "Add password hashing")
+    let task3 = async TaskRunner("task-3", "Create login endpoint")
+    
+    // Execute all concurrently
+    let results = await [task1, task2, task3]
+    
+    // Process results
+    for i, result in results {
+        print("Task {i}: {result}")
+    }
+}

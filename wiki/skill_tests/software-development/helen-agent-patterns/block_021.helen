@@ -1,0 +1,15 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 21)
+
+main {
+    let response = async Streamer("long essay")
+    let total_length = 0
+    
+    // 流式聚合
+    for await chunk in response {
+        total_length = total_length + len(chunk)
+        if len(chunk) > 10 {
+            stream_print(chunk)  // 只输出长 chunk
+        }
+    }
+    print("Total length: " + total_length)
+}

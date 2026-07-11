@@ -1,0 +1,42 @@
+// 来源: skills/software-development/helen-stdlib/SKILL.md (代码块 12)
+
+# 环境变量
+let home = env_get("HOME")
+env_set("MY_VAR", "value")
+let all_env = env_list()  # 敏感值自动掩码
+
+# CLI 参数（预定义常量 argv + 解析函数）
+# 命令行: helen tool.helen --verbose --output=json input.txt
+print(argv)  # ["--verbose", "--output=json", "input.txt"]
+
+let parsed = parse_cli_args()           # 自动解析
+# {verbose: true, output: "json", _positional: ["input.txt"]}
+
+let spec = {
+    "verbose": {"type": "flag", "default": false},
+    "output": {"type": "string", "default": "text"}
+}
+let config = parse_cli_args(spec)       # 结构化解析（带类型+默认值）
+
+# Shell 命令（默认 shell=True，支持完整 shell 语法）
+# 使用 /bin/bash 执行，支持 brace expansion 等 bash 特性
+# 所有 shell 语法都支持：&&、||、|、>、<、;、$()、{} 等
+let result = shell_exec("ls -la")
+let result = shell_exec("mkdir -p ~/project/{src,tests,contracts}")  # 创建三个目录
+let result = shell_exec("cat file.txt | grep pattern | wc -l")
+let result = shell_exec("echo 'hello' > output.txt")
+print(result["output"])
+
+# 安全模式：shell=False 用于处理不可信输入
+# 当命令包含用户输入时，使用 shell=False 防止 shell 注入
+let user_input = "some_input"
+let result = shell_exec("echo " + user_input, shell=false)
+
+# 系统信息
+let pid = process_id()
+let os = platform()        # "linux", "darwin", "windows"
+let host = hostname()
+
+# 日志
+log_info("Application started")
+log_error("Something went wrong", category="app")

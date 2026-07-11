@@ -1,0 +1,17 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 10)
+
+agent ProcessItems(items: list<int>) {
+    main {
+        // ✅ 可以读取
+        let first = items[0]
+        let count = len(items)
+        
+        // ❌ 不能修改（v1.12 起自动只读包装）
+        // items[0] = 999  // ScopeViolationError
+        
+        // 如需修改，创建副本
+        let my_items = list(items)
+        my_items.append(100)
+        return my_items
+    }
+}

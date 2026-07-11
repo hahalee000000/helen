@@ -1,0 +1,14 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 36)
+
+// && 短路
+let x = false && expensiveCall()  // expensiveCall() 不会执行
+
+// || 短路
+let y = true || expensiveCall()   // expensiveCall() 不会执行
+
+// 安全访问
+let user = getUser()
+let name = user != null && user.getName()
+
+// 默认值
+let config = loadConfig() || defaultConfig()

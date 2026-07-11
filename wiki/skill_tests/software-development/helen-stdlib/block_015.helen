@@ -1,0 +1,15 @@
+// 来源: skills/software-development/helen-stdlib/SKILL.md (代码块 15)
+
+# clear_context() — 清空当前对话上下文
+# 用于重新开始对话或重置上下文
+let result = clear_context()
+print("已清空 " + str(result["cleared_messages"]) + " 条消息")
+print("释放约 " + str(result["cleared_tokens"]) + " tokens")
+# 返回: {"status": "ok", "cleared_messages": 5, "cleared_tokens": 1200, "warning": "..."}
+
+# compress_context() — 压缩当前对话上下文
+# 用于减少 token 消耗，保留重要上下文
+let result = compress_context("auto")
+# 策略: "auto" (自动), "summarize" (LLM 摘要), "truncate" (截断), "none" (不压缩)
+print("从 " + str(result["original_tokens"]) + " 压缩到 " + str(result["compressed_tokens"]) + " tokens")
+# 返回: {"status": "ok", "original_messages": 10, "compressed_messages": 5, ...}

@@ -1,0 +1,11 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 32)
+
+# ✅ 只授予需要的工具
+agent FileReader {
+    tools = ["read_file"]  # 只需要读取
+}
+
+# ❌ 授予过多工具
+agent SimpleAgent {
+    tools = ["read_file", "write_file", "shell_exec", "web_search"]  # 太多
+}

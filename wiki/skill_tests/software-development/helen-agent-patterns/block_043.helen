@@ -1,0 +1,31 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 43)
+
+// ❌ 冗余：为每个角色创建独立 Agent
+agent OptimistAgent(topic: str) { ... }
+agent PessimistAgent(topic: str) { ... }
+agent InnovatorAgent(topic: str) { ... }
+
+// ✅ 推荐：配置驱动，一个 Agent 处理所有角色
+agent RoleAgent(topic: str, config: map) {
+    description "可配置的角色 Agent"
+    prompt """
+    你是「{{config["name"]}}」。
+    角色描述: {{config["description"]}}
+    风格: {{config["style"]}}
+    
+    分析: {{topic}}
+    """
+    main {
+        return llm act
+    }
+}
+
+// 使用
+let configs = [
+    {"name": "乐观派", "description": "看到最好的一面", "style": "积极向上"},
+    {"name": "悲观派", "description": "关注风险", "style": "谨慎保守"}
+]
+
+for config in configs {
+    let result = RoleAgent("话题", config)
+}

@@ -1,0 +1,49 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 15)
+
+# 定义专家
+agent TechSupport(query: str) {
+    description "Technical support specialist"
+    prompt "You are a technical support expert."
+    main {
+        return llm act "Help with: " + query
+    }
+}
+
+agent BillingSupport(query: str) {
+    description "Billing support specialist"
+    prompt "You are a billing support expert."
+    main {
+        return llm act "Help with: " + query
+    }
+}
+
+agent GeneralSupport(query: str) {
+    description "General support specialist"
+    prompt "You are a general support assistant."
+    main {
+        return llm act "Help with: " + query
+    }
+}
+
+# 路由 Agent
+agent SupportRouter(query: str) {
+    description "Route support queries to specialists"
+    
+    main {
+        llm if query {
+            case "technical issue, bug, error, crash, not working" {
+                return TechSupport(query)
+            }
+            case "billing, payment, invoice, subscription, refund" {
+                return BillingSupport(query)
+            }
+            default {
+                return GeneralSupport(query)
+            }
+        }
+    }
+}
+
+# 使用
+let response = SupportRouter("I can't login to my account")
+# 路由到 TechSupport

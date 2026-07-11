@@ -1,0 +1,14 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 26)
+
+// 基本用法
+let result = 5 |> double  // 等价于 double(5)
+
+// 链式调用
+let result = "hello" |> upper |> strip  // 等价于 strip(upper("hello"))
+
+// 与内置函数
+let len = [1, 2, 3] |> len  // 3
+
+// 与自定义函数
+fn add_one(x) { return x + 1 }
+let result = 10 |> add_one  // 11

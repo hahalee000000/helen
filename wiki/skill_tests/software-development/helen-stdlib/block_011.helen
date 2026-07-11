@@ -1,0 +1,36 @@
+// 来源: skills/software-development/helen-stdlib/SKILL.md (代码块 11)
+
+# 读写文件
+let content = read_file("/path/to/file.txt")
+write_file("/path/to/output.txt", "Hello, World!")
+append_file("/path/to/log.txt", "New log entry\n")
+
+# 文件信息
+if file_exists("/path/to/file.txt") {
+    let size = file_size("/path/to/file.txt")
+    print("文件大小: " + str(size) + " bytes")
+}
+
+# 目录操作
+let files = list_dir("/path/to/dir")
+mkdir("/path/to/new/dir")
+copy_file("/src/file.txt", "/dst/file.txt")
+delete_file("/path/to/file.txt")
+
+# 文件搜索（v1.15 新增）
+# 递归查找所有 Python 文件
+let py_files = glob_files("src", "*.py")
+# 返回: ["main.py", "utils/helper.py", "tests/test_main.py"]
+
+# 使用 ** 显式递归
+let md_files = glob_files("docs", "**/*.md")
+
+# 搜索文件内容（字面量）
+let matches = grep_files("src/", "TODO")
+# 返回: [{"file": "main.py", "line": 42, "text": "    # TODO: fix this"}]
+
+# 搜索文件内容（正则）
+let functions = grep_files("src/", "def \\w+\\(", regex=true)
+
+# 大小写不敏感搜索
+let errors = grep_files("logs/", "error", case_sensitive=false)

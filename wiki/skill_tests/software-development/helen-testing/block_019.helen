@@ -1,0 +1,8 @@
+// 来源: skills/software-development/helen-testing/SKILL.md (代码块 19)
+
+// @test-location: tests/integration/test_my_agent.py
+
+agent MyAgent {
+    description "示例 agent"
+    main { llm act "执行任务" }
+}

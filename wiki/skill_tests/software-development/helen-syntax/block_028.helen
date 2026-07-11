@@ -1,0 +1,18 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 28)
+
+// 协议声明
+protocol Printable {
+    fn to_string(self): String
+}
+
+// 协议实现（鸭子类型）
+struct Point {
+    x: Int
+    y: Int
+}
+
+impl Printable for Point {
+    fn to_string(self): String {
+        return "Point(" + str(self.x) + ", " + str(self.y) + ")"
+    }
+}

@@ -1,0 +1,23 @@
+// 来源: skills/software-development/helen-programming-methodology/SKILL.md (代码块 6)
+
+// 任务摘要
+let task_summary = "实现了字符串反转函数，使用 TDD 开发，发现递归实现会导致栈溢出"
+let files_changed = "src/string_utils.helen, tests/test_string_utils.helen"
+
+// 调用技能评估
+let evaluation = call_skill_evaluator(task_summary, files_changed)
+
+// 处理评估结果
+if evaluation["new_skills"] != null {
+    for skill in evaluation["new_skills"] {
+        print("💡 建议创建新技能: " + skill["name"])
+        save_new_skill(skill["name"], skill["category"], skill["tags"], skill["content"])
+    }
+}
+
+if evaluation["updates"] != null {
+    for update in evaluation["updates"] {
+        print("🔄 建议更新技能: " + update["name"])
+        update_existing_skill(update["path"], update["addition"])
+    }
+}

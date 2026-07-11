@@ -1,0 +1,71 @@
+// 来源: skills/software-development/helen-agent-collaboration/SKILL.md (代码块 7)
+
+// v1.12: 使用值类型跟踪状态
+shared let project_phase = "init"
+shared let project_progress = 0
+
+agent ProjectManager(requirement: str) {
+    description "项目经理 - 总体协调"
+    
+    main {
+        project_phase = "planning"
+        
+        // 阶段 1: 需求分析
+        let analysis = RequirementAnalyst(requirement)
+        project_progress = 25
+        
+        // 阶段 2: 架构设计
+        let architecture = Architect(analysis)
+        project_progress = 50
+        
+        // 阶段 3: 并行开发
+        let frontend_task = async FrontendDev(architecture)
+        let backend_task = async BackendDev(architecture)
+        let dev_results = await [frontend_task, backend_task]
+        project_progress = 80
+        
+        // 阶段 4: 集成测试
+        let integration = IntegrationTester(dev_results)
+        project_progress = 100
+        project_phase = "complete"
+        
+        return integration
+    }
+}
+
+agent RequirementAnalyst(req: str) {
+    description "需求分析师"
+    main {
+        return llm act "分析需求: " + req
+    }
+}
+
+agent Architect(analysis: str) {
+    description "架构师"
+    main {
+        return llm act "设计架构: " + analysis
+    }
+}
+
+agent FrontendDev(arch: str) {
+    description "前端开发"
+    tools = ["write_file"]
+    main {
+        return llm act "实现前端: " + arch
+    }
+}
+
+agent BackendDev(arch: str) {
+    description "后端开发"
+    tools = ["write_file"]
+    main {
+        return llm act "实现后端: " + arch
+    }
+}
+
+agent IntegrationTester(results: list) {
+    description "集成测试"
+    main {
+        return llm act "执行集成测试"
+    }
+}

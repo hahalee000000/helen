@@ -1,0 +1,7 @@
+// 来源: skills/software-development/helen-language-development/references/v1.6-v1.7-v1.8-implementation.md (代码块 6)
+
+match value {
+    case is String { print("it's a string") }
+    case is Int { print("it's an int") }
+    case _ { print("unknown") }
+}

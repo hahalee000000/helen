@@ -1,0 +1,20 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 23)
+
+agent ConversationalAssistant {
+    description "Multi-turn conversational assistant"
+    prompt "You are a helpful conversational assistant. Remember context from previous messages."
+    
+    main {
+        # 自动维护对话历史
+        # 每次调用 llm act 都会记录到历史
+        let response = llm act "Remember this context"
+        
+        # 后续调用可以引用之前的内容
+        let followup = llm act "Based on what I said before, what do you think?"
+        
+        return followup
+    }
+}
+
+# 在 REPL 中，对话历史自动维护
+# 每次 :ask 都会记住之前的对话

@@ -1,0 +1,15 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 34)
+
+agent DebuggableAgent {
+    description "Debug example"
+    prompt "You are helpful."
+    model "gpt-4"
+    temperature 0.7
+    max-turns 10
+    
+    main {
+        // 打印配置信息
+        print("Agent started")
+        return llm act "Do something"
+    }
+}

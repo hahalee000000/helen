@@ -1,0 +1,9 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 7)
+
+agent Developer {
+    tools = ["load_skill"]
+    main {
+        let guide = load_skill("helen-testing")
+        return llm act "Follow: " + guide
+    }
+}

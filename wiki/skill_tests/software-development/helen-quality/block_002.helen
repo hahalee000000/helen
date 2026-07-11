@@ -1,0 +1,10 @@
+// 来源: skills/software-development/helen-quality/SKILL.md (代码块 2)
+
+// @test-location: tests/integration/test_programmer.py
+
+agent Programmer {
+    description "代码编写助手"
+    main {
+        llm act "编写代码"
+    }
+}

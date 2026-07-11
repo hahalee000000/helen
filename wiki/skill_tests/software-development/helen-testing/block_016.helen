@@ -1,0 +1,23 @@
+// 来源: skills/software-development/helen-testing/SKILL.md (代码块 16)
+
+// ✅ 每个测试独立
+fn test_feature_a() {
+    let data = setup_data()
+    assert_equal(process(data), expected_a)
+}
+
+fn test_feature_b() {
+    let data = setup_data()  // 重新设置
+    assert_equal(process(data), expected_b)
+}
+
+// ❌ 测试间依赖
+fn test_feature_a() {
+    global_data = setup_data()
+    assert_equal(process(global_data), expected_a)
+}
+
+fn test_feature_b() {
+    // 依赖 test_feature_a 的结果
+    assert_equal(process(global_data), expected_b)
+}

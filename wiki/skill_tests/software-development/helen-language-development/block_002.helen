@@ -1,0 +1,6 @@
+// 来源: skills/software-development/helen-language-development/SKILL.md (代码块 2)
+
+// v1.10: assignment targets
+arr[i] = x           // subscript assignment
+obj.field = x        // field assignment
+map["key"] = value   // map key assignment

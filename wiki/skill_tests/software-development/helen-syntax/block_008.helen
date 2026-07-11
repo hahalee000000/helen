@@ -1,0 +1,5 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 8)
+
+let and = a && b
+let or = a || b
+let not = !a

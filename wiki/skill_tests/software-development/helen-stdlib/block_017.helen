@@ -1,0 +1,23 @@
+// 来源: skills/software-development/helen-stdlib/SKILL.md (代码块 17)
+
+// 定义测试函数
+fn test_add() {
+    assert_equal(2 + 3, 5)
+}
+
+fn test_subtract() {
+    assert_equal(10 - 4, 6)
+}
+
+// 注册测试
+test_suite("Calculator")
+test_case("adds numbers", test_add)
+test_case("subtracts numbers", test_subtract)
+test_end_suite()
+
+// 运行测试
+run_tests()
+
+// 运行: helen test calculator_test.helen
+// 监听: helen test calculator_test.helen --watch
+// 过滤: helen test calculator_test.helen --filter "add"

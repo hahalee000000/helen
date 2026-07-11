@@ -1,0 +1,33 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 42)
+
+agent StructuredAnalyzer(input: str) {
+    description "返回结构化分析结果"
+    prompt """
+    分析: {{input}}
+    
+    严格以 JSON 格式返回:
+    {"key_points": [...], "summary": "...", "score": 0-10}
+    """
+    
+    main {
+        let response = llm act
+        
+        // 模式: try JSON parse, fallback to default structure
+        try {
+            let parsed = json_parse(response)
+            // 验证必需字段
+            if !has_key(parsed, "key_points") {
+                parsed["key_points"] = []
+            }
+            return parsed
+        } catch RuntimeError err {
+            // LLM 输出不是合法 JSON 时降级
+            return {
+                "key_points": ["解析失败，原始输出已保存"],
+                "summary": response,
+                "score": 0,
+                "_raw": response  // 保留原始输出供调试
+            }
+        }
+    }
+}

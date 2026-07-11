@@ -1,0 +1,29 @@
+// 来源: skills/software-development/helen-testing/SKILL.md (代码块 10)
+
+shared let shared_counter = 0
+const MAX_VALUE = 100
+
+agent CounterAgent {
+    description "Test scope isolation"
+    
+    main {
+        // ✅ const 可见
+        assert_true(MAX_VALUE > 0)
+        
+        // ✅ shared let 可见
+        shared_counter = shared_counter + 1
+        return shared_counter
+    }
+}
+
+fn test_agent_scope_isolation() {
+    shared_counter = 0  // 重置
+    
+    let r1 = CounterAgent()
+    assert_equal(r1, 1)
+    
+    let r2 = CounterAgent()
+    assert_equal(r2, 2)
+    
+    assert_equal(shared_counter, 2)
+}

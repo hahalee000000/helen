@@ -1,0 +1,20 @@
+// 来源: skills/software-development/helen-stdlib/SKILL.md (代码块 9)
+
+# 当前时间
+let now_ts = now()                    # Unix 时间戳（秒）
+let now_ms = timestamp()              # Unix 时间戳（毫秒）
+
+# 格式化
+let formatted = date_format(now(), "%Y-%m-%d %H:%M:%S")
+# "2026-06-19 17:30:00"
+
+# 解析
+let parsed = date_parse("2026-06-19", "%Y-%m-%d")
+
+# 计时
+let sw = stopwatch_start()
+# ... 执行操作 ...
+let elapsed = stopwatch_elapsed(sw)   # 秒（浮点数）
+
+# 休眠
+sleep(1.5)  # 休眠 1.5 秒

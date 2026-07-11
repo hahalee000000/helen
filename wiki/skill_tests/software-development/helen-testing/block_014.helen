@@ -1,0 +1,23 @@
+// 来源: skills/software-development/helen-testing/SKILL.md (代码块 14)
+
+test_suite("Math", fn() {
+    test_suite("Addition", fn() {
+        test_case("positive numbers", fn() {
+            assert_equal(2 + 3, 5)
+        })
+        test_case("negative numbers", fn() {
+            assert_equal(-1 + -2, -3)
+        })
+    })
+    
+    test_suite("Multiplication", fn() {
+        test_case("positive numbers", fn() {
+            assert_equal(2 * 3, 6)
+        })
+        test_case("with zero", fn() {
+            assert_equal(5 * 0, 0)
+        })
+    })
+})
+
+run_tests()

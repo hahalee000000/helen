@@ -1,0 +1,9 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 18)
+
+shared let _buf = ""    // 或：共享 定义 _buf = ""
+agent Worker {
+    main {
+        _buf = "new"    // ✅ 读写都允许
+        let x = _buf    // ✅
+    }
+}

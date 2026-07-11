@@ -1,0 +1,15 @@
+// 来源: skills/software-development/helen-stdlib/SKILL.md (代码块 8)
+
+# HTTP GET
+let response = http_get("https://api.example.com/data")
+let data = json_parse(response["body"])
+
+# HTTP POST
+let result = http_post(
+    "https://api.example.com/submit",
+    headers={"Content-Type": "application/json"},
+    body=json_stringify({"name": "Helen"})
+)
+
+# 下载文件
+http_download("https://example.com/file.pdf", "/tmp/file.pdf")

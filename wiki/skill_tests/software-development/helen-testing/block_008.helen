@@ -1,0 +1,14 @@
+// 来源: skills/software-development/helen-testing/SKILL.md (代码块 8)
+
+agent Adder(a: int, b: int) {
+    description "Add two numbers"
+    
+    main {
+        return a + b
+    }
+}
+
+fn test_adder_agent() {
+    let result = Adder(2, 3)
+    assert_equal(result, 5)
+}

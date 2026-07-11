@@ -1,0 +1,7 @@
+// 来源: skills/software-development/helen-programming-methodology/SKILL.md (代码块 9)
+
+// ✅ 正确
+let sub = substring(str, 0, 10)
+
+// ❌ 错误
+let sub = str[0:10]

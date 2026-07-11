@@ -1,0 +1,19 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 5)
+
+agent SmartAssistant {
+    description "Smart assistant with optimized context"
+    
+    // 上下文配置
+    context {
+        compression "graduated"      // 压缩策略
+        cache-aware true             // 缓存感知
+        working-memory true          // 工作记忆
+        working-memory-tokens 5000   // 工作记忆预算
+    }
+    
+    tools = ["read_file", "web_search"]
+    
+    main {
+        return llm act "..."
+    }
+}

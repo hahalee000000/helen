@@ -1,0 +1,41 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 13)
+
+// v1.12: 使用 shared store 管理复杂共享状态
+shared store TaskManager {
+    let pending = 0
+    let completed = 0
+
+    fn submit() {
+        pending = pending + 1
+    }
+
+    fn finish() {
+        pending = pending - 1
+        completed = completed + 1
+    }
+
+    fn get_status(): str {
+        return str(pending) + " pending, " + str(completed) + " completed"
+    }
+}
+
+agent TaskProducer() {
+    main {
+        TaskManager.submit()
+        TaskManager.submit()
+        return "submitted"
+    }
+}
+
+agent TaskWorker() {
+    main {
+        TaskManager.finish()
+        return "done"
+    }
+}
+
+main {
+    TaskProducer()
+    TaskWorker()
+    print(TaskManager.get_status())  // "1 pending, 1 completed"
+}

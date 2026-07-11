@@ -1,0 +1,20 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 36)
+
+agent PersistentAssistant {
+    description "Assistant with persistent history"
+    
+    main {
+        // 启动时加载历史
+        let loaded = load_history("./session.json")
+        if loaded > 0 {
+            print("Resumed session with " + str(loaded) + " messages")
+        }
+        
+        // 执行任务
+        let result = llm act "Continue our previous conversation"
+        
+        // 退出时保存历史
+        save_history("./session.json")
+        return result
+    }
+}

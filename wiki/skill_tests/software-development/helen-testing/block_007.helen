@@ -1,0 +1,16 @@
+// 来源: skills/software-development/helen-testing/SKILL.md (代码块 7)
+
+fn test_runtime_errors() {
+    // stdlib 异常被包装为 RuntimeError
+    expect(fn() {
+        let x = int("not a number")  // 会抛出 RuntimeError
+    }).toThrow()
+    
+    // 捕获并检查
+    try {
+        let arr = [1, 2, 3]
+        let x = arr[10]  // 索引越界
+    } catch RuntimeError as e {
+        assert_contains(e.message, "index")
+    }
+}

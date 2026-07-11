@@ -1,0 +1,12 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 13)
+
+// 给 stdlib 起自定义别名
+alias len as 我的长度
+alias print as 输出
+
+// 给用户函数起别名
+fn greet(name: str): str { return "Hello, " + name }
+alias greet as 打招呼
+
+// 中文关键字 `别名` 等价
+别名 sort as 排序

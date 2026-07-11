@@ -1,0 +1,20 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 1)
+
+// 纯中文
+函数 斐波那契(n: int): int {
+    如果 n <= 1 {
+        返回 n
+    } 否则 {
+        返回 斐波那契(n - 1) + 斐波那契(n - 2)
+    }
+}
+
+// 中英混合
+定义 结果 = 斐波那契(10)
+常量 LIMIT = 100
+如果 结果 < LIMIT {
+    print("OK")
+}
+
+// v1.10: 共享变量
+共享 let counter = 0

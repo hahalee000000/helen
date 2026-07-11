@@ -1,0 +1,20 @@
+// 来源: skills/software-development/helen-language-development/references/environment-and-pitfalls.md (代码块 16)
+
+// 1. Expression form — direct LLM call with prompt
+let result = llm act "translate hello to French"
+llm act "Analyze sentiment of: " + review
+
+// 2. Bare form — inside agent main, uses rendered prompt automatically
+agent Translator(text: str, target: str) {
+    prompt """
+    Translate to {{target}}:
+    {{text}}
+    """
+    main {
+        let result = llm act    // bare form — auto-uses rendered prompt
+        return result
+    }
+}
+
+// Calling agents — function-style only (call keyword deprecated)
+let translated = Translator(text="Hello", target="French")

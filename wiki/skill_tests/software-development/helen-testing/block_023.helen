@@ -1,0 +1,13 @@
+// 来源: skills/software-development/helen-testing/SKILL.md (代码块 23)
+
+// 纯逻辑函数 — 快速单元测试
+fn test_get_config() {
+    let config = get_default_config()
+    assert_equal(len(config), 4)
+}
+
+// Agent 测试 — 需要 LLM，较慢
+fn test_agent_returns_valid_structure() {
+    let result = MyAgent("test input")
+    assert_true(has_key(result, "output"))
+}

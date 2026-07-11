@@ -1,0 +1,4 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 35)
+
+const arr = [1, 2, 3]
+arr[0] = 10  // ❌ E0352 IMMUTABLE_ASSIGNMENT

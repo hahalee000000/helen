@@ -1,0 +1,14 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 38)
+
+// 单次异步
+let result = await llm act_async Task "Task"
+
+// 并发异步
+let [r1, r2, r3] = await [
+  llm act_async Task1 "First",
+  llm act_async Task2 "Second",
+  llm act_async Task3 "Third"
+]
+
+// 异步流式
+let full_text = await llm act_stream_async WriteStory "A cat"

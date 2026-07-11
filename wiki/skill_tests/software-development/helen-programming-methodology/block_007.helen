@@ -1,0 +1,43 @@
+// 来源: skills/software-development/helen-programming-methodology/SKILL.md (代码块 7)
+
+// Phase 1: 契约设计
+let requirement = "实现一个安全的用户认证模块"
+let context = "项目: auth_service, 需要 JWT 支持"
+let contract = call_contractor(requirement, context)
+print("✅ Phase 1 完成: 契约设计")
+print(contract)
+
+// 用户确认契约后继续
+
+// Phase 2 RED: 生成测试
+let source = ""  // 空实现
+let tests = call_test_builder(source, contract)
+write_file("tests/test_auth.helen", tests)
+let red_check = run_helen_tests("tests/")
+print("✅ Phase 2 RED 完成: 测试全部 FAIL")
+
+// Phase 2 GREEN: 编写实现
+let impl = call_implementer(source, tests, contract)
+write_file("src/auth.helen", impl)
+let green_check = run_helen_tests("tests/")
+if green_check["success"] {
+    print("✅ Phase 2 GREEN 完成: 测试全部 PASS")
+}
+
+// Phase 3: 质量评估
+let before = get_quality_scores("src/auth.helen")
+let quality = call_quality_gate("src/auth.helen", before)
+print("✅ Phase 3 完成: 质量评估")
+print(quality)
+
+if quality["verdict"] == "NEEDS_IMPROVEMENT" {
+    // 回到 Phase 2 改进
+    print("⚠️ 质量不达标，需要改进")
+}
+
+// Phase 4: 技能评估
+let summary = "实现了 JWT 认证模块，发现需要处理 token 过期的边界情况"
+let files = "src/auth.helen, tests/test_auth.helen"
+let skills = call_skill_evaluator(summary, files)
+print("✅ Phase 4 完成: 技能评估")
+print(skills)

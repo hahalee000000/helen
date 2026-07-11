@@ -1,0 +1,55 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 40)
+
+// 声明 shared store
+shared store Counter {
+  // 私有字段
+  count: int = 0
+  
+  // 公共方法
+  fn increment() {
+    count += 1
+  }
+  
+  fn get(): int {
+    return count
+  }
+  
+  fn reset() {
+    count = 0
+  }
+}
+
+// 中文
+共享 store 计数器 {
+  数量: int = 0
+  函数 增加() { 数量 += 1 }
+  函数 获取(): int { 返回 数量 }
+}
+
+// 使用
+agent Worker {
+  main {
+    Counter.increment()
+    let val = Counter.get()
+  }
+}
+
+// 多个 store 实例
+shared store TaskQueue {
+  items: list = []
+  
+  fn push(item) {
+    items.append(item)
+  }
+  
+  fn pop() {
+    if len(items) > 0 {
+      return items.remove(0)
+    }
+    return null
+  }
+  
+  fn size(): int {
+    return len(items)
+  }
+}

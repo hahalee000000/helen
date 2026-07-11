@@ -1,0 +1,22 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 21)
+
+# llm act — 自主执行
+let result = llm act "What is 2+2?"
+
+# llm if — 路由分类
+llm if input {
+    case "positive" { print("Good!") }
+    case "negative" { print("Bad!") }
+    default { print("Neutral") }
+}
+
+# llm act 带流式回调
+fn handle_chunk(chunk) {
+    print(chunk, end="")
+}
+
+fn on_complete() {
+    print("\n✅ 完成")
+}
+
+llm act "Write a story" on_chunk handle_chunk on_complete on_complete

@@ -1,0 +1,18 @@
+// 来源: skills/software-development/helen-language-development/references/environment-and-pitfalls.md (代码块 13)
+
+// Pattern 1: prompt as system instruction, llm act provides the task
+agent Translator(text: str, target: str) {
+    prompt """你是一个专业翻译。请将内容翻译成{{target}}。只输出翻译结果。"""
+    main { return llm act text }
+}
+
+// Pattern 2: bare llm act — fully rely on agent prompt
+agent Greeter(name: str) {
+    prompt "请用中文向{{name}}打招呼"
+    main { return llm act }
+}
+
+// Pattern 3: No prompt field — llm act prompt is self-contained (backward compatible)
+agent Simple(text: str) {
+    main { return llm act "大写：" + text }
+}

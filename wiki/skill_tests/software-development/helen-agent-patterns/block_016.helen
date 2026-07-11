@@ -1,0 +1,51 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 16)
+
+agent Researcher(topic: str) {
+    description "Research specialist"
+    tools = ["web_search", "web_fetch"]
+    
+    main {
+        return llm act "Research this topic and provide key findings: " + topic
+    }
+}
+
+agent Writer(topic: str, research: str) {
+    description "Content writer"
+    prompt "You are a professional content writer."
+    
+    main {
+        return llm act "Write an article about " + topic + 
+                       " based on this research: " + research
+    }
+}
+
+agent Editor(content: str) {
+    description "Content editor"
+    prompt "You are a meticulous editor. Fix grammar, improve clarity, ensure consistency."
+    temperature 0.3
+    
+    main {
+        return llm act "Edit and improve this content: " + content
+    }
+}
+
+# 管道
+agent ContentPipeline(topic: str) {
+    description "Research → Write → Edit pipeline"
+    
+    main {
+        # 阶段 1: 研究
+        let research = Researcher(topic)
+        
+        # 阶段 2: 写作
+        let draft = Writer(topic, research)
+        
+        # 阶段 3: 编辑
+        let final = Editor(draft)
+        
+        return final
+    }
+}
+
+# 使用
+let article = ContentPipeline("Helen programming language")

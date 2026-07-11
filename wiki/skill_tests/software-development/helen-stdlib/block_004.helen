@@ -1,0 +1,32 @@
+// 来源: skills/software-development/helen-stdlib/SKILL.md (代码块 4)
+
+# 大小写转换
+let upper = upper("hello")    # "HELLO"
+let lower = lower("WORLD")    # "world"
+
+# 分割与连接
+let parts = split("a,b,c", ",")  # ["a", "b", "c"]
+let joined = join(["a", "b"], "-")  # "a-b"
+
+# 查找与替换
+let found = find("hello world", "world")  # 6
+let replaced = replace("foo bar", "foo", "baz")  # "baz bar"
+
+# 正则表达式
+if regex_match("hello123", r"\d+") {
+    print("包含数字")
+}
+let cleaned = regex_replace("a1b2c3", r"\d", "")  # "abc"
+
+# 空白处理
+let trimmed = strip("  hello  ")  # "hello"
+let padded = pad_start("42", 5, "0")  # "00042"
+
+# 浮点数格式化
+let formatted1 = format_float(8.5, 1)      # "8.5"
+let formatted2 = format_float(7.857, 2)    # "7.86" (四舍五入)
+let formatted3 = format_float(3.14159, 3)  # "3.142"
+let formatted4 = format_float(100, 0)      # "100"
+
+# 中文别名
+let formatted = 格式化浮点(8.5, 1)  # "8.5"

@@ -1,0 +1,28 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 23)
+
+try {
+    risky_operation()
+} catch RuntimeError e {
+    print("Runtime error: " + e.message)
+} catch TimeoutError e {
+    print("Timeout: " + e.message)
+} finally {
+    cleanup()
+}
+
+// Agent 调用失败 — AgentError (v1.10)
+// 携带 agent_name、agent_args、cause 字段
+try {
+    let result = Contractor(req, dir)
+} catch AgentError e {
+    print("Agent failed: " + e.agent_name + " — " + e.message)
+}
+// AgentError 继承 LLMError，catch LLMError 也能捕获
+
+// 捕获标准库异常 (v1.9+)
+// 标准库函数抛出的 Python 异常自动包装为 RuntimeError
+try {
+    let x = len(42)        // Python TypeError
+} catch RuntimeError e {
+    print(e.message)       // "Python TypeError: object of type 'int' has no len()"
+}

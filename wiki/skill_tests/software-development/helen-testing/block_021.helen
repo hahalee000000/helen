@@ -1,0 +1,14 @@
+// 来源: skills/software-development/helen-testing/SKILL.md (代码块 21)
+
+fn test_with_trace() {
+    trace_on()
+    
+    let result = complex_function()
+    
+    let trace_log = get_trace()
+    print("Execution trace: " + str(trace_log))
+    
+    trace_off()
+    
+    assert_true(result > 0)
+}

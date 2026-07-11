@@ -1,0 +1,11 @@
+// 来源: skills/software-development/helen-programming-methodology/SKILL.md (代码块 8)
+
+// ✅ 正确
+if a && b { }
+if a || b { }
+if !a { }
+
+// ❌ 错误
+if a and b { }
+if a or b { }
+if not a { }

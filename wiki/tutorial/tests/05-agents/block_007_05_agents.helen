@@ -7,7 +7,7 @@ agent SmartAssistant {
         compression "graduated"      // 压缩策略
         cache-aware true             // 缓存感知
         working-memory true          // 工作记忆
-        working-memory-tokens 5000   // 工作记忆令牌预算
+        working-memory-tokens 5000   // 工作记忆词元预算
     }
     
     tools ["read_file", "web_search"]

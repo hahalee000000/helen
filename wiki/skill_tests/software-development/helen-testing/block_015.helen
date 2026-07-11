@@ -1,0 +1,10 @@
+// 来源: skills/software-development/helen-testing/SKILL.md (代码块 15)
+
+// ✅ 清晰的测试命名
+fn test_add_positive_numbers() { ... }
+fn test_add_negative_numbers() { ... }
+fn test_add_zero() { ... }
+
+// ❌ 模糊的命名
+fn test_add() { ... }
+fn test1() { ... }

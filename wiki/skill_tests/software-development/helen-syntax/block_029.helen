@@ -1,0 +1,6 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 29)
+
+import "utils.helen"              # 导入 Helen 模块
+import "config.json" as config    # 导入 JSON
+import "data.yaml" as data        # 导入 YAML
+import "./python_module" as py    # 导入 Python 模块

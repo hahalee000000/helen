@@ -1,0 +1,20 @@
+// 来源: skills/software-development/helen-language-development/references/environment-and-pitfalls.md (代码块 10)
+
+// async as expression — creates pending Task (NOT executed yet)
+let task1 = async Worker("input A")
+let task2 = async Worker("input B")
+
+// await list — executes ALL pending tasks CONCURRENTLY, returns results
+let results = await [task1, task2]
+print(results)  // ["result A", "result B"]
+
+// async as statement — still works (Task discarded)
+async Worker("fire and forget")
+
+// AggregateError catchable
+try {
+    let results = await [task1, task2]
+} catch AggregateError err {
+    print("Failed: " + err.message)
+    print(err.errors)  // list of inner exceptions
+}

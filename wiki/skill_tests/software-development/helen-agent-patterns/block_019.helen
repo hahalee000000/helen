@@ -1,0 +1,17 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 19)
+
+fn on_chunk(chunk: str) {
+    stream_print(chunk)
+}
+
+fn on_complete() {
+    print("\n\n✅ 完成")
+}
+
+agent StreamingWriter(topic: str) {
+    description "Write content with streaming output"
+    
+    main {
+        llm act "Write a detailed article about " + topic on_chunk on_chunk on_complete on_complete
+    }
+}

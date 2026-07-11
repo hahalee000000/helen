@@ -1,0 +1,5 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 9)
+
+let item = list[0]
+let value = map["key"]
+let length = len(str)

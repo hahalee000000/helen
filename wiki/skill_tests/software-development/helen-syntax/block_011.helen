@@ -1,0 +1,5 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 11)
+
+let x = 42                    # 可变变量
+const PI = 3.14159            # 常量
+let name: str = "Helen"       # 类型注解

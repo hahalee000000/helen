@@ -1,0 +1,13 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 16)
+
+// ✅ 正确：函数式调用（Agent 是一等公民）
+let result = Translator("Hello")
+return MyAgent("test")
+let x = some_fn(Translator("test"))
+
+// ❌ 错误：使用 call 关键字（表达式位置）
+let result = call Translator("Hello")  // 解析错误：Expected expression, got CALL
+
+// ✅ 语句位置：两种方式都可以
+call MyAgent("test")  // 可以，但不推荐
+MyAgent("test")       // 推荐，更简洁

@@ -1,0 +1,4 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 5)
+
+let name: str? = null           # 可选字符串
+let value: int | str = "hello"  # 联合类型

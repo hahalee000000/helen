@@ -1,0 +1,18 @@
+// 来源: skills/software-development/helen-programming-methodology/SKILL.md (代码块 1)
+
+// contracts/my_module.helen
+
+protocol MyModule {
+    fn process_data(input: str): map
+    fn validate_config(config: map): bool
+}
+
+// 错误码定义
+const ERROR_INVALID_INPUT = 1001
+const ERROR_CONFIG_MISSING = 1002
+const ERROR_PROCESSING_FAILED = 1003
+
+// 辅助函数
+fn is_valid_input(input: str): bool {
+    return len(input) > 0 && len(input) < 1000
+}

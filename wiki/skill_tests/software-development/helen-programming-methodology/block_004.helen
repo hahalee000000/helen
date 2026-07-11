@@ -1,0 +1,26 @@
+// 来源: skills/software-development/helen-programming-methodology/SKILL.md (代码块 4)
+
+// 提取重复逻辑
+fn process_data(input: str): map {
+    if !is_valid_input(input) {
+        return create_error(ERROR_INVALID_INPUT, "Invalid input length")
+    }
+    
+    return create_success(input)
+}
+
+// 辅助函数
+fn create_error(code: int, message: str): map {
+    return {
+        "status": "error",
+        "error_code": code,
+        "message": message
+    }
+}
+
+fn create_success(data: any): map {
+    return {
+        "status": "success",
+        "data": data
+    }
+}

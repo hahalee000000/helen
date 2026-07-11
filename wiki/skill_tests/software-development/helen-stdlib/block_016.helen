@@ -1,0 +1,12 @@
+// 来源: skills/software-development/helen-stdlib/SKILL.md (代码块 16)
+
+# 运行时断言
+assert x > 0
+assert x > 0, "x must be positive"
+
+# 断言失败抛出 AssertionError，可捕获
+try {
+    assert false, "test"
+} catch AssertionError as e {
+    print("Caught: " + e.message)
+}

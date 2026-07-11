@@ -1,0 +1,22 @@
+// 来源: skills/software-development/helen-testing/SKILL.md (代码块 13)
+
+before_each(fn() {
+    // 每个测试前执行
+    write_file("test_data.txt", "initial")
+})
+
+after_each(fn() {
+    // 每个测试后执行
+    delete_file("test_data.txt")
+})
+
+fn test_read_data() {
+    let content = read_file("test_data.txt")
+    assert_equal(content, "initial")
+}
+
+fn test_modify_data() {
+    write_file("test_data.txt", "modified")
+    let content = read_file("test_data.txt")
+    assert_equal(content, "modified")
+}

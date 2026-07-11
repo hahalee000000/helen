@@ -60,7 +60,7 @@ def _budget_reduction(messages: list[Message], target_ratio: float) -> list[Mess
 {"role": "tool", "content": "[Tool result: read_file({path: '/path/to/file.py'}) -> 5000 chars]"}
 ```
 
-**压缩比**：~60%（减少 60% 的令牌数）
+**压缩比**：~60%（减少 60% 的词元数）
 
 ---
 

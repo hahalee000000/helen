@@ -1,0 +1,19 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 37)
+
+agent SmartResearcher {
+    tools ["web_search", "web_fetch"]
+    
+    main {
+        // 搜索之前的工具调用
+        let past_searches = search_history(tool_name="web_search")
+        
+        if len(past_searches) > 0 {
+            // 引用之前的搜索结果
+            return llm act "Based on my previous research: " + str(past_searches[0])
+        }
+        
+        // 首次搜索
+        let info = web_search("Helen programming language")
+        return llm act "Analyzed: " + info
+    }
+}

@@ -1,0 +1,16 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 20)
+
+agent Streamer(topic: str) {
+    description "Stream a long response"
+    streaming true
+    prompt "Write a detailed essay about: {{topic}}"
+}
+
+main {
+    let response = async Streamer("the history of computing")
+    
+    // 逐 chunk 处理流式响应
+    for await chunk in response {
+        stream_print(chunk)
+    }
+}

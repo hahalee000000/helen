@@ -1,0 +1,14 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 24)
+
+# 简单断言
+assert x > 0
+
+# 带消息的断言
+assert x > 0, "x must be positive"
+
+# 可捕获
+try {
+    assert false, "test"
+} catch AssertionError as e {
+    print("Caught: " + e.message)
+}

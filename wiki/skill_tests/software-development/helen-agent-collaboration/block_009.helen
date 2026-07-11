@@ -1,0 +1,27 @@
+// 来源: skills/software-development/helen-agent-collaboration/SKILL.md (代码块 9)
+
+// ✅ v1.12 正确：shared let 只用于值类型
+shared let message_count = 0
+shared let last_message = ""
+
+agent Producer(msg: str) {
+    main {
+        message_count = message_count + 1
+        last_message = msg
+        // 引用类型通过返回值传递
+        return [msg]
+    }
+}
+
+agent Consumer(messages: list) {
+    main {
+        for msg in messages {
+            print("消费: " + msg)
+        }
+        print("总计: " + str(message_count) + " 条消息")
+    }
+}
+
+// 使用
+let msgs = Producer("hello")
+Consumer(msgs)

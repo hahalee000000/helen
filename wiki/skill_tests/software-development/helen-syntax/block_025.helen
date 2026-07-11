@@ -1,0 +1,51 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 25)
+
+// 基本匹配
+match status {
+    case 200 { print("OK") }
+    case 404 { print("Not Found") }
+    case 500 { print("Server Error") }
+    default { print("Unknown") }
+}
+
+// 范围匹配（.. 运算符，包含边界）
+let score = 85
+match score {
+    case 90..100 { print("A") }
+    case 80..89 { print("B") }
+    case 70..79 { print("C") }
+    default { print("F") }
+}
+
+// 守卫条件（if 表达式）
+match x {
+    case 1..100 if x == 42 { print("the answer") }
+    case 1..100 { print("in range") }
+    default { print("out of range") }
+}
+
+// v1.8: 通配符模式（可作为默认分支）
+match value {
+    case 1 { print("one") }
+    case _ { print("other") }  // 匹配任何值
+}
+
+// v1.8: 变量绑定
+match value {
+    case n if n > 0 { print("positive: " + str(n)) }
+    case n if n < 0 { print("negative: " + str(n)) }
+    case _ { print("zero") }
+}
+
+// v1.8: 类型模式
+match value {
+    case is String { print("it's a string") }
+    case is Int { print("it's an int") }
+    case _ { print("unknown type") }
+}
+
+// v1.8: 类型模式带绑定
+match value {
+    case is String s { print("string: " + s) }
+    case _ { print("not a string") }
+}

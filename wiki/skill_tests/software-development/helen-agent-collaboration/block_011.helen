@@ -1,0 +1,20 @@
+// 来源: skills/software-development/helen-agent-collaboration/SKILL.md (代码块 11)
+
+// ❌ 错误：模块级 let 在 agent main 中不可见
+let counter = 0
+
+agent BadCounter {
+    main {
+        // 编译错误！
+        counter = counter + 1
+    }
+}
+
+// ✅ 正确：使用 shared let
+shared let good_counter = 0
+
+agent GoodCounter {
+    main {
+        good_counter = good_counter + 1
+    }
+}

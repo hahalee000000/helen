@@ -1,0 +1,20 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 2)
+
+agent SmartAssistant {
+    context {
+        compression "graduated"      // 压缩策略: "none" / "graduated" / "traditional"
+        cache-aware true             // 缓存感知压缩
+        working-memory true          // 自动跟踪文件、决策、错误
+        working-memory-tokens 5000   // 工作记忆词元预算
+    }
+}
+
+// 中文关键字
+agent 智能助手 {
+    上下文 {
+        压缩 "graduated"
+        缓存感知 true
+        工作记忆 true
+        工作记忆词元 5000
+    }
+}

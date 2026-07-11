@@ -1,0 +1,18 @@
+// 来源: skills/software-development/helen-language-development/references/ffi-and-agents.md (代码块 4)
+
+agent SmartAgent(user_input: str) {
+    prompt "You are an assistant with persistent memory..."
+    tools = ["read_file", "write_file", "web_search"]
+    
+    main {
+        // Use stdlib functions — no Python FFI needed
+        let memory = read_file("memory/MEMORY.md")
+        let full_prompt = ""
+        if (memory != "") {
+            let full_prompt = "## Memory\n" + memory + "\n\n## Request\n" + user_input
+        } else {
+            let full_prompt = user_input
+        }
+        llm act full_prompt  // streaming output with tool support via on_chunk callback
+    }
+}

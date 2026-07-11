@@ -1,0 +1,28 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 38)
+
+agent Researcher(topic: str) {
+    description "Research assistant with optimized context"
+    
+    // 上下文配置
+    context {
+        compression "graduated"      // 五层渐进压缩
+        cache-aware true             // 缓存感知（提高缓存命中率）
+        working-memory true          // 自动跟踪文件操作
+        working-memory-tokens 8000   // 更大的工作记忆
+    }
+    
+    tools ["web_search", "web_fetch", "read_file", "write_file"]
+    
+    main {
+        // 工作记忆自动跟踪文件操作
+        let data = read_file("research_data.json")
+        let analysis = analyze(data)
+        write_file("analysis_result.json", analysis)
+        
+        // LLM 可以看到哪些文件被读取和修改
+        return llm act "Analyze the research data and write report"
+        // 工作记忆包含：
+        // - 活跃文件: research_data.json, analysis_result.json
+        // - 最近决策: Modified analysis_result.json
+    }
+}

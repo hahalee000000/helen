@@ -1,0 +1,26 @@
+// 来源: skills/software-development/helen-testing/SKILL.md (代码块 11)
+
+agent SlowWorker(id: str, delay: int) {
+    description "Worker with delay"
+    
+    main {
+        sleep(delay)
+        return "done: " + id
+    }
+}
+
+fn test_concurrent_agents() {
+    let start = timestamp()
+    
+    let t1 = async SlowWorker("A", 1)
+    let t2 = async SlowWorker("B", 1)
+    let t3 = async SlowWorker("C", 1)
+    
+    let results = await [t1, t2, t3]
+    
+    let elapsed = timestamp() - start
+    
+    // 应该并发执行，总时间约 1 秒
+    assert_true(elapsed < 2)
+    assert_equal(len(results), 3)
+}

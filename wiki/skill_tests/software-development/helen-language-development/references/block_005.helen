@@ -1,0 +1,27 @@
+// 来源: skills/software-development/helen-language-development/references/ffi-and-agents.md (代码块 5)
+
+main {
+    print("Agent ready. Type /quit to exit.")
+    
+    // Initialize memory directory
+    mkdir_p("memory")
+    if (!path_exists("memory/MEMORY.md")) {
+        write_file("memory/MEMORY.md", "# Memory\n")
+    }
+    
+    while (true) {
+        let user_input = input("You > ")
+        
+        if (user_input == "/quit") { break }
+        
+        if (startswith(user_input, "/remember ")) {
+            let fact = trim_prefix(user_input, "/remember ")
+            append_file("memory/MEMORY.md", "\n- " + fact)
+            print("Saved: " + fact)
+            continue
+        }
+        
+        // Normal: call agent
+        MyAgent(user_input)
+    }
+}

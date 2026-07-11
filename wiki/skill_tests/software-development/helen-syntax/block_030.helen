@@ -1,0 +1,8 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 30)
+
+# 单行注释
+
+"""
+多行注释
+可以跨行
+"""

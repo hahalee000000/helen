@@ -1,0 +1,18 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 27)
+
+// 匿名函数
+let add = fn(x, y) { return x + y }
+print(add(1, 2))  // 3
+
+// 闭包（词法作用域）
+fn make_counter() {
+    let count = 0
+    return fn() {
+        count = count + 1
+        return count
+    }
+}
+
+let counter = make_counter()
+print(counter())  // 1
+print(counter())  // 2

@@ -1,0 +1,9 @@
+// 来源: skills/software-development/helen-language-development/references/environment-and-pitfalls.md (代码块 8)
+
+// ✅ Independent use at top level
+llm act "What is 2+2?"
+let result = llm act "Translate this text"
+print(llm act "Summarize: " + content)
+
+// ❌ Error: must have a prompt
+llm act   // Error: Expected expression

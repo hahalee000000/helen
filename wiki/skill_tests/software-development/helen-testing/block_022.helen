@@ -1,0 +1,17 @@
+// 来源: skills/software-development/helen-testing/SKILL.md (代码块 22)
+
+// ❌ 错误：`is` 操作符不能在函数调用参数中使用
+fn test_type_check() {
+    assert_true(x is list)      // 解析错误！
+    assert_true(x is str)       // 解析错误！
+}
+
+// ✅ 正确：先赋值给变量，再断言
+fn test_type_check() {
+    let result = is_list(x)     // 使用 stdlib 类型检查函数
+    assert_true(result)
+    
+    // 或者使用 type() 函数
+    let t = type(x)
+    assert_equal(t, "list")
+}

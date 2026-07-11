@@ -1,0 +1,10 @@
+// 来源: skills/software-development/helen-language-development/references/import-system-debugging.md (代码块 2)
+
+// test_import.helen
+import "config.json"
+import "config.json" as cfg
+import "readme.md" as docs
+
+print(config.name)
+print(cfg.version)
+print(len(docs))

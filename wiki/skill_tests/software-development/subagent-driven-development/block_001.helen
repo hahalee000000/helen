@@ -1,0 +1,32 @@
+// 来源: skills/software-development/subagent-driven-development/SKILL.md (代码块 1)
+
+// temp_agent.helen — Generated per task
+import "json" as json
+import "os" as os
+
+agent TaskAgent() {
+    description: "Execute a single development task"
+    
+    main {
+        // Read task context
+        let context_file = os.getenv("TASK_CONTEXT_FILE")
+        let context = json.parse(os.read_file(context_file))
+        
+        let task_desc = context["task"]
+        let file_path = context["file"]
+        let expected_tests = context["tests"]
+        
+        // Execute task using Helen tools
+        // ... implementation using stdlib file/system tools ...
+        
+        // Write result
+        let result = {"status": "completed", "files_changed": [file_path]}
+        let output_file = os.getenv("TASK_OUTPUT_FILE")
+        os.write_file(output_file, json.stringify(result))
+    }
+}
+
+main {
+    let agent = TaskAgent()
+    agent.main()
+}

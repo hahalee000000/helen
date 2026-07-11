@@ -1,0 +1,11 @@
+// 来源: skills/software-development/helen-python-bridge/SKILL.md (代码块 1)
+
+// translator.helen
+agent TranslatorAgent(text: str, target: str) {
+    description "翻译文本到目标语言"
+    prompt "Translate '{{text}}' to {{target}}"
+    
+    main {
+        return llm act "Translate '{{text}}' to {{target}}"
+    }
+}

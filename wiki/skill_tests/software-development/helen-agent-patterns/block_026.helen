@@ -1,0 +1,24 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 26)
+
+agent RobustAgent(task: str) {
+    description "Agent with error handling and retry"
+    
+    main {
+        let max_retries = 3
+        let attempt = 0
+        
+        while attempt < max_retries {
+            try {
+                let result = llm act task
+                return result
+            } catch LLMError as e {
+                attempt = attempt + 1
+                if attempt >= max_retries {
+                    throw RuntimeError("Failed after " + str(max_retries) + " attempts: " + e.message)
+                }
+                # 等待后重试
+                sleep(2)
+            }
+        }
+    }
+}

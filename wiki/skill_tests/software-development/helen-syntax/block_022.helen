@@ -1,0 +1,23 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 22)
+
+# 异步表达式（延迟执行）
+let task = async fetch_data()
+
+# 等待单个
+let result = await task
+
+# 等待多个（并发）
+let results = await [task1, task2, task3]
+
+# 流式迭代（for await）
+agent Streamer(topic: str) {
+    streaming true
+    prompt "Write about: {{topic}}"
+}
+
+main {
+    let response = async Streamer("coding")
+    for await chunk in response {
+        stream_print(chunk)
+    }
+}

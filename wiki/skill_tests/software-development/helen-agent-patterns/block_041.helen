@@ -1,0 +1,17 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 41)
+
+main {
+    // 获取上下文统计
+    let stats = context_stats()
+    print("Token usage: " + stats["usage_ratio"])
+    
+    // 获取工作记忆快照
+    let wm = working_memory_snapshot()
+    print("Active files: " + wm["active_files"])
+    
+    // 手动触发压缩
+    compress_context("graduated")
+    
+    // 清除上下文
+    clear_context()
+}

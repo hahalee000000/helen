@@ -1,0 +1,9 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 19)
+
+const LIMIT = 100
+agent Worker {
+    main {
+        let x = LIMIT   // ✅ const 自动只读共享
+        LIMIT = 200     // ❌ 编译期错误：const is read-only
+    }
+}

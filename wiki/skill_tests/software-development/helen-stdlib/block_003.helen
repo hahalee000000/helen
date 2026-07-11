@@ -1,0 +1,20 @@
+// 来源: skills/software-development/helen-stdlib/SKILL.md (代码块 3)
+
+# 类型转换
+let num = int("42")           # 字符串 → 整数
+let text = str(3.14)          # 浮点数 → 字符串
+let flt = float("2.5")        # 字符串 → 浮点数
+
+# 长度与范围
+let length = len([1, 2, 3])   # 3
+let items = range(0, 10, 2)   # [0, 2, 4, 6, 8]
+
+# 数学基础
+let maximum = max(1, 2, 3)    # 3
+let minimum = min(1, 2, 3)    # 1
+let absolute = abs(-42)       # 42
+
+# 类型检查
+if isinstance(value, str) {
+    print("是字符串")
+}

@@ -1,0 +1,9 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 4)
+
+const FILE_TOOLS = ["read_file", "write_file", "path_exists"]
+const RESEARCH_TOOLS = ["web_search", "web_fetch", "read_file"]
+
+agent Contractor {
+    tools = FILE_TOOLS            # 复用 const
+    ...
+}

@@ -1,0 +1,64 @@
+// 来源: skills/software-development/helen-agent-collaboration/SKILL.md (代码块 5)
+
+// v1.12: 使用值类型计数器跟踪进度
+shared let pipeline_stage = 0
+
+agent DataCollector(source: str) {
+    description "阶段 1: 数据收集"
+    tools = ["web_search", "web_fetch"]
+    
+    main {
+        let raw_data = llm act "Collect data from: " + source
+        pipeline_stage = 1
+        print("✅ 数据收集完成")
+        return raw_data  // 通过返回值传递
+    }
+}
+
+agent DataCleaner(data: str) {
+    description "阶段 2: 数据清洗"
+    
+    main {
+        let cleaned = llm act "Clean this data: " + data
+        pipeline_stage = 2
+        print("✅ 数据清洗完成")
+        return cleaned
+    }
+}
+
+agent DataAnalyzer(data: str) {
+    description "阶段 3: 数据分析"
+    
+    main {
+        let analysis = llm act "Analyze: " + data
+        pipeline_stage = 3
+        print("✅ 数据分析完成")
+        return analysis
+    }
+}
+
+agent DataReporter(analysis: str) {
+    description "阶段 4: 生成报告"
+    
+    main {
+        let report = llm act "Generate report from: " + analysis
+        pipeline_stage = 4
+        print("✅ 报告生成完成")
+        return report
+    }
+}
+
+// 管道执行
+agent DataPipeline(source: str) {
+    description "完整数据处理管道"
+    
+    main {
+        let raw = DataCollector(source)
+        let cleaned = DataCleaner(raw)
+        let analysis = DataAnalyzer(cleaned)
+        let report = DataReporter(analysis)
+        
+        print("管道执行完成")
+        return report
+    }
+}

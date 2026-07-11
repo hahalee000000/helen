@@ -1,0 +1,27 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 17)
+
+agent DataFetcher(source: str) {
+    description "Fetch data from a source"
+    tools = ["http_get"]
+    
+    main {
+        return llm act "Fetch data from: " + source
+    }
+}
+
+agent DataAggregator {
+    description "Aggregate data from multiple sources"
+    
+    main {
+        # 并发获取数据
+        let task1 = async DataFetcher("https://api.source1.com/data")
+        let task2 = async DataFetcher("https://api.source2.com/data")
+        let task3 = async DataFetcher("https://api.source3.com/data")
+        
+        # 等待所有完成
+        let results = await [task1, task2, task3]
+        
+        # 聚合结果
+        return llm act "Aggregate these results: " + str(results)
+    }
+}

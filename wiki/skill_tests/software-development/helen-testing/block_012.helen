@@ -1,0 +1,23 @@
+// 来源: skills/software-development/helen-testing/SKILL.md (代码块 12)
+
+agent FailingAgent(task: str) {
+    description "Agent that may fail"
+    
+    main {
+        if task == "fail" {
+            throw RuntimeError("Intentional failure")
+        }
+        return "success: " + task
+    }
+}
+
+fn test_agent_error_handling() {
+    // 正常情况
+    let result = FailingAgent("ok")
+    assert_equal(result, "success: ok")
+    
+    // 异常情况
+    expect(fn() {
+        FailingAgent("fail")
+    }).toThrow()
+}

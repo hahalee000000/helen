@@ -1,0 +1,15 @@
+// 来源: skills/software-development/helen-language-development/references/environment-and-pitfalls.md (代码块 15)
+
+// ✅ Expression form — evaluates prompt, calls LLM, returns response text
+return llm act "translate " + text + " to " + target
+let result = llm act prompt
+print(llm act "summarize this: " + content)
+
+// ✅ Bare form inside agent — uses rendered prompt
+agent Translator {
+    prompt "Translate to French:"
+    main { return llm act }
+}
+
+// ❌ DEPRECATED — use function-style Agent(args) or call Agent(args) instead
+// llm act Translator(text="hello") "translate to French"

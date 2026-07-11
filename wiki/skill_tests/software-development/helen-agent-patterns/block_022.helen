@@ -1,0 +1,19 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 22)
+
+agent CodeAssistant {
+    description "AI coding assistant with file access"
+    prompt """
+    You are an expert coding assistant. You can:
+    - Read and write files
+    - Execute shell commands
+    - Search the web for documentation
+    
+    Always explain your changes before making them.
+    """
+    tools = ["read_file", "write_file", "patch_file", "shell_exec", "web_search"]
+    max-turns 15  # 允许多轮工具调用
+    
+    main {
+        return llm act "Help me implement a REST API in Python"
+    }
+}

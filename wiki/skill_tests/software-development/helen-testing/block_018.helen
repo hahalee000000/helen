@@ -1,0 +1,14 @@
+// 来源: skills/software-development/helen-testing/SKILL.md (代码块 18)
+
+fn test_with_mock_data() {
+    // 准备 mock 数据
+    let mock_user = {
+        "id": 1,
+        "name": "Test User",
+        "email": "test@example.com"
+    }
+    
+    // 测试
+    let result = format_user(mock_user)
+    assert_equal(result, "Test User (test@example.com)")
+}

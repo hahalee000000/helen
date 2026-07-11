@@ -1,0 +1,14 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 1)
+
+agent SimpleAgent {
+    description "A simple agent"
+    prompt "You are a helpful assistant."
+    
+    main {
+        return llm act "Hello, world!"
+    }
+}
+
+# 调用
+let result = SimpleAgent()
+print(result)

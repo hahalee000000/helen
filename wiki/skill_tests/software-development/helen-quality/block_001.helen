@@ -1,0 +1,5 @@
+// 来源: skills/software-development/helen-quality/SKILL.md (代码块 1)
+
+let source = read_file("my_program.helen")
+let scores = quality_score(source, "my_program.helen")
+print("Grade: " + scores["grade"])

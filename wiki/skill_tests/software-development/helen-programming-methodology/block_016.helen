@@ -1,0 +1,23 @@
+// 来源: skills/software-development/helen-programming-methodology/SKILL.md (代码块 16)
+
+// 任务：使用 helen-testing 技能编写测试
+// 问题：发现技能文档没提到 mock 对象必须在 test_suite 外部定义
+
+let task_summary = """
+使用 helen-testing 技能编写测试，发现 mock 对象必须在 test_suite 外部定义，
+不能在 test_case 内部定义，否则会导致作用域错误。
+"""
+
+// SkillEvaluator 评估
+let evaluation = call_skill_evaluator(task_summary, "tests/test_api.helen")
+
+// 结果：建议更新现有技能
+// {
+//   "updates": [{
+//     "name": "helen-testing",
+//     "path": "~/.helen/skills/software-development/helen-testing/SKILL.md",
+//     "addition": "\n## 新陷阱\n- mock 对象必须在 test_suite 外部定义，不能在 test_case 内部"
+//   }]
+// }
+
+update_existing_skill("~/.helen/skills/software-development/helen-testing/SKILL.md", "## 新陷阱\n...")

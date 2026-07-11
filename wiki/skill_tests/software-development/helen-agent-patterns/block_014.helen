@@ -1,0 +1,25 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 14)
+
+agent CodeExpert {
+    description "Programming expert"
+    prompt """
+    You are a senior software engineer with 20 years of experience.
+    You provide clear, concise, and correct code solutions.
+    Always explain your reasoning.
+    """
+    tools = ["read_file", "write_file", "shell_exec"]
+    
+    main {
+        return llm act "Review this code and suggest improvements"
+    }
+}
+
+agent MathExpert {
+    description "Mathematics expert"
+    prompt "You are a mathematics professor. Provide rigorous proofs and explanations."
+    temperature 0.2  # 低温度，更确定
+    
+    main {
+        return llm act "Solve this math problem step by step"
+    }
+}

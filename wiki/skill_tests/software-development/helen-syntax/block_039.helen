@@ -1,0 +1,36 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 39)
+
+// L1: 标准隔离（默认）
+agent Normal() {
+  main { ... }
+}
+
+// L0: 开放隔离 — 可访问模块级 let
+@open agent Debug() {
+  main {
+    // 可以访问模块级 let（用于调试）
+    let data = moduleLevelLet
+  }
+}
+
+// L2: 严格隔离 — 参数和返回值深拷贝
+@strict agent Safe(data: list) {
+  main {
+    // data 是深拷贝，修改不影响调用者
+    data.append(1)
+    return data  // 返回值也是深拷贝
+  }
+}
+
+// L3: 沙箱隔离 — 深拷贝 + 限制工具
+@sandbox agent Untrusted(input: str) {
+  tools []  // 只能用空工具列表
+  main {
+    return process(input)
+  }
+}
+
+// 中文
+@开放 agent 调试() { main { ... } }
+@严格 agent 安全() { main { ... } }
+@沙箱 agent 隔离() { main { ... } }

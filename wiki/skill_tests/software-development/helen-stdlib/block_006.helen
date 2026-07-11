@@ -1,0 +1,57 @@
+// 来源: skills/software-development/helen-stdlib/SKILL.md (代码块 6)
+
+# 创建 MediaPart - 从文件
+let img = media("file:///path/to/image.png")
+
+# 创建 MediaPart - 从 URL
+let remote = media("https://example.com/image.jpg")
+
+# 创建 MediaPart - 从 base64
+let b64_data = base64_encode(read_file_bytes("image.png"))
+let inline = media_base64(b64_data, "image/png")
+
+# 检查是否为 MediaPart
+如果 是媒体(img) {
+    打印("这是一个媒体对象")
+}
+
+# 获取媒体类型
+let type = 媒体类型(img)  # "image"
+
+# 类型谓词 — 精确判断媒体类型
+如果 是图片(img) { 打印("图片") }
+如果 是视频(vid) { 打印("视频") }
+如果 是音频(aud) { 打印("音频") }
+
+# 在 llm act 中使用
+let result = llm act "描述这张图片" media(img)
+let result = llm act "比较这些图片" media(img1, img2)
+
+# 内置格式适配器 — 一行完成 provider 格式转换
+let result = llm act "分析图片"
+    media(img)
+    on_media fn(parts, provider) { 转Claude格式(parts) }
+
+# 可用适配器: 转OpenAI格式(parts), 转Claude格式(parts), 转Gemini格式(parts)
+# 注意: 转Claude格式 不支持视频/音频（会抛出 ValueError）
+
+# 媒体工具函数
+let b64 = 媒体转base64(img)             # 任意 source → 纯 base64
+let path = 保存媒体(img, "/tmp/out.png") # 保存到指定路径
+let path2 = 保存媒体(img)                # 自动命名保存到 ~/.helen/generated_media/
+
+# on_media 回调（自定义媒体适配 — 仅非标准 provider 需要）
+let result = llm act "分析图片"
+    media(img)
+    on_media fn(parts, provider) {
+        返回 parts.map(fn(part) {
+            返回 {"type": "image_url", "image_url": {"url": part.content}}
+        })
+    }
+
+# on_generate 回调（媒体生成）
+let result = llm act "生成一张图"
+    on_generate fn(params) {
+        let url = call_generation_api(params["prompt"])
+        返回 media("url://" + url)
+    }

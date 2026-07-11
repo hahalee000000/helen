@@ -1,0 +1,20 @@
+// 来源: skills/software-development/helen-stdlib/SKILL.md (代码块 5)
+
+# JSON
+let data = json_parse('{"name": "Helen", "version": 1}')
+let json = json_stringify(data, indent=2)
+
+# YAML
+let config = yaml_parse("key: value\nlist:\n  - item1\n  - item2")
+
+# CSV
+let rows = csv_parse("name,age\nAlice,30\nBob,25")
+# [["name", "age"], ["Alice", "30"], ["Bob", "25"]]
+
+# URL 编码
+let encoded = url_encode("hello world&foo=bar")
+let decoded = url_decode(encoded)
+
+# Base64
+let encoded = base64_encode("secret data")
+let decoded = base64_decode(encoded)

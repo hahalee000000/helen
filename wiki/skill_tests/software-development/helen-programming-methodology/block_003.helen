@@ -1,0 +1,28 @@
+// 来源: skills/software-development/helen-programming-methodology/SKILL.md (代码块 3)
+
+// src/my_module.helen
+
+import "contracts/my_module.helen"
+
+fn process_data(input: str): map {
+    if !is_valid_input(input) {
+        return {
+            "status": "error",
+            "error_code": ERROR_INVALID_INPUT,
+            "message": "Invalid input length"
+        }
+    }
+    
+    // 最小实现：只让测试通过
+    return {
+        "status": "success",
+        "data": input
+    }
+}
+
+fn validate_config(config: map): bool {
+    if !contains(config, "required_field") {
+        return false
+    }
+    return true
+}

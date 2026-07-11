@@ -1,0 +1,16 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 30)
+
+# 创造性任务：高 temperature
+agent CreativeWriter {
+    temperature 0.9
+}
+
+# 精确任务：低 temperature
+agent CodeGenerator {
+    temperature 0.2
+}
+
+# 平衡任务：中等 temperature
+agent GeneralAssistant {
+    temperature 0.7
+}

@@ -1,0 +1,9 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 12)
+
+fn add(a: int, b: int): int {
+    return a + b
+}
+
+fn greet(name: str) {
+    print("Hello, " + name)
+}

@@ -23,7 +23,7 @@ class WorkingMemory:
     recent_decisions: list[str]    # 关键决策（从 assistant 消息提取）
     pending_todos: list[str]       # 待办事项（从注释提取）
     error_history: list[dict]      # 错误记录（工具调用失败）
-    max_tokens: int = 5000         # 令牌预算
+    max_tokens: int = 5000         # 词元预算
 ```
 
 ### 自动跟踪
@@ -173,7 +173,7 @@ agent DebugHelper {
 
 ---
 
-## 令牌预算
+## 词元预算
 
 ### 限制工作记忆大小
 
@@ -181,13 +181,13 @@ agent DebugHelper {
 max_tokens: int = 5000  # 默认 5000 tokens
 ```
 
-工作记忆的总令牌数不超过 `max_tokens`，超出时丢弃最旧的记录。
+工作记忆的总词元数不超过 `max_tokens`，超出时丢弃最旧的记录。
 
-### 计算令牌
+### 计算词元
 
 ```python
 def _calculate_tokens(self) -> int:
-    """计算当前工作记忆的令牌数。"""
+    """计算当前工作记忆的词元数。"""
     total = 0
     for file in self.active_files:
         total += len(file) // 4
@@ -359,7 +359,7 @@ class AgentContextManager:
 agent SmartAssistant {
     context {
         working-memory true           // 启用工作记忆
-        working-memory-tokens 8000    // 令牌预算 8000
+        working-memory-tokens 8000    // 词元预算 8000
     }
     
     main { ... }
@@ -375,7 +375,7 @@ agent SmartAssistant {
   - 决策提取
   - TODO 提取
   - 错误记录
-  - 令牌预算
+  - 词元预算
   - 三通道构建
 
 ---

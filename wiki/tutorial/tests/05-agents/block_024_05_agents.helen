@@ -20,7 +20,7 @@ agent SmartAssistant {
         compression "graduated"      // 压缩策略
         cache-aware true             // 缓存感知
         working-memory true          // 工作记忆
-        working-memory-tokens 5000   // 工作记忆令牌预算
+        working-memory-tokens 5000   // 工作记忆词元预算
     }
     
     tools ["read_file", "web_search"]
@@ -144,7 +144,7 @@ agent ResearchAssistant {
         compression "graduated"      // "none" | "graduated" | "traditional"
         cache-aware true             // 启用缓存感知压缩
         working-memory true          // 启用工作记忆
-        working-memory-tokens 8000   // 工作记忆令牌预算
+        working-memory-tokens 8000   // 工作记忆词元预算
     }
     
     tools ["read_file", "write_file", "web_search"]
@@ -158,6 +158,6 @@ agent 研究助手 {
         压缩 "graduated"
         缓存感知 true
         工作记忆 true
-        工作记忆令牌 8000
+        工作记忆词元 8000
     }
 }

@@ -1,0 +1,8 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 6)
+
+let sum = a + b
+let diff = a - b
+let prod = a * b
+let quot = a / b
+let remainder = a % b
+let power = a ** b

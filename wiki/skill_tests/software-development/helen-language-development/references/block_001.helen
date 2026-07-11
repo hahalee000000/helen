@@ -1,0 +1,4 @@
+// 来源: skills/software-development/helen-language-development/references/import-system-debugging.md (代码块 1)
+
+import "config.json"
+import "config.json" as cfg  // cfg not defined

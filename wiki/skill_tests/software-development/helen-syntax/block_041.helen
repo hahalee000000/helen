@@ -1,0 +1,27 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 41)
+
+// 声明
+channel Counter {
+  let count: int = 0
+  fn increment() { count = count + 1 }
+  fn get(): int { return count }
+}
+
+// 中文
+通道 计数器 {
+  定义 count: int = 0
+  函数 increment() { count = count + 1 }
+  函数 get(): int { 返回 count }
+}
+
+// 使用
+Counter.increment()
+let val = Counter.get()
+
+// Agent 中访问
+agent Worker() {
+  main {
+    Counter.increment()
+    return Counter.get()
+  }
+}

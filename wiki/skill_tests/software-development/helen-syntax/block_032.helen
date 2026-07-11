@@ -1,0 +1,20 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 32)
+
+// 声明（v1.12: 只允许值类型）
+shared let counter = 0
+shared let SHARED_NAME = "default"
+shared let rate = 3.14
+
+// 中文
+共享 let counter = 0
+
+// 使用
+agent Worker {
+  main {
+    counter += 1  // ✅ 可以访问和修改
+  }
+}
+
+// ❌ v1.12 起禁止：引用类型不能放在 shared let 中
+// shared let config = {"debug": true}  // 语义错误！
+// shared let items = []               // 语义错误！

@@ -1,0 +1,22 @@
+// 来源: skills/software-development/helen-agent-collaboration/SKILL.md (代码块 1)
+
+agent MyAgent(input: str) {
+    description "我的 Agent"
+    prompt """
+    处理输入: {{input}}
+    """
+    
+    functions {
+        fn process(data: str): str {
+            return "processed: " + data
+        }
+    }
+    
+    main {
+        llm act
+    }
+}
+
+// 调用 Agent（像调用函数一样）
+let result = MyAgent("hello")
+print(result)

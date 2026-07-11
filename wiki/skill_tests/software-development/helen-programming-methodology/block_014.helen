@@ -1,0 +1,32 @@
+// 来源: skills/software-development/helen-programming-methodology/SKILL.md (代码块 14)
+
+// ❌ 难维护（重复逻辑）
+fn process_a(input: str): map {
+    if len(input) == 0 {
+        return {"status": "error", "code": 1001}
+    }
+    // ... 处理逻辑
+}
+
+fn process_b(input: str): map {
+    if len(input) == 0 {
+        return {"status": "error", "code": 1001}
+    }
+    // ... 类似的处理逻辑
+}
+
+// ✅ 易维护（提取公共函数）
+fn validate_input(input: str): map {
+    if len(input) == 0 {
+        return create_error(1001, "Empty input")
+    }
+    return create_success(input)
+}
+
+fn process_a(input: str): map {
+    let validation = validate_input(input)
+    if validation["status"] == "error" {
+        return validation
+    }
+    // ... 处理逻辑
+}

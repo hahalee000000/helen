@@ -1,0 +1,15 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 39)
+
+agent QuickResponder {
+    description "Fast response agent"
+    
+    context {
+        compression "none"           // 不压缩
+        working-memory false         // 禁用工作记忆
+    }
+    
+    main {
+        // 快速响应，无需上下文管理开销
+        return llm act "Quick answer"
+    }
+}

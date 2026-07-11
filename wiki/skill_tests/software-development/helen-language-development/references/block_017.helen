@@ -1,0 +1,15 @@
+// 来源: skills/software-development/helen-language-development/references/environment-and-pitfalls.md (代码块 17)
+
+agent Translator(text: str, target: str) {
+    prompt """
+    Translate to {{target}}:
+    {{text}}
+    """
+    main {
+        let result = llm act    // bare form — uses rendered prompt as user message
+        return result
+    }
+}
+// call Translator(text="Hello", target="French")
+// → system: "Translate to French:\nHello"
+// → user: "Translate to French:\nHello" (same content, auto-filled)

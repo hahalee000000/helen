@@ -874,7 +874,7 @@ class Parser:
                     elif key in ("working-memory", "工作记忆"):
                         val_tok = self._advance()
                         working_memory = val_tok.lexeme.lower() in ("true", "是")
-                    elif key in ("working-memory-tokens", "工作记忆令牌"):
+                    elif key in ("working-memory-tokens", "工作记忆词元", "工作记忆令牌"):
                         working_memory_tokens = int(self._advance().literal)
                     else:
                         self._error(f"Unknown context option: {key}")

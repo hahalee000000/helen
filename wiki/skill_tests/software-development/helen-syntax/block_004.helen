@@ -1,0 +1,12 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 4)
+
+// 命令行: helen tool.helen --verbose --output=json input.txt
+print(argv)          // ["--verbose", "--output=json", "input.txt"]
+print(len(argv))     // 3
+print(argv[0])       // "--verbose"
+
+// 也可用 get_cli_args() / parse_cli_args() 进行结构化解析
+let config = parse_cli_args()
+// {verbose: true, output: "json", _positional: ["input.txt"]}
+
+// argv = []          // ❌ 语义错误: cannot assign to const variable

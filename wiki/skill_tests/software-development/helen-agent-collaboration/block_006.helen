@@ -1,0 +1,52 @@
+// 来源: skills/software-development/helen-agent-collaboration/SKILL.md (代码块 6)
+
+agent TechSupport(query: str) {
+    description "技术支持"
+    prompt "你是技术支持专家。"
+    main {
+        return llm act "解答技术问题: " + query
+    }
+}
+
+agent BillingSupport(query: str) {
+    description "账单支持"
+    prompt "你是账单支持专家。"
+    main {
+        return llm act "解答账单问题: " + query
+    }
+}
+
+agent SalesSupport(query: str) {
+    description "销售支持"
+    prompt "你是销售顾问。"
+    main {
+        return llm act "解答销售问题: " + query
+    }
+}
+
+// 路由 Agent
+agent SupportRouter(query: str) {
+    description "智能路由客服查询"
+    
+    functions {
+        fn classify(query: str): str {
+            // 使用 LLM 进行分类
+            let category = llm act "分类查询到: tech, billing, sales. 查询: " + query
+            return category
+        }
+    }
+    
+    main {
+        let category = classify(query)
+        
+        if category == "tech" {
+            return TechSupport(query)
+        } else if category == "billing" {
+            return BillingSupport(query)
+        } else if category == "sales" {
+            return SalesSupport(query)
+        } else {
+            return llm act "通用回复: " + query
+        }
+    }
+}

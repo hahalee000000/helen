@@ -1,0 +1,12 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 35)
+
+main {
+    trace_on()  // 启用跟踪
+    
+    let result = MyAgent("test")
+    
+    let trace = get_trace()
+    print("Execution trace: " + str(trace))
+    
+    trace_off()
+}

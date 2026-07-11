@@ -1,0 +1,12 @@
+// 来源: skills/software-development/helen-testing/SKILL.md (代码块 3)
+
+fn test_contains() {
+    // 字符串
+    assert_contains("hello world", "world")
+    
+    // 数组
+    assert_contains([1, 2, 3], 2)
+    
+    // 对象
+    assert_contains({"name": "Helen", "version": "1.0"}, "name")
+}

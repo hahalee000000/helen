@@ -1,0 +1,55 @@
+// 来源: skills/software-development/helen-agent-collaboration/SKILL.md (代码块 4)
+
+// v1.12: 结果通过返回值传递，不用 shared let
+shared let completed_count = 0
+
+agent CodeAnalyzer(path: str) {
+    description "分析代码文件"
+    main {
+        completed_count = completed_count + 1
+        return { "path": path, "status": "ok", "issues": 0 }
+    }
+}
+
+agent ResultSummarizer(results: list) {
+    description "汇总结果"
+    main {
+        return { "total": len(results), "status": "done" }
+    }
+}
+
+agent ParallelOrchestrator(file_paths: list) {
+    description "并行编排器 - 扇出模式"
+    prompt """
+    文件列表: {{file_paths}}
+    
+    并行分析每个文件，然后汇总结果。
+    """
+    
+    functions {
+        fn analyze_files_parallel(paths: list): map {
+            // 启动并行分析
+            let tasks = []
+            for path in paths {
+                let task = async CodeAnalyzer(path)
+                tasks.append(task)
+            }
+            
+            // 等待所有完成
+            let results = await tasks
+            
+            // 汇总结果
+            let summary = ResultSummarizer(results)
+            return {
+                "individual": results,
+                "summary": summary
+            }
+        }
+    }
+    
+    main {
+        let result = analyze_files_parallel(file_paths)
+        print("分析完成，共 " + str(len(result["individual"])) + " 个文件")
+        print("完成计数: " + str(completed_count))
+    }
+}

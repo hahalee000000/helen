@@ -132,7 +132,7 @@ class TestContextConfigParsing:
                 压缩 "graduated"
                 缓存感知 true
                 工作记忆 true
-                工作记忆令牌 5000
+                工作记忆词元 5000
             }
             main {}
         }
@@ -143,6 +143,24 @@ class TestContextConfigParsing:
         assert agent.context_config.cache_aware is True
         assert agent.context_config.working_memory is True
         assert agent.context_config.working_memory_tokens == 5000
+
+    def test_context_block_legacy_chinese_keyword(self):
+        """Backward compatibility: legacy 工作记忆令牌 still parses.
+
+        v1.17 renamed LLM-context 令牌 → 词元. The parser accepts both
+        forms so existing programs don't break.
+        """
+        source = '''
+        agent TestAgent {
+            context {
+                工作记忆令牌 8000
+            }
+            main {}
+        }
+        '''
+        program = self._parse(source)
+        agent = program.statements[0]
+        assert agent.context_config.working_memory_tokens == 8000
 
     def test_agent_without_context_block(self):
         """Test agent without context block (should have None context_config)."""

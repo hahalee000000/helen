@@ -1,0 +1,11 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 31)
+
+# 简单问答：少轮次
+agent QuickAnswer {
+    max-turns 3
+}
+
+# 复杂任务：多轮次
+agent ComplexSolver {
+    max-turns 15
+}

@@ -1,0 +1,48 @@
+// 来源: skills/software-development/helen-agent-collaboration/SKILL.md (代码块 3)
+
+agent WorkflowOrchestrator(requirement: str) {
+    description "工作流编排器 - 顺序链模式"
+    prompt """
+    需求: {{requirement}}
+    
+    工作流程：
+    1. 调用 ContractDesigner 设计接口
+    2. 调用 TestBuilder 生成测试
+    3. 调用 Implementer 编写实现
+    4. 调用 QualityChecker 评估质量
+    """
+    
+    functions {
+        fn run_workflow(req: str): map {
+            // Step 1: 契约设计
+            let contract = ContractDesigner(req)
+            print("✅ Step 1: 契约设计完成")
+            
+            // Step 2: 测试生成
+            let tests = TestBuilder(contract)
+            write_file("tests/generated.helen", tests)
+            print("✅ Step 2: 测试生成完成")
+            
+            // Step 3: 实现编写
+            let impl = Implementer(contract, tests)
+            write_file("src/implementation.helen", impl)
+            print("✅ Step 3: 实现编写完成")
+            
+            // Step 4: 质量评估
+            let quality = QualityChecker("src/implementation.helen")
+            print("✅ Step 4: 质量评估完成")
+            
+            return {
+                "contract": contract,
+                "tests": tests,
+                "implementation": impl,
+                "quality": quality
+            }
+        }
+    }
+    
+    main {
+        let result = run_workflow(requirement)
+        print("工作流完成")
+    }
+}

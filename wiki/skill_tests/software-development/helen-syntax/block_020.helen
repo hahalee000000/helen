@@ -1,0 +1,12 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 20)
+
+let _buf = ""
+fn _buf_reset() { _buf = "" }
+fn _buf_get(): str { return _buf }
+
+agent MyAgent {
+    main {
+        _buf_reset()        // ✅ 通过函数
+        let x = _buf_get()  // ✅ 通过函数
+    }
+}

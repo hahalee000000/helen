@@ -1,0 +1,11 @@
+// 来源: skills/software-development/helen-programming-methodology/SKILL.md (代码块 12)
+
+// ✅ 正确
+test_suite("MyModule", fn() {
+    test_case("valid input", fn() {
+        assert_equal(result, expected)
+    })
+})
+
+// ❌ 错误（不能用字符串作为函数名）
+test_case("valid input", "test_function")

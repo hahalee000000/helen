@@ -1,0 +1,53 @@
+// 来源: skills/software-development/helen-agent-collaboration/SKILL.md (代码块 2)
+
+// ✅ v1.12: shared let 只用于值类型
+shared let task_count = 0
+shared let completed_count = 0
+const MAX_CONCURRENT = 5
+
+// 引用类型通过参数传递
+agent TaskProducer(tasks: list, queue: list) {
+    description "Produce tasks to queue"
+    
+    main {
+        // 创建副本后修改（参数是只读的）
+        let my_queue = list(queue)
+        for task in tasks {
+            my_queue.append(task)
+            task_count = task_count + 1
+        }
+        print("Queued " + str(task_count) + " tasks")
+        return my_queue
+    }
+}
+
+agent TaskWorker(worker_id: str, queue: list, completed: map) {
+    description "Process tasks from queue"
+    
+    main {
+        let my_queue = list(queue)
+        let my_completed = dict(completed)
+        
+        while len(my_queue) > 0 {
+            let task = my_queue.pop(0)
+            print("Worker " + worker_id + " processing: " + task)
+            
+            // 模拟处理
+            let result = llm act "Process: " + task
+            
+            // 记录完成
+            my_completed[task] = "done by " + worker_id
+            completed_count = completed_count + 1
+        }
+        
+        return { "queue": my_queue, "completed": my_completed }
+    }
+}
+
+// 协作流程
+let initial_queue = []
+let queue = TaskProducer(["task1", "task2", "task3"], initial_queue)
+let w1 = async TaskWorker("W1", queue, {})
+let w2 = async TaskWorker("W2", queue, {})
+await [w1, w2]
+print("Completed: " + str(completed_count))

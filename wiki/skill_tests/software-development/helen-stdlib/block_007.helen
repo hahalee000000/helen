@@ -1,0 +1,23 @@
+// 来源: skills/software-development/helen-stdlib/SKILL.md (代码块 7)
+
+# 排序与去重
+let sorted = sort([3, 1, 4, 1, 5])  # [1, 1, 3, 4, 5]
+let unique_items = unique([1, 2, 2, 3])  # [1, 2, 3]
+
+# 映射与过滤
+let doubled = map([1, 2, 3], x => x * 2)  # [2, 4, 6]
+let evens = filter([1, 2, 3, 4], x => x % 2 == 0)  # [2, 4]
+
+# 归约
+let sum = reduce([1, 2, 3, 4], (acc, x) => acc + x, 0)  # 10
+
+# 分组
+let grouped = group_by(users, u => u["role"])
+# {"admin": [...], "user": [...]}
+
+# 分块
+let chunks = chunk([1, 2, 3, 4, 5], 2)
+# [[1, 2], [3, 4], [5]]
+
+# 集合运算
+let common = intersection([1, 2, 3], [2, 3, 4])  # [2, 3]

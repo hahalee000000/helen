@@ -1,0 +1,8 @@
+// 来源: skills/software-development/helen-testing/SKILL.md (代码块 5)
+
+fn test_expect_api() {
+    expect(42).toBe(42)
+    expect([1, 2, 3]).toContain(2)
+    expect("hello").toStartWith("he")
+    expect({"a": 1}).toHaveProperty("a")
+}

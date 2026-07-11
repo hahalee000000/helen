@@ -1,0 +1,11 @@
+// 来源: skills/software-development/debugging/SKILL.md (代码块 1)
+
+# Runtime assertion with optional message
+assert x > 0, "x must be positive"
+
+# Catchable — throws AssertionError
+try {
+    assert false, "test"
+} catch AssertionError e {
+    print("Caught: " + e.message)
+}

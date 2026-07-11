@@ -1,0 +1,11 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 27)
+
+try {
+    let result = Contractor(req, dir)
+} catch AgentError err {
+    # err.message    — "Agent 'Contractor' failed: ..."
+    # err.agent_name — "Contractor"
+    # err.agent_args — {req: "...", dir: "..."}
+    # err.cause      — 底层异常
+    error("失败: " + err.message)
+}

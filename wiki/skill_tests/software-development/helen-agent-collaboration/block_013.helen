@@ -1,0 +1,33 @@
+// 来源: skills/software-development/helen-agent-collaboration/SKILL.md (代码块 13)
+
+channel MessageQueue {
+    messages: list = []
+
+    fn send(msg: str) { messages.append(msg) }
+    fn receive(): str { return messages.shift() }
+    fn pending(): int { return len(messages) }
+    fn is_empty(): bool { return len(messages) == 0 }
+}
+
+agent Sender(queue: MessageQueue) {
+    main {
+        queue.send("Hello from sender")
+        queue.send("Another message")
+    }
+}
+
+agent Receiver(queue: MessageQueue) {
+    main {
+        while not queue.is_empty() {
+            let msg = queue.receive()
+            print("Received: " + msg)
+        }
+    }
+}
+
+main {
+    let queue = MessageQueue
+    async call Sender(queue)
+    async call Receiver(queue)
+    await []
+}

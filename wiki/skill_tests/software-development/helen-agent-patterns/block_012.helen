@@ -1,0 +1,33 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 12)
+
+// v1.12: shared let 只允许值类型
+shared let request_count = 0
+shared let last_request_time = ""
+
+agent RequestCounter() {
+    description "Count requests"
+    
+    main {
+        request_count = request_count + 1
+        last_request_time = "2024-01-01"  // str 是值类型
+        return request_count
+    }
+}
+
+// 引用类型通过参数传递
+agent CacheWriter(cache: map, key: str, value: any) {
+    description "Write to cache (passed as parameter)"
+    
+    main {
+        // v1.12: cache 是只读视图，创建副本修改
+        let my_cache = dict(cache)
+        my_cache[key] = value
+        return my_cache
+    }
+}
+
+// 使用
+let my_cache = {}
+let updated = CacheWriter(my_cache, "user:1", "Alice")
+RequestCounter()
+print("Requests: " + request_count)  // 1

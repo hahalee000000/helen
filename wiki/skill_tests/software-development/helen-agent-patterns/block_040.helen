@@ -1,0 +1,21 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 40)
+
+agent CodeReviewer {
+    context {
+        working-memory true  // 启用工作记忆
+    }
+    
+    tools ["read_file", "write_file", "patch_file"]
+    
+    main {
+        // 自动跟踪：读取的文件
+        let code = read_file("src/main.py")
+        
+        // 自动跟踪：修改的文件
+        let fixed = fix_code(code)
+        write_file("src/main.py", fixed)
+        
+        // LLM 现在知道哪些文件被修改了
+        return llm act "Review the changes"
+    }
+}

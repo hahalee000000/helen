@@ -1,0 +1,28 @@
+// 来源: skills/software-development/helen-agent-collaboration/SKILL.md (代码块 14)
+
+agent RobustOrchestrator(tasks: list) {
+    description "带错误处理的编排器"
+    
+    main {
+        let promises = []
+        for task in tasks {
+            promises.append(async TaskWorker(task))
+        }
+        
+        try {
+            let results = await promises
+            return results
+        } catch AggregateError as e {
+            print("部分任务失败: " + str(len(e.errors)))
+            
+            // 处理失败的任务
+            let successes = []
+            for i in range(len(tasks)) {
+                if i < len(results) {
+                    successes.append(results[i])
+                }
+            }
+            return successes
+        }
+    }
+}

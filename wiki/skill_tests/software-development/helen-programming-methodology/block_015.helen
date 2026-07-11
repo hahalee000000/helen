@@ -1,0 +1,24 @@
+// 来源: skills/software-development/helen-programming-methodology/SKILL.md (代码块 15)
+
+// 任务：实现递归斐波那契
+// 问题：n > 30 时栈溢出
+
+let task_summary = """
+实现了递归斐波那契函数，发现 n > 30 时会导致栈溢出。
+解决方案：改用迭代实现，或使用尾递归优化。
+"""
+
+// SkillEvaluator 评估
+let evaluation = call_skill_evaluator(task_summary, "src/math.helen")
+
+// 结果：建议创建新技能
+// {
+//   "new_skills": [{
+//     "name": "recursion-stack-overflow",
+//     "category": "error-patterns",
+//     "tags": "[helen, recursion, stack-overflow, performance]",
+//     "content": "# 递归栈溢出\n\n## 触发条件\n- 递归深度 > 30\n- 无尾递归优化\n\n## 解决方案\n1. 改用迭代实现\n2. 使用尾递归（如果 Helen 支持）\n3. 增加递归深度检查"
+//   }]
+// }
+
+save_new_skill("recursion-stack-overflow", "error-patterns", "[helen, recursion, stack-overflow]", "...")

@@ -1,0 +1,9 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 37)
+
+// ✅ 新语法（仅支持）
+fn add(a: int, b: int): int {
+  return a + b
+}
+
+// ❌ 旧语法（已移除）
+// fn add(a: int, b: int) -> int { ... }

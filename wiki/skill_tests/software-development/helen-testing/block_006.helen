@@ -1,0 +1,20 @@
+// 来源: skills/software-development/helen-testing/SKILL.md (代码块 6)
+
+fn test_exceptions() {
+    // 基础异常测试
+    assert_throws(fn() {
+        throw RuntimeError("error")
+    })
+    
+    // 特定异常类型（v1.10）
+    expect(fn() {
+        throw LLMError("API failed")
+    }).toThrow()
+    
+    // 检查异常消息
+    try {
+        throw RuntimeError("specific error")
+    } catch RuntimeError as e {
+        assert_contains(e.message, "specific")
+    }
+}

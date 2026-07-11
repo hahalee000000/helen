@@ -1,0 +1,47 @@
+// 来源: skills/software-development/helen-agent-collaboration/SKILL.md (代码块 8)
+
+shared let best_solution = null
+shared let best_score = 0
+
+agent SolutionGenerator(problem: str, strategy: str) {
+    description "生成解决方案"
+    
+    main {
+        let solution = llm act "用 " + strategy + " 策略解决: " + problem
+        
+        // 自我评估
+        let score = llm act "评估方案质量(0-100): " + solution
+        
+        // 更新最佳方案（需要并发安全）
+        if score > best_score {
+            best_score = score
+            best_solution = {
+                "strategy": strategy,
+                "solution": solution,
+                "score": score
+            }
+        }
+        
+        return solution
+    }
+}
+
+agent SolutionSelector(problem: str) {
+    description "竞争选择最佳方案"
+    
+    main {
+        // 多种策略并行竞争
+        let strategies = ["分治法", "动态规划", "贪心算法", "回溯法"]
+        let tasks = []
+        
+        for strategy in strategies {
+            let task = async SolutionGenerator(problem, strategy)
+            tasks.append(task)
+        }
+        
+        await tasks
+        
+        // 返回最佳方案
+        return best_solution
+    }
+}

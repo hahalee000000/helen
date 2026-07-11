@@ -124,7 +124,7 @@ class ContextConfigNode(StatementNode):
     compression: str = "graduated"      # 压缩策略: "none" / "graduated" / "traditional"
     cache_aware: bool = True            # 缓存感知
     working_memory: bool = True         # 工作记忆
-    working_memory_tokens: int = 5000   # 工作记忆令牌预算
+    working_memory_tokens: int = 5000   # 工作记忆词元预算
 ```
 
 用于 agent 的 `context {}` 配置块，控制上下文管理策略。

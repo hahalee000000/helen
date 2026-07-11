@@ -1,0 +1,18 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 24)
+
+agent DynamicRouter(input: str) {
+    description "Dynamically select agent based on input"
+    
+    main {
+        # 使用 LLM 决定路由
+        let decision = llm act "Classify this input into one of: tech, billing, general. Input: " + input
+        
+        if decision == "tech" {
+            return TechSupport(input)
+        } else if decision == "billing" {
+            return BillingSupport(input)
+        } else {
+            return GeneralSupport(input)
+        }
+    }
+}

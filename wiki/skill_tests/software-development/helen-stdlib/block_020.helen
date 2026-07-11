@@ -1,0 +1,13 @@
+// 来源: skills/software-development/helen-stdlib/SKILL.md (代码块 20)
+
+try {
+    let x = len(42)           // Python TypeError
+} catch RuntimeError err {
+    print(err.message)        // "Python TypeError: object of type 'int' has no len()"
+}
+
+try {
+    let data = read_file("/nonexistent")
+} catch RuntimeError err {
+    print(err.message)        // "Python FileNotFoundError: [Errno 2] ..."
+}

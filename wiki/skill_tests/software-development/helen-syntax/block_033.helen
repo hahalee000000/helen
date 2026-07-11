@@ -1,0 +1,10 @@
+// 来源: skills/software-development/helen-syntax/SKILL.md (代码块 33)
+
+agent Worker(items: list) {
+  main {
+    // items 是只读视图
+    let copy = list(items)  // 创建副本后可修改
+    copy.append(4)
+    return copy
+  }
+}

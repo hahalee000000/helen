@@ -1,0 +1,16 @@
+// 来源: skills/software-development/helen-testing/SKILL.md (代码块 17)
+
+fn test_edge_cases() {
+    // 空输入
+    assert_equal(process([]), [])
+    
+    // 单元素
+    assert_equal(process([1]), [1])
+    
+    // 最大值
+    assert_equal(process([MAX_INT]), [MAX_INT])
+    
+    // 边界值
+    assert_equal(process([0]), [0])
+    assert_equal(process([-1]), [-1])
+}

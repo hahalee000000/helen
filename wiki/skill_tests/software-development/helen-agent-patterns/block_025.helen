@@ -1,0 +1,33 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 25)
+
+# 基础 Agent
+agent BaseAgent {
+    description "Base agent with common configuration"
+    model "gpt-4"
+    temperature 0.7
+    
+    main {
+        return llm act "Base behavior"
+    }
+}
+
+# 组合多个 Agent 的能力
+agent MultiSkillAgent(task: str) {
+    description "Agent that can use multiple skills"
+    tools = ["web_search", "read_file", "write_file", "shell_exec"]
+    
+    main {
+        # 根据任务动态选择策略
+        llm if task {
+            case "research, search, find" {
+                return llm act "Research: " + task
+            }
+            case "code, implement, write" {
+                return llm act "Implement: " + task
+            }
+            default {
+                return llm act "Handle: " + task
+            }
+        }
+    }
+}

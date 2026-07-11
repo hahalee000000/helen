@@ -1,0 +1,19 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 29)
+
+# ✅ 具体的 prompt
+agent DataAnalyst {
+    prompt """
+    You are a data analyst with expertise in Python, SQL, and statistics.
+    When analyzing data:
+    1. First understand the data structure
+    2. Identify patterns and anomalies
+    3. Provide statistical summaries
+    4. Suggest actionable insights
+    Always show your work and explain your reasoning.
+    """
+}
+
+# ❌ 模糊的 prompt
+agent Analyst {
+    prompt "You analyze things."
+}

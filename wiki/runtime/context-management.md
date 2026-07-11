@@ -124,7 +124,7 @@ agent SmartAssistant {
         compression "graduated"       // "none" | "graduated" | "traditional"
         cache-aware true              // 缓存感知包裹
         working-memory true           // 工作记忆
-        working-memory-tokens 5000    // 工作记忆令牌预算
+        working-memory-tokens 5000    // 工作记忆词元预算
     }
     main { ... }
 }
@@ -135,7 +135,7 @@ agent 智能助手 {
         压缩 "graduated"
         缓存感知 true
         工作记忆 true
-        工作记忆令牌 5000
+        工作记忆词元 5000
     }
     主逻辑 { ... }
 }

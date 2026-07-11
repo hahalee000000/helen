@@ -1,0 +1,13 @@
+// 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 28)
+
+# ✅ 好的 description
+agent CodeReviewer {
+    description "Review code for bugs, security issues, and best practices"
+    # ...
+}
+
+# ❌ 模糊的 description
+agent Helper {
+    description "Helps with stuff"
+    # ...
+}

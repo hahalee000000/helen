@@ -1,0 +1,23 @@
+// 来源: skills/software-development/helen-testing/SKILL.md (代码块 9)
+
+agent FileProcessor(path: str) {
+    description "Process a file"
+    tools = ["read_file"]
+    
+    main {
+        let content = read_file(path)
+        return len(content)
+    }
+}
+
+fn test_file_processor() {
+    // 准备测试文件
+    write_file("test_input.txt", "hello world")
+    
+    // 测试
+    let result = FileProcessor("test_input.txt")
+    assert_equal(result, 11)
+    
+    // 清理
+    delete_file("test_input.txt")
+}

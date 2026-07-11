@@ -1,0 +1,13 @@
+// 来源: skills/software-development/helen-testing/SKILL.md (代码块 2)
+
+// calculator_test.helen
+
+fn test_add() {
+    assert_equal(2 + 3, 5)
+}
+
+fn test_subtract() {
+    assert_equal(10 - 4, 6)
+}
+
+run_tests()

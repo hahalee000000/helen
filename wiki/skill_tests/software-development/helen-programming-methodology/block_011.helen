@@ -1,0 +1,11 @@
+// 来源: skills/software-development/helen-programming-methodology/SKILL.md (代码块 11)
+
+// ✅ 正确
+fn process(): map {
+    return {"status": "success", "data": result}
+}
+
+// ❌ 错误（Helen 不支持隐式返回）
+fn process(): map {
+    {"status": "success", "data": result}
+}
