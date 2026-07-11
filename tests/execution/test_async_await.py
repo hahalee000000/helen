@@ -8,7 +8,7 @@ Covers:
 - Error aggregation in await [list]
 """
 
-from helen.interpreter.task import Task, AggregateError, AwaitExpression
+from helen.interpreter.task import Task, AggregateError
 from helen.core.ast import (
     AgentDeclNode,
     AsyncCallStmtNode,
@@ -92,23 +92,6 @@ class TestAggregateError:
         s = str(agg)
         assert "timeout" in s
         assert "invalid" in s
-
-
-class TestAwaitExpression:
-    """Test AwaitExpression."""
-
-    def test_single_task(self):
-        """await single task."""
-        task = Task.completed("result")
-        expr = AwaitExpression(targets=task)
-        assert not expr.is_list
-
-    def test_task_list(self):
-        """await [list] of tasks."""
-        tasks = [Task.completed("a"), Task.completed("b")]
-        expr = AwaitExpression(targets=tasks)
-        assert expr.is_list
-        assert len(expr.targets) == 2
 
 
 class TestPromiseAllSemantics:

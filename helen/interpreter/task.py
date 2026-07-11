@@ -162,18 +162,3 @@ class Task:
         if self.exception is not None:
             raise self.exception
         return self.result_value
-
-
-@dataclass
-class AwaitExpression:
-    """Represents await task or await [task1, task2, ...] (HLD 3.6.7).
-
-    Used to distinguish await on a single task vs await on a list.
-    """
-
-    targets: list[Task] | Task
-
-    @property
-    def is_list(self) -> bool:
-        """Whether this is await [list]."""
-        return isinstance(self.targets, list)

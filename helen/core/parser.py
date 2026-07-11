@@ -1050,16 +1050,6 @@ class Parser:
             span=span,
         )
 
-    def _prompt_def(self) -> PromptDefNode:
-        """Parse a prompt definition."""
-        self._advance()  # consume PROMPT
-        if self._match(TokenType.STRING, TokenType.TRIPLE_QUOTE_STRING):
-            content = self._previous().literal or ""
-        else:
-            content = ""
-            self._error("Expected string after 'prompt'.")
-        return PromptDefNode(content=content, span=self._previous().span)
-
     def _main_block(self) -> MainBlockNode:
         """Parse a main block: main { stmt* }."""
         start = self._previous()  # _match already consumed MAIN
