@@ -129,6 +129,118 @@ main {
 
 ---
 
+## Python 类
+
+### 实例化 Python 类
+
+通过访问模块中的类名并调用 `()` 来创建实例：
+
+```helen
+import "json" as json
+
+main {
+    // JSONEncoder 是 Python 类，() 创建实例
+    let encoder = json.JSONEncoder()
+    print(encoder)    // <json.encoder.JSONEncoder object at ...>
+}
+```
+
+### 调用实例方法
+
+两种方式，效果相同：
+
+```helen
+import "json" as json
+
+main {
+    let encoder = json.JSONEncoder()
+    
+    // 方式 1：自然方法调用（推荐）
+    let result1 = encoder.encode({"name": "Alice"})
+    
+    // 方式 2：.call() 按方法名调用
+    let result2 = encoder.call("encode", {"name": "Alice"})
+    
+    print(result1)    // {"name": "Alice"}
+    print(result2)    // {"name": "Alice"}
+}
+```
+
+**选择建议：**
+- 方法名已知（绝大多数场景）→ 用 `obj.method()`，更简洁直观
+- 方法名动态决定（运行时才知道调用哪个方法）→ 用 `obj.call("method_name")`
+
+### 示例：使用自定义 Python 类
+
+假设有一个 Python 模块 `mylib/greeter.py`：
+
+```python
+class Greeter:
+    def __init__(self, name: str):
+        self.name = name
+    
+    def greet(self, prefix: str) -> str:
+        return f"{prefix}, {self.name}!"
+    
+    def set_name(self, name: str):
+        self.name = name
+```
+
+在 Helen 中使用：
+
+```helen
+import "mylib.greeter" as PyGreeter
+
+main {
+    // 1. 实例化：类名()
+    let greeter = PyGreeter.Greeter("Alice")
+    
+    // 2. 调用方法（自然语法）
+    let msg = greeter.greet("Hello")
+    print(msg)    // Hello, Alice!
+    
+    // 3. 修改属性
+    greeter.set_name("Bob")
+    print(greeter.greet("Hi"))    // Hi, Bob!
+    
+    // 4. 动态方法名
+    let method = "greet"
+    let msg2 = greeter.call(method, "Hey")
+    print(msg2)    // Hey, Bob!
+}
+```
+
+### 在模块中使用 Python 类
+
+Python 类可以在被导入的 `.helen` 模块中实例化，跨模块正常工作：
+
+```helen
+// bridge.helen
+import "mylib.greeter" as PyGreeter
+
+shared let _greeter = null
+
+fn init_greeter(name: str) {
+    _greeter = PyGreeter.Greeter(name)
+}
+
+fn greet(prefix: str): str {
+    return _greeter.greet(prefix)
+}
+```
+
+```helen
+// main.helen
+import "bridge.helen"
+
+main {
+    init_greeter("Alice")
+    print(greet("Hello"))    // Hello, Alice!
+}
+```
+
+---
+
 ## 实际示例
 
 ### 示例 1：数学计算

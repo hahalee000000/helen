@@ -738,6 +738,31 @@ import "data.yaml" as data        # 导入 YAML
 import "./python_module" as py    # 导入 Python 模块
 ```
 
+### Python FFI：类与方法
+```helen
+import "json" as json
+import "mylib.greeter" as PyGreeter
+
+main {
+    // 1. 调用 Python 函数
+    let s = json.dumps({"k": "v"})
+    
+    // 2. 实例化 Python 类：类名()
+    let encoder = json.JSONEncoder()
+    
+    // 3. 调用实例方法（推荐自然语法）
+    let result = encoder.encode({"x": 1})
+    
+    // 4. 按方法名调用（方法名动态决定时使用）
+    let method = "encode"
+    let result2 = encoder.call(method, {"x": 1})
+}
+```
+**要点：**
+- 类实例化：`PyModule.ClassName()` — 类是可调用的
+- 方法调用：`obj.method(args)` 优先；`obj.call("method", args)` 用于动态方法名
+- 嵌套导入中的 Python 类完全可用：被导入的 `.helen` 模块中实例化的 Python 对象跨模块正常传递
+
 ## 注释
 ```helen
 // 单行注释
