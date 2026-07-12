@@ -243,8 +243,10 @@ class ImportResolver:
             FunctionDeclNode,
             VarDeclNode,
             ImportStmtNode,
+            SharedStoreDeclNode,
+            ChannelDeclNode,
         )
-        
+
         for stmt in program.statements:
             if isinstance(stmt, AgentDeclNode):
                 self._agents[stmt.name] = stmt
@@ -253,6 +255,13 @@ class ImportResolver:
             elif isinstance(stmt, VarDeclNode) and (not stmt.mutable or stmt.shared):
                 # Register const declarations and shared let (v1.10)
                 # Store the VarDeclNode so we can evaluate it later
+                self._data[stmt.name] = stmt
+            elif isinstance(stmt, (SharedStoreDeclNode, ChannelDeclNode)):
+                # v1.17 (Issue #35): Register shared store/channel declarations
+                # so they can be executed and made visible cross-module.
+                # Previously these fell through and were silently dropped,
+                # making the container name resolve to None when the module's
+                # functions were called from another module.
                 self._data[stmt.name] = stmt
             elif isinstance(stmt, ImportStmtNode):
                 # Recursively process imports in the imported file

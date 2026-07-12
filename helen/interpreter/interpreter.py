@@ -2035,6 +2035,8 @@ class Interpreter(LlmMixin, Visitor[object]):
                 # v1.10: Create a module env for imported functions so they can
                 # access their own module's consts and shared let.
                 from helen.core.ast import VarDeclNode as _VDN
+                from helen.core.ast import SharedStoreDeclNode as _SSDN
+                from helen.core.ast import ChannelDeclNode as _CDN
                 module_env = Environment(parent=self.environment)
                 for name, data in self.import_resolver.data.items():
                     if isinstance(data, _VDN) and (not data.mutable or data.shared):
@@ -2044,6 +2046,19 @@ class Interpreter(LlmMixin, Visitor[object]):
                         else:
                             value = None
                         module_env.define(name, value, is_const=not data.mutable)
+                    elif isinstance(data, (_SSDN, _CDN)):
+                        # v1.17 (Issue #35): Execute shared store/channel declaration
+                        # so the container is instantiated and visible cross-module.
+                        # Define in module_env (so the module's own functions see it
+                        # via their parent scope) AND in self.environment (so the
+                        # importing module and other modules can access it directly
+                        # by name, matching shared let semantics).
+                        with self._push_scope(module_env):
+                            container = data.accept(self)
+                        # data.accept() defined it in module_env (current env inside
+                        # the push_scope); also define in the main environment.
+                        if container is not None:
+                            self.environment.define(name, container, is_const=True)
 
                 for name, agent in self.import_resolver.agents.items():
                     if name not in self._agents:
@@ -2159,6 +2174,8 @@ class Interpreter(LlmMixin, Visitor[object]):
         so cross-function calls within the same aliased module resolve correctly.
         """
         from helen.core.ast import VarDeclNode  # noqa: PLC0415
+        from helen.core.ast import SharedStoreDeclNode as _SSDN  # noqa: PLC0415
+        from helen.core.ast import ChannelDeclNode as _CDN  # noqa: PLC0415
         module = {
             "__type__": "module",
             "__path__": result.path,
@@ -2180,6 +2197,14 @@ class Interpreter(LlmMixin, Visitor[object]):
                 else:
                     value = None
                 module_env.define(name, value, is_const=not data.mutable)
+            elif isinstance(data, (_SSDN, _CDN)):
+                # v1.17 (Issue #35): Execute shared store/channel declaration.
+                # Define in module_env (module's own functions) AND self.environment
+                # (cross-module direct access), matching shared let semantics.
+                with self._push_scope(module_env):
+                    container = data.accept(self)
+                if container is not None:
+                    self.environment.define(name, container, is_const=True)
         module["__env__"] = module_env
 
         # v1.16: Register module functions in module_env as callable wrappers,

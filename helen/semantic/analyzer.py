@@ -1370,6 +1370,8 @@ class SemanticAnalyzer(Visitor[None]):
                 
                 # Register all functions from imported file
                 # Also recursively process imports in the imported file
+                from helen.core.ast import SharedStoreDeclNode as _SSDN  # noqa: PLC0415
+                from helen.core.ast import ChannelDeclNode as _CDN  # noqa: PLC0415
                 for stmt in imported_program.statements:
                     match stmt:
                         case FunctionDeclNode():
@@ -1393,6 +1395,17 @@ class SemanticAnalyzer(Visitor[None]):
                             from helen.semantic.symbols import Symbol
                             sym = Symbol(stmt.name, kind="const" if not stmt.mutable else "shared", is_const=not stmt.mutable)
                             self.symbols.define(stmt.name, sym)
+
+                        case _SSDN() | _CDN():
+                            # v1.17 (Issue #35): Register imported shared store/channel
+                            # declarations so they're visible by name in the importing
+                            # module (matching shared let semantics). Without this, direct
+                            # cross-module access like `MyStore.set_val(...)` fails at
+                            # semantic analysis with "undeclared variable".
+                            from helen.semantic.symbols import Symbol
+                            sym = Symbol(stmt.name, kind="shared", is_const=True)
+                            self.symbols.define(stmt.name, sym)
+                            self._shared_var_names.add(stmt.name)
 
                         case ImportStmtNode():
                             # Recursively process imports in the imported file

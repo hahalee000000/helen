@@ -192,25 +192,25 @@ class TestChineseKeywordsLexer:
         return_token = next(t for t in tokens if t.type == TokenType.RETURN)
         assert return_token.lexeme == "返回"
 
-    def test_all_47_chinese_keywords_registered(self):
-        """Verify exactly 46 Chinese keywords are in the keyword map (v1.14 removed 流式执行, v1.12 added 分离)."""
+    def test_all_48_chinese_keywords_registered(self):
+        """Verify exactly 48 Chinese keywords are in the keyword map (v1.17 added 设)."""
         kw = keywords()
         chinese = {k: v for k, v in kw.items()
                    if any('\u4e00' <= c <= '\u9fff' for c in k)}
-        assert len(chinese) == 47, f"Expected 47, got {len(chinese)}: {sorted(chinese.keys())}"
+        assert len(chinese) == 48, f"Expected 48, got {len(chinese)}: {sorted(chinese.keys())}"
 
     def test_no_lexer_errors(self):
         """Full Chinese program should produce zero lexer errors."""
         source = """
-定义 x = 10
+设 x = 10
 常量 Y = 20
 函数 加(甲: int, 乙: int): int {
     返回 甲 + 乙
 }
 如果 x > 0 {
-    定义 结果 = 加(x, Y)
+    设 结果 = 加(x, Y)
 } 否则 {
-    定义 结果 = 0
+    设 结果 = 0
 }
 """
         scanner = Scanner(source=source, file="<test>")
