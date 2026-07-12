@@ -81,7 +81,7 @@ class TestImportResolverPythonImports:
 
             resolver = ImportResolver(base_dir=tmpdir)
             resolver.resolve("helper.helen")
-            assert "json" in resolver.python_imports
+            assert ("json", None) in resolver.python_imports
         finally:
             import shutil
             shutil.rmtree(tmpdir)
@@ -97,7 +97,7 @@ class TestImportResolverPythonImports:
 
             resolver = ImportResolver(base_dir=tmpdir)
             resolver.resolve("b.helen")
-            assert resolver.python_imports.count("json") == 1
+            assert resolver.python_imports.count(("json", None)) == 1
         finally:
             import shutil
             shutil.rmtree(tmpdir)
@@ -230,3 +230,87 @@ class TestPythonFFITransitiveImports:
             "middle.helen": middle,
         })
         assert "helper" in result
+
+
+class TestPythonFFIAliasedNestedImports:
+    """Aliased Python imports in transitively-imported .helen files.
+
+    Regression: before the fix, `import "ui.renderer" as PyUIRenderer`
+    in a .helen module that was imported by another .helen file would
+    lose the alias — PyUIRenderer was defined as `renderer` instead.
+    """
+
+    def test_aliased_python_import_in_helper(self):
+        """helper.helen: `import "json" as J`, main imports helper.helen.
+
+        Before fix: 'J' is NoneType (actually defined as 'json').
+        After fix: 'J' is the json module.
+        """
+        helper = """
+        import "json" as J
+        fn to_json(d: map): str {
+            return J.dumps(d)
+        }
+        """
+        main = """
+        import "helper.helen"
+        main {
+            to_json({"k": "v"})
+        }
+        """
+        result, _ = _run_file(main, {"helper.helen": helper})
+        assert '"k": "v"' in result or '"k":"v"' in result or '"k":' in result
+
+    def test_aliased_python_import_in_aliased_helper(self):
+        """Same as above but main uses aliased import for helper too."""
+        helper = """
+        import "json" as J
+        fn to_json(d: map): str {
+            return J.dumps(d)
+        }
+        """
+        main = """
+        import "helper.helen" as H
+        main {
+            H.to_json({"a": 1})
+        }
+        """
+        result, _ = _run_file(main, {"helper.helen": helper})
+        assert '"a": 1' in result or '"a":1' in result or '"a":' in result
+
+    def test_dotted_python_module_with_alias(self):
+        """Test dotted Python module path with alias (like ui.renderer)."""
+        # Use os.path as a readily-available dotted module
+        helper = """
+        import "os.path" as P
+        fn join_parts(): str {
+            return P.join("a", "b")
+        }
+        """
+        main = """
+        import "helper.helen"
+        main {
+            join_parts()
+        }
+        """
+        result, _ = _run_file(main, {"helper.helen": helper})
+        assert result == "a/b" or "a" in str(result)
+
+    def test_multiple_aliased_python_imports(self):
+        """Multiple aliased Python imports in one helper module."""
+        helper = """
+        import "json" as J
+        import "math" as M
+        fn describe(): str {
+            let pi_str = str(M.floor(M.pi))
+            return J.dumps({"pi_floor": pi_str})
+        }
+        """
+        main = """
+        import "helper.helen"
+        main {
+            describe()
+        }
+        """
+        result, _ = _run_file(main, {"helper.helen": helper})
+        assert "3" in str(result)

@@ -2070,14 +2070,16 @@ class Interpreter(LlmMixin, Visitor[object]):
                     if not hasattr(self, '_python_runtime'):
                         from helen.ffi.python_runtime import DefaultPythonRuntime
                         self._python_runtime = DefaultPythonRuntime()
-                    for py_module_name in self.import_resolver.python_imports:
+                    for py_module_name, py_alias in self.import_resolver.python_imports:
                         try:
                             module = self._python_runtime.import_module(py_module_name)
-                            alias = py_module_name.split('.')[-1]
+                            # Use the user-specified alias (if any),
+                            # otherwise fall back to the last dotted segment.
+                            name = py_alias or py_module_name.split('.')[-1]
                             # Define in both module_env (module's own functions)
                             # and self.environment (cross-module direct access)
-                            module_env.define(alias, module)
-                            self.environment.define(alias, module)
+                            module_env.define(name, module)
+                            self.environment.define(name, module)
                         except ImportError:
                             pass  # Best-effort; already validated by resolver
 
@@ -2233,12 +2235,12 @@ class Interpreter(LlmMixin, Visitor[object]):
             if not hasattr(self, '_python_runtime'):
                 from helen.ffi.python_runtime import DefaultPythonRuntime
                 self._python_runtime = DefaultPythonRuntime()
-            for py_module_name in self.import_resolver.python_imports:
+            for py_module_name, py_alias in self.import_resolver.python_imports:
                 try:
                     py_mod = self._python_runtime.import_module(py_module_name)
-                    alias = py_module_name.split('.')[-1]
-                    module_env.define(alias, py_mod)
-                    self.environment.define(alias, py_mod)
+                    name = py_alias or py_module_name.split('.')[-1]
+                    module_env.define(name, py_mod)
+                    self.environment.define(name, py_mod)
                 except ImportError:
                     pass  # Best-effort; already validated by resolver
 

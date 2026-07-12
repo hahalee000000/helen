@@ -71,11 +71,14 @@ class ImportResolver:
         self._agents: dict[str, Any] = {}  # name -> AgentDeclNode
         self._functions: dict[str, Any] = {}  # name -> FunctionDeclNode
         self._data: dict[str, Any] = {}  # alias -> loaded content
-        # v1.17 (Issue #35 follow-up): Python module names imported by
-        # transitively-imported .helen files. The interpreter executes
-        # these during import so nested Python dependencies are available
-        # when the imported module's functions are called.
-        self._python_imports: list[str] = []
+        # v1.17 (Issue #35 follow-up): Python module imports from
+        # transitively-imported .helen files. Each entry is a
+        # (module_name, alias_or_none) tuple so aliased imports like
+        # `import "ui.renderer" as PyUIRenderer` preserve their alias.
+        # The interpreter executes these during import so nested Python
+        # dependencies are available when the imported module's functions
+        # are called.
+        self._python_imports: list[tuple[str, str | None]] = []
 
     def resolve(
         self, import_path: str, from_file: str | None = None
@@ -283,8 +286,14 @@ class ImportResolver:
                     module_name = import_path
                     if module_name.endswith('.py'):
                         module_name = module_name[:-3]
-                    if module_name not in self._python_imports:
-                        self._python_imports.append(module_name)
+                    # Preserve the alias (if any) so the interpreter
+                    # defines the Python module under the correct name.
+                    # E.g. `import "ui.renderer" as PyUIRenderer` must
+                    # be defined as PyUIRenderer, not renderer.
+                    import_alias = stmt.alias
+                    entry = (module_name, import_alias)
+                    if entry not in self._python_imports:
+                        self._python_imports.append(entry)
                 # Pass the current file's path so nested imports can be resolved correctly
                 self.resolve(import_path, file_path)
 
@@ -299,8 +308,12 @@ class ImportResolver:
         return self._functions
 
     @property
-    def python_imports(self) -> list[str]:
-        """Python module names imported by transitively-loaded .helen files."""
+    def python_imports(self) -> list[tuple[str, str | None]]:
+        """Python module imports from transitively-loaded .helen files.
+
+        Each entry is (module_name, alias_or_none). The alias preserves
+        user-specified names like ``import "ui.renderer" as PyUIRenderer``.
+        """
         return self._python_imports
 
     @property
