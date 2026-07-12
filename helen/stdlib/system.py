@@ -317,11 +317,11 @@ def _kill(pid: int, signal_num: int = 15) -> str:
 
 # Configure logging
 _logger = logging.getLogger("helen")
-_logger.setLevel(logging.DEBUG)
+_logger.setLevel(logging.INFO)
 
 # Create console handler
 _console_handler = logging.StreamHandler()
-_console_handler.setLevel(logging.DEBUG)
+_console_handler.setLevel(logging.INFO)
 
 # Create formatter
 _formatter = logging.Formatter(
