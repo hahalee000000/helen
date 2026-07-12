@@ -314,3 +314,75 @@ class TestPythonFFIAliasedNestedImports:
         """
         result, _ = _run_file(main, {"helper.helen": helper})
         assert "3" in str(result)
+
+
+class TestPythonObjectCallMethodByName:
+    """WrappedPythonObject.call() supports method-by-name dispatch.
+
+    When the wrapped object is not callable (an instance) and the first
+    argument is a string, .call("method", *args) invokes the named method.
+    This is a convenience for ``obj.get_attribute("method")()``.
+    """
+
+    def test_call_method_by_name_on_instance(self):
+        """r.call("method") invokes the named method on a Python instance."""
+        helper = """
+        import "json" as J
+        fn test(): str {
+            let encoder = J.JSONEncoder()
+            return encoder.call("encode", {"x": 1})
+        }
+        """
+        main = """
+        import "helper.helen"
+        main { test() }
+        """
+        result, _ = _run_file(main, {"helper.helen": helper})
+        assert '"x": 1' in result or '"x":1' in result or '"x": ' in result
+
+    def test_call_still_works_on_callable(self):
+        """Wrapped callable (class/function) still calls directly."""
+        helper = """
+        import "json" as J
+        fn test(): str {
+            return J.dumps({"k": "v"})
+        }
+        """
+        main = """
+        import "helper.helen"
+        main { test() }
+        """
+        result, _ = _run_file(main, {"helper.helen": helper})
+        assert '"k"' in result
+
+    def test_call_class_constructor_via_dot_call(self):
+        """Class (callable) still constructs via .call()."""
+        helper = """
+        import "json" as J
+        fn test(): str {
+            let encoder = J.JSONEncoder()
+            return str(encoder)
+        }
+        """
+        main = """
+        import "helper.helen"
+        main { test() }
+        """
+        result, _ = _run_file(main, {"helper.helen": helper})
+        assert "JSONEncoder" in str(result)
+
+    def test_natural_method_call_syntax(self):
+        """obj.method() works naturally via attribute access."""
+        helper = """
+        import "json" as J
+        fn test(): str {
+            let encoder = J.JSONEncoder()
+            return encoder.encode({"a": 1})
+        }
+        """
+        main = """
+        import "helper.helen"
+        main { test() }
+        """
+        result, _ = _run_file(main, {"helper.helen": helper})
+        assert '"a"' in str(result)

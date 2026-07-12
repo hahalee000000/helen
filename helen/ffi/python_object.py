@@ -42,28 +42,45 @@ class WrappedPythonObject:
     def call(self, *args: Any, **kwargs: Any) -> Any:
         """Call the Python object as a function.
 
+        Supports two patterns:
+        1. Direct call: when the wrapped object is callable (function/class),
+           ``wrapped.call(arg1, arg2)`` invokes it directly.
+        2. Method-by-name call: when the wrapped object is NOT callable
+           (instance) and the first argument is a string,
+           ``wrapped.call("method_name", arg1)`` calls the named method
+           with the remaining arguments. This is a convenience that
+           avoids the more verbose ``wrapped.get_attribute("method")()``.
+
         Args:
-            *args: Positional arguments
+            *args: Positional arguments (or method name + args for pattern 2)
             **kwargs: Keyword arguments
 
         Returns:
             The return value (wrapped if it's a complex object)
 
         Raises:
-            TypeError: If object is not callable
+            TypeError: If object is not callable and no method match found
         """
-        if not callable(self._obj):
-            raise TypeError(f"'{type(self._obj).__name__}' object is not callable")
+        if callable(self._obj):
+            # Pattern 1: direct call (wrapped function/class)
+            py_args = [self._converter.helen_to_python(arg) for arg in args]
+            py_kwargs = {k: self._converter.helen_to_python(v) for k, v in kwargs.items()}
+            result = self._obj(*py_args, **py_kwargs)
+            return self._converter.python_to_helen(result)
 
-        # Convert Helen arguments to Python
-        py_args = [self._converter.helen_to_python(arg) for arg in args]
-        py_kwargs = {k: self._converter.helen_to_python(v) for k, v in kwargs.items()}
+        # Pattern 2: method-by-name dispatch for non-callable instances
+        # ``instance.call("method", arg1, arg2)`` → ``instance.method(arg1, arg2)``
+        if args and isinstance(args[0], str):
+            method_name = args[0]
+            method = getattr(self._obj, method_name, None)
+            if method is not None and callable(method):
+                remaining_args = args[1:]
+                py_args = [self._converter.helen_to_python(arg) for arg in remaining_args]
+                py_kwargs = {k: self._converter.helen_to_python(v) for k, v in kwargs.items()}
+                result = method(*py_args, **py_kwargs)
+                return self._converter.python_to_helen(result)
 
-        # Call the object
-        result = self._obj(*py_args, **py_kwargs)
-
-        # Convert result back to Helen
-        return self._converter.python_to_helen(result)
+        raise TypeError(f"'{type(self._obj).__name__}' object is not callable")
 
     def __getitem__(self, key: Any) -> Any:
         """Get item by key (for dict/list access).
