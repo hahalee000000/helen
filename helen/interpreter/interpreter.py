@@ -2060,6 +2060,27 @@ class Interpreter(LlmMixin, Visitor[object]):
                         if container is not None:
                             self.environment.define(name, container, is_const=True)
 
+                # v1.17 (Issue #35 follow-up): Execute nested Python imports
+                # from the imported .helen module so its functions can access
+                # the Python modules they depend on. Without this, helper.helen
+                # importing 'json' was only validated (path check) but the
+                # Python module was never actually imported, so 'json.dumps'
+                # raised "'NoneType' has no property 'dumps'" at runtime.
+                if hasattr(self.import_resolver, 'python_imports'):
+                    if not hasattr(self, '_python_runtime'):
+                        from helen.ffi.python_runtime import DefaultPythonRuntime
+                        self._python_runtime = DefaultPythonRuntime()
+                    for py_module_name in self.import_resolver.python_imports:
+                        try:
+                            module = self._python_runtime.import_module(py_module_name)
+                            alias = py_module_name.split('.')[-1]
+                            # Define in both module_env (module's own functions)
+                            # and self.environment (cross-module direct access)
+                            module_env.define(alias, module)
+                            self.environment.define(alias, module)
+                        except ImportError:
+                            pass  # Best-effort; already validated by resolver
+
                 for name, agent in self.import_resolver.agents.items():
                     if name not in self._agents:
                         self._agents[name] = agent
@@ -2205,6 +2226,22 @@ class Interpreter(LlmMixin, Visitor[object]):
                     container = data.accept(self)
                 if container is not None:
                     self.environment.define(name, container, is_const=True)
+
+        # v1.17 (Issue #35 follow-up): Execute nested Python imports
+        # so aliased-imported modules can use their Python dependencies.
+        if hasattr(self.import_resolver, 'python_imports'):
+            if not hasattr(self, '_python_runtime'):
+                from helen.ffi.python_runtime import DefaultPythonRuntime
+                self._python_runtime = DefaultPythonRuntime()
+            for py_module_name in self.import_resolver.python_imports:
+                try:
+                    py_mod = self._python_runtime.import_module(py_module_name)
+                    alias = py_module_name.split('.')[-1]
+                    module_env.define(alias, py_mod)
+                    self.environment.define(alias, py_mod)
+                except ImportError:
+                    pass  # Best-effort; already validated by resolver
+
         module["__env__"] = module_env
 
         # v1.16: Register module functions in module_env as callable wrappers,

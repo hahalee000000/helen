@@ -71,6 +71,11 @@ class ImportResolver:
         self._agents: dict[str, Any] = {}  # name -> AgentDeclNode
         self._functions: dict[str, Any] = {}  # name -> FunctionDeclNode
         self._data: dict[str, Any] = {}  # alias -> loaded content
+        # v1.17 (Issue #35 follow-up): Python module names imported by
+        # transitively-imported .helen files. The interpreter executes
+        # these during import so nested Python dependencies are available
+        # when the imported module's functions are called.
+        self._python_imports: list[str] = []
 
     def resolve(
         self, import_path: str, from_file: str | None = None
@@ -267,6 +272,19 @@ class ImportResolver:
                 # Recursively process imports in the imported file
                 # Resolve the import path relative to the current file's directory
                 import_path = stmt.module_path
+                # v1.17 (Issue #35 follow-up): collect Python module imports
+                # so the interpreter can execute them when the importing
+                # .helen module is loaded. Without this, nested Python
+                # imports (e.g. helper.helen importing 'json') were only
+                # validated but never executed, causing the Python module
+                # name to resolve to None at runtime.
+                from helen.core import is_helen_data_file  # noqa: PLC0415
+                if not is_helen_data_file(import_path):
+                    module_name = import_path
+                    if module_name.endswith('.py'):
+                        module_name = module_name[:-3]
+                    if module_name not in self._python_imports:
+                        self._python_imports.append(module_name)
                 # Pass the current file's path so nested imports can be resolved correctly
                 self.resolve(import_path, file_path)
 
@@ -279,6 +297,11 @@ class ImportResolver:
     def functions(self) -> dict[str, Any]:
         """Registered function definitions from imports."""
         return self._functions
+
+    @property
+    def python_imports(self) -> list[str]:
+        """Python module names imported by transitively-loaded .helen files."""
+        return self._python_imports
 
     @property
     def data(self) -> dict[str, Any]:
