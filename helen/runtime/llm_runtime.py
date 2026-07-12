@@ -55,8 +55,15 @@ class LLMRuntime(ABC):
     def act(self, prompt: str, tools: list[dict[str, Any]] | None = None,
             model: str | None = None, temperature: float = 1.0,
             max_turns: int = 1, history: list[dict[str, Any]] | None = None,
-            system_prompt: str | None = None) -> LLMResponse:
-        """Execute an autonomous LLM action (sync version)."""
+            system_prompt: str | None = None,
+            dispatch_fn: Any = None) -> LLMResponse:
+        """Execute an autonomous LLM action (sync version).
+
+        Args:
+            dispatch_fn: Optional custom tool dispatch function.
+                Signature: (name: str, args: dict) -> str
+                If not provided, uses the default dispatch_tool from helen.runtime.tools.
+        """
         ...
 
     # Phase 1b: Async versions for concurrent execution
@@ -71,18 +78,21 @@ class LLMRuntime(ABC):
     async def act_async(self, prompt: str, tools: list[dict[str, Any]] | None = None,
                         model: str | None = None, temperature: float = 1.0,
                         max_turns: int = 1, history: list[dict[str, Any]] | None = None,
-                        system_prompt: str | None = None) -> LLMResponse:
+                        system_prompt: str | None = None,
+                        dispatch_fn: Any = None) -> LLMResponse:
         """Async version of act() for concurrent execution.
 
         Default implementation calls sync version. Override for true async.
         """
-        return self.act(prompt, tools, model, temperature, max_turns, history, system_prompt)
+        return self.act(prompt, tools, model, temperature, max_turns, history,
+                        system_prompt, dispatch_fn)
 
     def act_stream(self, prompt: str, model: str | None = None,
                    temperature: float = 1.0, system_prompt: str | None = None,
                    tools: list[dict[str, Any]] | None = None,
                    max_turns: int = 5,
-                   history: list[dict[str, Any]] | None = None) -> Iterator[dict[str, Any]]:
+                   history: list[dict[str, Any]] | None = None,
+                   dispatch_fn: Any = None) -> Iterator[dict[str, Any]]:
         """Stream LLM response with tool-calling support.
 
         Default implementation calls act() and yields the full response as a single content event.
@@ -95,7 +105,8 @@ class LLMRuntime(ABC):
             {"type": "error", "message": "..."}       — error
         """
         response = self.act(prompt, tools=tools, model=model, temperature=temperature,
-                            max_turns=max_turns, system_prompt=system_prompt)
+                            max_turns=max_turns, system_prompt=system_prompt,
+                            dispatch_fn=dispatch_fn)
         if response and response.text:
             yield {"type": "content", "content": response.text}
 
@@ -140,8 +151,14 @@ class MockLLMRuntime(LLMRuntime):
     def act(self, prompt: str, tools: list[dict[str, Any]] | None = None,
             model: str | None = None, temperature: float = 1.0,
             max_turns: int = 1, history: list[dict[str, Any]] | None = None,
-            system_prompt: str | None = None) -> LLMResponse:
-        """Return the preset act_return value."""
+            system_prompt: str | None = None,
+            dispatch_fn: Any = None) -> LLMResponse:
+        """Return the preset act_return value.
+
+        Args:
+            dispatch_fn: Accepted for interface compatibility with HttpLLMRuntime,
+                but ignored (mock does not dispatch tool calls).
+        """
         self.act_history.append({
             "prompt": prompt,
             "tools": tools,
@@ -150,6 +167,7 @@ class MockLLMRuntime(LLMRuntime):
             "max_turns": max_turns,
             "history": history,
             "system_prompt": system_prompt,
+            "dispatch_fn": dispatch_fn,
         })
         if self.act_fail is not None:
             raise self.act_fail

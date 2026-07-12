@@ -95,7 +95,7 @@ from helen.interpreter.exceptions import (
 )
 from helen.interpreter.task import Task
 from helen.interpreter.llm_mixin import LlmMixin
-from helen.runtime.llm_runtime import LLMRuntime, MockLLMRuntime
+from helen.runtime.llm_runtime import LLMRuntime
 from helen.runtime.import_resolver import ImportResolver, ImportResult
 from helen.runtime.history import HistoryManager, Message as HistoryMessage
 from helen.runtime.observability import ObservabilityManager
@@ -751,7 +751,12 @@ class Interpreter(LlmMixin, Visitor[object]):
         self.environment = Environment()
         self._functions: dict[str, FunctionDeclNode] = {}
         self._agents: dict[str, AgentDeclNode] = {}
-        self.llm_runtime = llm_runtime or MockLLMRuntime()
+        # v1.17: Lazy-load HttpLLMRuntime as default instead of MockLLMRuntime.
+        # MockLLMRuntime is for deterministic testing only — production code
+        # (CLI, REPL, Python Bridge) needs real LLM calls. The runtime is
+        # initialized on first access to avoid import overhead for programs
+        # that don't use llm act/if/choose.
+        self._llm_runtime: LLMRuntime | None = llm_runtime
         self._current_agent: AgentDeclNode | None = None
         self.import_resolver = import_resolver or ImportResolver()
         self._program_args: list[str] = list(program_args) if program_args else []
@@ -803,6 +808,25 @@ class Interpreter(LlmMixin, Visitor[object]):
         _set_cli_args(self._program_args)
         # Define `argv` as a pre-defined const (CLI arguments after the filename)
         self.environment.define("argv", self._program_args, is_const=True)
+
+    @property
+    def llm_runtime(self) -> LLMRuntime:
+        """Lazy-load HttpLLMRuntime on first access.
+
+        Production code (CLI, REPL, Python Bridge) needs real LLM calls.
+        MockLLMRuntime should only be used for deterministic testing.
+        Tests pass llm_runtime explicitly; everyone else gets HttpLLMRuntime
+        initialized from ~/.helen/config.yaml on first use.
+        """
+        if self._llm_runtime is None:
+            from helen.runtime.http_llm import HttpLLMRuntime
+            self._llm_runtime = HttpLLMRuntime()
+        return self._llm_runtime
+
+    @llm_runtime.setter
+    def llm_runtime(self, value: LLMRuntime | None) -> None:
+        """Allow explicit assignment (used by tests with MockLLMRuntime)."""
+        self._llm_runtime = value
 
     @property
     def _history(self) -> list[HistoryMessage]:
