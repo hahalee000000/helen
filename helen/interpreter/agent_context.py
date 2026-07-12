@@ -188,13 +188,13 @@ class AgentContextManager:
                         backend, max_memory_items=max_memory_items,
                         session_dir=session_dir_for_media,
                     )
-                    logger.info("Resumed custom transcript: %s", transcript_path)
+                    logger.debug("Resumed custom transcript: %s", transcript_path)
                 else:
                     self._transcript_store = TranscriptStore(
                         backend=backend, max_memory_items=max_memory_items,
                         session_dir=session_dir_for_media,
                     )
-                    logger.info("Created custom transcript: %s", transcript_path)
+                    logger.debug("Created custom transcript: %s", transcript_path)
             else:
                 # Use default session management
                 session_dir = config.get("session_dir")
@@ -224,13 +224,13 @@ class AgentContextManager:
                         backend, max_memory_items=max_memory_items,
                         session_dir=session_dir_for_media,
                     )
-                    logger.info("Resumed transcript session: %s", session_id)
+                    logger.debug("Resumed transcript session: %s", session_id)
                 else:
                     self._transcript_store = TranscriptStore(
                         backend=backend, max_memory_items=max_memory_items,
                         session_dir=session_dir_for_media,
                     )
-                    logger.info("Created new transcript session: %s", session_id)
+                    logger.debug("Created new transcript session: %s", session_id)
 
         except Exception as e:
             logger.error("Failed to initialize TranscriptStore: %s", e)

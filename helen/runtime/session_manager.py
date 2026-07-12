@@ -73,7 +73,7 @@ class SessionManager:
         session_dir = self.base_dir / session_id
         session_dir.mkdir(parents=True, exist_ok=True)
 
-        logger.info("Created session: %s", session_id)
+        logger.debug("Created session: %s", session_id)
         return session_id
 
     def get_session_path(self, session_id: str) -> Path:
@@ -178,7 +178,7 @@ class SessionManager:
 
         try:
             shutil.rmtree(session_dir)
-            logger.info("Deleted session: %s", session_id)
+            logger.debug("Deleted session: %s", session_id)
             return True
         except OSError as e:
             logger.error("Failed to delete session %s: %s", session_id, e)
@@ -221,5 +221,5 @@ class SessionManager:
             if self.delete_session(session["session_id"]):
                 deleted_count += 1
 
-        logger.info("Cleaned up %d old sessions", deleted_count)
+        logger.debug("Cleaned up %d old sessions", deleted_count)
         return deleted_count
