@@ -96,13 +96,10 @@ class CancelledError(Exception):
 @dataclass
 class MockLLMRuntime(LLMRuntime):
     route_return: str | None = None       # 预设 route() 返回值
-    choose_return: str | None = None      # 预设 choose() 返回值
     act_return: LLMResponse | str | None  # 预设 act() 返回值
     route_fail: Exception | None = None   # 预设 route() 异常
-    choose_fail: Exception | None = None  # 预设 choose() 异常
     act_fail: Exception | None = None     # 预设 act() 异常
     route_history: list[dict]             # 调用记录
-    choose_history: list[dict]            # 调用记录
     act_history: list[dict]               # 调用记录
 ```
 

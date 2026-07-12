@@ -271,7 +271,7 @@ def _synchronize(self):
 - ✅ 函数声明与调用
 - ✅ 控制流 (if/for/while/match)
 - ✅ 异常处理 (try/catch/finally/throw)
-- ✅ LLM 语句 (act/if/choose)
+- ✅ LLM 语句 (act/if)
 - ✅ 异步调用 (async/await)
 - ✅ 表达式优先级
 - ✅ Panic mode 恢复

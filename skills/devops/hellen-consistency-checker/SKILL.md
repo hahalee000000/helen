@@ -181,7 +181,7 @@ grep -n "ERR_\d\+\s*=" file
 |--------|------|---------|
 | 构造函数参数完整 | 对比 dataclass 字段 vs 测试用例中的参数 | Phase 0: test_let/test_const 缺 `mutable` 参数 |
 | 方法签名匹配 | 对比方法定义 vs 调用处的参数名 | Remaining: CLI 用 `environment=env` 但 Interpreter 定义是 `env` |
-| 返回值类型一致 | 同一类方法返回类型应一致 | P2-3: visit_llm_if_stmt 返回 ANY，visit_llm_choose_stmt 返回 None |
+| 返回值类型一致 | 同一类方法返回类型应一致 | P2-3: visit_llm_if_stmt 返回 ANY，visit_llm_act_stmt 返回 LLMResponse |
 
 #### D3. 接口与实现一致
 
@@ -320,7 +320,7 @@ sed -i 's/from \.tokens import.*SourceSpan/from .source import SourceSpan/g' fil
 | `node.statements` (ProgramNode) | `node.body` | P2-3 Analyzer/Interpreter |
 | `Token.col` | `Token.column` | P1 Parser `_span_from_to` |
 | `Token.end_col` | `Token.end_column` | P1 Parser `_span_from_to` |
-| `node.options` (LlmChooseStmtNode) | `node.cases`, `node.default_case` | P2-3 Analyzer |
+| `node.branches` (LlmIfStmtNode) | `node.then_branch`, `node.else_branch` | P2-3 Analyzer |
 
 **检查方法**：对每个 AST 节点，在 Phase 0 确认字段名后，grep 所有下游文档中的 `node.<字段名>` 访问。
 
@@ -360,14 +360,14 @@ Parser 文档的 `_span_from_to` 等辅助方法中使用了 `token.column` / `t
 
 **检查方法**：grep `\.column\b` 和 `\.end_column\b` 在 Parser 文档中出现的位置。
 
-### 🟡 模式 8：LlmChooseStmtNode 字段结构漂移
+### 🟡 模式 8：LlmIfStmtNode 字段结构漂移
 
-Phase 0 定义：`LlmChooseStmtNode(description: str, options: list[str], span)` — 纯选项名列表，无 body。
-HLD EBNF：`Option → "option" STRING` — 只有选项名。
+Phase 0 定义：`LlmIfStmtNode(description: str, branches: list[LlmBranchNode], span)` — 分支名列表 + 分支体。
+HLD EBNF：`Branch → "branch" IDENTIFIER block` — 分支名 + 执行体。
 
-P2-3 Analyzer 错误假设了复杂结构：`node.cases`（带 body 的 case 列表）、`node.default_case`。
+P2-3 Analyzer 错误假设了 if-else 结构：`node.then_branch`、`node.else_branch`（当成普通 if 语句）。
 
-**检查方法**：grep `node\.cases` 和 `node\.default_case` 在 P2-3 中对 LlmChooseStmtNode 的访问。
+**检查方法**：grep `node\.then_branch` 和 `node\.else_branch` 在 P2-3 中对 LlmIfStmtNode 的访问。
 
 ### 🟡 模式 9：visit_program 使用 node.body 而非 node.statements
 
@@ -933,20 +933,19 @@ self._error(ErrorCode.SEMANTIC_TYPE_MISMATCH, "...", node.span)
 
 ### 🔴 模式 31：LLM 语句 Interpreter 方法的完整 AST 结构错位
 
-`visit_llm_if_stmt` 和 `visit_llm_choose_stmt` 的 Interpreter（async）版本最容易假设错误的 AST 结构，因为 LLM 语句的 AST 设计与传统控制流完全不同：
+`visit_llm_if_stmt` 的 Interpreter（async）版本最容易假设错误的 AST 结构，因为 LLM 语句的 AST 设计与传统控制流完全不同：
 
 | 节点 | Phase 0 正确结构 | Interpreter 常见错误假设 |
 |------|-----------------|------------------------|
 | `LlmIfStmtNode` | `description: str`, `branches: list[LlmBranchNode]` | `prompt`, `then_branch`, `else_branch`（当成普通 if） |
-| `LlmChooseStmtNode` | `description: str`, `options: list[str]` | `cases`（带 body 的 case 列表）, `prompt`, `default_case` |
 | `LlmBranchNode` | `name: str`, `body: list[Stmt]` | 无对应 — Interpreter 直接访问 then/else |
 
 **关键区别**：`llm if` 不是条件分支，而是 **LLM 路由** — 将输入分类到预定义分支。它的执行语义是：调用 LLM → 获取分支名 → 执行匹配分支。
 
 **检查方法**：
-1. 在 P2-3 中 `grep 'def.*visit_llm_if_stmt'` 和 `grep 'def.*visit_llm_choose_stmt'`
+1. 在 P2-3 中 `grep 'def.*visit_llm_if_stmt'`
 2. 分别检查 sync（Analyzer）和 async（Interpreter）版本
-3. 确认 Interpreter 版本访问 `node.description`、`node.branches`/`node.options`，而非 `node.then_branch`/`node.cases`
+3. 确认 Interpreter 版本访问 `node.description`、`node.branches`，而非 `node.then_branch`
 
 ### 🟡 模式 32：P2-3 中 sync（Analyzer）与 async（Interpreter）visitor 方法的验证
 
@@ -976,7 +975,7 @@ for prefix in ['def ', 'async def ']:
 
 代码中新增 AST 节点后，ASTPrinter 的 visitor 方法会同步添加到代码，但**设计文档几乎总是遗漏**。实战中 code 有 46 个 ASTPrinter 方法，设计文档只有 26 个（缺失 20 个）。
 
-**受影响的典型方法**：visit_agent_param, visit_call_arg, visit_declaration, visit_fn_block, visit_literal_type, visit_map_entry, visit_optional_type, visit_type, visit_union_type, visit_program, visit_prompt_def, visit_catch_all, visit_catch_clause, visit_finally_block, visit_function_decl, visit_llm_branch, visit_llm_choose_stmt, visit_llm_option, visit_async_call_stmt, visit_case。
+**受影响的典型方法**：visit_agent_param, visit_call_arg, visit_declaration, visit_fn_block, visit_literal_type, visit_map_entry, visit_optional_type, visit_type, visit_union_type, visit_program, visit_prompt_def, visit_catch_all, visit_catch_clause, visit_finally_block, visit_function_decl, visit_llm_branch, visit_async_call_stmt, visit_case。
 
 **检查方法**：分别提取代码和设计文档中 class ASTPrinter 后的所有 def visit_\w+ 方法，做集合差集。
 

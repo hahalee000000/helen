@@ -24,11 +24,11 @@
 
 ### 四、解释执行
 - [[interpreter/execution|执行引擎]] — AST 遍历解释器、Environment 作用域链
-- [[interpreter/llm-integration|LLM 集成]] — `llm act/if/choose`、对话历史
+- [[interpreter/llm-integration|LLM 集成]] — `llm act/if`、对话历史
 - [[interpreter/async|异步与并发]] — `async call`、`await`、Promise.all
 
 ### 五、运行时系统
-- [[runtime/llm-runtime|LLM 运行时]] — route/choose/act 接口、取消机制
+- [[runtime/llm-runtime|LLM 运行时]] — route/act 接口、取消机制
 - [[runtime/prompt-builder|提示词构建]] — 两层渐进式披露、模板渲染
 - [[runtime/memory|内存系统]] — FileMemoryProvider、InMemoryProvider
 - [[runtime/transcript-store|TranscriptStore SSOT]] — 消息唯一真实来源、SQLite/JSONL 后端、LRU 缓存、UUID 寻址、非破坏性压缩（**v1.16 新特性**）
@@ -55,7 +55,7 @@
 - [[tutorial/03-functions|函数]] — fn 声明、参数、返回值
 - [[tutorial/04-control-flow|控制流]] — if/for/while/match/try-catch
 - [[tutorial/05-agents|Agent 编程]] — agent 声明、description、prompt
-- [[tutorial/06-llm-statements|LLM 语句]] — act/if/choose 实战
+- [[tutorial/06-llm-statements|LLM 语句]] — act/if 实战
 - [[tutorial/07-async-await|异步编程]] — async call、await、错误聚合
 - [[tutorial/08-modules|模块与导入]] — import、跨文件复用
 - [[tutorial/09-python-ffi|Python FFI]] — Python 库导入、类型转换

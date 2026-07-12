@@ -1459,7 +1459,7 @@ agent Translator {
 - **Interpreter**: `visit_llm_act_expr()` evaluates prompt expression → stringifies → calls `llm_runtime.act()` → returns response text
 - **SemanticAnalyzer**: `visit_llm_act_expr()` visits the prompt expression for validation (if not None)
 
-**Pitfall**: The LLM keyword is registered as BOTH a statement-level dispatch (in `_declaration()`) AND an expression prefix (in Pratt rules). The statement path handles `llm if`/`llm choose`. The expression path handles `llm act`. The Pratt parser's prefix takes precedence when `llm` appears in expression position (after `return`, `=`, inside `()`, etc.).
+**Pitfall**: The LLM keyword is registered as BOTH a statement-level dispatch (in `_declaration()`) AND an expression prefix (in Pratt rules). The statement path handles `llm if`. The expression path handles `llm act`. The Pratt parser's prefix takes precedence when `llm` appears in expression position (after `return`, `=`, inside `()`, etc.).
 
 ### `llm act` Syntax (Simplified 2026-06)
 

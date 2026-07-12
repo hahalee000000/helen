@@ -154,8 +154,8 @@ LLM 通过 OpenAI function calling 协议调用工具，支持多轮循环 + nud
 │              Interpreter                     │
 │  ┌──────────────┐     ┌──────────────────┐  │
 │  │ visit_llm_*  │────▶│   LLMRuntime     │  │
-│  │ (act/if/choose)    │   (ABC)          │  │
-│  └──────┬───────┘     │  route/choose/act│  │
+│  │ (act/if)           │   (ABC)          │  │
+│  └──────┬───────┘     │  route/act       │  │
 │         │             └────────┬─────────┘  │
 │         │                      │            │
 │  ┌──────▼───────┐     ┌────────▼─────────┐  │
