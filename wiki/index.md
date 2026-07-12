@@ -69,6 +69,7 @@
 - [[tutorial/17-multimodal|多模态支持]] — MediaPart、on_media/on_generate 回调、媒体适配（**v1.17 新特性**）
 
 ### 八、参考资料
+- [[reference/python-integration|Helen ↔ Python 双向集成]] ⭐ — 全景图：FFI（Helen → Python）+ Bridge（Python → Helen）+ 混合使用模式
 - [[reference/claude-code-context-management|Claude Code 上下文管理技术详解]] — 5 层渐进压缩管线、TranscriptStore SSOT、缓存感知
 - [[reference/claude-code-budget-reduction-and-context-collapse|Claude Code 预算削减与上下文折叠]] — Layer 1-4 零成本压缩策略
 - [[reference/agent-system-prompt-guide|Agent 提示词工程完全指南]] ⭐ — 来自 Claude Code 逆向工程的启示：结构布局、写作原则、反模式、Token 预算、缓存设计、中途注入（**v1.17 新增**）

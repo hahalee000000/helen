@@ -6,6 +6,10 @@
 
 Helen Python Bridge 允许 Python 开发者直接导入和使用 Helen Agent，就像使用普通的 Python 类一样。这是 Helen 与 Python 生态系统的深度集成方案。
 
+> 📘 **双向集成全景图**：见 [[reference/python-integration]]（包含 FFI + Bridge + 混合使用模式）
+>
+> **反向（Helen → Python）**：见 [[tutorial/09-python-ffi|Python FFI 教程]]
+
 ## 快速开始
 
 ### 1. 创建 Helen Agent
@@ -286,3 +290,9 @@ uninstall_import_hook()
 ## 总结
 
 Helen Python Bridge 让 Helen 成为 Python 的"原生扩展"，Python 开发者可以像使用 `numpy`、`pandas` 一样使用 Helen Agent，这会让 Helen 在 Python 生态系统中获得最大的采用率。
+
+---
+
+> **相关文档**：
+> - [[reference/python-integration|Helen ↔ Python 双向集成全景图]] — 混合使用示例 + 选择指南
+> - [[tutorial/09-python-ffi|Python FFI]] — 反向：在 Helen 中调用 Python 库

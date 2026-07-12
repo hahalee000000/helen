@@ -762,6 +762,7 @@ main {
 - 类实例化：`PyModule.ClassName()` — 类是可调用的
 - 方法调用：`obj.method(args)` 优先；`obj.call("method", args)` 用于动态方法名
 - 嵌套导入中的 Python 类完全可用：被导入的 `.helen` 模块中实例化的 Python 对象跨模块正常传递
+- **反方向（Python → Helen）**：见 `helen-python-bridge` skill；双向全景见 `wiki/reference/python-integration.md`
 
 ## 注释
 ```helen

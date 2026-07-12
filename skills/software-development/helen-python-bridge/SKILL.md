@@ -19,6 +19,35 @@ Python Bridge 实现了 Helen 与 Python 的双向 FFI：
 
 这让 Helen 成为 Python 生态系统的"原生扩展"，Python 开发者可以像使用 `numpy`、`pandas` 一样使用 Helen Agent。
 
+> 📘 **想看双向集成全貌？** 见 `wiki/reference/python-integration.md` — 架构图 + 混合使用示例
+
+## Helen → Python（FFI）速查
+
+本文档侧重 **Python → Helen** 方向。如果你需要的是 **Helen → Python**（在 Helen 中调用 Python 库），核心语法如下：
+
+```helen
+// 导入 Python 模块（无扩展名 = Python 模块）
+import "math" as math
+import "json" as json
+import "mylib.renderer" as PyRenderer
+
+// 调用函数 / 访问常量
+let s = json.dumps({"k": "v"})
+let pi = math.pi
+
+// 实例化 Python 类 + 调用方法
+let encoder = json.JSONEncoder()
+let result = encoder.encode({"x": 1})        // 自然方法调用（推荐）
+let result2 = encoder.call("encode", {"x": 1})  // 按方法名调用（动态场景）
+```
+
+**要点：**
+- 类实例化：`PyModule.ClassName()` — 类是可调用的
+- 方法调用：优先用 `obj.method()`；`obj.call("method")` 用于动态方法名
+- 嵌套导入：被导入的 `.helen` 模块中的 Python 导入完全可用
+
+→ 详细教程：`wiki/tutorial/09-python-ffi.md`
+
 ## 快速开始
 
 ### 1. 创建 Helen Agent
