@@ -6,7 +6,7 @@ Implementation will follow TDD after tests are written.
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable, Iterator, AsyncIterator
+from typing import Protocol, runtime_checkable, Iterator
 
 
 @runtime_checkable
@@ -30,21 +30,6 @@ class StreamingLLMRuntime(Protocol):
     def act_stream(self, prompt: str, model: str | None = None,
                    temperature: float = 1.0, system_prompt: str | None = None) -> Iterator[StreamChunk]:
         """Execute LLM action with streaming response (sync).
-
-        Args:
-            prompt: The prompt text
-            model: Optional model override
-            temperature: Sampling temperature
-            system_prompt: Optional system prompt
-
-        Yields:
-            StreamChunk objects with incremental content
-        """
-        ...
-
-    async def act_stream_async(self, prompt: str, model: str | None = None,
-                               temperature: float = 1.0, system_prompt: str | None = None) -> AsyncIterator[StreamChunk]:
-        """Execute LLM action with streaming response (async).
 
         Args:
             prompt: The prompt text

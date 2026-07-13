@@ -944,102 +944,66 @@ while (count < 5) {
 
 When writing or reviewing while-loop tutorials, **always use assignment** (`count = count + 1`) not `let`. The tutorial test runner skips while loops without `break` to guard against this exact infinite loop scenario.
 
-### Async/Await (Tutorial 07) — True Concurrent Execution (Phase 1b, 2026-06)
+### spawnagent + Channel (Tutorial 07) — Concurrent Execution (v1.18)
 
-**Fully implemented with TRUE single-thread asyncio concurrent execution.**
+**Replaces the old async/await/detach model.** `spawnagent` spawns an agent in a daemon thread and returns a `Channel` (mailbox) for bidirectional communication.
 
 **Working syntax**:
 ```helen
-// async as expression — creates pending Task (NOT executed yet)
-let task1 = async Worker("input A")
-let task2 = async Worker("input B")
+// spawnagent returns a Channel (mailbox) immediately - agent runs in background thread
+agent Worker(input: str, reply: Channel) {
+    main {
+        let result = process(input)
+        reply.send(result)
+    }
+}
 
-// await list — executes ALL pending tasks CONCURRENTLY, returns results
-let results = await [task1, task2]
+let m1 = spawnagent Worker("input A")
+let m2 = spawnagent Worker("input B")
+
+// receive() blocks until the agent sends a result
+let r1 = m1.receive()
+let r2 = m2.receive()
+let results = [r1, r2]
 print(results)  // ["result A", "result B"]
 
-// async as statement — still works (Task discarded)
-async Worker("fire and forget")
+// fire-and-forget: just don't call receive()
+spawnagent Worker("fire and forget")
 
-// AggregateError catchable
-try {
-    let results = await [task1, task2]
-} catch AggregateError err {
-    print("Failed: " + err.message)
-    print(err.errors)  // list of inner exceptions
-}
+// multi-channel select (first-ready wins)
+let ready = mailbox_select([m1, m2])
+
+// cancel a spawned agent
+m1.cancel()
 ```
 
-**Architecture — Hybrid Async in Sync Visitor Interpreter**:
+**Architecture — Thread-based with Channel message queue**:
 
-The key design: only LLM calls are async, not the entire interpreter. This avoids converting all 50+ `visit_*` methods to async (which would be ~2000 lines of changes).
-
-```
-┌─────────────────────────────────────────────────────┐
-│  Interpreter (sync visitor)                         │
-│  ├── visit_binary_op, visit_if_stmt, etc. (sync)   │
-│  ├── visit_async_call_expr → Task.pending(...)      │
-│  └── _await_tasks → asyncio.gather()                │
-│                                                     │
-│  AsyncLLMInterpreter (extends Interpreter)          │
-│  ├── visit_llm_act_expr_async → await act_async()  │
-│  └── visit_llm_if_stmt_async → await route_async() │
-└─────────────────────────────────────────────────────┘
-```
+The spawned agent runs in an isolated daemon thread with a deep-copied snapshot of the parent environment. Communication happens exclusively through the `Channel` (dual-queue: `to_spawned` / `from_spawned`).
 
 **Execution flow**:
 ```
-async Worker("A")  → Task.pending(call_node, interpreter, env_snapshot)  [NOT executed]
-async Worker("B")  → Task.pending(call_node, interpreter, env_snapshot)  [NOT executed]
-await [t1, t2]     → asyncio.gather(task.execute_async()) → concurrent → [resultA, resultB]
+spawnagent Worker("A")  -> Thread(started) -> isolated Interpreter(env_snapshot)
+Worker main runs        -> reply.send(result) -> from_spawned queue
+mailbox.receive()       -> queue.get() -> blocks until result arrives -> resultA
 ```
 
-**Task.execute_async()** detects interpreter type:
-- `AsyncLLMInterpreter` → direct `await visit_llm_act_expr_async()` (zero threads)
-- Regular `Interpreter` → `asyncio.to_thread(execute_sync)` (fallback)
-
-**Memory**: Zero additional threads for concurrent LLM calls. Suitable for memory-constrained environments (1.8GB RAM + 8GB swap).
-
-**Performance**: 3 × 1s LLM calls complete in ~1s (concurrent) vs ~3s (sequential).
+**Isolation**: `environment.snapshot()` deep-copies ALL variables (including `SharedStore`). The spawned agent cannot accidentally mutate parent state. To share mutable state explicitly, pass a `SharedStore` reference through the `Channel`:
+```helen
+shared store Counter { count: int = 0 }
+let counter = Counter()
+let mailbox = spawnagent Worker(counter)  // reference passed in message
+```
 
 **Key implementation files**:
-- `helen/interpreter/async_interpreter.py` — `AsyncLLMInterpreter` with async LLM methods
-- `helen/interpreter/task.py` — `Task.pending()`, `execute_async()`, `_execute_async()`
-- `helen/interpreter/environment.py` — `snapshot()` for task isolation
-- `helen/runtime/llm_runtime.py` — `act_async()`, `route_async()` abstract methods
-- `helen/runtime/hermes_cli_llm.py` — `_ask_async()` using `asyncio.create_subprocess_exec()`
+- `helen/runtime/channel.py` - `Channel` (dual-queue container) + `ChannelEndpoint` (main/spawned sides)
+- `helen/interpreter/interpreter.py` - `visit_spawnagent_expr` (snapshot + thread creation)
+- `helen/interpreter/environment.py` - `snapshot()` (full deep copy)
+- `helen/stdlib/mailbox.py` - `mailbox_select()` for multi-channel select
 
-See `references/async-interpreter.md` for the full architecture, contract-first development approach, and performance benchmarks.
+**Pratt parser note**: `spawnagent` is registered as an expression prefix. The Pratt framework consumes the `SPAWNAGENT` token before calling `_spawnagent_expr`, so use `self._previous()` to access it (not `self._advance()`).
 
-**Pratt parser pitfall — statement vs expression prefix**: When a token (like `async`) is registered as BOTH a statement prefix (dispatched from `_declaration()`) AND an expression prefix (registered in Pratt rules), the two parse functions handle token consumption differently:
-- **Statement prefix** (`_async_call_stmt`): Called from `_declaration()` BEFORE the Pratt framework consumes the token → must call `self._advance()` to consume ASYNC
-- **Expression prefix** (`_async_call_expr`): Called by Pratt framework AFTER it already consumed the token → must use `self._previous()` to get the already-consumed ASYNC
-
-Using `self._advance()` in the expression prefix causes the parser to skip the NEXT token (e.g., the agent name), leading to "'async' must be followed by a function call" errors on the line AFTER the async expression.
-
-**Pitfall — asyncio.to_thread is NOT true async**: `asyncio.to_thread()` and `loop.run_in_executor()` still use thread pools under the hood. Wrapping them in `asyncio.run()` does NOT make them single-thread. For memory-constrained environments, you MUST implement true async methods (e.g., `act_async()` using `asyncio.create_subprocess_exec()`) and call them directly with `await`, not via thread pool delegation.
-
-**Pitfall — REPL event loop detection**: `_await_tasks()` must detect whether it's running inside an already-running event loop (e.g., in REPL) to avoid `RuntimeError: asyncio.run() cannot be called from a running event loop`. Use `asyncio.get_event_loop()` + `.is_running()` — NOT `asyncio.get_running_loop()`, which raises `RuntimeError` when no loop exists and the except clause may not catch it properly in all contexts. When in a running loop (REPL), fall back to `concurrent.futures.ThreadPoolExecutor` directly instead of `asyncio.run()`:
-```python
-in_event_loop = False
-try:
-    _loop = asyncio.get_event_loop()
-    if _loop.is_running():
-        in_event_loop = True
-except Exception:
-    in_event_loop = False
-
-if in_event_loop:
-    # REPL: use ThreadPoolExecutor directly
-    import concurrent.futures
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = [executor.submit(task.execute) for task in pending_tasks]
-        for f in concurrent.futures.as_completed(futures):
-            f.result()
-else:
-    # Script: use asyncio.run()
-    asyncio.run(execute_all())
-```
+**Pitfall — SharedStore methods are NOT deep-copied**: When snapshot deep-copies a `SharedStore`, the data fields are copied but the bound methods are not (they reference closures over the original interpreter). To call methods on a shared store inside a spawned agent, pass the store reference explicitly through the Channel rather than relying on the snapshot copy.
 
 ### Tutorial `llm if` Syntax Conflict — FIXED
 
@@ -1673,7 +1637,7 @@ See `references/tutorial-testing.md` for test runner details, skip categories, a
 | M8 Import Resolver | ✅ `.helen`/`.json`/`.md`. ⚠️ **Missing `.yaml`/`.yml`** support; **path security (`../` escape prevention)** not verified |
 | M12 LSP Server | ✅ Diagnostics (full Lex→Parse→Analyze), completions (keywords+types+stdlib), go-to-definition. ⚠️ **Completions not position-filtered**; missing hover/signature help/rename |
 | M13 VS Code Extension | ⚠️ TextMate syntax highlight only; **no LSP-backed completion/jump integration** |
-| M14 Async/Await | ✅ **Fully implemented with true single-thread asyncio concurrent execution (Phase 1b, 2026-06)**. `async` works as both statement and expression (`let task = async Worker(...)`). Creates pending Tasks (deferred execution). `await [list]` executes all pending tasks CONCURRENTLY via pure asyncio (zero additional threads). `AsyncLLMInterpreter` extends `Interpreter` with async LLM methods. `AggregateError` catchable by try-catch. Environment isolation via `snapshot()`. See `references/async-interpreter.md` for architecture details |
+| M14 Concurrency | ✅ **Replaced by `spawnagent` + Channel (v1.18, 2026-07)**. `spawnagent Agent(...)` spawns an agent in a daemon thread and returns a `Channel` (mailbox) for bidirectional communication (`send`/`receive`/`cancel`). `mailbox_select([m1, m2])` for multi-channel select. Old `async`/`await`/`detach` keywords and `AsyncLLMInterpreter`/`Task` classes removed. Environment isolation via full `snapshot()` deep copy (including SharedStore). See `references/spawnagent-proposal.md` for architecture details |
 
 ### ❌ Not Implemented (HLD v1.2.1 gaps found 2026-06)
 | ❌ Not Implemented (HLD v1.2.1 gaps found 2026-06) |
@@ -1751,8 +1715,7 @@ Critical pitfalls:
 Helen now supports streaming LLM output through three mechanisms:
 
 1. **Standard library**: `stream_print()`, `stream_clear()`, `progress_bar()`, cursor movement
-2. **Syntax**: `llm act "prompt" [on_chunk callback] [on_complete callback]`
-3. **Async iterators**: `StreamingResponse` wrapper for `for await` patterns
+2. **Syntax**: `llm act "prompt" [on_chunk callback] [on_complete callback]` (v1.14: streaming merged into `llm act`; `for await` and `StreamingResponse` removed in v1.18)
 
 See `references/streaming-implementation.md` for complete implementation guide.
 

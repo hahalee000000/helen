@@ -706,65 +706,84 @@ print(BankAccount.balance)  // 输出: 900
 print(BankAccount._transactionLog)  // 错误！
 ```
 
-### Channel：Agent 间通信端点
+### Channel：Agent 间消息通信（v1.18+）
 
-`channel` 用于 Agent 间的**消息传递**，语法和 shared store 相同，但语义不同。
+`spawnagent` 返回一个 **Channel**（邮箱），用于与生成的 Agent 进行双向通信。Channel 提供 `send`/`receive`/`try_receive`/`cancel`/`close` 方法。
 
 ```helen
-channel MessageQueue {
-    let messages: list = []
-    
-    fn send(msg: str) {
-        messages.append(msg)
-    }
-    
-    fn receive(): str {
-        if (len(messages) == 0) {
-            return ""
-        }
-        return messages.shift()
-    }
-    
-    fn pending(): int {
-        return len(messages)
+// Worker Agent 接收一个 Channel 参数用于回复结果
+agent Worker(task: str, reply: Channel) {
+    main {
+        let result = "完成: " + task
+        reply.send(result)
     }
 }
 
-// 生产者
-agent Producer() {
-    main {
-        MessageQueue.send("task-1")
-        MessageQueue.send("task-2")
-    }
-}
-
-// 消费者
-agent Consumer() {
-    main {
-        let msg = MessageQueue.receive()
-        if (msg != "") {
-            print("Processing: " + msg)
-        }
-    }
-}
+// spawnagent 返回 Channel，自动注入为 Agent 的最后一个参数
+let mailbox = spawnagent Worker("任务A")
+print(mailbox.receive())  // "完成: 任务A"
 ```
 
-**Shared Store vs Channel**：
+**Channel API：**
 
-| 特性 | Shared Store | Channel |
-|------|--------------|---------|
-| 语义 | 共享状态容器 | 消息传递端点 |
-| 典型用途 | Counter、Cache、Config | Queue、EventBus、Signal |
-| 运行时 | 相同（SharedStore 类） | 相同（SharedStore 类） |
-| 线程安全 | ✅ RLock | ✅ RLock |
+| 方法 | 说明 |
+|------|------|
+| `channel.send(value)` | 发送消息到 Channel |
+| `channel.receive()` | 阻塞接收消息 |
+| `channel.try_receive()` | 非阻塞接收，无消息返回 null |
+| `channel.cancel()` | 取消 Channel 对应的 Agent |
+| `channel.close()` | 关闭 Channel |
 
-选择建议：
-- 需要**共享引用类型**（list/dict）+ 方法封装 → `shared store`
-- 构建**消息/事件系统** → `channel`
+**中文别名**：`发送()`、`接收()`、`尝试接收()`、`取消()`、`关闭()`。
 
-### Detach 与共享状态（v1.17+）
+#### 多通道选择：mailbox_select
 
-`detach` 语句可以在后台执行任务，同时访问 shared store 和 channel：
+当同时监听多个 Channel 时，使用 `mailbox_select` 进行多路复用：
+
+```helen
+agent Fetcher(url: str, reply: Channel) {
+    main {
+        let data = web_fetch(url)
+        reply.send(data)
+    }
+}
+
+let mb1 = spawnagent Fetcher("https://api.example.com/a")
+let mb2 = spawnagent Fetcher("https://api.example.com/b")
+
+// 等待任意一个 Channel 返回结果
+let result = mailbox_select([mb1, mb2])
+print("最先返回: " + result)
+```
+
+**中文别名**：`邮箱选择([mb1, mb2])`。
+
+#### 并发模式示例
+
+```helen
+// 生产者 Agent：向 Channel 发送多条消息
+agent Producer(items: list, reply: Channel) {
+    main {
+        for item in items {
+            reply.send("处理: " + item)
+        }
+        reply.send("done")  // 完成信号
+    }
+}
+
+// 消费者：从 Channel 接收消息
+let mailbox = spawnagent Producer(["苹果", "香蕉", "樱桃"])
+let msg = mailbox.receive()
+while (msg != "done") {
+    print(msg)
+    msg = mailbox.receive()
+}
+mailbox.close()
+```
+
+### spawnagent 与共享状态（v1.18+）
+
+`spawnagent` 可以在后台启动 Agent，通过 Channel 进行通信。多个 spawnagent 可以同时访问 shared store：
 
 ```helen
 shared store Counter {
@@ -772,24 +791,31 @@ shared store Counter {
     fn increment() { count = count + 1 }
 }
 
-agent Worker() {
+agent Worker(reply: Channel) {
     main {
-        // 启动 3 个后台任务，共享同一个 Counter
-        detach Counter.increment()
-        detach Counter.increment()
-        detach Counter.increment()
+        Counter.increment()
+        reply.send("done")
     }
 }
 
-Worker()
-sleep(100)  // 等待后台任务
+// 启动 3 个并发 Agent，共享同一个 Counter
+let mb1 = spawnagent Worker()
+let mb2 = spawnagent Worker()
+let mb3 = spawnagent Worker()
+
+// 等待所有 Agent 完成
+print(mb1.receive())  // "done"
+print(mb2.receive())  // "done"
+print(mb3.receive())  // "done"
+
 print(Counter.count)  // 输出: 3
 ```
 
 **线程安全保证**：
 - SharedStore 内部使用 RLock 保护所有字段访问
-- 多个 detached agent 并发调用方法时，自动序列化执行
-- 主线程和 detached agent 可以同时访问同一个 SharedStore
+- 多个 spawnagent 并发调用方法时，自动序列化执行
+- 主线程和 spawnagent 可以同时访问同一个 SharedStore
+- Channel 的 `send`/`receive` 操作也是线程安全的
 
 ---
 

@@ -49,10 +49,10 @@ baseline = {
         "BinaryOpNode": {"fields": ["left", "operator", "right", "span"]},
         "UnaryOpNode": {"fields": ["operator", "right", "span"]},
         "LlmIfStmtNode": {"fields": ["description", "branches", "span"]},
-        "LlmActStmtNode": {"fields": ["has_await", "span"]},
+        "LlmActStmtNode": {"fields": ["span"]},
         "TryStmtNode": {"fields": ["try_body", "catch_clauses", "catch_all", "finally_body", "span"]},
         "CatchClauseNode": {"fields": ["exception_type", "var_name", "body", "span"]},
-        "AsyncCallStmtNode": {"fields": ["agent_name", "arguments", "span"]},
+        "SpawnagentExprNode": {"fields": ["call", "span"]},
         "ForStmtNode": {"fields": ["iterator", "iterable", "body", "span"]},
         "AgentDeclNode": {"fields": ["name", "params", "declarations", "prompt", "logic", "span"]},
         "ImportStmtNode": {"fields": ["path", "alias", "span"]},
@@ -141,8 +141,8 @@ grep -n "ERR_\d\+\s*=" file
 | 错误码常量 | 300-314 与 baseline 一致？ | 对齐编号 |
 | SemanticAnalyzer | 字段访问与 Phase 0 定义一致？ | node.initializer (非 node.value) |
 | visit_llm_if_stmt | 语义正确（LLM 路由，非普通 if）？ | 访问 description + branches |
-| visit_llm_act_stmt | 结构正确（has_await，非 target/arguments）？ | 移除错误字段访问 |
-| visit_async_call_stmt | 使用 agent_name + arguments？ | 不使用 node.body |
+| visit_llm_act_stmt | 结构正确？ | 移除错误字段访问 |
+| visit_spawnagent_expr | 使用 node.call？ | 不使用 node.body |
 | Environment | const 保护逻辑正确？ | 对比 HLD |
 | Interpreter | visit_* 方法字段访问与 Phase 0 一致？ | 全面对齐 |
 | 异常层次 | 与 HLD 3.6.4 一致？ | 对比异常继承树 |
@@ -314,7 +314,7 @@ sed -i 's/from \.tokens import.*SourceSpan/from .source import SourceSpan/g' fil
 | `node.then_branch` (IfStmtNode) | `node.then_body` | P1 Parser |
 | `node.else_branch` (IfStmtNode) | `node.else_body` | P1 Parser |
 | `node.iterator` (ForStmtNode) | `node.var_name` | P1 Parser |
-| `node.arguments` (AsyncCallStmtNode) | `node.args` | P1 Parser |
+| `node.arguments` (AsyncCallStmtNode, v1.18 removed) | `node.args` | P1 Parser (historical) |
 | `node.elements` (ListLiteralNode) | `node.items` | Remaining TypeChecker |
 | `node.right` (UnaryOpNode) | `node.expression` | P2-3 Analyzer/Interpreter |
 | `node.statements` (ProgramNode) | `node.body` | P2-3 Analyzer/Interpreter |
@@ -738,7 +738,7 @@ When fixing 20+ inconsistencies across 4+ documents, use **parallel delegation**
 
 ```python
 # Instead of sequential fix (Phase0 → P1 → P2-3 → Remaining),
-# use delegate_task with 3 concurrent subagents:
+# use delegate_task with 3 concurrent subagents (or spawnagent in Helen v1.18+):
 
 # Subagent 1: Fix Phase0 (AST definitions + ErrorCode + HellenError)
 # Subagent 2: Fix P1 Parser + P2-3 (interpreter bugs + operator types)
@@ -904,7 +904,7 @@ design = design.replace('(Stmt)', '(StatementNode)')
 
 ### Pattern 38：Visitor 方法清理——注意非 ABC 区域的方法残留
 
-在大型设计文档中，旧的 visitor 方法（如 `visit_await`, `visit_fn_decl`）可能残留在 ASTPrinter 或其他非 Visitor ABC 区域。简单的 `def visit_\w+` 计数会把这些计入 Visitor 方法总数，导致假阳性。
+在大型设计文档中，旧的 visitor 方法（如 `visit_await`、`visit_fn_decl`、`visit_async_call_stmt`）可能残留在 ASTPrinter 或其他非 Visitor ABC 区域。简单的 `def visit_\w+` 计数会把这些计入 Visitor 方法总数，导致假阳性。
 
 **检查方法**：
 ```python
@@ -949,23 +949,26 @@ self._error(ErrorCode.SEMANTIC_TYPE_MISMATCH, "...", node.span)
 
 ### 🟡 模式 32：P2-3 中 sync（Analyzer）与 async（Interpreter）visitor 方法的验证
 
+> **v1.18 更新**: 旧的 async/await 模型已移除。Interpreter visitor 方法现在不再标记为 `async def`，但 Analyzer 和 Interpreter 仍然是两个独立的 visitor，可能访问不同的 AST 字段。
+
 P2-3 文档为同一个 AST 节点定义了两个版本的 visitor 方法：
 - **sync `def visit_*`**：Semantic Analyzer 版本 — 只做类型检查和符号表构建
-- **async `async def visit_*`**：Interpreter 版本 — 实际执行 AST 遍历
+- **sync `def visit_*`**（Interpreter 版本）：实际执行 AST 遍历（v1.18 不再是 async）
 
 验证时必须**分别检查两个版本**，因为：
-- Analyzer 版本可能不需要访问运行时字段（如 `node.has_await`、`node.description`）
+- Analyzer 版本可能不需要访问运行时字段（如 `node.description`）
 - Interpreter 版本必须正确访问所有 AST 字段
 - 两个版本可能出现不同的不一致
 
 **检查方法**：
 ```python
-for prefix in ['def ', 'async def ']:
-    idx = doc.find(f'{prefix}visit_llm_if_stmt')
-    # 分别验证两个版本
+# 分别提取 Analyzer 和 Interpreter 的 visit 方法
+analyzer_methods = extract_visitor_methods(analyzer_section)
+interpreter_methods = extract_visitor_methods(interpreter_section)
+# 对比字段访问差异
 ```
 
-**实战案例**：`visit_llm_act_stmt` 的 Analyzer 版本只返回 `ANY`（不访问 `has_await`），但 Interpreter 版本需要处理 `has_await`。如果只检查第一个出现的 `def visit_llm_act_stmt`（Analyzer 版本），会误报"缺少 `has_await`"。
+**v1.18 变化**: `visit_llm_act_stmt` 不再需要处理 `has_await` 字段（该字段已移除）。`visit_spawnagent_expr` 替代了旧的 `visit_async_call_stmt`。
 
 ### 🟡 模式 39：Keyword 映射提取假阳性
 
@@ -975,7 +978,7 @@ for prefix in ['def ', 'async def ']:
 
 代码中新增 AST 节点后，ASTPrinter 的 visitor 方法会同步添加到代码，但**设计文档几乎总是遗漏**。实战中 code 有 46 个 ASTPrinter 方法，设计文档只有 26 个（缺失 20 个）。
 
-**受影响的典型方法**：visit_agent_param, visit_call_arg, visit_declaration, visit_fn_block, visit_literal_type, visit_map_entry, visit_optional_type, visit_type, visit_union_type, visit_program, visit_prompt_def, visit_catch_all, visit_catch_clause, visit_finally_block, visit_function_decl, visit_llm_branch, visit_async_call_stmt, visit_case。
+**受影响的典型方法**：visit_agent_param, visit_call_arg, visit_declaration, visit_fn_block, visit_literal_type, visit_map_entry, visit_optional_type, visit_type, visit_union_type, visit_program, visit_prompt_def, visit_catch_all, visit_catch_clause, visit_finally_block, visit_function_decl, visit_llm_branch, visit_spawnagent_expr, visit_case。
 
 **检查方法**：分别提取代码和设计文档中 class ASTPrinter 后的所有 def visit_\w+ 方法，做集合差集。
 
@@ -1035,4 +1038,4 @@ for prefix in ['def ', 'async def ']:
 | **SourceSpan** | 所有新节点携带 span | 检查 dataclass 定义 |
 | **跨 Phase 兼容** | 已有节点字段无漂移 | 对比 `AgentDeclNode` 等核心节点字段 vs 前期 |
 
-**Phase 编号陷阱**：HLD §5.1 的 Phase 编号与代码实际交付编号可能不一致。验证时应以 HLD 模块需求（M5/M8/etc）为基准，而非 Phase 编号。例如代码标注的"Phase 6"实际交付的是 HLD Phase 4 的剩余内容（Import Resolver + Agent async/await），而 HLD 定义的真实 Phase 6 是 CLI + VS Code。
+**Phase 编号陷阱**：HLD §5.1 的 Phase 编号与代码实际交付编号可能不一致。验证时应以 HLD 模块需求（M5/M8/etc）为基准，而非 Phase 编号。例如代码标注的"Phase 6"实际交付的是 HLD Phase 4 的剩余内容（Import Resolver + Agent spawnagent），而 HLD 定义的真实 Phase 6 是 CLI + VS Code。

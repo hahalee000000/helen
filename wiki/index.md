@@ -1,7 +1,7 @@
 # Helen 语言 Wiki 索引
 
 > **Helen** — A Prompt-first Agent Programming Language
-> 版本: v1.17 | 状态: Phase 0-10 全部实现 + Phase 1-7 上下文管理增强 + TranscriptStore SSOT + 多模态支持 + 中文语法 + Agent 作用域隔离 | 测试: 2822 passed
+> 版本: v1.18 | 状态: Phase 0-10 全部实现 + Phase 1-7 上下文管理增强 + TranscriptStore SSOT + 多模态支持 + spawnagent 并发原语 + 中文语法 + Agent 作用域隔离 | 测试: 2791 passed
 
 ---
 
@@ -9,13 +9,13 @@
 
 ### 一、语言概述
 - [[overview/design-philosophy|设计哲学]] — 为什么需要 Agent 编程语言
-- [[overview/language-spec|语言规格]] — 97 关键字 (48.5 英文 + 48.5 中文)、Token、AST 节点一览
+- [[overview/language-spec|语言规格]] — 89 关键字 (44.5 英文 + 44.5 中文)、Token、AST 节点一览
 - [[overview/architecture|整体架构]] — 3 层架构 (Core / Runtime / Toolchain)
 
 ### 二、前端编译
 - [[syntax/lexical|词法分析]] — 89 Token 类型、Maximal Munch、三引号字符串、CJK 字符集
 - [[syntax/grammar|语法规范]] — EBNF 完整语法、Pratt Parsing 10 级优先级
-- [[syntax/keywords|关键字参考]] — 97 关键字分类与用法（含中文关键字映射表）
+- [[syntax/keywords|关键字参考]] — 89 关键字分类与用法（含中文关键字映射表）
 
 ### 三、中间表示与语义
 - [[compiler/ast|AST 节点定义]] — 50 节点类、Visitor 模式 (47 方法)
@@ -25,7 +25,7 @@
 ### 四、解释执行
 - [[interpreter/execution|执行引擎]] — AST 遍历解释器、Environment 作用域链
 - [[interpreter/llm-integration|LLM 集成]] — `llm act/if`、对话历史
-- [[interpreter/async|异步与并发]] — `async call`、`await`、Promise.all
+- [[interpreter/spawnagent|并发与 spawnagent]] — `spawnagent`、Channel 消息队列、mailbox_select
 
 ### 五、运行时系统
 - [[runtime/llm-runtime|LLM 运行时]] — route/act 接口、取消机制
@@ -56,7 +56,7 @@
 - [[tutorial/04-control-flow|控制流]] — if/for/while/match/try-catch
 - [[tutorial/05-agents|Agent 编程]] — agent 声明、description、prompt
 - [[tutorial/06-llm-statements|LLM 语句]] — act/if 实战
-- [[tutorial/07-async-await|异步编程]] — async call、await、错误聚合
+- [[tutorial/07-spawnagent|并发编程]] — spawnagent、Channel 消息队列、mailbox_select、显式共享
 - [[tutorial/08-modules|模块与导入]] — import、跨文件复用
 - [[tutorial/09-python-ffi|Python FFI]] — Python 库导入、类型转换
 - [[tutorial/10-stdlib|标准库参考]] — 255 个内置函数（255 中文别名）

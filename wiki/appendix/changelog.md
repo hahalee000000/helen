@@ -1,6 +1,102 @@
 # 版本历史
 
-> Helen v1.17 | 多模态格式适配器 — 8 个新 stdlib 函数将 provider 格式知识从 skill 文档提升为一等公民 API，`_default_media_adapter` 重构为委托调用
+> Helen v1.18 | spawnagent 并发原语 — `spawnagent` + Channel 消息队列替代 `async/await/detach`，snapshot 全部深复制，89 关键字
+
+---
+
+## v1.18: spawnagent 并发原语 (当前)
+
+**发布日期**: 2026-07-13  
+**核心特性**: `spawnagent` + Channel 消息队列统一并发与通信模型，替代旧的 `async/await/detach`
+
+### 主要变更
+
+#### 1. spawnagent 并发原语
+
+```helen
+agent Worker(task: str, reply: Channel) {
+    description "后台工作 agent"
+    main {
+        let result = llm act "处理" + task
+        reply.send(result)
+    }
+}
+
+main {
+    let mailbox = spawnagent Worker("数据分析")
+    let result = mailbox.receive()
+    print(result)
+}
+```
+
+- `spawnagent` 返回 `Channel` 类型（邮箱）
+- spawned agent 最后一个参数接收通信 channel（自动注入）
+- 支持双向通信、流式进度、竞争模式
+
+#### 2. Channel 消息队列
+
+- `Channel` 运行时类型（`helen/runtime/channel.py`）
+- 双队列设计：`_to_spawned` + `_from_spawned`
+- `send(msg)` / `receive(timeout?)` / `try_receive()` / `cancel()` / `close()` / `is_closed()`
+- 中文方法别名：`发送`/`接收`/`尝试接收`/`取消`/`关闭`/`已关闭`
+- `Channel()` 构造函数创建独立 channel
+- `mailbox_select([channels])` stdlib 多路复用
+
+#### 3. snapshot 语义变更
+
+- **全部深复制，无例外**（包括 SharedStore）
+- `SharedStore.__deepcopy__`：fields 深复制，methods 不复制
+- 共享通过 channel 显式传递引用
+
+#### 4. 删除清单
+
+| 删除 | 替代 |
+|------|------|
+| `async` / `await` / `detach` 关键字 | `spawnagent` / `生成` |
+| `AsyncCallStmtNode` / `AsyncCallExprNode` / `DetachStmtNode` | `SpawnagentExprNode` |
+| `ChannelDeclNode` / `channel X { fields }` | `Channel()` 构造函数 |
+| `ForAwaitStmtNode` | `on_chunk` 回调 |
+| `AsyncLLMInterpreter` (`async_interpreter.py`) | 新 Interpreter + Thread |
+| `Task` 类 (`task.py`) | Channel 端点 |
+| `act_async()` / `act_stream_async()` / `route_async()` | spawnagent |
+
+#### 5. 关键字变更
+
+- 新增：`spawnagent` / `生成`
+- 删除：`async` / `异步`、`await` / `等待`、`detach` / `分离`、`channel`（声明）/ `通道`（声明）
+- 总数：97 → 89（44.5 英文 + 44.5 中文）
+
+#### 6. 迁移指南
+
+```helen
+// 旧：detach + shared store 轮询
+shared store Result { let done = false; let data = "" }
+detach Worker("task")
+循环 { 如果 Result.done { 跳出 } sleep(100) }
+
+// 新：spawnagent + channel
+let m = spawnagent Worker("task")
+let data = m.receive()
+
+// 旧：async/await
+let t = async Agent("task")
+let result = await t
+
+// 新：spawnagent + receive
+let m = spawnagent Agent("task")
+let result = m.receive()
+
+// 旧：channel 声明语法
+channel EventBus { let last_event = "" }
+
+// 新：shared store（带锁结构体）或 Channel（消息队列）
+shared store EventBus { let last_event = "" }
+```
+
+### 测试
+
+- 新增测试：`test_spawnagent.py`、`test_channel.py`、`test_mailbox_select.py` 等
+- 总测试数：2791 passed
 
 ---
 

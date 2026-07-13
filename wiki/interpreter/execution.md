@@ -262,21 +262,57 @@ for param in agent.params:
         call_env.define(param.name, value)
 ```
 
-### v1.13 Channel 执行语义
+### v1.13 Channel 执行语义（v1.18 已更新）
 
-`channel` 声明在运行时复用 `SharedStore` 类：
+v1.18 起 `channel X { fields }` 声明语法已删除。Channel 现在通过 `Channel()` 构造函数或 `spawnagent` 创建，是消息队列（send/receive），不再是 SharedStore 的别名。
+
+**新 Channel 运行时**（`helen/runtime/channel.py`）：
+- `Channel` + `ChannelEndpoint` 双端模型
+- 内部两个 `queue.Queue`，支持双向通信
+- `send(msg)` / `receive(timeout?)` / `try_receive()` / `cancel()` / `close()` / `is_closed()`
+- 中文方法别名：`发送`/`接收`/`尝试接收`/`取消`/`关闭`/`已关闭`
+
+详见 [[interpreter/spawnagent|并发与 spawnagent]]。
+
+### v1.18 spawnagent 执行语义
+
+`spawnagent` 是 v1.18 引入的并发原语，替代旧的 `async/await/detach`：
 
 ```python
-def visit_channel_decl(self, node: ChannelDeclNode) -> object:
-    # 与 shared store 相同，创建 SharedStore 实例
-    fields = {}
-    methods = {}
-    # ... 求值字段初始值、绑定方法闭包
-    store = SharedStore(name=node.name, fields=fields, methods=methods)
-    self.environment.define(node.name, store, is_const=True)
+def visit_spawnagent_expr(self, node: SpawnagentExprNode) -> object:
+    from helen.runtime.channel import Channel, ChannelEndpoint
+
+    # 1. 创建 Channel（双端队列）
+    channel = Channel(name=f"spawn_{agent_name}")
+    main_endpoint = ChannelEndpoint(channel, is_main_thread=True)
+    spawned_endpoint = ChannelEndpoint(channel, is_main_thread=False)
+
+    # 2. 快照环境（全部深复制，包括 SharedStore）
+    env_snapshot = self.environment.snapshot()
+
+    # 3. 在新 daemon 线程中执行 spawned agent
+    def run_spawned():
+        spawned_interpreter = Interpreter(...)
+        spawned_interpreter.environment = env_snapshot
+        try:
+            call_node.accept(spawned_interpreter)
+        except Exception as e:
+            spawned_endpoint.send({"__error__": True, "message": str(e)})
+        finally:
+            spawned_endpoint.close()
+
+    thread = threading.Thread(target=run_spawned, daemon=True)
+    thread.start()
+
+    # 4. 返回主线程端点（Channel 类型）
+    return main_endpoint
 ```
 
-Channel 与 Shared Store 的运行时行为完全一致，语义差异仅在语言层面（通信端点 vs 共享状态容器）。
+**snapshot 语义变更**：全部深复制，无例外（包括 SharedStore）。
+**SharedStore.__deepcopy__**：fields 深复制，methods 不复制（闭包引用旧环境）。
+**显式共享**：通过 channel 传递 SharedStore 引用。
+
+详见 [[interpreter/spawnagent|并发与 spawnagent]]。
 
 ---
 

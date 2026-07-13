@@ -24,7 +24,7 @@ helen check <file.helen>        # Validate syntax/semantics without executing
 helen repl                      # Interactive REPL
 
 # Testing
-pytest                              # Run all 2875+ tests
+pytest                              # Run all 2791+ tests
 pytest tests/core/                  # Run tests for a specific module
 pytest tests/execution/test_functions.py::test_function_call -v  # Single test
 helen test <file.helen>             # Run Helen's built-in test framework
@@ -42,14 +42,14 @@ helen init                          # Initialize ~/.helen/ config directory
 
 ```
 Layer 1: Helen Core (pure language)
-  Lexer (maximal-munch, frozenset O(1) lookup, 97 bilingual keywords)
+  Lexer (maximal-munch, frozenset O(1) lookup, 89 bilingual keywords)
     → Parser (Pratt precedence + recursive descent)
     → AST (64 frozen dataclass nodes, Visitor pattern)
     → SemanticAnalyzer (two-pass for forward refs, SymbolTable, 14-type system)
     → Interpreter (environment chain, sentinels for control flow)
 
 Layer 2: Runtime (LLM integration)
-  LLMRuntime (abstract) → HttpLLMRuntime (httpx connection pool + async, OpenAI-compatible API)
+  LLMRuntime (abstract) → HttpLLMRuntime (httpx connection pool, OpenAI-compatible API)
   Tools (10 built-in: web_search, web_fetch, read/write/patch_file, shell_exec, calculate, load_skill, find_files, search_files)
   ImportResolver (.helen/.json/.yaml/.md/.txt/Python), Config, History (with compression)
   TranscriptStore (v1.16: SSOT for all messages, SQLite/JSONL backends, LRU cache, UUID addressing)
@@ -73,8 +73,10 @@ helen/
 │                  # fuzzy_match.py (9-strategy file patching)
 │                  # transcript_store.py (v1.16: SSOT, SQLiteBackend, JSONLBackend, LRU cache)
 │                  # session_manager.py (v1.16: session lifecycle, path management)
+│                  # channel.py (v1.18: Channel + ChannelEndpoint message queue)
 ├── stdlib/        # 255 built-in functions (string, math, crypto, collections, test, quality, context, transcript, media, etc.)
 │                  # locales/zh.py (255 Chinese aliases)
+│                  # mailbox.py (v1.18: mailbox_select for multi-channel select)
 ├── ffi/           # Python FFI for importing Python modules from Helen
 ├── cli/           # __main__.py (entry point), repl.py, formatter.py, docgen.py
 ├── lsp/           # Language Server Protocol (JSON-RPC 2.0 over stdio)
@@ -98,9 +100,14 @@ skills/            # 16 built-in skills (SKILL.md + references/)
   - Default (no decorator): Standard isolation — module `let` invisible, `const` auto-visible read-only
 - **Shared store & channel (v1.12-v1.13)**: Thread-safe shared state containers
   - `shared store Name { fields, methods }` — mutable shared state with RLock protection
-  - `channel Name { fields, methods }` — inter-agent communication endpoints (same runtime as store)
-  - Chinese keywords: `仓库` (store), `通道` (channel)
+  - `通道` (channel) — Chinese alias for `shared store` (same declaration syntax, same runtime)
+  - Chinese keywords: `仓库` (store), `通道` (channel alias)
   - `_` prefix fields are private (inaccessible from agent code)
+- **Channel message queue (v1.18)**: `spawnagent` returns a Channel (mailbox) for message-passing concurrency
+  - `spawnagent Agent(...)` — spawns agent, returns Channel immediately
+  - Channel methods: `send(msg)`, `receive()`, `try_receive()`, `cancel()`, `close()`
+  - `mailbox_select([m1, m2])` — multi-channel select (first-ready wins)
+  - Chinese aliases: `发送()`, `接收()`, `尝试接收()`, `取消()`, `关闭()`
 - **ReadOnlyView (v1.12)**: Immutable wrapper for agent parameters
   - Blocks all mutation attempts → raises `ScopeViolationError`
   - Supports `__getitem__`, `__len__`, `__iter__`, `__contains__`, `__bool__`, `__str__`, comparison operators, `__add__`, `__radd__`, `__hash__`
@@ -120,13 +127,13 @@ skills/            # 16 built-in skills (SKILL.md + references/)
   - **设计原则**：协议未统一时不固化进语法；未来新模态/新协议无需修改语言核心，用户更新回调或 skill 即可
   - **配套 skill**：`multimodal-providers` 提供各主流 provider（OpenAI/Claude/Gemini/Seedance/Kling 等）的标准回调写法模板
   - **中文别名**：`媒体()`, `媒体base64()`, `是媒体()`, `媒体类型()`, `处理媒体 fn(...)`, `生成 fn(...)`
-- **Async/await**: `async call` for concurrent agent execution, `await [list]` for Promise.all. HTTP layer has true async: `act_async()` / `act_stream_async()` via `httpx.AsyncClient` (v1.10)
+- **spawnagent + Channel (v1.18)**: `spawnagent Agent(...)` spawns an agent and returns a Channel (mailbox) immediately. The spawned agent runs in an isolated environment with a deep-copied snapshot of ALL variables (including SharedStore). Inter-agent data sharing is done explicitly by passing SharedStore references through Channel messages. `mailbox_select([m1, m2, ...])` provides multi-channel select (first-ready wins). Old async/await/detach keywords and `channel X { fields }` declaration syntax removed (v1.18).
 - **Short-circuit evaluation (v1.10)**: `&&` and `||` short-circuit
 - **Type system**: 14 types including Optional (`str?`), Union (`int | str`), Protocol, Agent, Literal. Return type annotation uses `:` syntax only (`fn foo(): int {}`); `->` syntax removed (v1.10)
 - **Pattern matching**: `match` with range, wildcard, variable binding, type patterns
 - **Exception hierarchy**: `AnyError → LLMError → TimeoutError/ModelError/AgentError`, `ToolError`, `RuntimeError` (including wrapped stdlib Python exceptions since v1.10), `AssertionError`, `AggregateError`, `ScopeViolationError`
 - **Imports**: Multi-format (`.helen`, `.json`, `.yaml`, `.md`, `.txt`, Python), circular detection; imported `shared let` tracked correctly since v1.10
-- **Chinese support**: 97 bilingual keywords (48.5 English + 48.5 Chinese) with full bilingual support (CJK identifiers, fullwidth punctuation since v1.10, Chinese quotes since v1.10)
+- **Chinese support**: 89 bilingual keywords (44.5 English + 44.5 Chinese) with full bilingual support (CJK identifiers, fullwidth punctuation since v1.10, Chinese quotes since v1.10)
 - **Subscript/field assignment (v1.10)**: `arr[i] = x` and `obj.field = x` are supported as assignment targets
 - **Alias statement (v1.10)**: `alias <canonical> as <alias_name>` / `别名 <canonical> 为 <alias_name>` — create aliases for stdlib, user functions, agents, and variables
 - **Context management (v1.12)**: `clear_context()` clears conversation history; `compress_context(strategy)` with strategies: `auto`, `summarize`, `truncate`, `none`
@@ -182,8 +189,8 @@ Also supports `.env` format and falls back to `~/.hermes/.env`.
 Tests in `tests/` mirror the source structure:
 - `core/` — Lexer, parser, AST, tokens, errors
 - `semantic/` — Semantic analyzer, agent scope isolation
-- `interpreter/` — Interpreter, async, isolation (v1.12)
-- `execution/` — End-to-end (agents, async, control flow, functions, imports, match, exceptions, v1.12 isolation)
+- `interpreter/` — Interpreter, isolation (v1.12)
+- `execution/` — End-to-end (agents, control flow, functions, imports, match, exceptions, v1.12 isolation, v1.18 spawnagent)
 - `runtime/` — LLM runtime, tools, memory, history, config, imports, working memory, graduated compression, cache-aware compression, transcript store, session manager
 - `stdlib/` — Standard library functions, context management, transcript functions
 - `language/` — Feature tests (v16-v18: pattern matching, closures, protocols)
@@ -192,7 +199,7 @@ Tests in `tests/` mirror the source structure:
 - `lsp/` — Language Server
 - `cli/` — CLI and REPL
 
-**2875+ tests passing** (Python pytest)
+**2791+ tests passing** (Python pytest)
 
 Helen also has a built-in test framework (`helen/stdlib/test.py`) with `test()`, `assert_equal()`, `assert_true()`, `assert_throws()`, expect chains, suites, filtering, JSON output, watch mode, and coverage tracking.
 

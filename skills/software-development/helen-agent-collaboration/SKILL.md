@@ -1,15 +1,15 @@
 ---
 name: helen-agent-collaboration
 description: "Helen Agent 协作模式 — 多 Agent 协作、编排、分工、数据流、共享状态、作用域隔离"
-version: 1.17.0
+version: 1.18.0
 author: Helen Team
 license: MIT
-tags: [helen, agent, collaboration, orchestration, workflow, multi-agent, shared-let, scope-isolation, v1.12, read-only-params, ground-truth-injection, v1.17]
+tags: [helen, agent, collaboration, orchestration, workflow, multi-agent, shared-let, scope-isolation, v1.12, read-only-params, ground-truth-injection, v1.17, spawnagent, channel, v1.18]
 ---
 
 # Helen Agent 协作模式
 
-本技能描述 Helen 语言中多 Agent 协作的模式和最佳实践（v1.12 更新）。
+本技能描述 Helen 语言中多 Agent 协作的模式和最佳实践（v1.18 更新：spawnagent + Channel 替代 async/await）。
 
 ## 核心概念
 
@@ -105,12 +105,13 @@ agent TaskWorker(worker_id: str, queue: list, completed: map) {
     }
 }
 
-// 协作流程
+// 协作流程（v1.18: spawnagent + Channel）
 let initial_queue = []
 let queue = TaskProducer(["task1", "task2", "task3"], initial_queue)
-let w1 = async TaskWorker("W1", queue, {})
-let w2 = async TaskWorker("W2", queue, {})
-await [w1, w2]
+let w1 = spawnagent TaskWorker("W1", queue, {})
+let w2 = spawnagent TaskWorker("W2", queue, {})
+let r1 = w1.receive()
+let r2 = w2.receive()
 print("Completed: " + str(completed_count))
 ```
 ```
@@ -208,15 +209,18 @@ agent ParallelOrchestrator(file_paths: list) {
     
     functions {
         fn analyze_files_parallel(paths: list): map {
-            // 启动并行分析
-            let tasks = []
+            // 启动并行分析（v1.18: spawnagent）
+            let mailboxes = []
             for path in paths {
-                let task = async CodeAnalyzer(path)
-                tasks.append(task)
+                let mailbox = spawnagent CodeAnalyzer(path)
+                mailboxes.append(mailbox)
             }
             
-            // 等待所有完成
-            let results = await tasks
+            // 逐个接收结果
+            let results = []
+            for mailbox in mailboxes {
+                results.append(mailbox.receive())
+            }
             
             // 汇总结果
             let summary = ResultSummarizer(results)
@@ -389,10 +393,10 @@ agent ProjectManager(requirement: str) {
         let architecture = Architect(analysis)
         project_progress = 50
         
-        // 阶段 3: 并行开发
-        let frontend_task = async FrontendDev(architecture)
-        let backend_task = async BackendDev(architecture)
-        let dev_results = await [frontend_task, backend_task]
+        // 阶段 3: 并行开发（v1.18: spawnagent + Channel）
+        let frontend_mb = spawnagent FrontendDev(architecture)
+        let backend_mb = spawnagent BackendDev(architecture)
+        let dev_results = [frontend_mb.receive(), backend_mb.receive()]
         project_progress = 80
         
         // 阶段 4: 集成测试
@@ -477,16 +481,19 @@ agent SolutionSelector(problem: str) {
     description "竞争选择最佳方案"
     
     main {
-        // 多种策略并行竞争
+        // 多种策略并行竞争（v1.18: spawnagent）
         let strategies = ["分治法", "动态规划", "贪心算法", "回溯法"]
-        let tasks = []
+        let mailboxes = []
         
         for strategy in strategies {
-            let task = async SolutionGenerator(problem, strategy)
-            tasks.append(task)
+            let mailbox = spawnagent SolutionGenerator(problem, strategy)
+            mailboxes.append(mailbox)
         }
         
-        await tasks
+        // 接收所有结果
+        for mailbox in mailboxes {
+            mailbox.receive()
+        }
         
         // 返回最佳方案
         return best_solution
@@ -606,9 +613,8 @@ agent Consumer(registry: TaskRegistry) {
 
 main {
     let registry = TaskRegistry
-    async call Producer(registry)
-    async call Consumer(registry)
-    await []
+    spawnagent Producer(registry)
+    spawnagent Consumer(registry)
 }
 ```
 
@@ -617,52 +623,45 @@ main {
 - `_` 前缀字段为私有，agent 不可直接访问
 - 方法封装逻辑，避免散落的锁操作
 
-### 5. 使用 Channel 进行 Agent 间通信（v1.13）
+### 5. 使用 Channel 消息队列进行 Agent 间通信（v1.18）
 
-Channel 提供类型安全的结构化通信：
+v1.18 引入 `spawnagent` + Channel 消息队列，替代旧的 async/await 并发模型：
 
 ```helen
-channel MessageQueue {
-    messages: list = []
-
-    fn send(msg: str) { messages.append(msg) }
-    fn receive(): str { return messages.shift() }
-    fn pending(): int { return len(messages) }
-    fn is_empty(): bool { return len(messages) == 0 }
-}
-
-agent Sender(queue: MessageQueue) {
+// spawnagent 返回 Channel（邮箱）
+agent Sender(output: Channel) {
     main {
-        queue.send("Hello from sender")
-        queue.send("Another message")
+        output.send("Hello from sender")
+        output.send("Another message")
+        return "done"
     }
 }
 
-agent Receiver(queue: MessageQueue) {
+agent Receiver(input: Channel) {
     main {
-        while not queue.is_empty() {
-            let msg = queue.receive()
-            print("Received: " + msg)
-        }
+        let msg1 = input.receive()
+        let msg2 = input.receive()
+        print("Received: " + msg1 + ", " + msg2)
+        return msg1 + msg2
     }
 }
 
 main {
-    let queue = MessageQueue
-    async call Sender(queue)
-    async call Receiver(queue)
-    await []
+    // 创建 channel 连接 sender 和 receiver
+    // 通过 spawnagent 启动并发 agent
+    let mb1 = spawnagent Sender(null)
+    let result = mb1.receive()
 }
 ```
 
-**Channel vs Shared Store**:
+**v1.18 Channel 消息队列 vs Shared Store**:
 
 | 场景 | 推荐 |
 |------|------|
 | 多个 Agent 读写同一个状态 | Shared Store |
-| Agent 间传递消息/任务 | Channel |
-| 需要类型安全的接口 | Channel |
-| 需要线程安全的字段访问 | 两者都支持 |
+| Agent 间传递消息/任务结果 | spawnagent + Channel |
+| 多路复用选择 | mailbox_select([m1, m2, ...]) |
+| 需要线程安全的字段访问 | Shared Store |
 
 ### 6. 向下游 Agent 传播环境事实（v1.17）
 
@@ -701,13 +700,16 @@ agent RobustOrchestrator(tasks: list) {
     description "带错误处理的编排器"
     
     main {
-        let promises = []
+        let mailboxes = []
         for task in tasks {
-            promises.append(async TaskWorker(task))
+            mailboxes.append(spawnagent TaskWorker(task))
         }
         
         try {
-            let results = await promises
+            let results = []
+            for mailbox in mailboxes {
+                results.append(mailbox.receive())
+            }
             return results
         } catch AggregateError as e {
             print("部分任务失败: " + str(len(e.errors)))
@@ -736,17 +738,18 @@ agent BatchProcessor(items: list) {
     main {
         let results = []
         
-        // 分批处理
+        // 分批处理（v1.18: spawnagent）
         for i in range(0, len(items), MAX_CONCURRENT) {
             let batch = items[i:i + MAX_CONCURRENT]
-            let tasks = []
+            let mailboxes = []
             
             for item in batch {
-                tasks.append(async Worker(item))
+                mailboxes.append(spawnagent Worker(item))
             }
             
-            let batch_results = await tasks
-            results.extend(batch_results)
+            for mailbox in mailboxes {
+                results.append(mailbox.receive())
+            }
         }
         
         return results

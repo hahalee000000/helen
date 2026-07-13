@@ -317,7 +317,7 @@ fn main() {
 - **模式匹配** - `match/case` 表达式
 - **协议** - `protocol/impl` 接口
 - **错误处理** - `try/catch/finally`
-- **异步/等待** - 并发操作
+- **并发** - `spawnagent` / Channel 消息队列
 - **标准库** - 常用工具函数
 
 ---

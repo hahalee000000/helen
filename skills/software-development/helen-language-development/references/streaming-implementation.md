@@ -7,7 +7,7 @@ Phase 1-3 streaming features for Helen language (2400+ tests).
 ```
 Phase 1: Stream output stdlib functions (stream_print, progress_bar, etc.)
 Phase 2: llm act with on_chunk/on_complete callbacks (v1.14: merged from llm stream)
-Phase 3: Async iterator support (for await, StreamingResponse, streaming true)
+Phase 3: Legacy streaming response (StreamingResponse wrapper, streaming true field); `for await` syntax removed in v1.18 - use on_chunk callbacks instead
 ```
 
 ## Key Files
@@ -17,12 +17,11 @@ Phase 3: Async iterator support (for await, StreamingResponse, streaming true)
 | `helen/stdlib/__init__.py` | IO functions: stream_print, stream_clear, progress_bar, stream_cursor_up/down |
 | `helen/stdlib/stream_contracts.py` | Protocol contracts for stream functions |
 | `helen/runtime/stream_contracts.py` | StreamChunk, StreamingLLMRuntime, LlmStreamCallback protocols |
-| `helen/runtime/async_iterator_contracts.py` | AsyncIterable, StreamingResponse, AsyncGenerator protocols |
-| `helen/runtime/streaming_response.py` | StreamingResponse async iterable wrapper |
-| `helen/core/ast.py` | LlmActExprNode (with on_chunk/on_complete), ForAwaitStmtNode, DeclarationNode.streaming |
-| `helen/core/parser.py` | llm act parsing with on_chunk/on_complete, for await parsing, streaming true parsing |
+| `helen/core/ast.py` | LlmActExprNode (with on_chunk/on_complete), DeclarationNode.streaming (legacy) |
+| `helen/runtime/streaming_response.py` | StreamingResponse wrapper (legacy, for await removed in v1.18) |
+| `helen/core/parser.py` | llm act parsing with on_chunk/on_complete |
 | `helen/core/tokens.py` | STREAMING token, 'streaming' keyword |
-| `helen/interpreter/interpreter.py` | visit_llm_act_expr (sync/streaming paths), visit_for_await_stmt, _call_llm_streaming |
+| `helen/interpreter/interpreter.py` | visit_llm_act_expr (sync/streaming paths), _call_llm_streaming |
 
 ## Syntax
 
@@ -40,18 +39,18 @@ agent Poet(topic: str) {
     main { llm act }
 }
 
-// Streaming agent with for await (custom chunk processing)
+// Streaming agent with on_chunk callback (v1.14+: streaming merged into llm act)
 agent Streamer(topic: str) {
     description "Stream a long response"
-    streaming true
     prompt "Write a detailed essay about: {{topic}}"
+    main {
+        fn handle(chunk) { stream_print(chunk) }
+        llm act on_chunk handle
+    }
 }
 
 main {
-    let response = async Streamer("coding")
-    for await chunk in response {
-        stream_print(chunk)
-    }
+    Streamer("coding")
 }
 ```
 

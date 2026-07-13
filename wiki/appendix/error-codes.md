@@ -31,7 +31,7 @@
 | E0315 | INVALID_BREAK | 无效的 break |
 | E0316 | INVALID_CONTINUE | 无效的 continue |
 | E0317 | MISSING_DEFAULT_CASE | match 缺少 default |
-| E0318 | ASYNC_ON_NON_CALL | async 修饰非 call 语句 |
+| E0318 | (已废弃) | v1.18 删除 async/await，此错误码不再使用 |
 | E0319 | INVALID_AGENT_PARAM | 无效 Agent 参数 |
 | E0320 | UNTERMINATED_BLOCK | 块未闭合 |
 

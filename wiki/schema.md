@@ -31,7 +31,7 @@ wiki/
 ├── interpreter/          # 解释执行
 │   ├── execution.md      # 执行引擎
 │   ├── llm-integration.md # LLM 集成
-│   └── async.md          # 异步与并发
+│   └── spawnagent.md     # 并发与 spawnagent
 │
 ├── runtime/              # 运行时系统
 │   ├── llm-runtime.md    # LLM 运行时
@@ -50,14 +50,14 @@ wiki/
 │   ├── stdlib.md         # 标准库
 │   └── error-format.md   # 错误格式化
 │
-├── tutorial/             # 教程（16 章）
+├── tutorial/             # 教程（17 章）
 │   ├── 01-getting-started.md
 │   ├── 02-variables-and-types.md
 │   ├── 03-functions.md
 │   ├── 04-control-flow.md
 │   ├── 05-agents.md
 │   ├── 06-llm-statements.md
-│   ├── 07-async-await.md
+│   ├── 07-spawnagent.md
 │   ├── 08-modules.md
 │   ├── 09-python-ffi.md
 │   ├── 10-stdlib.md
@@ -89,7 +89,7 @@ title: 页面标题
 type: entity | concept | reference | tutorial | appendix
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
-version: v1.15
+version: v1.18
 sources: []  # 贡献的源代码文件
 ---
 ```
@@ -216,22 +216,25 @@ python3 scripts/build_tutorial.py
 
 ## 版本追踪
 
-当前版本: **v1.15**
+当前版本: **v1.18**
 
 **版本历史**:
 - v1.8: 函数式编程增强（管道操作符、模式匹配增强）
 - v1.9: 中文关键字、基础 agent 支持
 - v1.10: shared let、agent 作用域隔离、子脚本赋值、短路求值、异步 HTTP
 - v1.12: 隔离装饰器、shared store/channel、ReadOnlyView
-- v1.13: channel 通道、97 关键字
+- v1.13: channel 通道、中文关键字补全
 - v1.14: llm stream 合并到 llm act、流式回调
 - v1.15: Phase 1-7 上下文管理（工作记忆、渐进压缩、缓存感知、三通道上下文）
+- v1.16: TranscriptStore SSOT（SQLite/JSONL 后端、LRU 缓存、UUID 寻址）
+- v1.17: 多模态格式适配器 stdlib
+- v1.18: spawnagent 并发原语（替代 async/await/detach）、Channel 消息队列、snapshot 全部深复制
 
 **需要追踪的特性**:
-- 关键字列表（英文 + 中文）: 97 (48.5 + 48.5)
+- 关键字列表（英文 + 中文）: 89 (44.5 + 44.5)
 - Token 类型数量: 83
-- AST 节点数量: 63
-- Visitor 方法数量: 58
+- AST 节点数量: 60
+- Visitor 方法数量: 54
 - 内置函数数量: 255（255 中文别名）
 - 新特性列表（见 changelog.md）
 
@@ -291,6 +294,6 @@ python3 scripts/build_tutorial.py
 
 ---
 
-**最后更新**: 2026-07-06  
+**最后更新**: 2026-07-13  
 **维护者**: LLM (Claude)  
-**版本**: v1.15
+**版本**: v1.18

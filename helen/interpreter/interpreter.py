@@ -9,8 +9,6 @@ expression evaluation.
 from __future__ import annotations
 
 import os
-import asyncio
-import concurrent.futures
 import copy
 from contextlib import contextmanager
 from typing import Callable
@@ -75,7 +73,6 @@ from helen.core.source import SourceSpan
 from helen.core.tokens import TokenType
 from helen.interpreter.environment import Environment
 from helen.interpreter.exceptions import (
-    AggregateError,
     AgentError,
     AssertionError as HelenAssertionError,
     BreakSentinel,
@@ -89,7 +86,6 @@ from helen.interpreter.exceptions import (
     resolve_exception,
     _PREDEFINED_EXCEPTIONS,
 )
-from helen.interpreter.task import Task
 from helen.interpreter.llm_mixin import LlmMixin
 from helen.runtime.llm_runtime import LLMRuntime
 from helen.runtime.import_resolver import ImportResolver, ImportResult
@@ -1174,11 +1170,6 @@ class Interpreter(LlmMixin, Visitor[object]):
         if op == TokenType.MINUS:
             self._check_number(node.operator, operand)
             return -operand
-        if op == TokenType.AWAIT:
-            # await task or await [task1, task2, ...] (HLD 3.6.7)
-            # operand is either a Task or a list of Tasks
-            return self._await_tasks(operand)
-
         self._runtime_error(node.span, f"Unknown unary operator '{node.operator.lexeme}'")
         return None
 
@@ -2378,7 +2369,7 @@ class Interpreter(LlmMixin, Visitor[object]):
         Example: mailbox = spawnagent Worker("task")
         """
         import threading
-        from helen.core.ast import SpawnagentExprNode, CallNode
+        from helen.core.ast import SpawnagentExprNode
         from helen.runtime.channel import Channel, ChannelEndpoint
 
         if not isinstance(node, SpawnagentExprNode):
@@ -3009,90 +3000,6 @@ class Interpreter(LlmMixin, Visitor[object]):
             if response and response.text:
                 return self._create_streaming_response(response.text)
             return None
-
-    def _await_tasks(self, tasks: list[Task] | Task) -> object:
-        """Await one or more tasks with Promise.all semantics (HLD 3.6.7).
-
-        Phase 1b: Executes pending tasks concurrently using asyncio.
-        Uses asyncio.to_thread() for sync interpreter code, which uses
-        a global thread pool (fixed memory, not per-task threads).
-
-        For a single task: returns its result or raises its exception.
-        For a list of tasks: returns list of results if all succeed,
-        or raises AggregateError containing all failed task exceptions.
-
-        Args:
-            tasks: A single Task or list of Task objects.
-
-        Returns:
-            Single result for one task, list of results for multiple tasks.
-
-        Raises:
-            The task's exception for single failed task.
-            AggregateError if any task in a list fails.
-        """
-        # Check if we're already in a running event loop (e.g., in REPL)
-        # Use asyncio.get_running_loop() which raises RuntimeError if no loop is running
-        in_event_loop = False
-        try:
-            asyncio.get_running_loop()
-            in_event_loop = True
-        except RuntimeError:
-            # No running event loop
-            in_event_loop = False
-
-        if isinstance(tasks, Task):
-            # Single task: execute if pending, then return result or raise exception
-            if tasks.is_pending:
-                if in_event_loop:
-                    # Already in event loop - use thread pool directly
-                    with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(tasks.execute)
-                        future.result()  # Wait for completion
-                else:
-                    # No event loop - use asyncio.run()
-                    asyncio.run(tasks.execute_async())
-            return tasks.result()
-
-        # List of tasks: execute pending tasks concurrently using asyncio
-        pending_tasks = [t for t in tasks if t.is_pending]
-
-        if pending_tasks:
-            if in_event_loop:
-                # Already in event loop - use thread pool for concurrency
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    futures = [executor.submit(task.execute) for task in pending_tasks]
-                    # Wait for all to complete
-                    for future in concurrent.futures.as_completed(futures):
-                        future.result()  # Raise any exceptions
-            else:
-                # No event loop - use asyncio.run()
-                async def execute_all():
-                    # Create coroutines for all pending tasks
-                    coros = [task.execute_async() for task in pending_tasks]
-                    # Execute concurrently
-                    await asyncio.gather(*coros)
-
-                asyncio.run(execute_all())
-
-        # Collect results from all tasks (both pending and already completed)
-        results = []
-        errors = []
-
-        for task in tasks:
-            if task.has_error:
-                errors.append(task.exception)
-            else:
-                results.append(task.result())
-
-        if errors:
-            # Per HLD 3.6.7: AggregateError contains all failures
-            raise AggregateError(
-                f"{len(errors)} task(s) failed",
-                errors=errors,
-            )
-
-        return results
 
     def _runtime_error(self, span: SourceSpan | None, message: str) -> None:
         """Report a runtime error and raise an exception.

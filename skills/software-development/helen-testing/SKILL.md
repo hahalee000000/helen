@@ -264,11 +264,15 @@ agent SlowWorker(id: str, delay: int) {
 fn test_concurrent_agents() {
     let start = timestamp()
     
-    let t1 = async SlowWorker("A", 1)
-    let t2 = async SlowWorker("B", 1)
-    let t3 = async SlowWorker("C", 1)
+    // v1.18: spawnagent + Channel
+    let m1 = spawnagent SlowWorker("A", 1)
+    let m2 = spawnagent SlowWorker("B", 1)
+    let m3 = spawnagent SlowWorker("C", 1)
     
-    let results = await [t1, t2, t3]
+    let r1 = m1.receive()
+    let r2 = m2.receive()
+    let r3 = m3.receive()
+    let results = [r1, r2, r3]
     
     let elapsed = timestamp() - start
     

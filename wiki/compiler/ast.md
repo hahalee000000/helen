@@ -1,6 +1,6 @@
 # AST 节点定义
 
-> 模块 M3 | `helen/core/ast.py` | 50 节点类 | Visitor 模式 47 方法
+> 模块 M3 | `helen/core/ast.py` | 47 节点类 | Visitor 模式 44 方法
 
 ---
 
@@ -16,7 +16,7 @@ class Visitor(ABC, Generic[R]):
     def visit_variable(self, node: VariableNode) -> R: ...
     @abstractmethod
     def visit_binary_op(self, node: BinaryOpNode) -> R: ...
-    # ... 共 46 个抽象方法
+    # ... 共 44 个抽象方法
 ```
 
 **三个编译阶段共享同一 Visitor 接口**：
@@ -45,7 +45,6 @@ ASTNode (ABC, frozen dataclass)
 │   ├── MatchStmtNode            ← 模式匹配
 │   ├── TryStmtNode              ← 异常处理
 │   ├── FunctionDeclNode         ← 函数声明
-│   ├── AsyncCallStmtNode        ← 异步调用
 │   ├── ImportStmtNode           ← 导入
 │   ├── AgentDeclNode            ← Agent 声明
 │   ├── MainBlockNode            ← 主程序块
@@ -75,7 +74,8 @@ ASTNode (ABC, frozen dataclass)
 │   ├── CallArgNode              ← 调用参数
 │   ├── MapEntryNode             ← 映射条目
 │   ├── TemplateRefNode          ← 模板引用
-│   └── LlmActArgNode            ← LLM act 参数
+│   ├── LlmActArgNode            ← LLM act 参数
+│   └── SpawnagentExprNode       ← spawnagent 并发原语 (v1.18)
 │
 ├── TypeNode (ABC)               ← 类型
 │   ├── OptionalTypeNode         ← 可选 T?
@@ -162,6 +162,26 @@ class LlmIfStmtNode(StatementNode):
     description: str
     branches: list[LlmBranchNode]      # case + default
 ```
+
+### SpawnagentExprNode (v1.18)
+
+```python
+@dataclass(frozen=True)
+class SpawnagentExprNode(ExpressionNode):
+    span: SourceSpan
+    call: CallNode                     # agent 调用
+```
+
+`spawnagent` 表达式节点。`call` 字段包含 agent 调用的目标名称和参数。返回 `Channel` 类型。
+
+**Visitor 方法**: `visit_spawnagent_expr`
+
+**v1.18 删除的节点**:
+- `AsyncCallStmtNode` — 异步调用语句
+- `AsyncCallExprNode` — 异步调用表达式
+- `DetachStmtNode` — detach 后台任务语句
+- `ChannelDeclNode` — channel 声明
+- `ForAwaitStmtNode` — for await 流式迭代语句
 
 ---
 

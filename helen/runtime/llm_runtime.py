@@ -66,27 +66,6 @@ class LLMRuntime(ABC):
         """
         ...
 
-    # Phase 1b: Async versions for concurrent execution
-    async def route_async(self, description: str, branches: list[str],
-                          context: str | None = None) -> str | None:
-        """Async version of route() for concurrent execution.
-
-        Default implementation calls sync version. Override for true async.
-        """
-        return self.route(description, branches, context)
-
-    async def act_async(self, prompt: str, tools: list[dict[str, Any]] | None = None,
-                        model: str | None = None, temperature: float = 1.0,
-                        max_turns: int = 1, history: list[dict[str, Any]] | None = None,
-                        system_prompt: str | None = None,
-                        dispatch_fn: Any = None) -> LLMResponse:
-        """Async version of act() for concurrent execution.
-
-        Default implementation calls sync version. Override for true async.
-        """
-        return self.act(prompt, tools, model, temperature, max_turns, history,
-                        system_prompt, dispatch_fn)
-
     def act_stream(self, prompt: str, model: str | None = None,
                    temperature: float = 1.0, system_prompt: str | None = None,
                    tools: list[dict[str, Any]] | None = None,

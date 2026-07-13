@@ -167,7 +167,7 @@ Helen 自带多个内置技能：
 | `helen-debugging` | Helen 程序调试 |
 | `helen-testing` | Helen 测试编写 |
 | `helen-stdlib` | 标准库使用指南 |
-| `helen-async` | 异步编程模式 |
+| `helen-spawnagent` | spawnagent 并发编程模式 |
 | `helen-security` | 安全编程实践 |
 | `helen-ffi` | Python FFI 集成 |
 | `helen-lsp` | LSP 开发 |

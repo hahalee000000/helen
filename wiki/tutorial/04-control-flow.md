@@ -301,7 +301,7 @@ try {
 | `TimeoutError` | LLM 调用超时（继承 LLMError） |
 | `ModelError` | 模型不可用或配额耗尽（继承 LLMError） |
 | `ToolError` | 工具调用失败 |
-| `AggregateError` | 多个异步任务失败（await [list]） |
+| `AggregateError` | 多个并发 Agent 任务失败（spawnagent 场景） |
 
 **异常继承**：`catch LLMError` 也会捕获 `TimeoutError` 和 `ModelError`。
 

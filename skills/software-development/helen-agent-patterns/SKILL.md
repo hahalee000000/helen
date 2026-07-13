@@ -1,10 +1,10 @@
 ---
 name: helen-agent-patterns
 description: "Helen Agent 设计模式 — 单 Agent、多 Agent 协作、作用域隔离、共享变量、路由、流式处理、历史管理、上下文管理、Transcript 会话记录"
-version: 1.17.0
+version: 1.18.0
 author: Helen Team
 license: MIT
-tags: [helen, agent, patterns, design, llm, scope-isolation, shared-let, v1.12, closure, concurrency, history, persistence, context-window, context-management, transcript, session, v1.16, ground-truth-injection, v1.17]
+tags: [helen, agent, patterns, design, llm, scope-isolation, shared-let, v1.12, closure, concurrency, history, persistence, context-window, context-management, transcript, session, v1.16, ground-truth-injection, v1.17, spawnagent, channel, v1.18]
 ---
 
 # Helen Agent 设计模式
@@ -584,7 +584,7 @@ agent ContentPipeline(topic: str) {
 let article = ContentPipeline("Helen programming language")
 ```
 
-### 模式 4: 并发 Agent（async/await）
+### 模式 4: 并发 Agent（spawnagent + Channel）
 
 **场景**：多个 Agent 并发执行，提高吞吐量
 
@@ -602,13 +602,16 @@ agent DataAggregator {
     description "Aggregate data from multiple sources"
     
     main {
-        // 并发获取数据
-        let task1 = async DataFetcher("https://api.source1.com/data")
-        let task2 = async DataFetcher("https://api.source2.com/data")
-        let task3 = async DataFetcher("https://api.source3.com/data")
+        // v1.18: spawnagent 并发获取数据
+        let m1 = spawnagent DataFetcher("https://api.source1.com/data")
+        let m2 = spawnagent DataFetcher("https://api.source2.com/data")
+        let m3 = spawnagent DataFetcher("https://api.source3.com/data")
         
-        // 等待所有完成
-        let results = await [task1, task2, task3]
+        // 逐个接收结果
+        let r1 = m1.receive()
+        let r2 = m2.receive()
+        let r3 = m3.receive()
+        let results = [r1, r2, r3]
         
         // 聚合结果
         return llm act "Aggregate these results: " + str(results)
@@ -616,11 +619,20 @@ agent DataAggregator {
 }
 ```
 
-### 模式 5: 流式 Agent（llm act + on_chunk 回调 / streaming true + for await）
+**多路复用**：当需要从多个 Channel 中等待第一个就绪的：
+
+```helen
+// mailbox_select: 返回第一个就绪的 Channel 的结果
+let first_ready = mailbox_select([m1, m2, m3])
+```
+
+### 模式 5: 流式 Agent（llm act + on_chunk 回调）
 
 **场景**：实时输出 LLM 响应，改善用户体验
 
-#### 方式 A：使用 `llm act` + `on_chunk` 回调
+**v1.18 更新**：`llm stream` 已删除（v1.14），`for await` 已删除（v1.18）。流式输出统一使用 `llm act` + `on_chunk` 回调。
+
+#### 使用 `llm act` + `on_chunk` 回调
 
 ```helen
 fn print_chunk(chunk: str) {
@@ -656,44 +668,6 @@ agent StreamingWriter(topic: str) {
     main {
         llm act "Write a detailed article about " + topic on_chunk on_chunk on_complete on_complete
     }
-}
-```
-
-#### 方式 B：使用 `streaming true` + `for await`（自定义处理每个 chunk）
-
-```helen
-agent Streamer(topic: str) {
-    description "Stream a long response"
-    streaming true
-    prompt "Write a detailed essay about: {{topic}}"
-}
-
-main {
-    let response = async Streamer("the history of computing")
-    
-    // 逐 chunk 处理流式响应
-    for await chunk in response {
-        stream_print(chunk)
-    }
-}
-```
-
-`streaming true` 使 agent 调用返回 `StreamingResponse` 对象，可在 `for await` 中迭代。
-适用于需要自定义处理逻辑的场景（过滤、转换、聚合）：
-
-```helen
-main {
-    let response = async Streamer("long essay")
-    let total_length = 0
-    
-    // 流式聚合
-    for await chunk in response {
-        total_length = total_length + len(chunk)
-        if len(chunk) > 10 {
-            stream_print(chunk)  // 只输出长 chunk
-        }
-    }
-    print("Total length: " + total_length)
 }
 ```
 

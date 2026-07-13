@@ -100,7 +100,7 @@ fn greet(name: string): string {
 Many fragments reference functions or variables not defined in the block:
 - `expensiveFunction()`, `getUser()`, `isValid()`, `processData()` in `04-control-flow.md`
 - `fix_code()` in `11-building-agents.md` and `14-observability.md`
-- `stream_print()` in `07-async-await.md`
+- `stream_print()` in `07-spawnagent.md`
 
 These are either:
 - Intentional placeholders (tutorial examples)
@@ -140,7 +140,7 @@ The tutorial claims `add(1.5, 2)` should fail with type mismatch, but Helen's se
 - `04-control-flow.md`: 2/24 pass (1 should_fail, 21 fail — many undefined refs)
 - `05-agents.md`: 10/25 pass (15 fail — undefined refs)
 - `06-llm-statements.md`: 8/14 pass (6 fail)
-- `07-async-await.md`: 6/16 pass (10 fail)
+- `07-spawnagent.md`: 6/16 pass (10 fail)
 - `08-modules.md`: 1/9 pass (1 should_fail, 7 fail — all imports)
 - `09-python-ffi.md`: 1/12 pass (11 skip — all Python FFI)
 - `10-stdlib.md`: 28/42 pass (14 fail)

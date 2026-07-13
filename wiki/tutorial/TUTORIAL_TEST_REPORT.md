@@ -63,7 +63,7 @@ fn greet(name: string): string {
 **Examples:**
 - `expensiveFunction()`, `getUser()`, `isValid()` in `04-control-flow.md`
 - `fix_code()` in `11-building-agents.md`, `14-observability.md`
-- `stream_print()` in `07-async-await.md`
+- `stream_print()` in `06-llm-statements.md`（流式回调已通过 `on_chunk` 处理）
 
 **Impact:** ~40 test failures
 

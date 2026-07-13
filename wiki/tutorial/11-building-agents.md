@@ -124,32 +124,42 @@ main {
 ## 第三步：添加并发优化
 
 ```helen
-// 知识库查询 agent
-agent KnowledgeBase(query: str) {
+// 知识库查询 agent — 接收 reply Channel 用于返回结果
+agent KnowledgeBase(query: str, reply: Channel) {
     description "Search knowledge base"
     prompt "Search knowledge base for: {{query}}"
+    main {
+        let result = llm act "搜索知识库: " + query
+        reply.send(result)
+    }
 }
 
-// 历史查询 agent
-agent HistoryLookup(topic: str) {
+// 历史查询 agent — 接收 reply Channel 用于返回结果
+agent HistoryLookup(topic: str, reply: Channel) {
     description "Lookup relevant history"
     prompt "Find relevant history for: {{topic}}"
+    main {
+        let result = llm act "查找相关历史: " + topic
+        reply.send(result)
+    }
 }
 
-// 优化的版本：并发查询知识库
+// 优化的版本：并发查询知识库（v1.18+ spawnagent 模式）
 main {
     let question = "How do I reset my password?"
 
-    // 并发获取上下文
-    let kb_task = async KnowledgeBase(question)
-    let history_task = async HistoryLookup("password reset")
+    // 并发获取上下文：spawnagent 返回 Channel
+    let kb_mailbox = spawnagent KnowledgeBase(question)
+    let history_mailbox = spawnagent HistoryLookup("password reset")
+
+    // 从 Channel 接收结果
+    let kb_result = kb_mailbox.receive()
+    let history_result = history_mailbox.receive()
+    let full_context = kb_result + "\n" + history_result
 
     // 先分类（串行，需要结果路由）
     llm if "Classify customer question" {
         branch "technical" {
-            // 等待上下文
-            let context = await [kb_task, history_task]
-            let full_context = context[0] + "\n" + context[1]
             let answer = TechSupport(question + "\nContext: " + full_context)
         }
         default {
@@ -316,9 +326,9 @@ agent CodeReviewer {
 
 ---
 
-## 第八步：多 Agent 协作模式（v1.12+）
+## 第八步：多 Agent 协作模式（v1.18+）
 
-在实际应用中，多个 Agent 经常需要**共享状态**或**相互通信**。Helen 提供两种机制：`shared store` 和 `channel`。
+在实际应用中，多个 Agent 经常需要**共享状态**或**相互通信**。Helen 提供两种机制：`shared store`（共享状态容器）和 **spawnagent + Channel**（消息通信）。
 
 ### 使用 Shared Store 共享状态
 
@@ -349,7 +359,8 @@ shared store SessionStats {
     }
 }
 
-agent CustomerService(sessionId: str, question: str) {
+// Agent 接收 reply Channel 和 sessionId 参数
+agent CustomerService(sessionId: str, question: str, reply: Channel) {
     description "Handle customer session"
     main {
         SessionStats.startSession(sessionId)
@@ -358,16 +369,20 @@ agent CustomerService(sessionId: str, question: str) {
         let response = llm act Assistant "Question: " + question
         
         SessionStats.endSession(sessionId)
-        return response
+        reply.send(response)
     }
 }
 
-// 多个 Agent 并发运行，共享统计信息
-async call CustomerService("session-1", "How to reset password?")
-async call CustomerService("session-2", "Billing issue")
-async call CustomerService("session-3", "Technical support")
+// 多个 Agent 并发运行（v1.18+ spawnagent 模式）
+let mb1 = spawnagent CustomerService("session-1", "How to reset password?")
+let mb2 = spawnagent CustomerService("session-2", "Billing issue")
+let mb3 = spawnagent CustomerService("session-3", "Technical support")
 
-sleep(500)  // 等待所有会话完成
+// 等待所有会话完成
+let r1 = mb1.receive()
+let r2 = mb2.receive()
+let r3 = mb3.receive()
+
 print("Resolution rate: " + SessionStats.getResolutionRate())
 ```
 
@@ -376,53 +391,39 @@ print("Resolution rate: " + SessionStats.getResolutionRate())
 假设我们需要一个后台任务处理队列：
 
 ```helen
-channel TaskQueue {
-    let tasks: list = []
-    
-    fn enqueue(task: str) {
-        tasks.append(task)
-    }
-    
-    fn dequeue(): str {
-        if (len(tasks) == 0) {
-            return ""
-        }
-        return tasks.shift()
-    }
-    
-    fn pending(): int {
-        return len(tasks)
-    }
-}
-
-agent TaskProducer() {
+// 生产者 Agent：生成任务并通过 Channel 发送
+agent TaskProducer(reply: Channel) {
     description "Produce tasks"
     main {
-        TaskQueue.enqueue("send-email-1")
-        TaskQueue.enqueue("send-email-2")
-        TaskQueue.enqueue("send-email-3")
+        reply.send("send-email-1")
+        reply.send("send-email-2")
+        reply.send("send-email-3")
+        reply.send("done")  // 完成信号
     }
 }
 
-agent TaskConsumer() {
+// 消费者 Agent：从 Channel 接收并处理任务
+agent TaskConsumer(task: str, reply: Channel) {
     description "Consume tasks"
     main {
-        let task = TaskQueue.dequeue()
-        if (task != "") {
-            print("Processing: " + task)
-            // 处理任务...
-        }
+        print("Processing: " + task)
+        // 处理任务...
+        reply.send("completed: " + task)
     }
 }
 
-// 生产者和消费者并发运行
-async call TaskProducer()
-sleep(100)  // 等待任务入队
+// 生产者并发运行
+let producer_mb = spawnagent TaskProducer()
 
 // 消费所有任务
-for (let i = 0; i < 3; i = i + 1) {
-    async call TaskConsumer()
+let task = producer_mb.receive()
+while (task != "done") {
+    let consumer_mb = spawnagent TaskConsumer(task)
+    let result = consumer_mb.receive()
+    print(result)
+    task = producer_mb.receive()
 }
+producer_mb.close()
 ```
 
 ### 协作模式选择
@@ -430,13 +431,13 @@ for (let i = 0; i < 3; i = i + 1) {
 | 模式 | 适用场景 | 示例 |
 |------|---------|------|
 | **Shared Store** | 多个 Agent 读写同一份数据 | 统计计数器、缓存、配置 |
-| **Channel** | Agent 间传递消息/事件 | 任务队列、事件总线、信号 |
+| **Channel（spawnagent）** | Agent 间传递消息/事件 | 任务队列、结果回报、信号 |
 
 **最佳实践**：
 - ✅ 用 `shared store` 管理**全局状态**（统计、配置、缓存）
-- ✅ 用 `channel` 构建**消息系统**（队列、事件、信号）
-- ✅ 结合 `async/await` 实现并发协作
-- ✅ 结合 `detach` 实现后台任务（v1.17+）
+- ✅ 用 `spawnagent` + Channel 实现**消息通信**（队列、事件、信号）
+- ✅ 用 `mailbox_select` 监听多个 Channel 的结果
+- ✅ Channel 自动注入为 Agent 最后一个参数，无需手动传递
 
 ---
 
@@ -484,7 +485,7 @@ $ helen doc customer-service/main.helen --format markdown
 通过这个案例，你学会了：
 1. ✅ 声明多个 Agent 及其配置
 2. ✅ 使用 `llm if` 进行智能路由
-3. ✅ 使用 `async call` + `await` 并发获取上下文
+3. ✅ 使用 `spawnagent` + Channel 并发获取上下文
 4. ✅ 使用 `try-catch` 处理 LLM 异常
 5. ✅ 组织多文件项目结构
 
