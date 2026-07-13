@@ -6,7 +6,7 @@ from helen.core.parser import Parser
 from helen.core.ast import (
     ProgramNode, AgentDeclNode, MainBlockNode,
     TryStmtNode, LlmIfStmtNode, MatchStmtNode,
-    FunctionDeclNode, CallNode, AsyncCallStmtNode,
+    FunctionDeclNode, CallNode,
     VarDeclNode, IfStmtNode, ForStmtNode,
 )
 
@@ -52,7 +52,7 @@ agent SearchAgent(query: str, max_results: int = 10) {
         }
 
         try {
-            async saveResults(formatted)
+            saveResults(formatted)
         catch Error e {
             print("Error: " + e)
         } finally {

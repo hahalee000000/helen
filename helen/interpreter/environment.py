@@ -285,47 +285,30 @@ class Environment:
     def snapshot(self) -> "Environment":
         """Create a deep copy of the entire environment chain.
 
-        Used for async task isolation: each task gets its own copy
-        of the environment to avoid race conditions.
+        Used for spawnagent isolation: each spawned agent gets its own copy
+        of the environment to avoid unintended shared state.
+
+        v1.18 change: ALL values are deep-copied with no exceptions.
+        SharedStore instances are deep-copied via their __deepcopy__ method
+        (creates independent fields, empty methods, new lock).
+        To share state between agents, pass SharedStore references explicitly
+        through Channel endpoints.
 
         Returns:
-            A new Environment chain with copied stores.
-
-        Note:
-            Does not use pooling - snapshots are long-lived and should
-            not be returned to the pool.
-
-        v1.12 fix: Mutable values (list, dict) are deep-copied to prevent
-        async tasks from sharing mutable references. Without this, concurrent
-        tasks could race on the same list/dict objects.
-
-        v1.17 fix: SharedStore instances (shared store/channel) are NOT deep-copied.
-        They maintain reference semantics to allow detached agents to access and
-        update shared state. Thread safety is guaranteed by SharedStore's internal
-        RLock mechanism.
+            A new Environment chain with fully copied stores.
         """
         import copy
-        # Import here to avoid circular dependency
-        from helen.interpreter.interpreter import SharedStore
 
         # First, snapshot the parent chain (if any)
         parent_snapshot = None
         if self.parent is not None:
             parent_snapshot = self.parent.snapshot()
 
-        # Create a new environment with deep-copied store and consts
+        # Create a new environment with fully deep-copied store
         new_env = Environment(parent=parent_snapshot)
-        # Deep copy mutable values to prevent cross-task mutation
         new_store: dict = {}
         for key, value in self._store.items():
-            if isinstance(value, SharedStore):
-                # SharedStore maintains reference (designed for cross-agent sharing)
-                # Thread safety guaranteed by SharedStore's internal RLock
-                new_store[key] = value
-            elif isinstance(value, (list, dict)):
-                new_store[key] = copy.deepcopy(value)
-            else:
-                new_store[key] = value
+            new_store[key] = copy.deepcopy(value)
         new_env._store = new_store
         new_env._consts = copy.copy(self._consts)  # Copy of const set (immutable set)
         # Don't copy flat cache - it will be populated on demand

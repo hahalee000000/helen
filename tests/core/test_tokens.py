@@ -97,8 +97,6 @@ class TestTokenType:
             "BREAK",
             "CONTINUE",
             "RETURN",
-            "AWAIT",
-            "ASYNC",
             "MATCH",
             "CASE",
             "BRANCH",
@@ -113,7 +111,7 @@ class TestTokenType:
             "FUNCTIONS",
             "MAIN",
             "STORE",
-            "CHANNEL",
+            "SPAWNAGENT",
         ]:
             assert hasattr(TokenType, name), f"Missing keyword: {name}"
 
@@ -139,7 +137,7 @@ class TestKeywords:
     def test_keyword_count(self):
         """Test that the keyword map contains the expected number of entries."""
         kw = keywords()
-        assert len(kw) == 95  # 47 English + 48 Chinese keywords (含 定义 legacy alias)
+        assert len(kw) == 89  # 44 English + 45 Chinese keywords (removed async/await/detach/channel, added spawnagent)
 
     def test_all_keywords_map_to_token_types(self) -> None:
         """Every keyword value should be a TokenType member."""

@@ -330,4 +330,7 @@ ALIASES: dict[str, str] = {
     # ── File Search (文件搜索) ────────────────────────────────────
     "查找文件": "glob_files",
     "搜索内容": "grep_files",
+
+    # ── Concurrency (并发) ────────────────────────────────────
+    "邮箱选择": "mailbox_select",
 }

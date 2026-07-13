@@ -48,6 +48,10 @@ class Visitor(ABC, Generic[R]):
         """Visit a CallNode."""
 
     @abstractmethod
+    def visit_spawnagent_expr(self, node: "SpawnagentExprNode") -> R:
+        """Visit a SpawnagentExprNode."""
+
+    @abstractmethod
     def visit_call_arg(self, node: CallArgNode) -> R:
         """Visit a CallArgNode."""
 
@@ -60,20 +64,12 @@ class Visitor(ABC, Generic[R]):
         """Visit a SharedStoreDeclNode."""
 
     @abstractmethod
-    def visit_channel_decl(self, node: "ChannelDeclNode") -> R:
-        """Visit a ChannelDeclNode."""
-
-    @abstractmethod
     def visit_if_stmt(self, node: IfStmtNode) -> R:
         """Visit an IfStmtNode."""
 
     @abstractmethod
     def visit_for_stmt(self, node: ForStmtNode) -> R:
         """Visit a ForStmtNode."""
-
-    @abstractmethod
-    def visit_for_await_stmt(self, node: ForAwaitStmtNode) -> R:
-        """Visit a ForAwaitStmtNode."""
 
     @abstractmethod
     def visit_while_stmt(self, node: WhileStmtNode) -> R:
@@ -158,18 +154,6 @@ class Visitor(ABC, Generic[R]):
     @abstractmethod
     def visit_agent_param(self, node: AgentParamNode) -> R:
         """Visit an AgentParamNode."""
-
-    @abstractmethod
-    def visit_detach_stmt(self, node: DetachStmtNode) -> R:
-        """Visit a DetachStmtNode."""
-
-    @abstractmethod
-    def visit_async_call_stmt(self, node: AsyncCallStmtNode) -> R:
-        """Visit an AsyncCallStmtNode."""
-
-    @abstractmethod
-    def visit_async_call_expr(self, node: AsyncCallExprNode) -> R:
-        """Visit an AsyncCallExprNode."""
 
     @abstractmethod
     def visit_case(self, node: CaseNode) -> R:
@@ -555,42 +539,6 @@ class SharedStoreDeclNode(StatementNode):
 
 
 @dataclass(frozen=True)
-class ChannelDeclNode(StatementNode):
-    """Channel declaration: channel Name { fields, methods }.
-
-    v1.13: Channels provide typed, thread-safe communication between agents.
-    Structurally identical to SharedStore but semantically represents a
-    communication endpoint rather than shared state.
-
-    Channels are thread-safe — method calls are serialized via an internal lock.
-    They can be passed as agent parameters and accessed from any agent.
-
-    Example:
-        channel Counter {
-            let count: int = 0
-
-            fn increment() { count = count + 1 }
-            fn get(): int { return count }
-        }
-
-    Chinese syntax:
-        通道 Counter {
-            定义 count: int = 0
-            函数 increment() { count = count + 1 }
-            函数 get(): int { 返回 count }
-        }
-    """
-    name: str
-    fields: list["VarDeclNode"]  # Private state variables
-    methods: list["FunctionDeclNode"]  # Public methods
-    span: SourceSpan
-
-    def accept(self, visitor: Visitor[R]) -> R:
-        """Dispatch to the visitor."""
-        return visitor.visit_channel_decl(self)
-
-
-@dataclass(frozen=True)
 class IfStmtNode(StatementNode):
     """Conditional: if cond { ... } else { ... }."""
     condition: ExpressionNode
@@ -614,19 +562,6 @@ class ForStmtNode(StatementNode):
     def accept(self, visitor: Visitor[R]) -> R:
         """Dispatch to the visitor."""
         return visitor.visit_for_stmt(self)
-
-
-@dataclass(frozen=True)
-class ForAwaitStmtNode(StatementNode):
-    """For-await loop: for await x in async_iterable { ... }."""
-    iterator: VariableNode | None
-    iterable: ExpressionNode
-    body: StatementNode
-    span: SourceSpan
-
-    def accept(self, visitor: Visitor[R]) -> R:
-        """Dispatch to the visitor."""
-        return visitor.visit_for_await_stmt(self)
 
 
 @dataclass(frozen=True)
@@ -896,45 +831,22 @@ class AliasStmtNode(StatementNode):
 
 
 @dataclass(frozen=True)
-class AsyncCallStmtNode(StatementNode):
-    """Async call statement."""
-    call: CallNode
-    span: SourceSpan
+class SpawnagentExprNode(ExpressionNode):
+    """Spawn agent expression: spawnagent AgentName(...).
 
-    def accept(self, visitor: Visitor[R]) -> R:
-        """Dispatch to the visitor."""
-        return visitor.visit_async_call_stmt(self)
+    v1.17: Spawns an agent and returns a Task object that can be awaited
+    or stored. Replaces async call (async Agent(...)) and detach statement.
 
-
-@dataclass(frozen=True)
-class AsyncCallExprNode(ExpressionNode):
-    """Async call expression: async Agent(...) used in expression position.
-
-    Returns a Task object that can be stored in a variable and awaited.
-    Example: let task = async Worker("input")
+    Example:
+        let task = spawnagent Worker("input")
+        let result = await task
     """
     call: CallNode
     span: SourceSpan
 
     def accept(self, visitor: Visitor[R]) -> R:
         """Dispatch to the visitor."""
-        return visitor.visit_async_call_expr(self)
-
-
-@dataclass(frozen=True)
-class DetachStmtNode(StatementNode):
-    """Detach statement: fire-and-forget background execution (Issue #29).
-
-    Starts an agent in the background without waiting for completion.
-    No Task object is returned - completely detached from the main flow.
-    Example: detach Worker("input")
-    """
-    call: CallNode
-    span: SourceSpan
-
-    def accept(self, visitor: Visitor[R]) -> R:
-        """Dispatch to the visitor."""
-        return visitor.visit_detach_stmt(self)
+        return visitor.visit_spawnagent_expr(self)
 
 
 @dataclass(frozen=True)
@@ -1285,15 +1197,6 @@ class ASTPrinter(Visitor[str]):
             parts.append(method)
         return self._parenthesize("shared store", *parts)
 
-    def visit_channel_decl(self, node: ChannelDeclNode) -> str:
-        """Visit a ChannelDeclNode."""
-        parts: list[Any] = [node.name]
-        for field in node.fields:
-            parts.append(field)
-        for method in node.methods:
-            parts.append(method)
-        return self._parenthesize("channel", *parts)
-
     def visit_if_stmt(self, node: IfStmtNode) -> str:
         """Visit an IfStmtNode."""
         parts: list[Any] = [node.condition, node.then_branch]
@@ -1304,10 +1207,6 @@ class ASTPrinter(Visitor[str]):
     def visit_for_stmt(self, node: ForStmtNode) -> str:
         """Visit a ForStmtNode."""
         return self._parenthesize("for", node.iterator, node.iterable, node.body)
-
-    def visit_for_await_stmt(self, node: ForAwaitStmtNode) -> str:
-        """Visit a ForAwaitStmtNode."""
-        return self._parenthesize("for await", node.iterator, node.iterable, node.body)
 
     def visit_while_stmt(self, node: WhileStmtNode) -> str:
         """Visit a WhileStmtNode."""
@@ -1400,17 +1299,9 @@ class ASTPrinter(Visitor[str]):
         """Visit an AgentParamNode."""
         return "(param " + node.name + ")"
 
-    def visit_detach_stmt(self, node: DetachStmtNode) -> str:
-        """Visit a DetachStmtNode."""
-        return self._parenthesize("detach", node.call)
-
-    def visit_async_call_stmt(self, node: AsyncCallStmtNode) -> str:
-        """Visit an AsyncCallStmtNode."""
-        return self._parenthesize("async-call", node.call)
-
-    def visit_async_call_expr(self, node: AsyncCallExprNode) -> str:
-        """Visit an AsyncCallExprNode."""
-        return self._parenthesize("async-call-expr", node.call)
+    def visit_spawnagent_expr(self, node: SpawnagentExprNode) -> str:
+        """Visit a SpawnagentExprNode."""
+        return self._parenthesize("spawnagent", node.call)
 
     def visit_case(self, node: CaseNode) -> str:
         """Visit a CaseNode."""

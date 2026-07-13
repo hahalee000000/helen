@@ -1,4 +1,5 @@
-"""Helen core module — token types, source management, and error reporting."""
+# -*- coding: utf-8 -*-
+"""Helen core module -- token types, source management, and error reporting."""
 
 from helen.core.errors import ErrorCode, ErrorReporter, HelenError, HelenWarning
 from helen.core.source import SourceFile, SourceSpan

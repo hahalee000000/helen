@@ -77,7 +77,7 @@ class TestKeywords:
             "temperature", "max-turns",
             "prompt", "llm", "import", "let", "const", "if", "else",
             "for", "while", "break", "continue", "return",
-            "await", "async", "match", "case", "branch",
+            "spawnagent", "match", "case", "branch",
             "default", "act", "try", "catch", "finally",
             "fn", "as", "in", "functions", "main", "true", "false",
             "null",

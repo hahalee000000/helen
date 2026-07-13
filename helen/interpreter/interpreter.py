@@ -20,8 +20,6 @@ from helen.core.ast import (
     AgentParamNode,
     AliasStmtNode,
     AssertStmtNode,
-    AsyncCallExprNode,
-    AsyncCallStmtNode,
     BinaryOpNode,
     BreakStmtNode,
     CallArgNode,
@@ -31,12 +29,10 @@ from helen.core.ast import (
     CatchClauseNode,
     ContinueStmtNode,
     DeclarationNode,
-    DetachStmtNode,
     ExprStmtNode,
     FinallyBlockNode,
     FnBlockNode,
     ForStmtNode,
-    ForAwaitStmtNode,
     FunctionDeclNode,
     GroupingNode,
     IfStmtNode,
@@ -408,6 +404,23 @@ class SharedStore:
         with lock:
             fields[name] = value
 
+    def __deepcopy__(self, memo: dict) -> "SharedStore":
+        """Deep copy creates an independent SharedStore with copied fields.
+
+        Methods are NOT copied — they reference closures bound to the original
+        interpreter environment. The copy has empty methods and shares no state
+        with the original (except through explicitly passed references).
+
+        The lock is recreated (locks cannot be pickled/deep-copied).
+        """
+        import copy
+        name = object.__getattribute__(self, '_name')
+        fields = object.__getattribute__(self, '_fields')
+        new_fields = copy.deepcopy(fields, memo)
+        new_store = SharedStore(name, new_fields, {})
+        memo[id(self)] = new_store
+        return new_store
+
 
 class SharedStoreMethod:
     """A callable wrapper for a shared store method.
@@ -509,8 +522,7 @@ def _collect_variable_refs(node: object, bound: set[str], used: set[str]) -> Non
         IfStmtNode, ForStmtNode, WhileStmtNode, ReturnStmtNode, ExprStmtNode,
         VarDeclNode, FnBlockNode, MatchStmtNode, LambdaNode, IndexNode,
         AccessNode, GroupingNode, PipeExprNode, ListLiteralNode, MapLiteralNode,
-        TemplateRefNode, AssertStmtNode, AsyncCallExprNode,
-        AsyncCallStmtNode, ForAwaitStmtNode, TryStmtNode,
+        TemplateRefNode, AssertStmtNode, TryStmtNode,
         CatchClauseNode, FinallyBlockNode, CaseNode,
         LlmActExprNode,
         MatchExprNode,
@@ -573,12 +585,6 @@ def _collect_variable_refs(node: object, bound: set[str], used: set[str]) -> Non
 
     if isinstance(node, ForStmtNode):
         # For loop: iterator variable is bound in body
-        _collect_variable_refs(node.iterable, bound, used)
-        body_bound = bound | {node.variable}
-        _collect_variable_refs(node.body, body_bound, used)
-        return
-
-    if isinstance(node, ForAwaitStmtNode):
         _collect_variable_refs(node.iterable, bound, used)
         body_bound = bound | {node.variable}
         _collect_variable_refs(node.body, body_bound, used)
@@ -664,10 +670,6 @@ def _collect_variable_refs(node: object, bound: set[str], used: set[str]) -> Non
         _collect_variable_refs(node.condition, bound, used)
         if node.message is not None:
             _collect_variable_refs(node.message, bound, used)
-        return
-
-    if isinstance(node, (AsyncCallExprNode, AsyncCallStmtNode)):
-        _collect_variable_refs(node.call, bound, used)
         return
 
     if isinstance(node, TryStmtNode):
@@ -1500,11 +1502,6 @@ class Interpreter(LlmMixin, Visitor[object]):
         from helen.core.ast import SharedStoreDeclNode  # noqa: PLC0415
         return self._visit_shared_container(node, SharedStoreDeclNode)
 
-    def visit_channel_decl(self, node: object) -> object:
-        """Execute a channel declaration."""
-        from helen.core.ast import ChannelDeclNode  # noqa: PLC0415
-        return self._visit_shared_container(node, ChannelDeclNode)
-
     # ------------------------------------------------------------------
     # Control flow
     # ------------------------------------------------------------------
@@ -1543,46 +1540,6 @@ class Interpreter(LlmMixin, Visitor[object]):
                     return result
 
         return result
-
-    def visit_for_await_stmt(self, node: ForAwaitStmtNode) -> object:
-        """Execute a for-await-in loop (async iteration)."""
-        from helen.interpreter.task import Task
-
-        iterable = node.iterable.accept(self)
-
-        # If iterable is a Task, await it first to get the actual async iterable
-        if isinstance(iterable, Task):
-            if iterable.is_pending:
-                iterable.execute()
-            iterable = iterable.result()
-
-        # Check if iterable is an async iterable
-        if not hasattr(iterable, '__aiter__'):
-            self._runtime_error(node.span, f"Cannot async iterate over {type(iterable).__name__}")
-            return None
-
-        # Run async iteration using asyncio
-        async def _async_iterate():
-            result = None
-            async for item in iterable:
-                with self._push_scope():
-                    if node.iterator is not None:
-                        self.environment.define(node.iterator.name, item)
-                    result = self._execute(node.body)
-                    if isinstance(result, BreakSentinel):
-                        break
-                    if isinstance(result, ContinueSentinel):
-                        continue
-                    if isinstance(result, ReturnSentinel):
-                        return result
-            return result
-
-        # Run the async iteration
-        try:
-            return asyncio.run(_async_iterate())
-        except Exception as e:
-            self._runtime_error(node.span, f"Error in for-await loop: {e}")
-            return None
 
     def visit_while_stmt(self, node: WhileStmtNode) -> object:
         """Execute a while loop."""
@@ -2060,7 +2017,6 @@ class Interpreter(LlmMixin, Visitor[object]):
                 # access their own module's consts and shared let.
                 from helen.core.ast import VarDeclNode as _VDN
                 from helen.core.ast import SharedStoreDeclNode as _SSDN
-                from helen.core.ast import ChannelDeclNode as _CDN
                 module_env = Environment(parent=self.environment)
                 for name, data in self.import_resolver.data.items():
                     if isinstance(data, _VDN) and (not data.mutable or data.shared):
@@ -2070,7 +2026,7 @@ class Interpreter(LlmMixin, Visitor[object]):
                         else:
                             value = None
                         module_env.define(name, value, is_const=not data.mutable)
-                    elif isinstance(data, (_SSDN, _CDN)):
+                    elif isinstance(data, _SSDN):
                         # v1.17 (Issue #35): Execute shared store/channel declaration
                         # so the container is instantiated and visible cross-module.
                         # Define in module_env (so the module's own functions see it
@@ -2222,7 +2178,6 @@ class Interpreter(LlmMixin, Visitor[object]):
         """
         from helen.core.ast import VarDeclNode  # noqa: PLC0415
         from helen.core.ast import SharedStoreDeclNode as _SSDN  # noqa: PLC0415
-        from helen.core.ast import ChannelDeclNode as _CDN  # noqa: PLC0415
         module = {
             "__type__": "module",
             "__path__": result.path,
@@ -2244,7 +2199,7 @@ class Interpreter(LlmMixin, Visitor[object]):
                 else:
                     value = None
                 module_env.define(name, value, is_const=not data.mutable)
-            elif isinstance(data, (_SSDN, _CDN)):
+            elif isinstance(data, _SSDN):
                 # v1.17 (Issue #35): Execute shared store/channel declaration.
                 # Define in module_env (module's own functions) AND self.environment
                 # (cross-module direct access), matching shared let semantics.
@@ -2410,83 +2365,110 @@ class Interpreter(LlmMixin, Visitor[object]):
 
         return None
 
-    def visit_async_call_stmt(self, node: AsyncCallStmtNode) -> object:
-        """Execute async call statement (HLD 3.6.7).
+    def visit_spawnagent_expr(self, node: object) -> object:
+        """Execute spawnagent expression: spawn an agent and return a Channel endpoint.
 
-        In v1 synchronous mode, executes the call immediately but wraps
-        the result in a Task object for await semantics.
+        Creates a bidirectional Channel, spawns the agent in a daemon thread
+        with an isolated environment snapshot, and returns the main-thread
+        ChannelEndpoint for communication.
 
-        Returns:
-            A Task object wrapping the call result or exception.
-        """
-        try:
-            result = node.call.accept(self)
-            return Task.completed(result)
-        except Exception as exc:
-            return Task.failed(exc)
+        The agent's last parameter must be typed as Channel — spawnagent
+        auto-injects the spawned-side endpoint.
 
-    def visit_detach_stmt(self, node: DetachStmtNode) -> object:
-        """Execute detach statement: fire-and-forget background execution (Issue #29).
-
-        Starts the agent call in a background thread without waiting for completion.
-        No Task object is returned - completely detached from the main flow.
-
-        Thread Safety (v1.16 fix): Creates an environment snapshot for isolation,
-        preventing race conditions when the detached agent accesses variables.
-
-        Example: detach Worker("input")
-
-        Returns:
-            None (fire-and-forget)
+        Example: mailbox = spawnagent Worker("task")
         """
         import threading
-        import copy
+        from helen.core.ast import SpawnagentExprNode, CallNode
+        from helen.runtime.channel import Channel, ChannelEndpoint
 
-        # Create environment snapshot for thread safety (prevents race conditions)
+        if not isinstance(node, SpawnagentExprNode):
+            return None
+
+        call_node = node.call
+
+        # Resolve the agent being called
+        if not hasattr(call_node.callee, 'name'):
+            self.errors.error(
+                ErrorCode.RUNTIME_ERROR,
+                "spawnagent requires an agent call",
+                node.span,
+            )
+            return None
+
+        agent_name = call_node.callee.name
+        agent_decl = self._agents.get(agent_name)
+        if agent_decl is None:
+            self.errors.error(
+                ErrorCode.RUNTIME_ERROR,
+                f"Undefined agent '{agent_name}' in spawnagent",
+                node.span,
+            )
+            return None
+
+        # Evaluate the user-provided arguments (exclude the Channel parameter)
+        # The agent expects N params; the last one is Channel (auto-injected)
+        arg_values = []
+        for arg in call_node.arguments:
+            val = arg.accept(self)
+            arg_values.append(val)
+
+        # Create the bidirectional Channel
+        channel = Channel(name=f"spawn_{agent_name}")
+        main_endpoint = ChannelEndpoint(channel, is_main_thread=True)
+        spawned_endpoint = ChannelEndpoint(channel, is_main_thread=False)
+
+        # Append spawned endpoint as the last argument (auto-inject)
+        arg_values.append(spawned_endpoint)
+
+        # Snapshot environment for isolation (all deep-copied)
         env_snapshot = self.environment.snapshot()
 
-        # Create a thread that will execute the call with isolated environment
-        def run_detached():
+        # Capture references for the thread
+        errors = self.errors
+        llm_runtime = self.llm_runtime
+        import_resolver = self.import_resolver
+        program_args = self._program_args
+        transcript_enabled = self._transcript_store_enabled
+
+        def run_spawned():
             try:
-                # Create a new interpreter instance with the snapshot for full isolation
-                detached_interpreter = Interpreter(
-                    errors=self.errors,
-                    llm_runtime=self.llm_runtime,
-                    import_resolver=self.import_resolver,
+                spawned_interp = Interpreter(
+                    errors=errors,
+                    llm_runtime=llm_runtime,
+                    import_resolver=import_resolver,
+                    program_args=program_args,
+                    transcript_store_enabled=transcript_enabled,
                 )
-                # Replace the environment with the snapshot
-                detached_interpreter.environment = env_snapshot
+                spawned_interp.environment = env_snapshot
+                # Copy agent/function registries from parent
+                spawned_interp._agents = dict(self._agents)
+                spawned_interp._functions = dict(self._functions)
 
-                # Execute the call in the isolated interpreter
-                node.call.accept(detached_interpreter)
+                # Construct a new CallNode with evaluated args
+                from helen.core.ast import CallNode as CN, CallArgNode, VariableNode, LiteralNode
+                new_args = []
+                for val in arg_values:
+                    lit = LiteralNode(value=val, span=node.span)
+                    new_args.append(CallArgNode(name=None, value=lit))
+                new_call = CN(
+                    callee=VariableNode(name=agent_name, span=node.span),
+                    arguments=new_args,
+                    span=node.span,
+                )
+                new_call.accept(spawned_interp)
             except Exception as e:
-                # Log error but don't propagate - fire-and-forget
-                import sys
-                print(f"[detach] Background task error: {e}", file=sys.stderr)
+                try:
+                    spawned_endpoint.send({"__error__": True, "message": str(e)})
+                except Exception:
+                    pass
+            finally:
+                spawned_endpoint.close()
 
-        # Start the thread
-        thread = threading.Thread(target=run_detached, daemon=True)
+        thread = threading.Thread(target=run_spawned, daemon=True,
+                                  name=f"spawnagent-{agent_name}")
         thread.start()
 
-        # Return immediately - fire-and-forget
-        return None
-
-    def visit_async_call_expr(self, node: AsyncCallExprNode) -> object:
-        """Execute async call expression (HLD 3.6.7).
-
-        Phase 1b: Creates a pending Task that will execute on await.
-        This enables true concurrency when multiple async calls are awaited together.
-
-        Example: let task = async Worker("input")
-
-        Returns:
-            A pending Task object that executes on await.
-        """
-        # Create environment snapshot for isolation
-        env_snapshot = self.environment.snapshot()
-
-        # Create pending task (will execute on await)
-        return Task.pending(node.call, self, env_snapshot)
+        return main_endpoint
 
     # ------------------------------------------------------------------
     # Helper methods

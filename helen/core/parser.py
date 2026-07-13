@@ -1,4 +1,5 @@
-"""helen/core/parser.py — Helen Pratt precedence parser + recursive descent."""
+# -*- coding: utf-8 -*-
+"""helen/core/parser.py -- Helen Pratt precedence parser + recursive descent."""
 
 from __future__ import annotations
 
@@ -12,7 +13,6 @@ from .ast import (
     AgentParamNode,
     AliasStmtNode,
     AssertStmtNode,
-    AsyncCallStmtNode,
     BreakStmtNode,
     CallArgNode,
     CallNode,
@@ -21,13 +21,11 @@ from .ast import (
     CatchClauseNode,
     ContinueStmtNode,
     DeclarationNode,
-    DetachStmtNode,
     ExprStmtNode,
     ExpressionNode,
     FinallyBlockNode,
     FnBlockNode,
     ForStmtNode,
-    ForAwaitStmtNode,
     FunctionDeclNode,
     GroupingNode,
     IfStmtNode,
@@ -51,6 +49,7 @@ from .ast import (
     ImplDeclNode,
     RangePatternNode,
     ReturnStmtNode,
+    SpawnagentExprNode,
     StatementNode,
     TemplateRefNode,
     ThrowStmtNode,
@@ -67,7 +66,6 @@ from .ast import (
     IndexNode,
     AccessNode,
     BinaryOpNode,
-    AsyncCallExprNode,
 )
 from .errors import ErrorCode, ErrorReporter
 from .tokens import Token, TokenType
@@ -81,7 +79,7 @@ BARE_FORM_TOKENS = (
     TokenType.IF, TokenType.FOR, TokenType.WHILE,
     TokenType.BREAK, TokenType.CONTINUE, TokenType.MATCH,
     TokenType.TRY, TokenType.THROW,
-    TokenType.LLM, TokenType.ASYNC,
+    TokenType.LLM,
 )
 
 PrefixParseFn = Callable[["Parser"], ExpressionNode]
@@ -100,7 +98,6 @@ class Precedence:
     TERM = 7
     FACTOR = 8
     UNARY = 9
-    AWAIT = 10
     CALL = 11
 
 
@@ -170,7 +167,6 @@ class Parser:
         self._rules[TokenType.LEFT_PAREN].prefix = self._grouping
         self._rules[TokenType.BANG].prefix = self._unary
         self._rules[TokenType.MINUS].prefix = self._unary
-        self._rules[TokenType.AWAIT].prefix = self._unary
         self._rules[TokenType.LEFT_BRACKET].prefix = self._list_literal
         self._rules[TokenType.LEFT_BRACE].prefix = self._map_literal
         self._rules[TokenType.TEMPLATE_OPEN].prefix = self._template_ref
@@ -178,8 +174,8 @@ class Parser:
         # llm act as expression
         self._rules[TokenType.LLM].prefix = self._llm_expr
 
-        # async as expression: async Agent(...)
-        self._rules[TokenType.ASYNC].prefix = self._async_call_expr
+        # spawnagent as expression: spawnagent Agent(...)
+        self._rules[TokenType.SPAWNAGENT].prefix = self._spawnagent_expr
 
         # lambda as expression: fn(params) { body }
         self._rules[TokenType.FN].prefix = self._lambda_expr
@@ -190,8 +186,7 @@ class Parser:
         # Precedence for prefix operators
         self._rules[TokenType.BANG].precedence = Precedence.UNARY
         self._rules[TokenType.MINUS].precedence = Precedence.UNARY
-        self._rules[TokenType.AWAIT].precedence = Precedence.AWAIT
-        self._rules[TokenType.ASYNC].precedence = Precedence.UNARY
+        self._rules[TokenType.SPAWNAGENT].precedence = Precedence.UNARY
 
         # Infix rules with precedence
         infix_map = {
@@ -292,6 +287,26 @@ class Parser:
             self._error("Expected 'act' after 'llm'.")
             self._synchronize()
             return LiteralNode(value=None, span=self._make_span(start, self._previous()))
+
+    def _spawnagent_expr(self) -> SpawnagentExprNode:
+        """Parse a spawnagent expression: spawnagent AgentCall(...).
+
+        v1.17: Spawns an agent and returns a Task object that can be awaited
+        or stored. Replaces async call (async Agent(...)).
+
+        Example:
+            let task = spawnagent Worker("input")
+            let result = await task
+        """
+        start = self._previous()  # SPAWNAGENT token already consumed by Pratt framework
+        call_expr = self._expression(Precedence.NONE)
+        if not isinstance(call_expr, CallNode):
+            self._error("'spawnagent' must be followed by a function call.")
+            return SpawnagentExprNode(
+                call=CallNode(callee=VariableNode(name="", span=start.span), arguments=[], span=start.span),
+                span=self._make_span(start, self._previous())
+            )
+        return SpawnagentExprNode(call=call_expr, span=self._make_span(start, self._previous()))
 
     def _llm_act_expr(self) -> ExpressionNode:
         """Parse an llm act expression with multimodal support.
@@ -541,20 +556,6 @@ class Parser:
         if self._check(TokenType.AT):
             isolation_level = self._parse_decorator()
 
-        # async statement modifier detection (HLD 3.3.3)
-        if self._check(TokenType.ASYNC):
-            return self._async_call_stmt()
-
-        # v1.12: detach statement for fire-and-forget background execution (Issue #29)
-        if self._check(TokenType.DETACH):
-            return self._detach_stmt()
-
-        # v1.13: channel declaration — typed, thread-safe agent communication
-        if self._match(TokenType.CHANNEL):
-            if isolation_level != "standard":
-                self._error(f"Decorator '@{isolation_level}' can only be applied to agent declarations.")
-            return self._channel_decl()
-
         if self._match(TokenType.SHARED):
             if isolation_level != "standard":
                 self._error(f"Decorator '@{isolation_level}' can only be applied to agent declarations.")
@@ -666,38 +667,6 @@ class Parser:
             self._synchronize()
             return None
 
-    def _async_call_stmt(self) -> AsyncCallStmtNode:
-        """Parse an async statement modifier: async AgentName(...) (HLD 3.3.3)."""
-        start = self._advance()  # consume ASYNC
-        # Parse as a call expression (no 'call' keyword needed)
-        call_expr = self._expression(Precedence.NONE)
-        if not isinstance(call_expr, CallNode):
-            self._error("'async' must be followed by a function call.")
-            return AsyncCallStmtNode(call=CallNode(callee=VariableNode(name="", span=start.span), arguments=[], span=start.span), span=start.span)
-        return AsyncCallStmtNode(call=call_expr,
-                                 span=self._make_span(start, self._previous()))
-
-    def _detach_stmt(self) -> DetachStmtNode:
-        """Parse a detach statement: detach AgentName(...) (Issue #29)."""
-        start = self._advance()  # consume DETACH
-        # Parse as a call expression
-        call_expr = self._expression(Precedence.NONE)
-        if not isinstance(call_expr, CallNode):
-            self._error("'detach' must be followed by a function call.")
-            return DetachStmtNode(call=CallNode(callee=VariableNode(name="", span=start.span), arguments=[], span=start.span), span=start.span)
-        return DetachStmtNode(call=call_expr,
-                              span=self._make_span(start, self._previous()))
-
-    def _async_call_expr(self) -> "AsyncCallExprNode":
-        """Parse async as expression prefix: async Agent(...) -> Task."""
-        start = self._previous()  # ASYNC already consumed by Pratt framework
-        call_expr = self._expression(Precedence.NONE)
-        if not isinstance(call_expr, CallNode):
-            self._error("'async' must be followed by a function call.")
-            return AsyncCallExprNode(call=CallNode(callee=VariableNode(name="", span=start.span), arguments=[], span=start.span), span=start.span)
-        return AsyncCallExprNode(call=call_expr,
-                                 span=self._make_span(start, self._previous()))
-
     def _statement(self) -> StatementNode | None:
         """Parse a single statement."""
         return self._declaration()
@@ -742,11 +711,9 @@ class Parser:
                           else_branch=else_branch,
                           span=self._make_span(start, end))
 
-    def _for_stmt(self) -> ForStmtNode | ForAwaitStmtNode:
-        """Parse a for statement: for x in expr { ... } or for await x in expr { ... }."""
+    def _for_stmt(self) -> ForStmtNode:
+        """Parse a for statement: for x in expr { ... }."""
         start = self._previous()
-        # Check for 'for await' syntax
-        is_await = self._match(TokenType.AWAIT)
         iter_tok = self._consume(TokenType.IDENTIFIER, "Expected iterator after 'for'.")
         self._consume(TokenType.IN, "Expected 'in' after iterator.")
         iterable = self._expression()
@@ -754,9 +721,6 @@ class Parser:
         body = self._block_body()
         end = self._previous()
         iter_node = VariableNode(name=iter_tok.lexeme, span=iter_tok.span)
-        if is_await:
-            return ForAwaitStmtNode(iterator=iter_node, iterable=iterable, body=body,
-                                    span=self._make_span(start, end))
         return ForStmtNode(iterator=iter_node, iterable=iterable, body=body,
                            span=self._make_span(start, end))
 
@@ -909,15 +873,14 @@ class Parser:
                              context_config=context_config)
 
     def _shared_container_decl(self, kind: str) -> object:
-        """Parse a shared store or channel declaration.
+        """Parse a shared store declaration.
 
-        v1.12/v1.13: Both structures are parsed identically;
-        the difference is semantic (state container vs communication endpoint).
+        v1.12: Shared store provides controlled shared mutable state for agent collaboration.
         """
-        from .ast import ChannelDeclNode, SharedStoreDeclNode  # noqa: PLC0415
+        from .ast import SharedStoreDeclNode  # noqa: PLC0415
 
-        node_cls = SharedStoreDeclNode if kind == "store" else ChannelDeclNode
-        label = "store" if kind == "store" else "channel"
+        node_cls = SharedStoreDeclNode
+        label = "store"
         name_tok = self._consume(TokenType.IDENTIFIER, f"Expected {label} name after 'shared {label}'.")
         self._consume(TokenType.LEFT_BRACE, f"Expected '{{' after {label} name.")
 
@@ -946,10 +909,6 @@ class Parser:
     def _shared_store_decl(self):
         """Parse a shared store declaration (delegates to shared container)."""
         return self._shared_container_decl("store")
-
-    def _channel_decl(self):
-        """Parse a channel declaration (delegates to shared container)."""
-        return self._shared_container_decl("channel")
 
     def _agent_param(self) -> AgentParamNode:
         """Parse an agent parameter: name: Type? = expr?."""

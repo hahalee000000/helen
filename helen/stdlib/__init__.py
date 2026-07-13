@@ -156,6 +156,9 @@ from helen.stdlib.media import (
     _is_image, _is_video, _is_audio,
 )
 
+# Import mailbox utilities (v1.18: spawnagent support)
+from helen.stdlib.mailbox import _mailbox_select
+
 
 @dataclass
 class BuiltinFunction:
@@ -1073,6 +1076,9 @@ def _register_builtins() -> None:
         BuiltinFunction("is_image", "Check if MediaPart is an image", "is_image(value)", _is_image, "media"),
         BuiltinFunction("is_video", "Check if MediaPart is a video", "is_video(value)", _is_video, "media"),
         BuiltinFunction("is_audio", "Check if MediaPart is audio", "is_audio(value)", _is_audio, "media"),
+
+        # Mailbox utilities (v1.18: spawnagent support)
+        BuiltinFunction("mailbox_select", "Receive first available message from multiple channels", "mailbox_select(channels, timeout?)", _mailbox_select, "concurrency"),
     ]
 
     for func in builtins:

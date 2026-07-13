@@ -1,14 +1,13 @@
-"""Tests for expression parsing: index, member access, list/map literals, template refs, await."""
+"""Tests for expression parsing: index, member access, list/map literals, template refs."""
 
 import pytest
 from helen.core.lexer import Scanner
 from helen.core.parser import Parser
 from helen.core.ast import (
     IndexNode, AccessNode, ListLiteralNode, MapLiteralNode, MapEntryNode,
-    TemplateRefNode, UnaryOpNode, CallNode, VariableNode, BinaryOpNode,
+    TemplateRefNode, VariableNode, BinaryOpNode,
     LiteralNode, ProgramNode, ExprStmtNode,
 )
-from helen.core.tokens import TokenType
 
 
 def _parse(source: str) -> Parser:
@@ -119,15 +118,6 @@ class TestTemplateRef:
         expr = _first_stmt(p)
         assert isinstance(expr, TemplateRefNode)
         assert isinstance(expr.expression, BinaryOpNode)
-
-
-class TestAwaitPrefix:
-    def test_await_prefix_call(self):
-        p = _parse("await fetchData()")
-        expr = _first_stmt(p)
-        assert isinstance(expr, UnaryOpNode)
-        assert expr.operator.type == TokenType.AWAIT
-        assert isinstance(expr.operand, CallNode)
 
 
 class TestComplexExpressions:

@@ -252,7 +252,6 @@ class ImportResolver:
             VarDeclNode,
             ImportStmtNode,
             SharedStoreDeclNode,
-            ChannelDeclNode,
         )
 
         for stmt in program.statements:
@@ -264,8 +263,8 @@ class ImportResolver:
                 # Register const declarations and shared let (v1.10)
                 # Store the VarDeclNode so we can evaluate it later
                 self._data[stmt.name] = stmt
-            elif isinstance(stmt, (SharedStoreDeclNode, ChannelDeclNode)):
-                # v1.17 (Issue #35): Register shared store/channel declarations
+            elif isinstance(stmt, SharedStoreDeclNode):
+                # v1.17 (Issue #35): Register shared store declarations
                 # so they can be executed and made visible cross-module.
                 # Previously these fell through and were silently dropped,
                 # making the container name resolve to None when the module's

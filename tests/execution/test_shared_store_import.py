@@ -1,4 +1,4 @@
-"""Tests for shared store / channel scope across imports.
+"""Tests for shared store scope across imports.
 
 Regression tests for Issue #35: `shared store` declared in an imported
 module was silently dropped by ImportResolver (which only collected
@@ -8,15 +8,15 @@ raising "'NoneType' has no property '<method>'".
 
 Root cause:
   - helen/runtime/import_resolver.py: _extract_definitions had no case for
-    SharedStoreDeclNode / ChannelDeclNode -> they fell through silently.
+    SharedStoreDeclNode -> it fell through silently.
   - helen/interpreter/interpreter.py: visit_import_stmt (both aliased and
     non-aliased paths) never executed the declaration, so the container
     was never instantiated.
   - helen/semantic/analyzer.py: visit_import_stmt had no case for
-    SharedStoreDeclNode / ChannelDeclNode -> direct cross-module access
+    SharedStoreDeclNode -> direct cross-module access
     failed at semantic analysis with "undeclared variable".
 
-Fix (v1.17): collect and execute shared store/channel declarations during
+Fix (v1.17): collect and execute shared store declarations during
 import, defining the container in BOTH the module env (so the module's own
 functions see it) AND the importing environment (so direct cross-module
 access works), matching shared let semantics.
@@ -27,9 +27,8 @@ Covers:
 2. shared store direct cross-module access (MyStore.method() in main)
 3. shared store via aliased import
 4. shared store state persists across cross-module calls
-5. channel cross-module access
-6. import_resolver registers shared store/channel in data
-7. semantic analyzer registers imported shared store (no undeclared error)
+5. import_resolver registers shared store in data
+6. semantic analyzer registers imported shared store (no undeclared error)
 """
 
 import os
@@ -99,7 +98,7 @@ def _run_file(main_source: str, module_files: dict[str, str],
 
 
 class TestImportResolverSharedStore:
-    """Tests for import_resolver handling of shared store/channel."""
+    """Tests for import_resolver handling of shared store."""
 
     def test_shared_store_registered_in_data(self):
         """shared store SharedStoreDeclNode is registered in resolver.data."""
@@ -114,23 +113,6 @@ class TestImportResolverSharedStore:
             resolver = ImportResolver(base_dir=tmpdir)
             resolver.resolve("mod.helen")
             assert "S" in resolver.data
-        finally:
-            import shutil
-            shutil.rmtree(tmpdir)
-
-    def test_channel_registered_in_data(self):
-        """channel ChannelDeclNode is registered in resolver.data."""
-        tmpdir = tempfile.mkdtemp()
-        try:
-            with open(os.path.join(tmpdir, "mod.helen"), "w") as f:
-                f.write(
-                    "shared channel Q { let n = 0; fn inc() { n = n + 1 } }\n"
-                    "fn q_inc() { Q.inc() }\n"
-                )
-
-            resolver = ImportResolver(base_dir=tmpdir)
-            resolver.resolve("mod.helen")
-            assert "Q" in resolver.data
         finally:
             import shutil
             shutil.rmtree(tmpdir)
@@ -229,52 +211,6 @@ class TestSharedStoreCrossModule:
         """
         result, _ = _run_file(main, {"mod.helen": mod})
         assert result == 300
-
-
-# ─── Channel cross-module tests ───────────────────────────────────────────────
-
-
-CHANNEL_MOD = """
-shared channel Q {
-    let count = 0
-    fn inc() { count = count + 1 }
-    fn get(): int { return count }
-}
-
-fn q_inc() { Q.inc() }
-fn q_get(): int { return Q.get() }
-"""
-
-
-class TestChannelCrossModule:
-    """Issue #35 also affects channels (same SharedStore runtime)."""
-
-    def test_channel_module_function_access(self):
-        """Channel accessible cross-module via wrapper functions."""
-        main = """
-        import "chan_mod.helen"
-        main {
-            q_inc()
-            q_inc()
-            q_inc()
-            q_get()
-        }
-        """
-        result, _ = _run_file(main, {"chan_mod.helen": CHANNEL_MOD})
-        assert result == 3
-
-    def test_channel_direct_cross_module_access(self):
-        """Main module directly accesses channel by name."""
-        main = """
-        import "chan_mod.helen"
-        main {
-            Q.inc()
-            Q.inc()
-            Q.get()
-        }
-        """
-        result, _ = _run_file(main, {"chan_mod.helen": CHANNEL_MOD})
-        assert result == 2
 
 
 # ─── Semantic analyzer tests ──────────────────────────────────────────────────

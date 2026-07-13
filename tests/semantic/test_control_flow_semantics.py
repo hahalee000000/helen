@@ -98,28 +98,6 @@ class TestBreakContinueInsideLoop:
 
 
 # ---------------------------------------------------------------------------
-# LLM usage checks
-# ---------------------------------------------------------------------------
-
-
-class TestLlmUsage:
-    def test_async_on_call_is_valid(self):
-        """async call is parsed as AsyncCallStmtNode, semantic analyzer accepts it."""
-        from helen.core.ast import AsyncCallStmtNode, CallArgNode, CallNode
-        call = CallNode(
-            callee=_var("AgentA"),
-            arguments=[CallArgNode(name="data", value=_var("d1"))],
-            span=_span(),
-        )
-        async_stmt = AsyncCallStmtNode(call=call, span=_span())
-        prog = ProgramNode(statements=[async_stmt], span=_span())
-        errors = ErrorReporter()
-        SemanticAnalyzer(errors).analyze(prog)
-        # Should not crash; callee will be flagged as undeclared but that's fine
-        # The async-on-non-call check is done at parse time
-
-
-# ---------------------------------------------------------------------------
 # Match default mandatory
 # ---------------------------------------------------------------------------
 

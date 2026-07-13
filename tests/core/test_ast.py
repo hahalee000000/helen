@@ -115,10 +115,6 @@ class MockVisitor(Visitor[str]):
         self.calls.append("visit_shared_store_decl")
         return "<shared_store>"
 
-    def visit_channel_decl(self, node) -> str:
-        self.calls.append("visit_channel_decl")
-        return "<channel>"
-
     def visit_if_stmt(self, node: IfStmtNode) -> str:
         self.calls.append("visit_if_stmt")
         return "<if>"
@@ -147,10 +143,6 @@ class MockVisitor(Visitor[str]):
     def visit_for_stmt(self, node) -> str:
         self.calls.append("visit_for_stmt")
         return "<for>"
-
-    def visit_for_await_stmt(self, node) -> str:
-        self.calls.append("visit_for_await_stmt")
-        return "<for-await>"
 
     def visit_while_stmt(self, node) -> str:
         self.calls.append("visit_while_stmt")
@@ -221,17 +213,9 @@ class MockVisitor(Visitor[str]):
         self.calls.append("visit_agent_param")
         return "<agent_param>"
 
-    def visit_detach_stmt(self, node) -> str:
-        self.calls.append("visit_detach_stmt")
-        return "<detach>"
-
-    def visit_async_call_stmt(self, node) -> str:
-        self.calls.append("visit_async_call_stmt")
-        return "<async_call>"
-
-    def visit_async_call_expr(self, node) -> str:
-        self.calls.append("visit_async_call_expr")
-        return "<async_call_expr>"
+    def visit_spawnagent_expr(self, node) -> str:
+        self.calls.append("visit_spawnagent_expr")
+        return "<spawnagent>"
 
     def visit_case(self, node) -> str:
         self.calls.append("visit_case")

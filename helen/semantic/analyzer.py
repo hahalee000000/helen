@@ -24,7 +24,6 @@ from helen.core.ast import (
     AgentParamNode,
     AliasStmtNode,
     AssertStmtNode,
-    AsyncCallStmtNode,
     BinaryOpNode,
     BreakStmtNode,
     CallArgNode,
@@ -34,13 +33,11 @@ from helen.core.ast import (
     CatchClauseNode,
     ContinueStmtNode,
     DeclarationNode,
-    DetachStmtNode,
     ExprStmtNode,
     ExpressionNode,
     FinallyBlockNode,
     FnBlockNode,
     ForStmtNode,
-    ForAwaitStmtNode,
     FunctionDeclNode,
     GroupingNode,
     IfStmtNode,
@@ -558,11 +555,6 @@ class SemanticAnalyzer(Visitor[None]):
         from helen.core.ast import SharedStoreDeclNode  # noqa: PLC0415
         self._visit_shared_container(node, "store", SharedStoreDeclNode)
 
-    def visit_channel_decl(self, node: object) -> None:
-        """Analyze a channel declaration."""
-        from helen.core.ast import ChannelDeclNode  # noqa: PLC0415
-        self._visit_shared_container(node, "channel", ChannelDeclNode)
-
     def visit_variable(self, node: VariableNode) -> None:
         sym = self.symbols.resolve(node.name)
         if sym is None:
@@ -633,20 +625,6 @@ class SemanticAnalyzer(Visitor[None]):
         node.iterable.accept(self)
         self._in_loop += 1
         self.symbols.enter_scope("for", "block")
-        try:
-            if node.iterator is not None:
-                # The loop variable is declared in this scope
-                sym = Symbol(name=node.iterator.name, kind="variable")
-                self.symbols.define(node.iterator.name, sym)
-            node.body.accept(self)
-        finally:
-            self.symbols.exit_scope()
-            self._in_loop -= 1
-
-    def visit_for_await_stmt(self, node: ForAwaitStmtNode) -> None:
-        node.iterable.accept(self)
-        self._in_loop += 1
-        self.symbols.enter_scope("for-await", "block")
         try:
             if node.iterator is not None:
                 # The loop variable is declared in this scope
@@ -1371,7 +1349,6 @@ class SemanticAnalyzer(Visitor[None]):
                 # Register all functions from imported file
                 # Also recursively process imports in the imported file
                 from helen.core.ast import SharedStoreDeclNode as _SSDN  # noqa: PLC0415
-                from helen.core.ast import ChannelDeclNode as _CDN  # noqa: PLC0415
                 for stmt in imported_program.statements:
                     match stmt:
                         case FunctionDeclNode():
@@ -1396,7 +1373,7 @@ class SemanticAnalyzer(Visitor[None]):
                             sym = Symbol(stmt.name, kind="const" if not stmt.mutable else "shared", is_const=not stmt.mutable)
                             self.symbols.define(stmt.name, sym)
 
-                        case _SSDN() | _CDN():
+                        case _SSDN():
                             # v1.17 (Issue #35): Register imported shared store/channel
                             # declarations so they're visible by name in the importing
                             # module (matching shared let semantics). Without this, direct
@@ -1483,18 +1460,11 @@ class SemanticAnalyzer(Visitor[None]):
         self.symbols.define(alias_name, new_sym)
 
     # ------------------------------------------------------------------
-    # Async call
+    # Spawnagent
     # ------------------------------------------------------------------
 
-    def visit_async_call_stmt(self, node: AsyncCallStmtNode) -> None:
-        node.call.accept(self)
-
-    def visit_async_call_expr(self, node) -> None:
-        """Validate async expression: async Agent(...) -> Task."""
-        node.call.accept(self)
-
-    def visit_detach_stmt(self, node: DetachStmtNode) -> None:
-        """Validate detach statement: detach Agent(...) (Issue #29)."""
+    def visit_spawnagent_expr(self, node) -> None:
+        """Validate spawnagent expression (Phase C will implement fully)."""
         node.call.accept(self)
 
     # ------------------------------------------------------------------

@@ -97,9 +97,7 @@ class TokenType(Enum):
     BREAK = auto()
     CONTINUE = auto()
     RETURN = auto()
-    AWAIT = auto()
-    ASYNC = auto()
-    DETACH = auto()  # v1.12: fire-and-forget background execution (Issue #29)
+    SPAWNAGENT = auto()  # v1.17: spawnagent AgentCall(...) — spawn agent and return Task
     MATCH = auto()
     CASE = auto()
     BRANCH = auto()
@@ -116,7 +114,6 @@ class TokenType(Enum):
     FUNCTIONS = auto()
     MAIN = auto()
     STORE = auto()  # v1.12: shared store declaration
-    CHANNEL = auto()  # v1.13: channel declaration
     PROTOCOL = auto()  # v1.7: protocol declaration
     IMPL = auto()      # v1.7: protocol implementation
     IS = auto()        # v1.8: type pattern in match
@@ -154,9 +151,7 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "break": TokenType.BREAK,
     "continue": TokenType.CONTINUE,
     "return": TokenType.RETURN,
-    "await": TokenType.AWAIT,
-    "async": TokenType.ASYNC,
-    "detach": TokenType.DETACH,  # v1.12: fire-and-forget (Issue #29)
+    "spawnagent": TokenType.SPAWNAGENT,  # v1.17: spawn agent and return Task
     "match": TokenType.MATCH,
     "case": TokenType.CASE,
     "branch": TokenType.BRANCH,
@@ -174,8 +169,6 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "main": TokenType.MAIN,
     "store": TokenType.STORE,  # v1.12: shared store
     "仓库": TokenType.STORE,   # v1.12: Chinese equivalent
-    "channel": TokenType.CHANNEL,  # v1.13: channel declaration
-    "通道": TokenType.CHANNEL,     # v1.13: Chinese equivalent
     "alias": TokenType.ALIAS,
     "protocol": TokenType.PROTOCOL,  # v1.7
     "impl": TokenType.IMPL,          # v1.7
@@ -215,9 +208,7 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "智能体": TokenType.AGENT,
     "大模型": TokenType.LLM,
     "执行": TokenType.ACT,
-    "异步": TokenType.ASYNC,
-    "等待": TokenType.AWAIT,
-    "分离": TokenType.DETACH,  # v1.12: fire-and-forget (Issue #29)
+    "生成": TokenType.SPAWNAGENT,  # v1.17: Chinese alias for spawnagent
     "提示词": TokenType.PROMPT,
     "描述": TokenType.DESCRIPTION,
     "模型": TokenType.MODEL,
