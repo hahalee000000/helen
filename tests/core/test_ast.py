@@ -213,9 +213,9 @@ class MockVisitor(Visitor[str]):
         self.calls.append("visit_agent_param")
         return "<agent_param>"
 
-    def visit_spawnagent_expr(self, node) -> str:
-        self.calls.append("visit_spawnagent_expr")
-        return "<spawnagent>"
+    def visit_spawn_expr(self, node) -> str:
+        self.calls.append("visit_spawn_expr")
+        return "<spawn>"
 
     def visit_case(self, node) -> str:
         self.calls.append("visit_case")

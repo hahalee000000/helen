@@ -24,8 +24,8 @@ def _mailbox_select(channels: Any, timeout: Any = None) -> Any:
         Dict with keys "endpoint" and "message", or null if timeout expires.
 
     Example:
-        let m1 = spawnagent StrategyA()
-        let m2 = spawnagent StrategyB()
+        let m1 = spawn StrategyA()
+        let m2 = spawn StrategyB()
         let result = mailbox_select([m1, m2])
         print(result["message"])
     """

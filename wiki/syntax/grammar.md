@@ -63,7 +63,7 @@ store_method      → "fn" IDENTIFIER "(" fn_params? ")" fn_body
 - `shared store`: 受控的共享可变状态（跨 agent 共享引用类型）
 - 运行时复用 `SharedStore` 类（RLock 线程安全）
 - `_` 前缀字段/方法为私有，agent 不可直接访问
-- **v1.18**: `channel X { fields }` 声明语法已删除，channel 现在通过 `Channel()` 构造函数或 `spawnagent` 创建
+- **v1.18**: `channel X { fields }` 声明语法已删除，channel 现在通过 `Channel()` 构造函数或 `spawn` 创建
 
 ### 函数声明
 
@@ -186,12 +186,12 @@ call          → primary ("(" args ")")* ("[" expression "]")* ("." IDENTIFIER)
 primary       → NUMBER | STRING | "true" | "false" | "null"
               | IDENTIFIER | "(" expression ")"
               | list_literal | map_literal
-              | spawnagent_expr
+              | spawn_expr
 list_literal  → "[" (expression ("," expression)*)? "]"
 map_literal   → "{" (map_entry ("," map_entry)*)? "}"
 map_entry     → expression ":" expression
 
-spawnagent_expr → "spawnagent" IDENTIFIER "(" args? ")"
+spawn_expr → "spawn" IDENTIFIER "(" args? ")"
 ```
 
 **v1.8 管道操作符**：
@@ -215,7 +215,7 @@ spawnagent_expr → "spawnagent" IDENTIFIER "(" args? ")"
 | 8 | `*` `/` `%` | Left | `a * b / c` |
 | 9 | `!` `-` (unary) | Right | `!-x` |
 | 10 | `()` `[]` `.` | Left | `f(a)[0].x` |
-| 11 | `spawnagent` | Prefix | `spawnagent Agent(...)` |
+| 11 | `spawn` | Prefix | `spawn Agent(...)` |
 
 ---
 
@@ -232,15 +232,15 @@ else:                   → 作为标识符处理
 
 ---
 
-## `spawnagent` 前缀处理
+## `spawn` 前缀处理
 
-`spawnagent` 是一元前缀表达式，后接 agent 调用：
+`spawn` 是一元前缀表达式，后接 agent 调用：
 
 ```python
-if peek() == "spawnagent":
-    consume(SPAWNAGENT)
+if peek() == "spawn":
+    consume(SPAWN)
     call = parse_call()
-    return SpawnagentExprNode(call=call, span=...)
+    return SpawnExprNode(call=call, span=...)
 ```
 
 ---
@@ -271,7 +271,7 @@ def _synchronize(self):
 - ✅ 控制流 (if/for/while/match)
 - ✅ 异常处理 (try/catch/finally/throw)
 - ✅ LLM 语句 (act/if)
-- ✅ 并发调用 (spawnagent)
+- ✅ 并发调用 (spawn)
 - ✅ 表达式优先级
 - ✅ Panic mode 恢复
 - ✅ 类型注解解析
@@ -365,7 +365,7 @@ store_body        → (store_field | store_method)*
 // channel_decl → "channel" IDENTIFIER "{" store_body "}"
 ```
 
-v1.18 起 `channel X { fields }` 声明语法已删除。Channel 现在通过 `Channel()` 构造函数或 `spawnagent` 创建。
+v1.18 起 `channel X { fields }` 声明语法已删除。Channel 现在通过 `Channel()` 构造函数或 `spawn` 创建。
 
 ### v1.14 语法更新
 
@@ -381,13 +381,13 @@ llm_act → "llm" "act" act_target? act_args? string?
 
 ### v1.18 语法更新
 
-#### 1. spawnagent 并发原语
+#### 1. spawn 并发原语
 
 ```ebnf
-spawnagent_expr → "spawnagent" IDENTIFIER "(" args? ")"
+spawn_expr → "spawn" IDENTIFIER "(" args? ")"
 ```
 
-`spawnagent` 是一元前缀表达式，返回 `Channel` 类型。
+`spawn` 是一元前缀表达式，返回 `Channel` 类型。
 
 #### 2. 删除 async/await/detach/channel 声明
 

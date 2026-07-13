@@ -4,7 +4,7 @@ description: "Helen Agent 设计模式 — 单 Agent、多 Agent 协作、作用
 version: 1.18.0
 author: Helen Team
 license: MIT
-tags: [helen, agent, patterns, design, llm, scope-isolation, shared-let, v1.12, closure, concurrency, history, persistence, context-window, context-management, transcript, session, v1.16, ground-truth-injection, v1.17, spawnagent, channel, v1.18]
+tags: [helen, agent, patterns, design, llm, scope-isolation, shared-let, v1.12, closure, concurrency, history, persistence, context-window, context-management, transcript, session, v1.16, ground-truth-injection, v1.17, spawn, channel, v1.18]
 ---
 
 # Helen Agent 设计模式
@@ -584,7 +584,7 @@ agent ContentPipeline(topic: str) {
 let article = ContentPipeline("Helen programming language")
 ```
 
-### 模式 4: 并发 Agent（spawnagent + Channel）
+### 模式 4: 并发 Agent（spawn + Channel）
 
 **场景**：多个 Agent 并发执行，提高吞吐量
 
@@ -602,10 +602,10 @@ agent DataAggregator {
     description "Aggregate data from multiple sources"
     
     main {
-        // v1.18: spawnagent 并发获取数据
-        let m1 = spawnagent DataFetcher("https://api.source1.com/data")
-        let m2 = spawnagent DataFetcher("https://api.source2.com/data")
-        let m3 = spawnagent DataFetcher("https://api.source3.com/data")
+        // v1.18: spawn 并发获取数据
+        let m1 = spawn DataFetcher("https://api.source1.com/data")
+        let m2 = spawn DataFetcher("https://api.source2.com/data")
+        let m3 = spawn DataFetcher("https://api.source3.com/data")
         
         // 逐个接收结果
         let r1 = m1.receive()
@@ -669,6 +669,29 @@ agent StreamingWriter(topic: str) {
         llm act "Write a detailed article about " + topic on_chunk on_chunk on_complete on_complete
     }
 }
+```
+
+#### 流式中断 (v1.18)
+
+`on_chunk` 回调可以返回 `false` 来提前终止流式输出。结合 `spawn` + `Channel.cancel()`，可以中断后台 agent 正在进行的流式调用：
+
+```helen
+// on_chunk 返回 false 停止流式
+fn conditional_chunk(chunk: str) {
+    stream_print(chunk)
+    if should_stop() {
+        return false  // 终止流式接收
+    }
+}
+
+// spawn + cancel 中断后台流式
+let mailbox = spawn StreamingAgent("long task")
+// ... 在需要时取消
+mailbox.cancel()  // 中断后台 agent 的流式调用
+
+// 也可通过 stdlib 函数取消指定调用
+cancel_llm_call(call_id)
+取消大模型调用(call_id)  // 中文别名
 ```
 
 ### 模式 6: 工具使用 Agent

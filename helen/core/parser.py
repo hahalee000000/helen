@@ -49,7 +49,7 @@ from .ast import (
     ImplDeclNode,
     RangePatternNode,
     ReturnStmtNode,
-    SpawnagentExprNode,
+    SpawnExprNode,
     StatementNode,
     TemplateRefNode,
     ThrowStmtNode,
@@ -174,8 +174,8 @@ class Parser:
         # llm act as expression
         self._rules[TokenType.LLM].prefix = self._llm_expr
 
-        # spawnagent as expression: spawnagent Agent(...)
-        self._rules[TokenType.SPAWNAGENT].prefix = self._spawnagent_expr
+        # spawn as expression: spawn Agent(...)
+        self._rules[TokenType.SPAWN].prefix = self._spawn_expr
 
         # lambda as expression: fn(params) { body }
         self._rules[TokenType.FN].prefix = self._lambda_expr
@@ -186,7 +186,7 @@ class Parser:
         # Precedence for prefix operators
         self._rules[TokenType.BANG].precedence = Precedence.UNARY
         self._rules[TokenType.MINUS].precedence = Precedence.UNARY
-        self._rules[TokenType.SPAWNAGENT].precedence = Precedence.UNARY
+        self._rules[TokenType.SPAWN].precedence = Precedence.UNARY
 
         # Infix rules with precedence
         infix_map = {
@@ -288,25 +288,25 @@ class Parser:
             self._synchronize()
             return LiteralNode(value=None, span=self._make_span(start, self._previous()))
 
-    def _spawnagent_expr(self) -> SpawnagentExprNode:
-        """Parse a spawnagent expression: spawnagent AgentCall(...).
+    def _spawn_expr(self) -> SpawnExprNode:
+        """Parse a spawn expression: spawn AgentCall(...).
 
-        v1.17: Spawns an agent and returns a Task object that can be awaited
-        or stored. Replaces async call (async Agent(...)).
+        v1.18: Spawns an agent and returns a Channel (mailbox) for
+        bidirectional communication. Replaces old spawnagent keyword.
 
         Example:
-            let task = spawnagent Worker("input")
-            let result = await task
+            let mailbox = spawn Worker("input")
+            let msg = mailbox.receive()
         """
-        start = self._previous()  # SPAWNAGENT token already consumed by Pratt framework
+        start = self._previous()  # SPAWN token already consumed by Pratt framework
         call_expr = self._expression(Precedence.NONE)
         if not isinstance(call_expr, CallNode):
-            self._error("'spawnagent' must be followed by a function call.")
-            return SpawnagentExprNode(
+            self._error("'spawn' must be followed by a function call.")
+            return SpawnExprNode(
                 call=CallNode(callee=VariableNode(name="", span=start.span), arguments=[], span=start.span),
                 span=self._make_span(start, self._previous())
             )
-        return SpawnagentExprNode(call=call_expr, span=self._make_span(start, self._previous()))
+        return SpawnExprNode(call=call_expr, span=self._make_span(start, self._previous()))
 
     def _llm_act_expr(self) -> ExpressionNode:
         """Parse an llm act expression with multimodal support.

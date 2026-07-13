@@ -79,7 +79,7 @@ source.helen
 | 决策 | 选择 | 原因 |
 |---|---|---|
 | 手写扫描器 | 非正则 | 最大灵活性，支持三引号/连字符消歧 |
-| Pratt Parsing | 非传统递归下降 | 10 级表达式优先级，`spawnagent` 前缀处理 |
+| Pratt Parsing | 非传统递归下降 | 10 级表达式优先级，`spawn` 前缀处理 |
 | Visitor 模式 | 44 抽象方法 | 三个编译阶段共享同一 AST 遍历接口 |
 | SourceSpan | 全链路 | 每个 Token/AST 节点携带源码位置，用于精准错误定位 |
 

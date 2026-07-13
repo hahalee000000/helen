@@ -1,17 +1,17 @@
 # 版本历史
 
-> Helen v1.18 | spawnagent 并发原语 — `spawnagent` + Channel 消息队列替代 `async/await/detach`，snapshot 全部深复制，89 关键字
+> Helen v1.18 | spawn 并发原语 — `spawn` + Channel 消息队列替代 `async/await/detach`，snapshot 全部深复制，89 关键字
 
 ---
 
-## v1.18: spawnagent 并发原语 (当前)
+## v1.18: spawn 并发原语 (当前)
 
 **发布日期**: 2026-07-13  
-**核心特性**: `spawnagent` + Channel 消息队列统一并发与通信模型，替代旧的 `async/await/detach`
+**核心特性**: `spawn` + Channel 消息队列统一并发与通信模型，替代旧的 `async/await/detach`
 
 ### 主要变更
 
-#### 1. spawnagent 并发原语
+#### 1. spawn 并发原语
 
 ```helen
 agent Worker(task: str, reply: Channel) {
@@ -23,13 +23,13 @@ agent Worker(task: str, reply: Channel) {
 }
 
 main {
-    let mailbox = spawnagent Worker("数据分析")
+    let mailbox = spawn Worker("数据分析")
     let result = mailbox.receive()
     print(result)
 }
 ```
 
-- `spawnagent` 返回 `Channel` 类型（邮箱）
+- `spawn` 返回 `Channel` 类型（邮箱）
 - spawned agent 最后一个参数接收通信 channel（自动注入）
 - 支持双向通信、流式进度、竞争模式
 
@@ -52,17 +52,17 @@ main {
 
 | 删除 | 替代 |
 |------|------|
-| `async` / `await` / `detach` 关键字 | `spawnagent` / `生成` |
-| `AsyncCallStmtNode` / `AsyncCallExprNode` / `DetachStmtNode` | `SpawnagentExprNode` |
+| `async` / `await` / `detach` 关键字 | `spawn` / `分生` |
+| `AsyncCallStmtNode` / `AsyncCallExprNode` / `DetachStmtNode` | `SpawnExprNode` |
 | `ChannelDeclNode` / `channel X { fields }` | `Channel()` 构造函数 |
 | `ForAwaitStmtNode` | `on_chunk` 回调 |
 | `AsyncLLMInterpreter` (`async_interpreter.py`) | 新 Interpreter + Thread |
 | `Task` 类 (`task.py`) | Channel 端点 |
-| `act_async()` / `act_stream_async()` / `route_async()` | spawnagent |
+| `act_async()` / `act_stream_async()` / `route_async()` | spawn |
 
 #### 5. 关键字变更
 
-- 新增：`spawnagent` / `生成`
+- 新增：`spawn` / `分生`
 - 删除：`async` / `异步`、`await` / `等待`、`detach` / `分离`、`channel`（声明）/ `通道`（声明）
 - 总数：97 → 89（44.5 英文 + 44.5 中文）
 
@@ -74,16 +74,16 @@ shared store Result { let done = false; let data = "" }
 detach Worker("task")
 循环 { 如果 Result.done { 跳出 } sleep(100) }
 
-// 新：spawnagent + channel
-let m = spawnagent Worker("task")
+// 新：spawn + channel
+let m = spawn Worker("task")
 let data = m.receive()
 
 // 旧：async/await
 let t = async Agent("task")
 let result = await t
 
-// 新：spawnagent + receive
-let m = spawnagent Agent("task")
+// 新：spawn + receive
+let m = spawn Agent("task")
 let result = m.receive()
 
 // 旧：channel 声明语法
@@ -95,7 +95,7 @@ shared store EventBus { let last_event = "" }
 
 ### 测试
 
-- 新增测试：`test_spawnagent.py`、`test_channel.py`、`test_mailbox_select.py` 等
+- 新增测试：`test_spawn.py`、`test_channel.py`、`test_mailbox_select.py` 等
 - 总测试数：2791 passed
 
 ---

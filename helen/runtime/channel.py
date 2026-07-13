@@ -1,6 +1,6 @@
 """Channel — agent 通信的通用消息队列。
 
-在 spawnagent 跨线程场景和普通 agent 隔离场景中设计一致。
+在 spawn 跨线程场景和普通 agent 隔离场景中设计一致。
 内部两个队列，支持双向通信。
 
 提供：
@@ -18,7 +18,7 @@ from typing import Any
 class Channel:
     """双向消息通道。agent 通信的通用工具。
 
-    在 spawnagent 跨线程场景和普通 agent 隔离场景中设计一致。
+    在 spawn 跨线程场景和普通 agent 隔离场景中设计一致。
     内部两个队列，支持双向通信。
 
     不要直接使用 Channel 的 send/receive —— 应通过 ChannelEndpoint 操作。

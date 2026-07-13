@@ -264,7 +264,7 @@ for param in agent.params:
 
 ### v1.13 Channel 执行语义（v1.18 已更新）
 
-v1.18 起 `channel X { fields }` 声明语法已删除。Channel 现在通过 `Channel()` 构造函数或 `spawnagent` 创建，是消息队列（send/receive），不再是 SharedStore 的别名。
+v1.18 起 `channel X { fields }` 声明语法已删除。Channel 现在通过 `Channel()` 构造函数或 `spawn` 创建，是消息队列（send/receive），不再是 SharedStore 的别名。
 
 **新 Channel 运行时**（`helen/runtime/channel.py`）：
 - `Channel` + `ChannelEndpoint` 双端模型
@@ -272,14 +272,14 @@ v1.18 起 `channel X { fields }` 声明语法已删除。Channel 现在通过 `C
 - `send(msg)` / `receive(timeout?)` / `try_receive()` / `cancel()` / `close()` / `is_closed()`
 - 中文方法别名：`发送`/`接收`/`尝试接收`/`取消`/`关闭`/`已关闭`
 
-详见 [[interpreter/spawnagent|并发与 spawnagent]]。
+详见 [[interpreter/spawn|并发与 spawn]]。
 
-### v1.18 spawnagent 执行语义
+### v1.18 spawn 执行语义
 
-`spawnagent` 是 v1.18 引入的并发原语，替代旧的 `async/await/detach`：
+`spawn` 是 v1.18 引入的并发原语，替代旧的 `async/await/detach`：
 
 ```python
-def visit_spawnagent_expr(self, node: SpawnagentExprNode) -> object:
+def visit_spawn_expr(self, node: SpawnExprNode) -> object:
     from helen.runtime.channel import Channel, ChannelEndpoint
 
     # 1. 创建 Channel（双端队列）
@@ -312,7 +312,7 @@ def visit_spawnagent_expr(self, node: SpawnagentExprNode) -> object:
 **SharedStore.__deepcopy__**：fields 深复制，methods 不复制（闭包引用旧环境）。
 **显式共享**：通过 channel 传递 SharedStore 引用。
 
-详见 [[interpreter/spawnagent|并发与 spawnagent]]。
+详见 [[interpreter/spawn|并发与 spawn]]。
 
 ---
 

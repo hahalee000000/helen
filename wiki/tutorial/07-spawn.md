@@ -1,21 +1,21 @@
-# 教程 07: 并发编程 (spawnagent)
+# 教程 07: 并发编程 (spawn)
 
-> spawnagent / Channel 消息队列 / mailbox_select / 显式共享 / fire-and-forget / 错误处理
+> spawn / Channel 消息队列 / mailbox_select / 显式共享 / fire-and-forget / 错误处理
 
 ---
 
 ## 概述
 
-Helen v1.18 使用 `spawnagent` + Channel 消息队列实现并发。`spawnagent Agent(...)` 返回一个 Channel（邮箱），用于双向通信。
+Helen v1.18 使用 `spawn` + Channel 消息队列实现并发。`spawn Agent(...)` 返回一个 Channel（邮箱），用于双向通信。
 
 **核心原则**：
-- 一个并发原语（`spawnagent`）+ 一个通信机制（Channel 消息队列）
+- 一个并发原语（`spawn`）+ 一个通信机制（Channel 消息队列）
 - 隔离优先：snapshot 全部深复制，agent 默认与外部环境完全隔离
 - 共享是显式的：通过 Channel 传递 SharedStore 引用
 
 ---
 
-## spawnagent 基本用法
+## spawn 基本用法
 
 ```helen
 agent Worker(task: str, reply: Channel) {
@@ -28,15 +28,15 @@ agent Worker(task: str, reply: Channel) {
 }
 
 main {
-    let mailbox = spawnagent Worker("数据分析")
+    let mailbox = spawn Worker("数据分析")
     let result = mailbox.receive()
     print(result)  // "处理完成: 数据分析"
 }
 ```
 
 **要点**：
-- `spawnagent` 返回 `Channel` 类型（邮箱）
-- spawned agent 的**最后一个参数**接收通信 channel（由 spawnagent 自动注入）
+- `spawn` 返回 `Channel` 类型（邮箱）
+- spawned agent 的**最后一个参数**接收通信 channel（由 spawn 自动注入）
 - `reply.send(msg)` 发送消息到主线程
 - `mailbox.receive()` 阻塞等待消息
 
@@ -86,6 +86,45 @@ agent LongTask(reply: Channel) {
 }
 ```
 
+### 流式中断（cancel_event + on_chunk 返回 false）
+
+当 spawned agent 正在流式输出 LLM 响应时，主线程可通过 `mailbox.cancel()` 发送取消信号。spawned agent 内部可通过两种方式响应：
+
+1. **检查 `reply.cancel_event`**：在循环中检测取消信号
+2. **`on_chunk` 回调返回 `false`**：立即中断 LLM 流式输出
+
+```helen
+agent StreamWorker(prompt: str, reply: Channel) {
+    main {
+        let result = llm act prompt on_chunk fn(chunk: str) {
+            // 检查取消信号：如果主线程已取消，返回 false 中断流式
+            if reply.cancel_event.is_set() {
+                return false  // 立即停止 LLM 流式输出
+            }
+            reply.send({type: "chunk", data: chunk})
+            return true  // 继续接收下一个 chunk
+        }
+        reply.send({type: "done", data: result})
+    }
+}
+
+main {
+    let mailbox = spawn StreamWorker("写一篇长文")
+    // 读取前 3 个 chunk 后取消
+    let count = 0
+    loop {
+        let msg = mailbox.receive()
+        if msg == null { break }
+        print(msg["data"])
+        count = count + 1
+        if count >= 3 {
+            mailbox.cancel()  // 发送取消信号
+            break
+        }
+    }
+}
+```
+
 ### close（关闭）
 
 ```helen
@@ -105,7 +144,7 @@ agent LongTask(prompt: str, reply: Channel) {
 }
 
 main {
-    let mailbox = spawnagent LongTask("写一篇关于 AI 的论文")
+    let mailbox = spawn LongTask("写一篇关于 AI 的论文")
     loop {
         let msg = mailbox.receive()
         if msg == null { break }
@@ -140,8 +179,8 @@ agent StrategyB(problem: str, reply: Channel) {
 }
 
 main {
-    let m1 = spawnagent StrategyA("复杂问题")
-    let m2 = spawnagent StrategyB("复杂问题")
+    let m1 = spawn StrategyA("复杂问题")
+    let m2 = spawn StrategyB("复杂问题")
 
     let result = mailbox_select([m1, m2])
     print("最快结果: " + result["message"])
@@ -179,7 +218,7 @@ agent Worker(reply: Channel) {
 }
 
 main {
-    let mailbox = spawnagent Worker()
+    let mailbox = spawn Worker()
     mailbox.send(Counter)           // 显式传递引用
     print(mailbox.receive())        // "done"
     print(Counter.get())            // 2 — 同一个对象，修改可见
@@ -194,11 +233,11 @@ main {
 
 ## fire-and-forget
 
-不需要结果时，忽略 spawnagent 的返回值：
+不需要结果时，忽略 spawn 的返回值：
 
 ```helen
-spawnagent Logger("系统启动日志")
-spawnagent Monitor("健康检查")
+spawn Logger("系统启动日志")
+spawn Monitor("健康检查")
 print("系统已启动")  // 立即执行，不等待 spawned agent 完成
 ```
 
@@ -220,7 +259,7 @@ agent Calculator(reply: Channel) {
 }
 
 main {
-    let calc = spawnagent Calculator()
+    let calc = spawn Calculator()
     calc.send("2 + 3")
     print(calc.receive())     // 5
     calc.send("10 * 20")
@@ -244,7 +283,7 @@ agent RiskyTask(reply: Channel) {
 }
 
 main {
-    let mailbox = spawnagent RiskyTask()
+    let mailbox = spawn RiskyTask()
     let msg = mailbox.receive()
     if msg != null && msg["__error__"] == true {
         print("spawned agent 出错: " + msg["message"])
@@ -269,7 +308,7 @@ main {
 
 | 英文 | 中文 |
 |------|------|
-| `spawnagent` | `生成` |
+| `spawn` | `分生` |
 | `mailbox.send()` | `邮箱.发送()` |
 | `mailbox.receive()` | `邮箱.接收()` |
 | `mailbox.try_receive()` | `邮箱.尝试接收()` |
@@ -287,7 +326,7 @@ main {
 }
 
 主函 {
-    设 邮箱 = 生成 工作者("数据分析")
+    设 邮箱 = 分生 工作者("数据分析")
     设 结果 = 邮箱.接收()
     打印(结果)
 }
@@ -297,16 +336,16 @@ main {
 
 ## 与旧 async/await 的对比
 
-| 旧 async/await | 新 spawnagent |
+| 旧 async/await | 新 spawn |
 |----------------|---------------|
-| `let t = async Agent(...)` | `let m = spawnagent Agent(...)` |
+| `let t = async Agent(...)` | `let m = spawn Agent(...)` |
 | `result = await t` | `result = m.receive()` |
 | `await [t1, t2]` | `[m1.receive(), m2.receive()]` |
-| `detach Agent(...)` | `spawnagent Agent(...)`（忽略返回值） |
+| `detach Agent(...)` | `spawn Agent(...)`（忽略返回值） |
 
 **为什么替换？**
 - `async/await` 底层是线程池，与 `threading.Thread` 无本质区别
-- spawnagent + channel 能覆盖所有场景，且在流式、取消、竞争模式上更好
+- spawn + channel 能覆盖所有场景，且在流式、取消、竞争模式上更好
 - 一个并发原语比两个更清晰
 
 ---
@@ -315,8 +354,8 @@ main {
 
 | 规则 | 说明 |
 |---|---|
-| `spawnagent` 参数 | 必须是 agent 调用 |
-| 最后一个参数 | 必须是 `Channel` 类型（由 spawnagent 自动注入） |
+| `spawn` 参数 | 必须是 agent 调用 |
+| 最后一个参数 | 必须是 `Channel` 类型（由 spawn 自动注入） |
 | 返回类型 | `Channel`（主线程端点） |
 | 隔离 | snapshot 全部深复制，无例外 |
 | 共享 | 通过 channel 显式传递引用 |

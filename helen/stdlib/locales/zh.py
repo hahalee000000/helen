@@ -333,4 +333,9 @@ ALIASES: dict[str, str] = {
 
     # ── Concurrency (并发) ────────────────────────────────────
     "邮箱选择": "mailbox_select",
+
+    # ── LLM Call Control (大模型调用控制) ────────────────────────────────────
+    "取消大模型调用": "cancel_llm_call",
+    "当前大模型调用id": "current_llm_call_id",
+    "取消所有大模型调用": "cancel_all_llm_calls",
 }

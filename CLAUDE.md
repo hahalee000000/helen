@@ -103,11 +103,14 @@ skills/            # 16 built-in skills (SKILL.md + references/)
   - `通道` (channel) — Chinese alias for `shared store` (same declaration syntax, same runtime)
   - Chinese keywords: `仓库` (store), `通道` (channel alias)
   - `_` prefix fields are private (inaccessible from agent code)
-- **Channel message queue (v1.18)**: `spawnagent` returns a Channel (mailbox) for message-passing concurrency
-  - `spawnagent Agent(...)` — spawns agent, returns Channel immediately
+- **Channel message queue (v1.18)**: `spawn` returns a Channel (mailbox) for message-passing concurrency
+  - `spawn Agent(...)` — spawns agent, returns Channel immediately
   - Channel methods: `send(msg)`, `receive()`, `try_receive()`, `cancel()`, `close()`
   - `mailbox_select([m1, m2])` — multi-channel select (first-ready wins)
   - Chinese aliases: `发送()`, `接收()`, `尝试接收()`, `取消()`, `关闭()`
+  - **Streaming interrupt (v1.18)**: `on_chunk` callback return `false` to stop streaming; Ctrl+C during streaming interrupts and preserves REPL state; `spawn` + `Channel.cancel()` can interrupt background agent streaming
+  - **Stdlib**: `cancel_llm_call()`, `current_llm_call_id()`, `cancel_all_llm_calls()`
+  - **中文别名**: `取消大模型调用`, `当前大模型调用id`, `取消所有大模型调用`
 - **ReadOnlyView (v1.12)**: Immutable wrapper for agent parameters
   - Blocks all mutation attempts → raises `ScopeViolationError`
   - Supports `__getitem__`, `__len__`, `__iter__`, `__contains__`, `__bool__`, `__str__`, comparison operators, `__add__`, `__radd__`, `__hash__`
@@ -127,7 +130,7 @@ skills/            # 16 built-in skills (SKILL.md + references/)
   - **设计原则**：协议未统一时不固化进语法；未来新模态/新协议无需修改语言核心，用户更新回调或 skill 即可
   - **配套 skill**：`multimodal-providers` 提供各主流 provider（OpenAI/Claude/Gemini/Seedance/Kling 等）的标准回调写法模板
   - **中文别名**：`媒体()`, `媒体base64()`, `是媒体()`, `媒体类型()`, `处理媒体 fn(...)`, `生成 fn(...)`
-- **spawnagent + Channel (v1.18)**: `spawnagent Agent(...)` spawns an agent and returns a Channel (mailbox) immediately. The spawned agent runs in an isolated environment with a deep-copied snapshot of ALL variables (including SharedStore). Inter-agent data sharing is done explicitly by passing SharedStore references through Channel messages. `mailbox_select([m1, m2, ...])` provides multi-channel select (first-ready wins). Old async/await/detach keywords and `channel X { fields }` declaration syntax removed (v1.18).
+- **spawn + Channel (v1.18)**: `spawn Agent(...)` spawns an agent and returns a Channel (mailbox) immediately. The spawned agent runs in an isolated environment with a deep-copied snapshot of ALL variables (including SharedStore). Inter-agent data sharing is done explicitly by passing SharedStore references through Channel messages. `mailbox_select([m1, m2, ...])` provides multi-channel select (first-ready wins). Old async/await/detach keywords and `channel X { fields }` declaration syntax removed (v1.18).
 - **Short-circuit evaluation (v1.10)**: `&&` and `||` short-circuit
 - **Type system**: 14 types including Optional (`str?`), Union (`int | str`), Protocol, Agent, Literal. Return type annotation uses `:` syntax only (`fn foo(): int {}`); `->` syntax removed (v1.10)
 - **Pattern matching**: `match` with range, wildcard, variable binding, type patterns
@@ -190,7 +193,7 @@ Tests in `tests/` mirror the source structure:
 - `core/` — Lexer, parser, AST, tokens, errors
 - `semantic/` — Semantic analyzer, agent scope isolation
 - `interpreter/` — Interpreter, isolation (v1.12)
-- `execution/` — End-to-end (agents, control flow, functions, imports, match, exceptions, v1.12 isolation, v1.18 spawnagent)
+- `execution/` — End-to-end (agents, control flow, functions, imports, match, exceptions, v1.12 isolation, v1.18 spawn)
 - `runtime/` — LLM runtime, tools, memory, history, config, imports, working memory, graduated compression, cache-aware compression, transcript store, session manager
 - `stdlib/` — Standard library functions, context management, transcript functions
 - `language/` — Feature tests (v16-v18: pattern matching, closures, protocols)

@@ -6,6 +6,7 @@ MockLLMRuntime for deterministic testing of llm if/choose/act statements.
 
 from __future__ import annotations
 
+import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Iterator
@@ -71,11 +72,16 @@ class LLMRuntime(ABC):
                    tools: list[dict[str, Any]] | None = None,
                    max_turns: int = 5,
                    history: list[dict[str, Any]] | None = None,
-                   dispatch_fn: Any = None) -> Iterator[dict[str, Any]]:
+                   dispatch_fn: Any = None,
+                   cancel_event: threading.Event | None = None) -> Iterator[dict[str, Any]]:
         """Stream LLM response with tool-calling support.
 
         Default implementation calls act() and yields the full response as a single content event.
         Override for true streaming support.
+
+        Args:
+            cancel_event: Optional threading.Event for cooperative cancellation.
+                When set, the stream should stop yielding and return.
 
         Yields event dicts:
             {"type": "content", "content": "..."}     — text chunk

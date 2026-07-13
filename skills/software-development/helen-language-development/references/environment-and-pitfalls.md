@@ -944,13 +944,13 @@ while (count < 5) {
 
 When writing or reviewing while-loop tutorials, **always use assignment** (`count = count + 1`) not `let`. The tutorial test runner skips while loops without `break` to guard against this exact infinite loop scenario.
 
-### spawnagent + Channel (Tutorial 07) — Concurrent Execution (v1.18)
+### spawn + Channel (Tutorial 07) — Concurrent Execution (v1.18)
 
-**Replaces the old async/await/detach model.** `spawnagent` spawns an agent in a daemon thread and returns a `Channel` (mailbox) for bidirectional communication.
+**Replaces the old async/await/detach model.** `spawn` spawns an agent in a daemon thread and returns a `Channel` (mailbox) for bidirectional communication.
 
 **Working syntax**:
 ```helen
-// spawnagent returns a Channel (mailbox) immediately - agent runs in background thread
+// spawn returns a Channel (mailbox) immediately - agent runs in background thread
 agent Worker(input: str, reply: Channel) {
     main {
         let result = process(input)
@@ -958,8 +958,8 @@ agent Worker(input: str, reply: Channel) {
     }
 }
 
-let m1 = spawnagent Worker("input A")
-let m2 = spawnagent Worker("input B")
+let m1 = spawn Worker("input A")
+let m2 = spawn Worker("input B")
 
 // receive() blocks until the agent sends a result
 let r1 = m1.receive()
@@ -968,7 +968,7 @@ let results = [r1, r2]
 print(results)  // ["result A", "result B"]
 
 // fire-and-forget: just don't call receive()
-spawnagent Worker("fire and forget")
+spawn Worker("fire and forget")
 
 // multi-channel select (first-ready wins)
 let ready = mailbox_select([m1, m2])
@@ -983,7 +983,7 @@ The spawned agent runs in an isolated daemon thread with a deep-copied snapshot 
 
 **Execution flow**:
 ```
-spawnagent Worker("A")  -> Thread(started) -> isolated Interpreter(env_snapshot)
+spawn Worker("A")  -> Thread(started) -> isolated Interpreter(env_snapshot)
 Worker main runs        -> reply.send(result) -> from_spawned queue
 mailbox.receive()       -> queue.get() -> blocks until result arrives -> resultA
 ```
@@ -992,16 +992,16 @@ mailbox.receive()       -> queue.get() -> blocks until result arrives -> resultA
 ```helen
 shared store Counter { count: int = 0 }
 let counter = Counter()
-let mailbox = spawnagent Worker(counter)  // reference passed in message
+let mailbox = spawn Worker(counter)  // reference passed in message
 ```
 
 **Key implementation files**:
 - `helen/runtime/channel.py` - `Channel` (dual-queue container) + `ChannelEndpoint` (main/spawned sides)
-- `helen/interpreter/interpreter.py` - `visit_spawnagent_expr` (snapshot + thread creation)
+- `helen/interpreter/interpreter.py` - `visit_spawn_expr` (snapshot + thread creation)
 - `helen/interpreter/environment.py` - `snapshot()` (full deep copy)
 - `helen/stdlib/mailbox.py` - `mailbox_select()` for multi-channel select
 
-**Pratt parser note**: `spawnagent` is registered as an expression prefix. The Pratt framework consumes the `SPAWNAGENT` token before calling `_spawnagent_expr`, so use `self._previous()` to access it (not `self._advance()`).
+**Pratt parser note**: `spawn` is registered as an expression prefix. The Pratt framework consumes the `SPAWN` token before calling `_spawn_expr`, so use `self._previous()` to access it (not `self._advance()`).
 
 **Pitfall — SharedStore methods are NOT deep-copied**: When snapshot deep-copies a `SharedStore`, the data fields are copied but the bound methods are not (they reference closures over the original interpreter). To call methods on a shared store inside a spawned agent, pass the store reference explicitly through the Channel rather than relying on the snapshot copy.
 
@@ -1637,7 +1637,7 @@ See `references/tutorial-testing.md` for test runner details, skip categories, a
 | M8 Import Resolver | ✅ `.helen`/`.json`/`.md`. ⚠️ **Missing `.yaml`/`.yml`** support; **path security (`../` escape prevention)** not verified |
 | M12 LSP Server | ✅ Diagnostics (full Lex→Parse→Analyze), completions (keywords+types+stdlib), go-to-definition. ⚠️ **Completions not position-filtered**; missing hover/signature help/rename |
 | M13 VS Code Extension | ⚠️ TextMate syntax highlight only; **no LSP-backed completion/jump integration** |
-| M14 Concurrency | ✅ **Replaced by `spawnagent` + Channel (v1.18, 2026-07)**. `spawnagent Agent(...)` spawns an agent in a daemon thread and returns a `Channel` (mailbox) for bidirectional communication (`send`/`receive`/`cancel`). `mailbox_select([m1, m2])` for multi-channel select. Old `async`/`await`/`detach` keywords and `AsyncLLMInterpreter`/`Task` classes removed. Environment isolation via full `snapshot()` deep copy (including SharedStore). See `references/spawnagent-proposal.md` for architecture details |
+| M14 Concurrency | ✅ **Replaced by `spawn` + Channel (v1.18, 2026-07)**. `spawn Agent(...)` spawns an agent in a daemon thread and returns a `Channel` (mailbox) for bidirectional communication (`send`/`receive`/`cancel`). `mailbox_select([m1, m2])` for multi-channel select. Old `async`/`await`/`detach` keywords and `AsyncLLMInterpreter`/`Task` classes removed. Environment isolation via full `snapshot()` deep copy (including SharedStore). See `references/spawnagent-proposal.md` for architecture details |
 
 ### ❌ Not Implemented (HLD v1.2.1 gaps found 2026-06)
 | ❌ Not Implemented (HLD v1.2.1 gaps found 2026-06) |

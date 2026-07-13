@@ -48,8 +48,8 @@ class Visitor(ABC, Generic[R]):
         """Visit a CallNode."""
 
     @abstractmethod
-    def visit_spawnagent_expr(self, node: "SpawnagentExprNode") -> R:
-        """Visit a SpawnagentExprNode."""
+    def visit_spawn_expr(self, node: "SpawnExprNode") -> R:
+        """Visit a SpawnExprNode."""
 
     @abstractmethod
     def visit_call_arg(self, node: CallArgNode) -> R:
@@ -831,22 +831,22 @@ class AliasStmtNode(StatementNode):
 
 
 @dataclass(frozen=True)
-class SpawnagentExprNode(ExpressionNode):
-    """Spawn agent expression: spawnagent AgentName(...).
+class SpawnExprNode(ExpressionNode):
+    """Spawn agent expression: spawn AgentName(...).
 
-    v1.17: Spawns an agent and returns a Task object that can be awaited
-    or stored. Replaces async call (async Agent(...)) and detach statement.
+    v1.18: Spawns an agent and returns a Channel (mailbox) for
+    bidirectional communication. Replaces old spawnagent keyword.
 
     Example:
-        let task = spawnagent Worker("input")
-        let result = await task
+        let mailbox = spawn Worker("input")
+        let msg = mailbox.receive()
     """
     call: CallNode
     span: SourceSpan
 
     def accept(self, visitor: Visitor[R]) -> R:
         """Dispatch to the visitor."""
-        return visitor.visit_spawnagent_expr(self)
+        return visitor.visit_spawn_expr(self)
 
 
 @dataclass(frozen=True)
@@ -1299,9 +1299,9 @@ class ASTPrinter(Visitor[str]):
         """Visit an AgentParamNode."""
         return "(param " + node.name + ")"
 
-    def visit_spawnagent_expr(self, node: SpawnagentExprNode) -> str:
-        """Visit a SpawnagentExprNode."""
-        return self._parenthesize("spawnagent", node.call)
+    def visit_spawn_expr(self, node: SpawnExprNode) -> str:
+        """Visit a SpawnExprNode."""
+        return self._parenthesize("spawn", node.call)
 
     def visit_case(self, node: CaseNode) -> str:
         """Visit a CaseNode."""

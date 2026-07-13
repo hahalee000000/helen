@@ -4,12 +4,12 @@ description: "Helen Agent 协作模式 — 多 Agent 协作、编排、分工、
 version: 1.18.0
 author: Helen Team
 license: MIT
-tags: [helen, agent, collaboration, orchestration, workflow, multi-agent, shared-let, scope-isolation, v1.12, read-only-params, ground-truth-injection, v1.17, spawnagent, channel, v1.18]
+tags: [helen, agent, collaboration, orchestration, workflow, multi-agent, shared-let, scope-isolation, v1.12, read-only-params, ground-truth-injection, v1.17, spawn, channel, v1.18]
 ---
 
 # Helen Agent 协作模式
 
-本技能描述 Helen 语言中多 Agent 协作的模式和最佳实践（v1.18 更新：spawnagent + Channel 替代 async/await）。
+本技能描述 Helen 语言中多 Agent 协作的模式和最佳实践（v1.18 更新：spawn + Channel 替代 async/await）。
 
 ## 核心概念
 
@@ -105,11 +105,11 @@ agent TaskWorker(worker_id: str, queue: list, completed: map) {
     }
 }
 
-// 协作流程（v1.18: spawnagent + Channel）
+// 协作流程（v1.18: spawn + Channel）
 let initial_queue = []
 let queue = TaskProducer(["task1", "task2", "task3"], initial_queue)
-let w1 = spawnagent TaskWorker("W1", queue, {})
-let w2 = spawnagent TaskWorker("W2", queue, {})
+let w1 = spawn TaskWorker("W1", queue, {})
+let w2 = spawn TaskWorker("W2", queue, {})
 let r1 = w1.receive()
 let r2 = w2.receive()
 print("Completed: " + str(completed_count))
@@ -209,10 +209,10 @@ agent ParallelOrchestrator(file_paths: list) {
     
     functions {
         fn analyze_files_parallel(paths: list): map {
-            // 启动并行分析（v1.18: spawnagent）
+            // 启动并行分析（v1.18: spawn）
             let mailboxes = []
             for path in paths {
-                let mailbox = spawnagent CodeAnalyzer(path)
+                let mailbox = spawn CodeAnalyzer(path)
                 mailboxes.append(mailbox)
             }
             
@@ -393,9 +393,9 @@ agent ProjectManager(requirement: str) {
         let architecture = Architect(analysis)
         project_progress = 50
         
-        // 阶段 3: 并行开发（v1.18: spawnagent + Channel）
-        let frontend_mb = spawnagent FrontendDev(architecture)
-        let backend_mb = spawnagent BackendDev(architecture)
+        // 阶段 3: 并行开发（v1.18: spawn + Channel）
+        let frontend_mb = spawn FrontendDev(architecture)
+        let backend_mb = spawn BackendDev(architecture)
         let dev_results = [frontend_mb.receive(), backend_mb.receive()]
         project_progress = 80
         
@@ -481,12 +481,12 @@ agent SolutionSelector(problem: str) {
     description "竞争选择最佳方案"
     
     main {
-        // 多种策略并行竞争（v1.18: spawnagent）
+        // 多种策略并行竞争（v1.18: spawn）
         let strategies = ["分治法", "动态规划", "贪心算法", "回溯法"]
         let mailboxes = []
         
         for strategy in strategies {
-            let mailbox = spawnagent SolutionGenerator(problem, strategy)
+            let mailbox = spawn SolutionGenerator(problem, strategy)
             mailboxes.append(mailbox)
         }
         
@@ -613,8 +613,8 @@ agent Consumer(registry: TaskRegistry) {
 
 main {
     let registry = TaskRegistry
-    spawnagent Producer(registry)
-    spawnagent Consumer(registry)
+    spawn Producer(registry)
+    spawn Consumer(registry)
 }
 ```
 
@@ -625,10 +625,10 @@ main {
 
 ### 5. 使用 Channel 消息队列进行 Agent 间通信（v1.18）
 
-v1.18 引入 `spawnagent` + Channel 消息队列，替代旧的 async/await 并发模型：
+v1.18 引入 `spawn` + Channel 消息队列，替代旧的 async/await 并发模型：
 
 ```helen
-// spawnagent 返回 Channel（邮箱）
+// spawn 返回 Channel（邮箱）
 agent Sender(output: Channel) {
     main {
         output.send("Hello from sender")
@@ -648,8 +648,8 @@ agent Receiver(input: Channel) {
 
 main {
     // 创建 channel 连接 sender 和 receiver
-    // 通过 spawnagent 启动并发 agent
-    let mb1 = spawnagent Sender(null)
+    // 通过 spawn 启动并发 agent
+    let mb1 = spawn Sender(null)
     let result = mb1.receive()
 }
 ```
@@ -659,7 +659,7 @@ main {
 | 场景 | 推荐 |
 |------|------|
 | 多个 Agent 读写同一个状态 | Shared Store |
-| Agent 间传递消息/任务结果 | spawnagent + Channel |
+| Agent 间传递消息/任务结果 | spawn + Channel |
 | 多路复用选择 | mailbox_select([m1, m2, ...]) |
 | 需要线程安全的字段访问 | Shared Store |
 
@@ -702,7 +702,7 @@ agent RobustOrchestrator(tasks: list) {
     main {
         let mailboxes = []
         for task in tasks {
-            mailboxes.append(spawnagent TaskWorker(task))
+            mailboxes.append(spawn TaskWorker(task))
         }
         
         try {
@@ -738,13 +738,13 @@ agent BatchProcessor(items: list) {
     main {
         let results = []
         
-        // 分批处理（v1.18: spawnagent）
+        // 分批处理（v1.18: spawn）
         for i in range(0, len(items), MAX_CONCURRENT) {
             let batch = items[i:i + MAX_CONCURRENT]
             let mailboxes = []
             
             for item in batch {
-                mailboxes.append(spawnagent Worker(item))
+                mailboxes.append(spawn Worker(item))
             }
             
             for mailbox in mailboxes {

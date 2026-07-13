@@ -479,58 +479,111 @@ class LlmMixin:
             full_response = []
             tool_calls_log = []
             stream_usage = {}  # accumulated token usage across turns
-            for event in self.llm_runtime.act_stream(
-                prompt, model=model, temperature=temperature,
-                system_prompt=system_prompt, tools=tools,
-                max_turns=max_turns,
-                history=history_for_llm,
-                dispatch_fn=dispatch_fn,
-            ):
-                event_type = event.get("type", "content")
+            interrupted = False
 
-                if event_type == "content":
-                    content = event.get("content", "")
-                    if content:
-                        full_response.append(content)
-                        if on_chunk_fn is not None:
-                            on_chunk_fn(content)
+            # Phase 3: Register streaming call for cancel/KeyboardInterrupt support
+            stream_handle = self._register_streaming_call()
 
-                elif event_type == "tool_call":
-                    fn_name = event.get("name", "")
-                    fn_args = event.get("args", {})
-                    tool_calls_log.append({"name": fn_name, "args": fn_args})
-                    if on_chunk_fn is not None:
-                        args_str = ", ".join(f"{k}={v!r}" for k, v in fn_args.items())
-                        progress = f"\n🔧 Calling {fn_name}({args_str})...\n"
-                        on_chunk_fn(progress)
+            # Merge cancel signals: stream_handle + external (spawn scenario)
+            external_cancel = getattr(self, '_agent_cancel_event', None)
 
-                elif event_type == "tool_result":
-                    fn_name = event.get("name", "")
-                    result = event.get("result", "")
-                    if on_chunk_fn is not None:
-                        display_result = result if len(result) <= 200 else result[:200] + "..."
-                        result_msg = f"✅ {fn_name} returned: {display_result}\n"
-                        on_chunk_fn(result_msg)
-
-                elif event_type == "usage":
-                    u = event.get("usage", {})
-                    stream_usage["prompt_tokens"] = stream_usage.get("prompt_tokens", 0) + u.get("prompt_tokens", 0)
-                    stream_usage["completion_tokens"] = stream_usage.get("completion_tokens", 0) + u.get("completion_tokens", 0)
-
-                elif event_type == "error":
-                    error_msg = event.get("message", "Unknown error")
-                    self.errors.error(
-                        ErrorCode.RUNTIME_ERROR,
-                        f"Streaming error: {error_msg}",
-                        node.span,
+            # Phase 2: Pass cancel_event to act_stream
+            try:
+                try:
+                    stream_iter = self.llm_runtime.act_stream(
+                        prompt, model=model, temperature=temperature,
+                        system_prompt=system_prompt, tools=tools,
+                        max_turns=max_turns,
+                        history=history_for_llm,
+                        dispatch_fn=dispatch_fn,
+                        cancel_event=stream_handle.cancelled,
                     )
-                    break
+                except TypeError:
+                    # Fallback: custom LLMRuntime doesn't support cancel_event
+                    stream_iter = self.llm_runtime.act_stream(
+                        prompt, model=model, temperature=temperature,
+                        system_prompt=system_prompt, tools=tools,
+                        max_turns=max_turns,
+                        history=history_for_llm,
+                        dispatch_fn=dispatch_fn,
+                    )
 
-            # Call on_complete callback if provided
-            if on_complete_fn is not None:
+                for event in stream_iter:
+                    # Check cancel signals
+                    if stream_handle.cancelled.is_set():
+                        interrupted = True
+                        break
+                    if external_cancel is not None and external_cancel.is_set():
+                        stream_handle.cancelled.set()
+                        interrupted = True
+                        break
+
+                    event_type = event.get("type", "content")
+
+                    if event_type == "content":
+                        content = event.get("content", "")
+                        if content:
+                            full_response.append(content)
+                            if on_chunk_fn is not None:
+                                # Phase 1: Check on_chunk return value
+                                chunk_result = on_chunk_fn(content)
+                                if chunk_result is False:
+                                    interrupted = True
+                                    break
+
+                    elif event_type == "tool_call":
+                        fn_name = event.get("name", "")
+                        fn_args = event.get("args", {})
+                        tool_calls_log.append({"name": fn_name, "args": fn_args})
+                        if on_chunk_fn is not None:
+                            args_str = ", ".join(f"{k}={v!r}" for k, v in fn_args.items())
+                            progress = f"\n🔧 Calling {fn_name}({args_str})...\n"
+                            # Phase 1: Check on_chunk return value
+                            chunk_result = on_chunk_fn(progress)
+                            if chunk_result is False:
+                                interrupted = True
+                                break
+
+                    elif event_type == "tool_result":
+                        fn_name = event.get("name", "")
+                        result = event.get("result", "")
+                        if on_chunk_fn is not None:
+                            display_result = result if len(result) <= 200 else result[:200] + "..."
+                            result_msg = f"✅ {fn_name} returned: {display_result}\n"
+                            # Phase 1: Check on_chunk return value
+                            chunk_result = on_chunk_fn(result_msg)
+                            if chunk_result is False:
+                                interrupted = True
+                                break
+
+                    elif event_type == "usage":
+                        u = event.get("usage", {})
+                        stream_usage["prompt_tokens"] = stream_usage.get("prompt_tokens", 0) + u.get("prompt_tokens", 0)
+                        stream_usage["completion_tokens"] = stream_usage.get("completion_tokens", 0) + u.get("completion_tokens", 0)
+
+                    elif event_type == "error":
+                        error_msg = event.get("message", "Unknown error")
+                        self.errors.error(
+                            ErrorCode.RUNTIME_ERROR,
+                            f"Streaming error: {error_msg}",
+                            node.span,
+                        )
+                        break
+
+            except KeyboardInterrupt:
+                # Ctrl+C during streaming — captured here, REPL won't see it
+                interrupted = True
+                stream_handle.cancelled.set()
+
+            finally:
+                stream_handle.done.set()
+                self._unregister_streaming_call(stream_handle.call_id)
+
+            # on_complete only called when NOT interrupted
+            if not interrupted and on_complete_fn is not None:
                 on_complete_fn()
 
-            # Record tool calls + final response to history
+            # Record tool calls + final response to history (including partial)
             full_text = "".join(full_response)
             if full_text or tool_calls_log:
                 class _StreamResponse:
@@ -541,9 +594,10 @@ class LlmMixin:
                 self._record_llm_response_to_history(stream_resp)
 
             # Log to audit trail
+            audit_response = full_text + (" [interrupted]" if interrupted else "")
             self._log_llm_audit(
                 "act_stream", prompt, audit_start, agent_name, model,
-                response=full_text,
+                response=audit_response,
                 tokens_in=stream_usage.get("prompt_tokens", 0),
                 tokens_out=stream_usage.get("completion_tokens", 0),
                 tool_calls=tool_calls_log,

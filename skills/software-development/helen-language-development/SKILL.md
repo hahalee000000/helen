@@ -1,10 +1,10 @@
 ---
 name: helen-language-development
-description: "【面向 Helen 核心开发者】Helen 语言实现模式 — AST/解析器/解释器扩展、spawnagent、异常层级、作用域隔离、共享变量、v1.14 特性（Shared Store、Channel、llm act 流式统一）、v1.16 TranscriptStore SSOT、v1.18 spawnagent + Channel。本文档面向扩展 Helen 语言本身的开发者，非 Helen 程序用户。"
+description: "【面向 Helen 核心开发者】Helen 语言实现模式 — AST/解析器/解释器扩展、spawn、异常层级、作用域隔离、共享变量、v1.14 特性（Shared Store、Channel、llm act 流式统一）、v1.16 TranscriptStore SSOT、v1.18 spawn + Channel。本文档面向扩展 Helen 语言本身的开发者，非 Helen 程序用户。"
 version: 1.18.0
 author: Helen Team
 license: MIT
-tags: [helen, core-developer, language-extend, language-design, interpreter, spawnagent, parser, streaming, tool-calls, ffi, python-integration, contract-first, stdlib, closures, protocols, pipe-operator, pattern-matching, chinese-keywords, scope-isolation, shared-let, shared-store, channel, v1.10, v1.11, v1.12, v1.13, v1.14, v1.16, transcript, ssot, v1.18]
+tags: [helen, core-developer, language-extend, language-design, interpreter, spawn, parser, streaming, tool-calls, ffi, python-integration, contract-first, stdlib, closures, protocols, pipe-operator, pattern-matching, chinese-keywords, scope-isolation, shared-let, shared-store, channel, v1.10, v1.11, v1.12, v1.13, v1.14, v1.16, transcript, ssot, v1.18]
 ---
 
 # Helen Language Development
@@ -26,12 +26,12 @@ Development patterns and pitfalls for the Helen programming language (~/helen/).
 - **Tests**: `cd ~/helen && pytest`
 - **Git remote**: `https://github.com/hahalee000000/helen.git`
 - **File extension**: `.helen` (not `.hellen`)
-- **Current version**: v1.18 (includes: scope isolation v1.10, shared let v1.10, isolation enhancements + shared store v1.12, channel alias v1.13, llm stream merged into llm act v1.14, spawnagent + Channel message queue v1.18)
+- **Current version**: v1.18 (includes: scope isolation v1.10, shared let v1.10, isolation enhancements + shared store v1.12, channel alias v1.13, llm stream merged into llm act v1.14, spawn + Channel message queue v1.18)
 
 ## When to Use
 
 - Extending Helen's AST, parser, interpreter, or semantic analyzer
-- Implementing new language features (control flow, spawnagent, exceptions, etc.)
+- Implementing new language features (control flow, spawn, exceptions, etc.)
 - Debugging parser/interpreter issues
 - Adding new predefined exceptions or error types
 - Working with the Pratt parser framework
@@ -71,7 +71,7 @@ helen/
 
 ### 1. Extending the AST
 
-When adding a new node type (e.g., `SpawnagentExprNode`):
+When adding a new node type (e.g., `SpawnExprNode`):
 
 1. **Add to `ast.py`**: Frozen dataclass inheriting from `ExpressionNode` or `StatementNode`
 2. **Add visitor method to `Visitor[R]`**: Abstract method `visit_<node_type>(self, node: NodeType) -> R`
@@ -86,15 +86,15 @@ When adding a new node type (e.g., `SpawnagentExprNode`):
 
 ### 2. Pratt Parser Extension
 
-When adding a new prefix operator (e.g., `spawnagent`):
+When adding a new prefix operator (e.g., `spawn`):
 
 ```python
 # In Parser.__init__():
-self._rules[TokenType.SPAWNAGENT].prefix = self._spawnagent_expr
-self._rules[TokenType.SPAWNAGENT].precedence = Precedence.UNARY
+self._rules[TokenType.SPAWN].prefix = self._spawn_expr
+self._rules[TokenType.SPAWN].precedence = Precedence.UNARY
 
 # Prefix function:
-def _spawnagent_expr(self) -> SpawnagentExprNode:
+def _spawn_expr(self) -> SpawnExprNode:
     start = self._previous()  # ← CRITICAL: token already consumed!
     call_expr = self._expression(Precedence.NONE)
     # ... build and return node
@@ -131,10 +131,10 @@ _PREDEFINED_EXCEPTIONS = frozenset({
 
 **Pitfall**: If an exception doesn't inherit `HelenRuntimeError`, `try-catch` cannot catch it (the interpreter only catches `HelenRuntimeError`). If it's not in the predefined sets, semantic analysis rejects it.
 
-### 4. Spawnagent Implementation (v1.18)
+### 4. Spawn Implementation (v1.18)
 
 **Architecture**:
-- `spawnagent Agent(...)` creates the agent, spawns execution in a separate thread, and returns a **Channel** (mailbox) immediately
+- `spawn Agent(...)` creates the agent, spawns execution in a separate thread, and returns a **Channel** (mailbox) immediately
 - Each spawned agent gets an **environment snapshot** that deep-copies EVERYTHING including SharedStore
 - The Channel is used for message-passing: agent result is sent through it
 - `mailbox_select([ch1, ch2, ...])` waits on multiple channels, returns first-ready result
@@ -142,13 +142,13 @@ _PREDEFINED_EXCEPTIONS = frozenset({
 **Key components**:
 
 ```python
-# SpawnagentExprNode — the AST node for spawnagent
+# SpawnExprNode — the AST node for spawn
 @dataclass(frozen=True)
-class SpawnagentExprNode(ExpressionNode):
+class SpawnExprNode(ExpressionNode):
     call: CallExprNode       # The agent call expression
     span: SourceSpan
 
-# Channel — message queue returned by spawnagent
+# Channel — message queue returned by spawn
 class Channel:
     """Thread-safe message queue for agent communication."""
     def send(self, msg): ...
@@ -305,8 +305,8 @@ Helen supports 89 keywords in both English and Chinese. See `references/chinese-
 
 **v1.12 新增**: `store`/`仓库`（Shared Store 声明）
 **v1.14 删除**: `stream`/`流式执行`（流式功能合并到 `llm act`）
-**v1.18 删除**: `async`/`await`/`detach` + `异步`/`等待`/`分离`（由 spawnagent 替代）
-**v1.18 新增**: `spawnagent`/`生成`（生成 Agent 并返回 Channel）
+**v1.18 删除**: `async`/`await`/`detach` + `异步`/`等待`/`分离`（由 spawn 替代）
+**v1.18 新增**: `spawn`/`分生`（分生 Agent 并返回 Channel）
 
 ## v1.12 Features: Shared Store + Isolation Enhancements
 
@@ -353,11 +353,11 @@ class SharedStore:
 
 **v1.13-v1.17**: `channel` 声明类型安全的 agent 间通信端点。运行时复用 `SharedStore` 类。
 
-**v1.18**: `channel X { fields }` 声明语法已移除。`通道` 保留为 `shared store` 的中文别名。Channel 现在是消息队列类型（由 `spawnagent` 返回）。
+**v1.18**: `channel X { fields }` 声明语法已移除。`通道` 保留为 `shared store` 的中文别名。Channel 现在是消息队列类型（由 `spawn` 返回）。
 
 ```python
 # v1.18: Channel is a message queue, not a declaration type
-# AST: SpawnagentExprNode — spawnagent returns Channel
+# AST: SpawnExprNode — spawn returns Channel
 # Channel class in runtime/channel.py
 
 class Channel:
@@ -375,7 +375,7 @@ def mailbox_select(channels: list[Channel]) -> Any:
 
 **语义差异**: 
 - v1.13-v1.17: channel 是通信端点（message-passing），shared store 是共享状态容器（shared-memory）。运行时行为完全一致。
-- v1.18: `通道` 仅是 `shared store` 的中文别名。Channel 消息队列是全新的类型，由 spawnagent 返回。
+- v1.18: `通道` 仅是 `shared store` 的中文别名。Channel 消息队列是全新的类型，由 spawn 返回。
 
 ## v1.14 Features: llm stream merged into llm act
 
@@ -414,7 +414,7 @@ tests/
 ├── core/           # Lexer, parser, AST
 ├── semantic/       # Semantic analyzer
 ├── interpreter/    # Interpreter, isolation
-├── execution/      # End-to-end tests (including spawnagent)
+├── execution/      # End-to-end tests (including spawn)
 ├── runtime/        # LLM runtime, tools, channel
 ├── stdlib/         # Standard library, mailbox
 └── integration/    # Full agent tests
@@ -443,7 +443,7 @@ For detailed implementation guides, read these reference files:
 
 - **Parser patterns**: `references/parser-disambiguation.md`, `references/parser-optional-expression.md`
 - **Interpreter patterns**: `references/interpreter-execution-patterns.md`, `references/interpreter-sentinels.md`
-- **Spawnagent**: `references/v1.6-v1.7-v1.8-implementation.md`
+- **Spawn**: `references/v1.6-v1.7-v1.8-implementation.md`
 - **Python FFI**: `references/python-ffi-implementation.md`, `references/ffi-and-agents.md`
 - **Stdlib implementation**: `references/stdlib-implementation-patterns.md`
 - **Streaming**: `references/streaming-implementation.md`, `references/true-sse-streaming.md`
@@ -480,7 +480,7 @@ self._rules[TokenType.QUESTION].right_associative = True
 
 ### 3. Environment Snapshot Timing
 
-Always snapshot BEFORE spawnagent evaluation:
+Always snapshot BEFORE spawn evaluation:
 
 ```python
 # Correct

@@ -400,12 +400,12 @@ class LLMRuntime:
     def act_stream(self, target: str, description: str, **kwargs) -> Iterator[str]
 ```
 
-**v1.18 变更**: `act_async()` / `act_stream_async()` 已删除，由 `spawnagent` + Channel 替代。并发 LLM 调用现在通过 spawnagent 实现：
+**v1.18 变更**: `act_async()` / `act_stream_async()` 已删除，由 `spawn` + Channel 替代。并发 LLM 调用现在通过 spawn 实现：
 
 ```helen
 // v1.18 并发 LLM 调用
-let m1 = spawnagent AgentA("task1")
-let m2 = spawnagent AgentB("task2")
+let m1 = spawn AgentA("task1")
+let m2 = spawn AgentB("task2")
 let [r1, r2] = [m1.receive(), m2.receive()]
 ```
 
@@ -423,7 +423,7 @@ class HttpLLMRuntime(LLMRuntime):
         )
 ```
 
-**v1.18 变更**: `httpx.AsyncClient` 已删除，并发通过 `spawnagent`（threading.Thread）实现。
+**v1.18 变更**: `httpx.AsyncClient` 已删除，并发通过 `spawn`（threading.Thread）实现。
 
 ### 使用示例
 
@@ -433,9 +433,9 @@ agent MyAgent {
     // 同步调用
     let result = llm act Translate "Hello"
     
-    // 并发调用（v1.18 spawnagent）
-    let m1 = spawnagent Translate("Hello")
-    let m2 = spawnagent Translate("World")
+    // 并发调用（v1.18 spawn）
+    let m1 = spawn Translate("Hello")
+    let m2 = spawn Translate("World")
     let r1 = m1.receive()
     let r2 = m2.receive()
   }
@@ -447,19 +447,19 @@ agent MyAgent {
 `httpx.Client` 自动管理连接池：
 
 - **连接复用**: 多个请求复用同一 TCP 连接
-- **并发控制**: 通过 `spawnagent`（threading.Thread）实现并发
+- **并发控制**: 通过 `spawn`（threading.Thread）实现并发
 - **超时管理**: 统一的超时配置
 - **资源清理**: 程序退出时自动关闭连接
 
 ### 性能优势
 
-| 场景 | 串行 | spawnagent 并发 | 提升 |
+| 场景 | 串行 | spawn 并发 | 提升 |
 |------|------|----------------|------|
 | 单次调用 | 1.5s | 1.5s | 0% |
 | 3 次并发 | 4.5s | ~1.6s | 65% |
 | 10 次并发 | 15s | ~2.1s | 86% |
 
-**注意**: v1.18 起并发通过 `spawnagent` 实现，每个 spawned agent 在独立 daemon 线程中运行。
+**注意**: v1.18 起并发通过 `spawn` 实现，每个 spawned agent 在独立 daemon 线程中运行。
 
 ### 错误处理
 

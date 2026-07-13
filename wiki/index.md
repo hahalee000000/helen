@@ -1,7 +1,7 @@
 # Helen 语言 Wiki 索引
 
 > **Helen** — A Prompt-first Agent Programming Language
-> 版本: v1.18 | 状态: Phase 0-10 全部实现 + Phase 1-7 上下文管理增强 + TranscriptStore SSOT + 多模态支持 + spawnagent 并发原语 + 中文语法 + Agent 作用域隔离 | 测试: 2791 passed
+> 版本: v1.18 | 状态: Phase 0-10 全部实现 + Phase 1-7 上下文管理增强 + TranscriptStore SSOT + 多模态支持 + spawn 并发原语 + 中文语法 + Agent 作用域隔离 | 测试: 2791 passed
 
 ---
 
@@ -25,7 +25,7 @@
 ### 四、解释执行
 - [[interpreter/execution|执行引擎]] — AST 遍历解释器、Environment 作用域链
 - [[interpreter/llm-integration|LLM 集成]] — `llm act/if`、对话历史
-- [[interpreter/spawnagent|并发与 spawnagent]] — `spawnagent`、Channel 消息队列、mailbox_select
+- [[interpreter/spawn|并发与 spawn]] — `spawn`、Channel 消息队列、mailbox_select
 
 ### 五、运行时系统
 - [[runtime/llm-runtime|LLM 运行时]] — route/act 接口、取消机制
@@ -56,7 +56,7 @@
 - [[tutorial/04-control-flow|控制流]] — if/for/while/match/try-catch
 - [[tutorial/05-agents|Agent 编程]] — agent 声明、description、prompt
 - [[tutorial/06-llm-statements|LLM 语句]] — act/if 实战
-- [[tutorial/07-spawnagent|并发编程]] — spawnagent、Channel 消息队列、mailbox_select、显式共享
+- [[tutorial/07-spawn|并发编程]] — spawn、Channel 消息队列、mailbox_select、显式共享
 - [[tutorial/08-modules|模块与导入]] — import、跨文件复用
 - [[tutorial/09-python-ffi|Python FFI]] — Python 库导入、类型转换
 - [[tutorial/10-stdlib|标准库参考]] — 255 个内置函数（255 中文别名）

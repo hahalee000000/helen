@@ -1,15 +1,15 @@
-# spawnagent 并发原语
+# spawn 并发原语
 
-> 模块 M5 (`interpreter.py`) + 运行时 (`channel.py`) | 测试: `tests/interpreter/test_spawnagent*.py`、`tests/runtime/test_channel.py`
+> 模块 M5 (`interpreter.py`) + 运行时 (`channel.py`) | 测试: `tests/interpreter/test_spawn*.py`、`tests/runtime/test_channel.py`
 
 ---
 
 ## 概述
 
-Helen v1.18 使用 `spawnagent` + Channel 消息队列替代旧的 `async/await/detach` 并发模型。`spawnagent` 是唯一的并发原语，Channel 是 agent 间通信的通用工具。
+Helen v1.18 使用 `spawn` + Channel 消息队列替代旧的 `async/await/detach` 并发模型。`spawn` 是唯一的并发原语，Channel 是 agent 间通信的通用工具。
 
 **核心设计**：
-- 一个并发原语（`spawnagent`）+ 一个通信机制（Channel 消息队列）
+- 一个并发原语（`spawn`）+ 一个通信机制（Channel 消息队列）
 - 隔离优先：snapshot 全部深复制，agent 默认与外部环境完全隔离
 - 共享是显式的：通过 Channel 传递 SharedStore 引用
 
@@ -25,7 +25,7 @@ Helen v1.18 使用 `spawnagent` + Channel 消息队列替代旧的 `async/await/
 class Channel:
     """双向消息通道。agent 通信的通用工具。
 
-    在 spawnagent 跨线程场景和普通 agent 隔离场景中设计一致。
+    在 spawn 跨线程场景和普通 agent 隔离场景中设计一致。
     内部两个队列，支持双向通信。
     """
 
@@ -104,7 +104,7 @@ class ChannelEndpoint:
 ### 双端模型
 
 每个 Channel 实例有两个端点：
-- **主线程端**：`spawnagent` 返回值，`send()` 写入 `_to_spawned`，`receive()` 从 `_from_spawned` 读取
+- **主线程端**：`spawn` 返回值，`send()` 写入 `_to_spawned`，`receive()` 从 `_from_spawned` 读取
 - **spawned agent 端**：注入到 agent 的 `reply` 参数，方向相反
 
 ```
@@ -112,12 +112,42 @@ class ChannelEndpoint:
 spawned agent 端 ──send()──→ _from_spawned ──→ receive()── 主线程端
 ```
 
----
+### 流式中断机制
 
-## spawnagent 执行流程
+`cancel_event` 是一个 `threading.Event`，用于从主线程向 spawned agent 发送取消信号。spawned agent 可通过两种方式响应：
+
+1. **显式检查 `reply.cancel_event.is_set()`**：在循环或长时间任务中周期性检查
+2. **`on_chunk` 回调返回 `false`**：当与 `llm act` 的 `on_chunk` 回调结合使用时，返回 `false` 会立即中断 LLM 流式输出
 
 ```python
-def visit_spawnagent_expr(self, node: SpawnagentExprNode) -> object:
+# on_chunk 回调中的取消检查
+def on_chunk_handler(chunk: str) -> bool:
+    if reply.cancel_event.is_set():
+        return False  # 中断流式输出
+    reply.send({"type": "chunk", "data": chunk})
+    return True  # 继续接收
+```
+
+**取消时序**：
+```
+主线程                    spawned agent
+──────                    ─────────────
+mailbox.cancel()
+  │
+  ├─ cancel_event.set() ───→ reply.cancel_event.is_set() == true
+  ├─ close()                  │
+  │                           ├─ on_chunk 返回 false → 中断 LLM 流
+  │                           ├─ 或循环检查 → break 退出
+  │                           └─ reply.close()（自动）
+  └─ 返回
+```
+
+---
+
+## spawn 执行流程
+
+```python
+def visit_spawn_expr(self, node: SpawnExprNode) -> object:
     from helen.runtime.channel import Channel, ChannelEndpoint
 
     call_node = node.call
@@ -171,7 +201,7 @@ def visit_spawnagent_expr(self, node: SpawnagentExprNode) -> object:
 ```
 主线程                                  spawned agent
 ──────                                  ─────────────
-spawnagent Worker("task")
+spawn Worker("task")
   │
   ├─ 创建 Channel（双端队列）
   ├─ env.snapshot()（全部深复制）
@@ -250,7 +280,7 @@ class SharedStore:
 shared store Config { let timeout = 30 }
 
 main {
-    let mailbox = spawnagent Worker()
+    let mailbox = spawn Worker()
     mailbox.send(Config)    // 显式传递引用——只有这个 spawned agent 能看到
     let result = mailbox.receive()
 }
@@ -302,7 +332,7 @@ def mailbox_select(channels, timeout=None):
 
 ## 相关页面
 
-- [[tutorial/07-spawnagent|并发编程教程]]
+- [[tutorial/07-spawn|并发编程教程]]
 - [[interpreter/execution|执行引擎]]
 - [[syntax/keywords|关键字参考]]
 

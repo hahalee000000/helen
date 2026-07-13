@@ -52,7 +52,7 @@ baseline = {
         "LlmActStmtNode": {"fields": ["span"]},
         "TryStmtNode": {"fields": ["try_body", "catch_clauses", "catch_all", "finally_body", "span"]},
         "CatchClauseNode": {"fields": ["exception_type", "var_name", "body", "span"]},
-        "SpawnagentExprNode": {"fields": ["call", "span"]},
+        "SpawnExprNode": {"fields": ["call", "span"]},
         "ForStmtNode": {"fields": ["iterator", "iterable", "body", "span"]},
         "AgentDeclNode": {"fields": ["name", "params", "declarations", "prompt", "logic", "span"]},
         "ImportStmtNode": {"fields": ["path", "alias", "span"]},
@@ -142,7 +142,7 @@ grep -n "ERR_\d\+\s*=" file
 | SemanticAnalyzer | 字段访问与 Phase 0 定义一致？ | node.initializer (非 node.value) |
 | visit_llm_if_stmt | 语义正确（LLM 路由，非普通 if）？ | 访问 description + branches |
 | visit_llm_act_stmt | 结构正确？ | 移除错误字段访问 |
-| visit_spawnagent_expr | 使用 node.call？ | 不使用 node.body |
+| visit_spawn_expr | 使用 node.call？ | 不使用 node.body |
 | Environment | const 保护逻辑正确？ | 对比 HLD |
 | Interpreter | visit_* 方法字段访问与 Phase 0 一致？ | 全面对齐 |
 | 异常层次 | 与 HLD 3.6.4 一致？ | 对比异常继承树 |
@@ -738,7 +738,7 @@ When fixing 20+ inconsistencies across 4+ documents, use **parallel delegation**
 
 ```python
 # Instead of sequential fix (Phase0 → P1 → P2-3 → Remaining),
-# use delegate_task with 3 concurrent subagents (or spawnagent in Helen v1.18+):
+# use delegate_task with 3 concurrent subagents (or spawn in Helen v1.18+):
 
 # Subagent 1: Fix Phase0 (AST definitions + ErrorCode + HellenError)
 # Subagent 2: Fix P1 Parser + P2-3 (interpreter bugs + operator types)
@@ -968,7 +968,7 @@ interpreter_methods = extract_visitor_methods(interpreter_section)
 # 对比字段访问差异
 ```
 
-**v1.18 变化**: `visit_llm_act_stmt` 不再需要处理 `has_await` 字段（该字段已移除）。`visit_spawnagent_expr` 替代了旧的 `visit_async_call_stmt`。
+**v1.18 变化**: `visit_llm_act_stmt` 不再需要处理 `has_await` 字段（该字段已移除）。`visit_spawn_expr` 替代了旧的 `visit_async_call_stmt`。
 
 ### 🟡 模式 39：Keyword 映射提取假阳性
 
@@ -978,7 +978,7 @@ interpreter_methods = extract_visitor_methods(interpreter_section)
 
 代码中新增 AST 节点后，ASTPrinter 的 visitor 方法会同步添加到代码，但**设计文档几乎总是遗漏**。实战中 code 有 46 个 ASTPrinter 方法，设计文档只有 26 个（缺失 20 个）。
 
-**受影响的典型方法**：visit_agent_param, visit_call_arg, visit_declaration, visit_fn_block, visit_literal_type, visit_map_entry, visit_optional_type, visit_type, visit_union_type, visit_program, visit_prompt_def, visit_catch_all, visit_catch_clause, visit_finally_block, visit_function_decl, visit_llm_branch, visit_spawnagent_expr, visit_case。
+**受影响的典型方法**：visit_agent_param, visit_call_arg, visit_declaration, visit_fn_block, visit_literal_type, visit_map_entry, visit_optional_type, visit_type, visit_union_type, visit_program, visit_prompt_def, visit_catch_all, visit_catch_clause, visit_finally_block, visit_function_decl, visit_llm_branch, visit_spawn_expr, visit_case。
 
 **检查方法**：分别提取代码和设计文档中 class ASTPrinter 后的所有 def visit_\w+ 方法，做集合差集。
 
@@ -1038,4 +1038,4 @@ interpreter_methods = extract_visitor_methods(interpreter_section)
 | **SourceSpan** | 所有新节点携带 span | 检查 dataclass 定义 |
 | **跨 Phase 兼容** | 已有节点字段无漂移 | 对比 `AgentDeclNode` 等核心节点字段 vs 前期 |
 
-**Phase 编号陷阱**：HLD §5.1 的 Phase 编号与代码实际交付编号可能不一致。验证时应以 HLD 模块需求（M5/M8/etc）为基准，而非 Phase 编号。例如代码标注的"Phase 6"实际交付的是 HLD Phase 4 的剩余内容（Import Resolver + Agent spawnagent），而 HLD 定义的真实 Phase 6 是 CLI + VS Code。
+**Phase 编号陷阱**：HLD §5.1 的 Phase 编号与代码实际交付编号可能不一致。验证时应以 HLD 模块需求（M5/M8/etc）为基准，而非 Phase 编号。例如代码标注的"Phase 6"实际交付的是 HLD Phase 4 的剩余内容（Import Resolver + Agent spawn），而 HLD 定义的真实 Phase 6 是 CLI + VS Code。

@@ -31,7 +31,7 @@ wiki/
 ├── interpreter/          # 解释执行
 │   ├── execution.md      # 执行引擎
 │   ├── llm-integration.md # LLM 集成
-│   └── spawnagent.md     # 并发与 spawnagent
+│   └── spawn.md     # 并发与 spawn
 │
 ├── runtime/              # 运行时系统
 │   ├── llm-runtime.md    # LLM 运行时
@@ -57,7 +57,7 @@ wiki/
 │   ├── 04-control-flow.md
 │   ├── 05-agents.md
 │   ├── 06-llm-statements.md
-│   ├── 07-spawnagent.md
+│   ├── 07-spawn.md
 │   ├── 08-modules.md
 │   ├── 09-python-ffi.md
 │   ├── 10-stdlib.md
@@ -228,7 +228,7 @@ python3 scripts/build_tutorial.py
 - v1.15: Phase 1-7 上下文管理（工作记忆、渐进压缩、缓存感知、三通道上下文）
 - v1.16: TranscriptStore SSOT（SQLite/JSONL 后端、LRU 缓存、UUID 寻址）
 - v1.17: 多模态格式适配器 stdlib
-- v1.18: spawnagent 并发原语（替代 async/await/detach）、Channel 消息队列、snapshot 全部深复制
+- v1.18: spawn 并发原语（替代 async/await/detach）、Channel 消息队列、snapshot 全部深复制
 
 **需要追踪的特性**:
 - 关键字列表（英文 + 中文）: 89 (44.5 + 44.5)

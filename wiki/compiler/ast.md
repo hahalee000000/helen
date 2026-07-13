@@ -75,7 +75,7 @@ ASTNode (ABC, frozen dataclass)
 │   ├── MapEntryNode             ← 映射条目
 │   ├── TemplateRefNode          ← 模板引用
 │   ├── LlmActArgNode            ← LLM act 参数
-│   └── SpawnagentExprNode       ← spawnagent 并发原语 (v1.18)
+│   └── SpawnExprNode       ← spawn 并发原语 (v1.18)
 │
 ├── TypeNode (ABC)               ← 类型
 │   ├── OptionalTypeNode         ← 可选 T?
@@ -163,18 +163,18 @@ class LlmIfStmtNode(StatementNode):
     branches: list[LlmBranchNode]      # case + default
 ```
 
-### SpawnagentExprNode (v1.18)
+### SpawnExprNode (v1.18)
 
 ```python
 @dataclass(frozen=True)
-class SpawnagentExprNode(ExpressionNode):
+class SpawnExprNode(ExpressionNode):
     span: SourceSpan
     call: CallNode                     # agent 调用
 ```
 
-`spawnagent` 表达式节点。`call` 字段包含 agent 调用的目标名称和参数。返回 `Channel` 类型。
+`spawn` 表达式节点。`call` 字段包含 agent 调用的目标名称和参数。返回 `Channel` 类型。
 
-**Visitor 方法**: `visit_spawnagent_expr`
+**Visitor 方法**: `visit_spawn_expr`
 
 **v1.18 删除的节点**:
 - `AsyncCallStmtNode` — 异步调用语句

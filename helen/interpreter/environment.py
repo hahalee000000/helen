@@ -285,7 +285,7 @@ class Environment:
     def snapshot(self) -> "Environment":
         """Create a deep copy of the entire environment chain.
 
-        Used for spawnagent isolation: each spawned agent gets its own copy
+        Used for spawn isolation: each spawned agent gets its own copy
         of the environment to avoid unintended shared state.
 
         v1.18 change: ALL values are deep-copied with no exceptions.

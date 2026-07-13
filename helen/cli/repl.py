@@ -592,6 +592,11 @@ def repl_command() -> int:
                                 print(repr(result))
                         else:
                             print(f"Error: {result}", file=sys.stderr)
+                    except KeyboardInterrupt:
+                        # Phase 4: Cancel all active streaming calls on Ctrl+C
+                        if hasattr(interp, 'cancel_all_streaming_calls'):
+                            interp.cancel_all_streaming_calls()
+                        print("\n⚡ 已中断 — 状态已保留")
                     except Exception as e:
                         print(f"Internal Error: {e}", file=sys.stderr)
                 buffer_lines = []
@@ -614,6 +619,11 @@ def repl_command() -> int:
                             print(repr(result))
                     else:
                         print(f"Error: {result}", file=sys.stderr)
+                except KeyboardInterrupt:
+                    # Phase 4: Cancel all active streaming calls on Ctrl+C
+                    if hasattr(interp, 'cancel_all_streaming_calls'):
+                        interp.cancel_all_streaming_calls()
+                    print("\n⚡ 已中断 — 状态已保留")
                 except Exception as e:
                     print(f"Internal Error: {e}", file=sys.stderr)
                     # Don't crash the REPL

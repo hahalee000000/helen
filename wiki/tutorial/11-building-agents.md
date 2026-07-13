@@ -144,13 +144,13 @@ agent HistoryLookup(topic: str, reply: Channel) {
     }
 }
 
-// 优化的版本：并发查询知识库（v1.18+ spawnagent 模式）
+// 优化的版本：并发查询知识库（v1.18+ spawn 模式）
 main {
     let question = "How do I reset my password?"
 
-    // 并发获取上下文：spawnagent 返回 Channel
-    let kb_mailbox = spawnagent KnowledgeBase(question)
-    let history_mailbox = spawnagent HistoryLookup("password reset")
+    // 并发获取上下文：spawn 返回 Channel
+    let kb_mailbox = spawn KnowledgeBase(question)
+    let history_mailbox = spawn HistoryLookup("password reset")
 
     // 从 Channel 接收结果
     let kb_result = kb_mailbox.receive()
@@ -328,7 +328,7 @@ agent CodeReviewer {
 
 ## 第八步：多 Agent 协作模式（v1.18+）
 
-在实际应用中，多个 Agent 经常需要**共享状态**或**相互通信**。Helen 提供两种机制：`shared store`（共享状态容器）和 **spawnagent + Channel**（消息通信）。
+在实际应用中，多个 Agent 经常需要**共享状态**或**相互通信**。Helen 提供两种机制：`shared store`（共享状态容器）和 **spawn + Channel**（消息通信）。
 
 ### 使用 Shared Store 共享状态
 
@@ -373,10 +373,10 @@ agent CustomerService(sessionId: str, question: str, reply: Channel) {
     }
 }
 
-// 多个 Agent 并发运行（v1.18+ spawnagent 模式）
-let mb1 = spawnagent CustomerService("session-1", "How to reset password?")
-let mb2 = spawnagent CustomerService("session-2", "Billing issue")
-let mb3 = spawnagent CustomerService("session-3", "Technical support")
+// 多个 Agent 并发运行（v1.18+ spawn 模式）
+let mb1 = spawn CustomerService("session-1", "How to reset password?")
+let mb2 = spawn CustomerService("session-2", "Billing issue")
+let mb3 = spawn CustomerService("session-3", "Technical support")
 
 // 等待所有会话完成
 let r1 = mb1.receive()
@@ -413,12 +413,12 @@ agent TaskConsumer(task: str, reply: Channel) {
 }
 
 // 生产者并发运行
-let producer_mb = spawnagent TaskProducer()
+let producer_mb = spawn TaskProducer()
 
 // 消费所有任务
 let task = producer_mb.receive()
 while (task != "done") {
-    let consumer_mb = spawnagent TaskConsumer(task)
+    let consumer_mb = spawn TaskConsumer(task)
     let result = consumer_mb.receive()
     print(result)
     task = producer_mb.receive()
@@ -431,11 +431,11 @@ producer_mb.close()
 | 模式 | 适用场景 | 示例 |
 |------|---------|------|
 | **Shared Store** | 多个 Agent 读写同一份数据 | 统计计数器、缓存、配置 |
-| **Channel（spawnagent）** | Agent 间传递消息/事件 | 任务队列、结果回报、信号 |
+| **Channel（spawn）** | Agent 间传递消息/事件 | 任务队列、结果回报、信号 |
 
 **最佳实践**：
 - ✅ 用 `shared store` 管理**全局状态**（统计、配置、缓存）
-- ✅ 用 `spawnagent` + Channel 实现**消息通信**（队列、事件、信号）
+- ✅ 用 `spawn` + Channel 实现**消息通信**（队列、事件、信号）
 - ✅ 用 `mailbox_select` 监听多个 Channel 的结果
 - ✅ Channel 自动注入为 Agent 最后一个参数，无需手动传递
 
@@ -485,7 +485,7 @@ $ helen doc customer-service/main.helen --format markdown
 通过这个案例，你学会了：
 1. ✅ 声明多个 Agent 及其配置
 2. ✅ 使用 `llm if` 进行智能路由
-3. ✅ 使用 `spawnagent` + Channel 并发获取上下文
+3. ✅ 使用 `spawn` + Channel 并发获取上下文
 4. ✅ 使用 `try-catch` 处理 LLM 异常
 5. ✅ 组织多文件项目结构
 

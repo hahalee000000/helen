@@ -156,8 +156,13 @@ from helen.stdlib.media import (
     _is_image, _is_video, _is_audio,
 )
 
-# Import mailbox utilities (v1.18: spawnagent support)
+# Import mailbox utilities (v1.18: spawn support)
 from helen.stdlib.mailbox import _mailbox_select
+
+# Import LLM control utilities (streaming interrupt Phase 5)
+from helen.stdlib.llm_control import (
+    _cancel_llm_call, _current_llm_call_id, _cancel_all_llm_calls, _set_interpreter_ref,
+)
 
 
 @dataclass
@@ -1077,8 +1082,13 @@ def _register_builtins() -> None:
         BuiltinFunction("is_video", "Check if MediaPart is a video", "is_video(value)", _is_video, "media"),
         BuiltinFunction("is_audio", "Check if MediaPart is audio", "is_audio(value)", _is_audio, "media"),
 
-        # Mailbox utilities (v1.18: spawnagent support)
+        # Mailbox utilities (v1.18: spawn support)
         BuiltinFunction("mailbox_select", "Receive first available message from multiple channels", "mailbox_select(channels, timeout?)", _mailbox_select, "concurrency"),
+
+        # LLM call control utilities (streaming interrupt Phase 5)
+        BuiltinFunction("cancel_llm_call", "Cancel an in-flight streaming LLM call", "cancel_llm_call(call_id)", _cancel_llm_call, "llm"),
+        BuiltinFunction("current_llm_call_id", "Get the current active streaming LLM call ID", "current_llm_call_id()", _current_llm_call_id, "llm"),
+        BuiltinFunction("cancel_all_llm_calls", "Cancel all active streaming LLM calls", "cancel_all_llm_calls()", _cancel_all_llm_calls, "llm"),
     ]
 
     for func in builtins:

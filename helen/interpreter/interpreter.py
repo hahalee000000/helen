@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import copy
+import threading
 from contextlib import contextmanager
 from typing import Callable
 from helen.core.ast import (
@@ -731,6 +732,20 @@ def _collect_pattern_bindings(pattern: object, bound: set[str]) -> None:
     # Other patterns (literal, range) don't bind variables either
 
 
+class _StreamingHandle:
+    """Tracks an in-flight streaming LLM call for cancellation.
+
+    Phase 3 of streaming interrupt proposal: allows programmatic cancel
+    and Ctrl+C handling during llm act streaming.
+    """
+
+    def __init__(self) -> None:
+        import uuid
+        self.call_id: str = str(uuid.uuid4())
+        self.cancelled: "threading.Event" = threading.Event()
+        self.done: "threading.Event" = threading.Event()
+
+
 class Interpreter(LlmMixin, Visitor[object]):
     """AST visitor that executes Helen programs.
 
@@ -799,6 +814,9 @@ class Interpreter(LlmMixin, Visitor[object]):
         except Exception:
             pass
         self._shared_vars: set[str] = set()
+        # Phase 3: Streaming call registry for cancel/KeyboardInterrupt support
+        self._streaming_calls: dict[str, _StreamingHandle] = {}
+        self._streaming_lock = threading.Lock()
         # Register stdlib builtins in global environment (HLD M15)
         self._register_stdlib()
         # Set CLI args in the stdlib module (for get_cli_args/parse_cli_args)
@@ -870,6 +888,7 @@ class Interpreter(LlmMixin, Visitor[object]):
         from helen.stdlib import _set_interpreter_observability  # noqa: PLC0415
         from helen.stdlib import _set_interpreter_context  # noqa: PLC0415
         from helen.stdlib.transcript import _set_transcript_context  # noqa: PLC0415
+        from helen.stdlib.llm_control import _set_interpreter_ref  # noqa: PLC0415
         # Connect observability manager to stdlib debug functions
         _set_interpreter_observability(self.observability)
         # Connect history to stdlib context management functions
@@ -877,6 +896,8 @@ class Interpreter(LlmMixin, Visitor[object]):
         _set_interpreter_context(self._interpreter_history, self._history_manager, self._agent_context)
         # Connect agent context to stdlib transcript functions
         _set_transcript_context(self._agent_context)
+        # Phase 5: Connect interpreter ref to LLM control stdlib functions
+        _set_interpreter_ref(self)
         for name in stdlib.names:
             builtin = stdlib.lookup(name)
             if builtin is not None:
@@ -2356,23 +2377,23 @@ class Interpreter(LlmMixin, Visitor[object]):
 
         return None
 
-    def visit_spawnagent_expr(self, node: object) -> object:
-        """Execute spawnagent expression: spawn an agent and return a Channel endpoint.
+    def visit_spawn_expr(self, node: object) -> object:
+        """Execute spawn expression: spawn an agent and return a Channel endpoint.
 
         Creates a bidirectional Channel, spawns the agent in a daemon thread
         with an isolated environment snapshot, and returns the main-thread
         ChannelEndpoint for communication.
 
-        The agent's last parameter must be typed as Channel — spawnagent
+        The agent's last parameter must be typed as Channel — spawn
         auto-injects the spawned-side endpoint.
 
-        Example: mailbox = spawnagent Worker("task")
+        Example: mailbox = spawn Worker("task")
         """
         import threading
-        from helen.core.ast import SpawnagentExprNode
+        from helen.core.ast import SpawnExprNode
         from helen.runtime.channel import Channel, ChannelEndpoint
 
-        if not isinstance(node, SpawnagentExprNode):
+        if not isinstance(node, SpawnExprNode):
             return None
 
         call_node = node.call
@@ -2381,7 +2402,7 @@ class Interpreter(LlmMixin, Visitor[object]):
         if not hasattr(call_node.callee, 'name'):
             self.errors.error(
                 ErrorCode.RUNTIME_ERROR,
-                "spawnagent requires an agent call",
+                "spawn requires an agent call",
                 node.span,
             )
             return None
@@ -2391,7 +2412,7 @@ class Interpreter(LlmMixin, Visitor[object]):
         if agent_decl is None:
             self.errors.error(
                 ErrorCode.RUNTIME_ERROR,
-                f"Undefined agent '{agent_name}' in spawnagent",
+                f"Undefined agent '{agent_name}' in spawn",
                 node.span,
             )
             return None
@@ -2435,6 +2456,10 @@ class Interpreter(LlmMixin, Visitor[object]):
                 spawned_interp._agents = dict(self._agents)
                 spawned_interp._functions = dict(self._functions)
 
+                # Phase 6: Inject Channel cancel_event so spawned interpreter's
+                # streaming path can check it and abort on endpoint.cancel()
+                spawned_interp._agent_cancel_event = spawned_endpoint.cancel_event
+
                 # Construct a new CallNode with evaluated args
                 from helen.core.ast import CallNode as CN, CallArgNode, VariableNode, LiteralNode
                 new_args = []
@@ -2456,10 +2481,53 @@ class Interpreter(LlmMixin, Visitor[object]):
                 spawned_endpoint.close()
 
         thread = threading.Thread(target=run_spawned, daemon=True,
-                                  name=f"spawnagent-{agent_name}")
+                                  name=f"spawn-{agent_name}")
         thread.start()
 
         return main_endpoint
+
+    # ------------------------------------------------------------------
+    # Streaming call registry (Phase 3: streaming interrupt)
+    # ------------------------------------------------------------------
+
+    def _register_streaming_call(self) -> _StreamingHandle:
+        """Register a new in-flight streaming LLM call."""
+        handle = _StreamingHandle()
+        with self._streaming_lock:
+            self._streaming_calls[handle.call_id] = handle
+        return handle
+
+    def _unregister_streaming_call(self, call_id: str) -> None:
+        """Unregister a completed streaming call."""
+        with self._streaming_lock:
+            self._streaming_calls.pop(call_id, None)
+
+    def cancel_streaming_call(self, call_id: str) -> bool:
+        """Cancel a specific streaming call by ID. Returns True if found."""
+        with self._streaming_lock:
+            handle = self._streaming_calls.get(call_id)
+        if handle is None:
+            return False
+        handle.cancelled.set()
+        return True
+
+    def get_current_streaming_call_id(self) -> str | None:
+        """Return the ID of the current active streaming call, or None."""
+        with self._streaming_lock:
+            for cid, h in self._streaming_calls.items():
+                if not h.done.is_set():
+                    return cid
+        return None
+
+    def cancel_all_streaming_calls(self) -> int:
+        """Cancel all active streaming calls. Returns count cancelled."""
+        count = 0
+        with self._streaming_lock:
+            for handle in self._streaming_calls.values():
+                if not handle.done.is_set():
+                    handle.cancelled.set()
+                    count += 1
+        return count
 
     # ------------------------------------------------------------------
     # Helper methods

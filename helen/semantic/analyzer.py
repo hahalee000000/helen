@@ -1460,11 +1460,11 @@ class SemanticAnalyzer(Visitor[None]):
         self.symbols.define(alias_name, new_sym)
 
     # ------------------------------------------------------------------
-    # Spawnagent
+    # Spawn
     # ------------------------------------------------------------------
 
-    def visit_spawnagent_expr(self, node) -> None:
-        """Validate spawnagent expression (Phase C will implement fully)."""
+    def visit_spawn_expr(self, node) -> None:
+        """Validate spawn expression."""
         node.call.accept(self)
 
     # ------------------------------------------------------------------

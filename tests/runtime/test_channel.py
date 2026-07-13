@@ -1,4 +1,4 @@
-"""Tests for Channel runtime — Phase A of spawnagent proposal."""
+"""Tests for Channel runtime — spawn + Channel messaging."""
 
 import threading
 import time

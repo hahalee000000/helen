@@ -6,6 +6,7 @@ Implementation will follow TDD after tests are written.
 
 from __future__ import annotations
 
+import threading
 from typing import Protocol, runtime_checkable, Iterator
 
 
@@ -28,7 +29,8 @@ class StreamingLLMRuntime(Protocol):
     """
 
     def act_stream(self, prompt: str, model: str | None = None,
-                   temperature: float = 1.0, system_prompt: str | None = None) -> Iterator[StreamChunk]:
+                   temperature: float = 1.0, system_prompt: str | None = None,
+                   cancel_event: threading.Event | None = None) -> Iterator[StreamChunk]:
         """Execute LLM action with streaming response (sync).
 
         Args:

@@ -4,9 +4,9 @@
 
 ---
 
-## [2026-07-13] feature | v1.18 — spawnagent 并发原语
+## [2026-07-13] feature | v1.18 — spawn 并发原语
 
-**操作**: 更新 wiki 以反映 spawnagent 替代 async/await/detach 的重大变更
+**操作**: 更新 wiki 以反映 spawn 替代 async/await/detach 的重大变更
 **执行时间**: 2026-07-13
 **状态**: ✅ 完成
 
@@ -14,20 +14,20 @@
 
 1. **删除过时文件**
    - `reports/detach_thread_safety_and_shared_store_integration.md` — 删除
-   - `wiki/tutorial/07-async-await.md` — 删除（由 07-spawnagent.md 替代）
-   - `wiki/interpreter/async.md` — 删除（由 spawnagent.md 替代）
+   - `wiki/tutorial/07-async-await.md` — 删除（由 07-spawn.md 替代）
+   - `wiki/interpreter/async.md` — 删除（由 spawn.md 替代）
 
 2. **新增文件**
-   - `wiki/tutorial/07-spawnagent.md` — 并发编程教程
-   - `wiki/interpreter/spawnagent.md` — spawnagent 技术文档
+   - `wiki/tutorial/07-spawn.md` — 并发编程教程
+   - `wiki/interpreter/spawn.md` — spawn 技术文档
 
 3. **更新文件**
    - `wiki/index.md` — 版本 v1.18、测试 2791、89 关键字、链接更新
-   - `wiki/syntax/grammar.md` — 删除 async/await/detach/channel 声明 EBNF，新增 spawnagent_expr
-   - `wiki/syntax/keywords.md` — 删除 async/await/detach/channel 条目，新增 spawnagent/生成，89 关键字
+   - `wiki/syntax/grammar.md` — 删除 async/await/detach/channel 声明 EBNF，新增 spawn_expr
+   - `wiki/syntax/keywords.md` — 删除 async/await/detach/channel 条目，新增 spawn/分生，89 关键字
    - `wiki/overview/language-spec.md` — 全面更新关键字、Token、AST 列表，新增 v1.18 章节
-   - `wiki/compiler/ast.md` — 删除 5 个旧节点，新增 SpawnagentExprNode，47 节点类/44 方法
-   - `wiki/interpreter/execution.md` — 更新 Channel 语义，新增 spawnagent 执行语义
+   - `wiki/compiler/ast.md` — 删除 5 个旧节点，新增 SpawnExprNode，47 节点类/44 方法
+   - `wiki/interpreter/execution.md` — 更新 Channel 语义，新增 spawn 执行语义
    - `wiki/schema.md` — 版本 v1.18、计数更新
    - `wiki/appendix/changelog.md` — 新增 v1.18 条目
 
@@ -35,10 +35,10 @@
 
 | 动作 | 关键字 | 说明 |
 |------|--------|------|
-| 新增 | `spawnagent` / `生成` | 并发 agent 生成 |
-| 删除 | `async` / `异步` | 由 spawnagent 替代 |
+| 新增 | `spawn` / `分生` | 并发 agent 分生 |
+| 删除 | `async` / `异步` | 由 spawn 替代 |
 | 删除 | `await` / `等待` | 由 channel.receive() 替代 |
-| 删除 | `detach` / `分离` | 由 spawnagent 替代 |
+| 删除 | `detach` / `分离` | 由 spawn 替代 |
 | 删除 | `channel`（声明语法） | 由 Channel() 构造函数替代 |
 
 ### 计数变更

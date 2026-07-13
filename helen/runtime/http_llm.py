@@ -909,6 +909,7 @@ class HttpLLMRuntime(LLMRuntime):
         max_turns: int = 5,
         history: list[dict[str, Any]] | None = None,
         dispatch_fn: Any = None,
+        cancel_event: Any = None,
     ):
         """Stream LLM response with enhanced reliability features.
 
@@ -963,6 +964,10 @@ class HttpLLMRuntime(LLMRuntime):
         max_stream_retries = self.max_retries  # Same as non-streaming (default 3)
 
         while budget.consume():
+            # ★ Check cancel event between turns
+            if cancel_event is not None and cancel_event.is_set():
+                break
+
             # Phase 9B: Reset reactive compactor per-turn state
             if getattr(self, '_reactive_compactor', None) is not None:
                 self._reactive_compactor.reset_turn()
@@ -1001,6 +1006,10 @@ class HttpLLMRuntime(LLMRuntime):
                 with self._client.stream("POST", url, json=payload, timeout=self.timeout) as response:
                     response.raise_for_status()
                     for line_bytes in response.iter_lines():
+                        # ★ Check cancel event during SSE iteration
+                        if cancel_event is not None and cancel_event.is_set():
+                            break
+
                         line = line_bytes.strip()
                         if not line:
                             continue

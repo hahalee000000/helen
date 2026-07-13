@@ -517,9 +517,9 @@ for task in plan_tasks:
     print(f"Task {task['id']}: {result['status']}")
 ```
 
-### Concurrent Execution (spawnagent + Channel)
+### Concurrent Execution (spawn + Channel)
 
-Helen's `spawnagent` primitive enables concurrent task execution via Channel message queues:
+Helen's `spawn` primitive enables concurrent task execution via Channel message queues:
 
 ```helen
 import "os" as os
@@ -527,7 +527,7 @@ import "json" as json
 
 agent TaskRunner(task_id: str, context: str, reply: Channel) {
     main {
-        // Each agent runs in its own thread via spawnagent
+        // Each agent runs in its own thread via spawn
         let result = os.exec(["helen", "agent_script.helen"], 
                              env={"TASK_ID": task_id, "CONTEXT": context})
         reply.send(result)
@@ -536,9 +536,9 @@ agent TaskRunner(task_id: str, context: str, reply: Channel) {
 
 main {
     // Spawn agents - each returns a Channel (mailbox) immediately
-    let m1 = spawnagent TaskRunner("task-1", "Implement User model")
-    let m2 = spawnagent TaskRunner("task-2", "Add password hashing")
-    let m3 = spawnagent TaskRunner("task-3", "Create login endpoint")
+    let m1 = spawn TaskRunner("task-1", "Implement User model")
+    let m2 = spawn TaskRunner("task-2", "Add password hashing")
+    let m3 = spawn TaskRunner("task-3", "Create login endpoint")
     
     // Collect results from each mailbox (agents run concurrently)
     let results = [m1.receive(), m2.receive(), m3.receive()]
@@ -580,7 +580,7 @@ def review_task(task_desc: str, implementation: str) -> dict:
 1. **No external dependencies** — Pure Helen + Python stdlib
 2. **Memory isolation** — Each subprocess has its own memory space
 3. **Crash isolation** — One task failure doesn't affect others
-4. **True concurrency** — `spawnagent` runs each agent in its own daemon thread
+4. **True concurrency** — `spawn` runs each agent in its own daemon thread
 5. **Portable** — Works on any system with Python 3.8+
 
 ### Limitations

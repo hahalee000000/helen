@@ -97,7 +97,7 @@ class TokenType(Enum):
     BREAK = auto()
     CONTINUE = auto()
     RETURN = auto()
-    SPAWNAGENT = auto()  # v1.17: spawnagent AgentCall(...) — spawn agent and return Task
+    SPAWN = auto()  # v1.18: spawn AgentCall(...) — spawn agent and return Channel
     MATCH = auto()
     CASE = auto()
     BRANCH = auto()
@@ -151,7 +151,7 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "break": TokenType.BREAK,
     "continue": TokenType.CONTINUE,
     "return": TokenType.RETURN,
-    "spawnagent": TokenType.SPAWNAGENT,  # v1.17: spawn agent and return Task
+    "spawn": TokenType.SPAWN,  # v1.18: spawn agent and return Channel
     "match": TokenType.MATCH,
     "case": TokenType.CASE,
     "branch": TokenType.BRANCH,
@@ -208,7 +208,7 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "智能体": TokenType.AGENT,
     "大模型": TokenType.LLM,
     "执行": TokenType.ACT,
-    "生成": TokenType.SPAWNAGENT,  # v1.17: Chinese alias for spawnagent
+    "分生": TokenType.SPAWN,  # v1.18: Chinese keyword for spawn
     "提示词": TokenType.PROMPT,
     "描述": TokenType.DESCRIPTION,
     "模型": TokenType.MODEL,

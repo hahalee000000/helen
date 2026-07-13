@@ -708,7 +708,7 @@ print(BankAccount._transactionLog)  // 错误！
 
 ### Channel：Agent 间消息通信（v1.18+）
 
-`spawnagent` 返回一个 **Channel**（邮箱），用于与生成的 Agent 进行双向通信。Channel 提供 `send`/`receive`/`try_receive`/`cancel`/`close` 方法。
+`spawn` 返回一个 **Channel**（邮箱），用于与分生的 Agent 进行双向通信。Channel 提供 `send`/`receive`/`try_receive`/`cancel`/`close` 方法。
 
 ```helen
 // Worker Agent 接收一个 Channel 参数用于回复结果
@@ -719,8 +719,8 @@ agent Worker(task: str, reply: Channel) {
     }
 }
 
-// spawnagent 返回 Channel，自动注入为 Agent 的最后一个参数
-let mailbox = spawnagent Worker("任务A")
+// spawn 返回 Channel，自动注入为 Agent 的最后一个参数
+let mailbox = spawn Worker("任务A")
 print(mailbox.receive())  // "完成: 任务A"
 ```
 
@@ -748,8 +748,8 @@ agent Fetcher(url: str, reply: Channel) {
     }
 }
 
-let mb1 = spawnagent Fetcher("https://api.example.com/a")
-let mb2 = spawnagent Fetcher("https://api.example.com/b")
+let mb1 = spawn Fetcher("https://api.example.com/a")
+let mb2 = spawn Fetcher("https://api.example.com/b")
 
 // 等待任意一个 Channel 返回结果
 let result = mailbox_select([mb1, mb2])
@@ -772,7 +772,7 @@ agent Producer(items: list, reply: Channel) {
 }
 
 // 消费者：从 Channel 接收消息
-let mailbox = spawnagent Producer(["苹果", "香蕉", "樱桃"])
+let mailbox = spawn Producer(["苹果", "香蕉", "樱桃"])
 let msg = mailbox.receive()
 while (msg != "done") {
     print(msg)
@@ -781,9 +781,9 @@ while (msg != "done") {
 mailbox.close()
 ```
 
-### spawnagent 与共享状态（v1.18+）
+### spawn 与共享状态（v1.18+）
 
-`spawnagent` 可以在后台启动 Agent，通过 Channel 进行通信。多个 spawnagent 可以同时访问 shared store：
+`spawn` 可以在后台启动 Agent，通过 Channel 进行通信。多个 spawn 可以同时访问 shared store：
 
 ```helen
 shared store Counter {
@@ -799,9 +799,9 @@ agent Worker(reply: Channel) {
 }
 
 // 启动 3 个并发 Agent，共享同一个 Counter
-let mb1 = spawnagent Worker()
-let mb2 = spawnagent Worker()
-let mb3 = spawnagent Worker()
+let mb1 = spawn Worker()
+let mb2 = spawn Worker()
+let mb3 = spawn Worker()
 
 // 等待所有 Agent 完成
 print(mb1.receive())  // "done"
@@ -813,8 +813,8 @@ print(Counter.count)  // 输出: 3
 
 **线程安全保证**：
 - SharedStore 内部使用 RLock 保护所有字段访问
-- 多个 spawnagent 并发调用方法时，自动序列化执行
-- 主线程和 spawnagent 可以同时访问同一个 SharedStore
+- 多个 spawn 并发调用方法时，自动序列化执行
+- 主线程和 spawn 可以同时访问同一个 SharedStore
 - Channel 的 `send`/`receive` 操作也是线程安全的
 
 ---
