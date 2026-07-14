@@ -294,7 +294,22 @@ class ImportResolver:
                     if entry not in self._python_imports:
                         self._python_imports.append(entry)
                 # Pass the current file's path so nested imports can be resolved correctly
-                self.resolve(import_path, file_path)
+                nested = self.resolve(import_path, file_path)
+                # v1.18.2: A nested Helen/data-file import that fails to
+                # resolve must fail fast with a clear error. Without this,
+                # the missing module's symbols simply go unregistered and
+                # the failure surfaces much later as a misleading
+                # "'<name>' is not callable" / "'NoneType' has no property".
+                # Python-module imports (no .helen/.json/.md/.yaml/.txt/.py
+                # extension) legitimately return None here -- they are
+                # handled via _python_imports + the interpreter's FFI path.
+                if nested is None and is_helen_data_file(import_path):
+                    from helen.interpreter.exceptions import HelenRuntimeError  # noqa: PLC0415
+                    ref = os.path.basename(file_path) if file_path else import_path
+                    raise HelenRuntimeError(
+                        f"Failed to import '{import_path}' (referenced by '{ref}'): "
+                        f"file not found or could not be loaded"
+                    )
 
     @property
     def agents(self) -> dict[str, Any]:

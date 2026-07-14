@@ -41,6 +41,7 @@ When you MUST use Python FFI (`import "module" as alias`), watch for these quirk
 1. **Keyword arguments often fail** — `pathlib.Path.write_text(content, encoding="utf-8")` fails; use positional args only or use stdlib `write_file()` instead
 2. **`os.makedirs(path, exist_ok=true)` fails** — keyword args unreliable; use stdlib `mkdir_p()` instead
 3. **`open()` is not a Helen builtin** — must use `import "io" as io` then `io.open()`; but prefer stdlib `write_file()`/`append_file()`
+4. **FFI callbacks run synchronously in Helen's thread (no asyncio loop)** — when Helen calls a Python function (e.g. an `on_chunk` / streaming-emit callback registered from Python), it executes synchronously in Helen's execution thread, which has **no running asyncio event loop**. Inside such a callback you cannot `await`, `asyncio.create_task(...)`, or push to an `asyncio.Queue` directly (you'll get `RuntimeError: no running event loop`). Marshal work back to your event loop with `loop.call_soon_threadsafe(...)`. `async_call` does **not** fix this direction — it only makes the *Python->Helen* call asynchronous via a thread pool. Full example and the `spawn`/cancel caveats: see `docs/python_bridge.md` -> "FFI 回调与 asyncio（线程安全）".
 
 ---
 

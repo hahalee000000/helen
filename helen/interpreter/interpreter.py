@@ -2010,8 +2010,19 @@ class Interpreter(LlmMixin, Visitor[object]):
 
         result = self.import_resolver.resolve(node.module_path, current_file)
         if result is None:
-            # Error already reported by ImportResolver
-            return None
+            # v1.18.2: Fail fast with a clear error instead of silently
+            # registering nothing and later surfacing a misleading
+            # "'<name>' is not callable" / "'NoneType' has no property".
+            # Matches _import_python_module, which raises on Python-module
+            # import failure. Previously the collected "Import file not found"
+            # error was only visible to callers that ran the SemanticAnalyzer
+            # first; the Python bridge and other direct-interpreter users
+            # never saw it and chased the deferred callable error instead.
+            self._runtime_error(
+                node.span,
+                f"Failed to import '{node.module_path}': file not found or could not be loaded",
+            )
+            return None  # unreachable: _runtime_error raises
 
         # Register imported content into the interpreter's namespaces
         if result.format == "helen":

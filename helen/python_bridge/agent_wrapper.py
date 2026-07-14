@@ -21,8 +21,8 @@ class HelenAgentWrapper:
         
         # 初始化或复用解释器
         if interpreter is None:
-            from helen.interpreter import Interpreter
-            self.interpreter = Interpreter()
+            # 由 _load_agent 创建（带正确 base_dir 与 errors reporter）
+            self.interpreter = None
             self._load_agent()
         else:
             self.interpreter = interpreter
@@ -34,23 +34,65 @@ class HelenAgentWrapper:
         self._params = self._extract_params()
     
     def _load_agent(self):
-        """加载 Helen agent"""
+        """加载 Helen agent（词法 -> 语法 -> 语义 -> 执行）。
+
+        v1.18.2: 此前 bridge 跳过了语义分析、且 Scanner 未传入文件路径，
+        导致两个问题：(1) 跨目录调用（如从 webui/backend）时，该文件顶层
+        的 ``import "sibling.helen"`` 因基于 CWD 解析而找不到同目录依赖；
+        (2) 导入失败被静默吞掉，稍后才报 ``'X' is not callable`` 这类
+        误导性错误。现在复用与 CLI 一致的加载流程：Scanner 带文件名、
+        运行 SemanticAnalyzer、检查 errors.has_errors。
+        """
+        from helen.core.errors import ErrorReporter
+        from helen.core.lexer import Scanner
+        from helen.core.parser import Parser
+        from helen.semantic.analyzer import SemanticAnalyzer
+        from helen.interpreter import Interpreter
+        from helen.runtime.import_resolver import ImportResolver
+
         # 读取文件
         with open(self.helen_file, 'r', encoding='utf-8') as f:
             code = f.read()
-        
-        # 词法分析
-        from helen.core.lexer import Scanner
-        scanner = Scanner(code)
+
+        errors = ErrorReporter()
+        # base_dir 指向 .helen 文件所在目录（而非 CWD），使该文件顶层的
+        # 相对 import 能解析到同目录依赖文件。
+        base_dir = str(Path(self.helen_file).parent)
+
+        # 词法分析（传入文件名，使 span.file 可用于相对导入解析与错误定位）
+        scanner = Scanner(source=code, file=self.helen_file)
         tokens = scanner.scan_all()
-        
+
         # 语法分析
-        from helen.core.parser import Parser
-        parser = Parser(tokens)
+        parser = Parser(tokens, errors=errors)
         program = parser.parse()
-        
-        # 执行
+        if errors.has_errors:
+            raise RuntimeError(
+                f"Failed to parse '{self.helen_file}': "
+                + "; ".join(e.message for e in errors.errors)
+            )
+
+        # 语义分析（含导入文件存在性检查；base_dir 作为 span.file 缺失时的兜底）
+        analyzer = SemanticAnalyzer(errors, base_dir=base_dir)
+        analyzer.analyze(program)
+        if errors.has_errors:
+            raise RuntimeError(
+                f"Failed to load '{self.helen_file}': "
+                + "; ".join(e.message for e in errors.errors)
+            )
+
+        # 执行（注册 agent/function/const，不执行 main）。import_resolver
+        # 的 base_dir 同样指向文件所在目录，作为运行时导入解析的兜底。
+        self.interpreter = Interpreter(
+            errors=errors,
+            import_resolver=ImportResolver(base_dir=base_dir),
+        )
         self.interpreter.interpret(program)
+        if errors.has_errors:
+            raise RuntimeError(
+                f"Failed to initialize '{self.helen_file}': "
+                + "; ".join(e.message for e in errors.errors)
+            )
     
     def _get_agent_decl(self):
         """获取 agent 声明"""
@@ -162,17 +204,26 @@ def generate_python_classes(helen_file: str, interpreter=None) -> Dict[str, type
     # 解析 Helen 文件
     with open(helen_file, 'r', encoding='utf-8') as f:
         code = f.read()
-    
-    # 词法分析
+
+    helen_file = str(Path(helen_file).resolve())
+
+    # 词法分析（传入文件名，便于错误定位）
+    from helen.core.errors import ErrorReporter
     from helen.core.lexer import Scanner
-    scanner = Scanner(code)
+    scanner = Scanner(source=code, file=helen_file)
     tokens = scanner.scan_all()
-    
+
     # 语法分析
     from helen.core.parser import Parser
     from helen.core.ast import AgentDeclNode
-    parser = Parser(tokens)
+    errors = ErrorReporter()
+    parser = Parser(tokens, errors=errors)
     program = parser.parse()
+    if errors.has_errors:
+        raise RuntimeError(
+            f"Failed to parse '{helen_file}': "
+            + "; ".join(e.message for e in errors.errors)
+        )
     
     # 提取所有 agent 声明
     agents = {}
