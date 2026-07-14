@@ -1543,13 +1543,14 @@ class Interpreter(LlmMixin, Visitor[object]):
             with self._push_scope():
                 if node.iterator is not None:
                     self.environment.define(node.iterator.name, item)
-                result = self._execute(node.body)
-                if isinstance(result, BreakSentinel):
-                    break
-                if isinstance(result, ContinueSentinel):
+                step = self._execute(node.body)
+                if isinstance(step, BreakSentinel):
+                    return result  # absorb sentinel, return last normal value
+                if isinstance(step, ContinueSentinel):
                     continue
-                if isinstance(result, ReturnSentinel):
-                    return result
+                if isinstance(step, ReturnSentinel):
+                    return step
+                result = step
 
         return result
 

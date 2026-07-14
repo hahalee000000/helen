@@ -575,10 +575,9 @@ fn test_type_check() {
     assert_true(x is str)       // 解析错误！
 }
 
-// ✅ 正确：先赋值给变量，再断言
+// ✅ 正确：使用 isinstance() 或 type() 函数
 fn test_type_check() {
-    let result = is_list(x)     // 使用 stdlib 类型检查函数
-    assert_true(result)
+    assert_true(isinstance(x, "list"))   // isinstance 检查类型
     
     // 或者使用 type() 函数
     let t = type(x)

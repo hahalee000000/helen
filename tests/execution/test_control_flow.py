@@ -103,8 +103,9 @@ class TestForLoop:
         body = MainBlockNode(body=[if_stmt, expr], span=_span())
         stmt = ForStmtNode(iterator=_var("x"), iterable=lst, body=body, span=_span())
         result, errors = _run(stmt)
-        # BreakSentinel is consumed by the loop; top-level returns None
-        assert result is None
+        # Break is consumed by the loop; the loop returns the last normal
+        # value (2, from iteration x=2) — consistent with visit_while_stmt.
+        assert result == 2
         assert not errors.has_errors
 
     def test_continue_in_for(self):
@@ -224,3 +225,197 @@ def _make_tok(name: str = "EQUAL_EQUAL", lexeme: str = "==") -> "Token":
 
     tt = getattr(TokenType, name, TokenType.EQUAL_EQUAL)
     return Token(tt, lexeme, None, 1, 1, 1, len(lexeme) + 1)
+
+
+# ── Break/Continue sentinel leak regression tests ─────────────
+# Bug: visit_for_stmt returned BreakSentinel/ContinueSentinel as the
+# loop's result value when break/continue fired, leaking into the
+# enclosing scope.  Fixed by absorbing the sentinel and returning
+# the last normal value (matching visit_while_stmt structure).
+
+import io
+import sys
+from helen.core.lexer import Scanner
+from helen.core.parser import Parser
+
+
+def _run_source(source: str):
+    """Run Helen source, return (stdout_lines, errors)."""
+    errors = ErrorReporter()
+    scanner = Scanner(source=source, file="<test>")
+    tokens = scanner.scan_all()
+    parser = Parser(tokens, errors)
+    program = parser.parse()
+    if errors.has_errors:
+        return [], [str(e) for e in errors._errors]
+    old_stdout = sys.stdout
+    sys.stdout = io.StringIO()
+    try:
+        interp = Interpreter(errors=errors)
+        interp.interpret(program)
+        output = sys.stdout.getvalue().strip().split("\n") if sys.stdout.getvalue().strip() else []
+    finally:
+        sys.stdout = old_stdout
+    return output, []
+
+
+class TestBreakSentinelLeak:
+    """Regression: break inside for must not leak BreakSentinel as return value."""
+
+    def test_break_then_return_list(self):
+        """Original bug: function returns BreakSentinel instead of list after break."""
+        source = """
+fn get_items(): list {
+    let result = [1, 2, 3]
+    for i in range(5) {
+        if i == 2 {
+            break
+        }
+    }
+    return result
+}
+main {
+    let x = get_items()
+    print(str(x))
+}
+"""
+        lines, errs = _run_source(source)
+        assert not errs
+        assert "[1, 2, 3]" in lines
+
+    def test_break_preserves_last_value(self):
+        """Variable assigned before break should keep its value."""
+        source = """
+fn last_value(): int {
+    let x = 0
+    for i in range(10) {
+        x = i
+        if i == 3 {
+            break
+        }
+    }
+    return x
+}
+main {
+    print(str(last_value()))
+}
+"""
+        lines, errs = _run_source(source)
+        assert not errs
+        assert "3" in lines
+
+    def test_nested_for_break(self):
+        """Break in inner loop must not affect outer loop."""
+        source = """
+fn nested(): list {
+    let result = []
+    for i in range(3) {
+        for j in range(3) {
+            if j == 1 {
+                break
+            }
+            result.append(i * 10 + j)
+        }
+    }
+    return result
+}
+main {
+    print(str(nested()))
+}
+"""
+        lines, errs = _run_source(source)
+        assert not errs
+        assert "[0, 10, 20]" in lines
+
+    def test_bubble_sort_with_break(self):
+        """Bubble sort with early-exit break optimization must return sorted list."""
+        source = """
+fn bubble_sort(arr: list): list {
+    let n = len(arr)
+    let result = list(arr)
+    for i in range(n) {
+        let swapped = false
+        for j in range(n - 1 - i) {
+            if result[j] > result[j + 1] {
+                let temp = result[j]
+                result[j] = result[j + 1]
+                result[j + 1] = temp
+                swapped = true
+            }
+        }
+        if !swapped {
+            break
+        }
+    }
+    return result
+}
+main {
+    print(str(bubble_sort([5, 3, 8, 1, 2])))
+}
+"""
+        lines, errs = _run_source(source)
+        assert not errs
+        assert "[1, 2, 3, 5, 8]" in lines
+
+    def test_continue_on_last_iteration(self):
+        """Continue on the last iteration must not leak ContinueSentinel."""
+        source = """
+fn sum_skip_last(): int {
+    let sum = 0
+    for i in range(5) {
+        if i == 4 {
+            continue
+        }
+        sum = sum + i
+    }
+    return sum
+}
+main {
+    print(str(sum_skip_last()))
+}
+"""
+        lines, errs = _run_source(source)
+        assert not errs
+        assert "6" in lines
+
+    def test_while_break_no_leak(self):
+        """While loop break must not leak (already correct, verify stays correct)."""
+        source = """
+fn while_break(): list {
+    let result = [10, 20]
+    let i = 0
+    while i < 5 {
+        if i == 3 {
+            break
+        }
+        i = i + 1
+    }
+    return result
+}
+main {
+    print(str(while_break()))
+}
+"""
+        lines, errs = _run_source(source)
+        assert not errs
+        assert "[10, 20]" in lines
+
+    def test_break_in_main_block(self):
+        """Break inside main block's for loop must not crash the program."""
+        source = """
+main {
+    let found = -1
+    for i in range(10) {
+        if i == 5 {
+            found = i
+            break
+        }
+    }
+    print(str(found))
+    print("after loop")
+}
+"""
+        lines, errs = _run_source(source)
+        assert not errs
+        assert "5" in lines
+        assert "after loop" in lines

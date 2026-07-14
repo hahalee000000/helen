@@ -311,6 +311,37 @@ def _float(value: Any) -> float:
     return float(value)
 
 
+def _list(value: Any = None) -> list:
+    """Convert an iterable to a list, or create an empty list.
+
+    Examples:
+        list()          // [] — empty list
+        list("abc")     // ["a", "b", "c"]
+        list([1,2,3])   // [1, 2, 3] — shallow copy
+    """
+    if value is None:
+        return []
+    return list(value)
+
+
+def _dict(value: Any = None) -> dict:
+    """Convert to a dict, or create an empty dict.
+
+    Examples:
+        dict()                     // {} — empty dict
+        dict({"a": 1})             // {"a": 1} — shallow copy
+        dict([["k1","v1"],["k2","v2"]])  // {"k1": "v1", "k2": "v2"}
+    """
+    if value is None:
+        return {}
+    return dict(value)
+
+
+def _bool(value: Any) -> bool:
+    """Convert a value to boolean."""
+    return bool(value)
+
+
 def _abs(value: Any) -> float:
     """Return the absolute value."""
     return abs(value)
@@ -752,6 +783,9 @@ def _register_builtins() -> None:
         BuiltinFunction("str", "Convert to string", "str(value)", _str, "core"),
         BuiltinFunction("int", "Convert to integer", "int(value)", _int, "core"),
         BuiltinFunction("float", "Convert to float", "float(value)", _float, "core"),
+        BuiltinFunction("bool", "Convert to boolean", "bool(value)", _bool, "core"),
+        BuiltinFunction("list", "Convert to list or create empty list", "list(iterable?)", _list, "core"),
+        BuiltinFunction("dict", "Convert to dict or create empty dict", "dict(value?)", _dict, "core"),
         BuiltinFunction("abs", "Absolute value", "abs(value)", _abs, "core"),
         BuiltinFunction("min", "Minimum value", "min(*args)", _min, "core"),
         BuiltinFunction("max", "Maximum value", "max(*args)", _max, "core"),

@@ -1,7 +1,7 @@
 ---
 name: helen-stdlib
-description: "Helen 标准库使用指南 — 255 个内置函数的分类参考与示例"
-version: 1.17.0
+description: "Helen 标准库使用指南 — 258 个内置函数的分类参考与示例"
+version: 1.18.0
 author: Helen Team
 license: MIT
 metadata:
@@ -11,13 +11,13 @@ metadata:
 
 # Helen 标准库参考
 
-Helen 标准库提供 **255 个内置函数**，覆盖 AI 应用开发的所有核心需求。
+Helen 标准库提供 **258 个内置函数**，覆盖 AI 应用开发的所有核心需求。
 
 ## 分类概览
 
 | 类别 | 数量 | 代表函数 |
 |------|------|----------|
-| **Core** | 11 | `print`, `len`, `str`, `int`, `float`, `abs`, `min`, `max`, `range`, `type`, `isinstance` |
+| **Core** | 14 | `print`, `len`, `str`, `int`, `float`, `bool`, `list`, `dict`, `abs`, `min`, `max`, `range`, `type`, `isinstance` |
 | **String** | 37 | `upper`, `lower`, `strip`, `split`, `join`, `replace`, `find`, `reverse`, `repeat`, `regex_match`, `regex_replace`, `format_float` |
 | **Data** | 25 | `json_parse`, `json_stringify`, `yaml_parse`, `toml_parse`, `csv_parse`, `xml_parse`, `html_escape`, `url_encode`, `base64_encode` |
 | **Collection** | 22 | `sort`, `reverse`, `unique`, `flatten`, `zip`, `map`, `filter`, `reduce`, `group_by`, `chunk`, `intersection` |
@@ -47,6 +47,9 @@ Helen 内置 230+ 个中文别名，覆盖全部 stdlib 分类。常用示例：
 |------|------|------|
 | `len` | `长度` | Core |
 | `print` | `打印` | Core |
+| `list` | `列表` | Core |
+| `dict` | `字典` | Core |
+| `bool` | `布尔` | Core |
 | `sort` | `排序` | Collection |
 | `filter` | `过滤` | Collection |
 | `map` | `映射` | Collection |
@@ -106,6 +109,13 @@ alias len as 我的长度
 let num = int("42")           # 字符串 → 整数
 let text = str(3.14)          # 浮点数 → 字符串
 let flt = float("2.5")        # 字符串 → 浮点数
+let flag = bool(1)            # 整数 → true
+
+// 构造函数
+let empty_list = list()       # []
+let copy = list([1, 2, 3])   # [1, 2, 3] — 浅拷贝
+let empty_dict = dict()       # {}
+let dict_copy = dict({"a": 1})  # {"a": 1} — 浅拷贝
 
 // 长度与范围
 let length = len([1, 2, 3])   # 3
@@ -227,7 +237,7 @@ let path2 = 保存媒体(img)                # 自动命名保存到 ~/.helen/ge
 let result = llm act "分析图片"
     media(img)
     on_media fn(parts, provider) {
-        返回 parts.map(fn(part) {
+        返回 map(parts, fn(part) {
             返回 {"type": "image_url", "image_url": {"url": part.content}}
         })
     }
@@ -256,23 +266,19 @@ let result = llm act "生成一张图"
 let sorted = sort([3, 1, 4, 1, 5])  # [1, 1, 3, 4, 5]
 let unique_items = unique([1, 2, 2, 3])  # [1, 2, 3]
 
-// 映射与过滤
-let doubled = map([1, 2, 3], x => x * 2)  # [2, 4, 6]
-let evens = filter([1, 2, 3, 4], x => x % 2 == 0)  # [2, 4]
+// 映射与过滤（使用 fn() 匿名函数）
+let doubled = map([1, 2, 3], fn(x) { return x * 2 })  # [2, 4, 6]
+let evens = filter([1, 2, 3, 4], fn(x) { return x % 2 == 0 })  # [2, 4]
 
 // 归约
-let sum = reduce([1, 2, 3, 4], (acc, x) => acc + x, 0)  # 10
-
-// 分组
-let grouped = group_by(users, u => u["role"])
-// {"admin": [...], "user": [...]}
+let sum = reduce([1, 2, 3, 4], fn(acc, x) { return acc + x }, 0)  # 10
 
 // 分块
 let chunks = chunk([1, 2, 3, 4, 5], 2)
 // [[1, 2], [3, 4], [5]]
 
 // 集合运算
-let common = intersection([1, 2, 3], [2, 3, 4])  # [2, 3]
+let common = set_intersection([1, 2, 3], [2, 3, 4])  # [2, 3]
 ```
 
 ### Network（网络请求）
