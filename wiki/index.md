@@ -1,7 +1,8 @@
 # Helen 语言 Wiki 索引
 
 > **Helen** — A Prompt-first Agent Programming Language
-> 版本: v1.18 | 状态: Phase 0-10 全部实现 + Phase 1-7 上下文管理增强 + TranscriptStore SSOT + 多模态支持 + spawn 并发原语 + 中文语法 + Agent 作用域隔离 | 测试: 2791 passed
+> [![PyPI version](https://img.shields.io/pypi/v/helen-lang.svg)](https://pypi.org/project/helen-lang/)
+> 版本: v1.20 | 状态: PyPI 已发布（`pip install helen-lang`）| 上下文管理 API + Transcript 作用域 + spawn 并发 + 中文语法 | 测试: 2917 passed
 
 ---
 
@@ -77,5 +78,10 @@
 ### 九、附录
 - [[appendix/error-codes|错误码参考]] — 42 ErrorCode 完整列表
 - [[appendix/exceptions|异常层次]] — 异常类继承树
-- [[appendix/changelog|版本历史]] — Phase 0-10 变更记录
+- [[appendix/changelog|版本历史]] — v1.0 至 v1.20 变更记录
 - [[appendix/hld-compliance|HLD 合规]] — 17 模块实现状态
+
+### 十、安装与发布
+- [PyPI 项目页](https://pypi.org/project/helen-lang/) — `pip install helen-lang`
+- [GitHub 仓库](https://github.com/hahalee000000/helen) — 源码、issues、讨论
+- [[tutorial/01-getting-started|入门指南]] — 安装 + 第一个程序

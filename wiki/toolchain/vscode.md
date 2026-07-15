@@ -36,15 +36,19 @@ vscode-extension/
 
 1. **安装 Helen**：
 ```bash
-git clone https://github.com/hahalee00000/helen.git
+# 推荐：从 PyPI 安装
+pip install helen-lang
+
+# 或者从源码安装（开发者）
+git clone https://github.com/hahalee000000/helen.git
 cd helen
 pip install -e .
 ```
 
 2. **验证安装**：
 ```bash
-helen help
-helen lsp  # 应启动 LSP 服务器（按 Ctrl+C 退出）
+helen --version   # Helen 1.20.0
+helen lsp         # 应启动 LSP 服务器（按 Ctrl+C 退出）
 ```
 
 ### 从源码安装扩展

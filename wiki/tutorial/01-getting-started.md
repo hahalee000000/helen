@@ -6,31 +6,52 @@
 
 ## 系统要求
 
-- **Python 3.7+**（推荐 3.9+）
+- **Python 3.12+**（Helen 使用 Python 3.10+ 语法特性，必须 3.12 或更高版本）
 - 操作系统：Linux、macOS、Windows
+- 磁盘空间：~100 MB（含 17 个内置 skills）
 
 ---
 
 ## 安装
+
+### 方法 1：pip 安装（推荐）
+
+```bash
+# 安装（从 PyPI）
+pip install helen-lang
+
+# 验证
+helen --version
+# Helen 1.20.0
+
+helen --help
+```
+
+### 方法 2：从源码安装（开发者）
 
 ```bash
 # 克隆仓库
 git clone https://github.com/hahalee000000/helen.git
 cd helen
 
-# 安装
-pip install -e .
+# 创建虚拟环境（推荐）
+python -m venv .venv
+source .venv/bin/activate  # Linux/macOS
+# .venv\Scripts\activate   # Windows
 
-# 验证
-$ helen --help
-Usage: helen {run, check, repl, doc, init}
+# 可编辑安装（开发模式）
+pip install -e ".[dev]"
+
+# 运行测试（验证安装正确）
+pytest
+
+# 验证 CLI
+helen --version
 ```
 
----
+### 安装后配置
 
-## 初始化配置
-
-Helen 使用独立的配置目录 `~/.helen/`，不依赖 Hermes 安装：
+Helen 首次运行时会创建配置目录 `~/.helen/`：
 
 ```bash
 $ helen init
@@ -40,7 +61,7 @@ Config created: /home/user/.helen/config.yaml
 
 Next steps:
   1. Edit /home/user/.helen/config.yaml
-  2. Set your API key
+  2. Set your API key (LLM 提供商的 API key)
   3. Run a Helen program: helen <file.helen>
 ```
 
@@ -65,6 +86,12 @@ llm:
   model: "qwen3.7-plus"
   temperature: 0.7
   timeout: 60
+
+transcript:
+  enabled: true
+  backend: "sqlite"
+  session_scope: "auto"                  # "auto" | "global" | "project"
+  max_memory_items: 1000
 ```
 
 也支持 `.env` 格式 (`~/.helen/.env`)：

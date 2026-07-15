@@ -1,13 +1,37 @@
 # 版本历史
 
-> Helen v1.20 | Transcript 作用域 — transcripts 默认按应用隔离在 `.helen/sessions/`，REPL 等交互场景 opt-in 全局
+> Helen v1.20 | PyPI 已发布 — `pip install helen-lang` — Transcript 会话作用域默认按应用隔离
 
 ---
 
-## v1.20: Transcript 会话作用域 (当前)
+## v1.20: Transcript 会话作用域 + PyPI 发布 (当前)
 
 **发布日期**: 2026-07-15
-**核心特性**: transcripts 不再强制放在 `~/.helen/sessions/`，支持按应用目录隔离
+**核心特性**: transcripts 默认按应用目录隔离；**PyPI 正式上线**
+
+### PyPI 发布 🎉
+
+**Helen 语言现在可以通过 pip 安装！**
+
+```bash
+pip install helen-lang
+```
+
+发布准备（7 项清理）：
+1. 包名 `helen` → `helen-lang`（PyPI 上 `helen` 已被占用）
+2. 版本号对齐：`pyproject.toml` 与 `helen/__init__.py` 统一为 `1.20.0`
+3. 作者邮箱更新为 `2229855189@qq.com`
+4. 新增 MIT LICENSE 文件
+5. README 重写（反映 v1.20 + PyPI badges + 安装命令）
+6. Skills 移入包内：`skills/` → `helen/skills/`（wheel 自动包含）
+7. MANIFEST.in 创建，包含 LICENSE/skills/py.typed
+8. 新增 `py.typed` 标记（PEP 561，支持 mypy 等类型检查器）
+
+**本地验证**：
+- ✅ 隔离 Python 3.12 环境 `pip install helen-lang` 成功
+- ✅ `helen --version` → "Helen 1.20.0"
+- ✅ 17 个内置 skills 从 site-packages 正确加载
+- ✅ 全部 2917 测试通过
 
 ### 设计原则
 

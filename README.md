@@ -311,3 +311,20 @@ MIT License
 - 短路求值
 - 下标/字段赋值
 - 别名语句
+
+## 🤝 社区与贡献
+
+- **GitHub**: https://github.com/hahalee000000/helen — 报告 issue、提交 PR、参与讨论
+- **License**: MIT — 商业友好、开源友好
+- **Python**: 3.12+ required
+- **平台**: Linux / macOS / Windows
+
+欢迎贡献！可以查看 [CLAUDE.md](CLAUDE.md) 了解开发流程，或 [wiki/index.md](wiki/index.md) 查看完整文档。
+
+## 📊 项目数据
+
+- **代码规模**：~40,000 行 Python（96 个源文件）
+- **测试覆盖**：2917 个测试，137 个测试文件
+- **内置 stdlib**：287 个函数，287 个中文别名
+- **内置 skills**：17 个（helen-syntax、helen-stdlib、code-quality、github 等）
+- **双语关键字**：89 个（44.5 英文 + 44.5 中文）
