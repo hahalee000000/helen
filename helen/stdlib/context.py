@@ -50,6 +50,25 @@ def _set_interpreter_context(
     _interpreter_agent_context = agent_context
 
 
+def _get_effective_history() -> list | None:
+    """Return the effective message list from TranscriptStore (SSOT) or fallback.
+
+    Phase 2 SSOT: When TranscriptStore is enabled (the default since v1.16),
+    ``llm act`` writes messages ONLY to TranscriptStore, bypassing the
+    ``_interpreter_history`` list.  Stdlib read functions (``context_stats``,
+    ``context_usage``, ``search_context``, …) must therefore consult
+    TranscriptStore first to see the full conversation.
+
+    Returns:
+        List of Message objects, or None if no context is available at all.
+    """
+    if _interpreter_agent_context is not None:
+        store = getattr(_interpreter_agent_context, 'transcript_store', None)
+        if store is not None:
+            return store.read_view()
+    return _interpreter_history
+
+
 def _classify_message(message: Any) -> dict:
     """Classify a message and assign priority.
 
@@ -508,7 +527,8 @@ def _context_stats() -> dict:
             compress_context("auto")
         }
     """
-    if _interpreter_history is None:
+    messages = _get_effective_history()
+    if messages is None:
         return {
             "status": "error",
             "error": "No interpreter context available",
@@ -526,7 +546,7 @@ def _context_stats() -> dict:
     compressed_count = 0
     pinned_count = 0
 
-    for msg in _interpreter_history:
+    for msg in messages:
         role = getattr(msg, 'role', 'unknown')
         if role in by_role:
             by_role[role] += 1
@@ -541,7 +561,7 @@ def _context_stats() -> dict:
 
     return {
         "status": "ok",
-        "message_count": len(_interpreter_history),
+        "message_count": len(messages),
         "total_tokens": total_tokens,
         "usage_ratio": usage_ratio,
         "max_tokens": max_tokens,
@@ -565,12 +585,13 @@ def _context_usage() -> float:
             compress_context("auto")
         }
     """
-    if _interpreter_history is None:
+    messages = _get_effective_history()
+    if messages is None:
         return 0.0
     max_tokens = _get_max_tokens()
     if max_tokens == 0:
         return 0.0
-    total_tokens = sum(getattr(msg, 'token_count', 0) for msg in _interpreter_history)
+    total_tokens = sum(getattr(msg, 'token_count', 0) for msg in messages)
     return total_tokens / max_tokens
 
 
@@ -1217,7 +1238,8 @@ def _search_context(query: str, role: str = "", limit: int = 20) -> dict:
             "total_matches": int,
         }
     """
-    if _interpreter_history is None:
+    messages = _get_effective_history()
+    if messages is None:
         return {"status": "error", "error": "No interpreter context", "matches": [], "total_matches": 0}
     if not query:
         return {"status": "error", "error": "query is required", "matches": [], "total_matches": 0}
@@ -1226,7 +1248,7 @@ def _search_context(query: str, role: str = "", limit: int = 20) -> dict:
     matches = []
     total = 0
 
-    for i, msg in enumerate(_interpreter_history):
+    for i, msg in enumerate(messages):
         if role and msg.role != role:
             continue
         # Extract text from content

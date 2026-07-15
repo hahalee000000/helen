@@ -28,6 +28,8 @@ from helen.stdlib.context import (
     _on_compression,
     _on_context_overflow,
     _set_interpreter_context,
+    _context_stats,
+    _context_usage,
 )
 from helen.runtime.history import Message
 from helen.interpreter.agent_context import AgentContextManager
@@ -508,3 +510,93 @@ class TestHooks:
         r = _on_context_overflow(lambda stats: None)
         assert r["status"] == "ok"
         _on_context_overflow(None)  # clean up
+
+
+# ---------------------------------------------------------------------------
+# Regression: TranscriptStore SSOT integration (issue #11)
+# ---------------------------------------------------------------------------
+
+
+class TestTranscriptStoreSSOTIntegration:
+    """context_stats / search_context / context_usage must read from
+    TranscriptStore when it is the active SSOT.
+
+    Before the fix, these functions always read from ``_interpreter_history``
+    which is empty when TranscriptStore is enabled (the default) because
+    ``llm act`` writes ONLY to TranscriptStore.
+    """
+
+    def test_context_stats_reads_transcript_store(self):
+        """context_stats() sees messages written to TranscriptStore only."""
+        agent_ctx = AgentContextManager(transcript_store_enabled=True)
+        # Empty _interpreter_history — simulates the post-llm-act state
+        _set_interpreter_context([], type("HM", (), {"MAX_TOKENS": 1000})(), agent_ctx)
+        try:
+            # Simulate llm act writing directly to TranscriptStore
+            agent_ctx.transcript_store.append(
+                Message(role="user", content="hello AI", _token_count=50)
+            )
+            agent_ctx.transcript_store.append(
+                Message(role="assistant", content="hello human", _token_count=60)
+            )
+
+            stats = _context_stats()
+            assert stats["status"] == "ok"
+            assert stats["message_count"] == 2
+            assert stats["total_tokens"] == 110
+            assert stats["by_role"]["user"] == 1
+            assert stats["by_role"]["assistant"] == 1
+        finally:
+            _set_interpreter_context([], None, None)
+
+    def test_search_context_reads_transcript_store(self):
+        """search_context() finds messages written to TranscriptStore only."""
+        agent_ctx = AgentContextManager(transcript_store_enabled=True)
+        _set_interpreter_context([], type("HM", (), {"MAX_TOKENS": 1000})(), agent_ctx)
+        try:
+            agent_ctx.transcript_store.append(
+                Message(role="user", content="fix the TODO item", _token_count=10)
+            )
+            agent_ctx.transcript_store.append(
+                Message(role="assistant", content="all clear", _token_count=10)
+            )
+
+            r = _search_context("todo")
+            assert r["status"] == "ok"
+            assert r["total_matches"] == 1
+            assert r["matches"][0]["role"] == "user"
+            assert "TODO" in r["matches"][0]["snippet"]
+        finally:
+            _set_interpreter_context([], None, None)
+
+    def test_context_usage_reads_transcript_store(self):
+        """context_usage() reflects tokens in TranscriptStore only."""
+        agent_ctx = AgentContextManager(transcript_store_enabled=True)
+        _set_interpreter_context([], type("HM", (), {"MAX_TOKENS": 1000})(), agent_ctx)
+        try:
+            agent_ctx.transcript_store.append(
+                Message(role="user", content="a" * 100, _token_count=250)
+            )
+            agent_ctx.transcript_store.append(
+                Message(role="assistant", content="b" * 100, _token_count=250)
+            )
+            assert abs(_context_usage() - 0.5) < 1e-6
+        finally:
+            _set_interpreter_context([], None, None)
+
+    def test_fallback_when_transcript_store_disabled(self):
+        """Without TranscriptStore, functions still read from _interpreter_history."""
+        history = [
+            Message(role="user", content="hi", _token_count=10),
+            Message(role="assistant", content="hello", _token_count=20),
+        ]
+        _set_interpreter_context(history, type("HM", (), {"MAX_TOKENS": 500})())
+        try:
+            stats = _context_stats()
+            assert stats["message_count"] == 2
+            assert stats["total_tokens"] == 30
+            assert abs(_context_usage() - 0.06) < 1e-6
+            r = _search_context("hi")
+            assert r["total_matches"] == 1
+        finally:
+            _set_interpreter_context([], None, None)
