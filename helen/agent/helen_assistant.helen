@@ -1,6 +1,16 @@
-// Helen Language Assistant
-// An AI-powered assistant that helps users understand Helen,
-// write Helen code, and debug Helen programs.
+// Helen Language Assistant — 带可观测性的参考实现
+//
+// 本 Agent 演示了 Helen 可观测性工具的正确用法：
+//   - debug() 在关键点打桩（入口/出口/LLM 调用前后）
+//   - assert 前置验证（参数非空、文件可读）
+//   - trace_on()/trace_off() 追踪关键执行段
+//   - 结构化错误捕获（try/catch + debug）
+//
+// 调试方式：
+//   1. helen helen_assistant.helen                      — 正常运行
+//   2. helen repl → 运行同一程序 → :last_error          — 看出错详情
+//   3. helen repl → :llm_log -v                        — 看 LLM 真实调用
+//   4. 在代码中已布局 debug() 点，出错时 stderr 会有结构化信息
 //
 // Usage:
 //   let answer = HelenAssistant("How do I define an agent?", "/path/to/docs/tutorial.md", "/path/to/helen/")
@@ -19,59 +29,115 @@ You have access to:
 When answering questions about implementation details, internals, or advanced features,
 reference the source code. Be concise, practical, and provide code examples when relevant.
 Cite specific files and functions from the source code when appropriate."""
-    
+
     functions {
         fn load_documentation(): str {
-            // Load Helen tutorial documentation from absolute path
+            // 前置断言：路径非空
+            assert len(docs_path) > 0, "docs_path 不能为空"
+
+            // 入口打桩
+            debug("HelenAssistant.load_documentation", {"docs_path": docs_path})
+
             let tutorial = read_file(docs_path)
+
+            // 出口打桩：确认读到了内容
+            debug("文档加载完成", {"len": len(tutorial)})
+            assert len(tutorial) > 0, "tutorial.md 为空或不存在"
+
             return tutorial
         }
-        
+
         fn load_source_code(): str {
-            // Load key source files for implementation-level questions
+            // 入口打桩
+            debug("HelenAssistant.load_source_code", {"source_dir": source_dir})
+
+            // 用 trace_on 追踪多个文件读取的执行轨迹
+            trace_on()
+
             let parser = read_file(source_dir + "core/parser.py")
             let interpreter = read_file(source_dir + "interpreter/interpreter.py")
             let ast = read_file(source_dir + "core/ast.py")
             let lexer = read_file(source_dir + "core/lexer.py")
-            
+
+            trace_off()
+
             let sources = "# Helen Source Code\n\n"
             sources = sources + "## Parser (helen/core/parser.py)\n```\n" + parser + "\n```\n\n"
             sources = sources + "## Interpreter (helen/interpreter/interpreter.py)\n```\n" + interpreter + "\n```\n\n"
             sources = sources + "## AST (helen/core/ast.py)\n```\n" + ast + "\n```\n\n"
             sources = sources + "## Lexer (helen/core/lexer.py)\n```\n" + lexer + "\n```\n"
-            
+
+            // 出口打桩
+            debug("源码加载完成", {"sources_len": len(sources)})
+
             return sources
         }
-        
+
         fn build_context(): str {
-            // Build comprehensive context for LLM
+            // 入口打桩
+            debug("HelenAssistant.build_context 开始", {"question": question})
+
             let docs = load_documentation()
             let sources = load_source_code()
-            
+
             let context = "# Helen Language Documentation\n\n" + docs + "\n\n---\n\n"
             context = context + sources + "\n---\n\n"
             context = context + "# User Question\n\n" + question
+
+            // 出口打桩：上下文构建完成
+            debug("上下文构建完成", {"context_len": len(context)})
+
             return context
         }
     }
-    
+
     main {
-        // Build context with documentation, source code, and question
+        // Agent 入口打桩
+        debug("HelenAssistant 启动", {
+            "question_preview": substring(question, 0, 60),
+            "question_len": len(question)
+        })
+
+        // 前置断言
+        assert len(question) > 0, "question 不能为空"
+
+        // 构造上下文（内部已有 debug 打桩）
         let context = build_context()
-        
-        // Stream LLM response chunk by chunk for real-time output
-        llm act context on_chunk fn(chunk: str) {
-            print(chunk)
+
+        // LLM 流式调用
+        // 用 try/catch 捕获 LLM 错误，失败时 debug 输出上下文信息
+        try {
+            llm act context on_chunk fn(chunk: str) {
+                print(chunk)
+            }
+        } catch AnyError e {
+            // 错误打桩：记录失败的完整上下文
+            // 注意：Helen 的 catch 已经阻止了异常继续传播，
+            // 所以这里只记录，不重抛。
+            debug("HelenAssistant LLM 调用失败", {
+                "error_type": type(e),
+                "error_message": str(e),
+                "context_len": len(context)
+            })
+            print("\n[Error] " + str(e))
         }
+
+        // Agent 出口打桩
+        debug("HelenAssistant 完成", {})
     }
 }
 
 // Main entry point for standalone execution
 main {
+    debug("main 入口", {})
+
     // Example usage (adjust paths as needed)
     let question = "How do I define an agent in Helen?"
     let docs_path = "docs/tutorial.md"  // Relative path for development
     let source_dir = "helen/"  // Relative path for development
+
     HelenAssistant(question, docs_path, source_dir)
+
+    debug("main 完成", {})
     // Output is streamed directly to stdout
 }

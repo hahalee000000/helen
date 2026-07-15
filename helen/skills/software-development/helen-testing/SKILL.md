@@ -523,23 +523,69 @@ agent MyAgent {
 
 ## 调试测试
 
+> **核心心智模型**：`pytest` 告诉你"坏没坏"，Helen 自带工具（`debug`/`trace_on`/`:last_error`/`:llm_log`）告诉你"坏在哪里、为什么"。开发 Helen 应用时两者结合使用。
+
+### 开发 Helen 应用时，何时用什么工具
+
+| 场景 | 用什么 | 为什么 |
+|------|--------|--------|
+| 改完代码，验证没破坏旧功能 | `pytest` | 自动化回归 |
+| 验证 stdlib 函数行为 | `pytest`（Python 单元测试） | Python 层可直接 assert |
+| 验证新 agent 行为 | `helen <agent.helen>` + `:llm_log` | 需要真实 LLM 调用链路 |
+| 程序运行报错 | REPL + `:last_error` | 结构化错误快照（call_stack/scope） |
+| 追踪解释器执行流程 | `trace_on()` + `get_trace()` | 看 Python 单元测试看不到的 |
+| 变量值不符合预期 | `debug()` 在关键点打桩 | 结构化输出变量状态 |
+| LLM 行为异常 | `:llm_log -v` | 看真实 prompt/response |
+| 性能问题 | `context_stats()` / `stopwatch_*()` | 上下文占用 + 计时 |
+
 ### 使用 debug() 函数
+
+在关键位置打桩，输出结构化调试信息到 stderr：
 
 ```helen
 fn test_complex_logic() {
     let input = [1, 2, 3, 4, 5]
     
-    debug("Input: " + str(input))
+    // 入口打桩：记录输入状态
+    debug("test_complex_logic 输入", {"input": input, "len": len(input)})
     
     let result = process(input)
     
-    debug("Result: " + str(result))
+    // 出口打桩：记录输出状态
+    debug("test_complex_logic 输出", {"result": result})
     
     assert_equal(result, [2, 4, 6, 8, 10])
 }
 ```
 
+**在 Agent 中布局 debug 的最佳实践**：
+
+```helen
+agent MyAgent(task: str) {
+    main {
+        // 1. 入口打桩：记录参数
+        debug("MyAgent 启动", {"task": task})
+        
+        // 2. 前置断言
+        assert len(task) > 0, "task 不能为空"
+        
+        // 3. LLM 调用
+        let result = llm act task
+        debug("LLM 返回", {"len": len(result)})
+        
+        // 4. 结果验证
+        assert len(result) > 0, "LLM 返回空"
+        
+        // 5. 出口打桩
+        debug("MyAgent 完成", {})
+        return result
+    }
+}
+```
+
 ### 使用 trace
+
+用 `trace_on()` / `trace_off()` 包裹可疑代码块，追踪执行轨迹：
 
 ```helen
 fn test_with_trace() {
@@ -547,7 +593,7 @@ fn test_with_trace() {
     
     let result = complex_function()
     
-    let trace_log = get_trace()
+    let trace_log = get_trace(50)
     print("Execution trace: " + str(trace_log))
     
     trace_off()
@@ -555,6 +601,57 @@ fn test_with_trace() {
     assert_true(result > 0)
 }
 ```
+
+### 使用 :last_error 结构化错误
+
+程序报错时，进 REPL 用 `:last_error` 看结构化错误快照：
+
+```bash
+$ helen myagent.helen
+Error: ...
+
+$ helen repl
+> :last_error
+{
+  "error": {"type": "RuntimeError", "message": "...", "location": "..."},
+  "call_stack": [{"function": "main", "args": {...}}],
+  "scope": {"task": "...", "result": "..."},
+  "trace": [...]
+}
+```
+
+分析 `call_stack` 定位哪个函数出问题，分析 `scope` 看变量值是否符合预期。
+
+### 使用 :llm_log 检查 LLM 调用
+
+当 Agent 行为奇怪（答案不对、工具调用异常）时：
+
+```bash
+$ helen repl
+> :llm_log -v
+```
+
+看 LLM 实际收到的 prompt、返回的 response、token 用量、调用时长。常见定位：
+
+- **prompt 不对** → 检查 prompt 模板中的变量替换
+- **response 被截断** → 看 `max_tokens` / `timeout` 配置
+- **tool_calls 异常** → 检查 `tools` 注册和 schema
+- **调用失败** → 看 `error` 字段和 `duration_ms`
+
+### 常见调试场景速查
+
+| 症状 | 第一步 |
+|------|--------|
+| Agent 给错答案 | `:llm_log -v` 看 LLM 真实调用 |
+| 工具调用死循环 | `debug()` 在每次 tool 前后打桩 |
+| 上下文被意外压缩 | `context_stats()` 查看占用率 |
+| spawn 后子 agent 异常 | 子 agent 入口加 `debug("spawned", {...})` |
+| 闭包捕获值不对 | 闭包体内 `debug("captured", {"x": x})` |
+| 多 Agent 数据错乱 | 收发两端都加 `debug()` 对比 |
+| LLM 流式中断 | `on_chunk fn(c) { debug("chunk", c) }` |
+| 性能慢 | `stopwatch_start()` + `debug("elapsed", {...})` |
+
+> **完整 cookbook 参见 `debugging` skill §5**：含决策树 + 10 个场景的详细代码示例。
 
 ## 相关技能
 
