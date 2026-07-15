@@ -359,7 +359,7 @@ agent ChatBot {
 4. **上下文统计查询**：
    ```helen
    let stats = get_context_stats()
-   print("当前上下文: " + str(stats["tokens"]) + " tokens")
+   print("当前上下文: " + str(stats["total_tokens"]) + " tokens")
    ```
 
 ---

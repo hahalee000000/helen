@@ -492,8 +492,8 @@ print("从 " + str(result["original_tokens"]) + " 压缩到 " + str(result["comp
 ```helen
 // context_stats() — 详细统计
 let stats = context_stats()
-print("消息数: " + str(stats["messages"]))
-print("Token 数: " + str(stats["tokens"]))
+print("消息数: " + str(stats["message_count"]))
+print("Token 数: " + str(stats["total_tokens"]))
 print("占用率: " + str(stats["usage_ratio"]))
 // stats["by_role"] = {system: N, user: N, assistant: N, tool: N}
 // stats["compressed_count"], stats["pinned_count"]

@@ -1291,8 +1291,8 @@ agent LongRunner {
             
             // 查看详细统计
             let stats = context_stats()
-            print("messages=" + str(stats["messages"]) +
-                  " tokens=" + str(stats["tokens"]) +
+            print("message_count=" + str(stats["message_count"]) +
+                  " total_tokens=" + str(stats["total_tokens"]) +
                   " pinned=" + str(stats["pinned_count"]))
         }
     }

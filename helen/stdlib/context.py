@@ -488,9 +488,9 @@ def _context_stats() -> dict:
         dict with statistics:
         {
             "status": "ok",
-            "messages": int,            # Total message count
-            "tokens": int,              # Estimated total token count
-            "usage_ratio": float,       # tokens / max_tokens (0.0-1.0+)
+            "message_count": int,     # Total message count
+            "total_tokens": int,      # Estimated total token count
+            "usage_ratio": float,     # total_tokens / max_tokens (0.0-1.0+)
             "max_tokens": int,          # Configured context window size
             "by_role": {                # Message count per role
                 "system": int,
@@ -512,8 +512,8 @@ def _context_stats() -> dict:
         return {
             "status": "error",
             "error": "No interpreter context available",
-            "messages": 0,
-            "tokens": 0,
+            "message_count": 0,
+            "total_tokens": 0,
             "usage_ratio": 0.0,
             "max_tokens": 0,
             "by_role": {"system": 0, "user": 0, "assistant": 0, "tool": 0},
@@ -541,8 +541,8 @@ def _context_stats() -> dict:
 
     return {
         "status": "ok",
-        "messages": len(_interpreter_history),
-        "tokens": total_tokens,
+        "message_count": len(_interpreter_history),
+        "total_tokens": total_tokens,
         "usage_ratio": usage_ratio,
         "max_tokens": max_tokens,
         "by_role": by_role,

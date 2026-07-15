@@ -68,8 +68,8 @@ class TestContextStats:
         try:
             stats = _context_stats()
             assert stats["status"] == "ok"
-            assert stats["messages"] == 0
-            assert stats["tokens"] == 0
+            assert stats["message_count"] == 0
+            assert stats["total_tokens"] == 0
             assert stats["usage_ratio"] == 0.0
             assert stats["by_role"] == {"system": 0, "user": 0, "assistant": 0, "tool": 0}
             assert stats["compressed_count"] == 0
@@ -88,7 +88,7 @@ class TestContextStats:
         _setup_context(history)
         try:
             stats = _context_stats()
-            assert stats["messages"] == 5
+            assert stats["message_count"] == 5
             assert stats["by_role"]["system"] == 1
             assert stats["by_role"]["user"] == 2
             assert stats["by_role"]["assistant"] == 1
@@ -116,7 +116,7 @@ class TestContextStats:
         _setup_context(history, max_tokens=1000)
         try:
             stats = _context_stats()
-            assert stats["tokens"] == 300
+            assert stats["total_tokens"] == 300
             assert abs(stats["usage_ratio"] - 0.3) < 1e-6
         finally:
             _teardown_context()

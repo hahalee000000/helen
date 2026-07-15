@@ -464,8 +464,8 @@ let stats = context_stats()
 // 返回:
 // {
 //   status: "ok",
-//   messages: 42,             // 消息总数
-//   tokens: 18000,            // 估算 token 总数
+//   message_count: 42,        // 消息总数
+//   total_tokens: 18000,      // 估算 token 总数
 //   usage_ratio: 0.45,        // 上下文窗口占用率（0.0–1.0+）
 //   max_tokens: 40000,        // 配置的上下文窗口大小
 //   by_role: {system: 1, user: 15, assistant: 14, tool: 12},
