@@ -80,14 +80,13 @@ helen/
 ├── ffi/           # Python FFI for importing Python modules from Helen
 ├── cli/           # __main__.py (entry point), repl.py, formatter.py, docgen.py
 ├── lsp/           # Language Server Protocol (JSON-RPC 2.0 over stdio)
-└── agent/         # Helen assistant program (helen_assistant.helen)
-
-skills/            # 16 built-in skills (SKILL.md + references/)
-├── software-development/  # helen-syntax, helen-stdlib, helen-testing, helen-quality,
-│                          # helen-agent-patterns, helen-agent-collaboration,
-│                          # helen-language-development, helen-programming-methodology,
-│                          # code-quality, debugging, plan, tdd, subagent-driven, writing-plans
-└── devops/                # github, hellen-consistency-checker
+├── agent/         # Helen assistant program (helen_assistant.helen)
+└── skills/        # 16 built-in skills (SKILL.md + references/) — distributed with the package
+    ├── software-development/  # helen-syntax, helen-stdlib, helen-testing, helen-quality,
+    │                          # helen-agent-patterns, helen-agent-collaboration,
+    │                          # helen-language-development, helen-programming-methodology,
+    │                          # code-quality, debugging, plan, tdd, subagent-driven, writing-plans
+    └── devops/                # github, hellen-consistency-checker
 ```
 
 ## Language Concepts

@@ -3,21 +3,26 @@ requires = ["setuptools>=45"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "helen"
-version = "0.1.0"
-description = "Helen — A Prompt-first Agent Programming Language"
+name = "helen-lang"
+version = "1.20.0"
+description = "Helen — A Prompt-first Agent Programming Language for AI-native applications"
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
-    {name = "Helen Team", email = "helen@example.com"}
+    {name = "Helen Team", email = "2229855189@qq.com"}
 ]
+license = {text = "MIT"}
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Compilers",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
 ]
+keywords = ["helen", "dsl", "agent", "llm", "ai", "prompt", "language"]
 dependencies = [
     "pyyaml>=6.0",
     "toml>=0.10",
@@ -26,6 +31,8 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/hahalee000000/helen"
+Repository = "https://github.com/hahalee000000/helen"
+Issues = "https://github.com/hahalee000000/helen/issues"
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "pytest-cov>=4.0", "pytest-asyncio>=0.21.0", "flake8>=6.0"]
@@ -39,6 +46,15 @@ helen = "helen.cli.__main__:main"
 
 [tool.setuptools.packages.find]
 include = ["helen*"]
+
+# Include non-Python files in the wheel (skills, agent programs, config samples)
+[tool.setuptools.package-data]
+"helen" = [
+    "py.typed",
+    "agent/*.helen",
+    "skills/*/SKILL.md",
+    "skills/*/references/*.md",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

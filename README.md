@@ -1,42 +1,70 @@
-# Helen: 为 AI Agent 设计的 DSL
+# Helen — 为 AI Agent 设计的提示词优先编程语言
 
-Helen 是一个专为 AI Agent 开发设计的领域特定语言（DSL），提供简洁的语法和强大的功能。现在通过 Python Bridge，Python 开发者可以直接导入和使用 Helen Agent，就像使用普通的 Python 类一样。
+[![PyPI version](https://img.shields.io/pypi/v/helen-lang.svg)](https://pypi.org/project/helen-lang/)
+[![Python](https://img.shields.io/pypi/pyversions/helen-lang.svg)](https://pypi.org/project/helen-lang/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Tests](https://img.shields.io/badge/tests-2917%20passed-green.svg)](https://github.com/hahalee000000/helen)
 
-## ✨ 最新特性（v1.15）
+**Helen** 是一门专为 AI Agent 开发设计的 AI 原生 DSL（领域特定语言）。它将确定性构造（变量、函数、控制流）与一等 LLM 原语（`llm act`、`llm if`）融合为一门语言。
 
-### 🧠 上下文管理增强
+## ✨ 为什么选择 Helen？
 
-Helen v1.15 引入了完整的上下文管理系统，类似于 Claude Code 的智能上下文处理：
-
-- **Working Memory（工作记忆）**: 自动跟踪活跃文件、最近决策、待办事项、错误历史
-- **Graduated Compression（渐进式压缩）**: 五层渐进式压缩（Layer 1-5，从 60% 到 95% 使用率）
-- **Cache-Aware Compression（缓存感知压缩）**: 保留稳定前缀（30%），将缓存命中率从 10-20% 提升到 70-80%
-- **Three-Channel Context（三通道上下文）**: 系统指令（15%）+ 工作记忆（50%）+ 对话历史（35%）
-
-```helen
-agent SmartAgent {
-    context {
-        compression "graduated"
-        cache-aware true
-        working-memory true
-        working-memory-tokens 5000
-    }
-    
-    main {
-        return llm act "智能上下文管理"
-    }
-}
-```
+- **Prompt-first**：`agent` 是一等公民，Agent 即语言构造而非库模式
+- **287 个内置 stdlib 函数**：287 个中英文双语函数覆盖 AI 应用开发全链路
+- **5 层渐进压缩 + 工作记忆**：长对话 Agent 自动管理上下文，无需手工调优
+- **Transcript SSOT**：会话记录以 SQLite/JSONL 持久化，支持审计与回放
+- **多 Agent 并发**：`spawn` + Channel 消息队列，内置 mailbox_select 多选
+- **Python 双向集成**：Helen → Python FFI + Python → Helen Bridge
+- **89 个双语关键字**：44.5 英文 + 44.5 中文，原生中文编程支持
 
 ## 🚀 快速开始
 
 ### 安装
 
 ```bash
-pip install helen
+pip install helen-lang
 ```
 
-### 基本用法
+### Hello Helen
+
+创建 `hello.helen`：
+
+```helen
+agent Greeter(name: str) {
+    description "A friendly greeter"
+    prompt "Greet {{name}} warmly in one sentence"
+    
+    main {
+        return llm act "Greet {{name}} warmly"
+    }
+}
+
+main {
+    let g = Greeter("World")
+    print(g)
+}
+```
+
+运行：
+
+```bash
+helen hello.helen
+# Hello, World! It's wonderful to meet you!
+```
+
+### REPL 交互
+
+```bash
+helen repl
+> let x = 1 + 2
+> print(x)
+3
+> :help
+```
+
+### Python Bridge 用法
+
+Helen Agent 可以通过 Python Bridge 直接在 Python 中使用，就像使用普通的 Python 类：
 
 1. 创建 Helen Agent 文件 `translator.helen`：
 
@@ -51,51 +79,23 @@ agent TranslatorAgent(text: str, target: str) {
 }
 ```
 
-2. 在 Python 中使用：
+2. 在 Python 中导入并调用：
 
 ```python
 from translator import TranslatorAgent
 
-# 创建 agent 实例
 agent = TranslatorAgent()
-
-# 调用 agent
 result = agent("Hello", "French")
 print(result)  # "Bonjour"
 ```
 
-## 📚 特性
+### Python 集成特性
 
-### 1. 直接导入 Helen 文件
-
-```python
-# 自动识别并加载 .helen 文件
-from my_agents import TranslatorAgent, SummarizerAgent
-```
-
-### 2. 类型提示支持
-
-```python
-from typing import Optional
-
-def process_text(text: str, agent: TranslatorAgent) -> str:
-    return agent(text, target="Chinese")
-```
-
-### 3. 异步调用
-
-```python
-import asyncio
-
-async def main():
-    agent = TranslatorAgent()
-    result = await agent.async_call("Hello", "Spanish")
-    print(result)
-
-asyncio.run(main())
-```
-
-### 4. 装饰器模式
+- **直接导入 .helen 文件**：`from my_agents import TranslatorAgent`
+- **类型提示支持**：IDE 自动补全 Helen Agent
+- **异步调用**：`await agent.async_call(...)`
+- **装饰器模式**：`@helen_agent` 装饰 Python 函数
+- **参数验证**：Helen 自动校验 Agent 参数类型
 
 ```python
 from helen.python_bridge import helen_agent
@@ -105,21 +105,6 @@ def translate(text: str, target: str) -> str:
     pass
 
 result = translate("Hello", "French")
-```
-
-### 5. 参数验证
-
-```python
-agent = TranslatorAgent()
-
-# ✅ 正确
-result = agent("Hello", target="French")
-
-# ❌ 缺少必需参数
-result = agent("Hello")  # TypeError: missing required argument: 'target'
-
-# ❌ 未知参数
-result = agent("Hello", target="French", extra="value")  # TypeError
 ```
 
 ## 🎯 使用场景
@@ -263,17 +248,41 @@ MIT License
 
 - 文档：https://helen.readthedocs.io
 - GitHub：https://github.com/hahalee000000/helen
-- PyPI：https://pypi.org/project/helen
+- PyPI：https://pypi.org/project/helen-lang
 
 ## 📚 文档
 
 - [Wiki 文档](wiki/index.md) - 完整的技术文档
 - [教程](docs/tutorial.md) - 从零开始学习 Helen
 - [Python Bridge 教程](wiki/tutorial/15-python-bridge.md) - Python 集成指南
-- [上下文管理](wiki/runtime/working_memory.md) - 智能上下文处理
+- [上下文管理](wiki/runtime/context-management.md) - 智能上下文处理（v1.20）
 - [技能系统](wiki/runtime/skills.md) - 技能加载和使用
 
 ## 🆕 版本历史
+
+### v1.20 - Transcript 会话作用域
+- Transcripts 默认按应用隔离在 `.helen/sessions/`（REPL 场景 opt-in 全局）
+- `session_scope` 配置：`auto` | `global` | `project`
+- `HELEN_SESSION_DIR` 环境变量强制指定路径
+- 新增 `get_session_dir()` / `set_session_dir()` stdlib 函数
+
+### v1.19 - 上下文管理 API 完善
+- 补齐 6 维度 API（Inspection/Working Memory/Fine-grained Mutation/Runtime Config/Query/Multi-agent Transfer）
+- 新增 24 个 stdlib 函数：`context_stats`/`context_usage`/`pin_message`/`working_memory_*`/`export_context` 等
+- `Message.pinned: bool` 字段，pinned 消息免疫全部 5 层压缩
+- 内部化 `classify_message`
+
+### v1.18 - spawn 并发原语
+- `spawn Agent(...)` 返回 Channel，替代 `async/await/detach`
+- Channel 消息队列：`send/receive/try_receive/cancel/close`
+- `mailbox_select()` 多选原语
+- 流式中断：`on_chunk` 回调返回 `false` 停止流式；Ctrl+C 中断
+
+### v1.16 - TranscriptStore SSOT
+- 对话历史 SSOT，SQLite/JSONL 双后端
+- LRU 缓存（10K messages ~10MB）
+- UUID 寻址，O(1) 查找
+- 非破坏性压缩（BoundaryMarker 审计）
 
 ### v1.15 - 上下文管理增强
 - Working Memory（工作记忆）
@@ -281,6 +290,7 @@ MIT License
 - Cache-Aware Compression（缓存感知压缩）
 - Three-Channel Context（三通道上下文）
 - Agent context configuration
+
 
 ### v1.14 - LLM 流式支持
 - `llm act` 支持流式输出（on_chunk/on_complete 回调）

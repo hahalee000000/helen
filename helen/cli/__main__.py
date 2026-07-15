@@ -262,6 +262,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     elif first in ("-h", "--help", "help"):
         _print_help()
         return 0
+    elif first in ("-V", "--version"):
+        from helen import __version__
+        print(f"Helen {__version__}")
+        return 0
     else:
         # Default: treat first argument as a file to run,
         # argv[0] = script name (Issue #30), argv[1:] = program arguments
@@ -749,7 +753,8 @@ def quality_command(argv: list[str]) -> int:
 
 def _print_help() -> None:
     """Print CLI help."""
-    print("""helen — Helen Agent Programming Language
+    from helen import __version__
+    print(f"""helen {__version__} — Helen Agent Programming Language
 
 Usage:
   helen                          Interactive REPL (default)
@@ -760,6 +765,7 @@ Usage:
   helen doc [files]              Generate API documentation
   helen init                     Initialize Helen configuration
   helen lsp                      Start Language Server (LSP) for IDE support
+  helen --version                Show version number
 
 Program Arguments:
   Arguments after the filename are passed to the Helen program as `argv`.

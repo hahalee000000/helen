@@ -1,0 +1,28 @@
+# MANIFEST.in — include non-Python resources in source distribution
+
+include LICENSE
+include README.md
+include CLAUDE.md
+
+# Skills (built-in skill definitions distributed with the language)
+recursive-include helen/skills *.md
+
+# Agent program (Helen self-assistant)
+recursive-include helen/agent *.helen
+
+# PEP 561 marker
+include helen/py.typed
+
+# Exclude build/test artifacts
+global-exclude *.py[cod]
+global-exclude __pycache__
+global-exclude *.so
+prune .git
+prune .github
+prune tests
+prune docs
+prune examples
+prune reports
+prune wiki
+prune vscode-extension
+prune extensions

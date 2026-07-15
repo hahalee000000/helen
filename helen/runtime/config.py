@@ -66,9 +66,9 @@ def get_skill_dirs() -> list[Path]:
         dirs.append(helen_skills)
 
     # 3. Built-in skills (distributed with Helen language)
-    # helen/runtime/config.py -> helen/runtime -> helen -> helen package root
-    helen_package = Path(__file__).parent.parent.parent
-    builtin_skills = helen_package / "skills"
+    # helen/runtime/config.py -> helen/runtime -> helen (package dir)
+    helen_package_dir = Path(__file__).parent.parent
+    builtin_skills = helen_package_dir / "skills"
     if builtin_skills.exists() and builtin_skills not in dirs:
         dirs.append(builtin_skills)
 
