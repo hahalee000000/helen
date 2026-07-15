@@ -134,8 +134,17 @@ from helen.stdlib.tools import (
 
 # Import context management functions
 from helen.stdlib.context import (
-    _clear_context, _compress_context, _set_interpreter_context,  # noqa: F401 — re-exported
-    _classify_message, _compress_context_target,  # Phase 1: Message classification
+    _clear_context, _compress_context, _set_interpreter_context,  # noqa: F401
+    _compress_context_target,  # Phase 1: Targeted compression
+    _context_stats, _context_usage, _get_message,  # v1.19: Inspection
+    _delete_message, _pin_message, _unpin_message,  # v1.19: Fine-grained mutation
+    _working_memory_get, _working_memory_set, _working_memory_remove, _working_memory_clear,  # P1
+    _set_compression_strategy, _set_context_window, _set_working_memory_enabled,  # P2
+    _set_cache_aware, _get_context_config,  # P2
+    _insert_message, _replace_message,  # P2
+    _search_context, _context_slice,  # P3
+    _export_context, _import_context, _fork_context,  # P2/P3
+    _on_compression, _on_context_overflow,  # P1
 )
 
 # Import transcript functions (Phase 1 SSOT)
@@ -1084,9 +1093,39 @@ def _register_builtins() -> None:
         # Context management (v1.15)
         BuiltinFunction("clear_context", "Clear conversation context", "clear_context()", _clear_context, "context"),
         BuiltinFunction("compress_context", "Compress conversation context", "compress_context(strategy?)", _compress_context, "context"),
-        # Phase 1: Message classification and selective compression
-        BuiltinFunction("classify_message", "Classify message type and priority", "classify_message(message)", _classify_message, "context"),
         BuiltinFunction("compress_context_target", "Compress context by target type", "compress_context_target(target, keep_recent?)", _compress_context_target, "context"),
+        # v1.19: Context inspection
+        BuiltinFunction("context_stats", "Return detailed statistics about current context", "context_stats()", _context_stats, "context"),
+        BuiltinFunction("context_usage", "Return current context usage ratio (0.0-1.0)", "context_usage()", _context_usage, "context"),
+        # v1.19: Fine-grained message access
+        BuiltinFunction("get_message", "Retrieve a message by UUID", "get_message(uuid)", _get_message, "context"),
+        # v1.19: Fine-grained message mutation
+        BuiltinFunction("delete_message", "Delete a message by UUID", "delete_message(uuid)", _delete_message, "context"),
+        BuiltinFunction("pin_message", "Pin a message by UUID (immune to compression)", "pin_message(uuid)", _pin_message, "context"),
+        BuiltinFunction("unpin_message", "Unpin a previously pinned message", "unpin_message(uuid)", _unpin_message, "context"),
+        BuiltinFunction("insert_message", "Insert a new message into context", "insert_message(role, content, position?)", _insert_message, "context"),
+        BuiltinFunction("replace_message", "Replace a message's content by UUID", "replace_message(uuid, new_content)", _replace_message, "context"),
+        # v1.19: Working Memory access (P1)
+        BuiltinFunction("working_memory_get", "Read working memory contents", "working_memory_get(key?)", _working_memory_get, "context"),
+        BuiltinFunction("working_memory_set", "Set a working memory field", "working_memory_set(key, value)", _working_memory_set, "context"),
+        BuiltinFunction("working_memory_remove", "Remove a working memory entry", "working_memory_remove(key, item?)", _working_memory_remove, "context"),
+        BuiltinFunction("working_memory_clear", "Clear all working memory", "working_memory_clear()", _working_memory_clear, "context"),
+        # v1.19: Runtime configuration (P2)
+        BuiltinFunction("set_compression_strategy", "Set compression strategy at runtime", "set_compression_strategy(strategy)", _set_compression_strategy, "context"),
+        BuiltinFunction("set_context_window", "Set context window size at runtime", "set_context_window(tokens)", _set_context_window, "context"),
+        BuiltinFunction("set_working_memory_enabled", "Enable/disable working memory at runtime", "set_working_memory_enabled(enabled)", _set_working_memory_enabled, "context"),
+        BuiltinFunction("set_cache_aware", "Enable/disable cache-aware compression at runtime", "set_cache_aware(enabled)", _set_cache_aware, "context"),
+        BuiltinFunction("get_context_config", "Get current context management config", "get_context_config()", _get_context_config, "context"),
+        # v1.19: Query helpers (P3)
+        BuiltinFunction("search_context", "Search context for messages matching query", "search_context(query, role?, limit?)", _search_context, "context"),
+        BuiltinFunction("context_slice", "Extract a slice of conversation history", "context_slice(start?, end?, role?)", _context_slice, "context"),
+        # v1.19: Multi-agent context transfer (P2/P3)
+        BuiltinFunction("export_context", "Export current context as serializable dict", "export_context()", _export_context, "context"),
+        BuiltinFunction("import_context", "Import a previously exported context", "import_context(data)", _import_context, "context"),
+        BuiltinFunction("fork_context", "Create a deep-copy snapshot of current context", "fork_context()", _fork_context, "context"),
+        # v1.19: Lifecycle hooks (P1)
+        BuiltinFunction("on_compression", "Register callback for compression events", "on_compression(callback?)", _on_compression, "context"),
+        BuiltinFunction("on_context_overflow", "Register callback for context overflow", "on_context_overflow(callback?)", _on_context_overflow, "context"),
 
         # Transcript management (Phase 1 SSOT)
         BuiltinFunction("get_session_id", "Get current transcript session ID", "get_session_id()", _get_session_id, "transcript"),

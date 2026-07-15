@@ -168,11 +168,17 @@ def _budget_reduction(history: list[Message]) -> list[Message]:
     - If content > BUDGET_REDUCTION_MAX_CHARS → replace with pointer
     - Otherwise → keep as-is
 
+    Pinned messages are preserved (immune to compression).
+
     Returns:
         History with large tool outputs replaced
     """
     result = []
     for msg in history:
+        # Pinned messages are never compressed
+        if getattr(msg, 'pinned', False):
+            result.append(msg)
+            continue
         # v1.17: Use _message_text to handle both str and list[dict] content
         content_text = _message_text(msg.content)
         if msg.role == "tool" and len(content_text) > BUDGET_REDUCTION_MAX_CHARS:
@@ -189,6 +195,7 @@ def _budget_reduction(history: list[Message]) -> list[Message]:
                 message_type=msg.message_type,
                 priority=msg.priority,
                 compressed=True,
+                pinned=getattr(msg, 'pinned', False),
             )
             result.append(msg_copy)
             logger.debug("Budget reduction: Replaced tool result %s (%d chars)",
@@ -209,7 +216,7 @@ def _snip(history: list[Message], keep_recent: int = 8) -> list[Message]:
     Zero-cost operation (no LLM calls).
 
     Identifies "stale" turns (older than keep_recent) and drops them.
-    Always preserves system messages.
+    Always preserves system messages and pinned messages.
 
     Returns:
         History with stale turns removed
@@ -217,21 +224,26 @@ def _snip(history: list[Message], keep_recent: int = 8) -> list[Message]:
     if len(history) <= keep_recent:
         return history  # Not enough messages to snip
 
+    # Preserve pinned messages regardless of position
+    pinned_msgs = [msg for msg in history if getattr(msg, 'pinned', False)]
+
     # Separate system messages and conversation turns
     system_msgs = [msg for msg in history if msg.role == "system"]
-    conversation_msgs = [msg for msg in history if msg.role != "system"]
+    conversation_msgs = [msg for msg in history if msg.role != "system" and not getattr(msg, 'pinned', False)]
 
     if len(conversation_msgs) <= keep_recent:
-        return history  # Not enough conversation to snip
+        return history  # Not enough unpinned conversation to snip
 
-    # Keep only the most recent conversation turns
+    # Keep only the most recent unpinned conversation turns
     recent = conversation_msgs[-keep_recent:]
 
-    # Reconstruct: system messages + recent conversation
-    result = system_msgs + recent
+    # Reconstruct: system + pinned + recent conversation (preserve relative order)
+    # Build index-based merge to maintain original ordering
+    keep_set = {id(m) for m in system_msgs + pinned_msgs + recent}
+    result = [msg for msg in history if id(msg) in keep_set]
 
-    logger.debug("Snip: Dropped %d stale turns, kept %d recent",
-                len(conversation_msgs) - keep_recent, keep_recent)
+    logger.debug("Snip: Dropped %d stale turns, kept %d recent + %d pinned",
+                len(conversation_msgs) - keep_recent, keep_recent, len(pinned_msgs))
 
     return result
 
@@ -246,6 +258,7 @@ def _microcompact(history: list[Message], keep_recent: int = 5) -> list[Message]
     Zero-cost operation (no LLM calls).
 
     Core innovation: Preserves "actions" (tool_use blocks) but clears "data" (tool_result content).
+    Pinned messages are preserved (immune to compression).
 
     For each tool result message:
     - If it's one of the keep_recent most recent → preserve
@@ -254,17 +267,20 @@ def _microcompact(history: list[Message], keep_recent: int = 5) -> list[Message]
     Returns:
         History with old tool results cleared
     """
-    # Find all tool result messages
+    # Find all tool result messages (track both index and pinned status)
     tool_result_indices = []
+    pinned_indices = set()
     for i, msg in enumerate(history):
         if msg.role == "tool":
             tool_result_indices.append(i)
+            if getattr(msg, 'pinned', False):
+                pinned_indices.add(i)
 
     if len(tool_result_indices) <= keep_recent:
         return history  # Not enough tool results to microcompact
 
-    # Determine which tool results to clear (keep recent ones)
-    indices_to_clear = tool_result_indices[:-keep_recent]
+    # Determine which tool results to clear (keep recent ones + all pinned)
+    indices_to_clear = [i for i in tool_result_indices[:-keep_recent] if i not in pinned_indices]
 
     result = list(history)  # Copy
     for idx in indices_to_clear:
@@ -281,6 +297,7 @@ def _microcompact(history: list[Message], keep_recent: int = 5) -> list[Message]
                 message_type=msg.message_type,
                 priority=msg.priority,
                 compressed=True,
+                pinned=True,  # Preserve pinned status in copy
             )
             result[idx] = msg_copy
             logger.debug("Microcompact: Cleared tool result %s", tool_id)
@@ -302,6 +319,7 @@ def _context_collapse(history: list[Message]) -> list[Message]:
     - Extracts key decision points and task state changes
     - Segments old messages into time blocks with per-block summaries
     - Maintains continuity with recent conversation
+    - Pinned messages are preserved in full (immune to collapse)
 
     Algorithm:
     1. Segment old messages into time blocks (every ~10 messages)
@@ -311,7 +329,7 @@ def _context_collapse(history: list[Message]) -> list[Message]:
        - Tool usage
        - User intents / task state
     3. Generate timeline summary preserving progression
-    4. Return: system + timeline summary + recent messages
+    4. Return: system + timeline summary + pinned old messages + recent messages
 
     Returns:
         History with collapsed view projected (temporal-aware)
@@ -319,16 +337,17 @@ def _context_collapse(history: list[Message]) -> list[Message]:
     if len(history) <= CONTEXT_COLLAPSE_THRESHOLD:
         return history  # Not enough messages to collapse
 
-    # Separate system messages and conversation
+    # Partition by role + pinned status, using indices for stable ordering
+    cutoff = len(history) - CONTEXT_COLLAPSE_THRESHOLD
     system_msgs = [msg for msg in history if msg.role == "system"]
-    conversation_msgs = [msg for msg in history if msg.role != "system"]
+    pinned_old = [msg for i, msg in enumerate(history) if i < cutoff and getattr(msg, 'pinned', False)]
+    # Old messages available for archiving: non-system, non-pinned, before cutoff
+    old_msgs = [msg for i, msg in enumerate(history)
+                if i < cutoff and msg.role != "system" and not getattr(msg, 'pinned', False)]
+    recent_msgs = [msg for i, msg in enumerate(history) if i >= cutoff and msg.role != "system"]
 
-    if len(conversation_msgs) <= CONTEXT_COLLAPSE_THRESHOLD:
-        return history
-
-    # Split into old and recent
-    old_msgs = conversation_msgs[:-CONTEXT_COLLAPSE_THRESHOLD]
-    recent_msgs = conversation_msgs[-CONTEXT_COLLAPSE_THRESHOLD:]
+    if len(old_msgs) == 0:
+        return history  # Nothing to collapse
 
     # Generate temporal timeline summary
     timeline_parts = [f"[Context Collapse: {len(old_msgs)} turns archived as timeline]"]
@@ -368,12 +387,12 @@ def _context_collapse(history: list[Message]) -> list[Message]:
         compressed=False,  # Summary itself is not compressed
     )
 
-    # Return: system messages + timeline summary + recent conversation
-    result = system_msgs + [summary_msg] + recent_msgs
+    # Return: system messages + pinned old + timeline summary + recent conversation
+    result = system_msgs + pinned_old + [summary_msg] + recent_msgs
 
     logger.debug(
-        "Context collapse (temporal): Archived %d turns in %d blocks, kept %d recent",
-        len(old_msgs), len(blocks), len(recent_msgs)
+        "Context collapse (temporal): Archived %d turns in %d blocks, kept %d recent + %d pinned",
+        len(old_msgs), len(blocks), len(recent_msgs), len(pinned_old)
     )
 
     return result
@@ -513,9 +532,13 @@ def _auto_compact(
     if len(history) <= keep_recent + 2:
         return history  # Not enough to compact
 
-    # Separate system messages and conversation
+    # Separate system messages, pinned, and conversation
     system_msgs = [msg for msg in history if msg.role == "system"]
-    conversation_msgs = [msg for msg in history if msg.role != "system"]
+    cutoff = len(history) - keep_recent
+    pinned_old = [msg for i, msg in enumerate(history) if i < cutoff and getattr(msg, 'pinned', False)]
+    conversation_msgs = [msg for i, msg in enumerate(history)
+                         if msg.role != "system"
+                         and not (i < cutoff and getattr(msg, 'pinned', False))]
 
     if len(conversation_msgs) <= keep_recent:
         return history
@@ -543,10 +566,10 @@ def _auto_compact(
                 compressed=False,
             )
 
-            result = system_msgs + [summary_msg] + recent_msgs
+            result = system_msgs + pinned_old + [summary_msg] + recent_msgs
             logger.debug(
-                "Auto-Compact (LLM): Archived %d turns into semantic summary, kept %d recent",
-                len(old_msgs), len(recent_msgs)
+                "Auto-Compact (LLM): Archived %d turns into semantic summary, kept %d recent + %d pinned",
+                len(old_msgs), len(recent_msgs), len(pinned_old)
             )
             return result
 
@@ -555,11 +578,12 @@ def _auto_compact(
             # Fall through to structural summarization
 
     # Fallback: Zero-cost structural summarization
-    return _structural_auto_compact(system_msgs, old_msgs, recent_msgs, history)
+    return _structural_auto_compact(system_msgs, pinned_old, old_msgs, recent_msgs, history)
 
 
 def _structural_auto_compact(
     system_msgs: list[Message],
+    pinned_old: list[Message],
     old_msgs: list[Message],
     recent_msgs: list[Message],
     original_history: list[Message],
@@ -574,6 +598,7 @@ def _structural_auto_compact(
 
     Args:
         system_msgs: System messages to preserve
+        pinned_old: Pinned old messages to preserve in full
         old_msgs: Old messages to summarize
         recent_msgs: Recent messages to preserve
         original_history: Original history for metadata
@@ -653,11 +678,11 @@ def _structural_auto_compact(
         compressed=False,
     )
 
-    result = system_msgs + [summary_msg] + recent_msgs
+    result = system_msgs + pinned_old + [summary_msg] + recent_msgs
 
     logger.debug(
-        "Auto-Compact (structural): Archived %d turns into summary, kept %d recent",
-        len(old_msgs), len(recent_msgs)
+        "Auto-Compact (structural): Archived %d turns into summary, kept %d recent + %d pinned",
+        len(old_msgs), len(recent_msgs), len(pinned_old)
     )
 
     return result

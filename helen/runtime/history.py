@@ -286,6 +286,7 @@ class Message:
     message_type: str | None = field(default=None, repr=False)  # Auto-inferred type
     priority: int = field(default=50, repr=False)               # Priority (1-100, higher = more important)
     compressed: bool = field(default=False, repr=False)         # Whether message has been compressed
+    pinned: bool = field(default=False, repr=False)             # Pinned messages are immune to compression
 
     # Phase 10: Mostly-append transcript storage
     # UUID is assigned on first append; preserved across compression.

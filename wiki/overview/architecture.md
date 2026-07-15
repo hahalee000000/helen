@@ -12,7 +12,7 @@
 │  ┌─────────┐ ┌──────────┐ ┌──────────┐ ┌───────┐ ┌──────┐ │
 │  │ CLI M11 │ │ LSP M12  │ │ VSCode   │ │Stdlib  │ │DocGen│ │
 │  │run/check│ │diagnose  │ │ M13      │ │ M15    │ │      │ │
-│  │/repl/doc│ │/complete │ │highlight │ │255 fn  │ │      │ │
+│  │/repl/doc│ │/complete │ │highlight │ │285 fn  │ │      │ │
 │  └────┬────┘ └────┬─────┘ └────┬─────┘ └───┬───┘ └──┬───┘ │
 ├───────┼───────────┼────────────┼───────────┼─────────┼────┤
 │                    Runtime 运行时层                         │
@@ -206,7 +206,7 @@ $ helen init               # 初始化 ~/.helen/ 配置目录
 - `language-configuration.json` — 括号配对、自动闭合、缩进规则
 - `package.json` — 扩展清单
 
-### 标准库 (255 builtins)
+### 标准库 (285 builtins)
 
 | 类别 | 数量 | 代表函数 |
 |---|---|---|

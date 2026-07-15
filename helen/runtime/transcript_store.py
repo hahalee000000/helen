@@ -343,6 +343,7 @@ def _item_to_dict(item: Message | BoundaryMarker) -> dict[str, Any]:
             "message_type": item.message_type,
             "priority": item.priority,
             "compressed": item.compressed,
+            "pinned": item.pinned,
         }
     else:
         raise TypeError(f"Unknown item type: {type(item)}")
@@ -361,6 +362,7 @@ def _item_from_dict(data: dict[str, Any]) -> Message | BoundaryMarker | None:
             message_type=data.get("message_type"),
             priority=data.get("priority", 50),
             compressed=data.get("compressed", False),
+            pinned=data.get("pinned", False),
         )
     elif item_type == "boundary_marker":
         return BoundaryMarker.from_dict(data)

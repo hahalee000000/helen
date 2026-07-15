@@ -1,6 +1,6 @@
 # 标准库 (Stdlib)
 
-> 模块 M15 | `helen/stdlib/__init__.py` | **255 builtins** | 测试: `tests/stdlib/`
+> 模块 M15 | `helen/stdlib/__init__.py` | **285 builtins** | 测试: `tests/stdlib/`
 
 ---
 
@@ -52,11 +52,11 @@ class BuiltinFunction:
 | **Quality** | 4 | `quality.py` |
 | **IO** | 5 | `__init__.py` |
 | **Observability** | 4 | `observability.py` |
-| **Context** | 2 | `context.py` |
+| **Context** | 27 | `context.py` |
 | **Transcript** | 6 | `transcript.py` |
 | **Media** | 12 | `media.py` |
 | **Tools** | 24 | `tools.py` |
-| **总计** | **255** | - |
+| **总计** | **285** | - |
 
 ---
 

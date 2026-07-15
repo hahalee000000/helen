@@ -1,10 +1,10 @@
 ---
 name: helen-agent-patterns
 description: "Helen Agent 设计模式 — 单 Agent、多 Agent 协作、作用域隔离、共享变量、路由、流式处理、历史管理、上下文管理、Transcript 会话记录"
-version: 1.18.0
+version: 1.19.0
 author: Helen Team
 license: MIT
-tags: [helen, agent, patterns, design, llm, scope-isolation, shared-let, v1.12, closure, concurrency, history, persistence, context-window, context-management, transcript, session, v1.16, ground-truth-injection, v1.17, spawn, channel, v1.18]
+tags: [helen, agent, patterns, design, llm, scope-isolation, shared-let, v1.12, closure, concurrency, history, persistence, context-window, context-management, transcript, session, v1.16, ground-truth-injection, v1.17, spawn, channel, v1.18, pinned-messages, context-inspection, v1.19]
 ---
 
 # Helen Agent 设计模式
@@ -1264,15 +1264,92 @@ main {
 }
 ```
 
+### v1.19：Agent 自决上下文管理
+
+v1.19 补齐了上下文管理的 6 个维度（共 24 个新函数），让 agent 在运行时能**看见**并**操作**自己的上下文：
+
+- **Inspection**: `context_stats`/`context_usage` — 看见
+- **Working Memory**: `working_memory_get/set/remove/clear` — 主动参与工作记忆
+- **Fine-grained Mutation**: `insert/replace/delete/pin/unpin message` — 操作单条消息
+- **Runtime Config**: `set_compression_strategy`/`set_context_window`/`set_working_memory_enabled`/`set_cache_aware`/`get_context_config` — 运行时调整配置
+- **Query**: `search_context`/`context_slice` — 检索
+- **Multi-Agent Transfer**: `export_context`/`import_context`/`fork_context` — 跨 agent 共享
+- **Lifecycle Hooks**: `on_compression`/`on_context_overflow` — 事件回调
+
+**典型模式：Agent 自决压缩**
+
+```helen
+agent LongRunner {
+    main {
+        loop {
+            do_work()
+            
+            // 主动检查：占用率超过 70% 就压缩
+            if context_usage() > 0.7 {
+                compress_context("auto")
+            }
+            
+            // 查看详细统计
+            let stats = context_stats()
+            print("messages=" + str(stats["messages"]) +
+                  " tokens=" + str(stats["tokens"]) +
+                  " pinned=" + str(stats["pinned_count"]))
+        }
+    }
+}
+```
+
+**典型模式：保护关键上下文**
+
+```helen
+agent Coder {
+    main {
+        let r = insert_message("user", "Task: implement feature X")
+        pin_message(r["uuid"])  // 钉住，不会被压缩
+        
+        // 即使对话很长，任务描述始终在上下文中
+        do_many_things()
+    }
+}
+```
+
+**典型模式：跨 Agent 上下文传递**
+
+```helen
+agent Planner {
+    main {
+        do_planning()
+        let snapshot = export_context()
+        // 通过 Channel 传给 Executor
+        executor_channel.send(snapshot.context)
+    }
+}
+
+agent Executor(task) {
+    main {
+        let ctx = task_channel.receive()
+        import_context(ctx)  // 接管 Planner 的上下文
+        execute()
+    }
+}
+```
+
+**Pinned 消息的压缩免疫**：被 `pin_message` 标记的消息在所有 5 层渐进压缩（Layer 1–5）中都被保留。用于保护关键系统提示、Agent 做出的关键决策、few-shot 示例等。
+
 ---
 
 ## 总结
 
-Helen v1.15 的上下文管理增强包括：
+Helen v1.15/v1.19 的上下文管理增强包括：
 
 1. ✅ **自动集成**：所有 agent 默认使用渐进压缩和工作记忆
 2. ✅ **可配置性**：每个 agent 可以独立配置上下文策略
-3. ✅ **向后兼容**：现有代码无需修改
+3. ✅ **Agent 自决**：v1.19 新增 `context_stats`/`context_usage`，agent 可主动管理上下文
+4. ✅ **细粒度控制**：v1.19 新增 `pin_message`/`delete_message`/`insert_message`/`replace_message`，精确操作上下文
+5. ✅ **工作记忆参与**：v1.19 新增 `working_memory_get/set/remove/clear`，agent 主动参与工作记忆
+6. ✅ **运行时调整**：v1.19 新增 4 个 `set_*` 函数，配置可在运行时修改
+7. ✅ **跨 Agent 共享**：v1.19 新增 `export/import/fork_context`，上下文可传递
+8. ✅ **向后兼容**：现有代码无需修改
 
 ### REPL 调试
 

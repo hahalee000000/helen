@@ -1,5 +1,92 @@
 # 版本历史
 
+> Helen v1.19 | 上下文管理 API 完善 — 补齐 6 维度 API（Inspection/Working Memory/Fine-grained Mutation/Runtime Config/Query/Multi-agent Transfer/Lifecycle Hooks），共 24 个新 stdlib 函数（27 个上下文函数），pinned 消息免疫全部 5 层压缩，内部化 `classify_message`
+
+---
+
+## v1.19: 上下文管理 API 完善 (当前)
+
+**发布日期**: 2026-07-15
+**核心特性**: 补齐上下文管理的"检查"与"细粒度写入"两个维度，让 Agent 能**看见**并**操作**自己的上下文
+
+### 主要变更
+
+Helen v1.19 共新增 **24 个 stdlib 函数**（上下文类从 3 个扩展到 27 个），按优先级分 P0/P1/P2/P3 四批实现：
+
+#### P0：Inspection + 细粒度基础（6 个）
+```helen
+context_stats()           // 上下文统计（消息数/token/占用率/角色分布）
+context_usage()           // 占用率（0.0–1.0+）
+get_message(uuid)         // 按 UUID 读取消息
+delete_message(uuid)      // 按 UUID 逻辑删除
+pin_message(uuid)         // 钉住消息（免疫 5 层压缩）
+unpin_message(uuid)       // 取消钉住
+```
+
+#### P1：Working Memory + Lifecycle Hooks（6 个）
+```helen
+working_memory_get(key?)  // 读工作记忆（task/active_files/decisions/todos/errors）
+working_memory_set(k, v)  // 写工作记忆
+working_memory_remove(k)  // 移除
+working_memory_clear()    // 清空
+on_compression(callback)  // 压缩事件回调
+on_context_overflow(cb)   // 溢出回调（预留）
+```
+
+#### P2：Fine-grained Mutation + Runtime Config + Transfer（11 个）
+```helen
+// Mutation
+insert_message(role, content, position?)  // 插入消息
+replace_message(uuid, new_content)        // 替换消息
+
+// Runtime Configuration (v1.19 之前只能在 agent context {} 声明)
+set_compression_strategy(strategy)        // "graduated" | "traditional" | "none"
+set_context_window(tokens)                // 设置上下文窗口大小
+set_working_memory_enabled(bool)          // 开关工作记忆
+set_cache_aware(bool)                     // 开关缓存感知
+get_context_config()                      // 查询配置
+
+// Multi-Agent Transfer
+export_context()                          // 导出为 dict
+import_context(data)                      // 导入替换
+fork_context()                            // 深拷贝
+```
+
+#### P3：Query + Extras（2 个）
+```helen
+search_context(query, role?, limit?)      // 全文搜索
+context_slice(start?, end?, role?)        // 提取切片
+```
+
+### Pinned 消息免疫压缩
+
+`Message.pinned: bool` 字段加入 `history.py`。所有 5 层渐进压缩（Layer 1 Budget Reduction、Layer 2 Snip、Layer 3 Microcompact、Layer 4 Context Collapse、Layer 5 Auto-Compact）都已更新为跳过 pinned 消息。
+
+### 内部化 `classify_message`
+
+`classify_message` 从 stdlib 公开 API 中移除，内部化为 `_classify_message`。中文别名"消息分类"同步移除。
+
+### 中文别名（v1.19 新增 24 个）
+
+详见 `helen/stdlib/locales/zh.py` 和 `wiki/runtime/context-management.md § 8.5.8`。
+
+### 兼容性
+
+- 完全向后兼容。所有 2853 个既有测试通过。
+- 新增 57 个测试覆盖新函数与 pinned 压缩免疫行为（总测试 2889）。
+- 原 `classify_message` 调用会报"未找到函数"错误——这是**故意**的 breaking change（该函数本就是内部件，不应被外部使用）。
+
+### stdlib 总数
+
+- 255 → 267 → **285 builtins**（v1.19 本轮 +18）
+- Context 类：3 → 9 → **27 个函数**
+
+---
+
+## v1.18: spawn 并发原语
+
+**发布日期**: 2026-07-13
+
 > Helen v1.18 | spawn 并发原语 — `spawn` + Channel 消息队列替代 `async/await/detach`，snapshot 全部深复制，89 关键字
 
 ---

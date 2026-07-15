@@ -74,8 +74,8 @@ helen/
 │                  # transcript_store.py (v1.16: SSOT, SQLiteBackend, JSONLBackend, LRU cache)
 │                  # session_manager.py (v1.16: session lifecycle, path management)
 │                  # channel.py (v1.18: Channel + ChannelEndpoint message queue)
-├── stdlib/        # 255 built-in functions (string, math, crypto, collections, test, quality, context, transcript, media, etc.)
-│                  # locales/zh.py (255 Chinese aliases)
+├── stdlib/        # 285 built-in functions (string, math, crypto, collections, test, quality, context, transcript, media, etc.)
+│                  # locales/zh.py (285 Chinese aliases)
 │                  # mailbox.py (v1.18: mailbox_select for multi-channel select)
 ├── ffi/           # Python FFI for importing Python modules from Helen
 ├── cli/           # __main__.py (entry point), repl.py, formatter.py, docgen.py
@@ -139,7 +139,7 @@ skills/            # 16 built-in skills (SKILL.md + references/)
 - **Chinese support**: 89 bilingual keywords (44.5 English + 44.5 Chinese) with full bilingual support (CJK identifiers, fullwidth punctuation since v1.10, Chinese quotes since v1.10)
 - **Subscript/field assignment (v1.10)**: `arr[i] = x` and `obj.field = x` are supported as assignment targets
 - **Alias statement (v1.10)**: `alias <canonical> as <alias_name>` / `别名 <canonical> 为 <alias_name>` — create aliases for stdlib, user functions, agents, and variables
-- **Context management (v1.12)**: `clear_context()` clears conversation history; `compress_context(strategy)` with strategies: `auto`, `summarize`, `truncate`, `none`
+- **Context management (v1.12, v1.19)**: `clear_context()` clears conversation history; `compress_context(strategy)` with strategies: `auto`, `summarize`, `truncate`, `none`. v1.19 adds 24 new stdlib functions covering 6 dimensions: Inspection (`context_stats`, `context_usage`), Working Memory (`working_memory_get/set/remove/clear`), Fine-grained Mutation (`insert/replace/delete/pin/unpin_message`), Runtime Config (`set_compression_strategy/set_context_window/set_working_memory_enabled/set_cache_aware/get_context_config`), Query (`search_context/context_slice`), Multi-Agent Transfer (`export/import/fork_context`), Lifecycle Hooks (`on_compression/on_context_overflow`). Pinned messages are immune to all 5 graduated compression layers. `classify_message` internalized (no longer public).
 - **Context enhancement (v1.15, Phase 1-7)**:
   - **Working Memory**: Automatically tracks active files, recent decisions, pending TODOs, error history
   - **Graduated Compression**: Five-layer progressive compression (Layer 1-5, from 60% to 95% usage)

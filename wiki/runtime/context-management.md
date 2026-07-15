@@ -1,6 +1,6 @@
 # 上下文管理架构 (Context Management Architecture)
 
-> **版本**: v1.15 | **最后更新**: 2026-07-07
+> **版本**: v1.19 | **最后更新**: 2026-07-15
 > 统一说明 Helen 的上下文管理系统，替换原 `agent_context.md`、`graduated_compression.md`、`cache_aware_compression.md`、`working_memory.md` 中的分散描述。
 
 ---
@@ -233,6 +233,8 @@ Current Task (最后丢弃，必要时截断正文到行边界)
 | Layer 4 | 90% | Context Collapse | 零 | 归档旧轮次，**投射时间线视图**（分段摘要，保留时间结构） |
 | Layer 5 | 95% | Auto-Compact | **零或高** | 优先调用 `LLMSummarizer` 进行语义摘要；LLM 不可用时回退到零成本结构摘要 |
 
+**Pinned 消息免疫压缩**（v1.19）：被 `pin_message(uuid)` 标记的消息在所有 5 层中都被保留：Layer 1 不替换其内容、Layer 2 不丢弃、Layer 3 不清除、Layer 4 不归档、Layer 5 不摘要。用于保护关键上下文（系统提示、关键决策、few-shot 示例等）。`Message.pinned: bool` 字段加入 `history.py`，`TranscriptStore` 持久化时一并保存。
+
 **Layer 4 改进（时间线保留）**：受 RCC (Recurrent Context Compression) 和 CogCanvas 启发，Context Collapse 现在将旧消息分段（每 10 条一块），每段提取文件引用、工具使用、用户意图，生成时间线视图，保留任务进展的时序结构。
 
 **Layer 5 改进（LLM 语义摘要）**：当 `llm_client` 参数提供时，`_auto_compact` 调用 `LLMSummarizer` 生成高质量语义摘要，保留任务目标、关键决策、文件变更等。LLM 不可用时回退到零成本结构摘要（提取文件路径、工具计数、用户意图等）。
@@ -449,6 +451,167 @@ let result = compress_context(target="stale_turns", keep_recent=8)
 清除上下文()     // = clear_context()
 压缩上下文()     // = compress_context()
 ```
+
+### 8.5 v1.19 新增：上下文检查与细粒度操作
+
+v1.19 之前，上下文管理 API 只有"批量清空"和"批量压缩"两种粗粒度动作，Agent 既**看不见**当前上下文状态、也**动不了**单条消息。v1.19 补齐了**6 个维度**的 API。
+
+#### 8.5.1 检查类（Inspection）
+
+```helen
+// context_stats() — 详细统计
+let stats = context_stats()
+// 返回:
+// {
+//   status: "ok",
+//   messages: 42,             // 消息总数
+//   tokens: 18000,            // 估算 token 总数
+//   usage_ratio: 0.45,        // 上下文窗口占用率（0.0–1.0+）
+//   max_tokens: 40000,        // 配置的上下文窗口大小
+//   by_role: {system: 1, user: 15, assistant: 14, tool: 12},
+//   compressed_count: 5,      // 已经被压缩的消息数
+//   pinned_count: 2,          // 被钉住的消息数
+// }
+
+// context_usage() — 简化版，只返回占用率
+if context_usage() > 0.7 {
+    compress_context("auto")
+}
+```
+
+#### 8.5.2 单条消息访问与操作
+
+```helen
+// 读取
+get_message(uuid)      // 按 UUID 读取消息快照
+
+// 写入
+insert_message(role, content, position?)   // 插入新消息（默认追加到末尾）
+replace_message(uuid, new_content)         // 替换消息内容
+delete_message(uuid)                       // 逻辑删除（审计保留）
+
+// 钉住（Compression Immunity）
+pin_message(uuid)      // 钉住消息，所有 5 层压缩都跳过
+unpin_message(uuid)    // 取消钉住
+```
+
+Pinned 消息在 Layer 1–5 全部保留：
+- Layer 1：不替换其 tool 输出
+- Layer 2：不丢弃（即使是"过期"轮次）
+- Layer 3：不清除其内容
+- Layer 4：不归档（保留在投射视图中）
+- Layer 5：不参与语义摘要
+
+#### 8.5.3 工作记忆访问（P1）
+
+```helen
+// 读取（key 为空时返回全部）
+let data = working_memory_get("task")         // 返回任务描述
+let all = working_memory_get()                // 返回全部字段
+
+// 写入（list 类型 key 默认追加，也可整体替换）
+working_memory_set("task", "Build feature X")
+working_memory_set("active_files", "new.py")  // 追加
+working_memory_set("active_files", ["a.py"])  // 替换
+
+// 删除（item 为空时清空整个字段）
+working_memory_remove("task")
+working_memory_remove("active_files", "old.py")
+
+// 清空全部
+working_memory_clear()
+```
+
+**可用 keys**: `task` | `active_files` | `decisions` | `todos` | `errors`
+
+#### 8.5.4 运行时配置（P2）
+
+v1.19 之前，这些配置只能在 `agent context {}` 块中声明。v1.19 支持运行时修改。
+
+```helen
+set_compression_strategy("graduated")   // "graduated" | "traditional" | "none"
+set_context_window(64000)               // 设置上下文窗口大小（token 数）
+set_working_memory_enabled(true)        // 开关工作记忆
+set_cache_aware(true)                   // 开关缓存感知
+let cfg = get_context_config()          // 查询当前配置
+// cfg: {compression_strategy, max_tokens, working_memory_enabled, cache_aware_enabled, ...}
+```
+
+#### 8.5.5 查询（P3）
+
+```helen
+// 全文搜索
+let r = search_context("TODO", role="user", limit=10)
+// r.matches: [{uuid, role, snippet, index}, ...]
+
+// 上下文切片
+let slice = context_slice(start=5, end=20, role="")
+// slice.messages: [{uuid, role, content, token_count, compressed, pinned, index}, ...]
+```
+
+#### 8.5.6 多 Agent 上下文共享（P2/P3）
+
+```helen
+// 导出当前上下文为可传输的 dict
+let snapshot = export_context()
+// snapshot.context: {messages, working_memory, config}
+
+// 导入上下文（替换当前历史）
+import_context(snapshot.context)
+
+// Fork：返回与 export_context 相同结构的深拷贝
+let forked = fork_context()
+// 修改 forked 不影响原上下文
+```
+
+典型用途：通过 Channel 把当前对话上下文传给另一个 Agent；保存上下文到磁盘；fork 后并行探索多个方向。
+
+#### 8.5.7 生命周期钩子（P1）
+
+```helen
+// 注册压缩事件回调
+on_compression(callback)
+// callback 接收：{layer, original_tokens, compressed_tokens, ...}
+
+// 注册上下文溢出回调（预留接口）
+on_context_overflow(callback)
+
+// 传 None 清除回调
+on_compression(None)
+```
+
+#### 8.5.8 中文别名（v1.19 全部 24 个）
+
+| 英文名 | 中文名 |
+|--------|--------|
+| context_stats | 上下文统计 |
+| context_usage | 上下文占用率 |
+| get_message | 获取消息 |
+| delete_message | 删除消息 |
+| pin_message | 钉住消息 |
+| unpin_message | 取消钉住 |
+| insert_message | 插入消息 |
+| replace_message | 替换消息 |
+| working_memory_get | 获取工作记忆 |
+| working_memory_set | 设置工作记忆 |
+| working_memory_remove | 移除工作记忆 |
+| working_memory_clear | 清空工作记忆 |
+| set_compression_strategy | 设置压缩策略 |
+| set_context_window | 设置上下文窗口 |
+| set_working_memory_enabled | 设置工作记忆开关 |
+| set_cache_aware | 设置缓存感知 |
+| get_context_config | 获取上下文配置 |
+| search_context | 搜索上下文 |
+| context_slice | 上下文切片 |
+| export_context | 导出上下文 |
+| import_context | 导入上下文 |
+| fork_context | 分叉上下文 |
+| on_compression | 压缩回调 |
+| on_context_overflow | 溢出回调 |
+
+#### 8.5.9 内部化
+
+原 stdlib 函数 `classify_message` 已内部化为 `_classify_message`，不再对外暴露。中文别名"消息分类"同步移除。
 
 ---
 
