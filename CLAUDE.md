@@ -74,8 +74,8 @@ helen/
 │                  # transcript_store.py (v1.16: SSOT, SQLiteBackend, JSONLBackend, LRU cache)
 │                  # session_manager.py (v1.16: session lifecycle, path management)
 │                  # channel.py (v1.18: Channel + ChannelEndpoint message queue)
-├── stdlib/        # 285 built-in functions (string, math, crypto, collections, test, quality, context, transcript, media, etc.)
-│                  # locales/zh.py (285 Chinese aliases)
+├── stdlib/        # 287 built-in functions (string, math, crypto, collections, test, quality, context, transcript, media, etc.)
+│                  # locales/zh.py (287 Chinese aliases)
 │                  # mailbox.py (v1.18: mailbox_select for multi-channel select)
 ├── ffi/           # Python FFI for importing Python modules from Helen
 ├── cli/           # __main__.py (entry point), repl.py, formatter.py, docgen.py
@@ -154,13 +154,16 @@ skills/            # 16 built-in skills (SKILL.md + references/)
   - **Non-Destructive Compression**: BoundaryMarkers record compression events, full audit trail
   - **View Caching**: Dirty flag + cached view for O(1) reads
   - **REPL Commands**: `:transcript [--full|--audit]`, `:sessions`, `:session_id`
-  - **Stdlib Functions**: `get_session_id()`, `list_sessions()`, `replay_transcript()`, `export_transcript()`, `get_compression_audit()`
+  - **Stdlib Functions**: `get_session_id()`, `list_sessions()`, `replay_transcript()`, `export_transcript()`, `get_compression_audit()`, `get_session_dir()`, `set_session_dir()`
+  - **Session Scope (v1.20)**: transcripts 默认按作用域存储——项目目录 `.helen/sessions/`（检测到 `.helen/`、`helen.yaml`、`helen.toml` 时）或全局 `~/.helen/sessions/`（REPL、脚本）。通过 `session_scope: "auto"|"global"|"project"` 配置，或 `HELEN_SESSION_DIR` 环境变量强制指定路径
   - **Configuration**:
     ```yaml
     transcript:
       enabled: true              # Default: true (SSOT enabled)
       backend: "sqlite"          # or "jsonl"
-      session_dir: "~/.helen/sessions"
+      session_scope: "auto"      # "auto" (default) | "global" | "project"
+      session_dir: "~/.helen/sessions"          # used when scope=global
+      project_session_dir: ".helen/sessions"    # used when scope=project
       max_memory_items: 1000     # LRU cache size
     ```
 
@@ -176,7 +179,9 @@ llm:
 transcript:
   enabled: true
   backend: "sqlite"
-  session_dir: "~/.helen/sessions"
+  session_scope: "auto"                  # v1.20: "auto" (default) | "global" | "project"
+  session_dir: "~/.helen/sessions"       # scope=global 时使用
+  project_session_dir: ".helen/sessions" # scope=project 时使用
   max_memory_items: 1000
 
 multimodal:                          # v1.17

@@ -336,6 +336,8 @@ ALIASES: dict[str, str] = {
     "导出会话": "export_transcript",
     "压缩审计": "get_compression_audit",
     "恢复会话": "resume_session",
+    "获取会话目录": "get_session_dir",
+    "设置会话目录": "set_session_dir",
 
     # ── Media/Multimodal (媒体/多模态) ────────────────────────────
     "媒体": "media",

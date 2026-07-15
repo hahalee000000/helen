@@ -197,7 +197,14 @@ class AgentContextManager:
                     logger.debug("Created custom transcript: %s", transcript_path)
             else:
                 # Use default session management
-                session_dir = config.get("session_dir")
+                # v1.20: Resolve session_dir based on scope (global/project/auto)
+                #        + HELEN_SESSION_DIR env var override
+                from helen.runtime.config import resolve_session_dir
+                session_dir, detected_scope = resolve_session_dir()
+                logger.debug(
+                    "Transcript session scope: %s (resolved to %s)",
+                    detected_scope, session_dir,
+                )
 
                 # Create or reuse session
                 manager = SessionManager(base_dir=session_dir)

@@ -236,6 +236,66 @@ class SessionManager:
 └── ...
 ```
 
+### 4.5 会话作用域 (Session Scope, v1.20)
+
+v1.20 之前，所有 transcripts 都放在 `~/.helen/sessions/`（全局）。v1.20 引入**作用域**概念：transcripts 可以按应用隔离在各自的项目目录中。
+
+#### 作用域模式
+
+| 模式 | 路径 | 适用场景 |
+|------|------|----------|
+| `global` | `~/.helen/sessions/` | REPL 探索、跨项目共享、短脚本 |
+| `project` | `<project>/.helen/sessions/` | 长期应用、生产部署、容器化 |
+| `auto` (默认) | 检测项目目录，有则 project，无则 global | 推荐默认 |
+
+#### 项目检测
+
+通过向上查找以下标记之一检测项目根目录：
+- `.helen/`（目录）—— 但排除用户全局的 `~/.helen/`
+- `helen.yaml` / `helen.yml` / `helen.toml`
+
+#### 优先级
+
+1. **`HELEN_SESSION_DIR` 环境变量**：绝对优先，强制指定路径
+2. **`session_scope` 配置**：`auto` (默认) / `global` / `project`
+3. **回退到 `~/.helen/sessions/`**
+
+#### 配置
+
+```yaml
+# ~/.helen/config.yaml
+transcript:
+  enabled: true
+  backend: "sqlite"
+  session_scope: "auto"          # "auto" | "global" | "project"
+  session_dir: "~/.helen/sessions"             # 仅 scope=global 时
+  project_session_dir: ".helen/sessions"       # 仅 scope=project 时
+  max_memory_items: 1000
+```
+
+#### 运行时查询与修改
+
+```helen
+// 查看当前会话目录
+let info = get_session_dir()
+print("路径: " + info["session_dir"])
+print("作用域: " + info["scope"])
+print("项目根: " + str(info["project_dir"]))
+
+// 运行时切换（不修改 config.yaml，仅当前进程）
+set_session_dir("./my_app_sessions")
+```
+
+#### 设计原则
+
+**Transcripts 是应用数据，不是语言基础设施**。让 transcripts 跟随应用而非语言安装：
+- 应用即目录，`rm -rf .helen/` 清理全部状态
+- 复制/mv 应用目录时 transcripts 随之移动
+- 容器化场景：`WORKDIR` 自带 transcripts，无需挂载 `~/.helen`
+- 多应用机器：每个应用 transcripts 自然隔离
+
+REPL 等交互场景显式 `session_scope: "global"` 保持跨项目历史延续。
+
 ### 5. LRU Cache
 
 **工作原理**:

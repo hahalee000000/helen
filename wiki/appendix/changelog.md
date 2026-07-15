@@ -1,10 +1,83 @@
 # 版本历史
 
-> Helen v1.19 | 上下文管理 API 完善 — 补齐 6 维度 API（Inspection/Working Memory/Fine-grained Mutation/Runtime Config/Query/Multi-agent Transfer/Lifecycle Hooks），共 24 个新 stdlib 函数（27 个上下文函数），pinned 消息免疫全部 5 层压缩，内部化 `classify_message`
+> Helen v1.20 | Transcript 作用域 — transcripts 默认按应用隔离在 `.helen/sessions/`，REPL 等交互场景 opt-in 全局
 
 ---
 
-## v1.19: 上下文管理 API 完善 (当前)
+## v1.20: Transcript 会话作用域 (当前)
+
+**发布日期**: 2026-07-15
+**核心特性**: transcripts 不再强制放在 `~/.helen/sessions/`，支持按应用目录隔离
+
+### 设计原则
+
+**Transcripts 是应用数据，不是语言基础设施**。v1.20 之前所有 transcripts 都在全局 `~/.helen/sessions/`，导致：
+- 应用 A 和 B 的 transcripts 混在一起，归属不清
+- 清理困难（需从一堆 UUID 里筛选）
+- 不可移植（mv 应用目录不带走 transcripts）
+- 容器化不友好（需要挂载 `~/.helen`）
+
+v1.20 引入"会话作用域"概念：transcripts 可以按应用隔离。
+
+### 新增配置项
+
+```yaml
+# ~/.helen/config.yaml
+transcript:
+  session_scope: "auto"           # "auto" (默认) | "global" | "project"
+  session_dir: "~/.helen/sessions"            # scope=global 时使用
+  project_session_dir: ".helen/sessions"      # scope=project 时使用
+```
+
+### 三种作用域模式
+
+| 模式 | 路径 | 适用场景 |
+|------|------|----------|
+| `global` | `~/.helen/sessions/` | REPL 探索、跨项目共享 |
+| `project` | `<project>/.helen/sessions/` | 长期应用、生产部署 |
+| `auto` (默认) | 检测项目目录，有则 project，无则 global | 推荐默认 |
+
+### 项目检测
+
+通过向上查找以下标记之一检测项目根目录：
+- `.helen/`（目录）—— 但排除 `~/.helen`（用户全局配置）
+- `helen.yaml` / `helen.yml` / `helen.toml`
+
+### 环境变量覆盖
+
+`HELEN_SESSION_DIR` 强制指定 transcripts 路径，优先级最高：
+
+```bash
+HELEN_SESSION_DIR=/data/myapp/sessions helen myapp.helen
+```
+
+### 新增 stdlib 函数（2 个）
+
+```helen
+// 查询当前会话目录
+let info = get_session_dir()
+// {session_dir: "...", scope: "global"|"project"|"env_override", project_dir: "..."|None}
+
+// 运行时切换（仅当前进程，不修改 config.yaml）
+set_session_dir("./my_app_sessions")
+```
+
+**中文别名**: `获取会话目录`, `设置会话目录`
+
+### 兼容性
+
+- **默认行为变更**: v1.20 之前默认全局；v1.20 默认 auto（自动检测）。在没有项目标记的目录下运行时，行为与 v1.19 一致（全局）。
+- 显式 `session_scope: "global"` 可强制恢复旧行为。
+- `HELEN_SESSION_DIR` 环境变量始终优先。
+
+### 测试
+
+- 新增 28 个测试覆盖作用域检测、路径解析、环境变量、stdlib 函数
+- 全部测试通过，向后兼容
+
+---
+
+## v1.19: 上下文管理 API 完善
 
 **发布日期**: 2026-07-15
 **核心特性**: 补齐上下文管理的"检查"与"细粒度写入"两个维度，让 Agent 能**看见**并**操作**自己的上下文

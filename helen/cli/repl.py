@@ -444,11 +444,10 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
         return True
 
     if cmd == ":sessions":
-        from helen.runtime.config import get_transcript_config
+        from helen.runtime.config import resolve_session_dir
         from helen.runtime.session_manager import SessionManager
 
-        config = get_transcript_config()
-        session_dir = config.get("session_dir")
+        session_dir, detected_scope = resolve_session_dir()
         manager = SessionManager(base_dir=session_dir)
         sessions = manager.list_sessions()
 

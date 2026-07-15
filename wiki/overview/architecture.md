@@ -12,7 +12,7 @@
 │  ┌─────────┐ ┌──────────┐ ┌──────────┐ ┌───────┐ ┌──────┐ │
 │  │ CLI M11 │ │ LSP M12  │ │ VSCode   │ │Stdlib  │ │DocGen│ │
 │  │run/check│ │diagnose  │ │ M13      │ │ M15    │ │      │ │
-│  │/repl/doc│ │/complete │ │highlight │ │285 fn  │ │      │ │
+│  │/repl/doc│ │/complete │ │highlight │ │287 fn  │ │      │ │
 │  └────┬────┘ └────┬─────┘ └────┬─────┘ └───┬───┘ └──┬───┘ │
 ├───────┼───────────┼────────────┼───────────┼─────────┼────┤
 │                    Runtime 运行时层                         │
@@ -206,7 +206,7 @@ $ helen init               # 初始化 ~/.helen/ 配置目录
 - `language-configuration.json` — 括号配对、自动闭合、缩进规则
 - `package.json` — 扩展清单
 
-### 标准库 (285 builtins)
+### 标准库 (287 builtins)
 
 | 类别 | 数量 | 代表函数 |
 |---|---|---|
@@ -222,8 +222,8 @@ $ helen init               # 初始化 ~/.helen/ 配置目录
 | **Crypto** | 11 | `hash_md5`, `hash_sha256`, `hash_sha512`, `hmac_sha256`, `uuid_generate`, `random_bytes` |
 | **IO** | 5 | `read_line`, `prompt`, `format_table`, `progress_bar`, `terminal_width` |
 | **Observability** | 4 | `debug`, `trace_on`, `trace_off`, `get_trace` |
-| **Context** | 2 | `clear_context`, `compress_context` |
-| **Transcript** | 6 | `get_session_id`, `list_sessions`, `replay_transcript`, `export_transcript` |
+| **Context** | 27 | `clear_context`, `compress_context`, `context_stats`, `pin_message`, `working_memory_*`, `set_compression_strategy`, `export_context`, ... |
+| **Transcript** | 8 | `get_session_id`, `list_sessions`, `replay_transcript`, `export_transcript`, `get_session_dir`, `set_session_dir`, ... |
 | **Media** | 12 | `media`, `media_base64`, `to_openai_parts`, `to_claude_parts`, `to_gemini_parts`, `media_to_base64`, `save_media`, `is_image` |
 | **Test** | 14 | `test_suite`, `assert_true`, `assert_equal`, `expect`, `run_tests` |
 | **Quality** | 4 | `analyze_code`, `check_security`, `quality_score`, `quality_report` |

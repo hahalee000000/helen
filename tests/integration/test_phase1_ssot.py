@@ -47,6 +47,8 @@ class TestPhase1SSOT:
                 "enabled": True,
                 "backend": "jsonl",
                 "session_dir": str(tmp_path),
+                "session_scope": "global",  # v1.20: explicit global scope
+                "project_session_dir": ".helen/sessions",
                 "max_memory_items": 1000,
             }
 
@@ -83,6 +85,8 @@ class TestPhase1SSOT:
                 "enabled": True,
                 "backend": "jsonl",
                 "session_dir": str(tmp_path),
+                "session_scope": "global",  # v1.20: explicit global scope
+                "project_session_dir": ".helen/sessions",
                 "max_memory_items": 1000,
             }
 
@@ -122,6 +126,8 @@ class TestPhase1SSOT:
                 "enabled": True,
                 "backend": "jsonl",
                 "session_dir": str(tmp_path),
+                "session_scope": "global",  # v1.20: explicit global scope
+                "project_session_dir": ".helen/sessions",
                 "max_memory_items": 1000,
             }
 

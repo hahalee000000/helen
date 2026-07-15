@@ -123,14 +123,28 @@ def get_transcript_config() -> dict[str, Any]:
         Dict with transcript settings:
         - enabled: bool (default: True)
         - backend: str (default: "jsonl")
-        - session_dir: str (default: "~/.helen/sessions")
+        - session_scope: str (default: "auto") - "global" | "project" | "auto"
+        - session_dir: str (default: "~/.helen/sessions") - used when scope="global"
+        - project_session_dir: str (default: ".helen/sessions") - used when scope="project"
         - max_memory_items: int (default: 1000)
+
+    Session scope controls where transcripts are stored:
+        "global"  — Always use ~/.helen/sessions/ (user-wide, shared across all apps)
+        "project" — Always use .helen/sessions/ in the current working directory
+        "auto"    — Use project mode when a Helen project is detected (cwd/.helen/ or
+                    cwd/helen.yaml or cwd/helen.toml exists); otherwise use global mode.
+                    This is the default since v1.20.
+
+    The HELEN_SESSION_DIR environment variable overrides both session_dir and
+    project_session_dir, forcing a specific path regardless of scope.
 
     Example config.yaml:
         transcript:
           enabled: true
           backend: "jsonl"
+          session_scope: "auto"
           session_dir: "~/.helen/sessions"
+          project_session_dir: ".helen/sessions"
           max_memory_items: 1000
     """
     config = load_config()
@@ -140,9 +154,138 @@ def get_transcript_config() -> dict[str, Any]:
     return {
         "enabled": transcript_config.get("enabled", True),
         "backend": transcript_config.get("backend", "jsonl"),
+        "session_scope": transcript_config.get("session_scope", "auto"),
         "session_dir": transcript_config.get("session_dir", str(HELEN_HOME / "sessions")),
+        "project_session_dir": transcript_config.get("project_session_dir", ".helen/sessions"),
         "max_memory_items": transcript_config.get("max_memory_items", 1000),
     }
+
+
+# ---------------------------------------------------------------------------
+# Session scope resolution (v1.20)
+# ---------------------------------------------------------------------------
+
+# Valid scope values
+SESSION_SCOPES = frozenset({"global", "project", "auto"})
+
+# Files/directories that indicate a "Helen project" when present in cwd
+PROJECT_MARKERS = (".helen", "helen.yaml", "helen.yml", "helen.toml")
+
+
+def detect_project_dir(start_dir: str | None = None) -> str | None:
+    """Detect the nearest Helen project directory by walking up from start_dir.
+
+    A directory is considered a Helen project if it contains any of:
+      - `.helen/` (directory) — but NOT the user's global ``~/.helen``
+      - `helen.yaml` / `helen.yml` / `helen.toml`
+
+    Args:
+        start_dir: Directory to start searching from. Defaults to cwd.
+
+    Returns:
+        Absolute path to the project directory, or None if no project found.
+    """
+    from pathlib import Path
+    import os
+
+    if start_dir is None:
+        start_dir = os.getcwd()
+
+    # Resolve the user's global Helen home (~/.helen) so we can skip it
+    try:
+        helen_home = Path(HELEN_HOME).resolve()
+    except Exception:
+        helen_home = None
+
+    current = Path(start_dir).resolve()
+
+    # Walk up to filesystem root
+    while True:
+        for marker in PROJECT_MARKERS:
+            candidate = current / marker
+            if candidate.exists():
+                # Skip the user's global ~/.helen — it's not a project marker
+                if marker == ".helen" and helen_home is not None:
+                    try:
+                        if candidate.resolve() == helen_home:
+                            continue
+                    except Exception:
+                        pass
+                return str(current)
+        parent = current.parent
+        if parent == current:
+            # Reached filesystem root
+            return None
+        current = parent
+
+
+def resolve_session_dir(
+    scope: str | None = None,
+    cwd: str | None = None,
+    env_override: str | None = None,
+) -> tuple[str, str]:
+    """Resolve the actual session directory based on scope, env, and project detection.
+
+    Priority (highest first):
+    1. env_override (HELEN_SESSION_DIR env var)
+    2. Resolved scope-specific path:
+       - scope="global"  → ~/.helen/sessions
+       - scope="project" → <project_dir>/.helen/sessions (or cwd/.helen/sessions if no project)
+       - scope="auto"    → project if project detected, else global
+
+    Args:
+        scope: "global" | "project" | "auto" (default: read from config)
+        cwd: Current working directory (default: os.getcwd())
+        env_override: Override path from environment (default: read HELEN_SESSION_DIR)
+
+    Returns:
+        Tuple of (resolved_path: str, detected_scope: str) where detected_scope
+        is the actual scope used ("global" or "project"), which may differ from
+        the configured scope when scope="auto".
+    """
+    import os
+    from pathlib import Path
+
+    config = get_transcript_config()
+
+    if scope is None:
+        scope = config.get("session_scope", "auto")
+    if scope not in SESSION_SCOPES:
+        import logging
+        logging.getLogger(__name__).warning(
+            "Unknown session_scope %r, falling back to 'auto'", scope
+        )
+        scope = "auto"
+
+    if cwd is None:
+        cwd = os.getcwd()
+
+    if env_override is None:
+        env_override = os.environ.get("HELEN_SESSION_DIR")
+
+    # Env override takes absolute priority
+    if env_override:
+        return (str(Path(env_override).expanduser().resolve()), "env_override")
+
+    # Resolve based on scope
+    if scope == "global":
+        return (str(Path(config["session_dir"]).expanduser().resolve()), "global")
+
+    if scope == "project":
+        project_dir = detect_project_dir(cwd)
+        if project_dir is None:
+            # No project found — fall back to cwd
+            project_dir = cwd
+        base = Path(project_dir) / config.get("project_session_dir", ".helen/sessions")
+        return (str(base.resolve()), "project")
+
+    # scope == "auto"
+    project_dir = detect_project_dir(cwd)
+    if project_dir is not None:
+        base = Path(project_dir) / config.get("project_session_dir", ".helen/sessions")
+        return (str(base.resolve()), "project")
+    else:
+        return (str(Path(config["session_dir"]).expanduser().resolve()), "global")
 
 
 def get_multimodal_config() -> dict[str, Any]:
@@ -244,8 +387,20 @@ def _load_yaml_config(path: Path) -> dict[str, Any]:
                 config["transcript"]["enabled"] = bool(transcript["enabled"])
             if "backend" in transcript:
                 config["transcript"]["backend"] = str(transcript["backend"])
+            if "session_scope" in transcript:
+                scope = str(transcript["session_scope"])
+                if scope in ("global", "project", "auto"):
+                    config["transcript"]["session_scope"] = scope
+                else:
+                    import logging
+                    logging.getLogger(__name__).warning(
+                        "Invalid session_scope %r in config, expected "
+                        "'global' | 'project' | 'auto'", scope
+                    )
             if "session_dir" in transcript:
                 config["transcript"]["session_dir"] = str(transcript["session_dir"])
+            if "project_session_dir" in transcript:
+                config["transcript"]["project_session_dir"] = str(transcript["project_session_dir"])
             if "max_memory_items" in transcript:
                 config["transcript"]["max_memory_items"] = int(transcript["max_memory_items"])
         # Multimodal configuration (v1.17)

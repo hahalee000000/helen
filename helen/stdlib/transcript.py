@@ -57,8 +57,13 @@ def get_session_id() -> str:
     return session_id
 
 
-def list_sessions() -> list[dict[str, Any]]:
+def list_sessions(scope: str = "") -> list[dict[str, Any]]:
     """List all transcript sessions.
+
+    Args:
+        scope: Optional scope filter — "global", "project", or "" (both).
+            When empty, lists sessions from the currently resolved scope only.
+            This matches the behavior of :sessions REPL command.
 
     Returns:
         List of session metadata dicts, sorted by modification time (newest first).
@@ -68,20 +73,47 @@ def list_sessions() -> list[dict[str, Any]]:
         - modified_at: Last modification timestamp (Unix epoch)
         - size_bytes: Transcript file size in bytes
         - message_count: Number of messages (line count estimate)
+        - scope: "global" | "project" (added in v1.20)
 
     Example:
         let sessions = list_sessions()
         for session in sessions {
             print("{session.session_id}: {session.size_bytes} bytes")
         }
-    """
-    from helen.runtime.config import get_transcript_config
-    from helen.runtime.session_manager import SessionManager
 
-    config = get_transcript_config()
-    session_dir = config.get("session_dir")
-    manager = SessionManager(base_dir=session_dir)
-    return manager.list_sessions()
+        // List from a specific scope
+        let global_sessions = list_sessions("global")
+        let project_sessions = list_sessions("project")
+    """
+    from helen.runtime.config import resolve_session_dir, HELEN_HOME
+
+    results = []
+
+    if scope == "global" or scope == "":
+        global_dir = resolve_session_dir(scope="global")[0]
+        from helen.runtime.session_manager import SessionManager
+        manager = SessionManager(base_dir=global_dir)
+        for s in manager.list_sessions():
+            s["scope"] = "global"
+            results.append(s)
+
+    if scope == "project":
+        project_dir = resolve_session_dir(scope="project")[0]
+        from helen.runtime.session_manager import SessionManager
+        manager = SessionManager(base_dir=project_dir)
+        for s in manager.list_sessions():
+            s["scope"] = "project"
+            results.append(s)
+
+    # Default (no scope specified): only current scope, not both
+    if scope == "":
+        current_dir, current_scope = resolve_session_dir()
+        # Filter to just current scope if we got both
+        results = [s for s in results if s["scope"] == current_scope]
+
+    # Sort by modification time (newest first)
+    results.sort(key=lambda s: s.get("modified_at", 0), reverse=True)
+    return results
 
 
 def replay_transcript(
@@ -337,3 +369,106 @@ def resume_session(session_id: str) -> bool:
         import logging
         logging.getLogger(__name__).error("Failed to resume session %s: %s", session_id, e)
         return False
+
+
+# ---------------------------------------------------------------------------
+# Session directory access (v1.20)
+# ---------------------------------------------------------------------------
+
+def get_session_dir() -> dict:
+    """Get the resolved transcript session directory.
+
+    Returns the actual directory path where transcripts are stored for the
+    current session, taking into account:
+    - `session_scope` config ("global" | "project" | "auto")
+    - `HELEN_SESSION_DIR` environment variable override
+    - Project detection (when scope is "auto" or "project")
+
+    Returns:
+        dict:
+        {
+            "status": "ok",
+            "session_dir": str,           # Absolute path to session directory
+            "scope": str,                 # "global" | "project" | "env_override"
+            "project_dir": str | None,    # Detected project dir (if scope=project)
+        }
+
+    Example:
+        let info = get_session_dir()
+        print("Transcripts are stored in: " + info["session_dir"])
+        print("Scope: " + info["scope"])
+    """
+    from helen.runtime.config import resolve_session_dir, detect_project_dir
+    import os
+
+    path, scope = resolve_session_dir()
+    project_dir = detect_project_dir(os.getcwd()) if scope == "project" else None
+
+    return {
+        "status": "ok",
+        "session_dir": path,
+        "scope": scope,
+        "project_dir": project_dir,
+    }
+
+
+def set_session_dir(path: str) -> dict:
+    """Set the transcript session directory at runtime.
+
+    This overrides the session directory for the current interpreter session
+    only. It does NOT modify ``~/.helen/config.yaml`` — use that file for
+    persistent configuration.
+
+    The new directory will be created if it doesn't exist. Existing transcripts
+    in the old directory are NOT migrated — they remain where they are.
+
+    Args:
+        path: Absolute or relative path to the new session directory.
+              Relative paths are resolved against cwd.
+
+    Returns:
+        dict:
+        {
+            "status": "ok",
+            "session_dir": str,    # Absolute path of the new directory
+            "previous": str,       # Previous session directory
+        }
+        Or on error: {"status": "error", "error": "..."}
+
+    Example:
+        let r = set_session_dir("./my_sessions")
+        if r["status"] == "ok" {
+            print("Now storing transcripts in: " + r["session_dir"])
+        }
+
+    Note:
+        This only affects future sessions created after the call. The current
+        session's transcript remains in its original location until the next
+        session starts.
+    """
+    import os
+    from pathlib import Path
+
+    if not path:
+        return {"status": "error", "error": "path is required"}
+
+    try:
+        new_path = Path(path).expanduser().resolve()
+        # Get previous path for the response
+        from helen.runtime.config import resolve_session_dir
+        previous_path, _ = resolve_session_dir()
+
+        # Set the env var so subsequent resolve_session_dir() calls return this path
+        os.environ["HELEN_SESSION_DIR"] = str(new_path)
+
+        # Create directory if needed
+        new_path.mkdir(parents=True, exist_ok=True)
+
+        return {
+            "status": "ok",
+            "session_dir": str(new_path),
+            "previous": previous_path,
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+

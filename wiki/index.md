@@ -46,7 +46,7 @@
 - [[toolchain/quality|质量评估]] — 7 维框架、安全评分、CI 集成
 - [[toolchain/lsp|语言服务器]] — `helen lsp`、JSON-RPC 2.0、诊断/补全/跳转
 - [[toolchain/vscode|VS Code 扩展]] — 语法高亮、LSP 集成、代码补全、跳转定义
-- [[toolchain/stdlib|标准库]] — 285 builtins (285 中文别名) (core/string/data/collection/network/time/math/file/system/crypto/io/test/quality/context/transcript/media)
+- [[toolchain/stdlib|标准库]] — 287 builtins (287 中文别名) (core/string/data/collection/network/time/math/file/system/crypto/io/test/quality/context/transcript/media)
 - [[toolchain/error-format|错误格式化]] — HLD 3.11.2 诊断输出
 
 ### 七、教程
@@ -59,7 +59,7 @@
 - [[tutorial/07-spawn|并发编程]] — spawn、Channel 消息队列、mailbox_select、显式共享
 - [[tutorial/08-modules|模块与导入]] — import、跨文件复用
 - [[tutorial/09-python-ffi|Python FFI]] — Python 库导入、类型转换
-- [[tutorial/10-stdlib|标准库参考]] — 285 个内置函数（285 中文别名）
+- [[tutorial/10-stdlib|标准库参考]] — 287 个内置函数（287 中文别名）
 - [[tutorial/11-building-agents|构建多 Agent 系统]] — 完整案例
 - [[tutorial/12-testing|测试框架与 TDD]] — 断言 API、expect 链式、`--watch` 监听
 - [[tutorial/13-skills|技能系统]] — 三层搜索、两层披露、LLM 感知

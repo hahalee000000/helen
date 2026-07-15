@@ -155,6 +155,8 @@ from helen.stdlib.transcript import (
     export_transcript as _export_transcript,
     get_compression_audit as _get_compression_audit,
     resume_session as _resume_session,
+    get_session_dir as _get_session_dir,  # v1.20: session directory access
+    set_session_dir as _set_session_dir,  # v1.20: session directory access
 )
 
 # Import media functions (multimodal support)
@@ -1134,6 +1136,9 @@ def _register_builtins() -> None:
         BuiltinFunction("export_transcript", "Export transcript to file", "export_transcript(output_path, format?, session_id?)", _export_transcript, "transcript"),
         BuiltinFunction("get_compression_audit", "Get compression event history", "get_compression_audit()", _get_compression_audit, "transcript"),
         BuiltinFunction("resume_session", "Resume a previous transcript session", "resume_session(session_id)", _resume_session, "transcript"),
+        # v1.20: Session directory access
+        BuiltinFunction("get_session_dir", "Get resolved transcript session directory", "get_session_dir()", _get_session_dir, "transcript"),
+        BuiltinFunction("set_session_dir", "Set transcript session directory at runtime", "set_session_dir(path)", _set_session_dir, "transcript"),
 
         # Media/multimodal functions (v1.17)
         BuiltinFunction("media", "Create media from file/URL", "media(source, type?)", _media, "media"),
