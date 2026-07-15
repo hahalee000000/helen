@@ -212,6 +212,81 @@ class TestSharedStoreCrossModule:
         result, _ = _run_file(main, {"mod.helen": mod})
         assert result == 300
 
+    def test_two_importers_share_same_store(self):
+        """Two modules importing the same store module see the same instance.
+
+        Regression test: before the _shared_store_instances cache fix,
+        the second import would re-execute the SharedStoreDeclNode, creating
+        a fresh SharedStore with default field values and orphaning the
+        instance that main had already mutated.
+        """
+        ctx_mod = """
+        shared store Ctx {
+            let initialized: bool = false
+            let session_dir: str = ""
+            fn init(dir: str) {
+                initialized = true
+                session_dir = dir
+            }
+            fn is_init(): bool { return initialized }
+            fn get_dir(): str { return session_dir }
+        }
+        """
+        commands = """
+        import "ctx.helen"
+        fn check_init(): bool { return Ctx.is_init() }
+        fn check_dir(): str { return Ctx.get_dir() }
+        """
+        main = """
+        import "ctx.helen"
+        import "commands.helen"
+        main {
+            Ctx.init(".helen/sessions")
+            // commands.helen imported ctx.helen again — should see the same
+            // Ctx instance that main just initialized, not a fresh default.
+            if !check_init() { return false }
+            if check_dir() != ".helen/sessions" { return false }
+            true
+        }
+        """
+        result, interp = _run_file(main, {
+            "ctx.helen": ctx_mod,
+            "commands.helen": commands,
+        })
+        assert result is True
+        # Verify only one SharedStore instance was created for "Ctx"
+        assert "Ctx" in interp._shared_store_instances
+
+    def test_two_importers_aliased_share_same_store(self):
+        """Aliased imports from two modules also share the same store instance."""
+        counter_mod = """
+        shared store Counter {
+            let count: int = 0
+            fn inc() { count = count + 1 }
+            fn get(): int { return count }
+        }
+        """
+        commands = """
+        import "counter.helen" as C
+        fn bump() { C.Counter.inc() }
+        fn read(): int { return C.Counter.get() }
+        """
+        main = """
+        import "counter.helen" as C
+        import "commands.helen" as Cmd
+        main {
+            C.Counter.inc()
+            C.Counter.inc()
+            Cmd.bump()
+            C.Counter.get()
+        }
+        """
+        result, _ = _run_file(main, {
+            "counter.helen": counter_mod,
+            "commands.helen": commands,
+        })
+        assert result == 3
+
 
 # ─── Semantic analyzer tests ──────────────────────────────────────────────────
 

@@ -814,6 +814,10 @@ class Interpreter(LlmMixin, Visitor[object]):
         except Exception:
             pass
         self._shared_vars: set[str] = set()
+        # Shared store instance cache: ensures that importing the same module
+        # multiple times reuses the same SharedStore instance instead of
+        # re-creating and re-initializing it on each import pass.
+        self._shared_store_instances: dict[str, "SharedStore"] = {}
         # Phase 3: Streaming call registry for cancel/KeyboardInterrupt support
         self._streaming_calls: dict[str, _StreamingHandle] = {}
         self._streaming_lock = threading.Lock()
@@ -1367,6 +1371,24 @@ class Interpreter(LlmMixin, Visitor[object]):
                             evaluated = data_val.initializer.accept(self)
                             target["__data__"][prop] = evaluated  # cache for future access
                             return evaluated
+                        # SharedStoreDeclNode: return the runtime SharedStore
+                        # instance from the module's environment (where it was
+                        # created by _create_module_object), not the raw AST node.
+                        from helen.core.ast import SharedStoreDeclNode as _SSDN
+                        if isinstance(data_val, _SSDN):
+                            module_env = target.get("__env__")
+                            if module_env is not None:
+                                try:
+                                    store = module_env.lookup(prop)
+                                    target["__data__"][prop] = store  # cache
+                                    return store
+                                except NameError:
+                                    pass
+                            # Fallback: check interpreter's shared store cache
+                            cached = self._shared_store_instances.get(prop)
+                            if cached is not None:
+                                target["__data__"][prop] = cached
+                                return cached
                         return data_val
                     else:
                         # Fall back to regular dict access
@@ -1490,9 +1512,23 @@ class Interpreter(LlmMixin, Visitor[object]):
         """Execute a shared store or channel declaration.
 
         v1.12/v1.13: Both create a SharedStore instance at runtime.
+
+        Uses _shared_store_instances cache to ensure that re-importing a module
+        reuses the existing SharedStore instance instead of creating a new one
+        with freshly-initialized fields.
         """
         if not isinstance(node, node_cls):
             return None
+
+        # Return cached instance if already created (e.g. from a prior import).
+        # This prevents re-initialization when multiple modules import the same
+        # shared store module — the first import creates it, subsequent imports
+        # reuse the same instance with its current field values.
+        cached = self._shared_store_instances.get(node.name)
+        if cached is not None:
+            self.environment.define(node.name, cached, is_const=True)
+            self._shared_vars.add(node.name)
+            return cached
 
         fields: dict[str, object] = {}
         for field_node in node.fields:
@@ -1505,6 +1541,7 @@ class Interpreter(LlmMixin, Visitor[object]):
         for method_node in node.methods:
             container._methods[method_node.name] = SharedStoreMethod(method_node, container, self)
 
+        self._shared_store_instances[node.name] = container
         self.environment.define(node.name, container, is_const=True)
         self._shared_vars.add(node.name)
         return container
