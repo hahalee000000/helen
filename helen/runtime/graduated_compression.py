@@ -581,6 +581,107 @@ def _auto_compact(
     return _structural_auto_compact(system_msgs, pinned_old, old_msgs, recent_msgs, history)
 
 
+def _force_compact(
+    history: list[Message],
+    llm_client: Callable | None = None,
+    target_tokens: int = 2000,
+) -> list[Message]:
+    """Force compression for explicit user request (no threshold check).
+
+    Unlike _auto_compact, this function compresses even with very few messages.
+    User explicitly requested compression, so we maximize space savings.
+
+    Algorithm:
+    1. Keep only the last message for continuity (or none if only 1 message)
+    2. Summarize all other messages into a single summary
+    3. Works with any number of messages (even 2-3 messages)
+
+    Args:
+        history: Conversation history to compress
+        llm_client: Optional LLM client for semantic summarization
+        target_tokens: Target token count for the summary
+
+    Returns:
+        Compressed history with summary + recent messages
+    """
+    if len(history) <= 1:
+        return history  # Can't compress a single message
+
+    # Separate system messages
+    system_msgs = [msg for msg in history if msg.role == "system"]
+    conversation_msgs = [msg for msg in history if msg.role != "system"]
+
+    if len(conversation_msgs) <= 1:
+        # Only system messages or 1 conversation message - nothing to summarize
+        return history
+
+    # For maximum compression, keep only the last message
+    # If we have 2+ conversation messages, summarize all but the last
+    old_msgs = conversation_msgs[:-1]
+    recent_msgs = conversation_msgs[-1:]
+
+    # Use LLM summarization if client is available
+    if llm_client is not None:
+        try:
+            from helen.runtime.llm_summarizer import LLMSummarizer
+            summarizer = LLMSummarizer(llm_client)
+            summary_text = summarizer.summarize(old_msgs, target_tokens=target_tokens)
+
+            summary_msg = Message(
+                role="system",
+                content=f"[Conversation summary - LLM generated]\n\n{summary_text}",
+                tool_calls=[],
+                tool_call_id=None,
+                _token_count=0,
+                _model=history[0]._model if history else None,
+                message_type="system",
+                priority=100,
+                compressed=False,
+            )
+
+            result = system_msgs + [summary_msg] + recent_msgs
+            logger.debug(
+                "Force-Compact (LLM): Archived %d turns into summary, kept %d recent",
+                len(old_msgs), len(recent_msgs)
+            )
+            return result
+
+        except Exception as e:
+            logger.warning(f"LLM summarization failed, falling back to structural: {e}")
+
+    # Fallback: Structural summarization
+    summary_parts = []
+    for msg in old_msgs:
+        content = getattr(msg, 'content', '')
+        if content:
+            # Truncate long content
+            content_text = content[:300] + "..." if len(content) > 300 else content
+            summary_parts.append(f"[{msg.role}] {content_text}")
+
+    if summary_parts:
+        summary_text = "\n".join(summary_parts)
+        summary_msg = Message(
+            role="system",
+            content=f"[Conversation summary]\n\n{summary_text}",
+            tool_calls=[],
+            tool_call_id=None,
+            _token_count=0,
+            _model=history[0]._model if history else None,
+            message_type="system",
+            priority=100,
+            compressed=False,
+        )
+        result = system_msgs + [summary_msg] + recent_msgs
+        logger.debug(
+            "Force-Compact (structural): Archived %d turns into summary, kept %d recent",
+            len(old_msgs), len(recent_msgs)
+        )
+        return result
+
+    # If no content to summarize, return as-is
+    return history
+
+
 def _structural_auto_compact(
     system_msgs: list[Message],
     pinned_old: list[Message],

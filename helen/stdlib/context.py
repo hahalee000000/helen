@@ -365,19 +365,17 @@ def _compress_context(strategy: str = "auto") -> dict:
         # Handle explicit strategy overrides (summarize/truncate) in TranscriptStore path
         # These strategies should force compression regardless of usage ratio thresholds
         if strategy == "summarize":
-            # Directly use Layer 5 (_auto_compact) for LLM semantic summarization
-            # User explicitly requested compression, so we force it
-            from helen.runtime.graduated_compression import _auto_compact
-            compressed = _auto_compact(
+            # Use _force_compact for explicit user request (no threshold check)
+            from helen.runtime.graduated_compression import _force_compact
+            compressed = _force_compact(
                 list(current_history),
-                keep_recent=4,  # Keep last 4 messages
                 llm_client=getattr(_interpreter_agent_context, 'llm_client', None),
-                target_tokens=max_tokens // 10  # Target 10% of max window
+                target_tokens=max_tokens // 10
             )
             # Record compression in TranscriptStore for audit trail (creates BoundaryMarker)
             if compressed != current_history and len(compressed) < len(current_history):
                 _interpreter_agent_context._record_compression_ssot(
-                    current_history, compressed, "auto_compact"
+                    current_history, compressed, "force_compact"
                 )
         elif strategy == "truncate":
             # Directly use Layer 4 (_context_collapse) for truncation
@@ -455,11 +453,10 @@ def _compress_context(strategy: str = "auto") -> dict:
         # Use HistoryManager's enforce_limit (respects compression_mode setting)
         _interpreter_history[:] = _interpreter_history_manager.enforce_limit(_interpreter_history)
     elif strategy == "summarize":
-        # Directly use Layer 5 (_auto_compact) for LLM semantic summarization
-        from helen.runtime.graduated_compression import _auto_compact
-        compressed = _auto_compact(
+        # Use _force_compact for explicit user request (no threshold check)
+        from helen.runtime.graduated_compression import _force_compact
+        compressed = _force_compact(
             list(_interpreter_history),
-            keep_recent=4,
             llm_client=getattr(_interpreter_agent_context, 'llm_client', None) if _interpreter_agent_context else None,
             target_tokens=_interpreter_history_manager.MAX_TOKENS // 10
         )

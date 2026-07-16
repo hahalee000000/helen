@@ -244,42 +244,45 @@ class TestCompressContextActuallyCompresses:
         assert result["compressed_messages"] == 1
 
     def test_summarize_strategy_mutates_history(self):
-        """'summarize' strategy must replace history contents."""
-        msg1 = Message("user", "old", _token_count=1000)
-        msg2 = Message("assistant", "recent", _token_count=50)
-        history = [msg1, msg2]
+        """'summarize' strategy must replace history contents using _force_compact."""
+        msg1 = Message("user", "old message content " * 50, _token_count=1000)
+        msg2 = Message("assistant", "recent message", _token_count=50)
+        msg3 = Message("user", "latest user message", _token_count=100)
+        history = [msg1, msg2, msg3]
+        original_len = len(history)
 
-        summary_msg = Message("user", "[summary]", _token_count=20)
         mock_manager = MagicMock()
-        mock_manager.MAX_TOKENS = 100
-        mock_manager._summarize_compress = MagicMock(return_value=[summary_msg])
+        mock_manager.MAX_TOKENS = 131072
 
         _set_interpreter_context(history, mock_manager)
 
         result = _compress_context(strategy="summarize")
 
-        assert len(history) == 1
-        assert history[0] is summary_msg
+        # History should be compressed (fewer messages, less tokens)
+        assert len(history) < original_len
         assert result["status"] == "ok"
+        assert result["compressed_tokens"] < result["original_tokens"]
 
     def test_truncate_strategy_mutates_history(self):
-        """'truncate' strategy must replace history contents."""
-        msg1 = Message("user", "old", _token_count=1000)
-        msg2 = Message("assistant", "recent", _token_count=50)
-        history = [msg1, msg2]
+        """'truncate' strategy must replace history contents using _context_collapse."""
+        # Need enough messages for _context_collapse to work (> CONTEXT_COLLAPSE_THRESHOLD = 20)
+        history = [
+            Message("user" if i % 2 == 0 else "assistant", f"Message {i}", _token_count=100)
+            for i in range(25)
+        ]
+        original_len = len(history)
 
-        truncated = [msg2]
         mock_manager = MagicMock()
-        mock_manager.MAX_TOKENS = 100
-        mock_manager._truncate_compress = MagicMock(return_value=truncated)
+        mock_manager.MAX_TOKENS = 131072
 
         _set_interpreter_context(history, mock_manager)
 
         result = _compress_context(strategy="truncate")
 
-        assert len(history) == 1
-        assert history[0] is msg2
+        # History should be compressed
+        assert len(history) < original_len
         assert result["status"] == "ok"
+        assert result["compressed_tokens"] < result["original_tokens"]
 
 
 class TestClearContextClearsWorkingMemory:
