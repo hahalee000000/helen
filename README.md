@@ -3,7 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/helen-lang.svg)](https://pypi.org/project/helen-lang/)
 [![Python](https://img.shields.io/pypi/pyversions/helen-lang.svg)](https://pypi.org/project/helen-lang/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-2917%20passed-green.svg)](https://github.com/hahalee000000/helen)
+[![Tests](https://img.shields.io/badge/tests-2946%20passed-green.svg)](https://github.com/hahalee000000/helen)
 
 **Helen** 是一门专为 AI Agent 开发设计的 AI 原生 DSL（领域特定语言）。它将确定性构造（变量、函数、控制流）与一等 LLM 原语（`llm act`、`llm if`）融合为一门语言。
 
@@ -16,6 +16,30 @@
 - **多 Agent 并发**：`spawn` + Channel 消息队列，内置 mailbox_select 多选
 - **Python 双向集成**：Helen → Python FFI + Python → Helen Bridge
 - **89 个双语关键字**：44.5 英文 + 44.5 中文，原生中文编程支持
+
+## 🎯 何时使用 Helen？
+
+### ✅ 选择 Helen，如果你需要：
+- **Agent 即语言构造**：不是库模式，Agent 是一等公民
+- **双语支持**：原生中英文编程，降低团队学习门槛
+- **自动上下文管理**：长对话 Agent 自动压缩，无需手工调优
+- **完整 DSL**：变量、函数、控制流 + LLM 原语融合为一门语言
+- **多 Agent 并发**：spawn + Channel 消息队列，细粒度并发控制
+- **会话持久化**：内置 TranscriptStore，支持审计与回放
+- **优秀的调试体验**：REPL + Transcript + 可观测性
+
+### 🔄 Helen vs 其他框架
+
+| 场景 | 推荐 | 原因 |
+|------|------|------|
+| 快速原型开发 | **Helen** | 语法简洁，自动上下文管理 |
+| 复杂 RAG 管道 | LangChain | 大量预构建组件 |
+| 多 Agent 团队协作 | CrewAI / **Helen** | Helen 提供更细粒度的并发控制 |
+| 中英文双语应用 | **Helen** | 原生双语支持 |
+| 长对话 Agent | **Helen** | 5 层渐进压缩 + 工作记忆 |
+| 会话审计与回放 | **Helen** | 内置 TranscriptStore SSOT |
+
+📖 详细对比：[Helen vs LangChain vs CrewAI vs AutoGen](docs/COMPARISON.md)
 
 ## 🚀 快速开始
 

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "helen-lang"
 version = "1.21.0"
-description = "Helen — A Prompt-first Agent Programming Language for AI-native applications"
+description = "Helen — A Prompt-first Agent Programming Language for AI-native applications. Build multi-agent systems with built-in LLM primitives, bilingual support (English/Chinese), and automatic context management. Alternative to LangChain, CrewAI, AutoGen for agent orchestration."
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
@@ -20,9 +20,26 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Compilers",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Operating System :: OS Independent",
     "Typing :: Typed",
+    "Natural Language :: Chinese (Simplified)",
+    "Natural Language :: English",
 ]
-keywords = ["helen", "dsl", "agent", "llm", "ai", "prompt", "language"]
+keywords = [
+    "helen", "helen-lang",
+    "ai", "artificial-intelligence", "machine-learning", "deep-learning",
+    "llm", "gpt", "claude", "large-language-model", "chatgpt",
+    "agent", "ai-agent", "multi-agent", "agent-orchestration", "autonomous-agent",
+    "prompt", "prompt-engineering", "prompt-first",
+    "dsl", "domain-specific-language", "programming-language",
+    "langchain", "crewai", "autogen", "langchain-alternative",
+    "chatbot", "conversational-ai", "natural-language",
+    "bilingual", "chinese-programming", "中文编程",
+    "context-management", "transcript", "session-management",
+    "tool-calling", "function-calling", "agent-framework",
+]
 dependencies = [
     "pyyaml>=6.0",
     "toml>=0.10",
