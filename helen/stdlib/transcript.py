@@ -153,12 +153,11 @@ def replay_transcript(
     # If session_id is specified and different from current, load that session
     current_session_id = getattr(_interpreter_agent_context, "session_id", None)
     if session_id is not None and session_id != current_session_id:
-        from helen.runtime.config import get_transcript_config
+        from helen.runtime.config import resolve_session_dir
         from helen.runtime.session_manager import SessionManager
         from helen.runtime.transcript_store import JSONLBackend, TranscriptStore
 
-        config = get_transcript_config()
-        session_dir = config.get("session_dir")
+        session_dir, _scope = resolve_session_dir()
         manager = SessionManager(base_dir=session_dir)
 
         if not manager.session_exists(session_id):
@@ -335,8 +334,12 @@ def resume_session(session_id: str) -> bool:
     from helen.runtime.transcript_store import JSONLBackend, SQLiteBackend, TranscriptStore
 
     try:
+        from helen.runtime.config import resolve_session_dir, get_transcript_config
+        from helen.runtime.session_manager import SessionManager
+        from helen.runtime.transcript_store import JSONLBackend, SQLiteBackend, TranscriptStore
+
+        session_dir, _scope = resolve_session_dir()
         config = get_transcript_config()
-        session_dir = config.get("session_dir")
         backend_type = config.get("backend", "jsonl")
 
         manager = SessionManager(base_dir=session_dir)
