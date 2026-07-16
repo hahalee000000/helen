@@ -358,8 +358,8 @@ def _compress_context(strategy: str = "auto") -> dict:
         original_count = len(current_history)
         original_tokens = sum(getattr(msg, 'token_count', 0) for msg in current_history)
 
-        # Determine max_tokens (use AgentContextManager's context window)
-        from helen.runtime.graduated_compression import DEFAULT_CONTEXT_WINDOW
+        # Determine max_tokens (use DEFAULT_CONTEXT_WINDOW from token_utils)
+        from helen.runtime.token_utils import DEFAULT_CONTEXT_WINDOW
         max_tokens = DEFAULT_CONTEXT_WINDOW
 
         # Use AgentContextManager's _compress_history which records BoundaryMarkers
