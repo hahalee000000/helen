@@ -828,16 +828,22 @@ class AgentContextManager:
 
         This is the unified entry point for the stdlib clear_context() function.
         Clears working memory, resets compression state, and (if TranscriptStore
-        is enabled) records a boundary marker.
+        is enabled) records a boundary marker that covers ALL current messages.
+
+        The BoundaryMarker uses the first and last Message UUIDs as head/tail,
+        so read_view() will skip all previously existing messages. New messages
+        appended after clear_context() will appear normally.
 
         Returns:
             Dict with operation results:
             {
                 "status": "ok" | "error",
-                "cleared_items": list of what was cleared
+                "cleared_items": list of what was cleared,
+                "cleared_message_count": int,  # Number of messages cleared
             }
         """
         cleared = []
+        cleared_message_count = 0
 
         # Clear working memory
         if self.working_memory_enabled:
@@ -854,23 +860,42 @@ class AgentContextManager:
 
         # Record boundary in TranscriptStore if enabled
         if self._transcript_store is not None:
-            from helen.runtime.transcript_store import BoundaryMarker
-            marker = BoundaryMarker(
-                anchor_uuid="",
-                head_uuid="",
-                tail_uuid="",
-                summary="[Context Cleared]",
-                layer="clear_context",
-            )
-            self._transcript_store.transcript.append(marker)
-            self._transcript_store._uuid_index[marker.uuid] = len(self._transcript_store.transcript) - 1
-            cleared.append("transcript_boundary")
+            from helen.runtime.transcript_store import BoundaryMarker, Message
 
-        logger.info("Context cleared: %s", ", ".join(cleared))
+            # Find the first and last Message UUIDs to create a covering marker
+            messages = [item for item in self._transcript_store.transcript
+                        if isinstance(item, Message)]
+            if messages:
+                head_uuid = messages[0].uuid
+                tail_uuid = messages[-1].uuid
+                cleared_message_count = len(messages)
+
+                marker = BoundaryMarker(
+                    anchor_uuid="",  # No anchor — entire context is cleared
+                    head_uuid=head_uuid,
+                    tail_uuid=tail_uuid,
+                    summary=f"[Context Cleared: {cleared_message_count} messages]",
+                    layer="clear_context",
+                )
+                self._transcript_store.transcript.append(marker)
+                self._transcript_store._uuid_index[marker.uuid] = (
+                    len(self._transcript_store.transcript) - 1
+                )
+                # Mark cache as dirty so read_view() re-computes
+                self._transcript_store._dirty = True
+                self._transcript_store._cached_view = None
+                cleared.append("transcript_boundary")
+
+        logger.info(
+            "Context cleared: %s (%d messages)",
+            ", ".join(cleared),
+            cleared_message_count,
+        )
 
         return {
             "status": "ok",
             "cleared_items": cleared,
+            "cleared_message_count": cleared_message_count,
         }
 
     def compress_context(self, llm_client: Any | None = None) -> dict[str, Any]:
