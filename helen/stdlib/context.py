@@ -362,8 +362,33 @@ def _compress_context(strategy: str = "auto") -> dict:
         from helen.runtime.token_utils import DEFAULT_CONTEXT_WINDOW
         max_tokens = DEFAULT_CONTEXT_WINDOW
 
-        # Use AgentContextManager's _compress_history which records BoundaryMarkers
-        compressed = _interpreter_agent_context._compress_history(current_history, max_tokens)
+        # Handle explicit strategy overrides (summarize/truncate) in TranscriptStore path
+        # These strategies should force compression regardless of usage ratio thresholds
+        if strategy == "summarize":
+            from helen.runtime.history import HISTORY_BUDGET_RATIO
+            budget = int(max_tokens * HISTORY_BUDGET_RATIO)
+            compressed = _interpreter_history_manager._summarize_compress(list(current_history), budget)
+            # Record compression in TranscriptStore for audit trail
+            _interpreter_agent_context._record_compression_ssot(current_history, compressed, "summarize")
+        elif strategy == "truncate":
+            from helen.runtime.history import HISTORY_BUDGET_RATIO
+            budget = int(max_tokens * HISTORY_BUDGET_RATIO)
+            compressed = _interpreter_history_manager._truncate_compress(list(current_history), budget)
+            # Record compression in TranscriptStore for audit trail
+            _interpreter_agent_context._record_compression_ssot(current_history, compressed, "truncate")
+        elif strategy == "auto":
+            # Use AgentContextManager's _compress_history which respects thresholds
+            compressed = _interpreter_agent_context._compress_history(current_history, max_tokens)
+        else:
+            return {
+                "status": "error",
+                "error": f"Unknown compression strategy: {strategy}",
+                "original_messages": original_count,
+                "compressed_messages": original_count,
+                "original_tokens": original_tokens,
+                "compressed_tokens": original_tokens,
+                "strategy": strategy,
+            }
 
         # Get stats after compression
         compressed_count = len(compressed)
