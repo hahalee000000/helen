@@ -296,6 +296,86 @@ set_session_dir("./my_app_sessions")
 
 REPL 等交互场景显式 `session_scope: "global"` 保持跨项目历史延续。
 
+### 4.6 会话删除 (Session Deletion, v1.21)
+
+v1.21 新增三个 stdlib 函数，用于永久删除 TranscriptStore 会话数据。
+
+#### 设计原则
+
+Helen 采用**审计追踪优先**的删除策略：
+
+| 操作类型 | 函数 | 是否删除持久化数据 |
+|---------|------|:----------------:|
+| 逻辑删除（消息级） | `delete_message(uuid)` | ❌ 保留 |
+| 逻辑清空（会话级） | `clear_context()` | ❌ 保留（添加 BoundaryMarker） |
+| 永久删除（会话级） | `delete_session(id)` | ✅ 删除 |
+| 永久删除（当前会话） | `delete_current_session()` | ✅ 删除 |
+| 批量清理 | `cleanup_sessions()` | ✅ 删除 |
+
+逻辑删除保留持久化数据用于审计，永久删除才真正释放磁盘空间。
+
+#### delete_session(session_id)
+
+永久删除指定会话的所有数据：
+
+```helen
+let r = delete_session("session_1720435200_a1b2c3d4")
+// {"status": "ok", "session_id": "...", "freed_bytes": 10240, "message": "..."}
+```
+
+**安全限制**：不能删除当前会话，需使用 `delete_current_session()`。
+
+#### delete_current_session(confirm?)
+
+永久删除当前会话，需要显式确认：
+
+```helen
+// 第一步：查看确认提示
+let r = delete_current_session()
+// {"status": "error", "message": "Set confirm=true to delete current session"}
+
+// 第二步：确认删除
+let r = delete_current_session(confirm=true)
+// {"status": "ok", "session_id": "...", "freed_bytes": 8192}
+```
+
+删除后，解释器继续运行，但当前 TranscriptStore 被清空，后续消息会写入新会话。
+
+#### cleanup_sessions(keep_count?, older_than_days?)
+
+批量清理旧会话，支持两种策略：
+
+```helen
+// 策略 1：保留最近 N 个会话
+let r = cleanup_sessions(keep_count=50)
+// {"status": "ok", "deleted_count": 15, "freed_bytes": 1536000}
+
+// 策略 2：删除 N 天前的会话
+let r = cleanup_sessions(older_than_days=30)
+
+// 策略 3：组合使用（同时满足两个条件才删除）
+let r = cleanup_sessions(keep_count=50, older_than_days=30)
+```
+
+**安全限制**：当前会话永远不会被清理，即使它不在保留范围内。
+
+#### 使用场景
+
+| 场景 | 推荐函数 |
+|------|---------|
+| 长期运行 Agent 的定期清理 | `cleanup_sessions(keep_count=100)` |
+| 隐私合规（GDPR 被遗忘权） | `delete_session(user_session_id)` |
+| 测试环境清空 | `cleanup_sessions(keep_count=0)` |
+| 重置当前会话 | `delete_current_session(confirm=true)` |
+
+#### 中文别名
+
+| 英文 | 中文 |
+|------|------|
+| `delete_session` | `删除会话` |
+| `delete_current_session` | `删除当前会话` |
+| `cleanup_sessions` | `清理会话` |
+
 ### 5. LRU Cache
 
 **工作原理**:

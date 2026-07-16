@@ -338,6 +338,9 @@ ALIASES: dict[str, str] = {
     "恢复会话": "resume_session",
     "获取会话目录": "get_session_dir",
     "设置会话目录": "set_session_dir",
+    "删除会话": "delete_session",
+    "删除当前会话": "delete_current_session",
+    "清理会话": "cleanup_sessions",
 
     # ── Media/Multimodal (媒体/多模态) ────────────────────────────
     "媒体": "media",

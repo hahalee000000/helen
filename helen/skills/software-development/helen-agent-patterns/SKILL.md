@@ -171,6 +171,69 @@ agent ChatBot {
 - **审计追踪**: 使用 `get_compression_audit()` 分析压缩效率
 - **会话导出**: 使用 `export_transcript()` 保存对话记录
 - **多会话管理**: 使用 `list_sessions()` 管理多个会话
+- **磁盘清理**: 使用 `cleanup_sessions()` 释放磁盘空间（v1.21）
+- **隐私合规**: 使用 `delete_session()` 永久删除用户数据（v1.21）
+
+#### Transcript 会话删除 (v1.21+)
+
+Helen 提供三种方式永久删除 TranscriptStore 会话数据：
+
+**1. 删除指定会话**
+```helen
+agent SessionManager {
+    main {
+        // 删除旧会话
+        let r = delete_session("session_1720435200_a1b2c3d4")
+        if r["status"] == "ok" {
+            print("删除成功，释放 " + str(r["freed_bytes"]) + " 字节")
+        }
+    }
+}
+```
+
+**2. 删除当前会话（需确认）**
+```helen
+agent ResetAgent {
+    main {
+        // 第一次调用：查看确认提示
+        let r = delete_current_session()
+        if r["status"] == "error" {
+            // 第二次调用：确认删除
+            let r = delete_current_session(confirm=true)
+        }
+    }
+}
+```
+
+**3. 批量清理旧会话**
+```helen
+agent LongRunningAgent {
+    description "Long-running agent with automatic cleanup"
+    
+    main {
+        // 保留最近 100 个会话
+        let r = cleanup_sessions(keep_count=100)
+        print("清理了 " + str(r["deleted_count"]) + " 个旧会话")
+        
+        // 或删除 30 天前的会话
+        let r = cleanup_sessions(older_than_days=30)
+        
+        return llm act "Continue working..."
+    }
+}
+```
+
+**设计原则**：
+- **审计追踪优先**：`delete_message` 和 `clear_context` 只进行逻辑删除，保留持久化数据
+- **显式永久删除**：只有 `delete_session` 系列函数才会真正删除持久化数据
+- **安全机制**：`delete_current_session` 需要 `confirm=true` 参数，防止误操作
+- **批量优先**：`cleanup_sessions` 比单个删除更实用，适合定期清理
+
+**最佳实践**：
+- 长期运行的 Agent 应定期调用 `cleanup_sessions()` 释放磁盘空间
+- 处理敏感数据时，使用 `delete_session()` 确保数据完全删除
+- 测试环境使用 `cleanup_sessions(keep_count=0)` 清空所有会话
+- 生产环境保留一定数量的会话用于审计和调试（如 `keep_count=100`）
 
 **配置**：在 `~/.helen/config.yaml` 中配置 transcript：
 

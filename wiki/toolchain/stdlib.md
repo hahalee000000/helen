@@ -53,10 +53,10 @@ class BuiltinFunction:
 | **IO** | 5 | `__init__.py` |
 | **Observability** | 4 | `observability.py` |
 | **Context** | 27 | `context.py` |
-| **Transcript** | 8 | `transcript.py` |
+| **Transcript** | 11 | `transcript.py` |
 | **Media** | 12 | `media.py` |
 | **Tools** | 24 | `tools.py` |
-| **总计** | **287** | - |
+| **总计** | **290** | - |
 
 ---
 

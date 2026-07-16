@@ -472,3 +472,346 @@ def set_session_dir(path: str) -> dict:
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
+
+# ---------------------------------------------------------------------------
+# Session deletion (v1.21)
+# ---------------------------------------------------------------------------
+
+def delete_session(session_id: str) -> dict:
+    """Permanently delete a session and its transcript data.
+
+    This removes all data for the specified session from disk, including
+    transcript files, compression history, and indexes. This operation
+    cannot be undone.
+
+    Args:
+        session_id: The session ID to delete
+
+    Returns:
+        dict:
+        {
+            "status": "ok" | "error",
+            "session_id": str,
+            "message": str,
+            "freed_bytes": int,  # Only on success
+        }
+
+    Example:
+        let r = delete_session("session_1720435200_a1b2c3d4")
+        if r["status"] == "ok" {
+            print("Deleted session: " + r["session_id"])
+        } else {
+            print("Failed to delete: " + r["message"])
+        }
+
+    Warning:
+        This permanently deletes all session data and cannot be undone.
+        The current session cannot be deleted using this function — use
+        delete_current_session() for that (with extra confirmation).
+    """
+    import os
+    from pathlib import Path
+
+    if not session_id:
+        return {"status": "error", "message": "session_id is required"}
+
+    # Prevent deleting the current session
+    current_session_id = get_session_id()
+    if session_id == current_session_id:
+        return {
+            "status": "error",
+            "message": "Cannot delete current session. Use delete_current_session() instead.",
+            "session_id": session_id,
+        }
+
+    try:
+        from helen.runtime.config import resolve_session_dir
+        from helen.runtime.session_manager import SessionManager
+
+        # Resolve session directory
+        session_dir, _ = resolve_session_dir()
+        manager = SessionManager(base_dir=session_dir)
+
+        # Check if session exists
+        if not manager.session_exists(session_id):
+            return {
+                "status": "error",
+                "message": f"Session not found: {session_id}",
+                "session_id": session_id,
+            }
+
+        # Calculate size before deletion
+        session_path = manager.get_session_dir(session_id)
+        freed_bytes = 0
+        if session_path.exists():
+            freed_bytes = sum(
+                f.stat().st_size
+                for f in session_path.rglob("*")
+                if f.is_file()
+            )
+
+        # Delete the session
+        success = manager.delete_session(session_id)
+
+        if success:
+            logger.info("Deleted session %s, freed %d bytes", session_id, freed_bytes)
+            return {
+                "status": "ok",
+                "session_id": session_id,
+                "message": "Session deleted successfully",
+                "freed_bytes": freed_bytes,
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "Failed to delete session",
+                "session_id": session_id,
+            }
+
+    except Exception as e:
+        logger.error("Failed to delete session %s: %s", session_id, e)
+        return {"status": "error", "message": str(e), "session_id": session_id}
+
+
+def delete_current_session(confirm: bool = False) -> dict:
+    """Permanently delete the current session and its transcript data.
+
+    This is a dangerous operation that deletes all data for the current
+    session. Requires explicit confirmation via the `confirm` parameter.
+
+    Args:
+        confirm: Must be True to proceed with deletion
+
+    Returns:
+        dict:
+        {
+            "status": "ok" | "error",
+            "session_id": str,
+            "message": str,
+            "freed_bytes": int,  # Only on success
+        }
+
+    Example:
+        // First call without confirm to see what would be deleted
+        let r = delete_current_session()
+        print(r["message"])  # "Set confirm=true to delete current session"
+
+        // Then call with confirm to actually delete
+        if should_delete {
+            let r = delete_current_session(confirm=true)
+        }
+
+    Warning:
+        This permanently deletes ALL data for the current session and cannot
+        be undone. The interpreter will continue running, but a new session
+        will be started automatically.
+    """
+    if not confirm:
+        return {
+            "status": "error",
+            "message": "Set confirm=true to delete current session",
+            "session_id": get_session_id(),
+        }
+
+    session_id = get_session_id()
+    if not session_id:
+        return {
+            "status": "error",
+            "message": "No current session to delete",
+        }
+
+    try:
+        from helen.runtime.config import resolve_session_dir
+        from helen.runtime.session_manager import SessionManager
+
+        # Resolve session directory
+        session_dir, _ = resolve_session_dir()
+        manager = SessionManager(base_dir=session_dir)
+
+        # Check if session exists
+        if not manager.session_exists(session_id):
+            return {
+                "status": "error",
+                "message": f"Current session not found: {session_id}",
+                "session_id": session_id,
+            }
+
+        # Calculate size before deletion
+        session_path = manager.get_session_dir(session_id)
+        freed_bytes = 0
+        if session_path.exists():
+            freed_bytes = sum(
+                f.stat().st_size
+                for f in session_path.rglob("*")
+                if f.is_file()
+            )
+
+        # Delete the session
+        success = manager.delete_session(session_id)
+
+        if success:
+            logger.warning("Deleted current session %s, freed %d bytes", session_id, freed_bytes)
+
+            # Clear the current transcript store
+            if _interpreter_agent_context is not None:
+                store = getattr(_interpreter_agent_context, "transcript_store", None)
+                if store is not None:
+                    store.transcript.clear()
+                    store._uuid_index.clear()
+                    store._dirty = True
+
+            return {
+                "status": "ok",
+                "session_id": session_id,
+                "message": "Current session deleted successfully. A new session will be started.",
+                "freed_bytes": freed_bytes,
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "Failed to delete current session",
+                "session_id": session_id,
+            }
+
+    except Exception as e:
+        logger.error("Failed to delete current session: %s", e)
+        return {"status": "error", "message": str(e), "session_id": session_id}
+
+
+def cleanup_sessions(keep_count: int = 100, older_than_days: int | None = None) -> dict:
+    """Clean up old sessions to free disk space.
+
+    Permanently deletes old session data from disk. This operation cannot be undone.
+
+    Args:
+        keep_count: Keep only the N most recent sessions (default: 100)
+        older_than_days: Delete sessions older than N days (optional)
+
+    Returns:
+        dict:
+        {
+            "status": "ok",
+            "deleted_count": int,
+            "freed_bytes": int,
+            "message": str,
+        }
+
+    Examples:
+        // Keep only 50 most recent sessions
+        let r = cleanup_sessions(50)
+        print("Deleted " + str(r["deleted_count"]) + " sessions")
+
+        // Delete sessions older than 30 days
+        let r = cleanup_sessions(older_than_days=30)
+        print("Freed " + str(r["freed_bytes"]) + " bytes")
+
+        // Combine both criteria
+        let r = cleanup_sessions(keep_count=50, older_than_days=30)
+
+    Warning:
+        This permanently deletes session data and cannot be undone.
+        Use with caution in production environments.
+    """
+    import time
+
+    try:
+        from helen.runtime.config import resolve_session_dir
+        from helen.runtime.session_manager import SessionManager
+
+        # Resolve session directory
+        session_dir, _ = resolve_session_dir()
+        manager = SessionManager(base_dir=session_dir)
+
+        if older_than_days is not None:
+            # Delete sessions older than N days
+            cutoff_time = time.time() - (older_than_days * 86400)
+            sessions = manager.list_sessions()
+
+            deleted_count = 0
+            freed_bytes = 0
+
+            for session in sessions:
+                # Don't delete the current session
+                current_session_id = get_session_id()
+                if session["session_id"] == current_session_id:
+                    continue
+
+                if session.get("modified_at", 0) < cutoff_time:
+                    session_path = manager.get_session_dir(session["session_id"])
+                    if session_path.exists():
+                        # Calculate size before deletion
+                        size = sum(
+                            f.stat().st_size
+                            for f in session_path.rglob("*")
+                            if f.is_file()
+                        )
+                        if manager.delete_session(session["session_id"]):
+                            deleted_count += 1
+                            freed_bytes += size
+
+            logger.info(
+                "Cleaned up %d sessions older than %d days, freed %d bytes",
+                deleted_count,
+                older_than_days,
+                freed_bytes,
+            )
+
+            return {
+                "status": "ok",
+                "deleted_count": deleted_count,
+                "freed_bytes": freed_bytes,
+                "message": f"Deleted {deleted_count} sessions older than {older_than_days} days",
+            }
+
+        else:
+            # Keep only N most recent sessions
+            sessions = manager.list_sessions()
+            current_session_id = get_session_id()
+
+            # Don't count current session in keep_count
+            other_sessions = [s for s in sessions if s["session_id"] != current_session_id]
+
+            if len(other_sessions) <= keep_count:
+                return {
+                    "status": "ok",
+                    "deleted_count": 0,
+                    "freed_bytes": 0,
+                    "message": f"No cleanup needed, only {len(other_sessions)} sessions (keeping {keep_count})",
+                }
+
+            # Sessions are sorted by modified_at (newest first)
+            to_delete = other_sessions[keep_count:]
+            deleted_count = 0
+            freed_bytes = 0
+
+            for session in to_delete:
+                session_path = manager.get_session_dir(session["session_id"])
+                if session_path.exists():
+                    # Calculate size before deletion
+                    size = sum(
+                        f.stat().st_size
+                        for f in session_path.rglob("*")
+                        if f.is_file()
+                    )
+                    if manager.delete_session(session["session_id"]):
+                        deleted_count += 1
+                        freed_bytes += size
+
+            logger.info(
+                "Cleaned up %d old sessions, freed %d bytes (keeping %d)",
+                deleted_count,
+                freed_bytes,
+                keep_count,
+            )
+
+            return {
+                "status": "ok",
+                "deleted_count": deleted_count,
+                "freed_bytes": freed_bytes,
+                "message": f"Deleted {deleted_count} old sessions, keeping {keep_count} most recent",
+            }
+
+    except Exception as e:
+        logger.error("Failed to cleanup sessions: %s", e)
+        return {"status": "error", "message": str(e), "deleted_count": 0, "freed_bytes": 0}
+

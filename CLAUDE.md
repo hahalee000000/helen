@@ -155,7 +155,7 @@ helen/
   - **Non-Destructive Compression**: BoundaryMarkers record compression events, full audit trail
   - **View Caching**: Dirty flag + cached view for O(1) reads
   - **REPL Commands**: `:transcript [--full|--audit]`, `:sessions`, `:session_id`
-  - **Stdlib Functions**: `get_session_id()`, `list_sessions()`, `replay_transcript()`, `export_transcript()`, `get_compression_audit()`, `get_session_dir()`, `set_session_dir()`
+  - **Stdlib Functions**: `get_session_id()`, `list_sessions()`, `replay_transcript()`, `export_transcript()`, `get_compression_audit()`, `get_session_dir()`, `set_session_dir()`, `delete_session(id)`, `delete_current_session(confirm?)`, `cleanup_sessions(keep_count?, older_than_days?)`
   - **Session Scope (v1.20)**: transcripts 默认按作用域存储——项目目录 `.helen/sessions/`（检测到 `.helen/`、`helen.yaml`、`helen.toml` 时）或全局 `~/.helen/sessions/`（REPL、脚本）。通过 `session_scope: "auto"|"global"|"project"` 配置，或 `HELEN_SESSION_DIR` 环境变量强制指定路径
   - **Configuration**:
     ```yaml

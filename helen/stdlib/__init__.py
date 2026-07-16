@@ -157,6 +157,9 @@ from helen.stdlib.transcript import (
     resume_session as _resume_session,
     get_session_dir as _get_session_dir,  # v1.20: session directory access
     set_session_dir as _set_session_dir,  # v1.20: session directory access
+    delete_session as _delete_session,  # v1.21: session deletion
+    delete_current_session as _delete_current_session,  # v1.21: session deletion
+    cleanup_sessions as _cleanup_sessions,  # v1.21: session cleanup
 )
 
 # Import media functions (multimodal support)
@@ -1139,6 +1142,10 @@ def _register_builtins() -> None:
         # v1.20: Session directory access
         BuiltinFunction("get_session_dir", "Get resolved transcript session directory", "get_session_dir()", _get_session_dir, "transcript"),
         BuiltinFunction("set_session_dir", "Set transcript session directory at runtime", "set_session_dir(path)", _set_session_dir, "transcript"),
+        # v1.21: Session deletion
+        BuiltinFunction("delete_session", "Permanently delete a session", "delete_session(session_id)", _delete_session, "transcript"),
+        BuiltinFunction("delete_current_session", "Permanently delete current session", "delete_current_session(confirm?)", _delete_current_session, "transcript"),
+        BuiltinFunction("cleanup_sessions", "Clean up old sessions", "cleanup_sessions(keep_count?, older_than_days?)", _cleanup_sessions, "transcript"),
 
         # Media/multimodal functions (v1.17)
         BuiltinFunction("media", "Create media from file/URL", "media(source, type?)", _media, "media"),
