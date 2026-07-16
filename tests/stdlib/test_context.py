@@ -91,22 +91,36 @@ class TestCompressContext:
         self.mock_manager.enforce_limit.assert_called_once()
 
     def test_compress_context_summarize(self):
-        """Test summarize compression strategy."""
-        _set_interpreter_context(self.mock_history, self.mock_manager)
+        """Test summarize compression strategy uses Layer 5 (auto_compact)."""
+        # Need enough messages for _auto_compact to work (> keep_recent + 2 = 6)
+        from helen.runtime.history import Message
+        real_history = [
+            Message(role="user", content=f"Message {i}", uuid=f"uuid-{i}")
+            for i in range(10)
+        ]
+        _set_interpreter_context(real_history, self.mock_manager)
         result = _compress_context("summarize")
 
         assert result["status"] == "ok"
         assert result["strategy"] == "summarize"
-        self.mock_manager._summarize_compress.assert_called_once()
+        # Layer 5 compresses to recent messages + summary
+        assert result["compressed_messages"] < result["original_messages"]
 
     def test_compress_context_truncate(self):
-        """Test truncate compression strategy."""
-        _set_interpreter_context(self.mock_history, self.mock_manager)
+        """Test truncate compression strategy uses Layer 4 (context_collapse)."""
+        # Need > CONTEXT_COLLAPSE_THRESHOLD (20) messages for _context_collapse to work
+        from helen.runtime.history import Message
+        real_history = [
+            Message(role="user", content=f"Message {i}", uuid=f"uuid-{i}")
+            for i in range(25)
+        ]
+        _set_interpreter_context(real_history, self.mock_manager)
         result = _compress_context("truncate")
 
         assert result["status"] == "ok"
         assert result["strategy"] == "truncate"
-        self.mock_manager._truncate_compress.assert_called_once()
+        # Layer 4 compresses old messages
+        assert result["compressed_messages"] < result["original_messages"]
 
     def test_compress_context_none(self):
         """Test none compression strategy (no-op)."""

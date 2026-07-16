@@ -9,28 +9,32 @@ class TestIssue13CompressContextStrategyRespected:
     """Test that compress_context(strategy) respects the strategy parameter when TranscriptStore is enabled."""
 
     def test_compress_context_summarize_forces_compression(self):
-        """Test that 'summarize' strategy forces LLM semantic compression even with low usage ratio."""
+        """Test that 'summarize' strategy uses Layer 5 (auto_compact) for LLM semantic compression."""
         # Setup mock agent context with transcript store
         mock_agent_context = Mock()
         mock_transcript_store = Mock()
         mock_agent_context.transcript_store = mock_transcript_store
         mock_agent_context._record_compression_ssot = Mock()
+        mock_agent_context.llm_client = None  # No LLM, will use structural fallback
 
-        # Create mock messages with low token count (8% of 131072 = ~10485 tokens)
+        # Create real Message objects (not mocks) for graduated_compress
+        # Need > keep_recent + 2 = 6 messages for compression to occur
+        from helen.runtime.history import Message
         mock_messages = [
-            Mock(spec=Message, role="user", content="Hello", token_count=1000, uuid="uuid-1"),
-            Mock(spec=Message, role="assistant", content="Hi there!", token_count=2000, uuid="uuid-2"),
-            Mock(spec=Message, role="user", content="How are you?", token_count=1500, uuid="uuid-3"),
-            Mock(spec=Message, role="assistant", content="I'm good!", token_count=1800, uuid="uuid-4"),
+            Message(role="user", content="Hello " * 50, uuid="uuid-1"),
+            Message(role="assistant", content="Hi there! " * 50, uuid="uuid-2"),
+            Message(role="user", content="How are you? " * 50, uuid="uuid-3"),
+            Message(role="assistant", content="I'm good! " * 50, uuid="uuid-4"),
+            Message(role="user", content="What's up? " * 50, uuid="uuid-5"),
+            Message(role="assistant", content="Not much " * 50, uuid="uuid-6"),
+            Message(role="user", content="Anything new? " * 50, uuid="uuid-7"),
+            Message(role="assistant", content="Just working " * 50, uuid="uuid-8"),
         ]
         mock_transcript_store.read_view.return_value = mock_messages
 
-        # Mock history manager with _summarize_compress method
+        # Mock history manager
         mock_history_manager = Mock()
-        compressed_messages = [
-            Mock(spec=Message, role="user", content="Summary of conversation", token_count=500, uuid="uuid-summary"),
-        ]
-        mock_history_manager._summarize_compress.return_value = compressed_messages
+        mock_history_manager.MAX_TOKENS = 131072
 
         # Set up the global context
         _set_interpreter_context([], mock_history_manager, mock_agent_context)
@@ -38,47 +42,37 @@ class TestIssue13CompressContextStrategyRespected:
         # Call compress_context with "summarize" strategy
         result = _compress_context("summarize")
 
-        # Verify the result
+        # Verify the result - should compress to fewer messages
         assert result["status"] == "ok"
         assert result["strategy"] == "summarize"
-        assert result["original_messages"] == 4
-        assert result["compressed_messages"] == 1
-        assert result["original_tokens"] == 6300  # 1000+2000+1500+1800
-        assert result["compressed_tokens"] == 500
+        assert result["original_messages"] == 8
+        # Should compress (Layer 5 keeps recent 4 messages + summary)
+        assert result["compressed_messages"] < result["original_messages"]
 
-        # Verify _summarize_compress was called with correct budget
-        # Budget should be 50% of original tokens to force actual compression
-        expected_budget = int(6300 * 0.5)  # 50% of 6300 tokens
-        mock_history_manager._summarize_compress.assert_called_once()
-        call_args = mock_history_manager._summarize_compress.call_args
-        # Positional arguments: (history, budget)
-        assert call_args[0][1] == expected_budget
-
-        # Verify compression was recorded in TranscriptStore
-        mock_agent_context._record_compression_ssot.assert_called_once()
+        # Verify _record_compression_ssot was called (BoundaryMarker created)
+        assert mock_agent_context._record_compression_ssot.called
 
     def test_compress_context_truncate_forces_compression(self):
-        """Test that 'truncate' strategy forces truncation even with low usage ratio."""
+        """Test that 'truncate' strategy uses Layer 4 (context_collapse) for truncation."""
         # Setup mock agent context with transcript store
         mock_agent_context = Mock()
         mock_transcript_store = Mock()
         mock_agent_context.transcript_store = mock_transcript_store
         mock_agent_context._record_compression_ssot = Mock()
 
-        # Create mock messages
+        # Create real Message objects - need > CONTEXT_COLLAPSE_THRESHOLD (20) messages
+        from helen.runtime.history import Message
         mock_messages = [
-            Mock(spec=Message, role="user", content="Message 1", token_count=1000, uuid="uuid-1"),
-            Mock(spec=Message, role="assistant", content="Message 2", token_count=1000, uuid="uuid-2"),
-            Mock(spec=Message, role="user", content="Message 3", token_count=1000, uuid="uuid-3"),
+            Message(role="user" if i % 2 == 0 else "assistant",
+                   content=f"Message {i} " * 50,
+                   uuid=f"uuid-{i}")
+            for i in range(25)  # 25 messages to trigger context_collapse
         ]
         mock_transcript_store.read_view.return_value = mock_messages
 
-        # Mock history manager with _truncate_compress method
+        # Mock history manager
         mock_history_manager = Mock()
-        compressed_messages = [
-            Mock(spec=Message, role="user", content="Message 3", token_count=1000, uuid="uuid-3"),
-        ]
-        mock_history_manager._truncate_compress.return_value = compressed_messages
+        mock_history_manager.MAX_TOKENS = 131072
 
         # Set up the global context
         _set_interpreter_context([], mock_history_manager, mock_agent_context)
@@ -89,14 +83,12 @@ class TestIssue13CompressContextStrategyRespected:
         # Verify the result
         assert result["status"] == "ok"
         assert result["strategy"] == "truncate"
-        assert result["original_messages"] == 3
-        assert result["compressed_messages"] == 1
+        assert result["original_messages"] == 25
+        # Layer 4 should compress
+        assert result["compressed_messages"] < result["original_messages"]
 
-        # Verify _truncate_compress was called
-        mock_history_manager._truncate_compress.assert_called_once()
-
-        # Verify compression was recorded in TranscriptStore
-        mock_agent_context._record_compression_ssot.assert_called_once()
+        # Verify _record_compression_ssot was called
+        assert mock_agent_context._record_compression_ssot.called
 
     def test_compress_context_auto_uses_thresholds(self):
         """Test that 'auto' strategy still uses graduated compression with thresholds."""
