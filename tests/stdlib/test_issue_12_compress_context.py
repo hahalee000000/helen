@@ -2,125 +2,112 @@
 import pytest
 from unittest.mock import Mock, MagicMock
 from helen.stdlib.context import _compress_context, _set_interpreter_context
+from helen.runtime.history import Message
+
+
+def _make_messages(count: int) -> list[Message]:
+    """Create real Message objects for compression tests."""
+    return [
+        Message(
+            role="user" if i % 2 == 0 else "assistant",
+            content=f"Message {i} with content " * 10,
+            uuid=f"uuid-{i}",
+        )
+        for i in range(count)
+    ]
 
 
 class TestIssue12CompressContextTranscriptStore:
-    """Test that compress_context works with TranscriptStore enabled for all strategies."""
+    """Test that compress_context works with TranscriptStore enabled for all strategies.
+
+    Issue #12: non-auto strategies (summarize/truncate/none) used to raise
+    ImportError when TranscriptStore was enabled. These tests verify they
+    now work correctly.
+    """
 
     def test_compress_context_summarize_with_transcript_store(self):
-        """Test summarize strategy with TranscriptStore enabled (issue #12)."""
-        # Setup mock agent context with transcript store
+        """Test summarize strategy with TranscriptStore enabled (issue #12).
+
+        summarize now uses _force_compact which keeps last message + summary.
+        """
         mock_agent_context = Mock()
         mock_transcript_store = Mock()
         mock_agent_context.transcript_store = mock_transcript_store
+        mock_agent_context._record_compression_ssot = Mock()
+        mock_agent_context.llm_client = None
 
-        # Mock the read_view to return some messages
-        mock_messages = [
-            Mock(role="user", content="Hello", token_count=10),
-            Mock(role="assistant", content="Hi there!", token_count=15),
-        ]
-        mock_transcript_store.read_view.return_value = mock_messages
+        messages = _make_messages(8)
+        mock_transcript_store.read_view.return_value = messages
 
-        # Mock _compress_history to return compressed messages
-        compressed_messages = [
-            Mock(role="user", content="Hello", token_count=10),
-        ]
-        mock_agent_context._compress_history.return_value = compressed_messages
-
-        # Mock history (should not be used when TranscriptStore is enabled)
         mock_history = []
         mock_manager = Mock()
+        mock_manager.MAX_TOKENS = 131072
 
         _set_interpreter_context(mock_history, mock_manager)
-
-        # Import and set agent context
         from helen.stdlib import context
         context._interpreter_agent_context = mock_agent_context
 
-        # Test summarize strategy - should not raise ImportError
+        # summarize should not raise ImportError and should compress
         result = _compress_context("summarize")
 
-        # Verify result
         assert result["status"] == "ok"
         assert result["strategy"] == "summarize"
-        assert result["original_messages"] == 2
-        assert result["compressed_messages"] == 1
-
-        # Verify _compress_history was called with correct max_tokens
-        mock_agent_context._compress_history.assert_called_once()
-        call_args = mock_agent_context._compress_history.call_args
-        assert call_args[0][0] == mock_messages  # history
-        assert call_args[0][1] == 131072  # max_tokens (DEFAULT_CONTEXT_WINDOW)
+        assert result["original_messages"] == 8
+        # _force_compact keeps summary + last message (fewer than original)
+        assert result["compressed_messages"] < result["original_messages"]
 
     def test_compress_context_truncate_with_transcript_store(self):
-        """Test truncate strategy with TranscriptStore enabled (issue #12)."""
-        # Setup mock agent context with transcript store
+        """Test truncate strategy with TranscriptStore enabled (issue #12).
+
+        truncate now uses _context_collapse which requires > 20 messages.
+        """
         mock_agent_context = Mock()
         mock_transcript_store = Mock()
         mock_agent_context.transcript_store = mock_transcript_store
+        mock_agent_context._record_compression_ssot = Mock()
 
-        # Mock the read_view to return some messages
-        mock_messages = [
-            Mock(role="user", content="Hello", token_count=10),
-            Mock(role="assistant", content="Hi there!", token_count=15),
-            Mock(role="user", content="How are you?", token_count=12),
-        ]
-        mock_transcript_store.read_view.return_value = mock_messages
+        # Need > CONTEXT_COLLAPSE_THRESHOLD (20) messages for _context_collapse
+        messages = _make_messages(25)
+        mock_transcript_store.read_view.return_value = messages
 
-        # Mock _compress_history to return compressed messages
-        compressed_messages = [
-            Mock(role="user", content="How are you?", token_count=12),
-        ]
-        mock_agent_context._compress_history.return_value = compressed_messages
-
-        # Mock history (should not be used when TranscriptStore is enabled)
         mock_history = []
         mock_manager = Mock()
+        mock_manager.MAX_TOKENS = 131072
 
         _set_interpreter_context(mock_history, mock_manager)
-
-        # Import and set agent context
         from helen.stdlib import context
         context._interpreter_agent_context = mock_agent_context
 
-        # Test truncate strategy - should not raise ImportError
+        # truncate should not raise ImportError and should compress
         result = _compress_context("truncate")
 
-        # Verify result
         assert result["status"] == "ok"
         assert result["strategy"] == "truncate"
-        assert result["original_messages"] == 3
-        assert result["compressed_messages"] == 1
+        assert result["original_messages"] == 25
+        # _context_collapse compresses old messages
+        assert result["compressed_messages"] < result["original_messages"]
 
     def test_compress_context_none_with_transcript_store(self):
         """Test none strategy with TranscriptStore enabled (issue #12)."""
-        # Setup mock agent context with transcript store
         mock_agent_context = Mock()
         mock_transcript_store = Mock()
         mock_agent_context.transcript_store = mock_transcript_store
 
-        # Mock the read_view to return some messages
-        mock_messages = [
-            Mock(role="user", content="Hello", token_count=10),
-        ]
-        mock_transcript_store.read_view.return_value = mock_messages
+        messages = _make_messages(1)
+        mock_transcript_store.read_view.return_value = messages
 
-        # Mock _compress_history to return same messages (none strategy)
-        mock_agent_context._compress_history.return_value = mock_messages
+        mock_agent_context._compress_history.return_value = messages
 
-        # Mock history (should not be used when TranscriptStore is enabled)
         mock_history = []
         mock_manager = Mock()
 
         _set_interpreter_context(mock_history, mock_manager)
-
-        # Import and set agent context
         from helen.stdlib import context
         context._interpreter_agent_context = mock_agent_context
 
-        # Test none strategy - should not raise ImportError
+        # none should not raise ImportError
         result = _compress_context("none")
 
-        # Verify result
         assert result["status"] == "ok"
         assert result["strategy"] == "none"
+
