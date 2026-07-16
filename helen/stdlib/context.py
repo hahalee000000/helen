@@ -364,7 +364,17 @@ def _compress_context(strategy: str = "auto") -> dict:
 
         # Handle explicit strategy overrides (summarize/truncate) in TranscriptStore path
         # These strategies should force compression regardless of usage ratio thresholds
-        if strategy == "summarize":
+        if strategy == "none":
+            # No compression — return current state
+            return {
+                "status": "ok",
+                "original_messages": original_count,
+                "compressed_messages": original_count,
+                "original_tokens": original_tokens,
+                "compressed_tokens": original_tokens,
+                "strategy": "none",
+            }
+        elif strategy == "summarize":
             # Use _force_compact for explicit user request (no threshold check)
             from helen.runtime.graduated_compression import _force_compact
             compressed = _force_compact(

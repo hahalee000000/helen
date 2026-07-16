@@ -847,6 +847,7 @@ class AgentContextManager:
 
         # Clear working memory
         if self.working_memory_enabled:
+            self.working_memory.task_description = ""
             self.working_memory.active_files.clear()
             self.working_memory.recent_decisions.clear()
             self.working_memory.pending_todos.clear()
