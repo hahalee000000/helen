@@ -400,6 +400,10 @@ class LlmMixin:
                     )
                     return None
 
+            # Create hint collector to persist hints to TranscriptStore (v1.21.1)
+            def hint_collector(hint_msg):
+                self._add_to_history(hint_msg["role"], hint_msg["content"])
+
             response = self.llm_runtime.act(
                 prompt, tools=tools, model=model,
                 temperature=temperature, max_turns=max_turns,
@@ -407,6 +411,7 @@ class LlmMixin:
                 history=history_for_llm,
                 dispatch_fn=dispatch_fn,
                 on_tool_end_fn=on_tool_end_fn,
+                hint_collector_fn=hint_collector,
             )
 
             # Log to audit trail
@@ -448,12 +453,18 @@ class LlmMixin:
                 fallback_on_tool_end_fn = node.on_tool_end.accept(self)
                 if not callable(fallback_on_tool_end_fn):
                     fallback_on_tool_end_fn = None
+
+            # Create hint collector for fallback path (v1.21.1)
+            def fallback_hint_collector(hint_msg):
+                self._add_to_history(hint_msg["role"], hint_msg["content"])
+
             response = self.llm_runtime.act(
                 prompt, tools=tools, model=model, temperature=temperature,
                 system_prompt=system_prompt,
                 history=history_for_llm,
                 dispatch_fn=self._create_dispatch_fn(),
                 on_tool_end_fn=fallback_on_tool_end_fn,
+                hint_collector_fn=fallback_hint_collector,
             )
             if response and response.text:
                 if node.on_chunk is not None:
@@ -499,6 +510,10 @@ class LlmMixin:
                 )
                 return None
 
+        # Create hint collector to persist hints to TranscriptStore (v1.21.1)
+        def hint_collector(hint_msg):
+            self._add_to_history(hint_msg["role"], hint_msg["content"])
+
         # Audit log entry
         audit_start = time.time()
         agent_name = self._current_agent.name if self._current_agent else None
@@ -530,6 +545,7 @@ class LlmMixin:
                         dispatch_fn=dispatch_fn,
                         cancel_event=stream_handle.cancelled,
                         on_tool_end_fn=on_tool_end_fn,
+                        hint_collector_fn=hint_collector,
                     )
                 except TypeError:
                     # Fallback: custom LLMRuntime doesn't support cancel_event
@@ -540,6 +556,7 @@ class LlmMixin:
                         history=history_for_llm,
                         dispatch_fn=dispatch_fn,
                         on_tool_end_fn=on_tool_end_fn,
+                        hint_collector_fn=hint_collector,
                     )
 
                 for event in stream_iter:

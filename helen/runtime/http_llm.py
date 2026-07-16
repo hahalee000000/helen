@@ -514,6 +514,7 @@ class HttpLLMRuntime(LLMRuntime):
         system_prompt: str | None = None,
         dispatch_fn: Any = None,
         on_tool_end_fn: Any = None,
+        hint_collector_fn: Any = None,
     ) -> LLMResponse:
         """Execute an autonomous LLM action with enhanced reliability.
 
@@ -639,21 +640,24 @@ class HttpLLMRuntime(LLMRuntime):
                             hint = on_tool_end_fn(fn_name, result)
                             if hint is not None:
                                 if isinstance(hint, str):
-                                    messages.append({
+                                    hint_msg = {
                                         "role": "user",
                                         "content": (
                                             f"[System Hint — after tool '{fn_name}']\n"
                                             f"{hint}"
                                         ),
-                                    })
+                                    }
+                                    messages.append(hint_msg)
+                                    if hint_collector_fn is not None:
+                                        hint_collector_fn(hint_msg)
                                 elif isinstance(hint, dict):
                                     role = hint.get("role", "user")
                                     content = hint.get("content", "")
                                     if content:
-                                        messages.append({
-                                            "role": role,
-                                            "content": content,
-                                        })
+                                        hint_msg = {"role": role, "content": content}
+                                        messages.append(hint_msg)
+                                        if hint_collector_fn is not None:
+                                            hint_collector_fn(hint_msg)
                         except Exception as e:
                             logger.debug("on_tool_end callback error (non-fatal): %s", e)
 
@@ -939,6 +943,7 @@ class HttpLLMRuntime(LLMRuntime):
         dispatch_fn: Any = None,
         cancel_event: Any = None,
         on_tool_end_fn: Any = None,
+        hint_collector_fn: Any = None,
     ):
         """Stream LLM response with enhanced reliability features.
 
@@ -1195,26 +1200,29 @@ class HttpLLMRuntime(LLMRuntime):
                                             f"[System Hint — after tool '{fn_name}']\n"
                                             f"{hint}"
                                         )
-                                        messages.append({
+                                        hint_msg = {
                                             "role": "user",
                                             "content": hint_content,
-                                        })
+                                        }
+                                        messages.append(hint_msg)
                                         yield {
                                             "type": "hint",
                                             "content": hint_content,
                                         }
+                                        if hint_collector_fn is not None:
+                                            hint_collector_fn(hint_msg)
                                     elif isinstance(hint, dict):
                                         role = hint.get("role", "user")
                                         content = hint.get("content", "")
                                         if content:
-                                            messages.append({
-                                                "role": role,
-                                                "content": content,
-                                            })
+                                            hint_msg = {"role": role, "content": content}
+                                            messages.append(hint_msg)
                                             yield {
                                                 "type": "hint",
                                                 "content": content,
                                             }
+                                            if hint_collector_fn is not None:
+                                                hint_collector_fn(hint_msg)
                             except Exception as e:
                                 logger.debug(
                                     "on_tool_end callback error (non-fatal): %s", e

@@ -705,6 +705,8 @@ cancel_llm_call(call_id)
 - 返回 dict → `{"role": "user"|"system", "content": "..."}`，完全控制
 - 返回 null → 不注入
 
+**持久化**：所有注入的 hint 自动保存到 TranscriptStore，可通过 `:transcript` 查看，支持会话重放和审计。
+
 ```helen
 agent Coder {
     tools ["write_file", "shell_exec", "read_file"]

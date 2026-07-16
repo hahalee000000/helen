@@ -30,6 +30,7 @@ llm act "task"
 - 返回 `dict` → `{"role": "user"|"system", "content": "..."}`，完全控制消息格式
 - 返回 `null` → 不注入
 - 回调异常不影响 agentic loop（non-fatal，debug 级别日志）
+- **v1.21.1**: Hint 消息自动持久化到 TranscriptStore，可通过 `:transcript` 查看
 
 ### 中文别名补齐
 
@@ -47,15 +48,20 @@ llm act "task"
 
 - `LlmActExprNode` 新增 `on_tool_end: ExpressionNode | None` 字段
 - Parser: `_llm_act_expr()` 和 `_llm_act_stmt()` 支持解析 `on_tool_end` 及中文别名
-- `http_llm.py`: `act()` 和 `act_stream()` 新增 `on_tool_end_fn` 参数，在工具结果 append 后、reactive compaction 前调用
+- `http_llm.py`: `act()` 和 `act_stream()` 新增 `on_tool_end_fn` 和 `hint_collector_fn` 参数
+  - `on_tool_end_fn`: 用户回调，在工具结果 append 后、reactive compaction 前调用
+  - `hint_collector_fn`: 内部回调，用于将 hint 持久化到 TranscriptStore (v1.21.1)
+- `llm_mixin.py`: 创建 `hint_collector` 函数，调用 `_add_to_history()` 写入 TranscriptStore
 - `llm_mixin.py`: 提取并传递 `on_tool_end_fn` 到 runtime
 - `act_stream()` 额外 yield `{"type": "hint", ...}` 事件
 
 ### 测试
 
 - 新增 12 个 parser 测试（`tests/parser/test_llm_on_tool_end.py`）
-- 新增 7 个 runtime 测试（`tests/runtime/test_on_tool_end.py`）
-- 全部 2942 测试通过，0 failures
+- 新增 11 个 runtime 测试（`tests/runtime/test_on_tool_end.py`）
+  - 7 个测试 on_tool_end 回调行为
+  - 4 个测试 hint_collector 持久化功能
+- 全部 2946 测试通过，0 failures
 
 ---
 

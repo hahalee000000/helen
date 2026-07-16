@@ -266,3 +266,137 @@ class TestOnToolEndInAct:
                      if (m.get("content") and "[System Hint" in m["content"])
                      or m.get("role") == "system"]
         assert len(hint_msgs) == 0
+
+
+class TestHintCollector:
+    """Test hint_collector_fn for persisting hints to TranscriptStore."""
+
+    def test_hint_collector_called_for_string_hint(self):
+        """hint_collector_fn is called with hint message dict when returning string."""
+        runtime = _make_runtime()
+        hint_fn = MagicMock(return_value="file written")
+        collector = MagicMock()
+
+        runtime._client.post.side_effect = [
+            _make_tool_call_response("write_file", {"path": "/x.py"}),
+            _make_text_response("done"),
+        ]
+
+        runtime.act(
+            "write x.py",
+            tools=[{"type": "function", "function": {
+                "name": "write_file",
+                "parameters": {"type": "object", "properties": {}},
+            }}],
+            max_turns=3,
+            dispatch_fn=_mock_dispatch,
+            on_tool_end_fn=hint_fn,
+            hint_collector_fn=collector,
+        )
+
+        # Collector should be called once with the hint message
+        collector.assert_called_once()
+        hint_msg = collector.call_args[0][0]
+        assert hint_msg["role"] == "user"
+        assert "[System Hint" in hint_msg["content"]
+        assert "file written" in hint_msg["content"]
+
+    def test_hint_collector_called_for_dict_hint(self):
+        """hint_collector_fn is called with hint message dict when returning dict."""
+        runtime = _make_runtime()
+        hint_fn = MagicMock(return_value={
+            "role": "system",
+            "content": "CRITICAL warning",
+        })
+        collector = MagicMock()
+
+        runtime._client.post.side_effect = [
+            _make_tool_call_response("shell_exec", {"command": "rm -rf /"}),
+            _make_text_response("ok"),
+        ]
+
+        runtime.act(
+            "run command",
+            tools=[{"type": "function", "function": {
+                "name": "shell_exec",
+                "parameters": {"type": "object", "properties": {}},
+            }}],
+            max_turns=3,
+            dispatch_fn=_mock_dispatch,
+            on_tool_end_fn=hint_fn,
+            hint_collector_fn=collector,
+        )
+
+        collector.assert_called_once()
+        hint_msg = collector.call_args[0][0]
+        assert hint_msg["role"] == "system"
+        assert hint_msg["content"] == "CRITICAL warning"
+
+    def test_hint_collector_not_called_when_no_hint(self):
+        """hint_collector_fn is not called when on_tool_end returns None."""
+        runtime = _make_runtime()
+        hint_fn = MagicMock(return_value=None)
+        collector = MagicMock()
+
+        runtime._client.post.side_effect = [
+            _make_tool_call_response("read_file", {"path": "/x"}),
+            _make_text_response("done"),
+        ]
+
+        runtime.act(
+            "read x",
+            tools=TEST_TOOLS,
+            max_turns=3,
+            dispatch_fn=_mock_dispatch,
+            on_tool_end_fn=hint_fn,
+            hint_collector_fn=collector,
+        )
+
+        collector.assert_not_called()
+
+    def test_hint_collector_called_multiple_times(self):
+        """hint_collector_fn is called for each hint in multi-turn loop."""
+        runtime = _make_runtime()
+
+        # Return different hints based on tool name
+        def hint_fn(name, result):
+            if name == "tool_a":
+                return "hint_a"
+            elif name == "tool_b":
+                return "hint_b"
+            return None
+
+        collector = MagicMock()
+
+        runtime._client.post.side_effect = [
+            _make_tool_call_response("tool_a", {}),
+            _make_tool_call_response("tool_b", {}, "call_2"),
+            _make_text_response("done"),
+        ]
+
+        runtime.act(
+            "do stuff",
+            tools=[
+                {"type": "function", "function": {
+                    "name": "tool_a",
+                    "parameters": {"type": "object", "properties": {}},
+                }},
+                {"type": "function", "function": {
+                    "name": "tool_b",
+                    "parameters": {"type": "object", "properties": {}},
+                }},
+            ],
+            max_turns=5,
+            dispatch_fn=_mock_dispatch,
+            on_tool_end_fn=hint_fn,
+            hint_collector_fn=collector,
+        )
+
+        # Collector should be called twice
+        assert collector.call_count == 2
+        # First call: hint_a
+        first_hint = collector.call_args_list[0][0][0]
+        assert "hint_a" in first_hint["content"]
+        # Second call: hint_b
+        second_hint = collector.call_args_list[1][0][0]
+        assert "hint_b" in second_hint["content"]
