@@ -429,6 +429,108 @@ let evaluation = call_skill_evaluator(task_summary, "tests/test_api.helen")
 update_existing_skill("~/.helen/skills/software-development/helen-testing/SKILL.md", "## 新陷阱\n...")
 ```
 
+---
+
+## 开发工作流中的缓存管理
+
+### 开发环境 vs 生产环境
+
+| 环境 | 缓存行为 | 建议做法 |
+|------|---------|---------|
+| **CLI 开发** (`helen file.helen`) | 每次新进程，自动重新加载 | ✅ 无需特殊处理 |
+| **REPL 开发** | 进程内缓存，修改后不生效 | ⚠️ 需手动清除或重启 REPL |
+| **Web 服务** | 长进程，缓存持续存在 | ⚠️ 实现热重载或每次新建 Interpreter |
+| **生产环境** | 追求稳定性，禁用热重载 | ✅ 预加载，运行时不重新编译 |
+
+### 开发时的最佳实践
+
+```bash
+# 1. 优先使用 CLI 开发
+helen my_agent.helen              # 每次新进程，自动重新加载
+helen check my_agent.helen        # 语法检查，不执行
+
+# 2. REPL 中开发时，定期重置
+:reset                            # 重置 REPL 环境
+
+# 3. Web 服务开发时，提供热重载 API
+# POST /reload → 清除 ImportResolver 缓存
+```
+
+### Python 集成时的缓存管理
+
+```python
+# 开发环境：每次都重新加载
+from helen.interpreter import Interpreter
+
+def run_helen(file_path: str):
+    interp = Interpreter()  # 新建实例 = 清空缓存
+    return interp.execute_file(file_path)
+
+# 生产环境：预加载 + 复用
+class HelenService:
+    def __init__(self, agent_file: str):
+        self.interp = Interpreter()
+        self.interp.execute_file(agent_file)  # 启动时加载一次
+    
+    def run(self):
+        return self.interp.execute("call MainAgent()")
+```
+
+### 常见陷阱
+
+**❌ 陷阱 1**: 在 REPL 中修改 `.helen` 文件后继续测试
+```python
+# REPL 中
+interp.execute_file("agent.helen")  # 加载 v1
+# 修改 agent.helen...
+interp.execute_file("agent.helen")  # ❌ 仍是 v1！
+```
+
+**✅ 解决**: 重启 REPL 或手动清除缓存
+```python
+interp.import_resolver._cached_results.clear()
+interp.import_resolver._loaded.clear()
+```
+
+**❌ 陷阱 2**: Web 服务全局复用 Interpreter
+```python
+interp = Interpreter()  # 全局实例
+
+@app.post("/chat")
+def chat():
+    return interp.execute_file("chat_agent.helen")  # ❌ 永远用首次加载的版本
+```
+
+**✅ 解决**: 每次请求新建或使用 mtime 检查
+```python
+@app.post("/chat")
+def chat():
+    interp = Interpreter()  # 每次新建
+    return interp.execute_file("chat_agent.helen")
+```
+
+### 调试工具
+
+```python
+# 检查缓存状态
+def show_cache_status(interp):
+    print(f"缓存文件数: {len(interp.import_resolver._cached_results)}")
+    print(f"已加载文件:")
+    for path in interp.import_resolver._loaded:
+        print(f"  - {path}")
+
+# 使用
+show_cache_status(interp)
+```
+
+### 相关文档
+
+- `wiki/runtime/import.md` — 缓存机制详解
+- `helen-agent-patterns` — Agent 开发模式
+- `helen-stdlib` — stdlib 使用注意事项
+
+---
+
 ## 参考资源
 
 - [Helen 语法参考](./helen-syntax/SKILL.md)

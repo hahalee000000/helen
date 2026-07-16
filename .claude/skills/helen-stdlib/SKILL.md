@@ -955,3 +955,70 @@ try {
 
 异常消息格式为 `"Python <类型名>: <原始消息>"`，可在 catch 块中通过消息前缀区分具体的 Python 异常类型。已存在的 Helen 异常（如 `TimeoutError`）保持原有类型不变。
 
+---
+
+## ⚠️ 使用 stdlib 时的注意事项：模块缓存
+
+### 问题场景
+
+在 Python REPL、Jupyter 或 Web 服务中使用 Helen stdlib 函数时，如果修改了导入的 `.helen` 模块文件，**修改不会自动生效**！
+
+```python
+# Python REPL 中
+from helen.interpreter import Interpreter
+
+interp = Interpreter()
+interp.execute_file("my_utils.helen")  # 加载 v1
+interp.execute("print(custom_function())")  # 使用 v1 的函数
+
+# 修改 my_utils.helen...
+
+interp.execute_file("my_utils.helen")  # ❌ 仍然是 v1！
+```
+
+### 根本原因
+
+`ImportResolver` 使用内存缓存（`_cached_results`）加速重复导入：
+
+```python
+class ImportResolver:
+    def __init__(self):
+        self._cached_results: dict[str, ImportResult] = {}
+```
+
+### 快速解决方案
+
+```python
+# 方案 1: 每次新建 Interpreter（简单）
+interp = Interpreter()
+interp.execute_file("my_utils.helen")
+
+# 方案 2: 手动清除缓存（高效）
+interp.import_resolver._cached_results.clear()
+interp.import_resolver._loaded.clear()
+interp.execute_file("my_utils.helen")  # ✅ 重新加载
+
+# 方案 3: 使用 CLI 开发（推荐）
+# bash: helen my_program.helen  # 每次新进程，自动重新加载
+```
+
+### 调试 stdlib 时的技巧
+
+```python
+# 检查哪些文件被缓存了
+print(f"Cached: {len(interp.import_resolver._cached_results)} files")
+
+# 列出所有已加载的文件
+for path in interp.import_resolver._loaded:
+    print(f"  - {path}")
+```
+
+### 相关文档
+
+- `wiki/runtime/import.md` — 完整的缓存机制说明
+- `wiki/tutorial/08-modules.md` — 开发时的注意事项
+
+---
+
+**最后更新**: 2026-07-16
+

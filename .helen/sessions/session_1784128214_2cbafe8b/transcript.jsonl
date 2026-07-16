@@ -1,0 +1,2 @@
+{"type": "message", "role": "user", "content": "old", "tool_calls": [], "tool_call_id": null, "uuid": "944e0f896c23", "message_type": null, "priority": 50, "compressed": false, "pinned": false}
+{"type": "message", "role": "user", "content": "new", "tool_calls": [], "tool_call_id": null, "uuid": "9f8f754a1e70", "message_type": null, "priority": 50, "compressed": false, "pinned": false}

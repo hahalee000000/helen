@@ -1,19 +1,13 @@
 ---
 name: helen-language-development
-description: "【面向 Helen 核心开发者】Helen 语言实现模式 — AST/解析器/解释器扩展、spawn、异常层级、作用域隔离、共享变量、v1.14 特性（Shared Store、Channel、llm act 流式统一）、v1.16 TranscriptStore SSOT、v1.18 spawn + Channel。本文档面向扩展 Helen 语言本身的开发者，非 Helen 程序用户。"
-version: 1.18.0
+description: "Helen 语言实现模式 — AST/解析器/解释器扩展、async/await、异常层级、作用域隔离、共享变量、v1.14 特性（Shared Store、Channel、llm act 流式统一）、v1.16 TranscriptStore SSOT"
+version: 1.16.0
 author: Helen Team
 license: MIT
-tags: [helen, core-developer, language-extend, language-design, interpreter, spawn, parser, streaming, tool-calls, ffi, python-integration, contract-first, stdlib, closures, protocols, pipe-operator, pattern-matching, chinese-keywords, scope-isolation, shared-let, shared-store, channel, v1.10, v1.11, v1.12, v1.13, v1.14, v1.16, transcript, ssot, v1.18]
+tags: [helen, language-design, interpreter, async, parser, streaming, tool-calls, ffi, python-integration, contract-first, stdlib, closures, protocols, pipe-operator, pattern-matching, chinese-keywords, scope-isolation, shared-let, shared-store, channel, v1.10, v1.11, v1.12, v1.13, v1.14, v1.16, transcript, ssot]
 ---
 
 # Helen Language Development
-
-> **📌 本文档面向 Helen 核心开发者** —— 想要扩展 Helen 语言本身（添加新关键字、修改解析器、扩展解释器、增加 stdlib 函数）的开发者。
->
-> 如果你只是想**使用** Helen 编写 Agent 程序，请参阅 `helen-syntax`、`helen-agent-patterns` 等面向用户的技能。
->
-> 本文档包含 AST 节点、内部类名、Python 文件路径、压缩管线实现等实现细节——这些是扩展语言所必需的知识，但对编写 Helen 程序的用户毫无帮助，且可能随版本变化。
 
 Development patterns and pitfalls for the Helen programming language (~/helen/).
 
@@ -26,12 +20,12 @@ Development patterns and pitfalls for the Helen programming language (~/helen/).
 - **Tests**: `cd ~/helen && pytest`
 - **Git remote**: `https://github.com/hahalee000000/helen.git`
 - **File extension**: `.helen` (not `.hellen`)
-- **Current version**: v1.18 (includes: scope isolation v1.10, shared let v1.10, isolation enhancements + shared store v1.12, channel alias v1.13, llm stream merged into llm act v1.14, spawn + Channel message queue v1.18)
+- **Current version**: v1.14 (includes: scope isolation v1.10, shared let v1.10, isolation enhancements + shared store v1.12, channel v1.13, llm stream merged into llm act v1.14)
 
 ## When to Use
 
 - Extending Helen's AST, parser, interpreter, or semantic analyzer
-- Implementing new language features (control flow, spawn, exceptions, etc.)
+- Implementing new language features (control flow, async, exceptions, etc.)
 - Debugging parser/interpreter issues
 - Adding new predefined exceptions or error types
 - Working with the Pratt parser framework
@@ -51,27 +45,26 @@ helen/
 ├── interpreter/
 │   ├── interpreter.py  # Main visitor (Visitor[object])
 │   ├── environment.py  # Scope chain with snapshot() for isolation
-│   └── exceptions.py   # Exception hierarchy (HelenRuntimeError base)
+│   ├── exceptions.py   # Exception hierarchy (HelenRuntimeError base)
+│   └── task.py         # Async Task + AggregateError
 ├── semantic/
 │   ├── analyzer.py     # Semantic analysis (Visitor[None])
 │   └── type_utils.py   # Shared type_from_typenode() utility
 ├── runtime/
 │   ├── tools.py        # Built-in tool registry (web_search, read_file, etc.)
 │   ├── constants.py    # Centralized constants (URLs, thresholds, limits)
-│   ├── llm_runtime.py  # LLMRuntime interface
-│   ├── channel.py      # Channel + ChannelEndpoint message queue (v1.18)
+│   ├── llm_runtime.py  # LLMRuntime interface (sync + async)
 │   └── hermes_cli_llm.py  # Hermes CLI-based LLM runtime
 └── stdlib/
     ├── system.py       # System ops (shell=False default, PID/signal validation)
-    ├── network.py      # Network ops (URL validation, download size limits)
-    └── mailbox.py      # mailbox_select multi-channel select (v1.18)
+    └── network.py      # Network ops (URL validation, download size limits)
 ```
 
 ## Critical Patterns
 
 ### 1. Extending the AST
 
-When adding a new node type (e.g., `SpawnExprNode`):
+When adding a new node type (e.g., `AsyncCallExprNode`):
 
 1. **Add to `ast.py`**: Frozen dataclass inheriting from `ExpressionNode` or `StatementNode`
 2. **Add visitor method to `Visitor[R]`**: Abstract method `visit_<node_type>(self, node: NodeType) -> R`
@@ -86,15 +79,15 @@ When adding a new node type (e.g., `SpawnExprNode`):
 
 ### 2. Pratt Parser Extension
 
-When adding a new prefix operator (e.g., `spawn`):
+When adding a new prefix operator (e.g., `async`):
 
 ```python
 # In Parser.__init__():
-self._rules[TokenType.SPAWN].prefix = self._spawn_expr
-self._rules[TokenType.SPAWN].precedence = Precedence.UNARY
+self._rules[TokenType.ASYNC].prefix = self._async_call_expr
+self._rules[TokenType.ASYNC].precedence = Precedence.UNARY
 
 # Prefix function:
-def _spawn_expr(self) -> SpawnExprNode:
+def _async_call_expr(self) -> AsyncCallExprNode:
     start = self._previous()  # ← CRITICAL: token already consumed!
     call_expr = self._expression(Precedence.NONE)
     # ... build and return node
@@ -131,41 +124,33 @@ _PREDEFINED_EXCEPTIONS = frozenset({
 
 **Pitfall**: If an exception doesn't inherit `HelenRuntimeError`, `try-catch` cannot catch it (the interpreter only catches `HelenRuntimeError`). If it's not in the predefined sets, semantic analysis rejects it.
 
-### 4. Spawn Implementation (v1.18)
+### 4. Async/Await Implementation (v1.10)
 
 **Architecture**:
-- `spawn Agent(...)` creates the agent, spawns execution in a separate thread, and returns a **Channel** (mailbox) immediately
-- Each spawned agent gets an **environment snapshot** that deep-copies EVERYTHING including SharedStore
-- The Channel is used for message-passing: agent result is sent through it
-- `mailbox_select([ch1, ch2, ...])` waits on multiple channels, returns first-ready result
+- `async Agent()` creates a **pending Task** (not executed immediately)
+- `await [tasks]` executes all pending tasks concurrently using `asyncio`
+- Each task gets an **environment snapshot** for isolation
+- Uses `asyncio.to_thread()` for sync interpreter code (global thread pool, fixed memory)
 
 **Key components**:
 
 ```python
-# SpawnExprNode — the AST node for spawn
-@dataclass(frozen=True)
-class SpawnExprNode(ExpressionNode):
-    call: CallExprNode       # The agent call expression
-    span: SourceSpan
+# Task.pending() stores execution context
+Task.pending(
+    call_node=node.call,
+    interpreter=self,
+    env_snapshot=self.environment.snapshot()
+)
 
-# Channel — message queue returned by spawn
-class Channel:
-    """Thread-safe message queue for agent communication."""
-    def send(self, msg): ...
-    def receive(self) -> Any: ...      # blocking
-    def try_receive(self) -> Any: ...  # non-blocking, returns None if empty
-    def cancel(self): ...
-    def close(self): ...
-
-# Environment.snapshot() deep-copies ALL including SharedStore
+# Environment.snapshot() deep-copies scope chain
 def snapshot(self) -> Environment:
     parent_snapshot = self.parent.snapshot() if self.parent else None
     new_env = Environment(parent=parent_snapshot)
-    new_env.values = deep_copy(self.values)  # deep copy of current scope
+    new_env.values = self.values.copy()  # shallow copy of current scope
     return new_env
 ```
 
-**Pitfall**: Environment snapshot must be taken BEFORE agent execution starts. The snapshot deep-copies SharedStore too, so spawned agents get isolated copies. To share mutable state, pass SharedStore references through Channel messages explicitly.
+**Pitfall**: Environment snapshot must be taken BEFORE `async` expression evaluates. Otherwise, mutations between `async` and `await` corrupt the snapshot.
 
 ### 5. Agent Scope Isolation (v1.10/v1.12)
 
@@ -299,14 +284,13 @@ obj.field = x        // field assignment
 map["key"] = value   // map key assignment
 ```
 
-### 89 Bilingual Keywords
+### 92 Bilingual Keywords
 
-Helen supports 89 keywords in both English and Chinese. See `references/chinese-keyword-implementation.md` for the full mapping table.
+Helen supports 92 keywords in both English and Chinese. See `references/chinese-keyword-implementation.md` for the full mapping table.
 
 **v1.12 新增**: `store`/`仓库`（Shared Store 声明）
+**v1.13 新增**: `channel`/`通道`（Channel 声明）
 **v1.14 删除**: `stream`/`流式执行`（流式功能合并到 `llm act`）
-**v1.18 删除**: `async`/`await`/`detach` + `异步`/`等待`/`分离`（由 spawn 替代）
-**v1.18 新增**: `spawn`/`分生`（分生 Agent 并返回 Channel）
 
 ## v1.12 Features: Shared Store + Isolation Enhancements
 
@@ -347,35 +331,22 @@ class SharedStore:
 - Used for agent isolation decorators: `@open`, `@strict`, `@sandbox`
 - Parser: `_parse_decorator()` before agent/fn/import declarations
 
-## v1.13 Features: Channel (updated in v1.18)
+## v1.13 Features: Channel
 
-### Channel (`channel` / `通道`)
+### Channel (`channel`)
 
-**v1.13-v1.17**: `channel` 声明类型安全的 agent 间通信端点。运行时复用 `SharedStore` 类。
-
-**v1.18**: `channel X { fields }` 声明语法已移除。`通道` 保留为 `shared store` 的中文别名。Channel 现在是消息队列类型（由 `spawn` 返回）。
+`channel` 声明类型安全的 agent 间通信端点。运行时复用 `SharedStore` 类。
 
 ```python
-# v1.18: Channel is a message queue, not a declaration type
-# AST: SpawnExprNode — spawn returns Channel
-# Channel class in runtime/channel.py
+# AST: ChannelDeclNode(StatementNode)
+# Token: CHANNEL (keyword "channel"/"通道")
 
-class Channel:
-    """Thread-safe message queue for agent communication."""
-    def send(self, msg): ...
-    def receive(self) -> Any: ...      # blocking
-    def try_receive(self) -> Any: ...  # non-blocking
-    def cancel(self): ...
-    def close(self): ...
-
-# mailbox_select — stdlib function in stdlib/mailbox.py
-def mailbox_select(channels: list[Channel]) -> Any:
-    """Wait on multiple channels, return first-ready result."""
+# Parser: _channel_decl() — structurally identical to _shared_store_decl()
+# Analyzer: visit_channel_decl() — registers as kind="channel"
+# Interpreter: visit_channel_decl() — creates SharedStore instance (same as shared store)
 ```
 
-**语义差异**: 
-- v1.13-v1.17: channel 是通信端点（message-passing），shared store 是共享状态容器（shared-memory）。运行时行为完全一致。
-- v1.18: `通道` 仅是 `shared store` 的中文别名。Channel 消息队列是全新的类型，由 spawn 返回。
+**语义差异**: channel 是通信端点（message-passing），shared store 是共享状态容器（shared-memory）。运行时行为完全一致。
 
 ## v1.14 Features: llm stream merged into llm act
 
@@ -413,10 +384,10 @@ else:
 tests/
 ├── core/           # Lexer, parser, AST
 ├── semantic/       # Semantic analyzer
-├── interpreter/    # Interpreter, isolation
-├── execution/      # End-to-end tests (including spawn)
-├── runtime/        # LLM runtime, tools, channel
-├── stdlib/         # Standard library, mailbox
+├── interpreter/    # Interpreter, async
+├── execution/      # End-to-end tests
+├── runtime/        # LLM runtime, tools
+├── stdlib/         # Standard library
 └── integration/    # Full agent tests
 ```
 
@@ -443,7 +414,7 @@ For detailed implementation guides, read these reference files:
 
 - **Parser patterns**: `references/parser-disambiguation.md`, `references/parser-optional-expression.md`
 - **Interpreter patterns**: `references/interpreter-execution-patterns.md`, `references/interpreter-sentinels.md`
-- **Spawn**: `references/v1.6-v1.7-v1.8-implementation.md`
+- **Async/await**: `references/v1.6-v1.7-v1.8-implementation.md`, `references/comprehensive-async-testing.md`
 - **Python FFI**: `references/python-ffi-implementation.md`, `references/ffi-and-agents.md`
 - **Stdlib implementation**: `references/stdlib-implementation-patterns.md`
 - **Streaming**: `references/streaming-implementation.md`, `references/true-sse-streaming.md`
@@ -480,15 +451,15 @@ self._rules[TokenType.QUESTION].right_associative = True
 
 ### 3. Environment Snapshot Timing
 
-Always snapshot BEFORE spawn evaluation:
+Always snapshot BEFORE async evaluation:
 
 ```python
 # Correct
-snapshot = self.env.snapshot()  # deep-copies ALL including SharedStore
-channel = spawn_agent(snapshot=snapshot)
+snapshot = self.env.snapshot()
+task = Task.pending(snapshot=snapshot)
 
-# Wrong (mutations between snapshot and agent spawn)
-channel = spawn_agent()  # Too late!
+# Wrong (mutations between snapshot and task creation)
+task = Task.pending()  # Too late!
 snapshot = self.env.snapshot()
 ```
 
@@ -586,4 +557,118 @@ pytest tests/stdlib/test_transcript.py
 - **helen-syntax** — Helen syntax reference (including v1.10 features)
 - **helen-stdlib** — Standard library usage guide
 - **helen-agent-patterns** — Agent design patterns
+
+---
+
+## ⚠️ Critical Knowledge: ImportResolver 缓存机制
+
+### 问题背景
+
+开发者在 REPL、Jupyter 或长时间运行的服务中修改 `.helen` 文件后，经常遇到"新代码不生效"的问题。这是因为 `ImportResolver` 使用了**内存级缓存**。
+
+### 缓存行为
+
+```python
+# helen/runtime/import_resolver.py
+class ImportResolver:
+    def __init__(self):
+        self._cached_results: dict[str, ImportResult] = {}  # 内存缓存
+        self._loaded: set[str] = set()                      # 循环导入检测
+```
+
+| 场景 | 缓存行为 | 新代码生效？ |
+|------|---------|------------|
+| `helen main.helen` (CLI) | 每次新进程，无缓存 | ✅ 总是生效 |
+| REPL 中 `import` | 首次加载后缓存 | ❌ 修改后不生效 |
+| Web 服务复用 Interpreter | 首次加载后缓存 | ❌ 修改后不生效 |
+| 每次请求新建 Interpreter | 缓存自动清空 | ✅ 总是生效 |
+
+### 关键陷阱
+
+**❌ 错误模式**（开发时常见）：
+```python
+from helen.interpreter import Interpreter
+
+interp = Interpreter()
+interp.execute_file("agent.helen")  # 加载 v1
+
+# 修改 agent.helen...
+
+interp.execute_file("agent.helen")  # ❌ 仍然是 v1！
+```
+
+**✅ 正确模式**（方案 1）：
+```python
+def run_agent():
+    interp = Interpreter()  # 每次新建实例
+    return interp.execute_file("agent.helen")
+```
+
+**✅ 正确模式**（方案 2 - 手动清缓存）：
+```python
+interp = Interpreter()
+interp.execute_file("agent.helen")
+
+# 修改文件后
+interp.import_resolver._cached_results.clear()
+interp.import_resolver._loaded.clear()
+
+interp.execute_file("agent.helen")  # ✅ 新代码生效
+```
+
+**✅ 正确模式**（方案 3 - mtime 检查）：
+```python
+import os
+
+class SmartInterpreter:
+    def __init__(self):
+        self.interp = Interpreter()
+        self._mtimes = {}
+    
+    def execute_if_changed(self, path: str):
+        mtime = os.path.getmtime(path)
+        if self._mtimes.get(path, 0) < mtime:
+            self.interp.import_resolver._cached_results.clear()
+            self._mtimes[path] = mtime
+        return self.interp.execute_file(path)
+```
+
+### Helen vs Python 缓存对比
+
+| 特性 | Helen ImportResolver | Python `__pycache__` |
+|------|---------------------|---------------------|
+| 缓存位置 | 内存 | 磁盘 (`.pyc`) |
+| 跨进程 | ❌ 不持久化 | ✅ 持久化 |
+| 进程重启 | 自动清空 | 保留 |
+| 文件修改后 | 需手动清除 | 自动失效 (mtime) |
+
+### 为什么 Helen 不用磁盘缓存？
+
+1. **Helen 是解释型语言**，没有 bytecode 编译步骤
+2. **解析速度快**，缓存收益不明显
+3. **开发体验优先**，避免"旧代码幽灵"问题
+4. **进程隔离**，每次执行都是干净环境
+
+### 调试技巧
+
+```python
+# 检查缓存状态
+print(f"Cached: {len(interp.import_resolver._cached_results)} files")
+print(f"Loaded: {interp.import_resolver._loaded}")
+
+# 强制清除
+interp.import_resolver._cached_results.clear()
+interp.import_resolver._loaded.clear()
+```
+
+### 相关文档
+
+- `wiki/runtime/import.md` — 完整的缓存机制说明
+- `wiki/tutorial/08-modules.md` — 开发时的注意事项
+- GitHub Issue #15 — 问题诊断报告
+
+---
+
+**最后更新**: 2026-07-16  
+**版本**: v1.21
 - **helen-testing** — Testing framework and TDD workflow

@@ -1,0 +1,2 @@
+{"type": "message", "role": "user", "content": "[route] classify", "tool_calls": [], "tool_call_id": null, "uuid": "3859b72e7e91", "message_type": null, "priority": 50, "compressed": false, "pinned": false}
+{"type": "message", "role": "assistant", "content": "[routed to: command]", "tool_calls": [], "tool_call_id": null, "uuid": "6d0232e1bac1", "message_type": null, "priority": 50, "compressed": false, "pinned": false}

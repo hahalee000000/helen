@@ -1,0 +1,4 @@
+{"type": "message", "role": "user", "content": "user message", "tool_calls": [], "tool_call_id": null, "uuid": "85bb5ae63cf4", "message_type": null, "priority": 50, "compressed": false, "pinned": false}
+{"type": "message", "role": "assistant", "content": "assistant message", "tool_calls": [], "tool_call_id": null, "uuid": "82c554b0a77b", "message_type": null, "priority": 50, "compressed": false, "pinned": false}
+{"type": "message", "role": "system", "content": "system message", "tool_calls": [], "tool_call_id": null, "uuid": "ea6f2c1975c1", "message_type": null, "priority": 50, "compressed": false, "pinned": false}
+{"type": "message", "role": "tool", "content": "tool message", "tool_calls": [], "tool_call_id": null, "uuid": "1b49838a8a52", "message_type": null, "priority": 50, "compressed": false, "pinned": false}

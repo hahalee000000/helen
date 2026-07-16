@@ -186,3 +186,66 @@ main {
 2. 在 main.helen 中导入并使用这些函数
 3. 创建一个 config.json 并导入
 4. 尝试循环导入，观察行为
+
+---
+
+## ⚠️ 开发时的重要提示：模块缓存
+
+### 问题：修改 .helen 文件后不生效？
+
+Helen 的 `ImportResolver` 使用**内存级缓存**来加速重复导入。这意味着：
+
+- ✅ **CLI 模式**（`helen main.helen`）：每次都重新加载，无需担心
+- ❌ **REPL / 长时间运行的服务**：修改文件后不会自动重新加载
+
+### 示例场景
+
+```python
+# 场景 1: Python REPL 中开发
+from helen.interpreter import Interpreter
+
+interp = Interpreter()
+interp.execute_file("agent.helen")  # 加载 v1
+
+# 修改 agent.helen（添加新功能）...
+
+interp.execute_file("agent.helen")  # ❌ 仍然是 v1！
+```
+
+### 解决方案
+
+#### 方案 1: 使用 CLI（推荐用于开发）
+
+```bash
+# 每次执行都是新进程，自动重新加载
+helen main.helen
+```
+
+#### 方案 2: 在代码中创建新实例
+
+```python
+def run_agent():
+    # 每次创建新的 Interpreter，缓存自动清空
+    interp = Interpreter()
+    return interp.execute_file("agent.helen")
+```
+
+#### 方案 3: 手动清除缓存
+
+```python
+interp = Interpreter()
+interp.execute_file("agent.helen")
+
+# 修改文件后，手动清除缓存
+interp.import_resolver._cached_results.clear()
+interp.import_resolver._loaded.clear()
+
+# 重新执行
+interp.execute_file("agent.helen")  # ✅ 使用新代码
+```
+
+### 深入理解
+
+详见 [runtime/import.md - 缓存机制](../runtime/import.md#缓存机制开发者必读)
+
+---

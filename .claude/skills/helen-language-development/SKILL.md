@@ -557,4 +557,118 @@ pytest tests/stdlib/test_transcript.py
 - **helen-syntax** — Helen syntax reference (including v1.10 features)
 - **helen-stdlib** — Standard library usage guide
 - **helen-agent-patterns** — Agent design patterns
+
+---
+
+## ⚠️ Critical Knowledge: ImportResolver 缓存机制
+
+### 问题背景
+
+开发者在 REPL、Jupyter 或长时间运行的服务中修改 `.helen` 文件后，经常遇到"新代码不生效"的问题。这是因为 `ImportResolver` 使用了**内存级缓存**。
+
+### 缓存行为
+
+```python
+# helen/runtime/import_resolver.py
+class ImportResolver:
+    def __init__(self):
+        self._cached_results: dict[str, ImportResult] = {}  # 内存缓存
+        self._loaded: set[str] = set()                      # 循环导入检测
+```
+
+| 场景 | 缓存行为 | 新代码生效？ |
+|------|---------|------------|
+| `helen main.helen` (CLI) | 每次新进程，无缓存 | ✅ 总是生效 |
+| REPL 中 `import` | 首次加载后缓存 | ❌ 修改后不生效 |
+| Web 服务复用 Interpreter | 首次加载后缓存 | ❌ 修改后不生效 |
+| 每次请求新建 Interpreter | 缓存自动清空 | ✅ 总是生效 |
+
+### 关键陷阱
+
+**❌ 错误模式**（开发时常见）：
+```python
+from helen.interpreter import Interpreter
+
+interp = Interpreter()
+interp.execute_file("agent.helen")  # 加载 v1
+
+# 修改 agent.helen...
+
+interp.execute_file("agent.helen")  # ❌ 仍然是 v1！
+```
+
+**✅ 正确模式**（方案 1）：
+```python
+def run_agent():
+    interp = Interpreter()  # 每次新建实例
+    return interp.execute_file("agent.helen")
+```
+
+**✅ 正确模式**（方案 2 - 手动清缓存）：
+```python
+interp = Interpreter()
+interp.execute_file("agent.helen")
+
+# 修改文件后
+interp.import_resolver._cached_results.clear()
+interp.import_resolver._loaded.clear()
+
+interp.execute_file("agent.helen")  # ✅ 新代码生效
+```
+
+**✅ 正确模式**（方案 3 - mtime 检查）：
+```python
+import os
+
+class SmartInterpreter:
+    def __init__(self):
+        self.interp = Interpreter()
+        self._mtimes = {}
+    
+    def execute_if_changed(self, path: str):
+        mtime = os.path.getmtime(path)
+        if self._mtimes.get(path, 0) < mtime:
+            self.interp.import_resolver._cached_results.clear()
+            self._mtimes[path] = mtime
+        return self.interp.execute_file(path)
+```
+
+### Helen vs Python 缓存对比
+
+| 特性 | Helen ImportResolver | Python `__pycache__` |
+|------|---------------------|---------------------|
+| 缓存位置 | 内存 | 磁盘 (`.pyc`) |
+| 跨进程 | ❌ 不持久化 | ✅ 持久化 |
+| 进程重启 | 自动清空 | 保留 |
+| 文件修改后 | 需手动清除 | 自动失效 (mtime) |
+
+### 为什么 Helen 不用磁盘缓存？
+
+1. **Helen 是解释型语言**，没有 bytecode 编译步骤
+2. **解析速度快**，缓存收益不明显
+3. **开发体验优先**，避免"旧代码幽灵"问题
+4. **进程隔离**，每次执行都是干净环境
+
+### 调试技巧
+
+```python
+# 检查缓存状态
+print(f"Cached: {len(interp.import_resolver._cached_results)} files")
+print(f"Loaded: {interp.import_resolver._loaded}")
+
+# 强制清除
+interp.import_resolver._cached_results.clear()
+interp.import_resolver._loaded.clear()
+```
+
+### 相关文档
+
+- `wiki/runtime/import.md` — 完整的缓存机制说明
+- `wiki/tutorial/08-modules.md` — 开发时的注意事项
+- GitHub Issue #15 — 问题诊断报告
+
+---
+
+**最后更新**: 2026-07-16  
+**版本**: v1.21
 - **helen-testing** — Testing framework and TDD workflow

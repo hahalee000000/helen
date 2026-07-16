@@ -263,5 +263,133 @@ agent MyAgent {
 
 ---
 
-**最后更新**: 2026-07-01  
-**版本**: v1.10
+## 缓存机制（开发者必读）
+
+### 内存级缓存
+
+`ImportResolver` 使用**内存级缓存**（非磁盘缓存）来加速重复导入：
+
+```python
+class ImportResolver:
+    def __init__(self):
+        self._cached_results: dict[str, ImportResult] = {}
+        # ...
+```
+
+**缓存行为**：
+
+| 场景 | 缓存命中？ | 说明 |
+|------|----------|------|
+| 同一进程内多次 import 同一文件 | ✅ 命中 | 返回缓存的 `ImportResult` |
+| 进程重启后 import 同一文件 | ❌ 未命中 | 缓存已清空，重新从磁盘读取 |
+| 修改 .helen 文件后在同一进程内 import | ❌ 未命中但... | 缓存不会自动失效！ |
+
+### ⚠️ 开发时的重要陷阱
+
+**问题**：在同一个 Python 进程内（如 REPL、Web 服务器、长时间运行的 agent），修改 .helen 文件后再次 import，**仍然会使用旧的缓存**！
+
+```python
+# 场景 1: Python REPL 或 Jupyter
+from helen.interpreter import Interpreter
+interp = Interpreter()
+interp.execute_file("agent.helen")  # 加载 v1
+
+# 修改 agent.helen（添加新功能）
+
+interp.execute_file("agent.helen")  # ❌ 仍然是 v1！缓存未失效
+```
+
+```python
+# 场景 2: Web 服务器（Flask/FastAPI）
+@app.post("/run")
+def run_agent():
+    interp = Interpreter()  # 每次请求创建新实例
+    return interp.execute_file("agent.helen")  # ✅ 每次都重新加载
+```
+
+### 解决方案
+
+#### 方案 1: 每次创建新的 Interpreter 实例（推荐）
+
+```python
+def execute_helen(file_path: str):
+    # 每次创建新的 ImportResolver，缓存自动清空
+    interp = Interpreter()
+    return interp.execute_file(file_path)
+```
+
+#### 方案 2: 手动清除缓存
+
+```python
+interp = Interpreter()
+
+# 执行一次
+interp.execute_file("agent.helen")
+
+# 修改文件后，手动清除缓存
+interp.import_resolver._cached_results.clear()
+interp.import_resolver._loaded.clear()
+
+# 重新执行
+interp.execute_file("agent.helen")  # ✅ 使用新代码
+```
+
+#### 方案 3: 使用文件修改时间（mtime）检查
+
+```python
+import os
+
+class SmartInterpreter:
+    def __init__(self):
+        self.interp = Interpreter()
+        self._file_mtimes = {}
+    
+    def execute_if_changed(self, file_path: str):
+        current_mtime = os.path.getmtime(file_path)
+        cached_mtime = self._file_mtimes.get(file_path)
+        
+        if cached_mtime is None or current_mtime > cached_mtime:
+            # 文件已修改，清除缓存并重新加载
+            self.interp.import_resolver._cached_results.clear()
+            self._file_mtimes[file_path] = current_mtime
+            return self.interp.execute_file(file_path)
+        else:
+            # 文件未修改，使用缓存
+            return self.interp.execute_file(file_path)
+```
+
+### Helen vs Python 缓存对比
+
+| 特性 | Helen ImportResolver | Python `__pycache__` |
+|------|---------------------|---------------------|
+| 缓存位置 | 内存（进程内） | 磁盘（`.pyc` 文件） |
+| 跨进程持久化 | ❌ 否 | ✅ 是 |
+| 进程重启后 | 自动清空 | 保留（除非删除） |
+| 文件修改后 | 需手动清除或重启进程 | 自动失效（基于 mtime） |
+| 性能影响 | 微小（内存查找） | 首次加载稍慢 |
+
+### 最佳实践
+
+1. **开发环境**：
+   - 使用 `helen` CLI 命令（每次都是新进程，自动重新加载）
+   - 或在 Web 服务器中每次请求创建新的 `Interpreter` 实例
+
+2. **生产环境**：
+   - 长时间运行的服务应实现 mtime 检查或提供热重载 API
+   - 考虑添加 `--no-cache` 选项或 `clear_cache()` API
+
+3. **调试技巧**：
+   ```python
+   # 检查缓存状态
+   print(f"Cached files: {len(interp.import_resolver._cached_results)}")
+   print(f"Loaded files: {interp.import_resolver._loaded}")
+   
+   # 强制清除所有缓存
+   interp.import_resolver._cached_results.clear()
+   interp.import_resolver._loaded.clear()
+   ```
+
+---
+
+**最后更新**: 2026-07-16  
+**版本**: v1.21

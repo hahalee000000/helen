@@ -1,7 +1,7 @@
 ---
 name: helen-stdlib
-description: "Helen 标准库使用指南 — 285 个内置函数的分类参考与示例"
-version: 1.19.0
+description: "Helen 标准库使用指南 — 200 个内置函数的分类参考与示例"
+version: 1.16.0
 author: Helen Team
 license: MIT
 metadata:
@@ -11,29 +11,33 @@ metadata:
 
 # Helen 标准库参考
 
-Helen 标准库提供 **285 个内置函数**，覆盖 AI 应用开发的所有核心需求。
+Helen 标准库提供 **203 个内置函数**，覆盖 AI 应用开发的所有核心需求。
 
 ## 分类概览
 
 | 类别 | 数量 | 代表函数 |
 |------|------|----------|
-| **Core** | 14 | `print`, `len`, `str`, `int`, `float`, `bool`, `list`, `dict`, `abs`, `min`, `max`, `range`, `type`, `isinstance` |
-| **String** | 37 | `upper`, `lower`, `strip`, `split`, `join`, `replace`, `find`, `reverse`, `repeat`, `regex_match`, `regex_replace`, `format_float` |
-| **Data** | 25 | `json_parse`, `json_stringify`, `yaml_parse`, `toml_parse`, `csv_parse`, `xml_parse`, `html_escape`, `url_encode`, `base64_encode` |
-| **Collection** | 22 | `sort`, `reverse`, `unique`, `flatten`, `zip`, `map`, `filter`, `reduce`, `group_by`, `chunk`, `intersection` |
-| **Network** | 9 | `http_get`, `http_post`, `http_put`, `http_delete`, `http_download`, `url_parse` |
-| **Time** | 13 | `now`, `timestamp`, `date_format`, `date_parse`, `sleep`, `stopwatch_start`, `stopwatch_elapsed` |
-| **Math** | 15 | `round`, `sqrt`, `floor`, `ceil`, `pow`, `log`, `sin`, `cos`, `random_int`, `random_float`, `mean`, `median`, `stddev` |
-| **File** | 18 | `read_file`, `write_file`, `append_file`, `file_exists`, `list_dir`, `mkdir`, `copy_file`, `delete_file`, `file_size`, `glob_files`, `grep_files` |
-| **System** | 18 | `env_get`, `env_set`, `get_cli_args`, `parse_cli_args`, `shell_exec`, `process_id`, `platform`, `hostname`, `log_info`, `log_error` |
-| **Crypto** | 11 | `hash_md5`, `hash_sha256`, `hash_sha512`, `hmac_sha256`, `uuid_generate`, `random_bytes` |
-| **IO** | 5 | `read_line`, `prompt`, `format_table`, `progress_bar`, `terminal_width` |
+| **Core** | 17 | `print`, `len`, `str`, `int`, `float`, `bool`, `list`, `dict`, `abs`, `min`, `max`, `range`, `type`, `isinstance`, `input`, `multiline_input`, `exit` |
+| **String** | 40 | `upper`, `lower`, `strip`, `split`, `join`, `replace`, `find`, `reverse`, `repeat`, `regex_match`, `regex_replace`, `format_float`, `tokenize`, `levenshtein`, `base64_encode` |
+| **Data** | 27 | `json_parse`, `json_stringify`, `yaml_parse`, `toml_parse`, `csv_parse`, `xml_parse`, `html_escape`, `html_parse`, `markdown_parse`, `markdown_to_html` |
+| **Collection** | 22 | `sort`, `reverse`, `unique`, `flatten`, `zip`, `map`, `filter`, `reduce`, `chunk`, `set_union`, `set_intersection`, `set_difference` |
+| **Network** | 9 | `http_get`, `http_post`, `http_put`, `http_delete`, `http_download`, `url_parse`, `url_build`, `url_encode`, `url_decode` |
+| **Time** | 16 | `now`, `time`, `date`, `datetime`, `date_format`, `date_parse`, `date_add`, `date_diff`, `sleep`, `stopwatch_start`, `stopwatch_elapsed`, `stopwatch_lap` |
+| **Math** | 27 | `round`, `sqrt`, `floor`, `ceil`, `sum`, `product`, `mean`, `median`, `mode`, `stddev`, `variance`, `percentile`, `correlation`, `cos`, `sin`, `tan`, `pow`, `log`, `log2`, `log10`, `exp` |
+| **File** | 12 | `read_file`, `write_file`, `append_file`, `list_dir`, `mkdir`, `mkdir_p`, `copy_file`, `delete_file`, `file_size`, `glob_files`, `grep_files`, `temp_file` |
+| **System** | 24 | `env_get`, `env_set`, `env_delete`, `env_list`, `get_cli_args`, `parse_cli_args`, `shell_exec`, `exec`, `exec_async`, `pid`, `exit`, `kill`, `log_info`, `log_error`, `log_debug`, `platform`, `hostname`, `python_version`, `cpu_count`, `memory_info` |
+| **Crypto** | 20 | `md5`, `sha1`, `sha256`, `sha512`, `hmac_sha256`, `random`, `randint`, `choice`, `shuffle`, `sample`, `uuid_generate`, `uuid_from_string`, `uuid_nil`, `random_bytes`, `random_hex`, `random_base64` |
+| **IO** | 9 | `stream_print`, `stream_clear`, `progress_bar`, `mkdir`, `mkdir_p`, `append_file`, `stream_cursor_up`, `stream_cursor_down` |
+| **Path** | 6 | `path_basename`, `path_dirname`, `path_exists`, `path_is_dir`, `path_is_file`, `path_join` |
+| **Tools** | 6 | `shell_exec`, `calculate`, `patch_file`, `load_skill`, `web_search`, `web_fetch` |
 | **Observability** | 4 | `debug`, `trace_on`, `trace_off`, `get_trace` |
 | **Context** | 27 | `clear_context`, `compress_context`, `compress_context_target`, `context_stats`, `context_usage`, `get_message`, `delete_message`, `pin_message`, `unpin_message`, `insert_message`, `replace_message`, `working_memory_get`, `working_memory_set`, `working_memory_remove`, `working_memory_clear`, `set_compression_strategy`, `set_context_window`, `set_working_memory_enabled`, `set_cache_aware`, `get_context_config`, `search_context`, `context_slice`, `export_context`, `import_context`, `fork_context`, `on_compression`, `on_context_overflow` |
 | **Transcript** | 11 | `get_session_id`, `list_sessions`, `replay_transcript`, `export_transcript`, `get_compression_audit`, `resume_session`, `get_session_dir`, `set_session_dir`, `delete_session`, `delete_current_session`, `cleanup_sessions` |
-| **Media** | 12 | `media`, `media_base64`, `is_media`, `media_type`, `to_openai_parts`, `to_claude_parts`, `to_gemini_parts`, `media_to_base64`, `save_media`, `is_image`, `is_video`, `is_audio` (v1.17) |
-| **Test** | 14 | `test_suite`, `test_case`, `test_end_suite`, `assert_true`, `assert_equal`, `expect`, `run_tests`, `before_each`, `after_each` |
+| **Media** | 12 | `media`, `media_base64`, `is_media`, `media_type`, `to_openai_parts`, `to_claude_parts`, `to_gemini_parts`, `media_to_base64`, `save_media`, `is_image`, `is_video`, `is_audio` |
+| **Test** | 23 | `test_suite`, `test_case`, `test_case_skip`, `test_end_suite`, `set_test_timeout`, `run_tests`, `run_tests_json`, `test_count`, `test_reset`, `before_all`, `after_all`, `before_each`, `after_each`, `assert_equal`, `assert_not_equal`, `assert_true`, `assert_contains`, `assert_throws`, `describe`, `expect`, `it`, `it_skip`, `fail` |
 | **Quality** | 4 | `analyze_code`, `check_security`, `quality_score`, `quality_report` |
+| **LLM** | 3 | `cancel_llm_call`, `current_llm_call_id`, `cancel_all_llm_calls` |
+| **Concurrency** | 1 | `mailbox_select` |
 
 ## 多语言 stdlib (v1.10)
 
@@ -47,9 +51,6 @@ Helen 内置 230+ 个中文别名，覆盖全部 stdlib 分类。常用示例：
 |------|------|------|
 | `len` | `长度` | Core |
 | `print` | `打印` | Core |
-| `list` | `列表` | Core |
-| `dict` | `字典` | Core |
-| `bool` | `布尔` | Core |
 | `sort` | `排序` | Collection |
 | `filter` | `过滤` | Collection |
 | `map` | `映射` | Collection |
@@ -64,16 +65,16 @@ Helen 内置 230+ 个中文别名，覆盖全部 stdlib 分类。常用示例：
 | `write_file` | `写文件` | File |
 | `shell_exec` | `执行命令` | System |
 
-完整别名列表可通过 REPL 的 `:stdlib` 命令查看。
+完整列表见 `helen/stdlib/locales/zh.py`。
 
 ### 使用示例
 
 ```helen
 // 直接用中文 stdlib 函数名（不需要任何 import 或 alias）
 函数 数据处理() {
-    设 原始数据 = [3, 1, 4, 1, 5, 9, 2, 6]
-    设 排序后 = 排序(原始数据)
-    设 去重后 = 去重(排序后)
+    定义 原始数据 = [3, 1, 4, 1, 5, 9, 2, 6]
+    定义 排序后 = 排序(原始数据)
+    定义 去重后 = 去重(排序后)
     返回 长度(去重后)
 }
 
@@ -99,34 +100,28 @@ alias len as 我的长度
 - **一套机制**：stdlib 别名和用户 `alias` 使用相同的 Environment binding
 - **全量加载**：所有 locale 的别名表启动时全部注册，不按 locale 过滤
 - **locale 只影响展示**：`~/.helen/config.yaml` 中的 `locale: zh` 只影响 docs/LSP/错误消息的语言
+- **扩展新语言**：添加新语言只需创建 `helen/stdlib/locales/<code>.py`
 
 ## 常用函数示例
 
 ### Core（核心）
 
 ```helen
-// 类型转换
+# 类型转换
 let num = int("42")           # 字符串 → 整数
 let text = str(3.14)          # 浮点数 → 字符串
 let flt = float("2.5")        # 字符串 → 浮点数
-let flag = bool(1)            # 整数 → true
 
-// 构造函数
-let empty_list = list()       # []
-let copy = list([1, 2, 3])   # [1, 2, 3] — 浅拷贝
-let empty_dict = dict()       # {}
-let dict_copy = dict({"a": 1})  # {"a": 1} — 浅拷贝
-
-// 长度与范围
+# 长度与范围
 let length = len([1, 2, 3])   # 3
 let items = range(0, 10, 2)   # [0, 2, 4, 6, 8]
 
-// 数学基础
+# 数学基础
 let maximum = max(1, 2, 3)    # 3
 let minimum = min(1, 2, 3)    # 1
 let absolute = abs(-42)       # 42
 
-// 类型检查
+# 类型检查
 if isinstance(value, str) {
     print("是字符串")
 }
@@ -135,264 +130,226 @@ if isinstance(value, str) {
 ### String（字符串）
 
 ```helen
-// 大小写转换
+# 大小写转换
 let upper = upper("hello")    # "HELLO"
 let lower = lower("WORLD")    # "world"
 
-// 分割与连接
+# 分割与连接
 let parts = split("a,b,c", ",")  # ["a", "b", "c"]
 let joined = join(["a", "b"], "-")  # "a-b"
 
-// 查找与替换
+# 查找与替换
 let found = find("hello world", "world")  # 6
 let replaced = replace("foo bar", "foo", "baz")  # "baz bar"
 
-// 正则表达式
+# 正则表达式
 if regex_match("hello123", r"\d+") {
     print("包含数字")
 }
 let cleaned = regex_replace("a1b2c3", r"\d", "")  # "abc"
 
-// 空白处理
+# 空白处理
 let trimmed = strip("  hello  ")  # "hello"
 let padded = pad_start("42", 5, "0")  # "00042"
 
-// 浮点数格式化
+# 浮点数格式化
 let formatted1 = format_float(8.5, 1)      # "8.5"
 let formatted2 = format_float(7.857, 2)    # "7.86" (四舍五入)
 let formatted3 = format_float(3.14159, 3)  # "3.142"
 let formatted4 = format_float(100, 0)      # "100"
 
-// 中文别名
+# 中文别名
 let formatted = 格式化浮点(8.5, 1)  # "8.5"
 ```
 
 ### Data（数据格式）
 
 ```helen
-// JSON
+# JSON
 let data = json_parse('{"name": "Helen", "version": 1}')
 let json = json_stringify(data, indent=2)
 
-// YAML
+# YAML
 let config = yaml_parse("key: value\nlist:\n  - item1\n  - item2")
 
-// CSV
+# CSV
 let rows = csv_parse("name,age\nAlice,30\nBob,25")
-// [["name", "age"], ["Alice", "30"], ["Bob", "25"]]
+# [["name", "age"], ["Alice", "30"], ["Bob", "25"]]
 
-// URL 编码
+# URL 编码
 let encoded = url_encode("hello world&foo=bar")
 let decoded = url_decode(encoded)
 
-// Base64
+# Base64
 let encoded = base64_encode("secret data")
 let decoded = base64_decode(encoded)
 ```
 
-### Media（多模态）(v1.17)
-
-```helen
-// 创建 MediaPart - 从文件
-let img = media("file:///path/to/image.png")
-
-// 创建 MediaPart - 从 URL
-let remote = media("https://example.com/image.jpg")
-
-// 创建 MediaPart - 从 base64
-let b64_data = base64_encode(read_file_bytes("image.png"))
-let inline = media_base64(b64_data, "image/png")
-
-// 检查是否为 MediaPart
-如果 是媒体(img) {
-    打印("这是一个媒体对象")
-}
-
-// 获取媒体类型
-let type = 媒体类型(img)  # "image"
-
-// 类型谓词 — 精确判断媒体类型
-如果 是图片(img) { 打印("图片") }
-如果 是视频(vid) { 打印("视频") }
-如果 是音频(aud) { 打印("音频") }
-
-// 在 llm act 中使用
-let result = llm act "描述这张图片" media(img)
-let result = llm act "比较这些图片" media(img1, img2)
-
-// 内置格式适配器 — 一行完成 provider 格式转换
-let result = llm act "分析图片"
-    media(img)
-    on_media fn(parts, provider) { 转Claude格式(parts) }
-
-// 可用适配器: 转OpenAI格式(parts), 转Claude格式(parts), 转Gemini格式(parts)
-// 注意: 转Claude格式 不支持视频/音频（会抛出 ValueError）
-
-// 媒体工具函数
-let b64 = 媒体转base64(img)             # 任意 source → 纯 base64
-let path = 保存媒体(img, "/tmp/out.png") # 保存到指定路径
-let path2 = 保存媒体(img)                # 自动命名保存到 ~/.helen/generated_media/
-
-// on_media 回调（自定义媒体适配 — 仅非标准 provider 需要）
-let result = llm act "分析图片"
-    media(img)
-    on_media fn(parts, provider) {
-        返回 map(parts, fn(part) {
-            返回 {"type": "image_url", "image_url": {"url": part.content}}
-        })
-    }
-
-// on_generate 回调（媒体生成）
-let result = llm act "生成一张图"
-    on_generate fn(params) {
-        let url = call_generation_api(params["prompt"])
-        返回 media("url://" + url)
-    }
-```
-
-**MediaPart 字段**：
-- `source`: 来源类型（"file"、"url"、"base64"）
-- `content`: 内容（文件路径、URL 或 base64 字符串）
-- `mime`: MIME 类型（如 "image/png"）
-- `media_type`: 媒体类型（"image"、"video"、"audio"）
-- `metadata`: 额外元数据（字典）
-
-**中文别名**：`media()` → `媒体()`, `media_base64()` → `媒体base64()`, `is_media()` → `是媒体()`, `media_type()` → `媒体类型()`, `to_openai_parts()` → `转OpenAI格式()`, `to_claude_parts()` → `转Claude格式()`, `to_gemini_parts()` → `转Gemini格式()`, `media_to_base64()` → `媒体转base64()`, `save_media()` → `保存媒体()`, `is_image()` → `是图片()`, `is_video()` → `是视频()`, `is_audio()` → `是音频()`
-
 ### Collection（集合操作）
 
 ```helen
-// 排序与去重
+# 排序与去重
 let sorted = sort([3, 1, 4, 1, 5])  # [1, 1, 3, 4, 5]
 let unique_items = unique([1, 2, 2, 3])  # [1, 2, 3]
 
-// 映射与过滤（使用 fn() 匿名函数）
-let doubled = map([1, 2, 3], fn(x) { return x * 2 })  # [2, 4, 6]
-let evens = filter([1, 2, 3, 4], fn(x) { return x % 2 == 0 })  # [2, 4]
+# 映射与过滤
+let doubled = map([1, 2, 3], x => x * 2)  # [2, 4, 6]
+let evens = filter([1, 2, 3, 4], x => x % 2 == 0)  # [2, 4]
 
-// 归约
-let sum = reduce([1, 2, 3, 4], fn(acc, x) { return acc + x }, 0)  # 10
+# 归约
+let sum = reduce([1, 2, 3, 4], (acc, x) => acc + x, 0)  # 10
 
-// 分块
+# 分组
+let grouped = group_by(users, u => u["role"])
+# {"admin": [...], "user": [...]}
+
+# 分块
 let chunks = chunk([1, 2, 3, 4, 5], 2)
-// [[1, 2], [3, 4], [5]]
+# [[1, 2], [3, 4], [5]]
 
-// 集合运算
-let common = set_intersection([1, 2, 3], [2, 3, 4])  # [2, 3]
+# 集合运算
+let common = intersection([1, 2, 3], [2, 3, 4])  # [2, 3]
 ```
 
 ### Network（网络请求）
 
 ```helen
-// HTTP GET
+# HTTP GET
 let response = http_get("https://api.example.com/data")
 let data = json_parse(response["body"])
 
-// HTTP POST
+# HTTP POST
 let result = http_post(
     "https://api.example.com/submit",
     headers={"Content-Type": "application/json"},
     body=json_stringify({"name": "Helen"})
 )
 
-// 下载文件
+# 下载文件
 http_download("https://example.com/file.pdf", "/tmp/file.pdf")
 ```
 
 ### Time（时间日期）
 
 ```helen
-// 当前时间
+# 当前时间
 let now_ts = now()                    # Unix 时间戳（秒）
-let now_ms = timestamp()              # Unix 时间戳（毫秒）
+let current = time()                  # 当前时间（datetime 对象）
 
-// 格式化
+# 格式化
 let formatted = date_format(now(), "%Y-%m-%d %H:%M:%S")
-// "2026-06-19 17:30:00"
+# "2026-06-19 17:30:00"
 
-// 解析
+# 解析
 let parsed = date_parse("2026-06-19", "%Y-%m-%d")
 
-// 计时
-let sw = stopwatch_start()
-// ... 执行操作 ...
-let elapsed = stopwatch_elapsed(sw)   # 秒（浮点数）
+# 日期运算
+let tomorrow = date_add(now(), days=1)
+let diff = date_diff(date1, date2, "days")
 
-// 休眠
+# 休眠
 sleep(1.5)  # 休眠 1.5 秒
+
+# 计时（高精度）
+let sw = stopwatch_start()
+# ... 执行操作 ...
+let elapsed = stopwatch_elapsed(sw)   # 秒（浮点数，高精度）
+print("耗时: " + str(elapsed) + " 秒")
 ```
 
 ### Math（数学运算）
 
 ```helen
-// 基础数学
+# 基础数学
 let rounded = round(3.14159, 2)   # 3.14
-let squared = pow(2, 10)          # 1024
 let root = sqrt(16)               # 4.0
+let ceiling = ceil(3.2)           # 4
+let flooring = floor(3.8)         # 3
+let power = pow(2, 10)            # 1024
 
-// 统计
+# 对数
+let natural = log(2.718)          # 自然对数 (ln)
+let base2 = log2(8)               # 3 (2^3 = 8)
+let base10 = log10(100)           # 2 (10^2 = 100)
+let exponential = exp(1)          # 2.718... (e^1)
+
+# 三角函数（弧度制）
+let cosine = cos(0)               # 1
+let sine = sin(3.14159 / 2)       # 1
+let tangent = tan(0)              # 0
+let angle = acos(0.5)             # 1.047... (60°)
+let angle2 = asin(0.5)            # 0.523... (30°)
+let angle3 = atan(1)              # 0.785... (45°)
+let angle4 = atan2(1, 1)          # 0.785... (45°, y/x)
+
+# 统计
 let avg = mean([1, 2, 3, 4, 5])   # 3.0
 let mid = median([1, 2, 3, 4, 5]) # 3
 let std = stddev([1, 2, 3, 4, 5]) # 1.414...
+let total = sum([1, 2, 3, 4, 5])  # 15
+let prod = product([1, 2, 3, 4])  # 24
 
-// 随机数
-let rand_int = random_int(1, 100)      # 1-100 的随机整数
-let rand_float = random_float(0, 1)    # 0-1 的随机浮点数
+# 随机数
+let rand = random()               # 0-1 的随机浮点数
+let rand_int = randint(1, 100)    # 1-100 的随机整数
+let item = choice([1, 2, 3, 4])   # 随机选择
+let shuffled = shuffle([1, 2, 3]) # 随机打乱
 ```
 
 ### File（文件操作）
 
 ```helen
-// 读写文件
+# 读写文件
 let content = read_file("/path/to/file.txt")
 write_file("/path/to/output.txt", "Hello, World!")
 append_file("/path/to/log.txt", "New log entry\n")
 
-// 文件信息
-if file_exists("/path/to/file.txt") {
+# 文件信息
+if path_exists("/path/to/file.txt") {
     let size = file_size("/path/to/file.txt")
     print("文件大小: " + str(size) + " bytes")
 }
 
-// 目录操作
+# 目录操作
 let files = list_dir("/path/to/dir")
 mkdir("/path/to/new/dir")
+mkdir_p("/path/to/deep/nested/dir")  # 递归创建
 copy_file("/src/file.txt", "/dst/file.txt")
 delete_file("/path/to/file.txt")
 
-// 文件搜索（v1.15 新增）
-// 递归查找所有 Python 文件
+# 文件搜索（v1.15 新增）
+# 递归查找所有 Python 文件
 let py_files = glob_files("src", "*.py")
-// 返回: ["main.py", "utils/helper.py", "tests/test_main.py"]
+# 返回: ["main.py", "utils/helper.py", "tests/test_main.py"]
 
-// 使用 ** 显式递归
+# 使用 ** 显式递归
 let md_files = glob_files("docs", "**/*.md")
 
-// 搜索文件内容（字面量）
+# 搜索文件内容（字面量）
 let matches = grep_files("src/", "TODO")
-// 返回: [{"file": "main.py", "line": 42, "text": "    # TODO: fix this"}]
+# 返回: [{"file": "main.py", "line": 42, "text": "    # TODO: fix this"}]
 
-// 搜索文件内容（正则）
+# 搜索文件内容（正则）
 let functions = grep_files("src/", "def \\w+\\(", regex=true)
 
-// 大小写不敏感搜索
+# 大小写不敏感搜索
 let errors = grep_files("logs/", "error", case_sensitive=false)
 ```
 
 ### System（系统操作）
 
 ```helen
-// 环境变量
+# 环境变量
 let home = env_get("HOME")
 env_set("MY_VAR", "value")
 let all_env = env_list()  # 敏感值自动掩码
 
-// CLI 参数（预定义常量 argv + 解析函数）
-// 命令行: helen tool.helen --verbose --output=json input.txt
+# CLI 参数（预定义常量 argv + 解析函数）
+# 命令行: helen tool.helen --verbose --output=json input.txt
 print(argv)  # ["--verbose", "--output=json", "input.txt"]
 
 let parsed = parse_cli_args()           # 自动解析
-// {verbose: true, output: "json", _positional: ["input.txt"]}
+# {verbose: true, output: "json", _positional: ["input.txt"]}
 
 let spec = {
     "verbose": {"type": "flag", "default": false},
@@ -400,26 +357,29 @@ let spec = {
 }
 let config = parse_cli_args(spec)       # 结构化解析（带类型+默认值）
 
-// Shell 命令（默认 shell=True，支持完整 shell 语法）
-// 使用 /bin/bash 执行，支持 brace expansion 等 bash 特性
-// 所有 shell 语法都支持：&&、||、|、>、<、;、$()、{} 等
+# Shell 命令（默认 shell=True，支持完整 shell 语法）
+# 使用 /bin/bash 执行，支持 brace expansion 等 bash 特性
+# 所有 shell 语法都支持：&&、||、|、>、<、;、$()、{} 等
 let result = shell_exec("ls -la")
 let result = shell_exec("mkdir -p ~/project/{src,tests,contracts}")  # 创建三个目录
 let result = shell_exec("cat file.txt | grep pattern | wc -l")
 let result = shell_exec("echo 'hello' > output.txt")
 print(result["output"])
 
-// 安全模式：shell=False 用于处理不可信输入
-// 当命令包含用户输入时，使用 shell=False 防止 shell 注入
+# 安全模式：shell=False 用于处理不可信输入
+# 当命令包含用户输入时，使用 shell=False 防止 shell 注入
 let user_input = "some_input"
 let result = shell_exec("echo " + user_input, shell=false)
 
-// 系统信息
-let pid = process_id()
-let os = platform()        # "linux", "darwin", "windows"
-let host = hostname()
+# 系统信息
+let pid = pid()                   # 进程 ID
+let os = platform()               # "linux", "darwin", "windows"
+let host = hostname()             # 主机名
+let py_ver = python_version()     # Python 版本
+let cpus = cpu_count()            # CPU 核心数
+let mem = memory_info()           # {total: ..., available: ..., used: ..., percent: ...}
 
-// 日志
+# 日志
 log_info("Application started")
 log_error("Something went wrong", category="app")
 ```
@@ -427,19 +387,28 @@ log_error("Something went wrong", category="app")
 ### Crypto（加密哈希）
 
 ```helen
-// 哈希
-let md5 = hash_md5("data")
-let sha256 = hash_sha256("data")
-let sha512 = hash_sha512("data")
+# 哈希
+let md5_hash = md5("data")
+let sha256_hash = sha256("data")
+let sha512_hash = sha512("data")
 
-// HMAC
+# HMAC
 let sig = hmac_sha256("message", "secret_key")
 
-// UUID
-let id = uuid_generate()  # "550e8400-e29b-41d4-a716-446655440000"
+# 随机数
+let rand = random()               # 0-1 随机浮点
+let rand_int = randint(1, 100)    # 随机整数
+let item = choice([1, 2, 3])      # 随机选择
 
-// 随机字节
-let bytes = random_bytes(16)  # 16 字节随机数据
+# UUID
+let id = uuid_generate()          # "550e8400-e29b-41d4-a716-446655440000"
+let nil_id = uuid_nil()           # "00000000-0000-0000-0000-000000000000"
+let parsed = uuid_from_string("550E8400-E29B-41D4-A716-446655440000")  # 规范化
+
+# 随机字节
+let bytes = random_bytes(16)      # 32 字符的十六进制字符串
+let hex_str = random_hex(32)      # 32 字符的十六进制字符串
+let b64 = random_base64(16)       # base64 编码的随机数据
 ```
 
 ## Observability（可观测性）
@@ -447,20 +416,20 @@ let bytes = random_bytes(16)  # 16 字节随机数据
 AI 原生可观测性函数，为 AI Agent 提供结构化调试上下文。
 
 ```helen
-// debug() — 结构化调试输出到 stderr
+# debug() — 结构化调试输出到 stderr
 let x = 42
 debug("variable value", x)
-// 输出: [DEBUG] variable value {"value": 42}
+# 输出: [DEBUG] variable value {"value": 42}
 
 debug("checkpoint reached")
-// 输出: [DEBUG] checkpoint reached
+# 输出: [DEBUG] checkpoint reached
 
-// trace_on() / trace_off() — 开启/关闭执行追踪
+# trace_on() / trace_off() — 开启/关闭执行追踪
 trace_on()
 let result = compute_something()
 trace_off()
 
-// get_trace() — 获取最近执行追踪记录
+# get_trace() — 获取最近执行追踪记录
 let trace = get_trace(10)
 print(trace)
 ```
@@ -469,204 +438,146 @@ print(trace)
 
 管理 LLM 对话上下文的函数，用于长对话 agent 的上下文控制。
 
-### 基础：清空与压缩
-
 ```helen
-// clear_context() — 清空当前对话上下文
-// 用于重新开始对话或重置上下文
+# clear_context() — 清空当前对话上下文
+# 用于重新开始对话或重置上下文
 let result = clear_context()
 print("已清空 " + str(result["cleared_messages"]) + " 条消息")
 print("释放约 " + str(result["cleared_tokens"]) + " tokens")
-// 返回: {"status": "ok", "cleared_messages": 5, "cleared_tokens": 1200, "warning": "..."}
+# 返回: {"status": "ok", "cleared_messages": 5, "cleared_tokens": 1200, "warning": "..."}
 
-// compress_context() — 压缩当前对话上下文
-// 用于减少 token 消耗，保留重要上下文
+# compress_context() — 压缩当前对话上下文
+# 用于减少 token 消耗，保留重要上下文
 let result = compress_context("auto")
-// 策略: "auto" (自动), "summarize" (LLM 摘要), "truncate" (截断), "none" (不压缩)
+# 策略: "auto" (自动), "summarize" (LLM 摘要), "truncate" (截断), "none" (不压缩)
 print("从 " + str(result["original_tokens"]) + " 压缩到 " + str(result["compressed_tokens"]) + " tokens")
-// 返回: {"status": "ok", "original_messages": 10, "compressed_messages": 5, ...}
-```
-
-### v1.19：检查 — 让 Agent 看见上下文状态
-
-```helen
-// context_stats() — 详细统计
-let stats = context_stats()
-print("消息数: " + str(stats["message_count"]))
-print("Token 数: " + str(stats["total_tokens"]))
-print("占用率: " + str(stats["usage_ratio"]))
-// stats["by_role"] = {system: N, user: N, assistant: N, tool: N}
-// stats["compressed_count"], stats["pinned_count"]
-
-// context_usage() — 轻量，只返回 0.0–1.0+ 的占用率
-if context_usage() > 0.7 {
-    compress_context("auto")
-}
-```
-
-### v1.19：细粒度消息操作
-
-```helen
-// get_message(uuid) — 按 UUID 读取
-let msg = get_message("abc-123-...")
-// 返回: {status, uuid, role, content, tool_call_id, token_count, compressed, pinned}
-
-// insert_message(role, content, position?) — 插入新消息
-insert_message("user", "few-shot example 1")
-insert_message("system", "important note", position="start")
-
-// replace_message(uuid, new_content) — 替换内容
-replace_message("abc-123-...", "corrected content")
-
-// delete_message(uuid) — 按 UUID 删除（逻辑删除，保留审计记录）
-let r = delete_message("abc-123-...")
-// 返回: {status, uuid, deleted_tokens}
-
-// pin_message(uuid) — 钉住，所有 5 层压缩都跳过
-pin_message("important-uuid")
-
-// unpin_message(uuid) — 取消钉住
-unpin_message("important-uuid")
-```
-
-### v1.19：工作记忆访问（P1）
-
-```helen
-// 读取
-let task = working_memory_get("task")            // 返回任务描述
-let all = working_memory_get()                   // 返回全部字段
-
-// 写入（list 类型 key 默认追加；传入 list 则替换）
-working_memory_set("task", "Build feature X")
-working_memory_set("active_files", "new.py")     // 追加
-working_memory_set("active_files", ["a.py"])     // 替换整个列表
-
-// 删除（item 为空时清空整个字段）
-working_memory_remove("active_files", "old.py")
-working_memory_remove("todos")                   // 清空 todos 字段
-
-// 清空全部
-working_memory_clear()
-```
-
-**可用 keys**: `task` | `active_files` | `decisions` | `todos` | `errors`
-
-### v1.19：运行时配置（P2）
-
-v1.19 之前，这些配置只能在 `agent context {}` 块中声明。现在支持运行时修改：
-
-```helen
-set_compression_strategy("graduated")    // "graduated" | "traditional" | "none"
-set_context_window(64000)                // 设置上下文窗口大小（token 数）
-set_working_memory_enabled(true)         // 开关工作记忆
-set_cache_aware(true)                    // 开关缓存感知
-let cfg = get_context_config()           // 查询当前配置
-// cfg: {compression_strategy, max_tokens, working_memory_enabled, cache_aware_enabled, working_memory_max_tokens}
-```
-
-### v1.19：查询（P3）
-
-```helen
-// 全文搜索（大小写不敏感）
-let r = search_context("TODO", role="user", limit=10)
-// r.matches: [{uuid, role, snippet, index}, ...]
-// r.total_matches: 总命中数
-
-// 上下文切片
-let slice = context_slice(start=5, end=20)
-// slice.messages: [{uuid, role, content, token_count, compressed, pinned, index}, ...]
-```
-
-### v1.19：多 Agent 上下文共享（P2/P3）
-
-```helen
-// 导出当前上下文为可传输的 dict
-let snapshot = export_context()
-// snapshot.context: {messages, working_memory, config}
-
-// 导入上下文（替换当前历史，可选恢复工作记忆）
-import_context(snapshot.context)
-
-// Fork：返回深拷贝快照（修改不影响原上下文）
-let forked = fork_context()
-```
-
-典型用途：
-- 通过 Channel 把当前对话上下文传给另一个 Agent
-- 保存上下文到磁盘用于 replay
-- Fork 后并行探索多个方向
-
-### v1.19：生命周期钩子（P1）
-
-```helen
-// 注册压缩事件回调
-on_compression(callback)
-// callback 接收: {layer, original_tokens, compressed_tokens, ...}
-
-// 注册上下文溢出回调（预留）
-on_context_overflow(callback)
-
-// 传 None 清除回调
-on_compression(None)
-```
-
-### Pinned 消息的压缩免疫
-
-`pin_message` 标记的消息在所有 5 层渐进压缩中都被保留：
-- **Layer 1** (Budget Reduction): 不替换其 tool 输出
-- **Layer 2** (Snip): 不丢弃（即使是"过期"轮次）
-- **Layer 3** (Microcompact): 不清除其内容
-- **Layer 4** (Context Collapse): 不归档（保留在投射视图中）
-- **Layer 5** (Auto-Compact): 不参与语义摘要
-
-典型用途：保护关键系统提示、Agent 做出的关键决策、few-shot 示例等。
-
-### 中文别名（v1.19 共 27 个上下文函数）
-
-```helen
-清除上下文()           // = clear_context()
-压缩上下文()           // = compress_context()
-定向压缩()             // = compress_context_target()
-上下文统计()           // = context_stats()
-上下文占用率()         // = context_usage()
-获取消息(uuid)         // = get_message(uuid)
-删除消息(uuid)         // = delete_message(uuid)
-钉住消息(uuid)         // = pin_message(uuid)
-取消钉住(uuid)         // = unpin_message(uuid)
-插入消息(...)          // = insert_message(...)
-替换消息(...)          // = replace_message(...)
-获取工作记忆(key?)     // = working_memory_get(key?)
-设置工作记忆(k, v)     // = working_memory_set(key, value)
-移除工作记忆(k, item?) // = working_memory_remove(key, item?)
-清空工作记忆()         // = working_memory_clear()
-设置压缩策略(s)        // = set_compression_strategy(strategy)
-设置上下文窗口(n)      // = set_context_window(tokens)
-设置工作记忆开关(b)    // = set_working_memory_enabled(enabled)
-设置缓存感知(b)        // = set_cache_aware(enabled)
-获取上下文配置()       // = get_context_config()
-搜索上下文(q, ...)     // = search_context(query, role?, limit?)
-上下文切片(...)        // = context_slice(start?, end?, role?)
-导出上下文()           // = export_context()
-导入上下文(data)       // = import_context(data)
-分叉上下文()           // = fork_context()
-压缩回调(cb)           // = on_compression(callback)
-溢出回调(cb)           // = on_context_overflow(callback)
+# 返回: {"status": "ok", "original_messages": 10, "compressed_messages": 5, ...}
 ```
 
 **使用场景**：
 - 长对话 agent 定期压缩上下文（避免 token 超限）
 - 用户要求"重新开始"时清空上下文
 - 错误恢复时重置上下文
-- Agent 自决压缩时机（agentic context management）：在 tool 循环中用 `context_usage()` 判断
-- 保护关键上下文：用 `pin_message` 钉住重要消息
 
 **注意事项**：
 - `clear_context()` 会清空所有对话历史，LLM 将失去之前的上下文
 - `compress_context("auto")` 只在 token 超过阈值时才压缩
 - `compress_context("summarize")` 会调用 LLM，较慢但保留上下文
 - `compress_context("truncate")` 快速但会丢失旧消息
-- `delete_message` 是逻辑删除（从内存移除），JSONL/SQLite 持久化记录保留用于审计
-- 原 `classify_message` 已内部化（`_classify_message`），不再对外暴露
+
+### Context 高级函数
+
+```helen
+// ═══════════════════════════════════════════════════════════════
+// 上下文检查 (Inspection)
+// ═══════════════════════════════════════════════════════════════
+
+// context_stats() — 上下文统计
+let stats = context_stats()
+// {message_count: 10, total_tokens: 2500, system_tokens: 500, ...}
+
+// context_usage() — 上下文占用率 (0.0-1.0)
+let usage = context_usage()
+if usage > 0.8 {
+    compress_context("auto")
+}
+
+// get_message(uuid) — 获取单条消息
+let msg = get_message("550e8400-e29b-41d4")
+print(msg["role"] + ": " + msg["content"])
+
+// ═══════════════════════════════════════════════════════════════
+// 细粒度变更 (Fine-grained Mutation)
+// ═══════════════════════════════════════════════════════════════
+
+// insert_message(role, content, index?) — 插入消息
+insert_message("system", "重要提示", 0)  // 插入到开头
+
+// replace_message(uuid, content) — 替换消息内容
+replace_message("msg-uuid", "新内容")
+
+// delete_message(uuid) — 删除消息
+delete_message("msg-uuid")
+
+// pin_message(uuid) / unpin_message(uuid) — 钉住消息（不受压缩影响）
+pin_message("important-msg")   // 钉住，压缩时保留
+unpin_message("important-msg") // 取消钉住
+
+// ═══════════════════════════════════════════════════════════════
+// 工作记忆 (Working Memory)
+// ═══════════════════════════════════════════════════════════════
+
+// 工作记忆自动跟踪活跃文件、最近决策、待办事项、错误历史
+working_memory_set("current_file", "main.py")
+working_memory_set("decision", "使用 JWT 认证")
+working_memory_set("todo", "修复登录 bug")
+
+let file = working_memory_get("current_file")  // "main.py"
+working_memory_remove("todo")
+working_memory_clear()  // 清空所有工作记忆
+
+// ═══════════════════════════════════════════════════════════════
+// 运行时配置 (Runtime Config)
+// ═══════════════════════════════════════════════════════════════
+
+// 动态调整压缩策略
+set_compression_strategy("graduated")  // "auto"|"summarize"|"truncate"|"none"|"graduated"
+
+// 设置上下文窗口大小
+set_context_window(128000)  // 128K tokens
+
+// 启用/禁用工作记忆
+set_working_memory_enabled(true)
+
+// 启用缓存感知压缩（提高缓存命中率）
+set_cache_aware(true)
+
+// 获取当前配置
+let config = get_context_config()
+// {strategy: "graduated", window: 128000, working_memory: true, cache_aware: true}
+
+// ═══════════════════════════════════════════════════════════════
+// 查询 (Query)
+// ═══════════════════════════════════════════════════════════════
+
+// search_context(query) — 搜索上下文
+let matches = search_context("认证")
+// [{uuid: "...", role: "user", content: "..."}, ...]
+
+// context_slice(start, end?) — 上下文切片
+let recent = context_slice(-5)  // 最近 5 条消息
+let range = context_slice(0, 10)  // 前 10 条消息
+
+// ═══════════════════════════════════════════════════════════════
+// 多 Agent 转移 (Multi-Agent Transfer)
+// ═══════════════════════════════════════════════════════════════
+
+// export_context() — 导出当前上下文
+let exported = export_context()
+// [{role: "user", content: "..."}, {role: "assistant", content: "..."}, ...]
+
+// import_context(messages) — 导入上下文到当前会话
+import_context(exported)
+
+// fork_context() — 分叉上下文（创建独立副本）
+let forked = fork_context()
+// 可以在另一个 agent 中使用，不影响原始上下文
+
+// ═══════════════════════════════════════════════════════════════
+// 生命周期钩子 (Lifecycle Hooks)
+// ═══════════════════════════════════════════════════════════════
+
+// on_compression(fn) — 压缩前回调
+on_compression(fn(stats) {
+    print("即将压缩: " + str(stats["token_count"]) + " tokens")
+})
+
+// on_context_overflow(fn) — 上下文溢出回调
+on_context_overflow(fn(stats) {
+    print("上下文溢出！当前: " + str(stats["usage_ratio"]))
+    compress_context("truncate")
+})
+```
 
 ### REPL 调试命令
 
@@ -681,11 +592,11 @@ on_compression(None)
 ### assert 语句
 
 ```helen
-// 运行时断言
+# 运行时断言
 assert x > 0
 assert x > 0, "x must be positive"
 
-// 断言失败抛出 AssertionError，可捕获
+# 断言失败抛出 AssertionError，可捕获
 try {
     assert false, "test"
 } catch AssertionError as e {
@@ -777,6 +688,253 @@ print(quality_report(source, "my_program.helen"))
 | 可维护性 | 10% | 长函数、高复杂度函数 |
 | 工程规范 | 10% | 命名规范、文件大小 |
 
+## Transcript（会话记录）
+
+TranscriptStore 是 v1.16 引入的 SSOT（Single Source of Truth），所有对话消息都持久化存储。
+
+```helen
+// ═══════════════════════════════════════════════════════════════
+// 会话管理
+// ═══════════════════════════════════════════════════════════════
+
+// get_session_id() — 获取当前会话 ID
+let session = get_session_id()
+print("当前会话: " + session)
+
+// list_sessions(scope?) — 列出所有会话
+let sessions = list_sessions()
+// [{session_id: "...", created_at: ..., modified_at: ..., size_bytes: ..., message_count: ..., scope: "global"|"project"}, ...]
+
+let global_sessions = list_sessions("global")   // 全局会话
+let project_sessions = list_sessions("project") // 项目会话
+
+// get_session_dir() / set_session_dir(path) — 会话目录管理
+let info = get_session_dir()
+// {status: "ok", session_dir: "/path/to/sessions", scope: "global"|"project"|"env_override", project_dir: str | null}
+print("会话目录: " + info["session_dir"])
+print("作用域: " + info["scope"])
+
+let result = set_session_dir("/custom/path")
+// {status: "ok", session_dir: "/custom/path", previous: "/previous/path"}
+if result["status"] == "ok" {
+    print("已切换到: " + result["session_dir"])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 会话回放与导出
+// ═══════════════════════════════════════════════════════════════
+
+// replay_transcript(session_id?, include_compressed?) — 回放会话
+let messages = replay_transcript()
+// [{role: "user", content: "...", uuid: "...", timestamp: ...}, ...]
+
+let full = replay_transcript("session_123", true)  // 包含压缩消息
+
+// export_transcript(session_id?, format?) — 导出会话
+export_transcript(null, "json")   // 导出当前会话为 JSON
+export_transcript(null, "text")   // 导出为纯文本
+
+// ═══════════════════════════════════════════════════════════════
+// 压缩审计
+// ═══════════════════════════════════════════════════════════════
+
+// get_compression_audit() — 获取压缩事件历史
+let audit = get_compression_audit()
+// [{timestamp: ..., strategy: ..., before_tokens: ..., after_tokens: ..., boundary_uuid: ...}, ...]
+
+// ═══════════════════════════════════════════════════════════════
+// 会话恢复与清理
+// ═══════════════════════════════════════════════════════════════
+
+// resume_session(session_id) — 恢复历史会话
+resume_session("session_123")
+
+// delete_session(session_id) — 删除指定会话
+delete_session("session_123")
+
+// delete_current_session(confirm?) — 删除当前会话
+delete_current_session(true)  // 需要确认
+
+// cleanup_sessions(keep_count?, older_than_days?) — 清理旧会话
+cleanup_sessions(keep_count=10)                    // 保留最近 10 个
+cleanup_sessions(older_than_days=30)               // 删除 30 天前的
+cleanup_sessions(keep_count=5, older_than_days=7)  // 组合条件
+```
+
+**会话作用域 (v1.20)**：
+- `global`: 存储在 `~/.helen/sessions/`
+- `project`: 存储在项目的 `.helen/sessions/`（需要 `.helen/`、`helen.yaml` 或 `helen.toml`）
+- `auto`（默认）: 自动检测项目目录，否则使用全局
+
+## Media（媒体/多模态）
+
+v1.17 引入多模态支持，`MediaPart` 是一等数据类型。
+
+```helen
+// ═══════════════════════════════════════════════════════════════
+// 创建媒体
+// ═══════════════════════════════════════════════════════════════
+
+// media(source, type?) — 从文件路径或 URL 创建
+let img = media("/path/to/image.png")
+let video = media("https://example.com/video.mp4")
+let audio = media("/path/to/audio.mp3", "audio")  // 显式指定类型
+
+// media_base64(data, mime, type?) — 从 base64 创建
+let base64_img = media_base64("iVBORw0KGgo...", "image/png")
+
+// ═══════════════════════════════════════════════════════════════
+// 检查媒体
+// ═══════════════════════════════════════════════════════════════
+
+// is_media(value) — 检查是否为 MediaPart
+if is_media(value) {
+    print("是媒体对象")
+}
+
+// media_type(value) — 获取媒体类型
+let t = media_type(img)  // "image" | "video" | "audio"
+
+// is_image(value) / is_video(value) / is_audio(value)
+if is_image(img) { print("是图片") }
+if is_video(video) { print("是视频") }
+if is_audio(audio) { print("是音频") }
+
+// ═══════════════════════════════════════════════════════════════
+// 格式适配器
+// ═══════════════════════════════════════════════════════════════
+
+// to_openai_parts(media_list) — 转换为 OpenAI 格式
+let openai_parts = to_openai_parts([img, video])
+// [{type: "image_url", image_url: {url: "..."}}, ...]
+
+// to_claude_parts(media_list) — 转换为 Claude 格式
+let claude_parts = to_claude_parts([img])
+// [{type: "image", source: {type: "base64", media_type: "...", data: "..."}}, ...]
+
+// to_gemini_parts(media_list) — 转换为 Gemini 格式
+let gemini_parts = to_gemini_parts([img])
+
+// ═══════════════════════════════════════════════════════════════
+// 媒体工具
+// ═══════════════════════════════════════════════════════════════
+
+// media_to_base64(media_part) — 转换为 base64 字符串
+let b64 = media_to_base64(img)
+
+// save_media(media_part, path) — 保存到文件
+save_media(img, "/path/to/save.png")
+
+// ═══════════════════════════════════════════════════════════════
+// 在 llm act 中使用
+// ═══════════════════════════════════════════════════════════════
+
+llm act "分析这张图片"
+    media("/path/to/image.png")
+    on_media fn(parts, provider) {
+        // 自定义适配器：将 MediaPart 转换为 provider 特定格式
+        if provider == "claude" {
+            return to_claude_parts(parts)
+        }
+        return to_openai_parts(parts)
+    }
+```
+
+## LLM（大模型调用控制）
+
+控制正在进行的 LLM 流式调用。
+
+```helen
+// cancel_llm_call(call_id) — 取消指定的 LLM 调用
+let call_id = current_llm_call_id()
+if call_id != null {
+    cancel_llm_call(call_id)
+}
+
+// current_llm_call_id() — 获取当前活跃的流式调用 ID
+let id = current_llm_call_id()
+// 返回 string | null
+
+// cancel_all_llm_calls() — 取消所有活跃的流式调用
+let cancelled_count = cancel_all_llm_calls()
+print("已取消 " + str(cancelled_count) + " 个调用")
+
+// 中文别名
+取消大模型调用(call_id)
+let id = 当前大模型调用id()
+取消所有大模型调用()
+```
+
+**使用场景**：
+- 在 `on_chunk` 回调中检测终止条件并中断流式输出
+- 用户按 Ctrl+C 时取消后台调用
+- 超时控制
+
+## Concurrency（并发）
+
+v1.18 引入基于 Channel 的消息传递并发模型。
+
+```helen
+// ═══════════════════════════════════════════════════════════════
+// spawn — 启动并发 Agent
+// ═══════════════════════════════════════════════════════════════
+
+agent Worker(task: str) {
+    main {
+        // 执行任务...
+        return "结果"
+    }
+}
+
+// spawn 返回 Channel（邮箱）
+let ch = spawn Worker("任务 1")
+
+// ═══════════════════════════════════════════════════════════════
+// Channel 方法
+// ═══════════════════════════════════════════════════════════════
+
+ch.send("消息")              // 发送消息
+let msg = ch.receive()       // 阻塞接收
+let maybe = ch.try_receive() // 非阻塞接收（返回 null 如果无消息）
+ch.cancel()                  // 取消（中断正在进行的流式调用）
+ch.close()                   // 关闭通道
+let closed = ch.is_closed()  // 检查是否已关闭
+
+// 中文别名
+发送("消息")
+接收()
+尝试接收()
+取消()
+关闭()
+已关闭()
+
+// ═══════════════════════════════════════════════════════════════
+// mailbox_select — 多通道选择
+// ═══════════════════════════════════════════════════════════════
+
+// 竞争模式：谁先完成用谁
+let m1 = spawn StrategyA()
+let m2 = spawn StrategyB()
+let m3 = spawn StrategyC()
+
+let result = mailbox_select([m1, m2, m3])
+// {endpoint: Channel, message: "..."}
+
+// 带超时
+let result = mailbox_select([m1, m2], timeout=5.0)  // 5 秒超时
+if result == null {
+    print("超时")
+}
+
+// 中文别名
+let result = 邮箱选择([m1, m2, m3])
+```
+
+**关键特性**：
+- **快照语义**: spawn 时深拷贝所有变量（包括 SharedStore），Agent 间数据共享通过 Channel 消息显式传递
+- **隔离环境**: 每个 spawned agent 运行在独立环境中
+- **流式中断**: `ch.cancel()` 可以中断正在进行的流式 LLM 调用
+
 ## 异常处理 (v1.9+)
 
 标准库函数调用时抛出的 Python 异常会自动包装为 `RuntimeError`，可通过 try-catch 捕获：
@@ -797,158 +955,70 @@ try {
 
 异常消息格式为 `"Python <类型名>: <原始消息>"`，可在 catch 块中通过消息前缀区分具体的 Python 异常类型。已存在的 Helen 异常（如 `TimeoutError`）保持原有类型不变。
 
+---
 
-## Transcript 会话删除 (v1.21+)
+## ⚠️ 使用 stdlib 时的注意事项：模块缓存
 
-Helen 提供三种方式永久删除 TranscriptStore 会话数据，释放磁盘空间。
+### 问题场景
 
-### delete_session(session_id) — 删除指定会话
+在 Python REPL、Jupyter 或 Web 服务中使用 Helen stdlib 函数时，如果修改了导入的 `.helen` 模块文件，**修改不会自动生效**！
 
-永久删除指定会话的所有数据（transcript 文件、压缩历史、索引等）。此操作不可逆。
+```python
+# Python REPL 中
+from helen.interpreter import Interpreter
 
-```helen
-// 删除指定会话
-let r = delete_session("session_1720435200_a1b2c3d4")
-if r["status"] == "ok" {
-    print("删除成功，释放 " + str(r["freed_bytes"]) + " 字节")
-} else {
-    print("删除失败: " + r["message"])
-}
+interp = Interpreter()
+interp.execute_file("my_utils.helen")  # 加载 v1
+interp.execute("print(custom_function())")  # 使用 v1 的函数
 
-// 中文别名
-let r = 删除会话("session_123")
+# 修改 my_utils.helen...
+
+interp.execute_file("my_utils.helen")  # ❌ 仍然是 v1！
 ```
 
-**返回值**：
-```
-{
-    "status": "ok" | "error",
-    "session_id": str,
-    "message": str,
-    "freed_bytes": int,  // 仅成功时返回
-}
-```
+### 根本原因
 
-**注意**：不能删除当前会话，请使用 `delete_current_session()`。
+`ImportResolver` 使用内存缓存（`_cached_results`）加速重复导入：
 
-### delete_current_session(confirm?) — 删除当前会话
-
-永久删除当前会话的所有数据。需要显式确认（`confirm=true`），防止误操作。
-
-```helen
-// 第一次调用：查看确认提示
-let r = delete_current_session()
-print(r["message"])  // "Set confirm=true to delete current session"
-
-// 第二次调用：确认删除
-let r = delete_current_session(confirm=true)
-if r["status"] == "ok" {
-    print("当前会话已删除，释放 " + str(r["freed_bytes"]) + " 字节")
-}
-
-// 中文别名
-删除当前会话(confirm=true)
+```python
+class ImportResolver:
+    def __init__(self):
+        self._cached_results: dict[str, ImportResult] = {}
 ```
 
-**返回值**：
-```
-{
-    "status": "ok" | "error",
-    "session_id": str,
-    "message": str,
-    "freed_bytes": int,  // 仅成功时返回
-}
-```
+### 快速解决方案
 
-**警告**：此操作会删除当前会话的所有数据，解释器会继续运行，但会自动开始新会话。
+```python
+# 方案 1: 每次新建 Interpreter（简单）
+interp = Interpreter()
+interp.execute_file("my_utils.helen")
 
-### cleanup_sessions(keep_count?, older_than_days?) — 批量清理
+# 方案 2: 手动清除缓存（高效）
+interp.import_resolver._cached_results.clear()
+interp.import_resolver._loaded.clear()
+interp.execute_file("my_utils.helen")  # ✅ 重新加载
 
-批量清理旧会话以释放磁盘空间。支持两种策略：按数量保留或按时间删除。
-
-```helen
-// 保留最近 50 个会话，删除其余
-let r = cleanup_sessions(keep_count=50)
-print("删除了 " + str(r["deleted_count"]) + " 个旧会话")
-print("释放了 " + str(r["freed_bytes"]) + " 字节")
-
-// 删除 30 天前的会话
-let r = cleanup_sessions(older_than_days=30)
-
-// 组合使用：保留最近 50 个，且删除 30 天前的
-let r = cleanup_sessions(keep_count=50, older_than_days=30)
-
-// 中文别名
-清理会话(50)
-清理会话(older_than_days=30)
+# 方案 3: 使用 CLI 开发（推荐）
+# bash: helen my_program.helen  # 每次新进程，自动重新加载
 ```
 
-**返回值**：
-```
-{
-    "status": "ok",
-    "deleted_count": int,
-    "freed_bytes": int,
-    "message": str,
-}
-```
+### 调试 stdlib 时的技巧
 
-**注意**：不会删除当前会话，即使它不在保留范围内。
+```python
+# 检查哪些文件被缓存了
+print(f"Cached: {len(interp.import_resolver._cached_results)} files")
 
-### 设计原则
-
-Helen 采用**审计追踪优先**的设计：
-
-1. **逻辑删除**（默认）：
-   - `delete_message(uuid)` — 从内存删除，保留持久化数据
-   - `clear_context()` — 添加 BoundaryMarker，保留持久化数据
-   - 用途：保持审计追踪，可回放历史
-
-2. **永久删除**（显式）：
-   - `delete_session()` — 真正删除持久化数据
-   - `delete_current_session()` — 删除当前会话数据
-   - `cleanup_sessions()` — 批量删除旧会话
-   - 用途：释放磁盘空间，隐私合规
-
-### 使用场景
-
-**场景 1：磁盘空间管理**
-```helen
-agent LongRunningAgent {
-    main {
-        // 每天清理一次，保留最近 100 个会话
-        cleanup_sessions(keep_count=100)
-    }
-}
+# 列出所有已加载的文件
+for path in interp.import_resolver._loaded:
+    print(f"  - {path}")
 ```
 
-**场景 2：隐私合规（GDPR）**
-```helen
-// 用户请求删除其会话
-fn handle_deletion_request(session_id: str) {
-    let r = delete_session(session_id)
-    if r["status"] == "ok" {
-        print("已删除用户会话，符合 GDPR 要求")
-    }
-}
-```
+### 相关文档
 
-**场景 3：测试环境清理**
-```helen
-// 测试结束后清理所有会话
-fn cleanup_test_sessions() {
-    let r = cleanup_sessions(keep_count=0)
-    print("测试环境已清理")
-}
-```
+- `wiki/runtime/import.md` — 完整的缓存机制说明
+- `wiki/tutorial/08-modules.md` — 开发时的注意事项
 
-### 相关函数
+---
 
-| 函数 | 说明 |
-|------|------|
-| `list_sessions()` | 列出所有会话 |
-| `get_session_id()` | 获取当前会话 ID |
-| `delete_message(uuid)` | 逻辑删除消息（保留审计） |
-| `clear_context()` | 清空上下文（保留审计） |
-| `delete_session(id)` | 永久删除会话 |
-| `cleanup_sessions()` | 批量清理会话 |
+**最后更新**: 2026-07-16
+

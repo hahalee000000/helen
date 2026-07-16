@@ -1,0 +1,1 @@
+{"type": "message", "role": "user", "content": "Hello world", "tool_calls": [], "tool_call_id": null, "uuid": "e376d1ca77a2", "message_type": null, "priority": 50, "compressed": false, "pinned": false}

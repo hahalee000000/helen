@@ -1612,3 +1612,133 @@ for config in configs {
 
 **优势**: 新增角色只需添加配置，无需修改代码。
 
+---
+
+## ⚠️ 开发 Agent 时的重要陷阱：模块缓存
+
+### 问题场景
+
+在开发 Agent 时，经常需要迭代修改 `.helen` 文件。但如果你在**同一个 Python 进程**内（REPL、Web 服务、Jupyter）测试 Agent，修改代码后**不会自动生效**！
+
+```python
+# 场景 1: Python REPL 中开发 Agent
+from helen.interpreter import Interpreter
+
+interp = Interpreter()
+result = interp.execute_file("my_agent.helen")  # 加载 v1
+
+# 修改 my_agent.helen（添加新功能）...
+
+result = interp.execute_file("my_agent.helen")  # ❌ 仍然是 v1！
+```
+
+```python
+# 场景 2: Web 服务中复用 Interpreter
+from helen.interpreter import Interpreter
+
+# 全局 Interpreter（错误模式）
+interp = Interpreter()
+
+@app.post("/chat")
+def chat():
+    return interp.execute_file("chat_agent.helen")  # ❌ 首次加载后永远用缓存
+```
+
+### 根本原因
+
+Helen 的 `ImportResolver` 使用**内存级缓存**（`_cached_results` 字典）来加速重复导入：
+
+```python
+class ImportResolver:
+    def __init__(self):
+        self._cached_results: dict[str, ImportResult] = {}
+```
+
+- ✅ **CLI 模式**（`helen my_agent.helen`）：每次都新进程，自动重新加载
+- ❌ **长时间进程**（REPL/Web 服务）：缓存不会自动失效
+
+### 解决方案
+
+#### 方案 1: 每次请求创建新的 Interpreter（推荐）
+
+```python
+from helen.interpreter import Interpreter
+
+@app.post("/chat")
+def chat():
+    # ✅ 每次请求新建 Interpreter，缓存自动清空
+    interp = Interpreter()
+    return interp.execute_file("chat_agent.helen")
+```
+
+#### 方案 2: 实现 mtime 检查（高性能场景）
+
+```python
+import os
+from helen.interpreter import Interpreter
+
+class HotReloadInterpreter:
+    def __init__(self):
+        self.interp = Interpreter()
+        self._mtimes = {}
+    
+    def execute_if_changed(self, file_path: str):
+        current_mtime = os.path.getmtime(file_path)
+        cached_mtime = self._mtimes.get(file_path)
+        
+        if cached_mtime is None or current_mtime > cached_mtime:
+            # 文件已修改，清除缓存
+            self.interp.import_resolver._cached_results.clear()
+            self.interp.import_resolver._loaded.clear()
+            self._mtimes[file_path] = current_mtime
+        
+        return self.interp.execute_file(file_path)
+
+# 使用
+smart_interp = HotReloadInterpreter()
+result = smart_interp.execute_if_changed("chat_agent.helen")
+```
+
+#### 方案 3: 提供热重载 API
+
+```python
+@app.post("/reload")
+def reload_agents():
+    """手动触发重新加载"""
+    interp.import_resolver._cached_results.clear()
+    interp.import_resolver._loaded.clear()
+    return {"status": "ok", "message": "Cache cleared"}
+```
+
+### 调试技巧
+
+```python
+# 检查缓存状态
+print(f"Cached files: {len(interp.import_resolver._cached_results)}")
+print(f"Loaded files: {interp.import_resolver._loaded}")
+
+# 强制清除
+interp.import_resolver._cached_results.clear()
+interp.import_resolver._loaded.clear()
+```
+
+### 最佳实践总结
+
+| 场景 | 推荐做法 | 原因 |
+|------|---------|------|
+| 本地开发 | 使用 `helen` CLI | 每次新进程，自动重新加载 |
+| Web 服务 | 每次请求新建 Interpreter | 简单可靠，避免缓存问题 |
+| 高性能服务 | 实现 mtime 检查 | 兼顾性能和热重载 |
+| 生产环境 | 预加载 + 禁用热重载 | 启动时加载一次，运行时无开销 |
+
+### 相关文档
+
+- `wiki/runtime/import.md` — 完整的缓存机制说明
+- `wiki/tutorial/08-modules.md` — 开发时的注意事项
+- GitHub Issue #15 — 问题诊断报告
+
+---
+
+**最后更新**: 2026-07-16  
+**版本**: v1.21
+
