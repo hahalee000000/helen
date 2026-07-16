@@ -1,11 +1,12 @@
 # 版本历史
 
-> Helen v1.21 (开发中) — `on_tool_end` 回调：工具执行后注入 hint 到 agentic loop
+> Helen v1.21 | PyPI 已发布 — `pip install helen-lang` — on_tool_end 回调：agentic loop 中间注入 hint
 
 ---
 
-## v1.21: on_tool_end 回调 — Agentic Loop 中间注入提示 (开发中)
+## v1.21: on_tool_end 回调 — Agentic Loop 中间注入提示
 
+**发布日期**: 2026-07-16
 **核心特性**: `llm act` 新增 `on_tool_end` 回调，在每个工具执行完毕后调用用户回调，返回值注入为 LLM 可见的消息。
 
 ### 新增语法
