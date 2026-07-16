@@ -1,3 +1,0 @@
-{"type": "message", "role": "user", "content": "msg1", "tool_calls": [], "tool_call_id": null, "uuid": "bc83d095bf1a", "message_type": null, "priority": 50, "compressed": false, "pinned": false}
-{"type": "message", "role": "assistant", "content": "msg2", "tool_calls": [], "tool_call_id": null, "uuid": "1eb11edbc2db", "message_type": null, "priority": 50, "compressed": false, "pinned": false}
-{"type": "message", "role": "user", "content": "msg3", "tool_calls": [], "tool_call_id": null, "uuid": "0b5ab4ad71fe", "message_type": null, "priority": 50, "compressed": false, "pinned": false}

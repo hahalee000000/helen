@@ -31,3 +31,6 @@ quick_test.py
 test2.py
 v1.py
 verify.py
+
+# Helen sessions (transcript recordings)
+.helen/sessions/
