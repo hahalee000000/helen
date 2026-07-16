@@ -513,6 +513,7 @@ class HttpLLMRuntime(LLMRuntime):
         history: list[dict[str, Any]] | None = None,
         system_prompt: str | None = None,
         dispatch_fn: Any = None,
+        on_tool_end_fn: Any = None,
     ) -> LLMResponse:
         """Execute an autonomous LLM action with enhanced reliability.
 
@@ -523,6 +524,7 @@ class HttpLLMRuntime(LLMRuntime):
         - Iteration budget to prevent infinite loops
         - Tool result truncation to prevent context explosion
         - Message sanitization to fix encoding issues
+        - on_tool_end callback for mid-loop hint injection (v1.21)
 
         Args:
             dispatch_fn: Optional custom tool dispatch function.
@@ -628,6 +630,32 @@ class HttpLLMRuntime(LLMRuntime):
                         "args": tc["function"].get("arguments", "{}"),
                         "result": result[:500] if len(result) > 500 else result,
                     })
+
+                # Phase 8C: on_tool_end callback — inject hints into messages
+                if on_tool_end_fn is not None:
+                    for tc, result in tool_results:
+                        try:
+                            fn_name = tc["function"]["name"]
+                            hint = on_tool_end_fn(fn_name, result)
+                            if hint is not None:
+                                if isinstance(hint, str):
+                                    messages.append({
+                                        "role": "user",
+                                        "content": (
+                                            f"[System Hint — after tool '{fn_name}']\n"
+                                            f"{hint}"
+                                        ),
+                                    })
+                                elif isinstance(hint, dict):
+                                    role = hint.get("role", "user")
+                                    content = hint.get("content", "")
+                                    if content:
+                                        messages.append({
+                                            "role": role,
+                                            "content": content,
+                                        })
+                        except Exception as e:
+                            logger.debug("on_tool_end callback error (non-fatal): %s", e)
 
                 # Phase 9B: Reactive compaction check after tool results
                 if getattr(self, 'enable_reactive_compaction', False) and \
@@ -910,6 +938,7 @@ class HttpLLMRuntime(LLMRuntime):
         history: list[dict[str, Any]] | None = None,
         dispatch_fn: Any = None,
         cancel_event: Any = None,
+        on_tool_end_fn: Any = None,
     ):
         """Stream LLM response with enhanced reliability features.
 
@@ -920,6 +949,7 @@ class HttpLLMRuntime(LLMRuntime):
         - Iteration budget to prevent infinite loops
         - Tool result truncation to prevent context explosion
         - Message sanitization to fix encoding issues
+        - on_tool_end callback for mid-loop hint injection (v1.21)
 
         Args:
             dispatch_fn: Optional custom tool dispatch function.
@@ -1152,6 +1182,43 @@ class HttpLLMRuntime(LLMRuntime):
                             "tool_call_id": tc["id"],
                             "content": result,
                         })
+
+                    # Phase 8C: on_tool_end callback — inject hints into messages
+                    if on_tool_end_fn is not None:
+                        for tc, result in tool_results:
+                            try:
+                                fn_name = tc["function"]["name"]
+                                hint = on_tool_end_fn(fn_name, result)
+                                if hint is not None:
+                                    if isinstance(hint, str):
+                                        hint_content = (
+                                            f"[System Hint — after tool '{fn_name}']\n"
+                                            f"{hint}"
+                                        )
+                                        messages.append({
+                                            "role": "user",
+                                            "content": hint_content,
+                                        })
+                                        yield {
+                                            "type": "hint",
+                                            "content": hint_content,
+                                        }
+                                    elif isinstance(hint, dict):
+                                        role = hint.get("role", "user")
+                                        content = hint.get("content", "")
+                                        if content:
+                                            messages.append({
+                                                "role": role,
+                                                "content": content,
+                                            })
+                                            yield {
+                                                "type": "hint",
+                                                "content": content,
+                                            }
+                            except Exception as e:
+                                logger.debug(
+                                    "on_tool_end callback error (non-fatal): %s", e
+                                )
 
                     # Phase 9B: Reactive compaction check after tool results (stream)
                     if getattr(self, 'enable_reactive_compaction', False) and \

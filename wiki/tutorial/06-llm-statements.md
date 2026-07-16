@@ -240,6 +240,50 @@ main {
 | `llm act` | 获取完整响应文本（可选流式回调） | 等待完成后返回，或通过 on_chunk 逐 chunk 输出 |
 | `llm if` | LLM 分类路由 | 等待完成后执行分支 |
 
+### 工具执行回调（on_tool_end）
+
+`llm act` 支持 `on_tool_end` 回调，在每个工具执行完毕后调用。回调可以返回字符串或 dict，作为 hint 注入对话历史，让 LLM 在下一次生成时看到。这在需要在 agentic loop 中间引导 LLM 方向时非常有用。
+
+**回调签名**：`fn(tool_name: str, tool_result: str): str | dict | null`
+
+- 返回字符串 → 自动注入为 `user` 消息，带 `[System Hint]` 前缀
+- 返回 dict → `{"role": "user"|"system", "content": "..."}` 完全控制消息格式
+- 返回 null → 不注入
+
+```helen
+agent Coder {
+    tools ["write_file", "shell_exec", "read_file"]
+
+    main {
+        llm act "Create hello.py, then run it"
+            on_chunk fn(c) { stream_print(c) }
+            on_tool_end fn(name, result) {
+                if name == "write_file" {
+                    return "文件已写入，下一步可以运行测试验证"
+                }
+                if name == "shell_exec" {
+                    return {"role": "system", "content": "注意：不要执行危险命令"}
+                }
+                return null
+            }
+    }
+}
+```
+
+使用中文别名：
+
+```helen
+llm act "Create hello.py" 工具结束 fn(name, result) {
+    return "提示内容"
+}
+```
+
+**典型应用场景**：
+- 工具执行后提供下一步建议，引导 LLM 方向
+- 安全审计：在 shell_exec 后注入安全警告
+- 外部状态同步：查询外部队列，将新信息注入对话
+- 进度追踪：在文件操作后更新 TODO 列表
+
 ---
 
 ## 对比：何时使用哪个？
@@ -250,6 +294,7 @@ main {
 | 需要 LLM 做分类决策 | `llm if` |
 | 需要 LLM 从选项中选择并执行代码 | `llm if` + `branch` |
 | 需要实时输出生成过程 | `llm act` + `on_chunk` 回调 |
+| 需要在工具执行后引导 LLM | `llm act` + `on_tool_end` 回调 |
 | 多步骤决策 | 嵌套 `llm if` |
 | 需要结果变量 | `llm if` 或 `llm act` |
 

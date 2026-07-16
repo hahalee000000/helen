@@ -694,6 +694,66 @@ cancel_llm_call(call_id)
 取消大模型调用(call_id)  // 中文别名
 ```
 
+### 模式 5B: 工具执行后注入提示（on_tool_end）
+
+**场景**：在 agentic loop 中间，工具执行完毕后引导 LLM 方向、注入外部信息或安全约束。
+
+**v1.21 新增**：`on_tool_end` 回调在每个工具执行后调用，返回值注入为 LLM 可见的消息。
+
+**回调签名**：`fn(tool_name: str, tool_result: str): str | dict | null`
+- 返回字符串 → 注入为 `user` 消息（带 `[System Hint]` 前缀）
+- 返回 dict → `{"role": "user"|"system", "content": "..."}`，完全控制
+- 返回 null → 不注入
+
+```helen
+agent Coder {
+    tools ["write_file", "shell_exec", "read_file"]
+
+    main {
+        llm act "Create hello.py and run it"
+            on_chunk fn(c) { stream_print(c) }
+            on_tool_end fn(name, result) {
+                // 写入文件后建议下一步
+                if name == "write_file" {
+                    return "文件已写入，下一步可以运行测试验证"
+                }
+                // shell_exec 后注入安全约束（使用 dict 控制角色）
+                if name == "shell_exec" {
+                    return {"role": "system", "content": "禁止执行 rm -rf 等危险命令"}
+                }
+                return null  // 其他工具不注入
+            }
+    }
+}
+```
+
+**外部队列集成**：从外部系统获取 hint 注入对话：
+
+```helen
+agent Worker {
+    tools ["read_file", "write_file"]
+
+    main {
+        llm act "完成分配的任务"
+            on_tool_end fn(name, result) {
+                let hint = get_hint_from_queue()  // 查询外部队列
+                if hint != null {
+                    return hint
+                }
+                return null
+            }
+    }
+}
+```
+
+**与其他回调的组合**：`on_tool_end` 可与 `on_chunk`/`on_complete` 同时使用。
+```helen
+llm act "task"
+    逐块处理 fn(c) { stream_print(c) }
+    完成 fn() { print("\n✅ 完成") }
+    工具结束 fn(name, result) { return "提示" }
+```
+
 ### 模式 6: 工具使用 Agent
 
 **场景**：Agent 使用工具完成复杂任务

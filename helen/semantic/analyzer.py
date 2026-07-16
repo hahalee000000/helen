@@ -1598,6 +1598,8 @@ class SemanticAnalyzer(Visitor[None]):
             node.on_chunk.accept(self)
         if node.on_complete is not None:
             node.on_complete.accept(self)
+        if node.on_tool_end is not None:
+            node.on_tool_end.accept(self)
         if node.on_media is not None:
             node.on_media.accept(self)
 

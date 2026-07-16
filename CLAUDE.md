@@ -120,7 +120,9 @@ helen/
 - **LLM primitives**: `llm act` (tool-calling loop + optional callbacks, usable as expression since v1.10), `llm if` (LLM-routed branching)
   - v1.14: `llm stream` **deleted** — streaming merged into `llm act` with optional callbacks
   - v1.17: 新增 `on_media` / `on_generate` / `provider` 子句，支持多模态输入与文生图/视频
-  - Syntax: `llm act "prompt" [media(...)] [provider("...")] [on_media fn(...)] [on_generate fn(...)] [on_chunk fn(...)] [on_complete fn(...)]`
+  - v1.21: 新增 `on_tool_end fn(name, result)` 回调——在每个工具执行后调用，返回 str/dict 注入 hint 到下一次 LLM 调用，返回 null 不注入。用于 agentic loop 中间引导 LLM 方向
+  - Syntax: `llm act "prompt" [media(...)] [provider("...")] [on_media fn(...)] [on_generate fn(...)] [on_chunk fn(...)] [on_complete fn(...)] [on_tool_end fn(...)]`
+  - 中文别名：`逐块处理`(on_chunk)、`完成`(on_complete)、`工具结束`(on_tool_end)、`处理媒体`(on_media)、`生成`(on_generate)
 - **Multimodal support (v1.17)**: 回调即适配器——协议差异由用户回调处理，Helen 核心不内置 provider 格式
   - **`media()` stdlib 函数**：普通函数（非关键字），返回 `MediaPart` 对象，自动识别文件路径/URL/base64
   - **`MediaPart` 数据类型**：一等公民，可赋值、传参、存入列表；字段：`source`/`content`/`mime`/`media_type`/`metadata`

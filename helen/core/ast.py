@@ -1010,7 +1010,7 @@ class LlmIfStmtNode(StatementNode):
 
 @dataclass(frozen=True)
 class LlmActExprNode(ExpressionNode):
-    """LLM act as an expression: llm act <prompt_expr>? [media(...)]* [on_chunk <cb>] [on_complete <cb>] [on_media <cb>] [on_generate <cb>]* [provider(<expr>)].
+    """LLM act as an expression: llm act <prompt_expr>? [media(...)]* [on_chunk <cb>] [on_complete <cb>] [on_tool_end <cb>] [on_media <cb>] [on_generate <cb>]* [provider(<expr>)].
 
     Without callbacks: synchronous LLM call, returns response text.
     With callbacks: streaming LLM call, calls on_chunk for each chunk,
@@ -1025,12 +1025,18 @@ class LlmActExprNode(ExpressionNode):
     - on_generate: List of callbacks for media generation tools
     - provider: Provider hint for default adaptation
 
+    Tool-end callback (v1.21):
+    - on_tool_end: Callback invoked after each tool execution in the agentic
+      loop. Returns str (injected as user hint), dict ({"role":..., "content":...}),
+      or None (no injection). Allows mid-loop hint injection.
+
     Syntax:
         llm act                                  # Bare form (in agent main)
         llm act "prompt"                         # Sync, returns text
         llm act "prompt" media("./img.png")      # With media input
         llm act "prompt" on_chunk callback       # Streaming with chunk callback
         llm act "prompt" on_complete callback    # Streaming with completion callback
+        llm act "prompt" on_tool_end callback    # Inject hint after each tool
         llm act "prompt" on_media fn(...)        # Custom media adapter
         llm act "prompt" on_generate fn(...)     # Media generation tool
         llm act "prompt" provider("openai")      # Provider hint
@@ -1040,6 +1046,7 @@ class LlmActExprNode(ExpressionNode):
     media: list[ExpressionNode] = field(default_factory=list)
     on_chunk: ExpressionNode | None = None
     on_complete: ExpressionNode | None = None
+    on_tool_end: ExpressionNode | None = None
     on_media: ExpressionNode | None = None
     on_generate: list[ExpressionNode] = field(default_factory=list)
     provider: ExpressionNode | None = None

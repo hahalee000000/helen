@@ -537,6 +537,18 @@ fn on_complete() {
 }
 
 llm act "Write a story" on_chunk handle_chunk on_complete on_complete
+
+// llm act 带工具回调 (v1.21)
+// on_tool_end 在 agentic loop 中每个工具执行后调用
+// 返回 str → 注入为 user hint；返回 dict → 完全控制；返回 null → 不注入
+llm act "Build project"
+    on_tool_end fn(name, result) {
+        if name == "shell_exec" { return "运行测试验证结果" }
+        return null
+    }
+
+// 中文别名：逐块处理(on_chunk)、完成(on_complete)、工具结束(on_tool_end)
+llm act "task" 工具结束 fn(name, result) { return "提示" }
 ```
 
 ### spawn 并发 (v1.18)

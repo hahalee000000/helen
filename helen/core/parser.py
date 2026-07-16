@@ -316,6 +316,7 @@ class Parser:
                 [media(...)]*
                 [on_chunk <cb>]
                 [on_complete <cb>]
+                [on_tool_end <cb>]
                 [on_media <cb>]
                 [on_generate <cb>]*
                 [provider(<expr>)]
@@ -333,8 +334,11 @@ class Parser:
         self._consume(TokenType.ACT, "Expected 'act' after 'llm'.")
         act_token = self._previous()
 
-        # Clause keywords that indicate bare form
-        clause_keywords = ("on_chunk", "on_complete", "on_media", "on_generate", "provider")
+        # Clause keywords that indicate bare form (including Chinese aliases)
+        clause_keywords = (
+            "on_chunk", "on_complete", "on_tool_end", "on_media", "on_generate",
+            "provider", "逐块处理", "完成", "工具结束", "处理媒体", "生成",
+        )
 
         # Check if there's an expression following 'llm act'.
         # If we hit a statement terminator or a new statement keyword, treat as bare form.
@@ -360,6 +364,7 @@ class Parser:
         media_exprs: list[ExpressionNode] = []
         on_chunk_expr: ExpressionNode | None = None
         on_complete_expr: ExpressionNode | None = None
+        on_tool_end_expr: ExpressionNode | None = None
         on_media_expr: ExpressionNode | None = None
         on_generate_exprs: list[ExpressionNode] = []
         provider_expr: ExpressionNode | None = None
@@ -370,16 +375,21 @@ class Parser:
                     and self._current().lexeme in ("media", "媒体")
                     and self._peek_next().type == TokenType.LEFT_PAREN):
                 media_exprs.append(self._expression())
-            # on_chunk callback
+            # on_chunk callback (Chinese alias: 逐块处理)
             elif (self._check(TokenType.IDENTIFIER)
-                  and self._current().lexeme in ("on_chunk",)):
+                  and self._current().lexeme in ("on_chunk", "逐块处理")):
                 self._advance()
                 on_chunk_expr = self._expression()
-            # on_complete callback
+            # on_complete callback (Chinese alias: 完成)
             elif (self._check(TokenType.IDENTIFIER)
-                  and self._current().lexeme in ("on_complete",)):
+                  and self._current().lexeme in ("on_complete", "完成")):
                 self._advance()
                 on_complete_expr = self._expression()
+            # on_tool_end callback (Chinese alias: 工具结束)
+            elif (self._check(TokenType.IDENTIFIER)
+                  and self._current().lexeme in ("on_tool_end", "工具结束")):
+                self._advance()
+                on_tool_end_expr = self._expression()
             # on_media callback
             elif (self._check(TokenType.IDENTIFIER)
                   and self._current().lexeme in ("on_media", "处理媒体")):
@@ -403,6 +413,7 @@ class Parser:
             media=media_exprs,
             on_chunk=on_chunk_expr,
             on_complete=on_complete_expr,
+            on_tool_end=on_tool_end_expr,
             on_media=on_media_expr,
             on_generate=on_generate_exprs,
             provider=provider_expr,
@@ -1306,6 +1317,7 @@ class Parser:
         - llm act "prompt" media("./img.png")      — with media input
         - llm act "prompt" on_chunk callback       — streaming with chunk callback
         - llm act "prompt" on_complete callback    — streaming with completion callback
+        - llm act "prompt" on_tool_end callback    — inject hint after each tool
         - llm act "prompt" on_media fn(...)        — custom media adapter
         - llm act "prompt" on_generate fn(...)     — media generation tool
         - llm act "prompt" provider("openai")      — provider hint
@@ -1316,8 +1328,11 @@ class Parser:
         self._consume(TokenType.ACT, "Expected 'act' after 'llm'.")
         act_token = self._previous()
 
-        # Clause keywords that indicate bare form
-        clause_keywords = ("on_chunk", "on_complete", "on_media", "on_generate", "provider")
+        # Clause keywords that indicate bare form (including Chinese aliases)
+        clause_keywords = (
+            "on_chunk", "on_complete", "on_tool_end", "on_media", "on_generate",
+            "provider", "逐块处理", "完成", "工具结束", "处理媒体", "生成",
+        )
 
         # 检查是否误用语句形式：llm act Agent(args) "desc"
         # 如果下一个 token 是 IDENTIFIER 且后面跟着 ( 或 STRING，报错
@@ -1355,6 +1370,7 @@ class Parser:
         media_exprs: list[ExpressionNode] = []
         on_chunk_expr: ExpressionNode | None = None
         on_complete_expr: ExpressionNode | None = None
+        on_tool_end_expr: ExpressionNode | None = None
         on_media_expr: ExpressionNode | None = None
         on_generate_exprs: list[ExpressionNode] = []
         provider_expr: ExpressionNode | None = None
@@ -1365,16 +1381,21 @@ class Parser:
                     and self._current().lexeme in ("media", "媒体")
                     and self._peek_next().type == TokenType.LEFT_PAREN):
                 media_exprs.append(self._expression())
-            # on_chunk callback
+            # on_chunk callback (Chinese alias: 逐块处理)
             elif (self._check(TokenType.IDENTIFIER)
-                  and self._current().lexeme in ("on_chunk",)):
+                  and self._current().lexeme in ("on_chunk", "逐块处理")):
                 self._advance()
                 on_chunk_expr = self._expression()
-            # on_complete callback
+            # on_complete callback (Chinese alias: 完成)
             elif (self._check(TokenType.IDENTIFIER)
-                  and self._current().lexeme in ("on_complete",)):
+                  and self._current().lexeme in ("on_complete", "完成")):
                 self._advance()
                 on_complete_expr = self._expression()
+            # on_tool_end callback (Chinese alias: 工具结束)
+            elif (self._check(TokenType.IDENTIFIER)
+                  and self._current().lexeme in ("on_tool_end", "工具结束")):
+                self._advance()
+                on_tool_end_expr = self._expression()
             # on_media callback
             elif (self._check(TokenType.IDENTIFIER)
                   and self._current().lexeme in ("on_media", "处理媒体")):
@@ -1398,6 +1419,7 @@ class Parser:
                                       media=media_exprs,
                                       on_chunk=on_chunk_expr,
                                       on_complete=on_complete_expr,
+                                      on_tool_end=on_tool_end_expr,
                                       on_media=on_media_expr,
                                       on_generate=on_generate_exprs,
                                       provider=provider_expr,

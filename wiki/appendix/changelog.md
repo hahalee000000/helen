@@ -1,6 +1,60 @@
 # 版本历史
 
-> Helen v1.20 | PyPI 已发布 — `pip install helen-lang` — Transcript 会话作用域默认按应用隔离
+> Helen v1.21 (开发中) — `on_tool_end` 回调：工具执行后注入 hint 到 agentic loop
+
+---
+
+## v1.21: on_tool_end 回调 — Agentic Loop 中间注入提示 (开发中)
+
+**核心特性**: `llm act` 新增 `on_tool_end` 回调，在每个工具执行完毕后调用用户回调，返回值注入为 LLM 可见的消息。
+
+### 新增语法
+
+```helen
+llm act "task"
+    on_tool_end fn(tool_name: str, tool_result: str): str | dict | null {
+        if tool_name == "write_file" {
+            return "文件已写入，下一步可以运行测试验证"
+        }
+        if tool_name == "shell_exec" {
+            return {"role": "system", "content": "禁止执行危险命令"}
+        }
+        return null  // 不注入
+    }
+```
+
+### 回调行为
+
+- 返回 `str` → 注入为 `user` 消息，带 `[System Hint]` 前缀
+- 返回 `dict` → `{"role": "user"|"system", "content": "..."}`，完全控制消息格式
+- 返回 `null` → 不注入
+- 回调异常不影响 agentic loop（non-fatal，debug 级别日志）
+
+### 中文别名补齐
+
+所有 `llm act` 回调现在都有中文别名：
+
+| 英文 | 中文别名 | 版本 |
+|------|----------|------|
+| `on_chunk` | `逐块处理` | v1.21 补齐 |
+| `on_complete` | `完成` | v1.21 补齐 |
+| `on_tool_end` | `工具结束` | v1.21 新增 |
+| `on_media` | `处理媒体` | v1.17 已有 |
+| `on_generate` | `生成` | v1.17 已有 |
+
+### 架构变更
+
+- `LlmActExprNode` 新增 `on_tool_end: ExpressionNode | None` 字段
+- Parser: `_llm_act_expr()` 和 `_llm_act_stmt()` 支持解析 `on_tool_end` 及中文别名
+- `http_llm.py`: `act()` 和 `act_stream()` 新增 `on_tool_end_fn` 参数，在工具结果 append 后、reactive compaction 前调用
+- `llm_mixin.py`: 提取并传递 `on_tool_end_fn` 到 runtime
+- `act_stream()` 额外 yield `{"type": "hint", ...}` 事件
+
+### 测试
+
+- 新增 12 个 parser 测试（`tests/parser/test_llm_on_tool_end.py`）
+- 新增 7 个 runtime 测试（`tests/runtime/test_on_tool_end.py`）
+- 全部 2942 测试通过，0 failures
 
 ---
 

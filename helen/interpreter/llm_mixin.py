@@ -388,12 +388,25 @@ class LlmMixin:
             # Create custom dispatch function that can execute Helen functions
             dispatch_fn = self._create_dispatch_fn()
 
+            # Extract on_tool_end callback if provided (v1.21)
+            on_tool_end_fn = None
+            if node.on_tool_end is not None:
+                on_tool_end_fn = node.on_tool_end.accept(self)
+                if not callable(on_tool_end_fn):
+                    self.errors.error(
+                        ErrorCode.SEMANTIC_TYPE_ERROR,
+                        f"on_tool_end callback must be callable, got {type(on_tool_end_fn).__name__}",
+                        node.span,
+                    )
+                    return None
+
             response = self.llm_runtime.act(
                 prompt, tools=tools, model=model,
                 temperature=temperature, max_turns=max_turns,
                 system_prompt=system_prompt,
                 history=history_for_llm,
                 dispatch_fn=dispatch_fn,
+                on_tool_end_fn=on_tool_end_fn,
             )
 
             # Log to audit trail
@@ -429,11 +442,18 @@ class LlmMixin:
                 node.span,
             )
             # Fallback to non-streaming (v1.17: pass tools for on_generate support)
+            # Extract on_tool_end_fn for fallback (v1.21)
+            fallback_on_tool_end_fn = None
+            if node.on_tool_end is not None:
+                fallback_on_tool_end_fn = node.on_tool_end.accept(self)
+                if not callable(fallback_on_tool_end_fn):
+                    fallback_on_tool_end_fn = None
             response = self.llm_runtime.act(
                 prompt, tools=tools, model=model, temperature=temperature,
                 system_prompt=system_prompt,
                 history=history_for_llm,
                 dispatch_fn=self._create_dispatch_fn(),
+                on_tool_end_fn=fallback_on_tool_end_fn,
             )
             if response and response.text:
                 if node.on_chunk is not None:
@@ -463,6 +483,18 @@ class LlmMixin:
                 self.errors.error(
                     ErrorCode.SEMANTIC_TYPE_ERROR,
                     f"on_complete callback must be callable, got {type(on_complete_fn).__name__}",
+                    node.span,
+                )
+                return None
+
+        # Evaluate on_tool_end callback if provided (v1.21)
+        on_tool_end_fn = None
+        if node.on_tool_end is not None:
+            on_tool_end_fn = node.on_tool_end.accept(self)
+            if not callable(on_tool_end_fn):
+                self.errors.error(
+                    ErrorCode.SEMANTIC_TYPE_ERROR,
+                    f"on_tool_end callback must be callable, got {type(on_tool_end_fn).__name__}",
                     node.span,
                 )
                 return None
@@ -497,6 +529,7 @@ class LlmMixin:
                         history=history_for_llm,
                         dispatch_fn=dispatch_fn,
                         cancel_event=stream_handle.cancelled,
+                        on_tool_end_fn=on_tool_end_fn,
                     )
                 except TypeError:
                     # Fallback: custom LLMRuntime doesn't support cancel_event
@@ -506,6 +539,7 @@ class LlmMixin:
                         max_turns=max_turns,
                         history=history_for_llm,
                         dispatch_fn=dispatch_fn,
+                        on_tool_end_fn=on_tool_end_fn,
                     )
 
                 for event in stream_iter:
