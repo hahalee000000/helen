@@ -295,3 +295,65 @@ def _date_weekday(date_str: str) -> int:
         return dt.weekday()
     except (ValueError, TypeError) as e:
         raise ValueError(f"Invalid date format: {e}") from e
+
+
+# ── Stopwatch operations ───────────────────────────────────────
+
+
+def _stopwatch_start() -> float:
+    """Start a stopwatch and return the start time.
+
+    Returns:
+        Start timestamp (float, seconds since epoch with high precision)
+
+    Example:
+        let sw = stopwatch_start()
+        // ... do some work ...
+        let elapsed = stopwatch_elapsed(sw)
+        print("Elapsed: " + str(elapsed) + " seconds")
+    """
+    return _time_module.perf_counter()
+
+
+def _stopwatch_elapsed(start_time: float) -> float:
+    """Get elapsed time since stopwatch started.
+
+    Args:
+        start_time: Start timestamp from stopwatch_start()
+
+    Returns:
+        Elapsed time in seconds (float)
+
+    Example:
+        let sw = stopwatch_start()
+        sleep(1.5)
+        let elapsed = stopwatch_elapsed(sw)
+        print("Elapsed: " + str(elapsed) + " seconds")  // ~1.5
+    """
+    return _time_module.perf_counter() - start_time
+
+
+def _stopwatch_lap(start_time: float) -> dict:
+    """Get lap time and continue the stopwatch.
+
+    Args:
+        start_time: Start timestamp from stopwatch_start()
+
+    Returns:
+        Dict with "lap" (time since start) and "start" (same start_time)
+
+    Example:
+        let sw = stopwatch_start()
+        // ... work 1 ...
+        let lap1 = stopwatch_lap(sw)
+        // ... work 2 ...
+        let lap2 = stopwatch_lap(sw)
+        // lap1["lap"] is time for work 1
+        // lap2["lap"] is total time for work 1 + 2
+    """
+    current = _time_module.perf_counter()
+    return {
+        "lap": current - start_time,
+        "start": start_time,
+        "now": current,
+    }

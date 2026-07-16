@@ -823,7 +823,7 @@ class Parser:
                         self._error(f"Expected 'fn', 'let', or 'const' inside functions block, got {self._current().type.name}")
                         self._synchronize()
                 self._consume(TokenType.RIGHT_BRACE, "Expected '}' after functions block.")
-            elif self._is_context_keyword("context"):
+            elif self._is_context_keyword("context") or self._current().lexeme == "上下文":
                 # Phase 7: Parse context {} block
                 self._advance()  # consume 'context'
                 self._consume(TokenType.LEFT_BRACE, "Expected '{' after 'context'.")
@@ -867,7 +867,7 @@ class Parser:
                 TokenType.DESCRIPTION, TokenType.MODEL, TokenType.TOOLS,
                 TokenType.MEMORY, TokenType.TEMPERATURE,
                 TokenType.MAX_TURNS, TokenType.STREAMING,
-            ) or self._is_context_keyword("memory"):
+            ) or self._is_context_keyword("memory") or self._current().lexeme == "记忆":
                 declarations.append(self._declaration_block())
             else:
                 self._error(f"Unexpected token in agent body: {self._current().type.name}")
@@ -941,7 +941,7 @@ class Parser:
         token_type = start.type
 
         # Handle context keyword "memory" (v1.6)
-        if token_type == TokenType.IDENTIFIER and start.lexeme == "memory":
+        if token_type == TokenType.IDENTIFIER and start.lexeme in ("memory", "记忆"):
             token_type = TokenType.MEMORY
 
         # Accept optional '=' between keyword and value (e.g. tools = [...], model = "...")
@@ -1077,7 +1077,7 @@ class Parser:
                               TokenType.MEMORY, TokenType.TEMPERATURE,
                               TokenType.MAX_TURNS):
             # Also check for context keyword "memory" (v1.6)
-            if self._is_context_keyword("memory"):
+            if self._is_context_keyword("memory") or self._current().lexeme == "记忆":
                 break
             prev_pos = self._pos
             s = self._statement()

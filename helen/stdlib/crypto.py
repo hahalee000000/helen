@@ -188,3 +188,98 @@ def _sample(items: list[Any], k: int) -> list[Any]:
     if k > len(items):
         raise ValueError(f"Cannot sample {k} items from list of length {len(items)}")
     return random.sample(items, k)
+
+
+# ── UUID operations ─────────────────────────────────────────────
+
+
+def _uuid_generate() -> str:
+    """Generate a UUID (Universally Unique Identifier).
+
+    Returns:
+        UUID string in format "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+    Example:
+        let id = uuid_generate()
+        // "550e8400-e29b-41d4-a716-446655440000"
+    """
+    import uuid as uuid_module
+    return str(uuid_module.uuid4())
+
+
+def _uuid_from_string(s: str) -> str:
+    """Parse a string as UUID and return normalized form.
+
+    Args:
+        s: UUID string
+
+    Returns:
+        Normalized UUID string
+
+    Raises:
+        ValueError: If string is not a valid UUID
+    """
+    import uuid as uuid_module
+    return str(uuid_module.UUID(s))
+
+
+def _uuid_nil() -> str:
+    """Return nil UUID (all zeros).
+
+    Returns:
+        "00000000-0000-0000-0000-000000000000"
+    """
+    import uuid as uuid_module
+    return str(uuid_module.UUID(int=0))
+
+
+# ── Random bytes operations ─────────────────────────────────────
+
+
+def _random_bytes(n: int) -> str:
+    """Generate n random bytes as hex string.
+
+    Args:
+        n: Number of bytes to generate
+
+    Returns:
+        Hex string of n bytes (2*n characters)
+
+    Example:
+        let bytes = random_bytes(16)
+        // "a1b2c3d4e5f6..." (32 hex chars)
+    """
+    if n <= 0:
+        raise ValueError("Number of bytes must be positive")
+    import os
+    return os.urandom(n).hex()
+
+
+def _random_hex(n: int) -> str:
+    """Generate random hex string of n characters.
+
+    Args:
+        n: Number of hex characters
+
+    Returns:
+        Random hex string
+    """
+    import os
+    byte_count = (n + 1) // 2
+    return os.urandom(byte_count).hex()[:n]
+
+
+def _random_base64(n: int) -> str:
+    """Generate n random bytes as base64 string.
+
+    Args:
+        n: Number of bytes to generate
+
+    Returns:
+        Base64 encoded string
+    """
+    import os
+    import base64
+    if n <= 0:
+        raise ValueError("Number of bytes must be positive")
+    return base64.b64encode(os.urandom(n)).decode("ascii")

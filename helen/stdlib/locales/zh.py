@@ -161,6 +161,10 @@ ALIASES: dict[str, str] = {
     "月": "date_month",
     "日": "date_day",
     "星期": "date_weekday",
+    # Stopwatch
+    "开始计时": "stopwatch_start",
+    "经过时间": "stopwatch_elapsed",
+    "计时分段": "stopwatch_lap",
 
     # ── Math / Stats (数学/统计) ─────────────────────────────────
     "平均值": "mean",
@@ -178,6 +182,20 @@ ALIASES: dict[str, str] = {
     "向下取整": "floor",
     "四舍五入": "round",
     "平方根": "sqrt",
+    # Trigonometric (三角函数)
+    "余弦": "cos",
+    "正弦": "sin",
+    "正切": "tan",
+    "反余弦": "acos",
+    "反正弦": "asin",
+    "反正切": "atan",
+    "反正切二": "atan2",
+    # Power and logarithmic (幂和对数)
+    "幂": "pow",
+    "对数": "log",
+    "对数二": "log2",
+    "对数十": "log10",
+    "指数": "exp",
 
     # ── File I/O (文件读写) ──────────────────────────────────────
     "读文件": "read_file",
@@ -213,6 +231,13 @@ ALIASES: dict[str, str] = {
     "执行": "exec",
     "异步执行": "exec_async",
     "终止进程": "kill",
+    # System info (系统信息)
+    "操作系统": "platform",
+    "主机名": "hostname",
+    "系统版本": "platform_version",
+    "Python版本": "python_version",
+    "CPU核心数": "cpu_count",
+    "内存信息": "memory_info",
 
     # ── Logging (日志) ───────────────────────────────────────────
     "日志调试": "log_debug",
@@ -261,6 +286,14 @@ ALIASES: dict[str, str] = {
     "随机选择": "choice",
     "随机抽样": "sample",
     "洗牌": "shuffle",
+    # UUID
+    "生成UUID": "uuid_generate",
+    "解析UUID": "uuid_from_string",
+    "空UUID": "uuid_nil",
+    # Random bytes
+    "随机字节": "random_bytes",
+    "随机十六进制": "random_hex",
+    "随机Base64": "random_base64",
 
     # ── Quality (代码质量) ───────────────────────────────────────
     "分析代码": "analyze_code",

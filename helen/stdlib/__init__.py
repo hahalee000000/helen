@@ -58,6 +58,8 @@ from helen.stdlib.time import (
     # Date
     _date, _datetime, _date_format, _date_parse,
     _date_add, _date_diff, _date_year, _date_month, _date_day, _date_weekday,
+    # Stopwatch
+    _stopwatch_start, _stopwatch_elapsed, _stopwatch_lap,
 )
 
 # Import math stats functions
@@ -65,6 +67,10 @@ from helen.stdlib.math_stats import (
     _mean, _median, _mode, _variance, _stddev,
     _correlation, _percentile, _sum, _product,
     _min as _stats_min, _max as _stats_max,
+    # Trigonometric
+    _cos, _sin, _tan, _acos, _asin, _atan, _atan2,
+    # Power and logarithmic
+    _pow, _log, _log2, _log10, _exp, _sqrt_basic,
 )
 
 # Import file advanced functions
@@ -90,6 +96,8 @@ from helen.stdlib.system import (
     # Log
     _log_debug, _log_info, _log_warn, _log_error, _log_critical,
     _log_set_level, _log_to_file,
+    # System info
+    _platform, _hostname, _platform_version, _python_version, _cpu_count, _memory_info,
 )
 
 # Import crypto functions
@@ -98,6 +106,10 @@ from helen.stdlib.crypto import (
     _md5, _sha1, _sha256, _sha512, _hmac_sha256, _hash_file,
     # Random
     _random, _randint, _choice, _shuffle, _sample,
+    # UUID
+    _uuid_generate, _uuid_from_string, _uuid_nil,
+    # Random bytes
+    _random_bytes, _random_hex, _random_base64,
 )
 
 # Import data formats functions
@@ -956,6 +968,10 @@ def _register_builtins() -> None:
         BuiltinFunction("date_month", "Extract month", "date_month(date_str)", _date_month, "time"),
         BuiltinFunction("date_day", "Extract day", "date_day(date_str)", _date_day, "time"),
         BuiltinFunction("date_weekday", "Day of week", "date_weekday(date_str)", _date_weekday, "time"),
+        # Stopwatch
+        BuiltinFunction("stopwatch_start", "Start stopwatch", "stopwatch_start()", _stopwatch_start, "time"),
+        BuiltinFunction("stopwatch_elapsed", "Get elapsed time", "stopwatch_elapsed(start_time)", _stopwatch_elapsed, "time"),
+        BuiltinFunction("stopwatch_lap", "Get lap time", "stopwatch_lap(start_time)", _stopwatch_lap, "time"),
 
         # Math statistics operations
         BuiltinFunction("mean", "Arithmetic mean", "mean(numbers)", _mean, "math"),
@@ -969,6 +985,20 @@ def _register_builtins() -> None:
         BuiltinFunction("product", "Product of numbers", "product(numbers)", _product, "math"),
         BuiltinFunction("stats_min", "Minimum value (stats)", "stats_min(numbers)", _stats_min, "math"),
         BuiltinFunction("stats_max", "Maximum value (stats)", "stats_max(numbers)", _stats_max, "math"),
+        # Trigonometric operations
+        BuiltinFunction("cos", "Cosine", "cos(radians)", _cos, "math"),
+        BuiltinFunction("sin", "Sine", "sin(radians)", _sin, "math"),
+        BuiltinFunction("tan", "Tangent", "tan(radians)", _tan, "math"),
+        BuiltinFunction("acos", "Arc cosine", "acos(x)", _acos, "math"),
+        BuiltinFunction("asin", "Arc sine", "asin(x)", _asin, "math"),
+        BuiltinFunction("atan", "Arc tangent", "atan(x)", _atan, "math"),
+        BuiltinFunction("atan2", "Arc tangent of y/x", "atan2(y, x)", _atan2, "math"),
+        # Power and logarithmic operations
+        BuiltinFunction("pow", "Power", "pow(base, exponent)", _pow, "math"),
+        BuiltinFunction("log", "Logarithm", "log(x, base?)", _log, "math"),
+        BuiltinFunction("log2", "Base-2 logarithm", "log2(x)", _log2, "math"),
+        BuiltinFunction("log10", "Base-10 logarithm", "log10(x)", _log10, "math"),
+        BuiltinFunction("exp", "Exponential (e^x)", "exp(x)", _exp, "math"),
 
         # File advanced operations
         BuiltinFunction("file_size", "File size in bytes", "file_size(path)", _file_size, "file"),
@@ -1001,6 +1031,14 @@ def _register_builtins() -> None:
         BuiltinFunction("exit", "Exit program", "exit(code?)", _exit, "system"),
         BuiltinFunction("kill", "Send signal to process", "kill(pid, signal?)", _kill, "system"),
 
+        # System information operations
+        BuiltinFunction("platform", "Get OS name", "platform()", _platform, "system"),
+        BuiltinFunction("hostname", "Get hostname", "hostname()", _hostname, "system"),
+        BuiltinFunction("platform_version", "Get detailed platform info", "platform_version()", _platform_version, "system"),
+        BuiltinFunction("python_version", "Get Python version", "python_version()", _python_version, "system"),
+        BuiltinFunction("cpu_count", "Get CPU core count", "cpu_count()", _cpu_count, "system"),
+        BuiltinFunction("memory_info", "Get memory information", "memory_info()", _memory_info, "system"),
+
         # System logging operations
         BuiltinFunction("log_debug", "Log debug message", "log_debug(message)", _log_debug, "system"),
         BuiltinFunction("log_info", "Log info message", "log_info(message)", _log_info, "system"),
@@ -1024,6 +1062,16 @@ def _register_builtins() -> None:
         BuiltinFunction("choice", "Choose random item", "choice(items)", _choice, "crypto"),
         BuiltinFunction("shuffle", "Shuffle list randomly", "shuffle(items)", _shuffle, "crypto"),
         BuiltinFunction("sample", "Sample items randomly", "sample(items, k)", _sample, "crypto"),
+
+        # Crypto UUID operations
+        BuiltinFunction("uuid_generate", "Generate UUID", "uuid_generate()", _uuid_generate, "crypto"),
+        BuiltinFunction("uuid_from_string", "Parse UUID from string", "uuid_from_string(s)", _uuid_from_string, "crypto"),
+        BuiltinFunction("uuid_nil", "Return nil UUID", "uuid_nil()", _uuid_nil, "crypto"),
+
+        # Crypto random bytes operations
+        BuiltinFunction("random_bytes", "Generate random bytes as hex", "random_bytes(n)", _random_bytes, "crypto"),
+        BuiltinFunction("random_hex", "Generate random hex string", "random_hex(n)", _random_hex, "crypto"),
+        BuiltinFunction("random_base64", "Generate random base64 string", "random_base64(n)", _random_base64, "crypto"),
 
         # Data formats YAML operations
         BuiltinFunction("yaml_parse", "Parse YAML", "yaml_parse(text)", _yaml_parse, "data"),

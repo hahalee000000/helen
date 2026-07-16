@@ -100,6 +100,86 @@ def _get_cli_args() -> list[str]:
     return list(_cli_args)
 
 
+# ── System information operations ──────────────────────────────
+
+
+def _platform() -> str:
+    """Get the current platform/OS name.
+
+    Returns:
+        Platform name: "linux", "darwin" (macOS), "windows", or other
+    """
+    import platform as _platform_module
+    system = _platform_module.system().lower()
+    if system == "darwin":
+        return "darwin"
+    elif system == "windows":
+        return "windows"
+    elif system == "linux":
+        return "linux"
+    return system
+
+
+def _hostname() -> str:
+    """Get the current hostname.
+
+    Returns:
+        Hostname of the machine
+    """
+    import socket
+    return socket.gethostname()
+
+
+def _platform_version() -> str:
+    """Get detailed platform version info.
+
+    Returns:
+        Detailed platform version string
+    """
+    import platform as _platform_module
+    return _platform_module.platform()
+
+
+def _python_version() -> str:
+    """Get Python version.
+
+    Returns:
+        Python version string
+    """
+    import platform as _platform_module
+    return _platform_module.python_version()
+
+
+def _cpu_count() -> int:
+    """Get number of CPU cores.
+
+    Returns:
+        Number of logical CPU cores
+    """
+    import os
+    return os.cpu_count() or 1
+
+
+def _memory_info() -> dict:
+    """Get memory information (if available).
+
+    Returns:
+        Dict with memory info (total, available, used, percent)
+        Empty dict if psutil not available
+    """
+    try:
+        import psutil
+        mem = psutil.virtual_memory()
+        return {
+            "total": mem.total,
+            "available": mem.available,
+            "used": mem.used,
+            "percent": mem.percent,
+        }
+    except ImportError:
+        return {}
+
+
 def _parse_cli_args(spec: dict | None = None) -> dict[str, Any]:
     """Parse CLI arguments into a structured map.
 

@@ -252,3 +252,181 @@ def _max(numbers: list[float]) -> float:
     if not numbers:
         raise ValueError("Cannot find maximum of empty list")
     return max(numbers)
+
+
+# ── Trigonometric operations ────────────────────────────────────
+
+
+def _cos(x: float) -> float:
+    """Calculate cosine.
+
+    Args:
+        x: Angle in radians
+
+    Returns:
+        Cosine value (-1.0 to 1.0)
+    """
+    return math.cos(x)
+
+
+def _sin(x: float) -> float:
+    """Calculate sine.
+
+    Args:
+        x: Angle in radians
+
+    Returns:
+        Sine value (-1.0 to 1.0)
+    """
+    return math.sin(x)
+
+
+def _tan(x: float) -> float:
+    """Calculate tangent.
+
+    Args:
+        x: Angle in radians
+
+    Returns:
+        Tangent value
+    """
+    return math.tan(x)
+
+
+def _acos(x: float) -> float:
+    """Calculate arc cosine.
+
+    Args:
+        x: Value (-1.0 to 1.0)
+
+    Returns:
+        Angle in radians
+    """
+    return math.acos(x)
+
+
+def _asin(x: float) -> float:
+    """Calculate arc sine.
+
+    Args:
+        x: Value (-1.0 to 1.0)
+
+    Returns:
+        Angle in radians
+    """
+    return math.asin(x)
+
+
+def _atan(x: float) -> float:
+    """Calculate arc tangent.
+
+    Args:
+        x: Any real number
+
+    Returns:
+        Angle in radians
+    """
+    return math.atan(x)
+
+
+def _atan2(y: float, x: float) -> float:
+    """Calculate arc tangent of y/x.
+
+    Args:
+        y: Y coordinate
+        x: X coordinate
+
+    Returns:
+        Angle in radians
+    """
+    return math.atan2(y, x)
+
+
+# ── Power and logarithmic operations ───────────────────────────
+
+
+def _pow(base: float, exponent: float) -> float:
+    """Calculate power.
+
+    Args:
+        base: Base number
+        exponent: Exponent
+
+    Returns:
+        base ** exponent
+    """
+    return math.pow(base, exponent)
+
+
+def _log(x: float, base: float | None = None) -> float:
+    """Calculate logarithm.
+
+    Args:
+        x: Positive number
+        base: Logarithm base (default: e for natural log)
+
+    Returns:
+        Logarithm of x
+
+    Raises:
+        ValueError: If x is not positive
+    """
+    if x <= 0:
+        raise ValueError("Logarithm requires positive number")
+    if base is None:
+        return math.log(x)
+    return math.log(x, base)
+
+
+def _log2(x: float) -> float:
+    """Calculate base-2 logarithm.
+
+    Args:
+        x: Positive number
+
+    Returns:
+        log2(x)
+    """
+    if x <= 0:
+        raise ValueError("Logarithm requires positive number")
+    return math.log2(x)
+
+
+def _log10(x: float) -> float:
+    """Calculate base-10 logarithm.
+
+    Args:
+        x: Positive number
+
+    Returns:
+        log10(x)
+    """
+    if x <= 0:
+        raise ValueError("Logarithm requires positive number")
+    return math.log10(x)
+
+
+def _exp(x: float) -> float:
+    """Calculate e raised to the power x.
+
+    Args:
+        x: Exponent
+
+    Returns:
+        e^x
+    """
+    return math.exp(x)
+
+
+def _sqrt_basic(x: float) -> float:
+    """Calculate square root (alias for compatibility).
+
+    Args:
+        x: Non-negative number
+
+    Returns:
+        Square root of x
+    """
+    if x < 0:
+        raise ValueError("Square root requires non-negative number")
+    return math.sqrt(x)
