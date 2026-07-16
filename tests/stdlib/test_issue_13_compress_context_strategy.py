@@ -47,9 +47,8 @@ class TestIssue13CompressContextStrategyRespected:
         assert result["compressed_tokens"] == 500
 
         # Verify _summarize_compress was called with correct budget
-        from helen.runtime.history import HISTORY_BUDGET_RATIO
-        from helen.runtime.token_utils import DEFAULT_CONTEXT_WINDOW
-        expected_budget = int(DEFAULT_CONTEXT_WINDOW * HISTORY_BUDGET_RATIO)
+        # Budget should be 50% of original tokens to force actual compression
+        expected_budget = int(6300 * 0.5)  # 50% of 6300 tokens
         mock_history_manager._summarize_compress.assert_called_once()
         call_args = mock_history_manager._summarize_compress.call_args
         # Positional arguments: (history, budget)

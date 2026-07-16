@@ -365,14 +365,14 @@ def _compress_context(strategy: str = "auto") -> dict:
         # Handle explicit strategy overrides (summarize/truncate) in TranscriptStore path
         # These strategies should force compression regardless of usage ratio thresholds
         if strategy == "summarize":
-            from helen.runtime.history import HISTORY_BUDGET_RATIO
-            budget = int(max_tokens * HISTORY_BUDGET_RATIO)
+            # Use 50% of current tokens as budget to force actual compression
+            budget = int(original_tokens * 0.5)
             compressed = _interpreter_history_manager._summarize_compress(list(current_history), budget)
             # Record compression in TranscriptStore for audit trail
             _interpreter_agent_context._record_compression_ssot(current_history, compressed, "summarize")
         elif strategy == "truncate":
-            from helen.runtime.history import HISTORY_BUDGET_RATIO
-            budget = int(max_tokens * HISTORY_BUDGET_RATIO)
+            # Use 50% of current tokens as budget to force actual compression
+            budget = int(original_tokens * 0.5)
             compressed = _interpreter_history_manager._truncate_compress(list(current_history), budget)
             # Record compression in TranscriptStore for audit trail
             _interpreter_agent_context._record_compression_ssot(current_history, compressed, "truncate")
@@ -443,14 +443,12 @@ def _compress_context(strategy: str = "auto") -> dict:
         # Use HistoryManager's enforce_limit (respects compression_mode setting)
         _interpreter_history[:] = _interpreter_history_manager.enforce_limit(_interpreter_history)
     elif strategy == "summarize":
-        # Force summarize compression with default budget
-        from helen.runtime.history import HISTORY_BUDGET_RATIO
-        budget = int(_interpreter_history_manager.MAX_TOKENS * HISTORY_BUDGET_RATIO)
+        # Force summarize compression with 50% of current tokens as budget
+        budget = int(original_tokens * 0.5)
         _interpreter_history[:] = _interpreter_history_manager._summarize_compress(_interpreter_history, budget)
     elif strategy == "truncate":
-        # Force truncate compression with default budget
-        from helen.runtime.history import HISTORY_BUDGET_RATIO
-        budget = int(_interpreter_history_manager.MAX_TOKENS * HISTORY_BUDGET_RATIO)
+        # Force truncate compression with 50% of current tokens as budget
+        budget = int(original_tokens * 0.5)
         _interpreter_history[:] = _interpreter_history_manager._truncate_compress(_interpreter_history, budget)
     else:
         return {
