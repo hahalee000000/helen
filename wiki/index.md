@@ -33,7 +33,7 @@
 - [[runtime/prompt-builder|提示词构建]] — 两层渐进式披露、模板渲染
 - [[runtime/memory|内存系统]] — FileMemoryProvider、InMemoryProvider
 - [[runtime/transcript-store|TranscriptStore SSOT]] — 消息唯一真实来源、SQLite/JSONL 后端、LRU 缓存、UUID 寻址、非破坏性压缩（**v1.16 新特性**）
-- [[runtime/context-management|上下文管理架构]] — 统一入口、三通道、渐进压缩、缓存感知、工作记忆（**权威文档**）
+- [[runtime/context-management|上下文管理架构]] — 设计哲学（Context vs Transcript、四层生命周期）、统一入口、三通道、渐进压缩、缓存感知、工作记忆（**权威文档**）
 - [[runtime/context-compression-research|上下文压缩研究资料]] — RCC、CogCanvas、DAST 等学术借鉴
 - [[runtime/history|历史管理]] — Token 预算、截断策略、conversation_summary
 - [[runtime/import|模块系统]] — 多格式导入、循环检测、路径安全

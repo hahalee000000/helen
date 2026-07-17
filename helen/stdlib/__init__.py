@@ -155,7 +155,7 @@ from helen.stdlib.context import (
     _set_cache_aware, _get_context_config,  # P2
     _insert_message, _replace_message,  # P2
     _search_context, _context_slice,  # P3
-    _export_context, _import_context, _fork_context,  # P2/P3
+    _export_context, _import_context, _fork_context, _restore_context,  # P2/P3 + restore
     _on_compression, _on_context_overflow,  # P1
 )
 
@@ -1176,6 +1176,7 @@ def _register_builtins() -> None:
         BuiltinFunction("export_context", "Export current context as serializable dict", "export_context()", _export_context, "context"),
         BuiltinFunction("import_context", "Import a previously exported context", "import_context(data)", _import_context, "context"),
         BuiltinFunction("fork_context", "Create a deep-copy snapshot of current context", "fork_context()", _fork_context, "context"),
+        BuiltinFunction("restore_context", "Restore active context from a previous transcript session", "restore_context(session_id)", _restore_context, "context"),
         # v1.19: Lifecycle hooks (P1)
         BuiltinFunction("on_compression", "Register callback for compression events", "on_compression(callback?)", _on_compression, "context"),
         BuiltinFunction("on_context_overflow", "Register callback for context overflow", "on_context_overflow(callback?)", _on_context_overflow, "context"),

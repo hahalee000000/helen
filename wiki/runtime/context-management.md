@@ -1,7 +1,138 @@
 # 上下文管理架构 (Context Management Architecture)
 
-> **版本**: v1.19 | **最后更新**: 2026-07-15
+> **版本**: v1.21 | **最后更新**: 2026-07-17
 > 统一说明 Helen 的上下文管理系统，替换原 `agent_context.md`、`graduated_compression.md`、`cache_aware_compression.md`、`working_memory.md` 中的分散描述。
+
+---
+
+## 零、设计哲学与生命周期
+
+> 在深入实现细节之前，先厘清上下文管理的本质问题：**Context 应该存在多久？**
+
+### 0.1 核心区分：Context vs Transcript
+
+Helen 有两套看似重叠实则职责分明的系统：
+
+| | **Context（上下文）** | **Transcript（转录）** |
+|---|---|---|
+| 本质 | LLM **当前看到**的信息 | LLM **曾经说过**的完整记录 |
+| 目的 | 支撑推理 | 审计、恢复、追溯 |
+| 可变性 | 压缩、裁剪、替换 | 只追加，不可变（[[runtime/transcript-store|TranscriptStore SSOT]]） |
+| 生命周期 | 会话级，可销毁 | 持久化（SQLite/JSONL） |
+| 类比 | 工作台——当前正在用的东西 | 档案柜——所有历史都在 |
+
+**设计原则**：Context 管理追求**在有限窗口内做到极致**，Transcript 追求**完整不丢失**。两者的分离让系统既高效（context 激进压缩不心疼）又安全（transcript 完整可审计）。
+
+> Context 是"此刻 LLM 该知道什么"，Transcript 是"LLM 曾经知道什么"。
+
+### 0.2 四层生命周期架构
+
+Context 的持续时间是分层的，每一层服务于不同的推理粒度：
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 3: Transcript（审计层）                              │
+│  生命周期：永久                                             │
+│  职责：不参与 LLM 推理，但可通过 replay_transcript() 恢复   │
+│  实现：[[runtime/transcript-store|TranscriptStore SSOT]]     │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 2: Pinned Context（持久关注层）                      │
+│  生命周期：跨 llm act 调用，Agent 会话内                    │
+│  职责：用户显式 pin 的关键信息，免疫所有 5 层压缩           │
+│  实现：pin_message(uuid)、working_memory_set()              │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 1: Active Context（活跃层）⭐ 核心                   │
+│  生命周期：Agent 会话（main {} 执行期）                     │
+│  职责：多轮 llm act 之间的对话历史 + 工具调用结果           │
+│  实现：AgentContextManager + 渐进压缩 + 三通道              │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 0: Working Memory（即时层）                          │
+│  生命周期：单次 llm act 调用内部                            │
+│  职责：当前任务焦点、活跃文件、最近决策                     │
+│  实现：WorkingMemory 自动更新                               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**关键设计决策**：
+
+1. **Layer 0 是临时的注意力引导**——单次 `llm act` 返回后即可销毁，不需要持久化。
+2. **Layer 1 的边界 = Agent `main {}` 的执行期**——这是你问题的核心答案：Context 生命周期 = Agent 会话生命周期。
+3. **Layer 2 是用户主动声明"这些信息重要"的机制**——和 Layer 1 共享同一个 token 窗口，但享有压缩豁免权。
+4. **Layer 3 不是 Context**——它是 SSOT 审计记录，通过 `replay_transcript()` / `export_transcript()` 按需恢复。
+
+### 0.3 Context 应该持久化多久？
+
+| 问题 | 答案 | 理由 |
+|---|---|---|
+| 跨 `llm act` 调用？ | ✅ 是 | 这是 Active Context 的核心价值——多轮工具调用需要连续性 |
+| 跨 agent？ | ❌ 不隐式共享 | 通过 [[interpreter/spawn|Channel / SharedStore]] 显式传递，避免作用域污染 |
+| 跨 Helen 进程？ | ❌ 不 | 进程重启通常意味着用户意图变了；通过 Transcript 恢复即可 |
+| 跨用户会话（天/周级）？ | ❌ 不是 context 的职责 | 是 [[runtime/skills|Skills]] / 外部记忆 / 文件的职责 |
+
+**跨进程为什么不该靠 context 持久化**：
+
+1. 跨进程恢复需要反序列化整个上下文状态（环境、压缩标记、pin 状态、working memory），复杂度很高
+2. 进程重启时用户意图通常已变，旧上下文的价值下降
+3. 如果真需要延续，应该通过 **显式导出/导入** 或**文件持久化**完成（见下文"跨会话恢复的实际路径"）
+4. 把"持久化"的责任从 context 剥离，让 context 可以激进压缩而不必顾虑信息丢失
+
+**跨会话的"记忆"应该靠什么**：
+
+- **`restore_context(session_id)`** ⭐ (v1.21+)：直接从旧 transcript session 恢复成 active context。内部读取 TranscriptStore、保留所有字段（`tool_calls`/`tool_call_id`/`compressed`/`pinned`/`uuid`）、调用 `import_context()` 填充当前历史。**一步到位，无需手写格式适配。**
+- **`export_context()` / `import_context(data)`**：会话结束前导出 context 快照（含 messages + working_memory + config）到文件，下次启动时读入并导入。适合需要同时保存 working_memory 和 config 的场景
+- **`replay_transcript(session_id)`**：读取旧 transcript 的消息列表（审计/查看用），**不会**自动注入到当前 context，且返回格式与 `import_context()` 不兼容
+- **文件持久化**：用户把关键信息写入文件，下次启动时读入
+- **Skills**：把模式、偏好、项目约定沉淀为 skill，不依赖上下文
+
+**`restore_context` vs `resume_session` 的区别**：
+
+| | `restore_context(session_id)` | `resume_session(session_id)` |
+|---|---|---|
+| 恢复目标 | **Active Context**（LLM 看到的 `_interpreter_history`） | **TranscriptStore**（持久化审计记录） |
+| 替换什么 | 当前对话历史 | 当前 transcript store 引用 |
+| LLM 能看到恢复的消息？ | ✅ 能 | ❌ 不能（只替换了 SSOT） |
+| 适用场景 | 接续旧会话继续工作 | 切换到旧 session 的 transcript 流查看 |
+
+### 0.4 `context {}` 配置的生命周期语义
+
+Agent 声明中的 `context { ... }` 配置绑定了 Active Context 的行为策略：
+
+```helen
+agent MyAgent {
+    context {
+        compression "graduated"       // 压缩策略
+        cache-aware true              // 缓存感知
+        working-memory true           // 工作记忆
+        working-memory-tokens 5000    // 工作记忆 token 预算
+    }
+    main { ... }
+}
+```
+
+**语义**：这些配置控制 Agent 会话期间 Active Context 如何管理自己，**不控制跨会话持久化**。每次 `helen` 进程启动，Agent 都从 fresh context 开始。如果需要延续旧会话，有两种方式：
+
+```helen
+// 方式 1（推荐）：从旧 transcript session 直接恢复 active context
+let sessions = list_sessions()
+// ... 选择要恢复的 session_id ...
+let r = restore_context("session_1783492628_d9d9c0aa")
+// r: {status: "ok", restored_messages: 42, boundary_markers: 3, note: "..."}
+
+// 方式 2：导出/导入完整快照（保留 working_memory + config）
+// 会话结束前保存
+let snapshot = export_context()
+write_file("context_snapshot.json", to_json(snapshot.context))
+// 新会话启动时恢复
+let saved = parse_json(read_file("context_snapshot.json"))
+import_context(saved)
+```
+
+**方式 1 vs 方式 2**：
+- `restore_context(session_id)`：恢复 **messages**，字段完整（含 tool_calls、pinned、compressed、uuid）。**不**恢复 working_memory 和 config（因为 transcript 不存这些）。
+- `export_context() / import_context()`：恢复 messages + working_memory + config 全部，但需要先写文件再读回。
+
+**未来考虑**：
+- 如果 Helen 支持 agent 复用/池化，需要明确——同一 agent 多次执行，context 是否复用？设计倾向：**不复用**，每次执行都是 fresh context。跨执行的延续通过 `restore_context()` 或参数传入。
 
 ---
 
@@ -566,6 +697,46 @@ let forked = fork_context()
 
 典型用途：通过 Channel 把当前对话上下文传给另一个 Agent；保存上下文到磁盘；fork 后并行探索多个方向。
 
+#### 8.5.6b 跨会话恢复（v1.21+）
+
+```helen
+// 列出所有旧会话
+let sessions = list_sessions()
+for s in sessions {
+    print("{s.session_id}: {s.message_count} msgs, scope={s.scope}")
+}
+
+// 从旧 transcript session 直接恢复 active context
+let r = restore_context("session_1783492628_d9d9c0aa")
+// r: {
+//   status: "ok",
+//   restored_messages: 42,
+//   session_id: "session_1783492628_d9d9c0aa",
+//   boundary_markers: 3,       // 跳过的压缩边界标记数
+//   note: "Working memory and context config are not persisted..."
+// }
+
+// 中文别名
+let r2 = 恢复上下文("session_1783492628_d9d9c0aa")
+```
+
+**`restore_context(session_id)` 的语义**：
+
+1. 从磁盘读取指定 session 的 TranscriptStore
+2. 遍历所有 Message（跳过 BoundaryMarker），保留完整字段：`role`、`content`、`tool_calls`、`tool_call_id`、`uuid`、`compressed`、`pinned`
+3. 内部调用 `import_context()` 替换当前 `_interpreter_history`
+4. 恢复后，下一次 `llm act` 调用就能看到旧会话的所有消息
+
+**限制**：只恢复 messages。**不**恢复 working_memory 和 context config（transcript 不存这些）。需要时通过 `working_memory_set()` / `set_compression_strategy()` 等手动恢复。
+
+**与 `resume_session()` 的区别**：
+
+| | `restore_context` | `resume_session` |
+|---|---|---|
+| 恢复目标 | Active Context（LLM 看到的） | TranscriptStore（审计记录） |
+| LLM 能看到恢复的消息？ | ✅ 能 | ❌ 不能（只换 SSOT 引用） |
+| 适用场景 | 接续旧会话继续工作 | 切换到旧 transcript 流 |
+
 #### 8.5.7 生命周期钩子（P1）
 
 ```helen
@@ -580,7 +751,7 @@ on_context_overflow(callback)
 on_compression(None)
 ```
 
-#### 8.5.8 中文别名（v1.19 全部 24 个）
+#### 8.5.8 中文别名（v1.19 全部 24 个 + v1.21 新增 1 个）
 
 | 英文名 | 中文名 |
 |--------|--------|
@@ -606,6 +777,7 @@ on_compression(None)
 | export_context | 导出上下文 |
 | import_context | 导入上下文 |
 | fork_context | 分叉上下文 |
+| **restore_context** | **恢复上下文** (v1.21+) |
 | on_compression | 压缩回调 |
 | on_context_overflow | 溢出回调 |
 
@@ -699,5 +871,5 @@ visit_llm_act_expr()
 
 ---
 
-**最后更新**: 2026-07-07
-**版本**: v1.15
+**最后更新**: 2026-07-17
+**版本**: v1.21

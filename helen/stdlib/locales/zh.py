@@ -359,6 +359,7 @@ ALIASES: dict[str, str] = {
     "导出上下文": "export_context",
     "导入上下文": "import_context",
     "分叉上下文": "fork_context",
+    "恢复上下文": "restore_context",
     "压缩回调": "on_compression",
     "溢出回调": "on_context_overflow",
 

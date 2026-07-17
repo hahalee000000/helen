@@ -23,7 +23,10 @@ These functions allow applications to control context growth in long-running age
 
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # Global reference to interpreter's history manager (set by interpreter)
 _interpreter_history_manager = None
@@ -1541,6 +1544,162 @@ def _fork_context() -> dict:
         dict: same as export_context()
     """
     return _export_context()
+
+
+def _restore_context(session_id: str) -> dict:
+    """Restore active context from a previous transcript session.
+
+    This is a convenience function that bridges the gap between TranscriptStore
+    (persistent audit trail) and active context (what the LLM actually sees).
+    It:
+
+    1. Reads the transcript of the specified session
+    2. Converts Message objects to the format import_context() expects,
+       preserving all fields (role, content, tool_calls, tool_call_id,
+       compressed, pinned, uuid)
+    3. Calls import_context() to populate the current active context
+
+    Unlike ``resume_session()``, which only swaps the TranscriptStore reference,
+    ``restore_context()`` populates ``_interpreter_history`` so the LLM actually
+    sees the restored messages on the next call.
+
+    Args:
+        session_id: The session ID to restore from.
+
+    Returns:
+        dict:
+        {
+            "status": "ok" | "error",
+            "restored_messages": int,        # Only on success
+            "session_id": str,               # Only on success
+            "boundary_markers": int,         # Skipped compression boundaries
+            "note": str,                     # Hint about working_memory
+        }
+
+    Limitations:
+        Only messages are restored. Working memory and context config are NOT
+        persisted per-session in the transcript — they remain at their current
+        values. Use ``working_memory_set()`` / ``set_compression_strategy()``
+        etc. afterwards if you need to restore those manually.
+
+    Example:
+        // List past sessions
+        let sessions = list_sessions()
+        for s in sessions {
+            print("{s.session_id}: {s.modified_at}")
+        }
+
+        // Restore a specific session into active context
+        let r = restore_context("session_1783492628_d9d9c0aa")
+        if r["status"] == "ok" {
+            print("Restored " + str(r["restored_messages"]) + " messages")
+        }
+    """
+    if not session_id:
+        return {"status": "error", "error": "session_id is required"}
+
+    if _interpreter_agent_context is None:
+        return {"status": "error", "error": "No interpreter agent context"}
+
+    # Import required modules
+    from helen.runtime.config import resolve_session_dir
+    from helen.runtime.session_manager import SessionManager
+    from helen.runtime.transcript_store import (
+        BoundaryMarker,
+        JSONLBackend,
+        SQLiteBackend,
+        TranscriptStore,
+    )
+    from helen.runtime.config import get_transcript_config
+
+    try:
+        session_dir, _scope = resolve_session_dir()
+        manager = SessionManager(base_dir=session_dir)
+
+        # Check if session exists
+        if not manager.session_exists(session_id):
+            return {
+                "status": "error",
+                "error": f"Session not found: {session_id}",
+            }
+
+        # Get transcript path and load store
+        transcript_path = manager.get_session_path(session_id)
+        config = get_transcript_config()
+        backend_type = config.get("backend", "jsonl")
+        max_memory_items = config.get("max_memory_items", 1000)
+
+        if backend_type == "sqlite":
+            sqlite_path = transcript_path.with_suffix(".db")
+            backend = SQLiteBackend(sqlite_path)
+        else:
+            backend = JSONLBackend(transcript_path)
+
+        loaded_store = TranscriptStore.load_from_backend(backend, max_memory_items)
+
+        # Convert Messages to import_context format, preserving all fields.
+        # Skip BoundaryMarkers (they are compression audit trail, not content).
+        messages = []
+        boundary_count = 0
+        for item in loaded_store.transcript:
+            if isinstance(item, BoundaryMarker):
+                boundary_count += 1
+                continue
+            # item is a Message (imported from helen.runtime.history)
+            content = item.content
+            if isinstance(content, list):
+                # Multimodal content — flatten to text for active context
+                content = "\n".join(
+                    p.get("text", "")
+                    for p in content
+                    if isinstance(p, dict) and p.get("type") == "text"
+                )
+            messages.append({
+                "role": item.role,
+                "content": str(content),
+                "tool_calls": list(item.tool_calls) if item.tool_calls else [],
+                "tool_call_id": item.tool_call_id,
+                "uuid": item.uuid,
+                "compressed": item.compressed,
+                "pinned": item.pinned,
+            })
+
+        if not messages:
+            return {
+                "status": "error",
+                "error": f"Session {session_id} has no messages",
+            }
+
+        # Delegate to import_context to populate _interpreter_history
+        import_result = _import_context({"messages": messages})
+
+        if import_result.get("status") != "ok":
+            return {
+                "status": "error",
+                "error": f"import_context failed: {import_result.get('error')}",
+            }
+
+        logger.info(
+            "Restored context from session %s: %d messages, %d boundary markers skipped",
+            session_id,
+            len(messages),
+            boundary_count,
+        )
+
+        return {
+            "status": "ok",
+            "restored_messages": len(messages),
+            "session_id": session_id,
+            "boundary_markers": boundary_count,
+            "note": (
+                "Working memory and context config are not persisted per-session. "
+                "Use working_memory_set() / set_compression_strategy() to restore manually."
+            ),
+        }
+
+    except Exception as e:
+        logger.error("Failed to restore context from session %s: %s", session_id, e)
+        return {"status": "error", "error": str(e)}
 
 
 # ---------------------------------------------------------------------------

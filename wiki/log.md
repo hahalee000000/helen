@@ -4,6 +4,79 @@
 
 ---
 
+## [2026-07-17] feature | v1.21 — restore_context 函数
+
+**操作**: 实现 `restore_context(session_id)` 并更新 wiki
+**触发**: 用户讨论上下文管理生命周期时发现 API 缺口，随即实现
+**状态**: ✅ 完成
+
+### 变更内容
+
+1. **实现 `restore_context` 函数**
+   - 位置：`helen/stdlib/context.py` (`_restore_context`)
+   - 注册：`helen/stdlib/__init__.py` (BuiltinFunction, category="context")
+   - 中文别名：`helen/stdlib/locales/zh.py` ("恢复上下文" → restore_context)
+   - 测试：`tests/stdlib/test_restore_context.py` (11 个用例，全部通过)
+
+2. **wiki/runtime/context-management.md 更新**
+   - §0.2 四层架构图保持不变
+   - §0.3 "跨会话的记忆" 增加 `restore_context` 作为首选路径
+   - 新增 `restore_context vs resume_session` 对比表
+   - §0.4 `context {}` 配置章节补充 restore_context 示例代码
+   - 删除"⚠️ API 缺口"段落（已实现）
+   - 新增 §8.5.6b "跨会话恢复（v1.21+）" 详细 API 文档
+   - §8.5.8 中文别名表新增 restore_context / 恢复上下文
+   - 版本号 v1.20 → v1.21
+
+### 设计要点
+
+- `restore_context` 直接读 TranscriptStore 拿完整 Message 对象（绕过 `replay_transcript`，避免字段丢失）
+- 保留所有字段：role、content、tool_calls、tool_call_id、uuid、compressed、pinned
+- 内部委托给 `import_context()`，避免重复实现 history 替换逻辑
+- **不**恢复 working_memory 和 context config（transcript 不持久化这些），在返回值 `note` 字段中显式提示
+- 与 `resume_session` 的语义边界清晰：restore → active context（LLM 看到）；resume → transcript store（审计用）
+
+---
+
+## [2026-07-17] query → file-back | 上下文管理生命周期设计哲学
+
+**操作**: 将关于 Context 管理生命周期的设计讨论补充进 wiki
+**触发**: 用户讨论"Helen 上下文管理的生命周期应该多长？应该持久化多久？"
+**状态**: ✅ 完成
+
+### 变更内容
+
+1. **`wiki/runtime/context-management.md` 新增"零、设计哲学与生命周期"章节**
+   - §0.1 **Context vs Transcript 核心区分**：Context 是"LLM 当前看到的信息"（可变、会话级），Transcript 是"LLM 曾经说过的完整记录"（只追加、永久）
+   - §0.2 **四层生命周期架构**：Layer 0 Working Memory（即时，单次 llm act）→ Layer 1 Active Context（Agent 会话期）→ Layer 2 Pinned Context（跨 llm act，免疫压缩）→ Layer 3 Transcript（永久，非 context）
+   - §0.3 **Context 持久化边界**：跨 llm act ✅ / 跨 agent ❌（显式传递）/ 跨进程 ❌（用 Transcript 恢复）/ 跨会话 ❌（用 Skills / 文件）
+   - §0.4 **`context {}` 配置的生命周期语义**：控制会话内行为，不控制跨会话持久化
+   - 同步版本号 v1.19 → v1.20
+
+### 设计要点
+
+- Context 管理的哲学：**在有限的窗口内做到极致，不试图无限持久**
+- 持久化是 Transcript 的事；Context 可以激进压缩而不必顾虑信息丢失
+- 跨会话的"记忆"不是 context 的职责，应通过 Transcript 恢复、文件持久化或 Skills 实现
+- `context {}` 配置绑定了 Agent 会话期内的压缩策略，不是跨会话状态
+
+### 修正（2026-07-17 同日）
+
+**问题**：初版 §0.3 和 §0.4 提到了 `restore_context(session_id)` 函数，**该函数不存在于 stdlib**——是我编造的"应该有"的函数。
+
+**实际 stdlib 能力**：
+- ✅ `export_context()` / `import_context(data)` — 唯一完整的跨会话恢复路径
+- ✅ `replay_transcript(session_id)` — 只读审计，不注入当前 context，且返回格式与 `import_context()` 不兼容
+- ❌ `restore_context(session_id)` — 不存在
+
+**修正内容**：
+- §0.3 "跨会话记忆"改用实际存在的 `export_context/import_context` 描述
+- 新增"⚠️ API 缺口"段落，明确指出现有需要手写格式适配的问题
+- §0.4 给出实际的 save/restore 代码示例（`export_context` + `write_file` + `parse_json` + `import_context`）
+- 把 `restore_context(session_id)` 列为**未来考虑**的便捷函数
+
+---
+
 ## [2026-07-13] feature | v1.18 — spawn 并发原语
 
 **操作**: 更新 wiki 以反映 spawn 替代 async/await/detach 的重大变更

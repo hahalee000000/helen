@@ -510,6 +510,53 @@ agent ChatBot {
 }
 ```
 
+### 恢复上下文 (v1.21)
+
+接续旧的 transcript session 到当前 active context——LLM 在下一次 `llm act` 调用时能看到恢复的所有消息。
+
+```helen
+// 1. 列出所有旧会话
+let sessions = list_sessions()
+for s in sessions {
+    print("{s.session_id}: {s.message_count} 条消息, scope={s.scope}")
+}
+
+// 2. 恢复指定会话到当前 active context
+let r = restore_context("session_1783492628_d9d9c0aa")
+if r["status"] == "ok" {
+    print("恢复了 " + str(r["restored_messages"]) + " 条消息")
+    print("跳过 " + str(r["boundary_markers"]) + " 个压缩边界")
+} else {
+    print("恢复失败: " + r["error"])
+}
+
+// 中文别名
+恢复上下文("session_1783492628_d9d9c0aa")
+```
+
+**与 `resume_session` 的区别**：
+
+- `restore_context(session_id)`：恢复 **active context**（LLM 能看到），适合接续旧会话继续工作
+- `resume_session(session_id)`：替换 **transcript store** 引用（LLM 看不到），适合查看旧 transcript 流
+
+**注意事项**：
+
+- `restore_context` 只恢复 messages（完整字段：`role`、`content`、`tool_calls`、`tool_call_id`、`uuid`、`compressed`、`pinned`）
+- **不**恢复 working_memory 和 context config（transcript 不持久化这些）
+- 需要恢复 working_memory 时，用 `working_memory_set()` 手动设置
+
+**跨会话保存/恢复完整上下文（含 working_memory）**：
+
+```helen
+// 会话结束前：导出完整快照到文件
+let snapshot = export_context()
+write_file("context_snapshot.json", to_json(snapshot.context))
+
+// 新会话启动时：读入并导入
+let saved = parse_json(read_file("context_snapshot.json"))
+import_context(saved)
+```
+
 ## Transcript 函数 (6) (v1.16)
 
 会话记录管理函数，用于访问和操作 Helen 的对话历史（v1.16+）。提供持久化、会话恢复和压缩审计功能。
