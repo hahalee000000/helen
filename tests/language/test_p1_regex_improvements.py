@@ -130,13 +130,13 @@ main {
         test_file.write_text("""
 main {
     let words = ["apple", "banana", "cherry", "date"]
-    let count = 0
+    let total = 0
     for word in words {
         if regex_test("a", word) {
-            count = count + 1
+            total = total + 1
         }
     }
-    print(count)
+    print(total)
 }
 """)
         result = run_helen(test_file)

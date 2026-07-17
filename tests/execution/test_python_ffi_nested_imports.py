@@ -180,7 +180,7 @@ class TestPythonFFINestedImports:
         helper = """
         import "json"
         import "math"
-        fn describe(x: int): str {
+        fn info(x: int): str {
             let s = "sqrt=" + str(math.sqrt(x))
             return json.dumps({"info": s})
         }
@@ -188,7 +188,7 @@ class TestPythonFFINestedImports:
         main = """
         import "helper.helen"
         main {
-            describe(16)
+            info(16)
         }
         """
         result, _ = _run_file(main, {"helper.helen": helper})
@@ -301,7 +301,7 @@ class TestPythonFFIAliasedNestedImports:
         helper = """
         import "json" as J
         import "math" as M
-        fn describe(): str {
+        fn info(): str {
             let pi_str = str(M.floor(M.pi))
             return J.dumps({"pi_floor": pi_str})
         }
@@ -309,7 +309,7 @@ class TestPythonFFIAliasedNestedImports:
         main = """
         import "helper.helen"
         main {
-            describe()
+            info()
         }
         """
         result, _ = _run_file(main, {"helper.helen": helper})

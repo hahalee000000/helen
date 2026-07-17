@@ -532,13 +532,13 @@ class TestSandboxAgent:
     def test_sandbox_agent_runs(self):
         """@sandbox agent can execute basic logic."""
         source = """
-@sandbox agent Safe(input: str) {
+@sandbox agent Safe(msg: str) {
     main {
-        return input
+        return msg
     }
 }
 
-let result = Safe(input = "hello")
+let result = Safe(msg = "hello")
 """
         interp = _run(source)
         assert interp.environment.lookup("result") == "hello"

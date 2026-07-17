@@ -129,10 +129,10 @@ class TestClosures:
         """测试简单闭包"""
         test_file = temp_helen_file("""
 fn make_counter() {
-    let count = 0
+    let n = 0
     return fn() {
-        count = count + 1
-        return count
+        n = n + 1
+        return n
     }
 }
 
@@ -184,10 +184,10 @@ main {
         """测试多个闭包独立"""
         test_file = temp_helen_file("""
 fn make_counter() {
-    let count = 0
+    let n = 0
     return fn() {
-        count = count + 1
-        return count
+        n = n + 1
+        return n
     }
 }
 

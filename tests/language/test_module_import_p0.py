@@ -100,11 +100,11 @@ main {{
         # Create math module
         math_file = temp_dir / "math.helen"
         math_file.write_text("""
-fn add(a: int, b: int): int {
+fn add_nums(a: int, b: int): int {
     return a + b
 }
 """)
-        
+
         # Create string module
         string_file = temp_dir / "string_utils.helen"
         string_file.write_text("""
@@ -112,7 +112,7 @@ fn greet(name: str): str {
     return "Hello, " + name
 }
 """)
-        
+
         # Create main file
         main_file = temp_dir / "main.helen"
         main_file.write_text(f"""
@@ -120,9 +120,9 @@ import "math.helen"
 import "string_utils.helen"
 
 main {{
-    let sum = add(10, 20)
+    let total = add_nums(10, 20)
     let greeting = greet("Helen")
-    print(sum)
+    print(total)
     print(greeting)
 }}
 """)
@@ -182,24 +182,24 @@ main {
         # Create module
         module_file = temp_dir / "utils.helen"
         module_file.write_text("""
-fn calculate(a: int, b: int, c: int): int {
+fn compute(a: int, b: int, c: int): int {
     return a + b * c
 }
 """)
-        
+
         # Create main file
         main_file = temp_dir / "main.helen"
         main_file.write_text(f"""
 import "utils.helen"
 
 main {{
-    let result = calculate(2, 3, 4)
-    print(result)
+    let out = compute(2, 3, 4)
+    print(out)
 }}
 """)
-        
+
         result = run_helen(main_file)
-        
+
         assert result["returncode"] == 0, f"Expected success, got error: {result['stderr']}"
         assert "14" in result["stdout"]  # 2 + 3 * 4 = 14
     

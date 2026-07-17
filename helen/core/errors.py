@@ -73,6 +73,7 @@ class ErrorCode(Enum):
     RUNTIME_ERROR = 351
     IMPORT_ERROR = 352
     INVALID_TOOLS_DECLARATION = 353
+    BUILTIN_SHADOWED = 354
 
 
 @dataclass

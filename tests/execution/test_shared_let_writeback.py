@@ -94,20 +94,20 @@ main {
     def test_nested_agents_writeback(self):
         """Nested agents both modify shared let; both write back."""
         source = """
-shared let log = []
+shared let logs = []
 
 agent Inner() {
     main {
-        log = log + ["inner"]
+        logs = logs + ["inner"]
         return "inner done"
     }
 }
 
 agent Outer() {
     main {
-        log = log + ["outer-before"]
+        logs = logs + ["outer-before"]
         Inner()
-        log = log + ["outer-after"]
+        logs = logs + ["outer-after"]
         return "outer done"
     }
 }
@@ -117,7 +117,7 @@ main {
 }
 """
         interp = _run(source)
-        log = interp.environment.lookup("log")
+        log = interp.environment.lookup("logs")
         assert log == ["outer-before", "inner", "outer-after"]
 
     def test_multiple_shared_vars(self):

@@ -326,14 +326,14 @@ class TestMultipleSharedLet:
         module = """
         shared let a = 1
         shared let b = 2
-        fn sum(): int { return a + b }
+        fn total(): int { return a + b }
         fn set_a(v: int) { a = v }
         """
         main = """
         import "mod.helen"
         main {
             set_a(10)
-            sum()
+            total()
         }
         """
         result, _ = _run_file(main, {"mod.helen": module})

@@ -146,6 +146,72 @@ class SemanticAnalyzer(Visitor[None]):
         argv_sym = Symbol("argv", kind="const", is_const=True)
         self.symbols.define("argv", argv_sym)
 
+    def _define_user_symbol(
+        self, name: str, symbol: "Symbol", span=None
+    ) -> "Symbol | None":
+        """Define a user-defined symbol, rejecting builtin shadowing.
+
+        Unlike ``symbols.define`` (which silently returns the existing symbol),
+        this method enforces the "no builtin shadowing" rule (v1.23).
+
+        A builtin is shadowed when a user-defined symbol (variable, function,
+        agent, parameter, import alias, ...) has the same name as a stdlib
+        builtin registered in the global scope (e.g., ``len``, ``log``,
+        ``print``, ``max``).
+
+        Shared stores / channels are a namespace of their own (``Store.field``,
+        ``Store.method``); symbols declared inside a store scope do not leak to
+        the global name resolution, so builtin shadowing checks are skipped
+        for them. Method *parameters* inside a store are still checked because
+        they live in a function scope within the store.
+
+        Args:
+            name: The identifier being defined.
+            symbol: The new Symbol to register.
+            span: Optional source span for error reporting.
+
+        Returns:
+            The existing Symbol if a non-builtin duplicate exists in the
+            current scope (caller should emit DUPLICATE_SYMBOL), or None
+            if the symbol was defined successfully. If a builtin would be
+            shadowed, a ``BUILTIN_SHADOWED`` error is reported and the
+            builtin is returned (so the caller can short-circuit).
+        """
+        # Skip builtin shadowing check inside shared store / channel scopes.
+        # Fields and methods live under `Store.name`, not in global resolution.
+        if not self._in_store_scope():
+            existing = self.symbols.resolve(name)
+            if existing is not None and existing.kind == "builtin":
+                self.errors.error(
+                    ErrorCode.BUILTIN_SHADOWED,
+                    f"cannot shadow builtin '{name}'; choose a different name "
+                    f"(hint: try '{name}s', 'my_{name}', or another non-builtin name)",
+                    span,
+                )
+                return existing
+
+        return self.symbols.define(name, symbol)
+
+    def _in_store_scope(self) -> bool:
+        """Return True if the current scope is directly inside a shared store/channel.
+
+        Shared stores/channels form their own namespace (``Store.field``,
+        ``Store.method``); symbols defined at the store scope level (fields,
+        method names) do not shadow globals.
+
+        Function/lambda scopes nested inside a store (i.e. method bodies)
+        still participate in global name resolution for locals/params, so
+        this returns False when the immediate scope is a function or lambda,
+        even if a store scope encloses it.
+        """
+        scope = self.symbols.current_scope
+        # Only the *immediate* scope matters. If we're in a function/lambda
+        # (method body) inside a store, that function scope still resolves
+        # names against globals — so we don't skip the builtin check.
+        if scope is None or scope.parent is None:
+            return False
+        return scope.scope_type == "store"
+
     def analyze(self, program: "ProgramNode") -> None:
         """Run semantic analysis on a full program.
         
@@ -359,8 +425,8 @@ class SemanticAnalyzer(Visitor[None]):
 
         # Register function in current scope (without analyzing body)
         sym = Symbol(name=node.name, kind="function", type_node=node.return_type)
-        existing = self.symbols.define(node.name, sym)
-        if existing is not None:
+        existing = self._define_user_symbol(node.name, sym, node.span)
+        if existing is not None and existing.kind != "builtin":
             self.errors.error(
                 ErrorCode.DUPLICATE_SYMBOL,
                 f"duplicate declaration of '{node.name}'",
@@ -374,8 +440,8 @@ class SemanticAnalyzer(Visitor[None]):
         """Register agent signature without analyzing body (for forward references)."""
         # Register agent in current scope
         sym = Symbol(name=node.name, kind="agent", type_node=None)
-        existing = self.symbols.define(node.name, sym)
-        if existing is not None:
+        existing = self._define_user_symbol(node.name, sym, node.span)
+        if existing is not None and existing.kind != "builtin":
             self.errors.error(
                 ErrorCode.DUPLICATE_AGENT_NAME,
                 f"duplicate agent name '{node.name}'",
@@ -436,22 +502,15 @@ class SemanticAnalyzer(Visitor[None]):
                 type_node=node.type_annotation,
                 is_const=not node.mutable,
             )
-            existing = self.symbols.define(node.name, symbol)
-            if existing is not None:
-                # Allow shadowing stdlib builtins (e.g. `let len = ...` shadows `len()`)
-                if existing.kind == "builtin":
-                    # Actually replace the builtin with the user's symbol.
-                    # Without this, `define` returns the existing builtin without
-                    # overwriting it, so later references resolve to the (const)
-                    # builtin instead of the user's variable. See test_nested_agents_writeback.
-                    self.symbols.undefine(node.name)
-                    self.symbols.define(node.name, symbol)
-                else:
-                    self.errors.error(
-                        ErrorCode.DUPLICATE_SYMBOL,
-                        f"duplicate declaration of '{node.name}'",
-                        node.span,
-                    )
+            # v1.23: Reject builtin shadowing. `_define_user_symbol` reports
+            # BUILTIN_SHADOWED and returns the builtin without replacing it.
+            existing = self._define_user_symbol(node.name, symbol, node.span)
+            if existing is not None and existing.kind != "builtin":
+                self.errors.error(
+                    ErrorCode.DUPLICATE_SYMBOL,
+                    f"duplicate declaration of '{node.name}'",
+                    node.span,
+                )
 
         # v1.10: Track shared let variable names for cross-agent visibility
         if node.shared:
@@ -489,16 +548,13 @@ class SemanticAnalyzer(Visitor[None]):
             kind=kind,
             is_const=True,
         )
-        existing = self.symbols.define(node.name, symbol)
-        if existing is not None:
-            if existing.kind == "builtin":
-                pass
-            else:
-                self.errors.error(
-                    ErrorCode.DUPLICATE_SYMBOL,
-                    f"duplicate declaration of '{node.name}'",
-                    node.span,
-                )
+        existing = self._define_user_symbol(node.name, symbol, node.span)
+        if existing is not None and existing.kind != "builtin":
+            self.errors.error(
+                ErrorCode.DUPLICATE_SYMBOL,
+                f"duplicate declaration of '{node.name}'",
+                node.span,
+            )
 
         self._shared_var_names.add(node.name)
         self.symbols.enter_scope(f"{kind}:{node.name}", "store")
@@ -546,7 +602,7 @@ class SemanticAnalyzer(Visitor[None]):
                     for param in method_node.params:
                         param_sym = Symbol(name=param.name, kind="param",
                                           type_node=param.type_annotation)
-                        self.symbols.define(param.name, param_sym)
+                        self._define_user_symbol(param.name, param_sym, param.span)
                     method_node.body.accept(self)
                 finally:
                     self.symbols.exit_scope()
@@ -634,7 +690,7 @@ class SemanticAnalyzer(Visitor[None]):
             if node.iterator is not None:
                 # The loop variable is declared in this scope
                 sym = Symbol(name=node.iterator.name, kind="variable")
-                self.symbols.define(node.iterator.name, sym)
+                self._define_user_symbol(node.iterator.name, sym, node.iterator.span)
             node.body.accept(self)
         finally:
             self.symbols.exit_scope()
@@ -1009,7 +1065,7 @@ class SemanticAnalyzer(Visitor[None]):
                     kind="variable",
                     type_node=param.type_annotation,
                 )
-                self.symbols.define(param.name, sym)
+                self._define_user_symbol(param.name, sym, param.span)
                 registered_params.append(param.name)
 
             # Register agent-scoped functions before analyzing main
@@ -1018,7 +1074,7 @@ class SemanticAnalyzer(Visitor[None]):
             for func_node in node.functions:
                 sym = Symbol(name=func_node.name, kind="function",
                              type_node=func_node.return_type)
-                self.symbols.define(func_node.name, sym)
+                self._define_user_symbol(func_node.name, sym, func_node.span)
                 registered_funcs.append(func_node.name)
 
             # v1.12: Register and analyze function_vars (let/const in functions {} block)
@@ -1034,7 +1090,7 @@ class SemanticAnalyzer(Visitor[None]):
                 )
                 if not var_node.mutable:
                     sym.is_const = True
-                self.symbols.define(var_node.name, sym)
+                self._define_user_symbol(var_node.name, sym, var_node.span)
                 registered_fvars.append(var_node.name)
 
                 # Analyze the initializer (if any) in agent scope
@@ -1073,7 +1129,7 @@ class SemanticAnalyzer(Visitor[None]):
                     for param in func_node.params:
                         sym = Symbol(name=param.name, kind="param",
                                     type_node=param.type_annotation)
-                        self.symbols.define(param.name, sym)
+                        self._define_user_symbol(param.name, sym, param.span)
                     # Visit function body
                     func_node.body.accept(self)
                 finally:
@@ -1140,8 +1196,8 @@ class SemanticAnalyzer(Visitor[None]):
         # Register function in current scope (skip if already registered in pass 1)
         if not already_registered:
             sym = Symbol(name=node.name, kind="function", type_node=node.return_type)
-            existing = self.symbols.define(node.name, sym)
-            if existing is not None:
+            existing = self._define_user_symbol(node.name, sym, node.span)
+            if existing is not None and existing.kind != "builtin":
                 self.errors.error(
                     ErrorCode.DUPLICATE_SYMBOL,
                     f"duplicate declaration of '{node.name}'",
@@ -1165,7 +1221,7 @@ class SemanticAnalyzer(Visitor[None]):
             # Bind parameters in function scope
             for param in node.params:
                 sym = Symbol(name=param.name, kind="param", type_node=param.type_annotation)
-                self.symbols.define(param.name, sym)
+                self._define_user_symbol(param.name, sym, param.span)
             # Visit function body
             node.body.accept(self)
         finally:
@@ -1213,7 +1269,7 @@ class SemanticAnalyzer(Visitor[None]):
             # Bind parameters in lambda scope
             for param in node.params:
                 sym = Symbol(name=param.name, kind="param", type_node=param.type_annotation)
-                self.symbols.define(param.name, sym)
+                self._define_user_symbol(param.name, sym, param.span)
             # Visit lambda body
             node.body.accept(self)
         finally:
@@ -1229,8 +1285,8 @@ class SemanticAnalyzer(Visitor[None]):
         """
         # Register protocol name in current scope
         sym = Symbol(name=node.name, kind="protocol", type_node=None)
-        existing = self.symbols.define(node.name, sym)
-        if existing is not None:
+        existing = self._define_user_symbol(node.name, sym, node.span)
+        if existing is not None and existing.kind != "builtin":
             self.errors.error(
                 ErrorCode.DUPLICATE_SYMBOL,
                 f"duplicate declaration of protocol '{node.name}'",
@@ -1286,7 +1342,7 @@ class SemanticAnalyzer(Visitor[None]):
             alias = node.alias if node.alias else path.split('.')[-1]
             from helen.semantic.symbols import Symbol
             sym = Symbol(alias, kind="import", is_const=False)
-            self.symbols.define(alias, sym)
+            self._define_user_symbol(alias, sym, node.span)
             return
 
         # P0 FIX: Resolve relative paths based on the importing file's directory
@@ -1320,7 +1376,7 @@ class SemanticAnalyzer(Visitor[None]):
             alias = node.alias if node.alias else os.path.splitext(os.path.basename(path))[0]
             from helen.semantic.symbols import Symbol
             sym = Symbol(alias, kind="import", is_const=False)
-            self.symbols.define(alias, sym)
+            self._define_user_symbol(alias, sym, node.span)
         elif path.endswith('.helen'):
             # P0 FIX: Parse imported .helen file and register its functions/agents
             # Use absolute path for tracking to avoid duplicate imports
@@ -1330,7 +1386,7 @@ class SemanticAnalyzer(Visitor[None]):
                 if node.alias:
                     from helen.semantic.symbols import Symbol
                     sym = Symbol(node.alias, kind="module", is_const=False)
-                    self.symbols.define(node.alias, sym)
+                    self._define_user_symbol(node.alias, sym, node.span)
                 return
             
             self._imported_paths.add(abs_target)
@@ -1360,7 +1416,7 @@ class SemanticAnalyzer(Visitor[None]):
                             # Register function in current symbol table
                             from helen.semantic.symbols import Symbol
                             sym = Symbol(stmt.name, kind="function", is_const=True)
-                            self.symbols.define(stmt.name, sym)
+                            self._define_user_symbol(stmt.name, sym, stmt.span)
                             # Store parameter types for compile-time checking
                             self._function_param_types[stmt.name] = [p.type_annotation for p in stmt.params]
 
@@ -1368,7 +1424,7 @@ class SemanticAnalyzer(Visitor[None]):
                             # Register agent in current symbol table
                             from helen.semantic.symbols import Symbol
                             sym = Symbol(stmt.name, kind="agent", is_const=True)
-                            self.symbols.define(stmt.name, sym)
+                            self._define_user_symbol(stmt.name, sym, stmt.span)
                             self._agent_names[stmt.name] = stmt
 
                         case VarDeclNode() if not stmt.mutable or stmt.shared:
@@ -1376,7 +1432,7 @@ class SemanticAnalyzer(Visitor[None]):
                             # v1.10: shared let (mutable=True, shared=True) also imported
                             from helen.semantic.symbols import Symbol
                             sym = Symbol(stmt.name, kind="const" if not stmt.mutable else "shared", is_const=not stmt.mutable)
-                            self.symbols.define(stmt.name, sym)
+                            self._define_user_symbol(stmt.name, sym, stmt.span)
 
                         case _SSDN():
                             # v1.17 (Issue #35): Register imported shared store/channel
@@ -1386,18 +1442,18 @@ class SemanticAnalyzer(Visitor[None]):
                             # semantic analysis with "undeclared variable".
                             from helen.semantic.symbols import Symbol
                             sym = Symbol(stmt.name, kind="shared", is_const=True)
-                            self.symbols.define(stmt.name, sym)
+                            self._define_user_symbol(stmt.name, sym, stmt.span)
                             self._shared_var_names.add(stmt.name)
 
                         case ImportStmtNode():
                             # Recursively process imports in the imported file
                             stmt.accept(self)
-                
+
                 # If alias is provided, register it as a module reference
                 if node.alias:
                     from helen.semantic.symbols import Symbol
                     sym = Symbol(node.alias, kind="module", is_const=False)
-                    self.symbols.define(node.alias, sym)
+                    self._define_user_symbol(node.alias, sym, node.span)
                     
             except Exception as e:
                 self.errors.error(
@@ -1462,7 +1518,7 @@ class SemanticAnalyzer(Visitor[None]):
             type_node=sym.type_node if sym else None,
             is_const=sym.is_const if sym else True,
         )
-        self.symbols.define(alias_name, new_sym)
+        self._define_user_symbol(alias_name, new_sym, node.span)
 
     # ------------------------------------------------------------------
     # Spawn
@@ -1550,7 +1606,7 @@ class SemanticAnalyzer(Visitor[None]):
         self.symbols.enter_scope("catch", "block")
         try:
             sym = Symbol(name=node.error_name, kind="variable")
-            self.symbols.define(node.error_name, sym)
+            self._define_user_symbol(node.error_name, sym, node.span)
             self._visit_stmts(node.body)
         finally:
             self.symbols.exit_scope()
@@ -1643,11 +1699,11 @@ class SemanticAnalyzer(Visitor[None]):
             if isinstance(node.pattern, VariablePatternNode):
                 from helen.semantic.symbols import Symbol
                 sym = Symbol(name=node.pattern.name, kind="variable", is_const=False)
-                self.symbols.define(node.pattern.name, sym)
+                self._define_user_symbol(node.pattern.name, sym, node.pattern.span)
             elif isinstance(node.pattern, TypePatternNode) and node.pattern.binding_name:
                 from helen.semantic.symbols import Symbol
                 sym = Symbol(name=node.pattern.binding_name, kind="variable", is_const=False)
-                self.symbols.define(node.pattern.binding_name, sym)
+                self._define_user_symbol(node.pattern.binding_name, sym, node.pattern.span)
             # Now evaluate guard with variables in scope
             if node.guard is not None:
                 node.guard.accept(self)

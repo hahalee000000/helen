@@ -82,8 +82,8 @@ class TestMethodStyleWithClosures:
     def test_function_composition(self, temp_helen_file, helen_dir):
         """测试使用函数组合模拟方法链"""
         test_file = temp_helen_file("""
-fn counter_increment(count) {
-    return count + 1
+fn counter_increment(n) {
+    return n + 1
 }
 
 main {

@@ -125,13 +125,13 @@ class TestStdlibAliasExecution:
     def test_all_chinese_program(self):
         """Full Chinese program with Chinese stdlib names and 主函."""
         source = """
-函数 测试() {
-    定义 列表 = [5, 2, 8, 1, 9]
-    返回 长度(排序(列表))
+函数 我的函数() {
+    定义 数据 = [5, 2, 8, 1, 9]
+    返回 长度(排序(数据))
 }
 
 主函 {
-    测试()
+    我的函数()
 }
 """
         assert _run(source) == 5
