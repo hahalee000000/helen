@@ -333,7 +333,7 @@ def _item_to_dict(item: Message | BoundaryMarker) -> dict[str, Any]:
     if isinstance(item, BoundaryMarker):
         return item.to_dict()
     elif isinstance(item, Message):
-        return {
+        d = {
             "type": "message",
             "role": item.role,
             "content": item.content,
@@ -345,6 +345,14 @@ def _item_to_dict(item: Message | BoundaryMarker) -> dict[str, Any]:
             "compressed": item.compressed,
             "pinned": item.pinned,
         }
+        # v1.22: Invocation tree fields (only include if set, for compactness)
+        if item.agent_name is not None:
+            d["agent_name"] = item.agent_name
+        if item.invocation_id:
+            d["invocation_id"] = item.invocation_id
+        if item.parent_invocation_id:
+            d["parent_invocation_id"] = item.parent_invocation_id
+        return d
     else:
         raise TypeError(f"Unknown item type: {type(item)}")
 
@@ -363,6 +371,10 @@ def _item_from_dict(data: dict[str, Any]) -> Message | BoundaryMarker | None:
             priority=data.get("priority", 50),
             compressed=data.get("compressed", False),
             pinned=data.get("pinned", False),
+            # v1.22: Invocation tree fields (default to None/"" for backward compat)
+            agent_name=data.get("agent_name"),
+            invocation_id=data.get("invocation_id", ""),
+            parent_invocation_id=data.get("parent_invocation_id", ""),
         )
     elif item_type == "boundary_marker":
         return BoundaryMarker.from_dict(data)

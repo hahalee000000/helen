@@ -4,6 +4,114 @@
 
 ---
 
+## [2026-07-17] feature | v1.22 — Invocation Tree + Per-Main Fresh Context
+
+**操作**: 实现 v1.22 提案的主体部分（调用树 + 每次 main {} fresh context）
+**触发**: 用户要求按 `reports/v1.22-invocation-tree-proposal.md` 完整实施
+**状态**: ✅ 完成
+
+### 变更内容
+
+1. **Message 字段扩展**（`helen/runtime/history.py`）
+   - 新增 `agent_name` / `invocation_id` / `parent_invocation_id` 三个字段
+   - `transcript_store.py` 的 `_item_to_dict` / `_item_from_dict` 同步更新
+   - 向后兼容：旧消息字段为 None/""
+
+2. **Interpreter invocation 状态管理**（`helen/interpreter/interpreter.py`）
+   - 新增 `_current_invocation_id` / `_invocation_stack` / `_invocation_index`
+   - 实现 `_enter_invocation(agent_name)` / `_exit_invocation()`
+   - `visit_main_block`：顶层 main 也创建 invocation
+   - `_call_agent`：进入 agent 时 enter invocation，finally 块 exit invocation
+   - `_history` property：按 `_current_invocation_id` 过滤，实现 per-agent 隔离
+
+3. **`_add_to_history` 自动填字段**（`helen/interpreter/llm_mixin.py`）
+   - 创建 Message 时填充 agent_name / invocation_id / parent_invocation_id
+
+4. **调用树 stdlib 函数**（`helen/stdlib/transcript.py`）
+   - `list_invocations(session_id?, agent?, limit?, offset?)`
+   - `get_invocation(invocation_id, session_id?)`
+   - `get_invocation_tree(session_id?)`
+   - `invocation_path(invocation_id, session_id?)`
+   - `_build_invocation_index(store)` 内部辅助函数（从 transcript 重建索引）
+
+5. **扩展 `replay_transcript`**：新增 `agent` / `invocation_id` / `last_only` / `include_subtree` 参数
+
+6. **扩展 `restore_context`**：新增 `invocation_id` / `agent` / `last_only` / `include_subtree` 参数
+
+7. **注册 + 中文别名**
+   - `helen/stdlib/__init__.py`：4 个新 BuiltinFunction，总数 319 -> 323
+   - `helen/stdlib/locales/zh.py`：`列出调用` / `获取调用` / `获取调用树` / `调用路径`
+
+8. **测试**：`tests/interpreter/test_invocation_tree.py`（17 个用例）
+   - 上下文隔离（两 agent、同 agent 两次、嵌套）
+   - invocation 元数据字段
+   - 调用树查询 API
+   - replay_transcript / restore_context 过滤
+   - 向后兼容
+
+9. **文档更新**
+   - `wiki/runtime/context-management.md`：修正"Context 生命周期 = Agent 会话"为"= 单次 main {} 执行"，新增 §0.5
+   - `wiki/runtime/transcript-store.md`：新增 Invocation Tree 章节
+   - `wiki/tutorial/10-stdlib.md`：新增"调用树查询 (v1.22)"章节，Transcript 函数 7 -> 11
+   - `helen/skills/software-development/helen-stdlib/SKILL.md`：Transcript 12 -> 16，新增调用树示例
+   - `reports/v1.22-invocation-tree-proposal.md`：状态 Draft -> 已实现
+
+### 设计决策（已确认）
+
+| 问题 | 决策 |
+|---|---|
+| 嵌套调用边界 | 严格隔离 + 未来 opt-in `merge_child_context()` |
+| 顶层 agent_name | `null` |
+| 元数据持久化 | 不持久化，从 transcript 重建（SSOT） |
+| list_invocations 分页 | `limit=100, offset=0` |
+| call_stack 关系 | 独立实现 |
+
+### 隔离机制
+
+active context 通过 `_history` property 按 `invocation_id` 过滤实现隔离，**不需要 save/restore**。transcript SSOT 仍然记录所有消息（审计完整），但 LLM 只看到当前 invocation 的消息。
+
+### 测试结果
+
+- 17 个新测试全部通过
+- 1669 个 stdlib + interpreter + runtime 测试全部通过
+- 1 个预先存在的无关失败（test_shared_let_writeback）除外
+
+---
+
+## [2026-07-17] feature | v1.22 — search_transcript 内容搜索函数
+
+**操作**: 实现 `search_transcript(query, ...)` 内容搜索函数并更新 wiki
+**触发**: 用户讨论：一般场景下记不住 invocation_id，但记得内容，需要根据内容找完整 context
+**状态**: ✅ 完成
+
+### 变更内容
+
+1. **实现 `search_transcript` 函数**
+   - 位置：`helen/stdlib/transcript.py`
+   - 注册：`helen/stdlib/__init__.py` (BuiltinFunction, category="transcript")
+   - 中文别名：`helen/stdlib/locales/zh.py` ("搜索会话" → search_transcript)
+   - 测试：`tests/stdlib/test_search_transcript.py` (15 个用例，全部通过)
+
+2. **wiki/runtime/transcript-store.md 新增 §search_transcript()**
+   - 完整 API 说明
+   - 参数表（query/session_id/scope/role/regex/limit）
+   - 返回格式
+   - 两个典型用法示例
+
+3. **wiki/runtime/context-management.md 更新**
+   - §0.3 "跨会话的记忆" 增加 `search_transcript` 作为与 `restore_context` 协同的发现工具
+   - 版本号 v1.21 → v1.22
+
+### 设计要点
+
+- **与 `search_context` 区别**：`search_context` 只搜当前 active context（main {} 退出就没了）；`search_transcript` 搜持久化 transcript，可跨 session
+- **scope 参数**：`current`（默认）/ `all`（跨所有 session）/ `global` / `project`
+- **去重**：`scope="all"` 时跨 global + project 搜索，对 session 目录和 session_id 双重去重避免重复结果
+- **多模态内容**：list 类型 content 自动展平为 text 部分再搜索
+- **当前限制**：Phase 1 实现（`return="message"`）；`return="invocation"` 等高级粒度待 v1.22 invocation tree 实现后补
+
+---
+
 ## [2026-07-17] feature | v1.21 — restore_context 函数
 
 **操作**: 实现 `restore_context(session_id)` 并更新 wiki

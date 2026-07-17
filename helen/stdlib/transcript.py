@@ -5,6 +5,7 @@ Provides access to transcript session management and replay capabilities:
 - list_sessions(): List all transcript sessions
 - replay_transcript(): Replay transcript messages
 - export_transcript(): Export transcript to file
+- search_transcript(): Search transcript messages by content
 - get_compression_audit(): Get compression event history
 
 These functions are registered as stdlib built-ins and can be called
@@ -119,20 +120,35 @@ def list_sessions(scope: str = "") -> list[dict[str, Any]]:
 def replay_transcript(
     session_id: str | None = None,
     include_compressed: bool = False,
+    # v1.22: Invocation tree filtering
+    agent: str | None = None,
+    invocation_id: str | None = None,
+    last_only: bool = False,
+    include_subtree: bool = False,
 ) -> list[dict[str, Any]]:
-    """Replay transcript messages.
+    """Replay transcript messages, with optional filtering.
 
     Args:
         session_id: Session to replay. If None, uses current session.
         include_compressed: If True, includes compressed messages.
                            If False, returns only the current effective view.
+        agent: Filter by agent name. None returns all agents.
+        invocation_id: Filter by invocation UUID. When include_subtree=True,
+                       also includes all descendant invocations.
+        last_only: When agent is set, only return the agent's most recent
+                   invocation (not all invocations).
+        include_subtree: When invocation_id is set, also return messages from
+                         all descendant invocations.
 
     Returns:
         List of message dicts with keys:
+        - type: "message" or "boundary"
         - role: Message role (user/assistant/system/tool)
         - content: Message content
         - uuid: Message UUID
-        - timestamp: When the message was added
+        - message_type: Auto-inferred message type
+        - agent_name: Agent that produced this message (v1.22+)
+        - invocation_id: Invocation UUID (v1.22+)
 
     Example:
         // Get current session transcript
@@ -140,6 +156,15 @@ def replay_transcript(
 
         // Get specific session with compressed messages
         let full = replay_transcript("session_123", true)
+
+        // v1.22: Filter by agent
+        let a_msgs = replay_transcript(agent="Researcher")
+
+        // v1.22: Get only the agent's last run
+        let last_run = replay_transcript(agent="Researcher", last_only=true)
+
+        // v1.22: Get specific invocation (and its subtree)
+        let subtree = replay_transcript(invocation_id="inv_xxx", include_subtree=true)
     """
     from helen.runtime.transcript_store import BoundaryMarker, Message
 
@@ -168,19 +193,68 @@ def replay_transcript(
         backend = JSONLBackend(transcript_path)
         store = TranscriptStore.load_from_backend(backend)
 
+    # v1.22: Determine the set of allowed invocation IDs based on filters
+    allowed_invocations: set[str] | None = None
+
+    if invocation_id is not None or agent is not None:
+        index = _build_invocation_index(store)
+
+        if invocation_id is not None:
+            # Start with this invocation
+            allowed = {invocation_id}
+            if include_subtree:
+                # Add all descendants
+                def _add_descendants(parent_id: str) -> None:
+                    if parent_id in index:
+                        for child_id in index[parent_id].get("children", []):
+                            allowed.add(child_id)
+                            _add_descendants(child_id)
+                _add_descendants(invocation_id)
+            allowed_invocations = allowed
+
+        elif agent is not None:
+            # Filter by agent name
+            agent_invs = [inv_id for inv_id, entry in index.items()
+                          if entry.get("agent_name") == agent]
+            if last_only and agent_invs:
+                # Pick the most recent by first_message_time, with order as tiebreaker
+                agent_invs.sort(
+                    key=lambda i: (
+                        index[i]["first_message_time"] if index[i]["first_message_time"] is not None else 0,
+                        index[i].get("order", 0),
+                    ),
+                    reverse=True,
+                )
+                agent_invs = [agent_invs[0]]
+            allowed_invocations = set(agent_invs)
+
+    # Helper to build message dict (includes v1.22 fields)
+    def _msg_dict(msg: Message) -> dict[str, Any]:
+        d = {
+            "type": "message",
+            "role": msg.role,
+            "content": msg.content,
+            "uuid": msg.uuid,
+            "message_type": msg.message_type,
+        }
+        # v1.22: Include invocation tree fields if set
+        if getattr(msg, "agent_name", None) is not None:
+            d["agent_name"] = msg.agent_name
+        if getattr(msg, "invocation_id", ""):
+            d["invocation_id"] = msg.invocation_id
+        return d
+
     # Get messages
     if include_compressed:
-        # Return all messages and boundaries from transcript
         items = []
         for item in store.transcript:
             if isinstance(item, Message):
-                items.append({
-                    "type": "message",
-                    "role": item.role,
-                    "content": item.content,
-                    "uuid": item.uuid,
-                    "message_type": item.message_type,
-                })
+                # Apply invocation filter
+                if allowed_invocations is not None:
+                    inv_id = getattr(item, "invocation_id", "") or ""
+                    if inv_id not in allowed_invocations:
+                        continue
+                items.append(_msg_dict(item))
             elif isinstance(item, BoundaryMarker):
                 items.append({
                     "type": "boundary",
@@ -192,18 +266,15 @@ def replay_transcript(
                 })
         return items
     else:
-        # Return current effective view (with compression applied)
         view = store.read_view()
-        return [
-            {
-                "type": "message",
-                "role": msg.role,
-                "content": msg.content,
-                "uuid": msg.uuid,
-                "message_type": msg.message_type,
-            }
-            for msg in view
-        ]
+        result = []
+        for msg in view:
+            if allowed_invocations is not None:
+                inv_id = getattr(msg, "invocation_id", "") or ""
+                if inv_id not in allowed_invocations:
+                    continue
+            result.append(_msg_dict(msg))
+        return result
 
 
 def export_transcript(
@@ -268,6 +339,575 @@ def export_transcript(
     except OSError as e:
         logger.error("Failed to export transcript to %s: %s", output_path, e)
         return ""
+
+
+def search_transcript(
+    query: str,
+    session_id: str | None = None,
+    scope: str = "current",
+    role: str = "",
+    regex: bool = False,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Search transcript messages by content.
+
+    Finds messages whose content matches the query. Unlike search_context()
+    which only searches the current active context (discarded when main {}
+    exits), search_transcript() searches the persistent TranscriptStore.
+
+    Args:
+        query: Text pattern to search for. Substring by default; regex if
+               regex=True.
+        session_id: Specific session to search. Ignored when scope="all".
+                    When None and scope="current", searches the current session.
+        scope: Search scope — "current" (default session), "all" (every
+               session on disk), "global", or "project".
+        role: Filter by message role (e.g., "user", "assistant", "tool").
+              Empty string matches all roles.
+        regex: If True, treat query as a regex pattern; otherwise substring.
+        limit: Maximum number of matches to return (default 50).
+
+    Returns:
+        List of match dicts, ordered by recency (newest first):
+        [
+            {
+                "session_id": str,
+                "message_uuid": str,
+                "role": str,
+                "content": str,             # full content
+                "snippet": str,             # matched region with context
+                "match_position": int,      # start index of match in content
+            },
+            ...
+        ]
+
+    Examples:
+        // Search current session for messages about "认证 bug"
+        let matches = search_transcript("认证 bug")
+
+        // Search ALL sessions (cross-session discovery)
+        let matches = search_transcript("数据库 schema", scope="all")
+
+        // Regex search
+        let matches = search_transcript("fix.*bug", regex=true)
+
+        // Only user messages
+        let matches = search_transcript("TODO", role="user")
+    """
+    import re
+
+    if not query:
+        return []
+
+    # Compile regex pattern once
+    try:
+        pattern = re.compile(query) if regex else None
+    except re.error as e:
+        logger.error("Invalid regex pattern: %s", e)
+        return []
+
+    def _matches(content: str) -> int:
+        """Return match position if content matches, else -1."""
+        if pattern is not None:
+            m = pattern.search(content)
+            return m.start() if m else -1
+        idx = content.find(query)
+        return idx
+
+    def _make_snippet(content: str, pos: int, context_chars: int = 60) -> str:
+        """Build a snippet around the match position."""
+        if not content:
+            return ""
+        start = max(0, pos - context_chars)
+        end = min(len(content), pos + len(query) + context_chars)
+        snippet = content[start:end].replace("\n", " ")
+        prefix = "..." if start > 0 else ""
+        suffix = "..." if end < len(content) else ""
+        return f"{prefix}{snippet}{suffix}"
+
+    def _match_message(msg_dict: dict, sid: str) -> dict | None:
+        """Check if a message dict matches; return match record or None."""
+        content = msg_dict.get("content", "")
+        if isinstance(content, list):
+            # Multimodal: flatten text parts
+            content = "\n".join(
+                p.get("text", "")
+                for p in content
+                if isinstance(p, dict) and p.get("type") == "text"
+            )
+        if not content:
+            return None
+
+        # Role filter
+        msg_role = msg_dict.get("role", "")
+        if role and msg_role != role:
+            return None
+
+        pos = _matches(content)
+        if pos < 0:
+            return None
+
+        return {
+            "session_id": sid,
+            "message_uuid": msg_dict.get("uuid", ""),
+            "role": msg_role,
+            "content": content,
+            "snippet": _make_snippet(content, pos),
+            "match_position": pos,
+        }
+
+    results: list[dict[str, Any]] = []
+
+    # --- Scope 1: current session (in-memory, fast path) ---
+    # "current" means the active interpreter's in-memory transcript. If there's
+    # no interpreter, there's no "current" session - return empty (don't fall
+    # through to disk, which would search unrelated historical sessions).
+    if scope == "current":
+        if _interpreter_agent_context is None:
+            return []
+        store = getattr(_interpreter_agent_context, "transcript_store", None)
+        current_sid = get_session_id()
+
+        # If session_id is specified and differs from current, fall through to disk
+        if store is not None and (session_id is None or session_id == current_sid):
+            from helen.runtime.transcript_store import BoundaryMarker, Message
+            for item in store.transcript:
+                if isinstance(item, BoundaryMarker):
+                    continue
+                if not isinstance(item, Message):
+                    continue
+                msg_dict = {
+                    "uuid": item.uuid,
+                    "role": item.role,
+                    "content": item.content,
+                }
+                match = _match_message(msg_dict, current_sid)
+                if match is not None:
+                    results.append(match)
+                    if len(results) >= limit:
+                        break
+            # Newest first
+            results.reverse()
+            return results[:limit]
+        # session_id specified but not current -> fall through to disk search below
+
+    elif scope in ("", "global", "project") and session_id is None and _interpreter_agent_context is not None:
+        # Implicit "current": interpreter exists, no explicit scope/session_id
+        store = getattr(_interpreter_agent_context, "transcript_store", None)
+        current_sid = get_session_id()
+        if store is not None:
+            from helen.runtime.transcript_store import BoundaryMarker, Message
+            for item in store.transcript:
+                if isinstance(item, BoundaryMarker):
+                    continue
+                if not isinstance(item, Message):
+                    continue
+                msg_dict = {
+                    "uuid": item.uuid,
+                    "role": item.role,
+                    "content": item.content,
+                }
+                match = _match_message(msg_dict, current_sid)
+                if match is not None:
+                    results.append(match)
+                    if len(results) >= limit:
+                        break
+            results.reverse()
+            return results[:limit]
+
+    # --- Scope 2: disk-based search (specific session or all sessions) ---
+    from helen.runtime.config import resolve_session_dir
+    from helen.runtime.session_manager import SessionManager
+    from helen.runtime.transcript_store import JSONLBackend, Message, TranscriptStore
+
+    # Determine which session dirs to search
+    search_dirs: list[tuple[Path, str]] = []
+    seen_dirs: set[str] = set()
+    if scope == "all":
+        # Search both global and project dirs (dedupe by path)
+        for sc in ("global", "project"):
+            try:
+                d, _ = resolve_session_dir(scope=sc)
+                d_str = str(d)
+                if d_str not in seen_dirs:
+                    search_dirs.append((Path(d), sc))
+                    seen_dirs.add(d_str)
+            except Exception:
+                pass
+    else:
+        # Single scope (current/global/project)
+        try:
+            d, _ = resolve_session_dir(scope=scope or "")
+            search_dirs.append((Path(d), scope or "current"))
+        except Exception as e:
+            logger.error("Failed to resolve session dir for scope %r: %s", scope, e)
+            return []
+
+    # Collect session IDs to search (dedupe)
+    target_sids: list[str] = []
+    seen_sids: set[str] = set()
+    for base_dir, _sc in search_dirs:
+        try:
+            manager = SessionManager(base_dir=str(base_dir))
+            for s in manager.list_sessions():
+                sid = s["session_id"]
+                if sid in seen_sids:
+                    continue
+                if session_id is not None and sid != session_id:
+                    continue
+                target_sids.append(sid)
+                seen_sids.add(sid)
+        except Exception as e:
+            logger.error("Failed to list sessions in %s: %s", base_dir, e)
+
+    # Read each session's transcript and search
+    for sid in target_sids:
+        if len(results) >= limit:
+            break
+        # Find the session dir
+        transcript_path = None
+        for base_dir, _sc in search_dirs:
+            try:
+                manager = SessionManager(base_dir=str(base_dir))
+                if manager.session_exists(sid):
+                    transcript_path = manager.get_session_path(sid)
+                    break
+            except Exception:
+                continue
+        if transcript_path is None or not transcript_path.exists():
+            continue
+
+        try:
+            backend = JSONLBackend(transcript_path)
+            loaded = TranscriptStore.load_from_backend(backend, max_memory_items=100_000)
+        except Exception as e:
+            logger.warning("Failed to load transcript %s: %s", sid, e)
+            continue
+
+        for item in loaded.transcript:
+            if len(results) >= limit:
+                break
+            if not isinstance(item, Message):
+                continue
+            msg_dict = {
+                "uuid": item.uuid,
+                "role": item.role,
+                "content": item.content,
+            }
+            match = _match_message(msg_dict, sid)
+            if match is not None:
+                results.append(match)
+
+    # Newest first (within each session the list is chronological; across
+    # sessions we just append, so final reverse gives newest-first overall)
+    results.reverse()
+    return results[:limit]
+
+
+# ---------------------------------------------------------------------------
+# v1.22: Invocation tree queries
+# ---------------------------------------------------------------------------
+# An invocation is one execution of an agent's main {} block (or top-level
+# main). Messages are tagged with invocation_id / agent_name / parent
+# invocation_id. These functions query the invocation tree.
+
+
+def _build_invocation_index(
+    store: Any,
+) -> dict[str, dict[str, Any]]:
+    """Rebuild the invocation index from a TranscriptStore.
+
+    Scans all messages in the store and builds a mapping from invocation_id
+    to invocation metadata. Used by list_invocations / get_invocation_tree
+    when the interpreter's in-memory index is unavailable (e.g., after
+    process restart, or for historical sessions).
+
+    Returns:
+        dict mapping invocation_id -> {
+            "invocation_id": str,
+            "agent_name": str | None,
+            "parent_invocation_id": str,
+            "message_count": int,
+            "first_message_time": float | None,
+            "last_message_time": float | None,
+            "order": int,  # Index of first message in transcript (tiebreaker)
+        }
+    """
+    from helen.runtime.transcript_store import BoundaryMarker, Message
+
+    index: dict[str, dict[str, Any]] = {}
+    message_idx = 0
+
+    for item in store.transcript:
+        if isinstance(item, BoundaryMarker) or not isinstance(item, Message):
+            message_idx += 1
+            continue
+        inv_id = getattr(item, "invocation_id", "") or ""
+        if not inv_id:
+            message_idx += 1
+            continue  # Skip messages without invocation_id (pre-v1.22)
+
+        if inv_id not in index:
+            index[inv_id] = {
+                "invocation_id": inv_id,
+                "agent_name": getattr(item, "agent_name", None),
+                "parent_invocation_id": getattr(item, "parent_invocation_id", "") or "",
+                "message_count": 0,
+                "first_message_time": None,
+                "last_message_time": None,
+                "order": message_idx,  # Position of first message
+            }
+        entry = index[inv_id]
+        entry["message_count"] += 1
+        ts = getattr(item, "timestamp", None)
+        if ts is not None:
+            if entry["first_message_time"] is None or ts < entry["first_message_time"]:
+                entry["first_message_time"] = ts
+            if entry["last_message_time"] is None or ts > entry["last_message_time"]:
+                entry["last_message_time"] = ts
+        message_idx += 1
+
+    # Add children lists
+    for entry in index.values():
+        entry["children"] = []
+    for entry in index.values():
+        parent = entry["parent_invocation_id"]
+        if parent and parent in index:
+            index[parent]["children"].append(entry["invocation_id"])
+
+    return index
+
+
+def _load_session_store(session_id: str) -> Any | None:
+    """Load a TranscriptStore for a specific session. Returns None on failure."""
+    from helen.runtime.config import resolve_session_dir
+    from helen.runtime.session_manager import SessionManager
+    from helen.runtime.transcript_store import JSONLBackend, SQLiteBackend, TranscriptStore
+    from helen.runtime.config import get_transcript_config
+
+    try:
+        session_dir, _ = resolve_session_dir()
+        manager = SessionManager(base_dir=session_dir)
+        if not manager.session_exists(session_id):
+            return None
+        transcript_path = manager.get_session_path(session_id)
+        config = get_transcript_config()
+        backend_type = config.get("backend", "jsonl")
+        if backend_type == "sqlite":
+            sqlite_path = transcript_path.with_suffix(".db")
+            backend = SQLiteBackend(sqlite_path)
+        else:
+            backend = JSONLBackend(transcript_path)
+        return TranscriptStore.load_from_backend(backend, max_memory_items=100_000)
+    except Exception as e:
+        logger.error("Failed to load session %s: %s", session_id, e)
+        return None
+
+
+def list_invocations(
+    session_id: str | None = None,
+    agent: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    """List invocations, with optional filtering and pagination.
+
+    Args:
+        session_id: Session to query. If None, uses current session.
+        agent: Filter by agent name. None returns all agents.
+        limit: Maximum results (default 100).
+        offset: Skip first N results (default 0).
+
+    Returns:
+        List of invocation metadata dicts, ordered by first_message_time (newest first).
+        Each dict contains:
+        - invocation_id: UUID of the invocation
+        - agent_name: Agent name (None for top-level main)
+        - parent_invocation_id: Parent invocation UUID
+        - message_count: Number of messages in this invocation
+        - first_message_time: Timestamp of first message (or None)
+        - last_message_time: Timestamp of last message (or None)
+        - children: List of child invocation IDs
+
+    Example:
+        let invs = list_invocations()
+        for inv in invs {
+            print("{inv.agent_name}: {inv.message_count} msgs")
+        }
+
+        // Filter by agent
+        let a_runs = list_invocations(agent="Researcher")
+
+        // Pagination
+        let page2 = list_invocations(limit=10, offset=10)
+    """
+    sid = session_id or get_session_id()
+    if not sid:
+        return []
+
+    store = _load_session_store(sid)
+    if store is None:
+        return []
+
+    index = _build_invocation_index(store)
+
+    # Filter by agent if specified
+    if agent is not None:
+        results = [e for e in index.values() if e["agent_name"] == agent]
+    else:
+        results = list(index.values())
+
+    # Sort by first_message_time, newest first (None times fall back to order)
+    results.sort(
+        key=lambda e: (
+            e["first_message_time"] if e["first_message_time"] is not None else 0,
+            e.get("order", 0),  # Tiebreaker: later invocations first
+        ),
+        reverse=True,
+    )
+
+    return results[offset : offset + limit]
+
+
+def get_invocation(invocation_id: str, session_id: str | None = None) -> dict[str, Any]:
+    """Get metadata for a specific invocation.
+
+    Args:
+        invocation_id: The invocation UUID to look up.
+        session_id: Session to query. If None, uses current session.
+
+    Returns:
+        Invocation metadata dict (same shape as list_invocations entries),
+        or empty dict if not found.
+
+    Example:
+        let info = get_invocation("inv_1784272795_a61bcdaf")
+        print("Agent: " + str(info["agent_name"]))
+        print("Messages: " + str(info["message_count"]))
+    """
+    if not invocation_id:
+        return {}
+
+    sid = session_id or get_session_id()
+    if not sid:
+        return {}
+
+    store = _load_session_store(sid)
+    if store is None:
+        return {}
+
+    index = _build_invocation_index(store)
+    return index.get(invocation_id, {})
+
+
+def get_invocation_tree(session_id: str | None = None) -> dict[str, Any]:
+    """Get the full invocation tree for a session.
+
+    Returns the root invocation (top-level main) with nested children.
+    If there's no top-level main (unusual), returns the forest as a
+    virtual root with multiple children.
+
+    Args:
+        session_id: Session to query. If None, uses current session.
+
+    Returns:
+        Nested dict representing the invocation tree:
+        {
+            "invocation_id": str,
+            "agent_name": str | None,
+            "message_count": int,
+            "children": [<nested trees>],
+            ...
+        }
+
+    Example:
+        let tree = get_invocation_tree()
+        // Print tree shape:
+        // inv_0 (top)
+        // ├── inv_1 (agent A)
+        // └── inv_2 (agent B)
+        //     └── inv_3 (agent C, nested in B)
+    """
+    sid = session_id or get_session_id()
+    if not sid:
+        return {}
+
+    store = _load_session_store(sid)
+    if store is None:
+        return {}
+
+    index = _build_invocation_index(store)
+    if not index:
+        return {}
+
+    # Find roots: invocations whose parent is not in the index
+    roots = [e for e in index.values() if e["parent_invocation_id"] not in index]
+
+    def _build_tree(entry: dict) -> dict:
+        node = dict(entry)
+        node["children"] = [
+            _build_tree(index[child_id])
+            for child_id in entry.get("children", [])
+            if child_id in index
+        ]
+        return node
+
+    if len(roots) == 1:
+        return _build_tree(roots[0])
+
+    # Multiple roots: wrap in virtual root
+    return {
+        "invocation_id": "",
+        "agent_name": None,
+        "message_count": 0,
+        "parent_invocation_id": "",
+        "children": [_build_tree(r) for r in roots],
+    }
+
+
+def invocation_path(invocation_id: str, session_id: str | None = None) -> str:
+    """Get a human-readable path string for an invocation.
+
+    Args:
+        invocation_id: The invocation UUID.
+        session_id: Session to query. If None, uses current session.
+
+    Returns:
+        Path string like "inv_0 (top) → inv_1 (agent A) → inv_3 (agent C)"
+        or empty string if not found.
+
+    Example:
+        print(invocation_path("inv_3"))
+        // "top → A → C"
+    """
+    if not invocation_id:
+        return ""
+
+    sid = session_id or get_session_id()
+    if not sid:
+        return ""
+
+    store = _load_session_store(sid)
+    if store is None:
+        return ""
+
+    index = _build_invocation_index(store)
+    if invocation_id not in index:
+        return ""
+
+    # Walk up the parent chain
+    path_parts: list[str] = []
+    current_id: str | None = invocation_id
+    seen: set[str] = set()
+    while current_id and current_id in index and current_id not in seen:
+        entry = index[current_id]
+        name = entry["agent_name"] or "top"
+        path_parts.append(f"{name}")
+        seen.add(current_id)
+        current_id = entry.get("parent_invocation_id") or None
+
+    path_parts.reverse()
+    return " → ".join(path_parts)
 
 
 def get_compression_audit() -> list[dict[str, Any]]:

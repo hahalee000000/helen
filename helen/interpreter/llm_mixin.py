@@ -1185,12 +1185,29 @@ class LlmMixin:
         P3: Sets model on message for accurate token counting.
         Phase 7: Update working memory from message content.
         v1.17: content can be str (plain text) or list[dict] (multimodal content parts).
+        v1.22: Fills agent_name / invocation_id / parent_invocation_id for
+               invocation tree tracking (per-agent context isolation).
         """
         agent_ctx = getattr(self, '_agent_context', None)
 
         # P3: Set model on message for tiktoken encoding selection
         model = getattr(self._history_manager, '_model', None)
-        msg = HistoryMessage(role=role, content=content, _model=model)
+
+        # v1.22: Invocation tree fields
+        current_agent = getattr(self, '_current_agent', None)
+        agent_name = current_agent.name if current_agent is not None else None
+        invocation_id = getattr(self, '_current_invocation_id', '') or ''
+        invocation_stack = getattr(self, '_invocation_stack', [])
+        parent_invocation_id = invocation_stack[-1] if invocation_stack else ''
+
+        msg = HistoryMessage(
+            role=role,
+            content=content,
+            _model=model,
+            agent_name=agent_name,
+            invocation_id=invocation_id,
+            parent_invocation_id=parent_invocation_id,
+        )
 
         # Phase 2 SSOT: Write to TranscriptStore when enabled (NO dual-write)
         if agent_ctx is not None and agent_ctx.transcript_store is not None:

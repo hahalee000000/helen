@@ -500,6 +500,135 @@ export_transcript("my_chat.md", "markdown")
 export_transcript("my_chat.txt", "text")
 ```
 
+#### search_transcript() (v1.22+)
+
+按**内容**搜索持久化 transcript。与 `search_context()`（只搜当前 active context）不同，`search_transcript()` 能跨会话、跨 agent 搜索历史。
+
+```helen
+// 当前 session 内搜
+let matches = search_transcript("认证 bug")
+
+// 跨所有 session 搜（跨会话发现）
+let matches = search_transcript("数据库 schema", scope="all")
+
+// 正则匹配
+let matches = search_transcript("fix.*bug", regex=true)
+
+// 只搜 user 消息
+let matches = search_transcript("TODO", role="user")
+
+// 限定结果数
+let matches = search_transcript("TODO", limit=20)
+
+// 中文别名
+let matches = 搜索会话("认证 bug")
+```
+
+**返回格式**：
+
+```helen
+// 每个匹配包含：
+{
+    session_id: "session_xxx",
+    message_uuid: "uuid-...",
+    role: "user",
+    content: "完整消息内容",
+    snippet: "...匹配位置周围的片段...",
+    match_position: 42,
+}
+```
+
+**参数说明**：
+
+| 参数 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `query` | str | (必填) | 搜索内容，substring 或 regex |
+| `session_id` | str? | null | 指定 session（`scope="all"` 时忽略） |
+| `scope` | str | `"current"` | `"current"` / `"all"` / `"global"` / `"project"` |
+| `role` | str | `""` | 按角色过滤：`"user"` / `"assistant"` / `"tool"` / `""` (全部) |
+| `regex` | bool | `false` | 是否按正则匹配 |
+| `limit` | int | `50` | 最大返回数 |
+
+**典型用法**：
+
+```helen
+// 场景 1：跨会话找某次讨论
+let matches = search_transcript("数据库 schema", scope="all", limit=5)
+for m in matches {
+    print("Session {m.session_id}: {m.snippet}")
+}
+
+// 场景 2：找完后恢复完整上下文
+if len(matches) > 0 {
+    restore_context(matches[0].session_id)
+}
+```
+
+#### Invocation Tree（调用树）(v1.22+)
+
+每条消息带三个新字段，构成调用树：
+- `agent_name`：产生该消息的 agent 名（顶层为 `None`）
+- `invocation_id`：本次 `main {}` 执行的唯一 ID
+- `parent_invocation_id`：父调用的 invocation_id
+
+**查询函数**：
+
+```helen
+// 列出所有 invocation（可按 agent 过滤、分页）
+let invs = list_invocations()
+// [{invocation_id, agent_name, parent_invocation_id, message_count, ...}, ...]
+
+let a_runs = list_invocations(agent="Researcher", limit=10)
+
+// 查单个 invocation 元数据
+let info = get_invocation("inv_1784272795_a61bcdaf")
+// {agent_name: "A", message_count: 4, parent_invocation_id: "inv_top", ...}
+
+// 获取完整调用树（嵌套结构）
+let tree = get_invocation_tree()
+// {
+//   invocation_id: "inv_top", agent_name: null, children: [
+//     {invocation_id: "inv_1", agent_name: "A", children: [...]},
+//     {invocation_id: "inv_2", agent_name: "B", children: []},
+//   ]
+// }
+
+// 调用路径字符串（调试用）
+print(invocation_path("inv_3"))
+// "top -> A -> C"
+
+// 中文别名
+列出调用()
+获取调用("inv_xxx")
+获取调用树()
+调用路径("inv_xxx")
+```
+
+**扩展的 `replay_transcript` 过滤**：
+
+```helen
+// 只看 agent A 的消息
+let a_msgs = replay_transcript(agent="A")
+
+// 只看 A 的最后一次运行
+let last_run = replay_transcript(agent="A", last_only=true)
+
+// 看某个 invocation 及其子调用
+let subtree = replay_transcript(invocation_id="inv_1", include_subtree=true)
+```
+
+**扩展的 `restore_context` 过滤**：
+
+```helen
+// 只恢复 agent A 的最近一次运行到 active context
+restore_context("session_xxx", agent="A", last_only=true)
+
+// 恢复某个 invocation 及其子树
+restore_context("session_xxx", invocation_id="inv_1", include_subtree=true)
+```
+
+**隔离语义**：active context 按 `invocation_id` 过滤，每个 agent `main {}` 调用都是 fresh。详见 [[runtime/context-management|上下文管理架构 §0.5]]。
+
 #### get_compression_audit()
 
 ```helen

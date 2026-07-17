@@ -165,6 +165,11 @@ from helen.stdlib.transcript import (
     list_sessions as _list_sessions,
     replay_transcript as _replay_transcript,
     export_transcript as _export_transcript,
+    search_transcript as _search_transcript,  # v1.22: content search
+    list_invocations as _list_invocations,  # v1.22: invocation tree
+    get_invocation as _get_invocation,  # v1.22: invocation tree
+    get_invocation_tree as _get_invocation_tree,  # v1.22: invocation tree
+    invocation_path as _invocation_path,  # v1.22: invocation tree
     get_compression_audit as _get_compression_audit,
     resume_session as _resume_session,
     get_session_dir as _get_session_dir,  # v1.20: session directory access
@@ -1176,7 +1181,7 @@ def _register_builtins() -> None:
         BuiltinFunction("export_context", "Export current context as serializable dict", "export_context()", _export_context, "context"),
         BuiltinFunction("import_context", "Import a previously exported context", "import_context(data)", _import_context, "context"),
         BuiltinFunction("fork_context", "Create a deep-copy snapshot of current context", "fork_context()", _fork_context, "context"),
-        BuiltinFunction("restore_context", "Restore active context from a previous transcript session", "restore_context(session_id)", _restore_context, "context"),
+        BuiltinFunction("restore_context", "Restore active context from a previous transcript session", "restore_context(session_id, invocation_id?, agent?, last_only?, include_subtree?)", _restore_context, "context"),
         # v1.19: Lifecycle hooks (P1)
         BuiltinFunction("on_compression", "Register callback for compression events", "on_compression(callback?)", _on_compression, "context"),
         BuiltinFunction("on_context_overflow", "Register callback for context overflow", "on_context_overflow(callback?)", _on_context_overflow, "context"),
@@ -1184,8 +1189,14 @@ def _register_builtins() -> None:
         # Transcript management (Phase 1 SSOT)
         BuiltinFunction("get_session_id", "Get current transcript session ID", "get_session_id()", _get_session_id, "transcript"),
         BuiltinFunction("list_sessions", "List all transcript sessions", "list_sessions()", _list_sessions, "transcript"),
-        BuiltinFunction("replay_transcript", "Replay transcript messages", "replay_transcript(session_id?, include_compressed?)", _replay_transcript, "transcript"),
+        BuiltinFunction("replay_transcript", "Replay transcript messages with optional invocation filtering", "replay_transcript(session_id?, include_compressed?, agent?, invocation_id?, last_only?, include_subtree?)", _replay_transcript, "transcript"),
         BuiltinFunction("export_transcript", "Export transcript to file", "export_transcript(output_path, format?, session_id?)", _export_transcript, "transcript"),
+        BuiltinFunction("search_transcript", "Search transcript messages by content", "search_transcript(query, session_id?, scope?, role?, regex?, limit?)", _search_transcript, "transcript"),
+        # v1.22: Invocation tree queries
+        BuiltinFunction("list_invocations", "List invocations with optional filtering", "list_invocations(session_id?, agent?, limit?, offset?)", _list_invocations, "transcript"),
+        BuiltinFunction("get_invocation", "Get metadata for a specific invocation", "get_invocation(invocation_id, session_id?)", _get_invocation, "transcript"),
+        BuiltinFunction("get_invocation_tree", "Get the full invocation tree for a session", "get_invocation_tree(session_id?)", _get_invocation_tree, "transcript"),
+        BuiltinFunction("invocation_path", "Get human-readable path string for an invocation", "invocation_path(invocation_id, session_id?)", _invocation_path, "transcript"),
         BuiltinFunction("get_compression_audit", "Get compression event history", "get_compression_audit()", _get_compression_audit, "transcript"),
         BuiltinFunction("resume_session", "Resume a previous transcript session", "resume_session(session_id)", _resume_session, "transcript"),
         # v1.20: Session directory access

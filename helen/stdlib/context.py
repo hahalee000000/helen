@@ -1546,7 +1546,13 @@ def _fork_context() -> dict:
     return _export_context()
 
 
-def _restore_context(session_id: str) -> dict:
+def _restore_context(
+    session_id: str,
+    invocation_id: str | None = None,
+    agent: str | None = None,
+    last_only: bool = False,
+    include_subtree: bool = False,
+) -> dict:
     """Restore active context from a previous transcript session.
 
     This is a convenience function that bridges the gap between TranscriptStore
@@ -1554,10 +1560,11 @@ def _restore_context(session_id: str) -> dict:
     It:
 
     1. Reads the transcript of the specified session
-    2. Converts Message objects to the format import_context() expects,
+    2. Optionally filters by invocation_id or agent
+    3. Converts Message objects to the format import_context() expects,
        preserving all fields (role, content, tool_calls, tool_call_id,
        compressed, pinned, uuid)
-    3. Calls import_context() to populate the current active context
+    4. Calls import_context() to populate the current active context
 
     Unlike ``resume_session()``, which only swaps the TranscriptStore reference,
     ``restore_context()`` populates ``_interpreter_history`` so the LLM actually
@@ -1565,6 +1572,14 @@ def _restore_context(session_id: str) -> dict:
 
     Args:
         session_id: The session ID to restore from.
+        invocation_id: (v1.22) Restore only messages from this invocation.
+            When include_subtree=True, also includes all descendant invocations.
+        agent: (v1.22) Filter by agent name. When last_only=True, restores
+            only the agent's most recent invocation.
+        last_only: (v1.22) When agent is set, only restore the agent's most
+            recent invocation.
+        include_subtree: (v1.22) When invocation_id is set, also restore
+            messages from all descendant invocations.
 
     Returns:
         dict:
@@ -1573,6 +1588,12 @@ def _restore_context(session_id: str) -> dict:
             "restored_messages": int,        # Only on success
             "session_id": str,               # Only on success
             "boundary_markers": int,         # Skipped compression boundaries
+            "filter": {                      # v1.22: Echo of filters used
+                "invocation_id": str | None,
+                "agent": str | None,
+                "last_only": bool,
+                "include_subtree": bool,
+            },
             "note": str,                     # Hint about working_memory
         }
 
@@ -1591,9 +1612,14 @@ def _restore_context(session_id: str) -> dict:
 
         // Restore a specific session into active context
         let r = restore_context("session_1783492628_d9d9c0aa")
-        if r["status"] == "ok" {
-            print("Restored " + str(r["restored_messages"]) + " messages")
-        }
+
+        // v1.22: Restore only agent A's most recent invocation
+        let r = restore_context("session_xxx", agent="A", last_only=true)
+
+        // v1.22: Restore a specific invocation and its subtree
+        let r = restore_context("session_xxx",
+                                invocation_id="inv_abc",
+                                include_subtree=true)
     """
     if not session_id:
         return {"status": "error", "error": "session_id is required"}
@@ -1637,8 +1663,40 @@ def _restore_context(session_id: str) -> dict:
 
         loaded_store = TranscriptStore.load_from_backend(backend, max_memory_items)
 
+        # v1.22: Determine allowed invocation IDs based on filters
+        allowed_invocations: set[str] | None = None
+        if invocation_id is not None or agent is not None:
+            from helen.stdlib.transcript import _build_invocation_index
+            index = _build_invocation_index(loaded_store)
+
+            if invocation_id is not None:
+                allowed = {invocation_id}
+                if include_subtree and invocation_id in index:
+                    def _add_descendants(parent_id: str) -> None:
+                        if parent_id in index:
+                            for child_id in index[parent_id].get("children", []):
+                                allowed.add(child_id)
+                                _add_descendants(child_id)
+                    _add_descendants(invocation_id)
+                allowed_invocations = allowed
+
+            elif agent is not None:
+                agent_invs = [inv_id for inv_id, entry in index.items()
+                              if entry.get("agent_name") == agent]
+                if last_only and agent_invs:
+                    agent_invs.sort(
+                        key=lambda i: (
+                            index[i]["first_message_time"] if index[i]["first_message_time"] is not None else 0,
+                            index[i].get("order", 0),
+                        ),
+                        reverse=True,
+                    )
+                    agent_invs = [agent_invs[0]]
+                allowed_invocations = set(agent_invs)
+
         # Convert Messages to import_context format, preserving all fields.
         # Skip BoundaryMarkers (they are compression audit trail, not content).
+        # Apply invocation filter when specified.
         messages = []
         boundary_count = 0
         for item in loaded_store.transcript:
@@ -1646,6 +1704,11 @@ def _restore_context(session_id: str) -> dict:
                 boundary_count += 1
                 continue
             # item is a Message (imported from helen.runtime.history)
+            # v1.22: Apply invocation filter
+            if allowed_invocations is not None:
+                inv_id = getattr(item, "invocation_id", "") or ""
+                if inv_id not in allowed_invocations:
+                    continue
             content = item.content
             if isinstance(content, list):
                 # Multimodal content — flatten to text for active context
@@ -1667,7 +1730,9 @@ def _restore_context(session_id: str) -> dict:
         if not messages:
             return {
                 "status": "error",
-                "error": f"Session {session_id} has no messages",
+                "error": f"Session {session_id} has no messages" + (
+                    " matching the filter" if allowed_invocations is not None else ""
+                ),
             }
 
         # Delegate to import_context to populate _interpreter_history
@@ -1691,6 +1756,12 @@ def _restore_context(session_id: str) -> dict:
             "restored_messages": len(messages),
             "session_id": session_id,
             "boundary_markers": boundary_count,
+            "filter": {
+                "invocation_id": invocation_id,
+                "agent": agent,
+                "last_only": last_only,
+                "include_subtree": include_subtree,
+            },
             "note": (
                 "Working memory and context config are not persisted per-session. "
                 "Use working_memory_set() / set_compression_strategy() to restore manually."

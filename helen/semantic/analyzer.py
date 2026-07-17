@@ -440,7 +440,12 @@ class SemanticAnalyzer(Visitor[None]):
             if existing is not None:
                 # Allow shadowing stdlib builtins (e.g. `let len = ...` shadows `len()`)
                 if existing.kind == "builtin":
-                    pass  # shadowing allowed
+                    # Actually replace the builtin with the user's symbol.
+                    # Without this, `define` returns the existing builtin without
+                    # overwriting it, so later references resolve to the (const)
+                    # builtin instead of the user's variable. See test_nested_agents_writeback.
+                    self.symbols.undefine(node.name)
+                    self.symbols.define(node.name, symbol)
                 else:
                     self.errors.error(
                         ErrorCode.DUPLICATE_SYMBOL,

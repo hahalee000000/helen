@@ -20,7 +20,7 @@ Helen 标准库提供 285 个内置函数，分为 17 大类别：
 | **Crypto** | 11 | 哈希、随机数 |
 | **IO** | 5 | 流式输出控制 |
 | **Context** | 2 | 上下文管理（v1.15 新增） |
-| **Transcript** | 6 | 会话记录管理（v1.16 新增） |
+| **Transcript** | 11 | 会话记录管理（v1.16 新增；v1.22 新增 `search_transcript` + invocation tree） |
 | **Media** | 12 | 多模态媒体处理（v1.17 新增） |
 
 ## 多语言 stdlib (v1.10)
@@ -557,7 +557,7 @@ let saved = parse_json(read_file("context_snapshot.json"))
 import_context(saved)
 ```
 
-## Transcript 函数 (6) (v1.16)
+## Transcript 函数 (11) (v1.16)
 
 会话记录管理函数，用于访问和操作 Helen 的对话历史（v1.16+）。提供持久化、会话恢复和压缩审计功能。
 
@@ -634,6 +634,109 @@ export_transcript("old_chat.json", "json", "session_1783492600_abc12345")
 - `session_id`（可选）：要导出的会话 ID
 
 **返回**：输出文件路径（成功）或空字符串（失败）
+
+### 搜索会话 (v1.22)
+
+按**内容**搜索持久化 transcript。一般场景下你记不住 session_id，但记得讨论过的内容——用 `search_transcript` 找到相关会话。
+
+```helen
+// 在当前 session 内搜
+let matches = search_transcript("认证 bug")
+for m in matches {
+    print("匹配: {m.snippet}")
+    print("位置: {m.match_position}")
+}
+
+// 跨所有 session 搜（跨会话发现）
+let matches = search_transcript("数据库 schema", scope="all", limit=10)
+
+// 正则匹配
+let matches = search_transcript("fix.*bug", regex=true)
+
+// 只搜 user 消息
+let matches = search_transcript("TODO", role="user")
+
+// 中文别名
+let matches = 搜索会话("认证 bug", scope="all")
+```
+
+**参数**：
+- `query`（必填）：搜索内容（substring 默认，`regex=true` 时为正则）
+- `scope`：`"current"`（默认）/ `"all"`（跨所有 session）/ `"global"` / `"project"`
+- `session_id`：指定 session（`scope="all"` 时忽略）
+- `role`：按角色过滤（`"user"` / `"assistant"` / `"tool"` / `""` 全部）
+- `regex`：是否按正则匹配
+- `limit`：最大返回数（默认 50）
+
+**典型用法**：搜索后恢复完整上下文
+
+```helen
+// 找相关的历史讨论
+let matches = search_transcript("认证 bug", scope="all", limit=5)
+if len(matches) > 0 {
+    // 找到最近的匹配所在 session
+    let target_session = matches[0]["session_id"]
+    // 恢复那个 session 的完整 context
+    restore_context(target_session)
+    print("已恢复到 session: " + target_session)
+}
+```
+
+### 调用树查询 (v1.22)
+
+每个 agent `main {}` 的执行都是一个 **invocation**，带唯一的 `invocation_id`。transcript 完整记录所有 invocation，可以用查询函数回溯调用结构。
+
+```helen
+// 列出所有 invocation
+let invs = list_invocations()
+for inv in invs {
+    print("{inv.agent_name}: {inv.message_count} 条消息")
+}
+
+// 按 agent 过滤
+let a_runs = list_invocations(agent="Researcher")
+
+// 查单个 invocation
+let info = get_invocation("inv_1784272795_a61bcdaf")
+print("Agent: " + str(info["agent_name"]))
+print("消息数: " + str(info["message_count"]))
+
+// 获取完整调用树
+let tree = get_invocation_tree()
+// tree.children 是嵌套的 invocation 列表
+
+// 调用路径字符串
+print(invocation_path("inv_3"))
+// "top -> A -> C"
+
+// 中文别名
+列出调用()
+获取调用树()
+调用路径("inv_3")
+```
+
+**配合 replay_transcript 过滤**：
+
+```helen
+// 只看 agent A 的消息
+let a_msgs = replay_transcript(agent="A")
+
+// 只看 A 的最后一次运行
+let last = replay_transcript(agent="A", last_only=true)
+
+// 看某个 invocation 及其子调用
+let subtree = replay_transcript(invocation_id="inv_1", include_subtree=true)
+```
+
+**配合 restore_context 精准恢复**：
+
+```helen
+// 只恢复 agent A 的最近一次运行
+restore_context("session_xxx", agent="A", last_only=true)
+
+// 恢复某个 invocation 及其子树
+restore_context("session_xxx", invocation_id="inv_1", include_subtree=true)
+```
 
 ### 获取压缩审计
 

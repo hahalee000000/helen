@@ -1,6 +1,6 @@
 # 上下文管理架构 (Context Management Architecture)
 
-> **版本**: v1.21 | **最后更新**: 2026-07-17
+> **版本**: v1.22 | **最后更新**: 2026-07-17
 > 统一说明 Helen 的上下文管理系统，替换原 `agent_context.md`、`graduated_compression.md`、`cache_aware_compression.md`、`working_memory.md` 中的分散描述。
 
 ---
@@ -56,7 +56,7 @@ Context 的持续时间是分层的，每一层服务于不同的推理粒度：
 **关键设计决策**：
 
 1. **Layer 0 是临时的注意力引导**——单次 `llm act` 返回后即可销毁，不需要持久化。
-2. **Layer 1 的边界 = Agent `main {}` 的执行期**——这是你问题的核心答案：Context 生命周期 = Agent 会话生命周期。
+2. **Layer 1 的边界 = 单次 `main {}` 的执行期**（v1.22 实现）——每次 agent `main {}` 调用都是 fresh context，main {} 退出后丢弃。同一 agent 多次调用之间也不共享。详见 §0.5。
 3. **Layer 2 是用户主动声明"这些信息重要"的机制**——和 Layer 1 共享同一个 token 窗口，但享有压缩豁免权。
 4. **Layer 3 不是 Context**——它是 SSOT 审计记录，通过 `replay_transcript()` / `export_transcript()` 按需恢复。
 
@@ -79,6 +79,7 @@ Context 的持续时间是分层的，每一层服务于不同的推理粒度：
 **跨会话的"记忆"应该靠什么**：
 
 - **`restore_context(session_id)`** ⭐ (v1.21+)：直接从旧 transcript session 恢复成 active context。内部读取 TranscriptStore、保留所有字段（`tool_calls`/`tool_call_id`/`compressed`/`pinned`/`uuid`）、调用 `import_context()` 填充当前历史。**一步到位，无需手写格式适配。**
+- **`search_transcript(query)`** ⭐ (v1.22+)：按**内容**搜索持久化 transcript。支持 `scope="all"` 跨所有 session 搜索、`regex=true` 正则匹配、`role="user"` 角色过滤。一般场景下用户记不住 session_id，但记得内容——用 `search_transcript` 找到匹配的 session_id，再用 `restore_context` 恢复。详见 [[runtime/transcript-store|TranscriptStore SSOT §search_transcript]]。
 - **`export_context()` / `import_context(data)`**：会话结束前导出 context 快照（含 messages + working_memory + config）到文件，下次启动时读入并导入。适合需要同时保存 working_memory 和 config 的场景
 - **`replay_transcript(session_id)`**：读取旧 transcript 的消息列表（审计/查看用），**不会**自动注入到当前 context，且返回格式与 `import_context()` 不兼容
 - **文件持久化**：用户把关键信息写入文件，下次启动时读入
@@ -133,6 +134,54 @@ import_context(saved)
 
 **未来考虑**：
 - 如果 Helen 支持 agent 复用/池化，需要明确——同一 agent 多次执行，context 是否复用？设计倾向：**不复用**，每次执行都是 fresh context。跨执行的延续通过 `restore_context()` 或参数传入。
+
+### 0.5 v1.22 实现：Per-Main Fresh Context + Invocation Tree
+
+> **状态**：已实现（v1.22）。详见 `reports/v1.22-invocation-tree-proposal.md`。
+
+v1.22 把上述设计原则落地为两个核心机制：
+
+**1. Per-Main Fresh Context（每次 main {} 都是 fresh）**
+
+每次进入 agent `main {}`（或顶层 main）时，interpreter 创建一个新的 `invocation_id`。`_history` 属性按 `invocation_id` 过滤--LLM 只看到当前 invocation 的消息。main {} 退出后，invocation 结束，下一次调用又是 fresh。
+
+实现位置：`helen/interpreter/interpreter.py`
+- `_enter_invocation(agent_name)` / `_exit_invocation()`：管理 invocation 栈
+- `_call_agent`：进入 agent 时 `_enter_invocation`，finally 块 `_exit_invocation`
+- `visit_main_block`：顶层 main 也创建 invocation
+- `_history` property：按 `_current_invocation_id` 过滤
+
+**2. Invocation Tree（调用树）**
+
+每条消息带三个新字段（`helen/runtime/history.py` 的 `Message` dataclass）：
+- `agent_name`：产生该消息的 agent 名（顶层为 `None`）
+- `invocation_id`：本次 main {} 执行的唯一 ID
+- `parent_invocation_id`：父调用的 invocation_id（构建调用树）
+
+transcript 仍然记录**所有**消息（SSOT 审计完整），但 active context 按 invocation 过滤。
+
+**查询 API**（`helen/stdlib/transcript.py`）：
+- `list_invocations(session_id?, agent?, limit?, offset?)`：列出 invocation
+- `get_invocation(invocation_id, session_id?)`：查单个 invocation 元数据
+- `get_invocation_tree(session_id?)`：获取完整调用树（嵌套结构）
+- `invocation_path(invocation_id, session_id?)`：调用路径字符串（如 `top -> A -> C`）
+
+**扩展的过滤参数**：
+- `replay_transcript(..., agent?, invocation_id?, last_only?, include_subtree?)`
+- `restore_context(session_id, invocation_id?, agent?, last_only?, include_subtree?)`
+
+**隔离边界**：
+
+| 场景 | 是否共享 active context |
+|---|---|
+| 同一 agent 的 `main {}` 内部多次 `llm act` | 累积（工具循环必需） |
+| 同一 agent 的两次 `main {}` 调用 | 隔离（每次 fresh） |
+| 不同 agent 的 `main {}` | 隔离 |
+| 嵌套调用：Outer 调 Inner 后 | Outer 看不到 Inner 的消息 |
+| `spawn A()` 并发 | 隔离 |
+| 跨 `helen` 进程 | 隔离 |
+
+**中文别名**：`列出调用`、`获取调用`、`获取调用树`、`调用路径`。
 
 ---
 
@@ -872,4 +921,4 @@ visit_llm_act_expr()
 ---
 
 **最后更新**: 2026-07-17
-**版本**: v1.21
+**版本**: v1.22

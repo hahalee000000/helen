@@ -12,7 +12,7 @@ import os
 import copy
 import threading
 from contextlib import contextmanager
-from typing import Callable
+from typing import Any, Callable
 from helen.core.ast import (
     AccessNode,
     AgentDeclNode,
@@ -801,6 +801,13 @@ class Interpreter(LlmMixin, Visitor[object]):
             cache_aware_enabled=True,
             transcript_store_enabled=self._transcript_store_enabled,
         )
+        # v1.22: Invocation tree tracking (see reports/v1.22-invocation-tree-proposal.md)
+        # _current_invocation_id: the invocation currently executing (or "" at top-level)
+        # _invocation_stack: stack of parent invocation IDs for nested agent calls
+        # _invocation_index: in-memory cache of invocation metadata (rebuilt from transcript)
+        self._current_invocation_id: str = ""
+        self._invocation_stack: list[str] = []
+        self._invocation_index: dict[str, dict[str, Any]] = {}
         # P2: Initialize PromptBuilder for unified prompt construction
         from helen.runtime.prompt_builder import PromptBuilder
         self._prompt_builder = PromptBuilder()
@@ -857,12 +864,28 @@ class Interpreter(LlmMixin, Visitor[object]):
 
         When TranscriptStore is disabled, returns _interpreter_history (fallback).
 
+        v1.22: Filtered by current invocation_id. Each agent main {} is an
+        invocation; the LLM only sees messages from the current invocation.
+        This gives per-agent context isolation. When _current_invocation_id
+        is "" (top-level code outside main {}), no filter is applied.
+
         This property is read-only — all writes go directly to TranscriptStore.
         """
         if self._agent_context is not None and self._agent_context.transcript_store is not None:
-            return self._agent_context.transcript_store.read_view()
+            all_messages = self._agent_context.transcript_store.read_view()
         else:
-            return self._interpreter_history
+            all_messages = self._interpreter_history
+
+        # v1.22: Filter by current invocation_id for per-agent isolation.
+        # Empty _current_invocation_id means no invocation active (top-level
+        # code outside main {}) — no filter.
+        if not self._current_invocation_id:
+            return all_messages
+
+        return [
+            m for m in all_messages
+            if getattr(m, 'invocation_id', '') == self._current_invocation_id
+        ]
 
     @contextmanager
     def _push_scope(self, set_to: Environment | None = None):
@@ -1735,9 +1758,24 @@ class Interpreter(LlmMixin, Visitor[object]):
         return self._execute_stmts(node.statements)
 
     def visit_main_block(self, node: MainBlockNode) -> object:
-        """Execute a main block."""
-        with self._push_scope():
-            return self._execute_stmts(node.body)
+        """Execute a main block.
+
+        v1.22: Top-level main (when _current_agent is None) is an invocation.
+        Agent main blocks are invocations created by _call_agent; we skip
+        creating a nested invocation here.
+        """
+        if self._current_agent is None:
+            # Top-level main: create an invocation
+            self._enter_invocation(None)
+            try:
+                with self._push_scope():
+                    return self._execute_stmts(node.body)
+            finally:
+                self._exit_invocation()
+        else:
+            # Agent main: _call_agent handles invocation entry/exit
+            with self._push_scope():
+                return self._execute_stmts(node.body)
 
     # ------------------------------------------------------------------
     # Match
@@ -2821,6 +2859,85 @@ class Interpreter(LlmMixin, Visitor[object]):
                 return result.value
             return result
 
+    # ------------------------------------------------------------------
+    # v1.22: Invocation tree management
+    # ------------------------------------------------------------------
+    # See reports/v1.22-invocation-tree-proposal.md for the full design.
+    #
+    # An "invocation" is one execution of an agent's main {} block (or the
+    # top-level main block). Each invocation has:
+    #   - invocation_id: a UUID unique to this execution
+    #   - agent_name: the agent that produced it (None for top-level)
+    #   - parent_invocation_id: the invocation that called it ("" at top-level)
+    #
+    # Active context (what LLM sees) is isolated per-invocation:
+    #   - On entry:  save caller's history; start with empty history
+    #   - On exit:   restore caller's history (agent's history is discarded
+    #                from active context, but preserved in transcript SSOT)
+    # ------------------------------------------------------------------
+
+    def _enter_invocation(self, agent_name: str | None) -> str:
+        """Enter a new invocation. Returns the new invocation_id.
+
+        Args:
+            agent_name: Name of the agent (None for top-level main).
+
+        Saves caller's invocation_id on the stack, allocates a fresh
+        invocation_id, and records metadata in _invocation_index.
+        """
+        import time
+        import uuid as _uuid
+
+        parent_id = self._current_invocation_id
+        new_id = f"inv_{int(time.time())}_{_uuid.uuid4().hex[:8]}"
+
+        # Push current onto stack
+        self._invocation_stack.append(self._current_invocation_id)
+        self._current_invocation_id = new_id
+
+        # Record metadata (used by list_invocations / get_invocation_tree)
+        self._invocation_index[new_id] = {
+            "invocation_id": new_id,
+            "agent_name": agent_name,
+            "parent_invocation_id": parent_id,
+            "start_time": time.time(),
+            "end_time": None,
+            "children": [],
+            "message_count": 0,
+        }
+        if parent_id and parent_id in self._invocation_index:
+            self._invocation_index[parent_id]["children"].append(new_id)
+
+        return new_id
+
+    def _exit_invocation(self) -> None:
+        """Exit the current invocation, restoring the caller's invocation_id.
+
+        Records end_time and final message_count. Does NOT touch active
+        context — that's _call_agent's responsibility.
+        """
+        import time
+
+        inv_id = self._current_invocation_id
+        if inv_id and inv_id in self._invocation_index:
+            entry = self._invocation_index[inv_id]
+            entry["end_time"] = time.time()
+            # Count messages belonging to this invocation in transcript
+            store = getattr(self._agent_context, "transcript_store", None)
+            if store is not None:
+                from helen.runtime.transcript_store import Message as _TranscriptMessage
+                entry["message_count"] = sum(
+                    1 for item in store.transcript
+                    if isinstance(item, _TranscriptMessage)
+                    and item.invocation_id == inv_id
+                )
+
+        # Pop stack
+        if self._invocation_stack:
+            self._current_invocation_id = self._invocation_stack.pop()
+        else:
+            self._current_invocation_id = ""
+
     def _call_agent(self, agent: AgentDeclNode, args: dict[str, object]) -> object:
         """Call an agent with the given arguments (HLD 3.5.2, 3.6.2).
 
@@ -2844,9 +2961,16 @@ class Interpreter(LlmMixin, Visitor[object]):
         # Check if agent is streaming mode
         is_streaming = self._is_agent_streaming(agent)
 
+        # v1.22: Enter a new invocation for this agent call.
+        # The invocation_id will be attached to all messages this agent produces
+        # (via _add_to_history in llm_mixin.py). The _history property filters
+        # by invocation_id, so the agent's LLM calls see ONLY this invocation's
+        # messages — achieving per-agent context isolation.
+        inv_id = self._enter_invocation(agent.name)
+
         # Push call stack frame (AI observability)
         self.observability.call_stack.push(agent.name, agent.span, args)
-        self.observability.tracer.trace("call", agent.span, {"agent": agent.name, "args": args, "isolation": isolation_level})
+        self.observability.tracer.trace("call", agent.span, {"agent": agent.name, "args": args, "isolation": isolation_level, "invocation_id": inv_id})
 
         # Create a completely isolated environment (HLD 3.5.2)
         # Start from a fresh root, not inheriting parent agent's variables.
@@ -3027,6 +3151,13 @@ class Interpreter(LlmMixin, Visitor[object]):
                 cause=e,
             ) from e
         finally:
+            # v1.22: Exit the invocation. This records end_time and message_count,
+            # and pops the invocation stack to restore the caller's invocation_id.
+            # The _history property then filters by caller's invocation_id, so
+            # the caller's subsequent LLM calls see only its own messages (not the
+            # agent's). The agent's messages remain in transcript SSOT for audit.
+            self._exit_invocation()
+
             # Write back shared let modifications from agent to caller (v1.11 fix).
             # Agent's call_env has its own copies of shared let values; any
             # mutations must be propagated back to the caller's scope chain

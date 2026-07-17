@@ -293,6 +293,15 @@ class Message:
     # Empty string means no UUID (backward compatible with existing messages).
     uuid: str = field(default="", repr=False)
 
+    # v1.22: Invocation tree tracking
+    # agent_name: Name of the agent that produced this message (None for top-level).
+    # invocation_id: UUID of the agent main{} invocation that produced this message.
+    # parent_invocation_id: UUID of the parent invocation (for nested agent calls).
+    # Together these form the invocation tree — see reports/v1.22-invocation-tree-proposal.md.
+    agent_name: str | None = field(default=None, repr=False)
+    invocation_id: str = field(default="", repr=False)
+    parent_invocation_id: str = field(default="", repr=False)
+
     @property
     def token_count(self) -> int:
         """Lazily computed token count (model-aware when tiktoken available)."""
