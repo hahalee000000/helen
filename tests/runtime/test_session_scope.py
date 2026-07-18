@@ -52,10 +52,23 @@ class TestTranscriptConfigDefaults:
 # ---------------------------------------------------------------------------
 
 class TestDetectProjectDir:
-    def test_no_project(self):
+    def test_no_project(self, monkeypatch):
+        # v1.23 fix: Mock Path.exists to return False for all markers to ensure
+        # test isolation from filesystem state (e.g., /tmp/.helen leftovers).
+        from unittest.mock import patch
         with tempfile.TemporaryDirectory() as tmp:
-            result = detect_project_dir(tmp)
-            assert result is None
+            test_dir = Path(tmp) / "test"
+            test_dir.mkdir()
+            # Mock Path.exists to only return True for non-marker paths
+            original_exists = Path.exists
+            def mock_exists(self):
+                # Return False for project markers
+                if self.name in (".helen", "helen.yaml", "helen.yml", "helen.toml"):
+                    return False
+                return original_exists(self)
+            with patch.object(Path, 'exists', mock_exists):
+                result = detect_project_dir(str(test_dir))
+                assert result is None
 
     def test_detect_helen_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -139,11 +152,19 @@ class TestResolveSessionDir:
             assert str(Path(tmp).resolve()) in path
 
     def test_project_scope_without_project_uses_cwd(self):
+        # v1.23 fix: Mock Path.exists to ensure test isolation from /tmp/.helen leftovers
+        from unittest.mock import patch
         with tempfile.TemporaryDirectory() as tmp:
-            path, scope = resolve_session_dir(scope="project", cwd=tmp)
-            assert scope == "project"
-            # Falls back to cwd/.helen/sessions when no project marker found
-            assert tmp in path or str(Path(tmp).resolve()) in path
+            original_exists = Path.exists
+            def mock_exists(self):
+                if self.name in (".helen", "helen.yaml", "helen.yml", "helen.toml"):
+                    return False
+                return original_exists(self)
+            with patch.object(Path, 'exists', mock_exists):
+                path, scope = resolve_session_dir(scope="project", cwd=tmp)
+                assert scope == "project"
+                # Falls back to cwd/.helen/sessions when no project marker found
+                assert tmp in path or str(Path(tmp).resolve()) in path
 
     def test_auto_with_project(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -153,10 +174,18 @@ class TestResolveSessionDir:
             assert str(Path(tmp).resolve()) in path
 
     def test_auto_without_project(self):
+        # v1.23 fix: Mock Path.exists to ensure test isolation from /tmp/.helen leftovers
+        from unittest.mock import patch
         with tempfile.TemporaryDirectory() as tmp:
-            path, scope = resolve_session_dir(scope="auto", cwd=tmp)
-            assert scope == "global"
-            assert ".helen/sessions" in path
+            original_exists = Path.exists
+            def mock_exists(self):
+                if self.name in (".helen", "helen.yaml", "helen.yml", "helen.toml"):
+                    return False
+                return original_exists(self)
+            with patch.object(Path, 'exists', mock_exists):
+                path, scope = resolve_session_dir(scope="auto", cwd=tmp)
+                assert scope == "global"
+                assert ".helen/sessions" in path
 
     def test_env_override(self):
         with tempfile.TemporaryDirectory() as tmp:

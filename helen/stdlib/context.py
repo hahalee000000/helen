@@ -1469,6 +1469,11 @@ def _import_context(data: dict) -> dict:
     Replaces the current conversation history with the exported messages.
     Optionally restores working memory and config.
 
+    v1.23 fix: Single-write semantics — writes to TranscriptStore when enabled,
+    or _interpreter_history when disabled (never both). Imported messages are
+    tagged with the current invocation_id so they are visible to the caller
+    under the per-agent isolation model (v1.22).
+
     Args:
         data: A dict as returned by export_context()["context"].
 
@@ -1490,10 +1495,35 @@ def _import_context(data: dict) -> dict:
     if not isinstance(messages_data, list):
         return {"status": "error", "error": "messages must be a list"}
 
-    # Clear current history
-    _interpreter_history.clear()
+    # v1.23: Get current invocation_id for tagging imported messages
+    # so they are visible to the caller under per-agent isolation.
+    current_invocation_id = ""
+    try:
+        from helen.stdlib.llm_control import _interpreter_ref
+        if _interpreter_ref is not None:
+            current_invocation_id = getattr(
+                _interpreter_ref, '_current_invocation_id', ''
+            ) or ''
+    except Exception:
+        pass
 
-    # Import messages
+    # v1.23 fix: Determine active store and clear/write consistently.
+    # TranscriptStore is SSOT when enabled; otherwise _interpreter_history.
+    store = None
+    if _interpreter_agent_context is not None:
+        store = getattr(_interpreter_agent_context, 'transcript_store', None)
+
+    if store is not None:
+        # TranscriptStore is SSOT: clear it and write only to it
+        store.transcript.clear()
+        store._uuid_index.clear()
+        store._dirty = True
+        _interpreter_history.clear()  # keep fallback in sync (empty)
+    else:
+        # Fallback: clear _interpreter_history only
+        _interpreter_history.clear()
+
+    # Import messages into active store
     imported = 0
     for m in messages_data:
         msg = Message(
@@ -1501,16 +1531,18 @@ def _import_context(data: dict) -> dict:
             content=m.get("content", ""),
             tool_calls=m.get("tool_calls", []),
             tool_call_id=m.get("tool_call_id"),
-            uuid=m.get("uuid", ""),
+            uuid=m.get("uuid", ""),  # v1.23: preserve original UUID if present
             compressed=m.get("compressed", False),
             pinned=m.get("pinned", False),
+            invocation_id=current_invocation_id,  # v1.23: tag with caller's invocation
         )
-        _interpreter_history.append(msg)
-        # Also register with TranscriptStore if available
-        if _interpreter_agent_context is not None:
-            store = getattr(_interpreter_agent_context, 'transcript_store', None)
-            if store is not None and not msg.uuid:
-                store.append(msg)  # assigns UUID
+        if store is not None:
+            store.append(msg)  # assigns UUID only if msg.uuid is empty
+        else:
+            if not msg.uuid:
+                import uuid as _uuid
+                msg.uuid = str(_uuid.uuid4())
+            _interpreter_history.append(msg)
         imported += 1
 
     # Import working memory if present

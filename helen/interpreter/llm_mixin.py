@@ -1318,17 +1318,25 @@ class LlmMixin:
         Returns:
             List of message dicts for API, or None if history is empty.
         """
-        # Phase 3 SSOT: Use TranscriptStore view when available
-        agent_ctx = getattr(self, '_agent_context', None)
-        if agent_ctx is not None and agent_ctx.transcript_store is not None:
-            history_for_compression = agent_ctx.transcript_store.read_view()
-        else:
-            history_for_compression = self._history
+        # v1.23 fix: Always use self._history which applies invocation_id
+        # filtering for per-agent context isolation (v1.22 design).
+        #
+        # Previously, when TranscriptStore was enabled (the default), this
+        # method called transcript_store.read_view() directly, which returned
+        # ALL messages across ALL invocations — breaking the per-agent
+        # isolation that interpreter.py:_history property provides.
+        #
+        # self._history:
+        #   - When TranscriptStore enabled: read_view() + invocation_id filter
+        #   - When TranscriptStore disabled: _interpreter_history + filter
+        # Either way, the result is correctly scoped to the current invocation.
+        history_for_compression = self._history
 
         if not history_for_compression:
             return None
 
         # Phase 7: Use AgentContextManager if available
+        agent_ctx = getattr(self, '_agent_context', None)
         if agent_ctx is not None:
             max_tokens = self._history_manager.MAX_TOKENS
             return agent_ctx.prepare_context(

@@ -447,7 +447,7 @@ class TestContextTransfer:
 
     def test_import_context_replaces_history(self):
         original = [_make_msg(role="user", content="original")]
-        _setup_context(original, with_agent_ctx=True)
+        agent_ctx = _setup_context(original, with_agent_ctx=True)
         try:
             data = {
                 "messages": [
@@ -466,8 +466,20 @@ class TestContextTransfer:
             assert r["status"] == "ok"
             assert r["imported_messages"] == 2
             assert r["imported_working_memory"] is True
-            assert len(original) == 2
-            assert original[0].content == "new system"
+            # v1.23 fix: When TranscriptStore is enabled, messages are written
+            # to TranscriptStore (single-write), not _interpreter_history.
+            store = agent_ctx.transcript_store if agent_ctx else None
+            if store is not None:
+                # Check TranscriptStore
+                view = store.read_view()
+                assert len(view) == 2
+                assert view[0].content == "new system"
+                # _interpreter_history should be empty (cleared)
+                assert len(original) == 0
+            else:
+                # Fallback: check _interpreter_history
+                assert len(original) == 2
+                assert original[0].content == "new system"
             r = _working_memory_get("task")
             assert r["data"] == "imported task"
         finally:
