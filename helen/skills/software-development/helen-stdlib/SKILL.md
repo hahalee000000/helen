@@ -825,6 +825,26 @@ print(invocation_path("inv_3"))  // "top -> A -> C"
 获取调用树()
 调用路径("inv_3")
 
+// ═══════════════════════════════════════════════════════════════
+// 上下文隔离 (v1.22/v1.23)
+// ═══════════════════════════════════════════════════════════════
+
+// v1.22 引入 per-agent 上下文隔离：每个 agent main {} 执行都是独立的 invocation
+// LLM 只能看到当前 invocation 的消息，不会看到其他 agent 或其他 invocation 的历史
+
+// v1.23 修复了关键 bug：
+// - _prepare_history_for_llm() 现在正确过滤 invocation_id
+// - _import_context() 改为单写策略，避免双存储不一致
+// - resume_session() 导入消息到当前 store，标记 invocation_id
+
+// 验证示例：
+agent AgentA { main { return llm act "我是 Alice" } }
+agent AgentB { main { return llm act "我叫什么？" } }
+
+let a = AgentA()  // invocation_id: inv_abc
+let b = AgentB()  // invocation_id: inv_def
+// AgentB 的 LLM 看不到 AgentA 的上下文 ✅
+
 // 配合 replay_transcript 过滤
 let a_msgs = replay_transcript(agent="A")              // 只看 A 的消息
 let last = replay_transcript(agent="A", last_only=true) // 只看 A 最近一次

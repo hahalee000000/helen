@@ -1,6 +1,128 @@
 # 版本历史
 
-> Helen v1.21 | PyPI 已发布 — `pip install helen-lang` — on_tool_end 回调：agentic loop 中间注入 hint
+> Helen v1.23 | PyPI 已发布 — `pip install helen-lang` — 修复 invocation 上下文隔离
+
+---
+
+## v1.23: 修复 Invocation 上下文隔离
+
+**发布日期**: 2026-07-18
+**核心特性**: 修复 v1.22 实现的 per-agent 上下文隔离 bug，确保 agent 之间无法看到彼此的 LLM 上下文
+
+### 问题背景
+
+v1.22 引入了 per-main fresh context 设计，每个 `agent main {}` 执行都是独立的 invocation，LLM 只能看到当前 invocation 的消息。但 v1.23 发现实现存在三个关键缺陷：
+
+1. **`_prepare_history_for_llm()` 绕过 invocation 过滤**
+   - 直接读取 `transcript_store.read_view()`，跳过了 `_history` property 的 invocation_id 过滤
+   - 导致 AgentA 的对话历史对 AgentB 可见，违反隔离设计
+
+2. **`_import_context()` 双存储不一致**
+   - 同时写入 `_interpreter_history` 和 `TranscriptStore`
+   - 导入的消息没有标记 `invocation_id`，无法正确隔离
+
+3. **`resume_session()` 语义错误**
+   - 直接替换 TranscriptStore 引用，恢复的消息不受 invocation 隔离控制
+
+### 修复内容
+
+1. **`helen/interpreter/llm_mixin.py`**
+   - `_prepare_history_for_llm()` 统一走 `self._history`（包含 invocation_id 过滤）
+   - 不再直接读取 `transcript_store.read_view()`
+
+2. **`helen/stdlib/context.py`**
+   - `_import_context()` 改为单写策略
+   - TranscriptStore 启用时只写 TranscriptStore，否则只写 `_interpreter_history`
+   - 导入的消息标记当前 `invocation_id`，确保对调用者可见
+
+3. **`helen/stdlib/transcript.py`**
+   - `resume_session()` 改为导入消息到当前 store（而非替换引用）
+   - 恢复的消息标记 `invocation_id`，保持审计追踪连续性
+
+### 验证测试
+
+新增 `tests/interpreter/test_v123_invocation_isolation.py`（2 个测试）：
+- `test_prepare_history_filters_by_invocation`: 验证 LLM 历史按 invocation_id 过滤
+- `test_import_context_tags_with_invocation_id`: 验证导入消息标记 invocation_id
+
+修复 `tests/stdlib/test_context_v119_p1p3.py`:
+- 适配 `_import_context()` 单写策略（检查 TranscriptStore 而非 `_interpreter_history`）
+
+修复 `tests/runtime/test_session_scope.py`（3 个测试）:
+- 使用 `unittest.mock.patch` 隔离 `/tmp/.helen` 残留文件的影响
+- `test_no_project`、`test_project_scope_without_project_uses_cwd`、`test_auto_without_project`
+
+### 测试结果
+
+- **3048 passed, 0 failed**（从 3042 passed, 4 failed 改进）
+- 新增 2 个 v1.23 隔离验证测试
+- 更新 1 个 import_context 测试
+- 修复 3 个 session_scope 测试
+
+### 版本 bump
+
+- `helen/__init__.py`: `1.23.0` → `1.23.1`（PyPI 1.23.0 已存在，跳至 1.23.1）
+- `pyproject.toml`: `1.23.0` → `1.23.1`
+
+### PyPI 发布
+
+```bash
+pip install helen-lang==1.23.1
+```
+
+---
+
+## v1.22: Invocation Tree + Per-Main Fresh Context
+
+**发布日期**: 2026-07-17
+**核心特性**: 每个 `agent main {}` 执行获得全新的上下文，agent 之间上下文完全隔离
+
+### 设计原则
+
+**每个 agent main {} 执行都是独立的 invocation，LLM 只能看到当前 invocation 的消息**。这是 Helen 作用域隔离的自然延伸——不仅变量隔离，上下文也隔离。
+
+### 新增特性
+
+1. **Invocation 管理**
+   - 每个 `agent main {}` 执行创建新的 `invocation_id`
+   - 嵌套调用形成调用树（parent_invocation_id）
+   - `_history` property 按 `invocation_id` 过滤，实现 per-agent 上下文隔离
+
+2. **Message 字段扩展**
+   - `agent_name`: 产生该消息的 agent 名
+   - `invocation_id`: 本次 main {} 执行的唯一 ID
+   - `parent_invocation_id`: 父调用的 invocation_id
+
+3. **调用树查询 API**
+   - `list_invocations(session_id?, agent?, limit?, offset?)`
+   - `get_invocation(invocation_id, session_id?)`
+   - `get_invocation_tree(session_id?)`
+   - `invocation_path(invocation_id, session_id?)`
+
+4. **扩展的过滤参数**
+   - `replay_transcript(..., agent?, invocation_id?, last_only?, include_subtree?)`
+   - `restore_context(session_id, invocation_id?, agent?, last_only?, include_subtree?)`
+
+### 中文别名
+
+- `列出调用` → `list_invocations`
+- `获取调用` → `get_invocation`
+- `获取调用树` → `get_invocation_tree`
+- `调用路径` → `invocation_path`
+
+### 测试
+
+- 新增 `tests/interpreter/test_invocation_tree.py`（17 个测试）
+- 全部 3027 测试通过
+
+### 已知问题（v1.23 修复）
+
+v1.22 的实现存在三个 bug，导致 per-agent 上下文隔离失效：
+1. `_prepare_history_for_llm()` 绕过 invocation 过滤
+2. `_import_context()` 双存储不一致
+3. `resume_session()` 语义错误
+
+详见 v1.23 修复说明。
 
 ---
 

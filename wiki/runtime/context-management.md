@@ -1,6 +1,6 @@
 # 上下文管理架构 (Context Management Architecture)
 
-> **版本**: v1.22 | **最后更新**: 2026-07-17
+> **版本**: v1.23 | **最后更新**: 2026-07-18
 > 统一说明 Helen 的上下文管理系统，替换原 `agent_context.md`、`graduated_compression.md`、`cache_aware_compression.md`、`working_memory.md` 中的分散描述。
 
 ---
@@ -182,6 +182,49 @@ transcript 仍然记录**所有**消息（SSOT 审计完整），但 active cont
 | 跨 `helen` 进程 | 隔离 |
 
 **中文别名**：`列出调用`、`获取调用`、`获取调用树`、`调用路径`。
+
+### 0.6 v1.23 修复：Invocation 隔离的实现修正
+
+> **状态**：已修复（v1.23，2026-07-18）。
+
+v1.22 实现了 per-main fresh context 的设计，但 v1.23 发现并修复了关键实现缺陷：
+
+**问题 1：`_prepare_history_for_llm()` 绕过 invocation 过滤**
+
+v1.22 中，`_prepare_history_for_llm()` 直接读取 `transcript_store.read_view()`，绕过了 `_history` property 的 invocation_id 过滤。这导致 agent 之间能看到彼此的上下文，违反了 per-main fresh context 的设计原则。
+
+**修复**：`_prepare_history_for_llm()` 统一走 `self._history`（包含 invocation_id 过滤）。
+
+**问题 2：`_import_context()` 双存储不一致**
+
+`_import_context()` 同时写入 `_interpreter_history` 和 `TranscriptStore`，导致数据不一致。且导入的消息没有标记 `invocation_id`，无法正确隔离。
+
+**修复**：改为单写策略——TranscriptStore 启用时只写 TranscriptStore，否则只写 `_interpreter_history`。导入的消息标记当前 `invocation_id`。
+
+**问题 3：`resume_session()` 语义错误**
+
+`resume_session()` 直接替换 TranscriptStore 引用，导致恢复的消息不受 invocation 隔离控制。
+
+**修复**：改为导入消息到当前 store 并标记 `invocation_id`，保持审计追踪的连续性。
+
+**验证测试**：
+
+```helen
+// v1.23 之前的 bug（已修复）
+agent AgentA { main { return llm act "我是 Alice" } }
+agent AgentB { main { return llm act "我叫什么？" } }
+
+let a = AgentA()
+let b = AgentB()
+// v1.22（bug）：AgentB 能回答 "Alice" ❌
+// v1.23（修复）：AgentB 看不到 AgentA 的上下文 ✅
+```
+
+**相关文件**：
+- `helen/interpreter/llm_mixin.py`：`_prepare_history_for_llm()` 修复
+- `helen/stdlib/context.py`：`_import_context()` 单写策略
+- `helen/stdlib/transcript.py`：`resume_session()` 导入语义
+- `tests/interpreter/test_v123_invocation_isolation.py`：新增隔离验证测试
 
 ---
 

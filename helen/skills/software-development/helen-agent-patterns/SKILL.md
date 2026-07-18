@@ -505,6 +505,127 @@ v1.12 实施后的第二轮修复确保了隔离承诺的可靠性：
 | 闭包作用域 | `_in_closure` 跳过所有检查 | 闭包内同样检查作用域隔离 |
 | @open 写回 | 模块级 let 修改不写回 | @open agent 写回所有修改 |
 
+## Agent 上下文隔离（v1.22/v1.23）
+
+除了变量作用域隔离，Helen v1.22 引入了 **invocation 级别的上下文隔离**，确保每个 agent `main {}` 执行都有独立的 LLM 上下文。
+
+### 核心机制
+
+**每次进入 agent `main {}` 时，interpreter 创建一个新的 `invocation_id`**。LLM 只能看到当前 invocation 的消息，不会看到其他 agent 或其他 invocation 的历史。
+
+```helen
+agent AgentA {
+    description "Agent A"
+    main {
+        return llm act "我是 Alice"
+    }
+}
+
+agent AgentB {
+    description "Agent B"
+    main {
+        return llm act "我叫什么名字？"
+    }
+}
+
+// 调用
+let a = AgentA()  // invocation_id: inv_abc123
+let b = AgentB()  // invocation_id: inv_def456
+
+// AgentB 的 LLM 看不到 AgentA 的对话
+// 每个 main {} 执行都是 fresh context
+```
+
+### 与变量作用域隔离的区别
+
+| 隔离维度 | 作用域隔离（v1.10/v1.12） | 上下文隔离（v1.22/v1.23） |
+|---------|------------------------|-------------------------|
+| 隔离对象 | 变量（let/const/shared） | LLM 对话历史 |
+| 隔离粒度 | 编译时检查 | 运行时过滤 |
+| 实现机制 | 作用域链 + 访问控制 | invocation_id 过滤 |
+| 目的 | 防止变量污染 | 防止上下文泄露 |
+
+### Invocation Tree（调用树）
+
+嵌套的 agent 调用形成调用树，每个 invocation 记录 `parent_invocation_id`：
+
+```helen
+agent Outer {
+    main {
+        return llm act "Outer task"
+    }
+}
+
+agent Inner {
+    main {
+        let outer_result = Outer()  // 嵌套调用
+        return llm act "Inner task"
+    }
+}
+
+// 调用树：
+// top (inv_top)
+//   └─ Inner (inv_inner, parent=inv_top)
+//        └─ Outer (inv_outer, parent=inv_inner)
+```
+
+### 查询调用树
+
+使用 stdlib 函数查询 invocation 信息：
+
+```helen
+// 列出所有 invocation
+let invs = list_invocations()
+// [{invocation_id, agent_name, parent_invocation_id, message_count, ...}, ...]
+
+// 按 agent 过滤
+let agent_a_runs = list_invocations(agent="AgentA", limit=10)
+
+// 获取完整调用树
+let tree = get_invocation_tree()
+
+// 查询单个 invocation
+let info = get_invocation("inv_xxx")
+```
+
+### 上下文恢复与 Invocation
+
+`restore_context()` 和 `replay_transcript()` 支持按 invocation 过滤：
+
+```helen
+// 恢复特定 agent 的最后一次调用
+restore_context(session_id, agent="AgentA", last_only=true)
+
+// 恢复特定 invocation 及其子树
+restore_context(session_id, invocation_id="inv_xxx", include_subtree=true)
+
+// 重放时按 invocation 过滤
+replay_transcript(session_id, agent="AgentB")
+```
+
+### v1.23 修复
+
+v1.22 实现了 invocation 隔离的设计，但 v1.23 修复了关键 bug：
+
+**问题**：v1.22 中 `_prepare_history_for_llm()` 直接读取 TranscriptStore，绕过了 `_history` property 的 invocation_id 过滤，导致 agent 之间能看到彼此的上下文。
+
+**修复**：
+- `_prepare_history_for_llm()` 统一走 `self._history`（包含 invocation_id 过滤）
+- `_import_context()` 改为单写策略，避免双存储不一致
+- `resume_session()` 导入消息到当前 store 而非替换引用
+
+**验证**：
+```helen
+// v1.23 之前的 bug（已修复）
+agent AgentA { main { return llm act "我是 Alice" } }
+agent AgentB { main { return llm act "我叫什么？" } }
+
+let a = AgentA()
+let b = AgentB()
+// v1.22（bug）：AgentB 能回答 "Alice"
+// v1.23（修复）：AgentB 看不到 AgentA 的上下文 ✅
+```
+
 ## 设计模式
 
 ### 模式 1: 专家 Agent

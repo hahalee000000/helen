@@ -4,6 +4,70 @@
 
 ---
 
+## [2026-07-18] bugfix | v1.23 — 修复 Invocation 上下文隔离 + 文档更新
+
+**操作**: 修复 v1.22 实现的 per-agent 上下文隔离 bug，更新相关文档
+**触发**: 用户深入调研发现 v1.22 实现与提案不一致
+**状态**: ✅ 完成
+
+### 代码修复
+
+1. **`helen/interpreter/llm_mixin.py`**
+   - `_prepare_history_for_llm()` 统一走 `self._history`（包含 invocation_id 过滤）
+   - 不再直接读取 `transcript_store.read_view()`
+
+2. **`helen/stdlib/context.py`**
+   - `_import_context()` 改为单写策略（TranscriptStore 启用时只写 TranscriptStore）
+   - 导入的消息标记当前 `invocation_id`
+
+3. **`helen/stdlib/transcript.py`**
+   - `resume_session()` 改为导入消息到当前 store（而非替换引用）
+   - 恢复的消息标记 `invocation_id`
+
+### 测试更新
+
+1. **新增 `tests/interpreter/test_v123_invocation_isolation.py`**（2 个测试）
+   - 验证 LLM 历史按 invocation_id 过滤
+   - 验证导入消息标记 invocation_id
+
+2. **修复 `tests/stdlib/test_context_v119_p1p3.py`**
+   - 适配 `_import_context()` 单写策略
+
+3. **修复 `tests/runtime/test_session_scope.py`**（3 个测试）
+   - 使用 `unittest.mock.patch` 隔离 `/tmp/.helen` 残留文件的影响
+
+### 文档更新
+
+1. **`helen/skills/software-development/helen-agent-patterns/SKILL.md`**
+   - 新增"Agent 上下文隔离（v1.22/v1.23）"章节
+   - 说明 invocation 级别隔离与变量作用域隔离的区别
+   - 提供调用树查询示例
+   - 说明 v1.23 修复内容
+
+2. **`wiki/runtime/context-management.md`**
+   - 版本号 v1.22 → v1.23
+   - 新增 §0.6 "v1.23 修复：Invocation 隔离实现修正"
+   - 详细说明三个 bug 及修复方案
+
+3. **`wiki/appendix/changelog.md`**
+   - 新增 v1.23 变更日志
+   - 新增 v1.22 变更日志（之前缺失）
+   - 说明 v1.22 已知问题及 v1.23 修复
+
+### 版本 bump
+
+- `helen/__init__.py`: `1.23.0` → `1.23.1`
+- `pyproject.toml`: `1.23.0` → `1.23.1`
+- PyPI 发布: `pip install helen-lang==1.23.1`
+
+### 测试结果
+
+- **3048 passed, 0 failed**（从 3042 passed, 4 failed 改进）
+- 新增 2 个 v1.23 测试
+- 修复 4 个失败测试
+
+---
+
 ## [2026-07-17] feature | v1.22 — Invocation Tree + Per-Main Fresh Context
 
 **操作**: 实现 v1.22 提案的主体部分（调用树 + 每次 main {} fresh context）
