@@ -594,8 +594,8 @@ working_memory_set("current_task", "从旧会话继续的工作")
 set_compression_strategy("graduated")
 
 // restore_context vs resume_session:
-// - restore_context: 恢复 active context（LLM 能看到）← 接续旧会话
-// - resume_session:  替换 transcript store（LLM 看不到）← 查看旧 transcript
+// - restore_context: 恢复 active context，支持按 agent/invocation 过滤
+// - resume_session:  恢复 active context，导入全部消息（v1.23 后 LLM 能看到）
 ```
 
 // ═══════════════════════════════════════════════════════════════

@@ -536,8 +536,10 @@ if r["status"] == "ok" {
 
 **与 `resume_session` 的区别**：
 
-- `restore_context(session_id)`：恢复 **active context**（LLM 能看到），适合接续旧会话继续工作
-- `resume_session(session_id)`：替换 **transcript store** 引用（LLM 看不到），适合查看旧 transcript 流
+- `restore_context(session_id)`：恢复 **active context**，支持按 agent/invocation 精准过滤，适合接续旧会话的特定部分
+- `resume_session(session_id)`：恢复 **active context**，导入旧会话的所有消息，适合恢复整个旧会话（v1.23 修复后 LLM 能看到恢复的消息）
+
+**注意**：v1.23 之前 `resume_session` 只替换 transcript store 引用（LLM 看不到），现在改为导入消息到当前 store（LLM 能看到）。
 
 **注意事项**：
 
@@ -770,6 +772,7 @@ for event in audit {
 let success = resume_session("session_1783492628_d9d9c0aa")
 if success {
     print("会话已恢复")
+    // v1.23: 恢复的消息现在对 LLM 可见
     let messages = replay_transcript()
     print("已加载 " + str(len(messages)) + " 条消息")
 } else {
@@ -783,9 +786,14 @@ if success {
 **返回**：true（成功）或 false（失败）
 
 **使用场景**：
-- 恢复之前的对话
+- 恢复之前的对话（v1.23 后 LLM 能看到历史消息）
 - 在 REPL 中继续之前的工作
 - 加载历史会话进行分析
+
+**v1.23 变更**：
+- 之前：替换 transcript store 引用，LLM 看不到恢复的消息
+- 现在：导入消息到当前 store，LLM 能看到恢复的消息（标记当前 invocation_id）
+- 如果需要按 agent/invocation 精准恢复，使用 `restore_context`
 
 ### 中文别名
 

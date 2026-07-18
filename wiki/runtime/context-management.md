@@ -89,10 +89,17 @@ Context 的持续时间是分层的，每一层服务于不同的推理粒度：
 
 | | `restore_context(session_id)` | `resume_session(session_id)` |
 |---|---|---|
-| 恢复目标 | **Active Context**（LLM 看到的 `_interpreter_history`） | **TranscriptStore**（持久化审计记录） |
-| 替换什么 | 当前对话历史 | 当前 transcript store 引用 |
-| LLM 能看到恢复的消息？ | ✅ 能 | ❌ 不能（只替换了 SSOT） |
-| 适用场景 | 接续旧会话继续工作 | 切换到旧 session 的 transcript 流查看 |
+| 恢复目标 | **Active Context**（LLM 看到的对话历史） | **Active Context** + 保持审计追踪连续性 |
+| 操作方式 | 清空当前历史，导入旧会话消息 | 导入旧会话消息到当前 store |
+| LLM 能看到恢复的消息？ | ✅ 能 | ✅ 能（v1.23 修复后） |
+| 调用树过滤 | 支持（按 agent/invocation 过滤） | 不支持（导入全部消息） |
+| session_id 变化 | 保持当前 session_id | 保持当前 session_id（v1.23 修复后） |
+| 适用场景 | 接续旧会话的特定 agent/invocation | 恢复整个旧会话的所有消息 |
+
+**v1.23 变更**：`resume_session` 从"替换 transcript store 引用"改为"导入消息到当前 store"。这意味着：
+- 恢复的消息现在对 LLM 可见（标记当前 invocation_id）
+- 当前 session_id 保持不变（审计追踪连续）
+- 如果需要按 agent/invocation 精准恢复，使用 `restore_context`
 
 ### 0.4 `context {}` 配置的生命周期语义
 
