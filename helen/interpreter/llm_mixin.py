@@ -714,12 +714,12 @@ class LlmMixin:
         tools: list[dict[str, Any]] = []
         tool_names: set[str] = set()
 
-        # v1.12: @sandbox (L3) — force empty tools, except load_skill
+        # v1.12: @sandbox (L3) — force empty tools, except load_skill + list_skill_references
         if self._current_agent is not None:
             isolation = getattr(self._current_agent, 'isolation_level', 'standard')
             if isolation == "sandbox":
-                # Sandbox agents get only load_skill for skill access
-                tools.extend(get_tool_schemas(["load_skill"]))
+                # Sandbox agents get skill tools for skill access
+                tools.extend(get_tool_schemas(["load_skill", "list_skill_references"]))
                 return tools
 
         # 1. Read declared tools allowlist
@@ -743,9 +743,9 @@ class LlmMixin:
                             declared_tools = []
                     break
 
-        # 2. If no tools declared → LLM gets nothing (load_skill added below)
+        # 2. If no tools declared → LLM gets nothing (skill tools added below)
         if declared_tools is None:
-            tools.extend(get_tool_schemas(["load_skill"]))
+            tools.extend(get_tool_schemas(["load_skill", "list_skill_references"]))
             return tools
 
         # 3. For each name in the allowlist, resolve to Helen fn or Python tool
@@ -771,9 +771,11 @@ class LlmMixin:
                     tools.append(schema)
                     tool_names.add(schema["function"]["name"])
 
-        # 4. Always include load_skill for Tier 2 skill disclosure (HLD 3.6.5)
-        if "load_skill" not in tool_names:
-            tools.extend(get_tool_schemas(["load_skill"]))
+        # 4. Always include skill tools for Tier 2/3 skill disclosure (HLD 3.6.5)
+        default_skill_tools = ["load_skill", "list_skill_references"]
+        missing = [t for t in default_skill_tools if t not in tool_names]
+        if missing:
+            tools.extend(get_tool_schemas(missing))
 
         return tools
 
