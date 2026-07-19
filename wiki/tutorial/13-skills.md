@@ -116,6 +116,28 @@ load_skill and follow its instructions. Err on the side of loading.
 
 LLM 看到索引后，判断需要时调用 `load_skill` 工具获取完整内容。
 
+```helen
+// 基本加载
+load_skill("helen-testing")
+
+// 同时列出参考文档
+load_skill("helen-language-development", include_references=true)
+```
+
+### 第三层：参考文档
+
+技能可包含 `references/` 目录，存放深度参考文档。LLM 可通过以下方式访问：
+
+```helen
+// 列出所有参考文档（名称、路径、大小、前 3 行预览）
+list_skill_references("helen-language-development")
+
+// 用 read_file 加载具体参考文档
+read_file(".../references/parser-disambiguation.md")
+```
+
+参考文档不自动加载，由 LLM 按需查阅，节省 token。
+
 ## LLM 语句中的技能感知
 
 `llm act` 自动注入技能索引到 system prompt：

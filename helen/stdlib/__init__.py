@@ -141,7 +141,7 @@ from helen.stdlib.quality import (
 from helen.stdlib.tools import (
     # Tool wrappers
     _web_search, _web_fetch,
-    _shell_exec, _calculate, _patch_file, _load_skill,
+    _shell_exec, _calculate, _patch_file, _load_skill, _list_skill_references,
 )
 
 # Import context management functions
@@ -1200,7 +1200,8 @@ def _register_tools() -> list[BuiltinFunction]:
         BuiltinFunction("shell_exec", "Execute shell command", "shell_exec(command, timeout?, shell?)", _shell_exec, "tools"),
         BuiltinFunction("calculate", "Evaluate math expression", "calculate(expression)", _calculate, "tools"),
         BuiltinFunction("patch_file", "Patch a file", "patch_file(path, old_string, new_string, replace_all?)", _patch_file, "tools"),
-        BuiltinFunction("load_skill", "Load a skill by name", "load_skill(name)", _load_skill, "tools"),
+        BuiltinFunction("load_skill", "Load a skill by name", "load_skill(name, include_references?)", _load_skill, "tools"),
+        BuiltinFunction("list_skill_references", "List reference documents for a skill", "list_skill_references(name)", _list_skill_references, "tools"),
     ]
 
 

@@ -4,6 +4,39 @@
 
 ---
 
+## [2026-07-19] feature | 技能引用系统优化 — list_skill_references + load_skill 增强
+
+**操作**: 增强技能引用文档加载机制
+**触发**: references/ 目录缺少专门的加载工具，LLM 无法高效发现参考文档
+**状态**: ✅ 完成
+
+### 代码变更
+
+1. **`helen/runtime/tools.py`**
+   - `_load_skill()` 增加 `include_references` 参数
+   - 新增 `_list_skill_references()` 工具函数
+
+2. **`helen/stdlib/tools.py`**
+   - 更新 `_load_skill` 包装函数
+   - 新增 `_list_skill_references` 包装函数
+
+3. **`helen/stdlib/__init__.py`**
+   - 注册 `list_skill_references` 为 BuiltinFunction
+   - builtin 总数: 323 → 324
+
+4. **`helen/stdlib/locales/zh.py`**
+   - 新增中文别名: `列出技能引用` → `list_skill_references`
+
+### 文档更新
+
+- `wiki/runtime/skills.md` — 新增 Tier 3 参考文档加载说明
+- `wiki/tutorial/06-llm-statements.md` — 工具表新增 `list_skill_references`
+- `wiki/tutorial/13-skills.md` — 新增第三层参考文档说明
+- `helen-stdlib` SKILL.md — Tools 类别 6 → 7
+- `CLAUDE.md` — 工具数量 10 → 11，builtin 323 → 324
+
+---
+
 ## [2026-07-19] refactor | 代码架构重构 — interpreter.py 拆分 + stdlib 注册重构
 
 **操作**: 按 `reports/architecture-analysis-2026-07-19.md` 执行代码重构

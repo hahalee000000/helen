@@ -332,6 +332,7 @@ ALIASES: dict[str, str] = {
     "计算表达式": "calculate",
     "修补文件": "patch_file",
     "加载技能": "load_skill",
+    "列出技能引用": "list_skill_references",
 
     # ── Context (上下文管理) ──────────────────────────────────────
     "清除上下文": "clear_context",

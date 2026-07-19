@@ -491,7 +491,7 @@ def _search_files(path: str, pattern: str, regex: bool = False,
         return json.dumps({"error": f"Search files failed: {e}"}, ensure_ascii=False)
 
 
-def _load_skill(name: str) -> str:
+def _load_skill(name: str, include_references: bool = False) -> str:
     """Load a skill's full SKILL.md content by name.
 
     Searches skill directories in priority order:
@@ -502,6 +502,12 @@ def _load_skill(name: str) -> str:
     This is the Tier 2 of the two-phase skill disclosure:
     - Tier 1: Skill Index (lightweight) injected in System Prompt
     - Tier 2: Full SKILL.md loaded on-demand via this tool
+
+    Args:
+        name: Skill name to load.
+        include_references: If True, also include the list of reference files
+            in the skill's references/ directory. The LLM can then use
+            read_file or list_skill_references to load specific references.
     """
     from pathlib import Path
     from helen.runtime.config import get_skill_dirs
@@ -520,16 +526,112 @@ def _load_skill(name: str) -> str:
                     skill_path = os.path.join(root, "SKILL.md")
                     with open(skill_path, encoding="utf-8") as f:
                         content = f.read()
-                    return json.dumps({
+
+                    result = {
                         "name": name,
                         "path": skill_path,
                         "content": content,
-                    }, ensure_ascii=False)
+                    }
+
+                    # Optionally include references list
+                    if include_references:
+                        refs_dir = os.path.join(root, "references")
+                        if os.path.isdir(refs_dir):
+                            ref_files = sorted(
+                                f for f in os.listdir(refs_dir)
+                                if f.endswith((".md", ".txt", ".yaml", ".json"))
+                            )
+                            result["references"] = [
+                                {
+                                    "name": rf,
+                                    "path": os.path.join(refs_dir, rf),
+                                    "size": os.path.getsize(os.path.join(refs_dir, rf)),
+                                }
+                                for rf in ref_files
+                            ]
+                        else:
+                            result["references"] = []
+
+                    return json.dumps(result, ensure_ascii=False)
 
         return json.dumps({"error": f"Skill '{name}' not found in any skill directory"}, ensure_ascii=False)
 
     except Exception as e:
         return json.dumps({"error": f"Load skill failed: {e}"}, ensure_ascii=False)
+
+
+def _list_skill_references(name: str) -> str:
+    """List reference files available for a skill.
+
+    Returns the names, paths, and sizes of all reference documents
+    in the skill's references/ directory. Use read_file to load
+    the content of specific reference files.
+
+    Args:
+        name: Skill name (from <available_skills> list).
+
+    Returns:
+        JSON with skill name, path, and list of reference files.
+    """
+    from pathlib import Path
+    from helen.runtime.config import get_skill_dirs
+
+    try:
+        for base in get_skill_dirs():
+            base_str = str(base)
+            if not Path(base_str).exists():
+                continue
+
+            for root, dirs, files in os.walk(base_str):
+                if os.path.basename(root) == name and "SKILL.md" in files:
+                    refs_dir = os.path.join(root, "references")
+                    if not os.path.isdir(refs_dir):
+                        return json.dumps({
+                            "name": name,
+                            "skill_path": os.path.join(root, "SKILL.md"),
+                            "references": [],
+                            "message": f"Skill '{name}' has no references/ directory",
+                        }, ensure_ascii=False)
+
+                    ref_files = sorted(
+                        f for f in os.listdir(refs_dir)
+                        if f.endswith((".md", ".txt", ".yaml", ".json"))
+                    )
+
+                    # Build reference list with preview (first 3 lines)
+                    references = []
+                    for rf in ref_files:
+                        rf_path = os.path.join(refs_dir, rf)
+                        size = os.path.getsize(rf_path)
+                        preview = ""
+                        try:
+                            with open(rf_path, encoding="utf-8") as f:
+                                lines = []
+                                for i, line in enumerate(f):
+                                    if i >= 3:
+                                        break
+                                    lines.append(line.rstrip())
+                                preview = "\n".join(lines)
+                        except Exception:
+                            pass
+                        references.append({
+                            "name": rf,
+                            "path": rf_path,
+                            "size": size,
+                            "preview": preview,
+                        })
+
+                    return json.dumps({
+                        "name": name,
+                        "skill_path": os.path.join(root, "SKILL.md"),
+                        "references": references,
+                        "total": len(references),
+                    }, ensure_ascii=False)
+
+        return json.dumps({"error": f"Skill '{name}' not found in any skill directory"}, ensure_ascii=False)
+
+    except Exception as e:
+        return json.dumps({"error": f"List skill references failed: {e}"}, ensure_ascii=False)
 
 
 # ── Register all built-in tools ────────────────────────────────
@@ -669,15 +771,29 @@ def _register_builtin_tools() -> None:
 
     register_tool(
         name="load_skill",
-        description="Load a skill's full SKILL.md content by name. Use this to get detailed instructions for a skill listed in <available_skills>.",
+        description="Load a skill's full SKILL.md content by name. Use this to get detailed instructions for a skill listed in <available_skills>. Set include_references=true to also see available reference documents.",
         parameters={
             "type": "object",
             "properties": {
                 "name": {"type": "string", "description": "Skill name to load (from <available_skills> list)"},
+                "include_references": {"type": "boolean", "description": "If true, also list reference files in the skill's references/ directory", "default": False},
             },
             "required": ["name"],
         },
         handler=_load_skill,
+    )
+
+    register_tool(
+        name="list_skill_references",
+        description="List reference documents available for a skill. Returns file names, paths, sizes, and previews. Use read_file to load specific reference content.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Skill name (from <available_skills> list)"},
+            },
+            "required": ["name"],
+        },
+        handler=_list_skill_references,
     )
 
 

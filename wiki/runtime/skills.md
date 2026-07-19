@@ -147,11 +147,47 @@ use load_skill tool to load full content.
 # LLM 通过 function calling 调用
 load_skill(name="helen-stdlib")
 # 返回完整的 SKILL.md 内容
+
+# 也可以同时列出参考文档
+load_skill(name="helen-language-development", include_references=True)
+# 返回 SKILL.md 内容 + references/ 目录文件列表
 ```
 
 **特点**：
 - 按需加载，节省 token
-- 包含完整的参考文档和示例
+- `include_references=true` 可同时获取参考文档列表
+
+### Tier 3 — 参考文档（深度查阅）
+
+技能可能包含 `references/` 目录，存放深度参考文档。通过以下方式访问：
+
+```python
+# 方式 1：列出所有参考文档（名称、路径、大小、预览）
+list_skill_references(name="helen-language-development")
+
+# 方式 2：load_skill 时附带引用列表
+load_skill(name="helen-language-development", include_references=True)
+
+# 方式 3：用 read_file 加载具体参考文档
+read_file(path=".../helen-language-development/references/parser-disambiguation.md")
+```
+
+**`list_skill_references` 返回格式**：
+```json
+{
+  "name": "helen-language-development",
+  "skill_path": ".../SKILL.md",
+  "references": [
+    {"name": "parser-disambiguation.md", "path": "...", "size": 3200, "preview": "# Parser 消歧..."},
+    ...
+  ],
+  "total": 17
+}
+```
+
+**特点**：
+- 参考文档不自动加载，由 LLM 按需查阅
+- 每个参考文件附带前 3 行预览，帮助 LLM 判断是否需要加载
 
 ---
 

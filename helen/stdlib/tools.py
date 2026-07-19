@@ -120,15 +120,29 @@ def _patch_file(path: str, old_string: str, new_string: str, replace_all: bool =
     return py_patch_file(path, old_string, new_string, replace_all)
 
 
-def _load_skill(name: str) -> str:
+def _load_skill(name: str, include_references: bool = False) -> str:
     """Load a skill's full SKILL.md content by name.
 
     Args:
         name: Skill name to load
+        include_references: If True, also list reference files
 
     Returns:
-        JSON string with skill content
+        JSON string with skill content (and optionally references)
     """
     from helen.runtime.tools import _load_skill as py_load_skill
-    return py_load_skill(name)
+    return py_load_skill(name, include_references=include_references)
+
+
+def _list_skill_references(name: str) -> str:
+    """List reference documents available for a skill.
+
+    Args:
+        name: Skill name to list references for
+
+    Returns:
+        JSON string with list of reference files
+    """
+    from helen.runtime.tools import _list_skill_references as py_list_refs
+    return py_list_refs(name)
 

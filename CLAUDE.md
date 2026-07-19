@@ -50,7 +50,7 @@ Layer 1: Helen Core (pure language)
 
 Layer 2: Runtime (LLM integration)
   LLMRuntime (abstract) → HttpLLMRuntime (httpx connection pool, OpenAI-compatible API)
-  Tools (10 built-in: web_search, web_fetch, read/write/patch_file, shell_exec, calculate, load_skill, find_files, search_files)
+  Tools (11 built-in: web_search, web_fetch, read/write/patch_file, shell_exec, calculate, load_skill, list_skill_references, find_files, search_files)
   ImportResolver (.helen/.json/.yaml/.md/.txt/Python), Config, History (with compression)
   TranscriptStore (v1.16: SSOT for all messages, SQLite/JSONL backends, LRU cache, UUID addressing)
 
@@ -79,7 +79,7 @@ helen/
 │                  # transcript_store.py (v1.16: SSOT, SQLiteBackend, JSONLBackend, LRU cache)
 │                  # session_manager.py (v1.16: session lifecycle, path management)
 │                  # channel.py (v1.18: Channel + ChannelEndpoint message queue)
-├── stdlib/        # 323 built-in functions (21 categories: core, string, math, crypto, etc.)
+├── stdlib/        # 324 built-in functions (21 categories: core, string, math, crypto, etc.)
 │                  # Per-category register functions (_register_core, _register_string, etc.)
 │                  # locales/zh.py (287 Chinese aliases)
 │                  # mailbox.py (v1.18: mailbox_select for multi-channel select)

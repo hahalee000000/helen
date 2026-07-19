@@ -401,7 +401,8 @@ agent Researcher(topic) {
 | `calculate` | 数学计算 | `expression: str` |
 | `find_files` | 按 glob 模式查找文件 | `path: str, pattern: str = "**/*", max_results: int = 200` |
 | `search_files` | 按内容搜索文件（文本/正则） | `path: str, pattern: str, regex: bool = false, case_sensitive: bool = true, max_results: int = 100` |
-| `load_skill` | 加载技能文档（总是可用） | `name: str` |
+| `load_skill` | 加载技能文档（总是可用） | `name: str, include_references: bool = false` |
+| `list_skill_references` | 列出技能参考文档 | `name: str` |
 
 ### patch_file 模糊匹配
 
