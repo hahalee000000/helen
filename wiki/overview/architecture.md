@@ -22,9 +22,12 @@
 │  │cancel    │ │render     │ │file   │ │budget│ │safe  │  │
 │  └────┬─────┘ └─────┬─────┘ └───┬───┘ └──┬───┘ └──┬───┘  │
 │  ┌──────────────────────────────────────────────────┐    │
-│  │  LlmMixin (interpreter/llm_mixin.py)             │    │
-│  │  visit_llm_act/if/stream 拆分                    │    │
-│  │  工具构建/历史管理/模板渲染                        │    │
+│  │  Interpreter Mixin Architecture                   │    │
+│  │  LlmMixin      — LLM act/if, 工具构建, 历史管理  │    │
+│  │  PatternMixin  — match/case 模式匹配              │    │
+│  │  ExceptionMixin — try/catch/throw/assert          │    │
+│  │  ImportMixin   — 多格式导入 (.helen/.py/.json等)  │    │
+│  │  StreamingMixin — 流式调用管理与取消               │    │
 │  └──────────────────────────────────────────────────┘    │
 ├───────┼─────────────┼───────────┼─────────┼────────┼──────┤
 │                    Core 核心编译层                          │
@@ -69,8 +72,8 @@ source.helen
     │  ┌─────────────────┐
     │  │ Interpreter(M5) │  AST → 执行结果
     │  │ Visitor[object] │  Environment 作用域链
-    │  │ + LlmMixin      │  Agent 隔离调用
-    │  │ + LLM Runtime   │  LLM 方法拆分为 Mixin
+    │  │ + 5 Mixins      │  Agent 隔离调用
+    │  │ + LLM Runtime   │  Mixin: Llm/Pattern/Exception/Import/Streaming
     │  └─────────────────┘
 ```
 

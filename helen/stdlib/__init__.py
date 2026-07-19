@@ -805,9 +805,9 @@ def _stream_cursor_down(n: int = 1) -> str:
 
 # ── Registration ───────────────────────────────────────────────
 
-def _register_builtins() -> None:
-    """Register all built-in functions."""
-    builtins = [
+def _register_core() -> list[BuiltinFunction]:
+    """Register Core built-in functions."""
+    return [
         # Core
         BuiltinFunction("print", "Print values to stdout", "print(*args)", _print, "core"),
         BuiltinFunction("len", "Return length of string/list/dict", "len(value)", _len, "core"),
@@ -823,7 +823,15 @@ def _register_builtins() -> None:
         BuiltinFunction("range", "Integer range", "range(start, stop?, step?)", _range, "core"),
         BuiltinFunction("type", "Type name", "type(value)", _type, "core"),
         BuiltinFunction("isinstance", "Type check", "isinstance(value, type_name)", _isinstance, "core"),
+        BuiltinFunction("input", "Read line from stdin", "input(prompt?)", _input, "core"),
+        BuiltinFunction("multiline_input", "Read multiple lines (empty line ends)", "multiline_input(prompt?)", _multiline_input, "core"),
+        BuiltinFunction("read_file", "Read file content", "read_file(path)", _read_file, "core"),
+    ]
 
+
+def _register_string() -> list[BuiltinFunction]:
+    """Register String built-in functions."""
+    return [
         # String
         BuiltinFunction("upper", "Uppercase string", "upper(s)", _upper, "string"),
         BuiltinFunction("lower", "Lowercase string", "lower(s)", _lower, "string"),
@@ -839,39 +847,6 @@ def _register_builtins() -> None:
         BuiltinFunction("trim_prefix", "Remove prefix", "trim_prefix(s, prefix)", _trim_prefix, "string"),
         BuiltinFunction("trim_suffix", "Remove suffix", "trim_suffix(s, suffix)", _trim_suffix, "string"),
         BuiltinFunction("interpolate", "Template string interpolation", "interpolate(template, vars)", _interpolate, "string"),
-
-        # Math
-        BuiltinFunction("round", "Round number", "round(value, ndigits?)", _round, "math"),
-        BuiltinFunction("sqrt", "Square root", "sqrt(value)", _sqrt, "math"),
-        BuiltinFunction("floor", "Floor value", "floor(value)", _floor, "math"),
-        BuiltinFunction("ceil", "Ceiling value", "ceil(value)", _ceil, "math"),
-        BuiltinFunction("input", "Read line from stdin", "input(prompt?)", _input, "core"),
-        BuiltinFunction("multiline_input", "Read multiple lines (empty line ends)", "multiline_input(prompt?)", _multiline_input, "core"),
-        BuiltinFunction("read_file", "Read file content", "read_file(path)", _read_file, "core"),
-        BuiltinFunction("write_file", "Write to file", "write_file(path, content)", _write_file, "io"),
-        BuiltinFunction("append_file", "Append to file", "append_file(path, content)", _append_file, "io"),
-        BuiltinFunction("mkdir", "Create directory", "mkdir(path)", _mkdir, "io"),
-        BuiltinFunction("mkdir_p", "Create directory tree", "mkdir_p(path)", _mkdir_p, "io"),
-
-        # Path operations
-        BuiltinFunction("path_join", "Join path components", "path_join(*parts)", _path_join, "path"),
-        BuiltinFunction("path_dirname", "Directory name", "path_dirname(path)", _path_dirname, "path"),
-        BuiltinFunction("path_basename", "Base name", "path_basename(path)", _path_basename, "path"),
-        BuiltinFunction("path_exists", "Check if path exists", "path_exists(path)", _path_exists, "path"),
-        BuiltinFunction("path_is_file", "Check if path is file", "path_is_file(path)", _path_is_file, "path"),
-        BuiltinFunction("path_is_dir", "Check if path is directory", "path_is_dir(path)", _path_is_dir, "path"),
-
-        # Network operations (imported from network module)
-        BuiltinFunction("http_get", "HTTP GET request", "http_get(url, headers?)", _http_get, "network"),
-        BuiltinFunction("http_post", "HTTP POST request", "http_post(url, data?, headers?)", _http_post, "network"),
-        BuiltinFunction("http_put", "HTTP PUT request", "http_put(url, data?, headers?)", _http_put, "network"),
-        BuiltinFunction("http_delete", "HTTP DELETE request", "http_delete(url, headers?)", _http_delete, "network"),
-        BuiltinFunction("http_download", "Download file from URL", "http_download(url, path)", _http_download, "network"),
-        BuiltinFunction("url_parse", "Parse URL", "url_parse(url)", _url_parse, "network"),
-        BuiltinFunction("url_build", "Build URL", "url_build(scheme, host, path?, query?)", _url_build, "network"),
-        BuiltinFunction("url_encode", "URL encode", "url_encode(s)", _url_encode, "network"),
-        BuiltinFunction("url_decode", "URL decode", "url_decode(s)", _url_decode, "network"),
-
         # String regex Operations
         BuiltinFunction("regex_match", "Regex match at start", "regex_match(pattern, s)", _regex_match, "string"),
         BuiltinFunction("regex_search", "Regex search anywhere", "regex_search(pattern, s)", _regex_search, "string"),
@@ -879,7 +854,6 @@ def _register_builtins() -> None:
         BuiltinFunction("regex_replace", "Regex replace", "regex_replace(pattern, s, replacement)", _regex_replace, "string"),
         BuiltinFunction("regex_split", "Regex split", "regex_split(pattern, s)", _regex_split, "string"),
         BuiltinFunction("regex_findall", "Regex find all", "regex_findall(pattern, s)", _regex_findall, "string"),
-
         # String text analysis
         BuiltinFunction("tokenize", "Tokenize text", "tokenize(text)", _tokenize, "string"),
         BuiltinFunction("word_count", "Count word frequencies", "word_count(text)", _word_count, "string"),
@@ -889,13 +863,11 @@ def _register_builtins() -> None:
         BuiltinFunction("normalize_whitespace", "Normalize whitespace", "normalize_whitespace(text)", _normalize_whitespace, "string"),
         BuiltinFunction("extract_urls", "Extract URLs", "extract_urls(text)", _extract_urls, "string"),
         BuiltinFunction("extract_emails", "Extract emails", "extract_emails(text)", _extract_emails, "string"),
-
         # String encoding
         BuiltinFunction("base64_encode", "Base64 encode", "base64_encode(s)", _base64_encode, "string"),
         BuiltinFunction("base64_decode", "Base64 decode", "base64_decode(s)", _base64_decode, "string"),
         BuiltinFunction("html_escape", "HTML escape", "html_escape(s)", _html_escape, "string"),
         BuiltinFunction("html_unescape", "HTML unescape", "html_unescape(s)", _html_unescape, "string"),
-
         # String operations
         BuiltinFunction("repeat", "Repeat string", "repeat(s, n)", _repeat, "string"),
         BuiltinFunction("reverse", "Reverse string", "reverse(s)", _reverse, "string"),
@@ -904,80 +876,19 @@ def _register_builtins() -> None:
         BuiltinFunction("center", "Center string", "center(s, width, char?)", _center, "string"),
         BuiltinFunction("count", "Count substring", "count(s, sub)", _count, "string"),
         BuiltinFunction("index", "Find substring index", "index(s, sub)", _index, "string"),
-
         # Float formatting
         BuiltinFunction("format_float", "Format float with decimals", "format_float(value, decimals)", _format_float, "string"),
+    ]
 
-        # Data JSON operations
-        BuiltinFunction("json_parse", "Parse JSON", "json_parse(text)", _json_parse, "data"),
-        BuiltinFunction("json_stringify", "Stringify to JSON", "json_stringify(value, indent?)", _json_stringify, "data"),
-        BuiltinFunction("json_load", "Load JSON from file", "json_load(path)", _json_load, "data"),
-        BuiltinFunction("json_save", "Save JSON to file", "json_save(path, value, indent?)", _json_save, "data"),
 
-        # Data HTML operations
-        BuiltinFunction("html_parse", "Parse HTML", "html_parse(text)", _html_parse, "data"),
-        BuiltinFunction("html_text", "Extract HTML text", "html_text(html)", _html_text, "data"),
-        BuiltinFunction("html_links", "Extract HTML links", "html_links(html)", _html_links, "data"),
-        BuiltinFunction("html_select", "CSS select elements", "html_select(html, selector)", _html_select, "data"),
-
-        # Data Markdown operations
-        BuiltinFunction("markdown_to_html", "Convert Markdown to HTML", "markdown_to_html(text)", _markdown_to_html, "data"),
-        BuiltinFunction("markdown_extract_headings", "Extract Markdown headings", "markdown_extract_headings(text)", _markdown_extract_headings, "data"),
-        BuiltinFunction("markdown_parse", "Parse Markdown to blocks", "markdown_parse(text)", _markdown_parse, "data"),
-
-        # Data CSV operations
-        BuiltinFunction("csv_parse", "Parse CSV", "csv_parse(text, delimiter?)", _csv_parse, "data"),
-        BuiltinFunction("csv_stringify", "Stringify to CSV", "csv_stringify(rows, delimiter?)", _csv_stringify, "data"),
-        BuiltinFunction("csv_load", "Load CSV from file", "csv_load(path, delimiter?)", _csv_load, "data"),
-        BuiltinFunction("csv_save", "Save CSV to file", "csv_save(path, rows, delimiter?)", _csv_save, "data"),
-
-        # Collection list operations
-        BuiltinFunction("map", "Map function over list", "map(lst, fn)", _map, "collection"),
-        BuiltinFunction("filter", "Filter list by predicate", "filter(lst, fn)", _filter, "collection"),
-        BuiltinFunction("reduce", "Reduce list to value", "reduce(lst, fn, initial?)", _reduce, "collection"),
-        BuiltinFunction("find_if", "Find element by predicate", "find_if(lst, fn)", _find_if, "collection"),
-        BuiltinFunction("every", "Check all elements", "every(lst, fn)", _every, "collection"),
-        BuiltinFunction("some", "Check any element", "some(lst, fn)", _some, "collection"),
-        BuiltinFunction("sort", "Sort list", "sort(lst, compare?)", _sort, "collection"),
-        BuiltinFunction("unique", "Remove duplicates", "unique(lst)", _unique, "collection"),
-        BuiltinFunction("flatten", "Flatten nested lists", "flatten(lst)", _flatten, "collection"),
-        BuiltinFunction("chunk", "Split into chunks", "chunk(lst, size)", _chunk, "collection"),
-        BuiltinFunction("zip", "Zip lists", "zip(*lists)", _zip, "collection"),
-
-        # Collection dict operations
-        BuiltinFunction("keys", "Get dict keys", "keys(dict)", _keys, "collection"),
-        BuiltinFunction("values", "Get dict values", "values(dict)", _values, "collection"),
-        BuiltinFunction("entries", "Get dict entries", "entries(dict)", _entries, "collection"),
-        BuiltinFunction("merge", "Merge dicts", "merge(*dicts)", _merge, "collection"),
-        BuiltinFunction("pick", "Pick dict keys", "pick(dict, keys)", _pick, "collection"),
-        BuiltinFunction("omit", "Omit dict keys", "omit(dict, keys)", _omit, "collection"),
-
-        # Collection set operations
-        BuiltinFunction("make_set", "Create set", "make_set(items)", _make_set, "collection"),
-        BuiltinFunction("set_union", "Set union", "set_union(s1, s2)", _set_union, "collection"),
-        BuiltinFunction("set_intersection", "Set intersection", "set_intersection(s1, s2)", _set_intersection, "collection"),
-        BuiltinFunction("set_difference", "Set difference", "set_difference(s1, s2)", _set_difference, "collection"),
-        BuiltinFunction("set_has", "Check set membership", "set_has(set, item)", _set_has, "collection"),
-
-        # Time operations
-        BuiltinFunction("now", "Current datetime", "now()", _now, "time"),
-        BuiltinFunction("time", "Unix timestamp", "time()", _time_func, "time"),
-        BuiltinFunction("sleep", "Pause execution", "sleep(seconds)", _sleep, "time"),
-        BuiltinFunction("date", "Create/get date", "date(year?, month?, day?)", _date, "time"),
-        BuiltinFunction("datetime", "Create/get datetime", "datetime(year?, month?, day?, hour?, minute?, second?)", _datetime, "time"),
-        BuiltinFunction("date_format", "Format date", "date_format(date_str, format_str)", _date_format, "time"),
-        BuiltinFunction("date_parse", "Parse date", "date_parse(date_str, format_str)", _date_parse, "time"),
-        BuiltinFunction("date_add", "Add to date", "date_add(date_str, days?, hours?, minutes?, seconds?)", _date_add, "time"),
-        BuiltinFunction("date_diff", "Date difference", "date_diff(date1, date2, unit?)", _date_diff, "time"),
-        BuiltinFunction("date_year", "Extract year", "date_year(date_str)", _date_year, "time"),
-        BuiltinFunction("date_month", "Extract month", "date_month(date_str)", _date_month, "time"),
-        BuiltinFunction("date_day", "Extract day", "date_day(date_str)", _date_day, "time"),
-        BuiltinFunction("date_weekday", "Day of week", "date_weekday(date_str)", _date_weekday, "time"),
-        # Stopwatch
-        BuiltinFunction("stopwatch_start", "Start stopwatch", "stopwatch_start()", _stopwatch_start, "time"),
-        BuiltinFunction("stopwatch_elapsed", "Get elapsed time", "stopwatch_elapsed(start_time)", _stopwatch_elapsed, "time"),
-        BuiltinFunction("stopwatch_lap", "Get lap time", "stopwatch_lap(start_time)", _stopwatch_lap, "time"),
-
+def _register_math() -> list[BuiltinFunction]:
+    """Register Math built-in functions."""
+    return [
+        # Math
+        BuiltinFunction("round", "Round number", "round(value, ndigits?)", _round, "math"),
+        BuiltinFunction("sqrt", "Square root", "sqrt(value)", _sqrt, "math"),
+        BuiltinFunction("floor", "Floor value", "floor(value)", _floor, "math"),
+        BuiltinFunction("ceil", "Ceiling value", "ceil(value)", _ceil, "math"),
         # Math statistics operations
         BuiltinFunction("mean", "Arithmetic mean", "mean(numbers)", _mean, "math"),
         BuiltinFunction("median", "Median value", "median(numbers)", _median, "math"),
@@ -1004,7 +915,152 @@ def _register_builtins() -> None:
         BuiltinFunction("log2", "Base-2 logarithm", "log2(x)", _log2, "math"),
         BuiltinFunction("log10", "Base-10 logarithm", "log10(x)", _log10, "math"),
         BuiltinFunction("exp", "Exponential (e^x)", "exp(x)", _exp, "math"),
+    ]
 
+
+def _register_io() -> list[BuiltinFunction]:
+    """Register IO built-in functions."""
+    return [
+        BuiltinFunction("write_file", "Write to file", "write_file(path, content)", _write_file, "io"),
+        BuiltinFunction("append_file", "Append to file", "append_file(path, content)", _append_file, "io"),
+        BuiltinFunction("mkdir", "Create directory", "mkdir(path)", _mkdir, "io"),
+        BuiltinFunction("mkdir_p", "Create directory tree", "mkdir_p(path)", _mkdir_p, "io"),
+        # Stream output
+        BuiltinFunction("stream_print", "Print without newline", "stream_print(text)", _stream_print, "io"),
+        BuiltinFunction("stream_clear", "Clear current line", "stream_clear()", _stream_clear, "io"),
+        BuiltinFunction("progress_bar", "Display progress bar", "progress_bar(current, total, width?)", _progress_bar, "io"),
+        BuiltinFunction("stream_cursor_up", "Move cursor up", "stream_cursor_up(n?)", _stream_cursor_up, "io"),
+        BuiltinFunction("stream_cursor_down", "Move cursor down", "stream_cursor_down(n?)", _stream_cursor_down, "io"),
+    ]
+
+
+def _register_path() -> list[BuiltinFunction]:
+    """Register Path built-in functions."""
+    return [
+        # Path operations
+        BuiltinFunction("path_join", "Join path components", "path_join(*parts)", _path_join, "path"),
+        BuiltinFunction("path_dirname", "Directory name", "path_dirname(path)", _path_dirname, "path"),
+        BuiltinFunction("path_basename", "Base name", "path_basename(path)", _path_basename, "path"),
+        BuiltinFunction("path_exists", "Check if path exists", "path_exists(path)", _path_exists, "path"),
+        BuiltinFunction("path_is_file", "Check if path is file", "path_is_file(path)", _path_is_file, "path"),
+        BuiltinFunction("path_is_dir", "Check if path is directory", "path_is_dir(path)", _path_is_dir, "path"),
+    ]
+
+
+def _register_network() -> list[BuiltinFunction]:
+    """Register Network built-in functions."""
+    return [
+        # Network operations (imported from network module)
+        BuiltinFunction("http_get", "HTTP GET request", "http_get(url, headers?)", _http_get, "network"),
+        BuiltinFunction("http_post", "HTTP POST request", "http_post(url, data?, headers?)", _http_post, "network"),
+        BuiltinFunction("http_put", "HTTP PUT request", "http_put(url, data?, headers?)", _http_put, "network"),
+        BuiltinFunction("http_delete", "HTTP DELETE request", "http_delete(url, headers?)", _http_delete, "network"),
+        BuiltinFunction("http_download", "Download file from URL", "http_download(url, path)", _http_download, "network"),
+        BuiltinFunction("url_parse", "Parse URL", "url_parse(url)", _url_parse, "network"),
+        BuiltinFunction("url_build", "Build URL", "url_build(scheme, host, path?, query?)", _url_build, "network"),
+        BuiltinFunction("url_encode", "URL encode", "url_encode(s)", _url_encode, "network"),
+        BuiltinFunction("url_decode", "URL decode", "url_decode(s)", _url_decode, "network"),
+    ]
+
+
+def _register_data() -> list[BuiltinFunction]:
+    """Register Data built-in functions."""
+    return [
+        # Data JSON operations
+        BuiltinFunction("json_parse", "Parse JSON", "json_parse(text)", _json_parse, "data"),
+        BuiltinFunction("json_stringify", "Stringify to JSON", "json_stringify(value, indent?)", _json_stringify, "data"),
+        BuiltinFunction("json_load", "Load JSON from file", "json_load(path)", _json_load, "data"),
+        BuiltinFunction("json_save", "Save JSON to file", "json_save(path, value, indent?)", _json_save, "data"),
+        # Data HTML operations
+        BuiltinFunction("html_parse", "Parse HTML", "html_parse(text)", _html_parse, "data"),
+        BuiltinFunction("html_text", "Extract HTML text", "html_text(html)", _html_text, "data"),
+        BuiltinFunction("html_links", "Extract HTML links", "html_links(html)", _html_links, "data"),
+        BuiltinFunction("html_select", "CSS select elements", "html_select(html, selector)", _html_select, "data"),
+        # Data Markdown operations
+        BuiltinFunction("markdown_to_html", "Convert Markdown to HTML", "markdown_to_html(text)", _markdown_to_html, "data"),
+        BuiltinFunction("markdown_extract_headings", "Extract Markdown headings", "markdown_extract_headings(text)", _markdown_extract_headings, "data"),
+        BuiltinFunction("markdown_parse", "Parse Markdown to blocks", "markdown_parse(text)", _markdown_parse, "data"),
+        # Data CSV operations
+        BuiltinFunction("csv_parse", "Parse CSV", "csv_parse(text, delimiter?)", _csv_parse, "data"),
+        BuiltinFunction("csv_stringify", "Stringify to CSV", "csv_stringify(rows, delimiter?)", _csv_stringify, "data"),
+        BuiltinFunction("csv_load", "Load CSV from file", "csv_load(path, delimiter?)", _csv_load, "data"),
+        BuiltinFunction("csv_save", "Save CSV to file", "csv_save(path, rows, delimiter?)", _csv_save, "data"),
+        # Data formats YAML operations
+        BuiltinFunction("yaml_parse", "Parse YAML", "yaml_parse(text)", _yaml_parse, "data"),
+        BuiltinFunction("yaml_stringify", "Stringify to YAML", "yaml_stringify(value)", _yaml_stringify, "data"),
+        BuiltinFunction("yaml_load", "Load YAML from file", "yaml_load(path)", _yaml_load, "data"),
+        BuiltinFunction("yaml_save", "Save YAML to file", "yaml_save(path, value)", _yaml_save, "data"),
+        # Data formats TOML operations
+        BuiltinFunction("toml_parse", "Parse TOML", "toml_parse(text)", _toml_parse, "data"),
+        BuiltinFunction("toml_stringify", "Stringify to TOML", "toml_stringify(value)", _toml_stringify, "data"),
+        BuiltinFunction("toml_load", "Load TOML from file", "toml_load(path)", _toml_load, "data"),
+        BuiltinFunction("toml_save", "Save TOML to file", "toml_save(path, value)", _toml_save, "data"),
+        # Data formats XML operations
+        BuiltinFunction("xml_parse", "Parse XML", "xml_parse(text)", _xml_parse, "data"),
+        BuiltinFunction("xml_stringify", "Stringify to XML", "xml_stringify(value, root?)", _xml_stringify, "data"),
+        BuiltinFunction("xml_load", "Load XML from file", "xml_load(path)", _xml_load, "data"),
+        BuiltinFunction("xml_save", "Save XML to file", "xml_save(path, value, root?)", _xml_save, "data"),
+    ]
+
+
+def _register_collection() -> list[BuiltinFunction]:
+    """Register Collection built-in functions."""
+    return [
+        # Collection list operations
+        BuiltinFunction("map", "Map function over list", "map(lst, fn)", _map, "collection"),
+        BuiltinFunction("filter", "Filter list by predicate", "filter(lst, fn)", _filter, "collection"),
+        BuiltinFunction("reduce", "Reduce list to value", "reduce(lst, fn, initial?)", _reduce, "collection"),
+        BuiltinFunction("find_if", "Find element by predicate", "find_if(lst, fn)", _find_if, "collection"),
+        BuiltinFunction("every", "Check all elements", "every(lst, fn)", _every, "collection"),
+        BuiltinFunction("some", "Check any element", "some(lst, fn)", _some, "collection"),
+        BuiltinFunction("sort", "Sort list", "sort(lst, compare?)", _sort, "collection"),
+        BuiltinFunction("unique", "Remove duplicates", "unique(lst)", _unique, "collection"),
+        BuiltinFunction("flatten", "Flatten nested lists", "flatten(lst)", _flatten, "collection"),
+        BuiltinFunction("chunk", "Split into chunks", "chunk(lst, size)", _chunk, "collection"),
+        BuiltinFunction("zip", "Zip lists", "zip(*lists)", _zip, "collection"),
+        # Collection dict operations
+        BuiltinFunction("keys", "Get dict keys", "keys(dict)", _keys, "collection"),
+        BuiltinFunction("values", "Get dict values", "values(dict)", _values, "collection"),
+        BuiltinFunction("entries", "Get dict entries", "entries(dict)", _entries, "collection"),
+        BuiltinFunction("merge", "Merge dicts", "merge(*dicts)", _merge, "collection"),
+        BuiltinFunction("pick", "Pick dict keys", "pick(dict, keys)", _pick, "collection"),
+        BuiltinFunction("omit", "Omit dict keys", "omit(dict, keys)", _omit, "collection"),
+        # Collection set operations
+        BuiltinFunction("make_set", "Create set", "make_set(items)", _make_set, "collection"),
+        BuiltinFunction("set_union", "Set union", "set_union(s1, s2)", _set_union, "collection"),
+        BuiltinFunction("set_intersection", "Set intersection", "set_intersection(s1, s2)", _set_intersection, "collection"),
+        BuiltinFunction("set_difference", "Set difference", "set_difference(s1, s2)", _set_difference, "collection"),
+        BuiltinFunction("set_has", "Check set membership", "set_has(set, item)", _set_has, "collection"),
+    ]
+
+
+def _register_time() -> list[BuiltinFunction]:
+    """Register Time built-in functions."""
+    return [
+        # Time operations
+        BuiltinFunction("now", "Current datetime", "now()", _now, "time"),
+        BuiltinFunction("time", "Unix timestamp", "time()", _time_func, "time"),
+        BuiltinFunction("sleep", "Pause execution", "sleep(seconds)", _sleep, "time"),
+        BuiltinFunction("date", "Create/get date", "date(year?, month?, day?)", _date, "time"),
+        BuiltinFunction("datetime", "Create/get datetime", "datetime(year?, month?, day?, hour?, minute?, second?)", _datetime, "time"),
+        BuiltinFunction("date_format", "Format date", "date_format(date_str, format_str)", _date_format, "time"),
+        BuiltinFunction("date_parse", "Parse date", "date_parse(date_str, format_str)", _date_parse, "time"),
+        BuiltinFunction("date_add", "Add to date", "date_add(date_str, days?, hours?, minutes?, seconds?)", _date_add, "time"),
+        BuiltinFunction("date_diff", "Date difference", "date_diff(date1, date2, unit?)", _date_diff, "time"),
+        BuiltinFunction("date_year", "Extract year", "date_year(date_str)", _date_year, "time"),
+        BuiltinFunction("date_month", "Extract month", "date_month(date_str)", _date_month, "time"),
+        BuiltinFunction("date_day", "Extract day", "date_day(date_str)", _date_day, "time"),
+        BuiltinFunction("date_weekday", "Day of week", "date_weekday(date_str)", _date_weekday, "time"),
+        # Stopwatch
+        BuiltinFunction("stopwatch_start", "Start stopwatch", "stopwatch_start()", _stopwatch_start, "time"),
+        BuiltinFunction("stopwatch_elapsed", "Get elapsed time", "stopwatch_elapsed(start_time)", _stopwatch_elapsed, "time"),
+        BuiltinFunction("stopwatch_lap", "Get lap time", "stopwatch_lap(start_time)", _stopwatch_lap, "time"),
+    ]
+
+
+def _register_file() -> list[BuiltinFunction]:
+    """Register File built-in functions."""
+    return [
         # File advanced operations
         BuiltinFunction("file_size", "File size in bytes", "file_size(path)", _file_size, "file"),
         BuiltinFunction("file_modified", "File modification time", "file_modified(path)", _file_modified, "file"),
@@ -1018,24 +1074,26 @@ def _register_builtins() -> None:
         BuiltinFunction("temp_dir", "Create temp directory", "temp_dir(suffix?, prefix?, dir?)", _temp_dir, "file"),
         BuiltinFunction("glob_files", "Recursively find files matching glob pattern", "glob_files(path, pattern?)", _glob_files, "file"),
         BuiltinFunction("grep_files", "Search file contents for a pattern", "grep_files(path, pattern, regex?, case_sensitive?, max_results?)", _grep_files, "file"),
+    ]
 
+
+def _register_system() -> list[BuiltinFunction]:
+    """Register System built-in functions."""
+    return [
         # System environment operations
         BuiltinFunction("env_get", "Get environment variable", "env_get(key, default?)", _env_get, "system"),
         BuiltinFunction("env_set", "Set environment variable", "env_set(key, value)", _env_set, "system"),
         BuiltinFunction("env_list", "List all environment variables", "env_list()", _env_list, "system"),
         BuiltinFunction("env_delete", "Delete environment variable", "env_delete(key)", _env_delete, "system"),
-
         # System CLI argument operations
         BuiltinFunction("get_cli_args", "Get CLI arguments", "get_cli_args()", _get_cli_args, "system"),
         BuiltinFunction("parse_cli_args", "Parse CLI arguments", "parse_cli_args(spec?)", _parse_cli_args, "system"),
-
         # System process operations
         BuiltinFunction("exec", "Execute command", "exec(command, shell?, timeout?)", _exec, "system"),
         BuiltinFunction("exec_async", "Execute command asynchronously", "exec_async(command, shell?)", _exec_async, "system"),
         BuiltinFunction("pid", "Get current process ID", "pid()", _pid, "system"),
         BuiltinFunction("exit", "Exit program", "exit(code?)", _exit, "system"),
         BuiltinFunction("kill", "Send signal to process", "kill(pid, signal?)", _kill, "system"),
-
         # System information operations
         BuiltinFunction("platform", "Get OS name", "platform()", _platform, "system"),
         BuiltinFunction("hostname", "Get hostname", "hostname()", _hostname, "system"),
@@ -1043,7 +1101,6 @@ def _register_builtins() -> None:
         BuiltinFunction("python_version", "Get Python version", "python_version()", _python_version, "system"),
         BuiltinFunction("cpu_count", "Get CPU core count", "cpu_count()", _cpu_count, "system"),
         BuiltinFunction("memory_info", "Get memory information", "memory_info()", _memory_info, "system"),
-
         # System logging operations
         BuiltinFunction("log_debug", "Log debug message", "log_debug(message)", _log_debug, "system"),
         BuiltinFunction("log_info", "Log info message", "log_info(message)", _log_info, "system"),
@@ -1052,7 +1109,12 @@ def _register_builtins() -> None:
         BuiltinFunction("log_critical", "Log critical message", "log_critical(message)", _log_critical, "system"),
         BuiltinFunction("log_set_level", "Set logging level", "log_set_level(level)", _log_set_level, "system"),
         BuiltinFunction("log_to_file", "Set log output to file", "log_to_file(path)", _log_to_file, "system"),
+    ]
 
+
+def _register_crypto() -> list[BuiltinFunction]:
+    """Register Crypto built-in functions."""
+    return [
         # Crypto hash operations
         BuiltinFunction("md5", "Calculate MD5 hash", "md5(text)", _md5, "crypto"),
         BuiltinFunction("sha1", "Calculate SHA1 hash", "sha1(text)", _sha1, "crypto"),
@@ -1060,55 +1122,37 @@ def _register_builtins() -> None:
         BuiltinFunction("sha512", "Calculate SHA512 hash", "sha512(text)", _sha512, "crypto"),
         BuiltinFunction("hmac_sha256", "Calculate HMAC-SHA256", "hmac_sha256(key, message)", _hmac_sha256, "crypto"),
         BuiltinFunction("hash_file", "Calculate hash of file", "hash_file(path, algorithm?)", _hash_file, "crypto"),
-
         # Crypto random operations
         BuiltinFunction("random", "Generate random float", "random()", _random, "crypto"),
         BuiltinFunction("randint", "Generate random integer", "randint(min, max)", _randint, "crypto"),
         BuiltinFunction("choice", "Choose random item", "choice(items)", _choice, "crypto"),
         BuiltinFunction("shuffle", "Shuffle list randomly", "shuffle(items)", _shuffle, "crypto"),
         BuiltinFunction("sample", "Sample items randomly", "sample(items, k)", _sample, "crypto"),
-
         # Crypto UUID operations
         BuiltinFunction("uuid_generate", "Generate UUID", "uuid_generate()", _uuid_generate, "crypto"),
         BuiltinFunction("uuid_from_string", "Parse UUID from string", "uuid_from_string(s)", _uuid_from_string, "crypto"),
         BuiltinFunction("uuid_nil", "Return nil UUID", "uuid_nil()", _uuid_nil, "crypto"),
-
         # Crypto random bytes operations
         BuiltinFunction("random_bytes", "Generate random bytes as hex", "random_bytes(n)", _random_bytes, "crypto"),
         BuiltinFunction("random_hex", "Generate random hex string", "random_hex(n)", _random_hex, "crypto"),
         BuiltinFunction("random_base64", "Generate random base64 string", "random_base64(n)", _random_base64, "crypto"),
+    ]
 
-        # Data formats YAML operations
-        BuiltinFunction("yaml_parse", "Parse YAML", "yaml_parse(text)", _yaml_parse, "data"),
-        BuiltinFunction("yaml_stringify", "Stringify to YAML", "yaml_stringify(value)", _yaml_stringify, "data"),
-        BuiltinFunction("yaml_load", "Load YAML from file", "yaml_load(path)", _yaml_load, "data"),
-        BuiltinFunction("yaml_save", "Save YAML to file", "yaml_save(path, value)", _yaml_save, "data"),
 
-        # Data formats TOML operations
-        BuiltinFunction("toml_parse", "Parse TOML", "toml_parse(text)", _toml_parse, "data"),
-        BuiltinFunction("toml_stringify", "Stringify to TOML", "toml_stringify(value)", _toml_stringify, "data"),
-        BuiltinFunction("toml_load", "Load TOML from file", "toml_load(path)", _toml_load, "data"),
-        BuiltinFunction("toml_save", "Save TOML to file", "toml_save(path, value)", _toml_save, "data"),
-
-        # Data formats XML operations
-        BuiltinFunction("xml_parse", "Parse XML", "xml_parse(text)", _xml_parse, "data"),
-        BuiltinFunction("xml_stringify", "Stringify to XML", "xml_stringify(value, root?)", _xml_stringify, "data"),
-        BuiltinFunction("xml_load", "Load XML from file", "xml_load(path)", _xml_load, "data"),
-        BuiltinFunction("xml_save", "Save XML to file", "xml_save(path, value, root?)", _xml_save, "data"),
-
-        # Stream output
-        BuiltinFunction("stream_print", "Print without newline", "stream_print(text)", _stream_print, "io"),
-        BuiltinFunction("stream_clear", "Clear current line", "stream_clear()", _stream_clear, "io"),
-        BuiltinFunction("progress_bar", "Display progress bar", "progress_bar(current, total, width?)", _progress_bar, "io"),
-        BuiltinFunction("stream_cursor_up", "Move cursor up", "stream_cursor_up(n?)", _stream_cursor_up, "io"),
-        BuiltinFunction("stream_cursor_down", "Move cursor down", "stream_cursor_down(n?)", _stream_cursor_down, "io"),
-
+def _register_debug() -> list[BuiltinFunction]:
+    """Register Debug built-in functions."""
+    return [
         # Debug/observability (AI-native)
         BuiltinFunction("debug", "Output structured debug info", "debug(message, data?)", _debug, "debug"),
         BuiltinFunction("trace_on", "Enable execution tracing", "trace_on()", _trace_on, "debug"),
         BuiltinFunction("trace_off", "Disable execution tracing", "trace_off()", _trace_off, "debug"),
         BuiltinFunction("get_trace", "Get recent execution trace", "get_trace(n?)", _get_trace, "debug"),
+    ]
 
+
+def _register_test() -> list[BuiltinFunction]:
+    """Register Test built-in functions."""
+    return [
         # Test framework (TDD support)
         BuiltinFunction("describe", "Define a test suite", "describe(name, fn)", _describe, "test"),
         BuiltinFunction("it", "Define a test case", "it(name, fn)", _it, "test"),
@@ -1133,13 +1177,23 @@ def _register_builtins() -> None:
         BuiltinFunction("test_end_suite", "End current test suite", "test_end_suite()", _test_end_suite, "test"),
         BuiltinFunction("fail", "Explicitly fail a test", "fail(message?)", _fail, "test"),
         BuiltinFunction("set_test_timeout", "Set per-test timeout", "set_test_timeout(seconds)", _set_test_timeout, "test"),
+    ]
 
+
+def _register_quality() -> list[BuiltinFunction]:
+    """Register Quality built-in functions."""
+    return [
         # Quality assessment (7-dimension evaluation)
         BuiltinFunction("analyze_code", "Analyze code metrics", "analyze_code(source, filename?)", _analyze_code, "quality"),
         BuiltinFunction("check_security", "Check security issues", "check_security(source)", _check_security, "quality"),
         BuiltinFunction("quality_score", "Calculate quality score", "quality_score(source, file_path?)", _quality_score, "quality"),
         BuiltinFunction("quality_report", "Generate quality report", "quality_report(source, filename?)", _quality_report, "quality"),
+    ]
 
+
+def _register_tools() -> list[BuiltinFunction]:
+    """Register Tools built-in functions."""
+    return [
         # Tool wrappers (from helen.stdlib.tools)
         BuiltinFunction("web_search", "Search the web", "web_search(query, limit?)", _web_search, "tools"),
         BuiltinFunction("web_fetch", "Fetch web page content", "web_fetch(url)", _web_fetch, "tools"),
@@ -1147,7 +1201,12 @@ def _register_builtins() -> None:
         BuiltinFunction("calculate", "Evaluate math expression", "calculate(expression)", _calculate, "tools"),
         BuiltinFunction("patch_file", "Patch a file", "patch_file(path, old_string, new_string, replace_all?)", _patch_file, "tools"),
         BuiltinFunction("load_skill", "Load a skill by name", "load_skill(name)", _load_skill, "tools"),
+    ]
 
+
+def _register_context() -> list[BuiltinFunction]:
+    """Register Context built-in functions."""
+    return [
         # Context management (v1.15)
         BuiltinFunction("clear_context", "Clear conversation context", "clear_context()", _clear_context, "context"),
         BuiltinFunction("compress_context", "Compress conversation context", "compress_context(strategy?)", _compress_context, "context"),
@@ -1185,7 +1244,12 @@ def _register_builtins() -> None:
         # v1.19: Lifecycle hooks (P1)
         BuiltinFunction("on_compression", "Register callback for compression events", "on_compression(callback?)", _on_compression, "context"),
         BuiltinFunction("on_context_overflow", "Register callback for context overflow", "on_context_overflow(callback?)", _on_context_overflow, "context"),
+    ]
 
+
+def _register_transcript() -> list[BuiltinFunction]:
+    """Register Transcript built-in functions."""
+    return [
         # Transcript management (Phase 1 SSOT)
         BuiltinFunction("get_session_id", "Get current transcript session ID", "get_session_id()", _get_session_id, "transcript"),
         BuiltinFunction("list_sessions", "List all transcript sessions", "list_sessions()", _list_sessions, "transcript"),
@@ -1206,39 +1270,76 @@ def _register_builtins() -> None:
         BuiltinFunction("delete_session", "Permanently delete a session", "delete_session(session_id)", _delete_session, "transcript"),
         BuiltinFunction("delete_current_session", "Permanently delete current session", "delete_current_session(confirm?)", _delete_current_session, "transcript"),
         BuiltinFunction("cleanup_sessions", "Clean up old sessions", "cleanup_sessions(keep_count?, older_than_days?)", _cleanup_sessions, "transcript"),
+    ]
 
+
+def _register_media() -> list[BuiltinFunction]:
+    """Register Media built-in functions."""
+    return [
         # Media/multimodal functions (v1.17)
         BuiltinFunction("media", "Create media from file/URL", "media(source, type?)", _media, "media"),
         BuiltinFunction("media_base64", "Create media from base64 data", "media_base64(data, mime, type?)", _media_base64, "media"),
         BuiltinFunction("is_media", "Check if value is MediaPart", "is_media(value)", _is_media, "media"),
         BuiltinFunction("media_type", "Get media type", "media_type(value)", _media_type_fn, "media"),
-
         # Media format adapters (v1.17)
         BuiltinFunction("to_openai_parts", "Convert MediaParts to OpenAI content format", "to_openai_parts(parts)", _to_openai_parts, "media"),
         BuiltinFunction("to_claude_parts", "Convert MediaParts to Claude content format", "to_claude_parts(parts)", _to_claude_parts, "media"),
         BuiltinFunction("to_gemini_parts", "Convert MediaParts to Gemini content format", "to_gemini_parts(parts)", _to_gemini_parts, "media"),
-
         # Media utilities (v1.17)
         BuiltinFunction("media_to_base64", "Convert MediaPart content to base64 string", "media_to_base64(part)", _media_to_base64, "media"),
         BuiltinFunction("save_media", "Save MediaPart to file", "save_media(part, path?)", _save_media, "media"),
-
         # Media type predicates (v1.17)
         BuiltinFunction("is_image", "Check if MediaPart is an image", "is_image(value)", _is_image, "media"),
         BuiltinFunction("is_video", "Check if MediaPart is a video", "is_video(value)", _is_video, "media"),
         BuiltinFunction("is_audio", "Check if MediaPart is audio", "is_audio(value)", _is_audio, "media"),
+    ]
 
+
+def _register_concurrency() -> list[BuiltinFunction]:
+    """Register Concurrency built-in functions."""
+    return [
         # Mailbox utilities (v1.18: spawn support)
         BuiltinFunction("mailbox_select", "Receive first available message from multiple channels", "mailbox_select(channels, timeout?)", _mailbox_select, "concurrency"),
+    ]
 
+
+def _register_llm() -> list[BuiltinFunction]:
+    """Register LLM built-in functions."""
+    return [
         # LLM call control utilities (streaming interrupt Phase 5)
         BuiltinFunction("cancel_llm_call", "Cancel an in-flight streaming LLM call", "cancel_llm_call(call_id)", _cancel_llm_call, "llm"),
         BuiltinFunction("current_llm_call_id", "Get the current active streaming LLM call ID", "current_llm_call_id()", _current_llm_call_id, "llm"),
         BuiltinFunction("cancel_all_llm_calls", "Cancel all active streaming LLM calls", "cancel_all_llm_calls()", _cancel_all_llm_calls, "llm"),
     ]
 
-    for func in builtins:
-        stdlib.register(func)
 
+def _register_builtins() -> None:
+    """Register all built-in functions."""
+    for builtin_list in (
+        _register_core(),
+        _register_string(),
+        _register_math(),
+        _register_io(),
+        _register_path(),
+        _register_network(),
+        _register_data(),
+        _register_collection(),
+        _register_time(),
+        _register_file(),
+        _register_system(),
+        _register_crypto(),
+        _register_debug(),
+        _register_test(),
+        _register_quality(),
+        _register_tools(),
+        _register_context(),
+        _register_transcript(),
+        _register_media(),
+        _register_concurrency(),
+        _register_llm(),
+    ):
+        for func in builtin_list:
+            stdlib.register(func)
 
 # Auto-register on import
 _register_builtins()

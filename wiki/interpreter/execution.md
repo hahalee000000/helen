@@ -1,17 +1,32 @@
 # 执行引擎 (Interpreter)
 
-> 模块 M5 | `helen/interpreter/interpreter.py` + `environment.py` | 测试: `tests/execution/`
+> 模块 M5 | `helen/interpreter/` (Mixin 架构) | 测试: `tests/execution/`
 
 ---
 
 ## 概述
 
-Interpreter 是 AST 的第二个 visitor，负责**执行 Helen 程序**。
+Interpreter 是 AST 的第二个 visitor，负责**执行 Helen 程序**。采用 Mixin 架构，将不同职责拆分为独立模块：
 
 ```python
-class Interpreter(Visitor[object]):
+class Interpreter(LlmMixin, StreamingMixin, PatternMixin,
+                  ExceptionMixin, ImportMixin, Visitor[object]):
     """每个 visit 方法返回节点的计算值，或控制流 Sentinel。"""
 ```
+
+### Mixin 架构
+
+| 模块 | 职责 | 核心方法 |
+|------|------|----------|
+| `interpreter.py` | 核心执行引擎：变量/函数/控制流/Agent | `visit_program`, `_execute_stmts`, `_call_agent` |
+| `llm_mixin.py` | LLM 集成：act/if、工具构建、历史管理 | `visit_llm_act_expr`, `visit_llm_if_stmt` |
+| `pattern_mixin.py` | 模式匹配：match/case 语句和表达式 | `visit_match_stmt`, `visit_match_expr` |
+| `exception_mixin.py` | 异常处理：try/catch/throw/assert | `visit_try_stmt`, `visit_throw_stmt` |
+| `import_mixin.py` | 导入机制：多格式导入 (.helen/.py/.json等) | `visit_import_stmt`, `_create_module_object` |
+| `streaming_mixin.py` | 流式调用管理与取消 | `cancel_streaming_call`, `_register_streaming_call` |
+| `closure.py` | Closure 类 + 自由变量分析 | `Closure`, `_compute_free_variables` |
+| `readonly_view.py` | ReadOnlyView（agent 参数隔离） | `ReadOnlyView` |
+| `shared_store.py` | SharedStore（线程安全共享状态） | `SharedStore`, `SharedStoreMethod` |
 
 ### 构造函数
 

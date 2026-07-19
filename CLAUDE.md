@@ -46,7 +46,7 @@ Layer 1: Helen Core (pure language)
     → Parser (Pratt precedence + recursive descent)
     → AST (64 frozen dataclass nodes, Visitor pattern)
     → SemanticAnalyzer (two-pass for forward refs, SymbolTable, 14-type system)
-    → Interpreter (environment chain, sentinels for control flow)
+    → Interpreter (environment chain, sentinels for control flow, mixin-based architecture)
 
 Layer 2: Runtime (LLM integration)
   LLMRuntime (abstract) → HttpLLMRuntime (httpx connection pool, OpenAI-compatible API)
@@ -67,14 +67,20 @@ Layer 3: Toolchain
 helen/
 ├── core/          # lexer.py, parser.py, ast.py, tokens.py, errors.py, source_span.py
 ├── semantic/      # analyzer.py (two-pass semantic analysis)
-├── interpreter/   # interpreter.py, llm_mixin.py (LLM visitor methods), environment.py, exceptions.py
+├── interpreter/   # interpreter.py (core execution engine, ~2000 lines)
+│                  # llm_mixin.py (LLM visitor methods), environment.py, exceptions.py
+│                  # pattern_mixin.py (match/case), exception_mixin.py (try/catch)
+│                  # import_mixin.py (multi-format imports), streaming_mixin.py (streaming cancel)
+│                  # closure.py (Closure + free variable analysis), readonly_view.py (ReadOnlyView)
+│                  # shared_store.py (SharedStore + SharedStoreMethod, thread-safe)
 ├── runtime/       # llm_runtime.py, http_llm.py, tools.py, config.py, import_resolver.py
 │                  # prompt_builder.py (system prompt + skill index), history.py, observability.py
 │                  # fuzzy_match.py (9-strategy file patching)
 │                  # transcript_store.py (v1.16: SSOT, SQLiteBackend, JSONLBackend, LRU cache)
 │                  # session_manager.py (v1.16: session lifecycle, path management)
 │                  # channel.py (v1.18: Channel + ChannelEndpoint message queue)
-├── stdlib/        # 287 built-in functions (string, math, crypto, collections, test, quality, context, transcript, media, etc.)
+├── stdlib/        # 323 built-in functions (21 categories: core, string, math, crypto, etc.)
+│                  # Per-category register functions (_register_core, _register_string, etc.)
 │                  # locales/zh.py (287 Chinese aliases)
 │                  # mailbox.py (v1.18: mailbox_select for multi-channel select)
 ├── ffi/           # Python FFI for importing Python modules from Helen

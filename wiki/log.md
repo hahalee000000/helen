@@ -4,6 +4,44 @@
 
 ---
 
+## [2026-07-19] refactor | 代码架构重构 — interpreter.py 拆分 + stdlib 注册重构
+
+**操作**: 按 `reports/architecture-analysis-2026-07-19.md` 执行代码重构
+**触发**: interpreter.py 膨胀至 3258 行，需要拆分提高可维护性
+**状态**: ✅ 完成
+
+### Phase 1: 提取辅助类
+
+- `helen/interpreter/closure.py` — Closure 类 + 自由变量分析函数
+- `helen/interpreter/readonly_view.py` — ReadOnlyView（agent 参数隔离）
+- `helen/interpreter/shared_store.py` — SharedStore + SharedStoreMethod（线程安全共享状态）
+
+### Phase 2: 提取 Visitor Mixin
+
+- `helen/interpreter/pattern_mixin.py` — match/case 模式匹配（8 个方法）
+- `helen/interpreter/exception_mixin.py` — try/catch/throw/assert（6 个方法）
+- `helen/interpreter/import_mixin.py` — 多格式导入（5 个方法）
+- `helen/interpreter/streaming_mixin.py` — 流式调用管理（5 个方法 + _StreamingHandle）
+
+**interpreter.py**: 3258 → 1990 行 (**-39%**)
+
+### Phase 3: stdlib 注册重构
+
+将 `_register_builtins()` 的 436 行注册列表拆分为 21 个按类别的注册函数：
+`_register_core()`, `_register_string()`, `_register_math()`, ..., `_register_llm()`
+
+### 文档更新
+
+- `CLAUDE.md` — 更新 interpreter/ 目录结构和架构描述
+- `wiki/overview/architecture.md` — 更新 Mixin 架构图
+- `wiki/interpreter/execution.md` — 添加 Mixin 架构表格
+
+### 测试结果
+
+- 3048 tests passed, 5 skipped
+
+---
+
 ## [2026-07-18] bugfix | v1.23 — 修复 Invocation 上下文隔离 + 文档更新
 
 **操作**: 修复 v1.22 实现的 per-agent 上下文隔离 bug，更新相关文档
