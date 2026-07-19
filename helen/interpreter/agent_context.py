@@ -130,19 +130,49 @@ class AgentContextManager:
         self._last_cache_stats: CacheStats | None = None
 
         # Phase 1 SSOT: Mostly-append transcript storage with persistence
+        # v1.24: Lazy initialization — session directory is created only when
+        # the transcript store is first accessed (i.e., when the first message
+        # is actually written). This prevents empty session directories from
+        # accumulating during tests and spawn calls.
         self._session_id: str | None = None
         self._transcript_store = None
+        self._transcript_store_enabled = transcript_store_enabled
+        self._transcript_store_initialized = False
+        self._pending_session_id = session_id
         if transcript_store_enabled:
-            self._init_transcript_store(session_id)
+            # Don't call _init_transcript_store yet — defer to first access
+            pass
 
     @property
     def transcript_store(self):
-        """Access the transcript store (None if not enabled)."""
+        """Access the transcript store (None if not enabled).
+
+        v1.24: Lazy initialization — creates session directory only on first
+        access. This avoids creating empty session directories for interpreters
+        that never write transcript messages (tests, spawned agents, etc.).
+        """
+        # Use getattr for safety — some tests create AgentContextManager via
+        # __new__ which bypasses __init__ and doesn't set these attributes.
+        enabled = getattr(self, '_transcript_store_enabled', False)
+        initialized = getattr(self, '_transcript_store_initialized', True)
+        if enabled and not initialized:
+            self._transcript_store_initialized = True
+            self._init_transcript_store(getattr(self, '_pending_session_id', None))
         return self._transcript_store
 
     @property
     def session_id(self) -> str | None:
-        """Get the current transcript session ID (None if not enabled)."""
+        """Get the current transcript session ID (None if not enabled).
+
+        v1.24: Accessing session_id triggers lazy initialization so the
+        session directory is created on first reference (e.g., from
+        get_session_id() stdlib function).
+        """
+        enabled = getattr(self, '_transcript_store_enabled', False)
+        initialized = getattr(self, '_transcript_store_initialized', True)
+        if enabled and not initialized:
+            self._transcript_store_initialized = True
+            self._init_transcript_store(getattr(self, '_pending_session_id', None))
         return self._session_id
 
     def _init_transcript_store(self, session_id: str | None = None) -> None:

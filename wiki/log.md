@@ -4,6 +4,39 @@
 
 ---
 
+## [2026-07-19] bugfix | Session 目录懒初始化 — 防止空目录堆积
+
+**操作**: AgentContextManager 延迟创建 session 目录，清理历史空目录
+**触发**: 每次 `AgentContextManager.__new__()` 立即初始化 TranscriptStore，导致大量空 session 目录堆积（~6300 个）
+**状态**: ✅ 完成
+
+### 根因
+
+`AgentContextManager.__init__()` 在初始化时无条件调用 `_init_transcript_store()`，该方法立即创建目录。
+测试和内部代码中通过 `__new__()` 创建 Context 对象（跳过 `__init__`）时，不会创建目录。
+但在 REPL/脚本中每次调用 agent 时，会创建 `AgentContextManager` 并立即初始化 session 目录，
+即使 transcript 功能未启用或未写入任何内容。
+
+### 修复方案（懒初始化）
+
+**`helen/interpreter/agent_context.py`**:
+- `__init__` 不再调用 `_init_transcript_store()`，仅保存参数
+- `transcript_store` property 在首次访问时触发懒初始化
+- `session_id` property 在首次访问时触发懒初始化
+- 使用 `getattr()` 安全访问属性，兼容 `__new__()` 创建的对象（绕过 `__init__`）
+
+### 清理
+
+- 删除 `~/.helen/sessions/` 空目录（33 → 1）
+- 删除 `.helen/sessions/` 空目录（6325 → 563）
+- 共清理 ~5800 个空目录
+
+### 测试结果
+
+3027 passed, 1 skipped（1 个 streaming asyncio 测试为预先存在的兼容性问题）
+
+---
+
 ## [2026-07-19] feature | 技能引用系统优化 — list_skill_references + load_skill 增强
 
 **操作**: 增强技能引用文档加载机制
