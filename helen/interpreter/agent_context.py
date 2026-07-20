@@ -55,6 +55,78 @@ logger = logging.getLogger(__name__)
 # Valid compression strategies
 COMPRESSION_STRATEGIES = frozenset({"none", "graduated", "traditional"})
 
+# ── Tool name canonicalization (v1.23.2 fix) ───────────────────────────
+# Maps Chinese tool aliases to canonical English names so working memory
+# tracking works regardless of which name the LLM used. Built lazily from
+# stdlib zh.ALIASES to avoid hardcoding the mapping. Only tool-related
+# entries (the 11 Python tools) are kept to keep the lookup small.
+_PYTHON_TOOLS = frozenset({
+    "web_search", "web_fetch", "read_file", "write_file", "patch_file",
+    "shell_exec", "calculate", "find_files", "search_files",
+    "load_skill", "list_skill_references",
+})
+
+
+def _build_canonical_tool_name_map() -> dict[str, str]:
+    """Build Chinese alias → canonical English tool name mapping."""
+    mapping: dict[str, str] = {}
+    try:
+        from helen.stdlib.locales.zh import ALIASES
+        for zh_name, en_name in ALIASES.items():
+            if en_name in _PYTHON_TOOLS:
+                mapping[zh_name] = en_name
+    except Exception:
+        pass
+    return mapping
+
+
+# Lazy-initialized on first use to avoid import-time cost
+_CANONICAL_TOOL_NAME: dict[str, str] | None = None
+
+
+def _get_canonical_tool_name_map() -> dict[str, str]:
+    global _CANONICAL_TOOL_NAME
+    if _CANONICAL_TOOL_NAME is None:
+        _CANONICAL_TOOL_NAME = _build_canonical_tool_name_map()
+    return _CANONICAL_TOOL_NAME
+
+
+# Multilingual error keywords (v1.23.2 fix: replace naive "error" substring
+# check with a broader set covering English, Chinese, and common variants).
+_ERROR_KEYWORDS = (
+    # English
+    "error", "failed", "failure", "exception", "traceback",
+    "denied", "permission denied", "not found", "no such file",
+    "timeout", "timed out", "unreachable", "refused",
+    # Chinese
+    "失败", "出错", "异常", "错误", "拒绝", "超时",
+    "未找到", "不存在", "没有那个文件",
+)
+
+
+def _looks_like_error(text: str) -> bool:
+    """Heuristic: does the tool result look like an error message?
+
+    v1.23.2: Replaced naive `"error" in text.lower()` with multilingual
+    keyword matching. Still a heuristic — real errors are best caught via
+    exit_code, but this covers cases where exit_code is unavailable.
+    """
+    if not isinstance(text, str):
+        return False
+    lower = text.lower()
+    return any(kw in lower for kw in _ERROR_KEYWORDS)
+
+
+# Module-level shortcut so update_from_tool_call can use it without
+# repeated lazy-init lookups on the hot path.
+class _CanonicalToolNameProxy:
+    """Dict-like proxy that lazily initializes the canonical tool name map."""
+    def get(self, key: str, default: Any = None) -> Any:
+        return _get_canonical_tool_name_map().get(key, default)
+
+
+_CANONICAL_TOOL_NAME_PROXY = _CanonicalToolNameProxy()
+
 
 class AgentContextManager:
     """Manages agent context: working memory and compression.
@@ -348,13 +420,21 @@ class AgentContextManager:
         - Search results
 
         Args:
-            tool_name: Name of the tool (e.g., "read_file")
+            tool_name: Name of the tool (e.g., "read_file"); Chinese aliases
+                are auto-translated to canonical English names.
             tool_args: Tool arguments
             tool_result: Tool result (string or dict)
-            exit_code: Exit code for shell commands (if available)
+            exit_code: Exit code for shell commands (if available). Also
+                auto-extracted from JSON-shaped tool_result when absent.
         """
         if not self.working_memory_enabled:
             return
+
+        # v1.23.2 fix: Translate Chinese tool aliases to canonical English
+        # names so working memory tracking works regardless of which name
+        # the LLM used. Handles custom Helen functions declared with Chinese
+        # names (e.g. `fn 读文件(...)` exposed as tools = ["读文件"]).
+        tool_name = _CANONICAL_TOOL_NAME_PROXY.get(tool_name, tool_name)
 
         # Defensive: tool_args may arrive as a JSON string (e.g. from raw API
         # tool_calls) or as a dict (tests / programmatic callers). Normalize
@@ -387,10 +467,22 @@ class AgentContextManager:
 
         elif tool_name == "shell_exec":
             command = tool_args.get("command", "")
+
+            # v1.23.2 fix: exit_code may be missing from http_llm's
+            # tool_calls_log. Try to extract from JSON-shaped tool_result.
+            if exit_code is None and isinstance(tool_result, str):
+                try:
+                    import json as _json
+                    parsed = _json.loads(tool_result)
+                    if isinstance(parsed, dict) and "exit_code" in parsed:
+                        exit_code = int(parsed["exit_code"])
+                except (ValueError, TypeError):
+                    pass
+
             if exit_code is not None and exit_code != 0:
                 error_msg = str(tool_result)[:200] if tool_result else "Unknown error"
                 self.working_memory._add_error(command, error_msg)
-            elif isinstance(tool_result, str) and "error" in tool_result.lower():
+            elif isinstance(tool_result, str) and _looks_like_error(tool_result):
                 error_msg = tool_result[:200]
                 self.working_memory._add_error(command, error_msg)
 

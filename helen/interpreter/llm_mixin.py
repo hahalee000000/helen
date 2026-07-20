@@ -1340,6 +1340,20 @@ class LlmMixin:
         # Phase 7: Use AgentContextManager if available
         agent_ctx = getattr(self, '_agent_context', None)
         if agent_ctx is not None:
+            # v1.23.2 fix: Auto-populate task_description on first LLM call
+            # of this invocation. working_memory's highest-priority field is
+            # otherwise never set automatically, leaving LLM blind to the
+            # current task. Use the current user prompt (truncated) as the
+            # task description. Don't override if user set it manually via
+            # working_memory_set("task", ...).
+            if agent_ctx.working_memory_enabled:
+                wm = agent_ctx.working_memory
+                if not wm.task_description and current_prompt:
+                    truncated = current_prompt[:300]
+                    if len(current_prompt) > 300:
+                        truncated += "..."
+                    wm.task_description = truncated
+
             max_tokens = self._history_manager.MAX_TOKENS
             return agent_ctx.prepare_context(
                 system_prompt=system_prompt,

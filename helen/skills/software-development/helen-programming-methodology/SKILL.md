@@ -246,14 +246,20 @@ main {
 }
 ```
 
-**模式 B：working_memory 显式保存（适用于跨 agent 数据交换）**
+**模式 B：SharedStore 显式保存（适用于跨 agent 数据交换）**
+
+> ⚠️ 注意：`working_memory_set(key, value)` 只接受 5 个固定 key（`task` / `active_files` / `decisions` / `todos` / `errors`），**不是通用 key-value 存储**。跨 agent 的结构化数据交换应使用 `shared store`。
 
 ```helen
+shared store AnalysisStore {
+    results: dict = {}
+}
+
 agent Analyzer(file: str, ch: Channel) {
     main {
         let result = llm act "分析文件 " + file + " 的 bug"
-        working_memory_set("analysis_" + file, result)  // 显式保存
-        ch.send({"status": "ok", "key": "analysis_" + file})
+        AnalysisStore.results[file] = result   // 显式保存到 SharedStore
+        ch.send({"status": "ok", "file": file})
     }
 }
 
@@ -261,11 +267,13 @@ main {
     let m = spawn Analyzer("main.py")
     let msg = m.receive()
     if msg["status"] == "ok" {
-        let data = working_memory_get(msg["key"])  // 显式取回
+        let data = AnalysisStore.results[msg["file"]]  // 显式取回
         print("分析结果: " + data)
     }
 }
 ```
+
+> 💡 `working_memory_set` 适合**自动跟踪**（LLM 看到的"当前任务/活动文件/最近决策"），`SharedStore` 适合**跨 agent 结构化数据交换**。
 
 **模式 C：持久化 session_id（适用于跨进程恢复）**
 
@@ -293,7 +301,7 @@ main {
 | 场景 | 推荐模式 | 原因 |
 |------|---------|------|
 | spawn 子 agent 需要父 transcript | **A**: 传 parent_sid + `resume_session` | 同一进程内直接接力，开销最小 |
-| agent 产出需要被其他 agent 看到 | **B**: `working_memory_set` + Channel 传递 | 结构化数据，避免 transcript 膨胀 |
+| agent 产出需要被其他 agent 看到 | **B**: `shared store` + Channel 传递 | 结构化数据，避免 transcript 膨胀 |
 | 跨进程恢复对话（程序重启） | **C**: 持久化 session_id + `resume_session` | 跨 Interpreter 生命周期 |
 | 长期知识沉淀（跨项目） | `export_transcript` + 外部知识库 | transcript 是运行时的，知识是持久的 |
 | 多 agent 并行写同一份上下文 | SharedStore + 显式同步 | Channel 是 1:1，SharedStore 支持多写者 |
@@ -304,7 +312,8 @@ main {
 >
 > - spawn 出去的 agent 默认拿不到父上下文 → 必须传参 + `resume_session`
 > - 重启程序后 transcript 不会自动接上 → 必须持久化 session_id
-> - 关键中间结果 → `working_memory_set` 显式保存，别指望 LLM "记得"
+> - 跨 agent 结构化数据 → `shared store` + Channel 传递，别指望自动共享
+> - `working_memory_set` 仅用于**5 个固定字段**（`task` / `active_files` / `decisions` / `todos` / `errors`），由 Helen 自动跟踪工具调用；**不是通用 KV 存储**
 
 #### 📚 关联
 

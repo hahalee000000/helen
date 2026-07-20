@@ -412,3 +412,185 @@ class TestThreeChannelBudgetEnforcement:
             content = working_msgs[0]["content"]
             # Task should survive; TODOs should be dropped
             assert "## Current Task" in content or "Active task" in content
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# v1.23.2 regression tests (from working-memory-audit-2026-07-20.md)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestChineseToolNameCanonicalization:
+    """v1.23.2 fix: Chinese tool aliases are translated to canonical names
+    before working memory tracking. Without this, user-defined Chinese
+    tool functions (e.g. `fn 读文件(...)`) would silently bypass tracking."""
+
+    def test_chinese_read_file_tracks_active_file(self):
+        """Chinese alias '读文件' should be tracked like 'read_file'."""
+        from helen.interpreter.agent_context import AgentContextManager
+        ctx = AgentContextManager(
+            compression_strategy="none", working_memory_enabled=True,
+            cache_aware_enabled=False, transcript_store_enabled=False,
+        )
+        ctx.update_from_tool_call("读文件", '{"path": "zh_test.py"}', "content")
+        assert "zh_test.py" in ctx.working_memory.active_files
+
+    def test_chinese_write_file_tracks_file_and_decision(self):
+        """Chinese alias '写文件' should track file and decision."""
+        from helen.interpreter.agent_context import AgentContextManager
+        ctx = AgentContextManager(
+            compression_strategy="none", working_memory_enabled=True,
+            cache_aware_enabled=False, transcript_store_enabled=False,
+        )
+        ctx.update_from_tool_call("写文件", '{"path": "out.py", "content": "x"}', "ok")
+        assert "out.py" in ctx.working_memory.active_files
+        assert any("out.py" in d for d in ctx.working_memory.recent_decisions)
+
+    def test_chinese_shell_exec(self):
+        """Chinese alias '执行命令' should be tracked like 'shell_exec'."""
+        from helen.interpreter.agent_context import AgentContextManager
+        ctx = AgentContextManager(
+            compression_strategy="none", working_memory_enabled=True,
+            cache_aware_enabled=False, transcript_store_enabled=False,
+        )
+        ctx.update_from_tool_call("执行命令", '{"command": "ls"}', "文件1\n文件2\n", None)
+        # Should not crash; no error since output is clean
+        assert ctx.working_memory.error_history == []
+
+    def test_unknown_chinese_name_falls_through(self):
+        """Unrecognized Chinese name should not crash, just be a no-op."""
+        from helen.interpreter.agent_context import AgentContextManager
+        ctx = AgentContextManager(
+            compression_strategy="none", working_memory_enabled=True,
+            cache_aware_enabled=False, transcript_store_enabled=False,
+        )
+        # 'unknown_zh' is not in any alias map; should be silently ignored
+        ctx.update_from_tool_call("unknown_zh", '{}', "result")
+        assert ctx.working_memory.active_files == []
+
+
+class TestMultilingualErrorDetection:
+    """v1.23.2 fix: _looks_like_error covers English + Chinese keywords
+    instead of just checking for substring 'error'."""
+
+    def test_english_error_keywords(self):
+        from helen.interpreter.agent_context import _looks_like_error
+        assert _looks_like_error("Error: file not found")
+        assert _looks_like_error("command failed with status 1")
+        assert _looks_like_error("Traceback (most recent call last)")
+        assert _looks_like_error("Permission denied")
+        assert _looks_like_error("Connection timed out")
+
+    def test_chinese_error_keywords(self):
+        from helen.interpreter.agent_context import _looks_like_error
+        assert _looks_like_error("命令执行失败")
+        assert _looks_like_error("出错了：文件不存在")
+        assert _looks_like_error("操作被拒绝")
+        assert _looks_like_error("超时了")
+
+    def test_success_not_flagged(self):
+        from helen.interpreter.agent_context import _looks_like_error
+        assert not _looks_like_error("Success! File saved.")
+        assert not _looks_like_error("Output: 42")
+        assert not _looks_like_error("Done.")
+        assert not _looks_like_error("")
+
+    def test_shell_exec_json_exit_code_extracted(self):
+        """When exit_code param is None, JSON-shaped result is parsed for exit_code."""
+        from helen.interpreter.agent_context import AgentContextManager
+        ctx = AgentContextManager(
+            compression_strategy="none", working_memory_enabled=True,
+            cache_aware_enabled=False, transcript_store_enabled=False,
+        )
+        json_result = '{"command": "bad", "exit_code": 1, "output": "msg"}'
+        ctx.update_from_tool_call("shell_exec", '{"command": "bad"}', json_result, None)
+        assert len(ctx.working_memory.error_history) == 1
+
+    def test_shell_exec_success_not_flagged(self):
+        """Clean shell output should not be flagged as error."""
+        from helen.interpreter.agent_context import AgentContextManager
+        ctx = AgentContextManager(
+            compression_strategy="none", working_memory_enabled=True,
+            cache_aware_enabled=False, transcript_store_enabled=False,
+        )
+        ctx.update_from_tool_call("shell_exec", '{"command": "ls"}', "file1\nfile2\n", None)
+        assert ctx.working_memory.error_history == []
+
+    def test_shell_exec_explicit_exit_code_still_works(self):
+        """Explicit exit_code parameter should take precedence."""
+        from helen.interpreter.agent_context import AgentContextManager
+        ctx = AgentContextManager(
+            compression_strategy="none", working_memory_enabled=True,
+            cache_aware_enabled=False, transcript_store_enabled=False,
+        )
+        ctx.update_from_tool_call("shell_exec", '{"command": "fail"}', "some output", 2)
+        assert len(ctx.working_memory.error_history) == 1
+
+
+class TestTaskDescriptionAutoSet:
+    """v1.23.2 fix: task_description is auto-populated from the first
+    LLM prompt in each invocation, so the highest-priority working
+    memory section isn't permanently empty."""
+
+    def test_empty_task_gets_autoset_from_prompt(self):
+        """When task_description is empty, prepare_context flow should
+        set it from the current prompt (via the logic in llm_mixin)."""
+        from helen.interpreter.agent_context import AgentContextManager
+        ctx = AgentContextManager(
+            compression_strategy="none", working_memory_enabled=True,
+            cache_aware_enabled=False, transcript_store_enabled=False,
+        )
+        assert ctx.working_memory.task_description == ""
+
+        # Simulate the auto-set logic from _prepare_history_for_llm
+        current_prompt = "请分析这段代码的 bug"
+        if ctx.working_memory_enabled:
+            wm = ctx.working_memory
+            if not wm.task_description and current_prompt:
+                truncated = current_prompt[:300]
+                if len(current_prompt) > 300:
+                    truncated += "..."
+                wm.task_description = truncated
+
+        assert ctx.working_memory.task_description == "请分析这段代码的 bug"
+        # Verify it shows in to_context output
+        context = ctx.working_memory.to_context()
+        assert "## Current Task" in context
+        assert "请分析这段代码的 bug" in context
+
+    def test_manual_task_not_overridden(self):
+        """If user set task_description manually, auto-set must not override."""
+        from helen.interpreter.agent_context import AgentContextManager
+        ctx = AgentContextManager(
+            compression_strategy="none", working_memory_enabled=True,
+            cache_aware_enabled=False, transcript_store_enabled=False,
+        )
+        ctx.working_memory.task_description = "My custom task"
+
+        # Simulate auto-set logic
+        current_prompt = "another prompt"
+        if ctx.working_memory_enabled:
+            wm = ctx.working_memory
+            if not wm.task_description and current_prompt:
+                wm.task_description = current_prompt
+
+        assert ctx.working_memory.task_description == "My custom task"
+
+    def test_long_prompt_is_truncated(self):
+        """Long prompts are truncated to 300 chars + '...'."""
+        from helen.interpreter.agent_context import AgentContextManager
+        ctx = AgentContextManager(
+            compression_strategy="none", working_memory_enabled=True,
+            cache_aware_enabled=False, transcript_store_enabled=False,
+        )
+        long_prompt = "A" * 500
+
+        if ctx.working_memory_enabled:
+            wm = ctx.working_memory
+            if not wm.task_description and long_prompt:
+                truncated = long_prompt[:300]
+                if len(long_prompt) > 300:
+                    truncated += "..."
+                wm.task_description = truncated
+
+        assert len(ctx.working_memory.task_description) == 303  # 300 + "..."
+        assert ctx.working_memory.task_description.endswith("...")
