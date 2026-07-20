@@ -163,6 +163,12 @@ helen/
   - **REPL Commands**: `:transcript [--full|--audit]`, `:sessions`, `:session_id`
   - **Stdlib Functions**: `get_session_id()`, `list_sessions()`, `replay_transcript()`, `export_transcript()`, `get_compression_audit()`, `get_session_dir()`, `set_session_dir()`, `delete_session(id)`, `delete_current_session(confirm?)`, `cleanup_sessions(keep_count?, older_than_days?)`
   - **Session Scope (v1.20)**: transcripts 默认按作用域存储——项目目录 `.helen/sessions/`（检测到 `.helen/`、`helen.yaml`、`helen.toml` 时）或全局 `~/.helen/sessions/`（REPL、脚本）。通过 `session_scope: "auto"|"global"|"project"` 配置，或 `HELEN_SESSION_DIR` 环境变量强制指定路径
+  - **Runtime Isolation (设计原则)**: transcript 按 **Interpreter 实例** 隔离，而非按目录绑定。每个 Interpreter 生命周期内 `get_session_id()` 返回相同值；不同 Interpreter 实例各自独立 transcript。具体规则：
+    - **同一进程内**多次调用 `get_session_id()` → 相同 ID（属性 getter）
+    - **重启程序** → 新 Interpreter → 新 session_id（`session_{timestamp}_{uuid8}`）
+    - **`spawn`** → 新建 Interpreter → 新建 session_id 与 transcript 目录
+    - **普通 agent 调用**（同进程）→ 共享 Interpreter → 共享 session_id，靠 `invocation_id` 区分
+    - **跨运行时继承必须显式编程**：用 `resume_session(parent_sid)` 或 `Channel.send(sid)` 传递，不自动共享。这是"显式优于隐式"的体现，避免并发写入污染与状态混乱
   - **Configuration**:
     ```yaml
     transcript:

@@ -810,6 +810,69 @@ agent DataAggregator {
 let first_ready = mailbox_select([m1, m2, m3])
 ```
 
+**⚠️ Transcript 运行时隔离**（关键设计原则）：
+
+`spawn` 创建的每个 agent 都在**独立的 Interpreter 实例**中运行，拥有独立的 `session_id` 和 transcript 目录。这是**刻意的设计**，不是 bug：
+
+```helen
+main {
+    let main_sid = get_session_id()        // session_1784531612_a7b8bd5f
+    let m = spawn Worker("task")
+    // Worker 内部: get_session_id() → session_1784531612_f020fde3 (不同!)
+}
+```
+
+**隔离规则**：
+- 同一进程内多次调用 `get_session_id()` → 相同 ID
+- 重启程序 → 新 Interpreter → 新 session_id（`session_{timestamp}_{uuid8}`）
+- `spawn` → 新 Interpreter → 新 session_id + 新 transcript 目录
+- 普通 agent 调用（同进程）→ 共享 session_id，靠 `invocation_id` 区分
+
+#### ❌ 反模式：假设自动继承
+
+```helen
+// 错误：spawn 出去的 worker 不会自动共享 main 的 transcript
+agent Worker(task: str, ch: Channel) {
+    main {
+        let sid = get_session_id()     // ❌ 这是 worker 自己的新 session
+        ch.send("done in " + sid)
+        // main 拿到这个 ID 后找不到对应 transcript
+    }
+}
+```
+
+#### ✅ 接力模板：显式传递 session_id
+
+```helen
+main {
+    let parent_sid = get_session_id()
+    let m = spawn Worker("task", parent_sid)  // 显式传递
+}
+
+agent Worker(task: str, parent_sid: str, ch: Channel) {
+    main {
+        resume_session(parent_sid)  // 显式继承父 transcript
+        // 现在 get_session_id() 返回与父相同的 ID
+        ch.send("done")
+    }
+}
+```
+
+#### 📋 三种接力方式（详见 `helen-programming-methodology` §5）
+
+| 场景 | 推荐做法 |
+|------|---------|
+| spawn 子 agent 需父 transcript | 传 parent_sid + `resume_session` |
+| agent 产出需被其他 agent 看到 | `working_memory_set` + Channel 传递 |
+| 跨进程恢复对话（程序重启） | 持久化 session_id + `resume_session` |
+
+> 🔑 **口诀**："spawn 即隔离，接力靠显式"
+
+这样设计的原因：
+1. 避免并发写入污染主 transcript
+2. 每个 spawned agent 的 transcript 可独立审计
+3. 符合 Helen "显式优于隐式" 的隔离哲学（v1.10 agent 环境隔离的延伸）
+
 ### 模式 5: 流式 Agent（llm act + on_chunk 回调）
 
 **场景**：实时输出 LLM 响应，改善用户体验

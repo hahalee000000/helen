@@ -736,6 +736,14 @@ TranscriptStore 是 v1.16 引入的 SSOT（Single Source of Truth），所有对
 let session = get_session_id()
 print("当前会话: " + session)
 
+// ── 关键行为（Transcript 运行时隔离设计原则） ──
+// ✅ 同一进程内多次调用 → 相同 ID（@property getter）
+// ✅ 重启程序 → 新 Interpreter → 新 session_id（session_{timestamp}_{uuid8}）
+// ✅ spawn 创建的 agent → 新 Interpreter → 新 session_id（独立 transcript）
+// ✅ 普通 agent 调用（同进程）→ 共享 session_id，靠 invocation_id 区分
+// ⚠️ session_id 与目录路径无关——不是"目录绑定的持久 ID"
+// ⚠️ 跨运行时继承必须显式编程：resume_session(parent_sid) 或 Channel.send(sid)
+
 // list_sessions(scope?) — 列出所有会话
 let sessions = list_sessions()
 // [{session_id: "...", created_at: ..., modified_at: ..., size_bytes: ..., message_count: ..., scope: "global"|"project"}, ...]

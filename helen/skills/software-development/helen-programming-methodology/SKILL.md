@@ -198,6 +198,119 @@ if evaluation["updates"] != null {
 }
 ```
 
+### 5. 上下文接力（Context Handoff Pattern）
+
+Helen 的 transcript 按 **Interpreter 实例隔离**（spawn 创建新 Interpreter → 新 session_id）。这意味着：**任何你希望被后继上下文利用的信息，必须显式保存和传递**——不能依赖自动继承。
+
+这是 Helen "显式优于隐式"哲学在上下文管理上的核心体现。
+
+#### ❌ 反模式：假设自动继承
+
+```helen
+// 错误：以为 spawn 出去的 worker 会自动共享 main 的 transcript
+agent Worker(task: str, ch: Channel) {
+    main {
+        // ❌ 这里的 session_id 不是 main 的那个！
+        let sid = get_session_id()
+        ch.send("done in " + sid)
+        // main 拿到这个 ID 后找不到对应 transcript，因为 spawn 创建了新 session
+    }
+}
+
+// 错误：以为重启程序后 get_session_id() 还能拿到之前的 ID
+main {
+    let sid = get_session_id()
+    // ❌ 下次运行程序，sid 就变了
+}
+```
+
+#### ✅ 正确模式：三种接力方式
+
+**模式 A：显式传递 session_id（适用于 spawn 场景）**
+
+```helen
+agent Worker(task: str, parent_sid: str, ch: Channel) {
+    main {
+        resume_session(parent_sid)  // 显式继承父 transcript
+        // 现在 get_session_id() 与父相同
+        let result = llm act "执行任务: " + task
+        ch.send(result)
+    }
+}
+
+main {
+    let parent_sid = get_session_id()
+    let m = spawn Worker("分析日志", parent_sid)
+    let result = m.receive()
+    print("Worker 结果: " + result)
+}
+```
+
+**模式 B：working_memory 显式保存（适用于跨 agent 数据交换）**
+
+```helen
+agent Analyzer(file: str, ch: Channel) {
+    main {
+        let result = llm act "分析文件 " + file + " 的 bug"
+        working_memory_set("analysis_" + file, result)  // 显式保存
+        ch.send({"status": "ok", "key": "analysis_" + file})
+    }
+}
+
+main {
+    let m = spawn Analyzer("main.py")
+    let msg = m.receive()
+    if msg["status"] == "ok" {
+        let data = working_memory_get(msg["key"])  // 显式取回
+        print("分析结果: " + data)
+    }
+}
+```
+
+**模式 C：持久化 session_id（适用于跨进程恢复）**
+
+```helen
+// 进程 1：保存当前 session_id 到文件
+main {
+    let my_sid = get_session_id()
+    write_file(".current_session", my_sid)  // 持久化
+    // ... 工作 ...
+}
+
+// 进程 2：读取并恢复
+main {
+    if file_exists(".current_session") {
+        let prev_sid = read_file(".current_session")
+        resume_session(prev_sid)  // 恢复之前的会话
+        let history = replay_transcript()
+        print("恢复了 " + str(len(history)) + " 条历史消息")
+    }
+}
+```
+
+#### 📊 决策表：何时用哪种接力方式
+
+| 场景 | 推荐模式 | 原因 |
+|------|---------|------|
+| spawn 子 agent 需要父 transcript | **A**: 传 parent_sid + `resume_session` | 同一进程内直接接力，开销最小 |
+| agent 产出需要被其他 agent 看到 | **B**: `working_memory_set` + Channel 传递 | 结构化数据，避免 transcript 膨胀 |
+| 跨进程恢复对话（程序重启） | **C**: 持久化 session_id + `resume_session` | 跨 Interpreter 生命周期 |
+| 长期知识沉淀（跨项目） | `export_transcript` + 外部知识库 | transcript 是运行时的，知识是持久的 |
+| 多 agent 并行写同一份上下文 | SharedStore + 显式同步 | Channel 是 1:1，SharedStore 支持多写者 |
+
+#### 🔑 核心口诀
+
+> **"spawn 即隔离，接力靠显式"**
+>
+> - spawn 出去的 agent 默认拿不到父上下文 → 必须传参 + `resume_session`
+> - 重启程序后 transcript 不会自动接上 → 必须持久化 session_id
+> - 关键中间结果 → `working_memory_set` 显式保存，别指望 LLM "记得"
+
+#### 📚 关联
+
+- 设计原理详见 `helen-agent-patterns` 模式 4（spawn + Channel）
+- API 参考详见 `helen-stdlib` 中 `get_session_id` / `resume_session` / `working_memory_*` 章节
+
 ## 完整工作流示例
 
 ```helen
