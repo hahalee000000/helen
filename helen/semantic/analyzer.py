@@ -649,9 +649,22 @@ class SemanticAnalyzer(Visitor[None]):
                 self.errors.error(
                     ErrorCode.SCOPE_VIOLATION,
                     f"agent scope isolation: cannot access module-level variable "
-                    f"'{node.name}' from agent main {{}}. "
-                    f"Agent main runs in an isolated environment. "
-                    f"Pass data via agent parameters or use a getter function.",
+                    f"'{node.name}' from agent main {{}}.\n\n"
+                    f"💡 Helen agents are strictly isolated — agent main runs in a "
+                    f"fresh environment that does NOT inherit module-level `let` "
+                    f"variables. This is by design (see: 'Caller Decides Context' "
+                    f"principle in helen-agent-collaboration skill).\n\n"
+                    f"How to fix:\n"
+                    f"  1. Pass as parameter (recommended):\n"
+                    f"       agent Worker({node.name}: <type>) {{ ... }}\n"
+                    f"       main {{ Worker({node.name}) }}\n"
+                    f"  2. Make it a const (read-only, auto-visible):\n"
+                    f"       const {node.name.upper()} = {{...}}\n"
+                    f"  3. Use shared let (mutable, cross-agent):\n"
+                    f"       shared let {node.name} = {{...}}\n"
+                    f"  4. Pass via Channel message (spawn scenario):\n"
+                    f"       ch.send({node.name})  // in caller\n"
+                    f"       let v = ch.receive()   // in agent",
                     node.span,
                 )
 

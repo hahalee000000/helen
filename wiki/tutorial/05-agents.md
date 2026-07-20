@@ -889,4 +889,44 @@ print(Counter.count)  // 输出: 3
 
 ---
 
+## 📦 内置模板库
+
+Helen 提供一组**内置模板**，涵盖常见 agent 模式。每个模板都是完整可运行的示例，并附有详细注释。
+
+### 查看模板
+
+```bash
+# 列出所有模板
+helen template --list
+
+# 查看模板内容
+helen template simple_agent
+helen template spawn_channel
+
+# 复制模板到当前目录
+helen template spawn_channel --copy my_worker.helen
+```
+
+### 可用模板
+
+| 模板 | 用途 |
+|------|------|
+| `simple_agent` | 简单 agent 调用 |
+| `spawn_channel` | spawn + Channel 并发 |
+| `spawn_with_transcript` | spawn + transcript 继承 |
+| `shared_store` | SharedStore 数据交换 |
+| `context_object` | Context 对象聚合参数 |
+| `pipeline` | Agent 管道（顺序处理） |
+
+### 💡 使用建议
+
+1. **初学**：从 `simple_agent` 开始，理解基本调用模式
+2. **并发**：看 `spawn_channel`，理解隔离与通信
+3. **多 agent 协作**：看 `shared_store` 和 `context_object`
+4. **复杂工作流**：看 `pipeline`，组合多个 agent
+
+所有模板都遵循 **"调用者决定上下文"** 原则——agent 的所有信息都通过参数显式传递。
+
+---
+
 > **下一步**: [[tutorial/06-llm-statements|LLM 语句实战]]

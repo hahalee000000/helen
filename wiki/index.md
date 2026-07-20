@@ -42,13 +42,14 @@
 > 注：`runtime/working_memory`、`runtime/graduated_compression`、`runtime/cache_aware_compression`、`runtime/agent_context` 的内容已合并到 `runtime/context-management`。旧页面仍保留但不再维护。
 
 ### 六、工具链
-- [[toolchain/cli|命令行工具]] — `helen <file>/check/test/quality/repl/doc/init/lsp`
+- [[toolchain/cli|命令行工具]] — `helen <file>/check/test/quality/repl/doc/init/lsp/template`
 - [[toolchain/testing|测试框架]] — TDD 支持、断言 API、`--watch` 监听
 - [[toolchain/quality|质量评估]] — 7 维框架、安全评分、CI 集成
 - [[toolchain/lsp|语言服务器]] — `helen lsp`、JSON-RPC 2.0、诊断/补全/跳转
 - [[toolchain/vscode|VS Code 扩展]] — 语法高亮、LSP 集成、代码补全、跳转定义
 - [[toolchain/stdlib|标准库]] — 287 builtins (287 中文别名) (core/string/data/collection/network/time/math/file/system/crypto/io/test/quality/context/transcript/media)
-- [[toolchain/error-format|错误格式化]] — HLD 3.11.2 诊断输出
+- [[toolchain/templates|内置模板库]] — `helen template`，常见 agent 模式的完整示例
+- [[toolchain/error-format|错误格式化]] — HLD 3.11.2 诊断输出（含智能修复建议）
 
 ### 七、教程
 - [[tutorial/01-getting-started|入门指南]] — 安装、配置、Hello World、REPL

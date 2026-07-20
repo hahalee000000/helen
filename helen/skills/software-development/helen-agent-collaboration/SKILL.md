@@ -878,6 +878,25 @@ print("缓存未命中: " + str(cache_misses))
 - **helen-syntax** — Helen 语法（shared let、const、agent main 等）
 - **subagent-driven-development** — 子代理驱动开发工作流
 
+## 📦 内置模板库
+
+Helen 提供一组内置模板，涵盖本文档中讨论的所有协作模式：
+
+```bash
+# 查看所有模板
+helen template --list
+
+# 查看协作相关模板
+helen template shared_store          # SharedStore 数据交换
+helen template spawn_channel         # spawn + Channel 并发
+helen template pipeline              # Agent 管道
+
+# 复制模板到当前目录开始开发
+helen template shared_store --copy my_collaboration.helen
+```
+
+每个模板都是完整可运行的示例，遵循 **"调用者决定上下文"** 原则。
+
 ## 延伸阅读
 
 - **[[Agent 提示词工程完全指南]]**（`wiki/reference/agent-system-prompt-guide.md`）— 来自 Claude Code 逆向工程的 agent prompt 设计方法论。编排者 agent 的 prompt 尤其需要遵循该指南的"原则优先于流程"和"注入环境事实"两条。

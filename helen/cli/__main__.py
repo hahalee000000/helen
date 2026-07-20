@@ -232,7 +232,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return repl_command()
 
     # Check for known subcommands
-    subcommands = {"check", "repl", "doc", "init", "test", "quality", "lsp", "watch"}
+    subcommands = {"check", "repl", "doc", "init", "test", "quality", "lsp", "watch", "template"}
     first = argv[0]
 
     if first in subcommands:
@@ -259,6 +259,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print("Error: 'watch' requires a file argument", file=sys.stderr)
                 return 1
             return watch_command(argv[1], program_args=argv[2:])
+        elif first == "template":
+            return template_command(argv[1:])
     elif first in ("-h", "--help", "help"):
         _print_help()
         return 0
@@ -822,6 +824,95 @@ def lsp_command() -> int:
     except Exception as e:
         print(f"Error starting LSP server: {e}", file=sys.stderr)
         return 1
+
+
+def template_command(argv: list[str]) -> int:
+    """View and copy built-in Helen templates.
+
+    Usage:
+        helen template                    # List all templates
+        helen template --list             # List all templates
+        helen template <name>             # Show template content
+        helen template <name> --copy      # Copy template to current directory
+        helen template <name> --copy <output>  # Copy to specific file
+
+    Available templates:
+        simple_agent              - Simple agent call pattern
+        spawn_channel             - spawn + Channel concurrency
+        spawn_with_transcript     - spawn with transcript inheritance
+        shared_store              - SharedStore data exchange
+        context_object            - Context object for parameter aggregation
+        pipeline                  - Sequential agent pipeline
+
+    Returns:
+        0 on success, 1 on error.
+    """
+    from pathlib import Path
+    import shutil
+
+    # Find templates directory
+    templates_dir = Path(__file__).parent.parent / "templates"
+    if not templates_dir.exists():
+        print(f"Error: Templates directory not found: {templates_dir}", file=sys.stderr)
+        return 1
+
+    # Get available templates
+    template_files = sorted([f.stem for f in templates_dir.glob("*.helen")])
+
+    if not argv or argv[0] in ("--list", "-l"):
+        # List all templates
+        print("Available Helen templates:\n")
+        for name in template_files:
+            # Read first comment line for description
+            template_path = templates_dir / f"{name}.helen"
+            desc = ""
+            with open(template_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if "// Description:" in line:
+                        desc = line.split("// Description:")[-1].strip()
+                        break
+            print(f"  {name:30s} - {desc}")
+        print()
+        print("Usage:")
+        print("  helen template <name>         # Show template content")
+        print("  helen template <name> --copy  # Copy to current directory")
+        return 0
+
+    template_name = argv[0]
+    template_path = templates_dir / f"{template_name}.helen"
+
+    if not template_path.exists():
+        print(f"Error: Template '{template_name}' not found.", file=sys.stderr)
+        print(f"Available templates: {', '.join(template_files)}", file=sys.stderr)
+        return 1
+
+    # Check for --copy flag
+    if "--copy" in argv:
+        # Determine output filename
+        copy_idx = argv.index("--copy")
+        if copy_idx + 1 < len(argv) and not argv[copy_idx + 1].startswith("-"):
+            output_file = Path(argv[copy_idx + 1])
+        else:
+            output_file = Path(f"{template_name}.helen")
+
+        # Copy template
+        shutil.copy(template_path, output_file)
+        print(f"✓ Template copied to: {output_file}")
+        print()
+        print(f"Edit {output_file} and run with: helen {output_file}")
+        return 0
+
+    # Show template content
+    with open(template_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    print(f"=== Template: {template_name} ===\n")
+    print(content)
+    print(f"\n=== End of template ===")
+    print()
+    print(f"Copy this template with: helen template {template_name} --copy")
+
+    return 0
 
 
 if __name__ == "__main__":

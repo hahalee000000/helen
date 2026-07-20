@@ -1148,5 +1148,28 @@ for path in interp.import_resolver._loaded:
 
 ---
 
-**最后更新**: 2026-07-16
+## 📦 内置模板库
+
+Helen 提供一组内置模板，涵盖常见 agent 模式。每个模板都是完整可运行的示例代码。
+
+```bash
+# 查看所有模板
+helen template --list
+
+# 查看具体模板
+helen template simple_agent          # 简单 agent 调用
+helen template spawn_channel         # spawn + Channel 并发
+helen template shared_store          # SharedStore 数据交换
+helen template context_object        # Context 对象聚合参数
+helen template pipeline              # Agent 管道
+
+# 复制模板到当前目录
+helen template spawn_channel --copy my_worker.helen
+```
+
+**模板设计原则**：所有模板都遵循 **"调用者决定上下文"** 原则——agent 的所有信息都通过参数显式传递，不依赖隐式继承。
+
+---
+
+**最后更新**: 2026-07-20
 

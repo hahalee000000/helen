@@ -66,8 +66,10 @@ def _format_diagnostic(
     parts: list[str] = []
 
     # Header: Error: [ERR_CODE] description
+    # For multi-line messages, only show the first line in the header
     code = diagnostic.code.value
-    parts.append(f"{label}: [{label[0]}{code:04d}] {diagnostic.message}")
+    first_line = diagnostic.message.split("\n")[0].strip()
+    parts.append(f"{label}: [{label[0]}{code:04d}] {first_line}")
 
     span = diagnostic.span
     if span is not None:
@@ -88,7 +90,19 @@ def _format_diagnostic(
             parts.append(f"   | {caret_line}")
             parts.append("   |")
 
-    # Detail suggestion
-    parts.append(f"  = {diagnostic.message}")
+    # Detail: for multi-line messages, skip the first line (already in header)
+    # and show the rest as detailed suggestion
+    if "\n" in diagnostic.message:
+        # Skip leading empty lines and the first non-empty line (already in header)
+        rest = diagnostic.message
+        # Find position after first non-empty line
+        lines = rest.split("\n")
+        # Skip the first line
+        remaining = "\n".join(lines[1:]).lstrip("\n")
+        if remaining.strip():
+            parts.append(remaining)
+    else:
+        # Single-line message: show as-is with "= " prefix
+        parts.append(f"  = {diagnostic.message}")
 
     return "\n".join(parts)

@@ -36,6 +36,9 @@ helen quality <file.helen>          # 7-dimension quality assessment
 helen doc <file.helen>              # Generate documentation
 helen lsp                           # Start Language Server (JSON-RPC over stdio)
 helen init                          # Initialize ~/.helen/ config directory
+helen template                      # List built-in code templates
+helen template <name>               # Show template content
+helen template <name> --copy        # Copy template to current directory
 ```
 
 ## Architecture (3-layer pipeline)
