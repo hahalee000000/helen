@@ -26,6 +26,76 @@ agent Translator {
 
 编译器理解 Agent 的语义，可以在 LSP 中补全、在文档中自动提取。
 
+## 核心设计原则：调用者决定上下文
+
+> **"调用 agent 前先问：它需要知道什么？"**
+
+Helen 的 agent 是**严格隔离**的——每次 agent 调用（无论是同步 `call Agent(...)` 还是 `spawn Agent(...)`）都会创建一个全新的、独立的执行环境。**Agent 不会自动继承调用者的任何变量、历史、或上下文**。
+
+这是 Helen "显式优于隐式" 哲学的核心体现，与 Python/JS 等语言中"函数自然看到外层作用域"的行为完全不同。
+
+### 为什么这样设计？
+
+1. **可预测性**：agent 看到什么完全由参数决定，不会被外层状态污染
+2. **可复用性**：同一个 agent 在不同调用点可以用不同上下文工作
+3. **可测试性**：测试 agent 不需要构造完整的外层环境
+4. **安全性**：敏感数据不会被意外泄漏给不需要的 agent
+
+### 调用 agent 前的思考清单
+
+每次调用 agent 之前，请明确回答：
+
+- [ ] **这个 agent 完成任务需要哪些信息？**（输入参数）
+- [ ] **这些信息是否都通过参数显式传入了？**
+- [ ] **agent 是否需要访问跨 agent 共享的状态？**（如果是，用 `shared store` 或 `shared let`）
+- [ ] **agent 的输出如何被调用者或其他 agent 使用？**（返回值 / Channel / SharedStore）
+
+### ❌ 错误示例：假设上下文自动继承
+
+```helen
+let user_name = "Alice"       // 模块级变量
+let user_id = 42              // 模块级变量
+
+agent Greeter {
+    main {
+        // ❌ 错误：user_name 和 user_id 在 agent 内不可见
+        // 编译会报错 "undefined variable"
+        print("Hello " + user_name + ", your id is " + str(user_id))
+    }
+}
+```
+
+### ✅ 正确示例：通过参数显式传递
+
+```helen
+agent Greeter(user_name: str, user_id: int) {
+    main {
+        // ✅ 所有信息都通过参数进入 agent
+        print("Hello " + user_name + ", your id is " + str(user_id))
+    }
+}
+
+main {
+    let user_name = "Alice"
+    let user_id = 42
+    // ✅ 调用时显式传入所需上下文
+    Greeter(user_name, user_id)
+}
+```
+
+### 不同场景的上下文传递方式
+
+| 场景 | 推荐方式 | 示例 |
+|------|---------|------|
+| 一次性输入 | 参数传递 | `Agent(data, config)` |
+| 只读配置 | `const` 模块常量 | 自动可见 |
+| 跨 agent 共享可变状态 | `shared store` | `Store.field = value` |
+| spawn 子 agent 的输出 | Channel 消息 | `ch.send(result)` |
+| 跨进程恢复对话 | `resume_session(sid)` | 显式继承 transcript |
+| LLM 看到的上下文 | agent 的 `prompt` 模板 | `{{var}}` 占位符 |
+
+> 💡 详细示例见 `helen-programming-methodology` §5 "上下文接力模式"
+
 ## 基本 Agent
 
 ```helen

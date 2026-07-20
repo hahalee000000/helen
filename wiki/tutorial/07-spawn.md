@@ -10,8 +10,11 @@ Helen v1.18 使用 `spawn` + Channel 消息队列实现并发。`spawn Agent(...
 
 **核心原则**：
 - 一个并发原语（`spawn`）+ 一个通信机制（Channel 消息队列）
-- 隔离优先：snapshot 全部深复制，agent 默认与外部环境完全隔离
+- **隔离优先**：snapshot 全部深复制，agent 默认与外部环境完全隔离
+- **上下文显式传递**：spawn 创建的 agent **完全看不到**父 agent 的变量、transcript、working memory——它只能看到传入的参数和 Channel。**调用前必须显式决定要传什么上下文**
 - 共享是显式的：通过 Channel 传递 SharedStore 引用
+
+> 💡 这条原则适用于所有 agent 调用，不只是 spawn。详见 [教程 05: 核心设计原则](05-agents.md#核心设计原则调用者决定上下文)。
 
 ---
 

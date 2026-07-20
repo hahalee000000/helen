@@ -11,6 +11,29 @@ tags: [helen, agent, patterns, design, llm, scope-isolation, shared-let, v1.12, 
 
 Helen 将 Agent 作为**一等语言构造**，提供声明式语法和强大的 LLM 集成。
 
+## 🎯 第一原则：调用者决定上下文（Caller Decides Context）
+
+> **"调用 agent 前先问：它需要知道什么？"**
+
+在进入任何设计模式之前，请先牢记 Helen agent 的**核心隔离原则**：
+
+- Agent 是**严格隔离**的——每次调用都创建独立的执行环境
+- Agent **不会自动继承**调用者的变量、历史、LLM 上下文
+- **所有**上下文必须通过参数、`shared store`、`const` 或 Channel **显式传递**
+- `spawn` 更进一步：每个 spawn 都有独立的 transcript（详见 §4）
+
+这条原则贯穿下文所有模式。无论选择顺序、并行、路由还是层级协作，**第一步总是画出上下文流图**：
+
+```
+调用者 ──参数──► Agent 输入
+      ──SharedStore──► 共享状态
+      ◄──返回值/Channel── Agent 输出
+```
+
+> 💡 完整说明详见 `helen-agent-collaboration` §"设计原则：调用者决定上下文"
+
+---
+
 ## Agent 基础
 
 ### 最小 Agent

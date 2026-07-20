@@ -13,6 +13,82 @@ tags: [helen, agent, collaboration, orchestration, workflow, multi-agent, shared
 
 ## 核心概念
 
+### 🎯 设计原则：调用者决定上下文（Caller Decides Context）
+
+> **"调用 agent 前先问：它需要知道什么？"**
+>
+> Agent 是严格隔离的——调用前必须显式考虑要向 agent 提供什么上下文。
+
+这是 Helen 多 agent 协作的**第一原则**。无论是同步调用 `call Agent(...)`、还是 `spawn Agent(...)`，每次调用都会创建一个全新的、独立的执行环境。**Agent 不会自动继承调用者的任何变量、历史、或 LLM 上下文**。
+
+#### 为什么这样设计？
+
+1. **可预测性**：agent 看到什么完全由参数决定，不会被外层状态污染
+2. **可复用性**：同一个 agent 在不同调用点可以用不同上下文工作
+3. **可测试性**：测试 agent 不需要构造完整的外层环境
+4. **安全性**：敏感数据不会被意外泄漏给不需要的 agent
+5. **并发友好**：spawn 出去的 agent 不会默默读写主 transcript
+
+#### 调用 agent 前的思考清单
+
+```
+┌─ 调用者 ──────────────────────────────────────────┐
+│  let user_data = {...}                            │
+│  let config = {...}                               │
+│  let history = [...]                              │
+│                                                   │
+│  ❓ 调用 MyAgent 前，先问：                       │
+│  • 它需要 user_data 吗？→ 通过参数传入             │
+│  • 它需要 config 吗？→ 用 const 或参数             │
+│  • 它需要 history 吗？→ 通过参数或 resume_session │
+│  • 它要修改共享状态吗？→ 用 shared store           │
+│  • 它要返回结果吗？→ 用返回值或 Channel            │
+└───────────────────────────────────────────────────┘
+```
+
+#### ❌ 错误模式：隐式假设
+
+```helen
+let user_name = "Alice"
+
+agent Greeter {
+    main {
+        // ❌ 错误：假设 user_name 自动可见
+        // 编译会报 "undefined variable: user_name"
+        print("Hello " + user_name)
+    }
+}
+```
+
+#### ✅ 正确模式：显式传递
+
+```helen
+agent Greeter(user_name: str) {
+    main {
+        // ✅ 通过参数进入 agent
+        print("Hello " + user_name)
+    }
+}
+
+main {
+    let user_name = "Alice"
+    Greeter(user_name)  // 显式传递
+}
+```
+
+#### 上下文传递方式速查
+
+| 场景 | 推荐方式 |
+|------|---------|
+| 一次性输入 | 参数传递 `Agent(x, y)` |
+| 只读配置 | `const` 模块常量（自动可见） |
+| 跨 agent 共享可变状态 | `shared store` / `shared let`（仅值类型） |
+| spawn 子 agent 的输出 | Channel 消息 `ch.send(result)` |
+| 跨进程恢复对话 | `resume_session(sid)` |
+| LLM 看到的上下文 | agent 的 `prompt` 模板（`{{var}}` 占位符） |
+
+> 💡 完整的"上下文接力模式"详见 `helen-programming-methodology` §5
+
 ### Agent 是一等公民
 
 在 Helen 中，Agent 是语言级别的一等构造，可以像函数一样被调用：

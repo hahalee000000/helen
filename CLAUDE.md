@@ -121,6 +121,7 @@ helen/
   - Supports `__getitem__`, `__len__`, `__iter__`, `__contains__`, `__bool__`, `__str__`, comparison operators, `__add__`, `__radd__`, `__hash__`
   - Nested iterables auto-wrapped on iteration
   - dict methods: `keys()`, `values()`, `items()`, `get()`
+- **🎯 第一原则：调用者决定上下文（Caller Decides Context）**：**调用 agent 前必须显式考虑要向 agent 提供什么上下文**。Agent 是严格隔离的——每次调用都创建独立执行环境，**不会自动继承**调用者的变量、历史、LLM 上下文。所有信息必须通过参数、`shared store`、`const` 或 Channel 显式传递。这是 Helen "显式优于隐式" 哲学在多 agent 协作中的核心体现。设计多 agent 系统时，第一步是画出上下文流图（调用者 → 参数/SharedStore/Channel → agent）。详见 `helen-agent-collaboration` §"设计原则：调用者决定上下文" 和 `helen-programming-methodology` §5 "上下文接力模式"
 - **Agent scope isolation (v1.10)**: `agent main {}` runs in isolated environment. Module-level `let` is **not** visible inside agent main (compile-time error). Module-level `const` is auto-visible (read-only sharing). Use `shared let` for cross-agent visible mutable variables. Closures in agent main can capture local variables.
 - **Closure value capture**: Closures capture a **deep copy** of reference-type variables (snapshot semantics, immune to subsequent modifications)
 - **LLM primitives**: `llm act` (tool-calling loop + optional callbacks, usable as expression since v1.10), `llm if` (LLM-routed branching)
