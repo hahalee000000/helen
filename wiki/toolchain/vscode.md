@@ -1,6 +1,6 @@
 # VS Code 扩展
 
-> 模块 M13 | `vscode-extension/` | 测试: `tests/extension/test_vscode_extension.py`
+> 模块 M13 | `extensions/vscode/` | 测试: `tests/extension/test_vscode_extension.py`
 
 ---
 
@@ -18,7 +18,7 @@ Helen VS Code 扩展提供完整的 IDE 支持：
 ## 文件结构
 
 ```
-vscode-extension/
+extensions/vscode/
 ├── package.json                      # 扩展清单
 ├── language-configuration.json       # 语言配置
 ├── tsconfig.json                     # TypeScript 配置
@@ -54,7 +54,7 @@ helen lsp         # 应启动 LSP 服务器（按 Ctrl+C 退出）
 ### 从源码安装扩展
 
 ```bash
-cd vscode-extension
+cd extensions/vscode
 npm install
 npm run compile
 npx vsce package
@@ -66,10 +66,10 @@ npx vsce package
 ```bash
 # 复制扩展目录到 VS Code 扩展目录
 # Linux/macOS:
-cp -r vscode-extension ~/.vscode/extensions/helen-language
+cp -r extensions/vscode ~/.vscode/extensions/helen-language
 
 # Windows:
-xcopy /E /I vscode-extension %USERPROFILE%\.vscode\extensions\helen-language
+xcopy /E /I extensions/vscode %USERPROFILE%\.vscode\extensions\helen-language
 ```
 
 ---
@@ -247,7 +247,7 @@ xcopy /E /I vscode-extension %USERPROFILE%\.vscode\extensions\helen-language
 ### 构建
 
 ```bash
-cd vscode-extension
+cd extensions/vscode
 npm install
 npm run compile
 ```
