@@ -369,6 +369,7 @@ ALIASES: dict[str, str] = {
     "获取会话元数据": "get_session_meta",
     "列出会话": "list_sessions",
     "回放会话": "replay_transcript",
+    "回放完整会话": "replay_full_session",  # v1.23.7: aggregate spawn tree
     "导出会话": "export_transcript",
     "搜索会话": "search_transcript",
     "列出调用": "list_invocations",
@@ -382,6 +383,9 @@ ALIASES: dict[str, str] = {
     "删除会话": "delete_session",
     "删除当前会话": "delete_current_session",
     "清理会话": "cleanup_sessions",
+    # v1.23.7: Spawn tracking
+    "获取子会话": "get_spawned_sessions",
+    "获取会话树": "get_spawn_tree",
 
     # ── Media/Multimodal (媒体/多模态) ────────────────────────────
     "媒体": "media",
