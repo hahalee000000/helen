@@ -58,6 +58,68 @@ def get_session_id() -> str:
     return session_id
 
 
+def get_session_meta(session_id: str = "") -> dict[str, Any]:
+    """Get session metadata (argv, timestamp, helen version, etc.).
+
+    v1.23.3: Returns metadata recorded at session creation. Useful for
+    identifying sessions, debugging, and building audit trails.
+
+    Args:
+        session_id: Optional session ID. If empty, uses the current session.
+
+    Returns:
+        dict with session metadata, or empty dict if not available:
+        {
+            "status": "ok",
+            "data": {
+                "argv": ["helen", "program.helen"],
+                "timestamp": 1720435200.123,
+                "helen_version": "1.23.3",
+                "python_version": "3.12.13",
+                "platform": "linux-aarch64",
+                "cwd": "/home/user/project",
+                "session_id": "session_1720435200_a1b2c3d4",
+                "session_scope": "project"
+            }
+        }
+        Or on error/not-available: {"status": "error", "error": "..."}
+
+    Example:
+        let meta = get_session_meta()
+        if meta["status"] == "ok" {
+            print("Started: " + str(meta["data"]["argv"]))
+            print("Helen version: " + meta["data"]["helen_version"])
+        }
+    """
+    if _interpreter_agent_context is None:
+        return {"status": "error", "error": "TranscriptStore not enabled"}
+
+    store = getattr(_interpreter_agent_context, "transcript_store", None)
+    if store is None:
+        return {"status": "error", "error": "TranscriptStore not available"}
+
+    try:
+        meta = store.read_meta()
+        if meta is None:
+            return {"status": "error", "error": "No session metadata available (old transcript?)"}
+
+        return {
+            "status": "ok",
+            "data": {
+                "argv": meta.argv,
+                "timestamp": meta.timestamp,
+                "helen_version": meta.helen_version,
+                "python_version": meta.python_version,
+                "platform": meta.platform,
+                "cwd": meta.cwd,
+                "session_id": meta.session_id,
+                "session_scope": meta.session_scope,
+            },
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
 def list_sessions(scope: str = "") -> list[dict[str, Any]]:
     """List all transcript sessions.
 

@@ -376,6 +376,74 @@ let r = cleanup_sessions(keep_count=50, older_than_days=30)
 | `delete_current_session` | `删除当前会话` |
 | `cleanup_sessions` | `清理会话` |
 
+### 4.7 会话元数据 (Session Metadata, v1.23.3)
+
+每个新 transcript 文件的第一行自动写入 **`session_meta`** 记录，记录启动时的上下文信息。
+
+#### 记录格式
+
+JSONL 文件第一行：
+
+```json
+{
+  "type": "session_meta",
+  "argv": ["helen", "my_app.helen", "--mode", "test"],
+  "timestamp": 1720435200.123456,
+  "helen_version": "1.23.3",
+  "python_version": "3.12.13",
+  "platform": "linux-aarch64",
+  "cwd": "/home/user/project",
+  "session_id": "session_1720435200_a1b2c3d4",
+  "session_scope": "project"
+}
+```
+
+#### 字段说明
+
+| 字段 | 说明 |
+|------|------|
+| `argv` | 程序名 + 所有调用参数 |
+| `timestamp` | 启动时间（Unix epoch，精确到微秒） |
+| `helen_version` | Helen 版本号 |
+| `python_version` | Python 解释器版本 |
+| `platform` | 操作系统/架构（如 `linux-aarch64`） |
+| `cwd` | 启动时的工作目录 |
+| `session_id` | 会话 ID（与目录名一致） |
+| `session_scope` | `global` / `project` / `custom` |
+
+#### 设计目标
+
+- **会话识别**：`cat transcript.jsonl | head -1` 立刻知道这是运行哪个程序产生的
+- **审计追踪**：完整记录启动参数，便于问题复现
+- **调试便利**：知道程序何时启动、用了什么参数、在什么环境下
+- **版本追踪**：记录 Helen 和 Python 版本，便于兼容性问题排查
+
+#### 运行时查询
+
+```helen
+let meta = get_session_meta()
+if meta["status"] == "ok" {
+    let data = meta["data"]
+    print("启动命令: " + str(data["argv"]))
+    print("Helen 版本: " + data["helen_version"])
+    print("工作目录: " + data["cwd"])
+}
+
+// 中文别名
+let meta_zh = 获取会话元数据()
+```
+
+#### 向后兼容
+
+- **旧 transcript 文件**（无 meta 行）：`get_session_meta()` 返回 `{"status": "error"}`
+- **新代码读旧 transcript**：`read_meta()` 返回 `None`，调用者优雅处理
+- **旧代码读新 transcript**：跳过 `type == "session_meta"` 行（不影响消息列表）
+
+#### JSONL vs SQLite
+
+- **JSONL**：meta 作为文件第一行，`load_all()` 自动跳过
+- **SQLite**：`session_meta` 单行表，`load_all()` 从 `messages` 表查询（自动隔离）
+
 ### 5. LRU Cache
 
 **工作原理**:

@@ -117,6 +117,105 @@ class BoundaryMarker:
 
 
 # ---------------------------------------------------------------------------
+# Session Metadata
+# ---------------------------------------------------------------------------
+
+@dataclass
+class SessionMeta:
+    """Metadata for a transcript session.
+
+    Stored as the first record in a transcript. Captures the execution
+    context so the session can be identified and replayed later.
+
+    v1.23.3: Added to enable session identification, audit trail, and
+    debugging. Designed to be extensible — new fields can be added without
+    breaking backward compatibility (old transcripts simply lack them).
+
+    Attributes:
+        argv: Command-line arguments (program name + args)
+        timestamp: Session start time (Unix epoch)
+        helen_version: Helen version that created the session
+        python_version: Python interpreter version
+        platform: OS / architecture (e.g., "linux-aarch64")
+        cwd: Working directory at session start
+        session_id: Session identifier (matches directory name)
+        session_scope: "global" | "project"
+    """
+
+    argv: list[str] = field(default_factory=list)
+    timestamp: float = field(default_factory=time.time)
+    helen_version: str = ""
+    python_version: str = ""
+    platform: str = ""
+    cwd: str = ""
+    session_id: str = ""
+    session_scope: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to JSON-serializable dict."""
+        return {
+            "type": "session_meta",
+            "argv": self.argv,
+            "timestamp": self.timestamp,
+            "helen_version": self.helen_version,
+            "python_version": self.python_version,
+            "platform": self.platform,
+            "cwd": self.cwd,
+            "session_id": self.session_id,
+            "session_scope": self.session_scope,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SessionMeta":
+        """Reconstruct from dict."""
+        return cls(
+            argv=data.get("argv", []),
+            timestamp=data.get("timestamp", 0.0),
+            helen_version=data.get("helen_version", ""),
+            python_version=data.get("python_version", ""),
+            platform=data.get("platform", ""),
+            cwd=data.get("cwd", ""),
+            session_id=data.get("session_id", ""),
+            session_scope=data.get("session_scope", ""),
+        )
+
+    @classmethod
+    def from_current_context(cls, session_id: str = "", session_scope: str = "") -> "SessionMeta":
+        """Build SessionMeta from the current process context.
+
+        Captures argv, python version, helen version, cwd, platform
+        automatically. Used when creating a new session.
+
+        Args:
+            session_id: The session ID (matches directory name)
+            session_scope: "global" or "project"
+
+        Returns:
+            A new SessionMeta populated from the current environment.
+        """
+        import sys
+        import platform as _platform
+
+        helen_version = ""
+        try:
+            from helen import __version__
+            helen_version = __version__
+        except Exception:
+            pass
+
+        return cls(
+            argv=sys.argv[:],
+            timestamp=time.time(),
+            helen_version=helen_version,
+            python_version=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+            platform=f"{_platform.system().lower()}-{_platform.machine()}",
+            cwd=str(Path.cwd()),
+            session_id=session_id,
+            session_scope=session_scope,
+        )
+
+
+# ---------------------------------------------------------------------------
 # Transcript Store Backend (Persistence Abstraction)
 # ---------------------------------------------------------------------------
 
@@ -150,6 +249,29 @@ class TranscriptStoreBackend(ABC):
     def close(self) -> None:
         """Close backend resources (file handles, connections)."""
         pass
+
+    def write_meta(self, meta: "SessionMeta") -> None:
+        """Write session metadata to persistent storage.
+
+        Called once at session creation. Default implementation is a no-op
+        — backends that don't support meta simply ignore it.
+
+        v1.23.3: Added for session identification and audit trail.
+
+        Args:
+            meta: Session metadata to persist.
+        """
+        pass
+
+    def read_meta(self) -> "SessionMeta | None":
+        """Read session metadata from persistent storage.
+
+        Returns:
+            SessionMeta if present, None otherwise (e.g., old transcripts).
+
+        v1.23.3: Added for session identification and audit trail.
+        """
+        return None
 
 
 class JSONLBackend(TranscriptStoreBackend):
@@ -227,6 +349,66 @@ class JSONLBackend(TranscriptStoreBackend):
             except OSError:
                 pass
             self._file = None
+
+    def write_meta(self, meta: "SessionMeta") -> None:
+        """Write session metadata as the first line of the JSONL file.
+
+        v1.23.3: Inserts meta at the top of the file. If the file already
+        has content, prepends the meta line (rare case — usually called
+        on fresh sessions).
+
+        Args:
+            meta: Session metadata to persist.
+        """
+        try:
+            meta_line = json.dumps(meta.to_dict(), ensure_ascii=False)
+
+            # Read existing content (if any)
+            existing = ""
+            if self.path.exists():
+                existing = self.path.read_text(encoding="utf-8")
+
+            # Write meta + existing content
+            with open(self.path, "w", encoding="utf-8") as f:
+                f.write(meta_line + "\n")
+                if existing:
+                    f.write(existing)
+
+            # Reset file handle (force reopen on next append)
+            if self._file is not None:
+                try:
+                    self._file.close()
+                except OSError:
+                    pass
+                self._file = None
+
+        except OSError as e:
+            logger.warning("JSONLBackend: failed to write meta to %s: %s", self.path, e)
+
+    def read_meta(self) -> "SessionMeta | None":
+        """Read session metadata from the first line of the JSONL file.
+
+        v1.23.3: Returns None if the first line is not a session_meta
+        record (backward compatible with old transcripts).
+
+        Returns:
+            SessionMeta if present, None otherwise.
+        """
+        if not self.path.exists():
+            return None
+
+        try:
+            with open(self.path, encoding="utf-8") as f:
+                first_line = f.readline().strip()
+                if not first_line:
+                    return None
+                data = json.loads(first_line)
+                if data.get("type") == "session_meta":
+                    return SessionMeta.from_dict(data)
+        except (OSError, json.JSONDecodeError, KeyError) as e:
+            logger.debug("JSONLBackend: no valid session_meta in %s: %s", self.path, e)
+
+        return None
 
 
 class SQLiteBackend(TranscriptStoreBackend):
@@ -327,6 +509,93 @@ class SQLiteBackend(TranscriptStoreBackend):
         except Exception:
             pass
 
+    def write_meta(self, meta: "SessionMeta") -> None:
+        """Write session metadata to the session_meta table.
+
+        v1.23.3: Creates the table if it doesn't exist and inserts or
+        replaces the single-row meta record.
+
+        Args:
+            meta: Session metadata to persist.
+        """
+        try:
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS session_meta (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    argv TEXT,
+                    timestamp REAL,
+                    helen_version TEXT,
+                    python_version TEXT,
+                    platform TEXT,
+                    cwd TEXT,
+                    session_id TEXT,
+                    session_scope TEXT
+                )
+            """)
+            self.conn.execute(
+                """
+                INSERT OR REPLACE INTO session_meta
+                (id, argv, timestamp, helen_version, python_version,
+                 platform, cwd, session_id, session_scope)
+                VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    json.dumps(meta.argv, ensure_ascii=False),
+                    meta.timestamp,
+                    meta.helen_version,
+                    meta.python_version,
+                    meta.platform,
+                    meta.cwd,
+                    meta.session_id,
+                    meta.session_scope,
+                ),
+            )
+            self.conn.commit()
+        except Exception as e:
+            logger.warning("SQLiteBackend: failed to write meta: %s", e)
+
+    def read_meta(self) -> "SessionMeta | None":
+        """Read session metadata from the session_meta table.
+
+        v1.23.3: Returns None if the table doesn't exist or is empty
+        (backward compatible with old transcripts).
+
+        Returns:
+            SessionMeta if present, None otherwise.
+        """
+        try:
+            # Check if table exists
+            cursor = self.conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='session_meta'"
+            )
+            if not cursor.fetchone():
+                return None
+
+            cursor = self.conn.execute(
+                """
+                SELECT argv, timestamp, helen_version, python_version,
+                       platform, cwd, session_id, session_scope
+                FROM session_meta WHERE id = 1
+                """
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+
+            return SessionMeta(
+                argv=json.loads(row[0]) if row[0] else [],
+                timestamp=row[1] or 0.0,
+                helen_version=row[2] or "",
+                python_version=row[3] or "",
+                platform=row[4] or "",
+                cwd=row[5] or "",
+                session_id=row[6] or "",
+                session_scope=row[7] or "",
+            )
+        except Exception as e:
+            logger.debug("SQLiteBackend: no valid session_meta: %s", e)
+            return None
+
 
 def _item_to_dict(item: Message | BoundaryMarker) -> dict[str, Any]:
     """Convert a Message or BoundaryMarker to a JSON-serializable dict."""
@@ -378,6 +647,10 @@ def _item_from_dict(data: dict[str, Any]) -> Message | BoundaryMarker | None:
         )
     elif item_type == "boundary_marker":
         return BoundaryMarker.from_dict(data)
+    elif item_type == "session_meta":
+        # v1.23.3: Session metadata is handled separately by read_meta().
+        # Skip silently — it's not a message or boundary marker.
+        return None
     else:
         logger.warning("Unknown item type in transcript: %r", item_type)
         return None
@@ -461,6 +734,56 @@ class TranscriptStore:
         """
         if not message.uuid:
             message.uuid = _generate_uuid()
+
+        # v1.17 Phase 3: Extract large media to external storage
+        if self._media_storage is not None and isinstance(message.content, list):
+            message.content = self._media_storage.process_content_parts(message.content)
+
+        index = len(self.transcript)
+        self.transcript.append(message)
+        self._uuid_index[message.uuid] = index
+        self._dirty = True  # Invalidate view cache
+
+        # Persist to backend
+        if self._backend is not None:
+            self._backend.append(message)
+
+        # Phase 4: LRU cache eviction - offload old items when over limit
+        if len(self.transcript) > self._max_memory_items:
+            self._evict_old_items()
+
+        return message
+
+    def write_meta(self, meta: "SessionMeta") -> None:
+        """Write session metadata to the backend.
+
+        v1.23.3: Called once at session creation. Persists argv, timestamp,
+        and other context so the session can be identified later.
+
+        Args:
+            meta: Session metadata to persist.
+        """
+        if self._backend is not None:
+            try:
+                self._backend.write_meta(meta)
+            except Exception as e:
+                logger.warning("TranscriptStore: failed to write meta: %s", e)
+
+    def read_meta(self) -> "SessionMeta | None":
+        """Read session metadata from the backend.
+
+        v1.23.3: Returns None if no meta is present (old transcripts).
+
+        Returns:
+            SessionMeta if present, None otherwise.
+        """
+        if self._backend is None:
+            return None
+        try:
+            return self._backend.read_meta()
+        except Exception as e:
+            logger.debug("TranscriptStore: failed to read meta: %s", e)
+            return None
 
         # v1.17 Phase 3: Extract large media to external storage
         if self._media_storage is not None and isinstance(message.content, list):

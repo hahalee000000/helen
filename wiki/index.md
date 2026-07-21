@@ -32,7 +32,7 @@
 - [[runtime/llm-runtime|LLM 运行时]] — route/act 接口、取消机制
 - [[runtime/prompt-builder|提示词构建]] — 两层渐进式披露、模板渲染
 - [[runtime/memory|内存系统]] — FileMemoryProvider、InMemoryProvider
-- [[runtime/transcript-store|TranscriptStore SSOT]] — 消息唯一真实来源、SQLite/JSONL 后端、LRU 缓存、UUID 寻址、非破坏性压缩（**v1.16 新特性**）；`search_transcript()` 内容搜索（**v1.22 新特性**）
+- [[runtime/transcript-store|TranscriptStore SSOT]] — 消息唯一真实来源、SQLite/JSONL 后端、LRU 缓存、UUID 寻址、非破坏性压缩（**v1.16 新特性**）；`search_transcript()` 内容搜索（**v1.22 新特性**）；`session_meta` 会话元数据 — argv、启动时间、版本信息（**v1.23.3 新特性**）
 - [[runtime/context-management|上下文管理架构]] — 设计哲学（Context vs Transcript、四层生命周期）、统一入口、三通道、渐进压缩、缓存感知、工作记忆（**权威文档**）
 - [[runtime/context-compression-research|上下文压缩研究资料]] — RCC、CogCanvas、DAST 等学术借鉴
 - [[runtime/history|历史管理]] — Token 预算、截断策略、conversation_summary

@@ -296,6 +296,17 @@ class AgentContextManager:
                         backend=backend, max_memory_items=max_memory_items,
                         session_dir=session_dir_for_media,
                     )
+                    # v1.23.3: Write session metadata (argv, timestamp, etc.)
+                    # for new sessions. This is the first record in the transcript.
+                    try:
+                        from helen.runtime.transcript_store import SessionMeta
+                        meta = SessionMeta.from_current_context(
+                            session_id=self._session_id,
+                            session_scope="custom",
+                        )
+                        self._transcript_store.write_meta(meta)
+                    except Exception as meta_err:
+                        logger.debug("Failed to write session meta: %s", meta_err)
                     logger.debug("Created custom transcript: %s", transcript_path)
             else:
                 # Use default session management
@@ -339,6 +350,17 @@ class AgentContextManager:
                         backend=backend, max_memory_items=max_memory_items,
                         session_dir=session_dir_for_media,
                     )
+                    # v1.23.3: Write session metadata (argv, timestamp, etc.)
+                    # for new sessions. This is the first record in the transcript.
+                    try:
+                        from helen.runtime.transcript_store import SessionMeta
+                        meta = SessionMeta.from_current_context(
+                            session_id=session_id,
+                            session_scope=detected_scope,
+                        )
+                        self._transcript_store.write_meta(meta)
+                    except Exception as meta_err:
+                        logger.debug("Failed to write session meta: %s", meta_err)
                     logger.debug("Created new transcript session: %s", session_id)
 
         except Exception as e:

@@ -4,6 +4,42 @@
 
 ---
 
+## [2026-07-20] feature | v1.23.3 — Session Metadata (会话元数据)
+
+**操作**: 在 transcript 文件头自动写入 argv、timestamp、版本等上下文信息
+**状态**: ✅ 完成
+
+### 新增内容
+
+- **SessionMeta 数据类** (`helen/runtime/transcript_store.py`)
+  - 8 个字段：argv、timestamp、helen_version、python_version、platform、cwd、session_id、session_scope
+  - `from_current_context()` 类方法自动捕获当前进程环境
+- **JSONL 后端支持**：meta 作为第一行写入，`load_all()` 自动跳过
+- **SQLite 后端支持**：`session_meta` 单行表
+- **TranscriptStore API**：`write_meta()` / `read_meta()`
+- **AgentContextManager 集成**：新 session 创建时自动写入 meta
+- **stdlib 函数**：`get_session_meta()` + 中文别名 `获取会话元数据()`
+- **6 个回归测试**：覆盖 roundtrip、backward compat、JSONL/SQLite 等
+
+### 用途
+
+- **会话识别**：`cat transcript.jsonl | head -1` 立即知道程序调用参数
+- **审计追踪**：完整的启动上下文记录
+- **版本追踪**：记录 Helen/Python 版本便于兼容性排查
+- **调试便利**：启动时间精确到微秒，便于性能分析
+
+### 向后兼容
+
+- 旧 transcript 文件无 meta 行：`get_session_meta()` 返回 error
+- 新代码读旧 transcript：`read_meta()` 返回 None
+- 旧代码读新 transcript：跳过 `type == "session_meta"` 行
+
+### 测试覆盖
+
+- 21 个 transcript 测试全部通过（含 6 个新增 SessionMeta 测试）
+
+---
+
 ## [2026-07-19] bugfix | Session 目录懒初始化 — 防止空目录堆积
 
 **操作**: AgentContextManager 延迟创建 session 目录，清理历史空目录

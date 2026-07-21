@@ -366,6 +366,7 @@ ALIASES: dict[str, str] = {
 
     # ── Transcript (会话记录) ──────────────────────────────────────
     "获取会话id": "get_session_id",
+    "获取会话元数据": "get_session_meta",
     "列出会话": "list_sessions",
     "回放会话": "replay_transcript",
     "导出会话": "export_transcript",

@@ -175,3 +175,165 @@ class TestGenerateUuid:
     def test_unique(self):
         uids = {_generate_uuid() for _ in range(100)}
         assert len(uids) == 100  # All unique
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# v1.23.3 SessionMeta tests
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestSessionMeta:
+    """v1.23.3: Session metadata (argv, timestamp, version, etc.)."""
+
+    def test_session_meta_roundtrip(self):
+        """SessionMeta can be serialized and deserialized."""
+        from helen.runtime.transcript_store import SessionMeta
+        meta = SessionMeta(
+            argv=["helen", "test.helen"],
+            timestamp=1720435200.123,
+            helen_version="1.23.3",
+            python_version="3.12.13",
+            platform="linux-aarch64",
+            cwd="/home/test",
+            session_id="session_1720435200_abc123",
+            session_scope="project",
+        )
+        d = meta.to_dict()
+        assert d["type"] == "session_meta"
+        assert d["argv"] == ["helen", "test.helen"]
+        assert d["helen_version"] == "1.23.3"
+
+        restored = SessionMeta.from_dict(d)
+        assert restored.argv == meta.argv
+        assert restored.timestamp == meta.timestamp
+        assert restored.helen_version == meta.helen_version
+        assert restored.session_scope == meta.session_scope
+
+    def test_session_meta_from_current_context(self):
+        """from_current_context captures sys.argv and versions."""
+        from helen.runtime.transcript_store import SessionMeta
+        meta = SessionMeta.from_current_context(
+            session_id="test_session",
+            session_scope="global",
+        )
+        assert len(meta.argv) > 0  # at least python executable
+        assert meta.timestamp > 0
+        assert meta.helen_version != ""
+        assert meta.python_version != ""
+        assert meta.platform != ""
+        assert meta.cwd != ""
+        assert meta.session_id == "test_session"
+        assert meta.session_scope == "global"
+
+    def test_jsonl_backend_write_read_meta(self, tmp_path):
+        """JSONL backend can write and read session metadata."""
+        from helen.runtime.transcript_store import (
+            JSONLBackend, SessionMeta, Message,
+        )
+        path = tmp_path / "transcript.jsonl"
+        backend = JSONLBackend(path)
+
+        meta = SessionMeta(
+            argv=["helen", "test.helen"],
+            timestamp=1720435200.0,
+            helen_version="1.23.3",
+            python_version="3.12.13",
+            platform="linux-aarch64",
+            cwd="/home/test",
+            session_id="test_session",
+            session_scope="project",
+        )
+        backend.write_meta(meta)
+
+        # Verify meta is the first line
+        assert path.exists()
+        first_line = path.read_text().split("\n")[0]
+        assert '"type": "session_meta"' in first_line or '"type":"session_meta"' in first_line
+
+        # Read meta back
+        restored = backend.read_meta()
+        assert restored is not None
+        assert restored.argv == ["helen", "test.helen"]
+        assert restored.helen_version == "1.23.3"
+
+        # load_all should NOT include meta as a message
+        items = backend.load_all()
+        assert len(items) == 0  # no messages, meta is filtered out
+
+        # Append a real message, meta should still be there
+        backend.append(Message(role="user", content="hello"))
+        items = backend.load_all()
+        assert len(items) == 1
+        assert items[0].role == "user"
+
+        # Meta still readable
+        restored2 = backend.read_meta()
+        assert restored2 is not None
+        assert restored2.argv == ["helen", "test.helen"]
+
+        backend.close()
+
+    def test_jsonl_backend_read_meta_old_transcript(self, tmp_path):
+        """Old transcripts without meta return None gracefully."""
+        from helen.runtime.transcript_store import JSONLBackend, Message
+        path = tmp_path / "old_transcript.jsonl"
+        # Write an old-style transcript (no meta)
+        with open(path, "w") as f:
+            f.write('{"type": "message", "role": "user", "content": "hi"}\n')
+
+        backend = JSONLBackend(path)
+        assert backend.read_meta() is None
+
+        # load_all still works
+        items = backend.load_all()
+        assert len(items) == 1
+        backend.close()
+
+    def test_transcript_store_meta_roundtrip(self, tmp_path):
+        """TranscriptStore exposes write_meta and read_meta."""
+        from helen.runtime.transcript_store import (
+            TranscriptStore, JSONLBackend, SessionMeta, Message,
+        )
+        path = tmp_path / "transcript.jsonl"
+        backend = JSONLBackend(path)
+        store = TranscriptStore(backend=backend)
+
+        meta = SessionMeta.from_current_context(
+            session_id="test_session",
+            session_scope="project",
+        )
+        store.write_meta(meta)
+
+        # Append a message
+        store.append(Message(role="user", content="hello"))
+
+        # Read back
+        restored = store.read_meta()
+        assert restored is not None
+        assert restored.session_id == "test_session"
+        assert len(store.read_view()) == 1  # message list unaffected
+
+    def test_session_meta_in_transcript_file(self, tmp_path):
+        """End-to-end: transcript file has meta as first line."""
+        from helen.runtime.transcript_store import (
+            TranscriptStore, JSONLBackend, SessionMeta, Message,
+        )
+        import json
+        path = tmp_path / "transcript.jsonl"
+        backend = JSONLBackend(path)
+        store = TranscriptStore(backend=backend)
+
+        meta = SessionMeta(argv=["helen", "app.helen", "--mode", "test"])
+        store.write_meta(meta)
+        store.append(Message(role="user", content="hello"))
+
+        # Read raw file and verify first line
+        lines = path.read_text().strip().split("\n")
+        assert len(lines) == 2
+        first = json.loads(lines[0])
+        assert first["type"] == "session_meta"
+        assert first["argv"] == ["helen", "app.helen", "--mode", "test"]
+
+        second = json.loads(lines[1])
+        assert second["type"] == "message"
+        assert second["role"] == "user"

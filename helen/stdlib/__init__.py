@@ -162,6 +162,7 @@ from helen.stdlib.context import (
 # Import transcript functions (Phase 1 SSOT)
 from helen.stdlib.transcript import (
     get_session_id as _get_session_id,
+    get_session_meta as _get_session_meta,  # v1.23.3: session metadata
     list_sessions as _list_sessions,
     replay_transcript as _replay_transcript,
     export_transcript as _export_transcript,
@@ -1253,6 +1254,7 @@ def _register_transcript() -> list[BuiltinFunction]:
     return [
         # Transcript management (Phase 1 SSOT)
         BuiltinFunction("get_session_id", "Get current transcript session ID", "get_session_id()", _get_session_id, "transcript"),
+        BuiltinFunction("get_session_meta", "Get session metadata (argv, timestamp, version)", "get_session_meta(session_id?)", _get_session_meta, "transcript"),
         BuiltinFunction("list_sessions", "List all transcript sessions", "list_sessions()", _list_sessions, "transcript"),
         BuiltinFunction("replay_transcript", "Replay transcript messages with optional invocation filtering", "replay_transcript(session_id?, include_compressed?, agent?, invocation_id?, last_only?, include_subtree?)", _replay_transcript, "transcript"),
         BuiltinFunction("export_transcript", "Export transcript to file", "export_transcript(output_path, format?, session_id?)", _export_transcript, "transcript"),
