@@ -16,13 +16,24 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Global reference to interpreter's agent context (set by interpreter)
-_interpreter_agent_context = None
+# Thread-local storage for the interpreter's agent context.
+#
+# v1.23.4 fix: Previously this was a module-level global, which meant that
+# spawning a child Interpreter (in a daemon thread) would overwrite the
+# main thread's agent context via _set_transcript_context(). This caused
+# the main thread to see the spawned session's ID (or None) after spawn.
+#
+# With thread-local storage, each thread has its own agent context:
+#   - Main thread: set during Interpreter.__init__ / _register_stdlib
+#   - Spawned thread: set when spawned_interp._register_stdlib runs
+# The two never interfere, preserving Helen's runtime isolation design.
+_agent_context_local = threading.local()
 
 
 def _set_transcript_context(agent_context: Any) -> None:
@@ -31,11 +42,22 @@ def _set_transcript_context(agent_context: Any) -> None:
     Called by the interpreter during initialization to provide stdlib functions
     with access to the transcript store.
 
+    v1.23.4: Stores in thread-local storage so concurrent Interpreters
+    (e.g. spawn) don't clobber each other's context.
+
     Args:
         agent_context: The interpreter's AgentContextManager instance
     """
-    global _interpreter_agent_context
-    _interpreter_agent_context = agent_context
+    _agent_context_local.ctx = agent_context
+
+
+def _get_agent_context() -> Any:
+    """Get the current thread's agent context.
+
+    Returns:
+        The AgentContextManager for the current thread, or None if not set.
+    """
+    return getattr(_agent_context_local, "ctx", None)
 
 
 def get_session_id() -> str:
@@ -48,10 +70,10 @@ def get_session_id() -> str:
         let session = get_session_id()
         print("Session: {session}")
     """
-    if _interpreter_agent_context is None:
+    if _get_agent_context() is None:
         return ""
 
-    session_id = getattr(_interpreter_agent_context, "session_id", None)
+    session_id = getattr(_get_agent_context(), "session_id", None)
     if session_id is None:
         return ""
 
@@ -91,10 +113,10 @@ def get_session_meta(session_id: str = "") -> dict[str, Any]:
             print("Helen version: " + meta["data"]["helen_version"])
         }
     """
-    if _interpreter_agent_context is None:
+    if _get_agent_context() is None:
         return {"status": "error", "error": "TranscriptStore not enabled"}
 
-    store = getattr(_interpreter_agent_context, "transcript_store", None)
+    store = getattr(_get_agent_context(), "transcript_store", None)
     if store is None:
         return {"status": "error", "error": "TranscriptStore not available"}
 
@@ -230,15 +252,15 @@ def replay_transcript(
     """
     from helen.runtime.transcript_store import BoundaryMarker, Message
 
-    if _interpreter_agent_context is None:
+    if _get_agent_context() is None:
         return []
 
-    store = getattr(_interpreter_agent_context, "transcript_store", None)
+    store = getattr(_get_agent_context(), "transcript_store", None)
     if store is None:
         return []
 
     # If session_id is specified and different from current, load that session
-    current_session_id = getattr(_interpreter_agent_context, "session_id", None)
+    current_session_id = getattr(_get_agent_context(), "session_id", None)
     if session_id is not None and session_id != current_session_id:
         from helen.runtime.config import resolve_session_dir
         from helen.runtime.session_manager import SessionManager
@@ -525,9 +547,9 @@ def search_transcript(
     # no interpreter, there's no "current" session - return empty (don't fall
     # through to disk, which would search unrelated historical sessions).
     if scope == "current":
-        if _interpreter_agent_context is None:
+        if _get_agent_context() is None:
             return []
-        store = getattr(_interpreter_agent_context, "transcript_store", None)
+        store = getattr(_get_agent_context(), "transcript_store", None)
         current_sid = get_session_id()
 
         # If session_id is specified and differs from current, fall through to disk
@@ -553,9 +575,9 @@ def search_transcript(
             return results[:limit]
         # session_id specified but not current -> fall through to disk search below
 
-    elif scope in ("", "global", "project") and session_id is None and _interpreter_agent_context is not None:
+    elif scope in ("", "global", "project") and session_id is None and _get_agent_context() is not None:
         # Implicit "current": interpreter exists, no explicit scope/session_id
-        store = getattr(_interpreter_agent_context, "transcript_store", None)
+        store = getattr(_get_agent_context(), "transcript_store", None)
         current_sid = get_session_id()
         if store is not None:
             from helen.runtime.transcript_store import BoundaryMarker, Message
@@ -993,10 +1015,10 @@ def get_compression_audit() -> list[dict[str, Any]]:
             print("{event.layer}: {event.original_token_count} -> {event.compressed_token_count}")
         }
     """
-    if _interpreter_agent_context is None:
+    if _get_agent_context() is None:
         return []
 
-    store = getattr(_interpreter_agent_context, "transcript_store", None)
+    store = getattr(_get_agent_context(), "transcript_store", None)
     if store is None:
         return []
 
@@ -1032,10 +1054,10 @@ def resume_session(session_id: str) -> bool:
             print("Failed to resume session")
         }
     """
-    if _interpreter_agent_context is None:
+    if _get_agent_context() is None:
         return False
 
-    store = getattr(_interpreter_agent_context, "transcript_store", None)
+    store = getattr(_get_agent_context(), "transcript_store", None)
     if store is None:
         return False
 
@@ -1399,8 +1421,8 @@ def delete_current_session(confirm: bool = False) -> dict:
             logger.warning("Deleted current session %s, freed %d bytes", session_id, freed_bytes)
 
             # Clear the current transcript store
-            if _interpreter_agent_context is not None:
-                store = getattr(_interpreter_agent_context, "transcript_store", None)
+            if _get_agent_context() is not None:
+                store = getattr(_get_agent_context(), "transcript_store", None)
                 if store is not None:
                     store.transcript.clear()
                     store._uuid_index.clear()

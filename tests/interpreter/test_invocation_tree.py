@@ -271,7 +271,7 @@ class TestInvocationTreeQueries:
         import helen.stdlib.transcript as tm
 
         interp = _make_interp()
-        tm._interpreter_agent_context = interp._agent_context
+        tm._set_transcript_context(interp._agent_context)
         self._build_session(interp)
 
         # Get session_id from interp
@@ -290,7 +290,7 @@ class TestInvocationTreeQueries:
         import helen.stdlib.transcript as tm
 
         interp = _make_interp()
-        tm._interpreter_agent_context = interp._agent_context
+        tm._set_transcript_context(interp._agent_context)
         top_inv, a_inv, b_inv = self._build_session(interp)
 
         sid = interp._agent_context.session_id
@@ -308,7 +308,7 @@ class TestInvocationTreeQueries:
         import helen.stdlib.transcript as tm
 
         interp = _make_interp()
-        tm._interpreter_agent_context = interp._agent_context
+        tm._set_transcript_context(interp._agent_context)
         self._build_session(interp)
 
         sid = interp._agent_context.session_id
@@ -324,7 +324,7 @@ class TestInvocationTreeQueries:
         import helen.stdlib.transcript as tm
 
         interp = _make_interp()
-        tm._interpreter_agent_context = interp._agent_context
+        tm._set_transcript_context(interp._agent_context)
         self._build_session(interp)
 
         sid = interp._agent_context.session_id
@@ -361,7 +361,7 @@ class TestReplayTranscriptFilter:
         import helen.stdlib.transcript as tm
 
         interp = _make_interp()
-        tm._interpreter_agent_context = interp._agent_context
+        tm._set_transcript_context(interp._agent_context)
         top_inv, a_inv, b_inv = self._build_session(interp)
 
         sid = interp._agent_context.session_id
@@ -375,7 +375,7 @@ class TestReplayTranscriptFilter:
         import helen.stdlib.transcript as tm
 
         interp = _make_interp()
-        tm._interpreter_agent_context = interp._agent_context
+        tm._set_transcript_context(interp._agent_context)
         top_inv, a_inv, b_inv = self._build_session(interp)
 
         sid = interp._agent_context.session_id
@@ -389,7 +389,7 @@ class TestReplayTranscriptFilter:
         import helen.stdlib.transcript as tm
 
         interp = _make_interp()
-        tm._interpreter_agent_context = interp._agent_context
+        tm._set_transcript_context(interp._agent_context)
 
         top_inv = interp._enter_invocation(None)
 

@@ -43,9 +43,8 @@ class TestIssue12CompressContextTranscriptStore:
         mock_manager = Mock()
         mock_manager.MAX_TOKENS = 131072
 
-        _set_interpreter_context(mock_history, mock_manager)
+        _set_interpreter_context(mock_history, mock_manager, mock_agent_context)
         from helen.stdlib import context
-        context._interpreter_agent_context = mock_agent_context
 
         # summarize should not raise ImportError and should compress
         result = _compress_context("summarize")
@@ -74,9 +73,8 @@ class TestIssue12CompressContextTranscriptStore:
         mock_manager = Mock()
         mock_manager.MAX_TOKENS = 131072
 
-        _set_interpreter_context(mock_history, mock_manager)
+        _set_interpreter_context(mock_history, mock_manager, mock_agent_context)
         from helen.stdlib import context
-        context._interpreter_agent_context = mock_agent_context
 
         # truncate should not raise ImportError and should compress
         result = _compress_context("truncate")
@@ -101,9 +99,8 @@ class TestIssue12CompressContextTranscriptStore:
         mock_history = []
         mock_manager = Mock()
 
-        _set_interpreter_context(mock_history, mock_manager)
+        _set_interpreter_context(mock_history, mock_manager, mock_agent_context)
         from helen.stdlib import context
-        context._interpreter_agent_context = mock_agent_context
 
         # none should not raise ImportError
         result = _compress_context("none")

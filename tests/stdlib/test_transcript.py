@@ -23,16 +23,16 @@ class TestTranscriptStdlib:
     @pytest.fixture(autouse=True)
     def reset_global_state(self):
         """Reset global interpreter context before each test."""
-        # Save original state
-        original_context = transcript_module._interpreter_agent_context
+        # Save original state (v1.23.4: use thread-local getter)
+        original_context = transcript_module._get_agent_context()
 
         # Reset to None for clean test state
-        transcript_module._interpreter_agent_context = None
+        transcript_module._set_transcript_context(None)
 
         yield
 
         # Restore original state after test
-        transcript_module._interpreter_agent_context = original_context
+        transcript_module._set_transcript_context(original_context)
 
     def test_get_session_id_no_interpreter(self):
         """Test get_session_id with no active interpreter."""
@@ -183,3 +183,108 @@ class TestTranscriptStdlib:
             assert result == ""  # Should return empty string on error
         finally:
             transcript_module.replay_transcript = original_replay
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# v1.23.4 regression tests: Thread-local agent context isolation
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestThreadLocalAgentContext:
+    """v1.23.4 fix: agent context is thread-local to prevent spawn pollution.
+
+    Before v1.23.4, _interpreter_agent_context was a module-level global.
+    When spawn created a child Interpreter in a daemon thread, the child's
+    _set_transcript_context() would overwrite the main thread's context,
+    causing the main thread to see the spawned session's ID (or None)
+    after spawn. These tests verify the fix.
+    """
+
+    def test_agent_context_is_thread_local(self):
+        """Each thread sees its own agent context."""
+        import threading
+        from helen.stdlib.transcript import _set_transcript_context, _get_agent_context
+
+        # Main thread sets a context
+        class FakeCtx:
+            session_id = "main_session"
+
+        _set_transcript_context(FakeCtx())
+        assert _get_agent_context().session_id == "main_session"
+
+        # Child thread sets a different context
+        results = {}
+
+        def child():
+            class ChildCtx:
+                session_id = "child_session"
+            _set_transcript_context(ChildCtx())
+            results["child_sees"] = _get_agent_context().session_id
+
+        t = threading.Thread(target=child)
+        t.start()
+        t.join()
+
+        # Child thread saw its own context
+        assert results["child_sees"] == "child_session"
+
+        # Main thread STILL sees its own context (not polluted)
+        assert _get_agent_context().session_id == "main_session"
+
+        # Cleanup
+        _set_transcript_context(None)
+
+    def test_agent_context_default_none(self):
+        """New thread with no context set returns None."""
+        import threading
+        from helen.stdlib.transcript import _get_agent_context
+
+        results = {}
+
+        def child():
+            results["ctx"] = _get_agent_context()
+
+        t = threading.Thread(target=child)
+        t.start()
+        t.join()
+
+        assert results["ctx"] is None
+
+    def test_get_session_id_unaffected_by_spawn(self):
+        """get_session_id() in main thread is stable across spawn-like operations.
+
+        Simulates the bug: before v1.23.4, spawning a thread that calls
+        _set_transcript_context would change the main thread's session_id.
+        """
+        import threading
+        from helen.stdlib.transcript import (
+            _set_transcript_context, _get_agent_context,
+        )
+
+        class MainCtx:
+            session_id = "main_session_123"
+
+        class SpawnedCtx:
+            session_id = "spawned_session_456"
+
+        _set_transcript_context(MainCtx())
+        main_before = _get_agent_context().session_id
+
+        # Simulate spawn: child thread sets its own context
+        def spawn_sim():
+            _set_transcript_context(SpawnedCtx())
+
+        t = threading.Thread(target=spawn_sim)
+        t.start()
+        t.join()
+
+        main_after = _get_agent_context().session_id
+
+        # Main thread's session_id must be unchanged
+        assert main_before == "main_session_123"
+        assert main_after == "main_session_123", (
+            f"Main thread polluted by spawn! before={main_before}, after={main_after}"
+        )
+
+        # Cleanup
+        _set_transcript_context(None)

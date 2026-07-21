@@ -62,7 +62,7 @@ class TestSearchTranscriptBasic:
     """Basic search behavior."""
 
     def teardown_method(self):
-        transcript_module._interpreter_agent_context = None
+        transcript_module._set_transcript_context(None)
 
     def test_empty_query_returns_empty(self):
         """Empty query should return no results."""
@@ -71,7 +71,7 @@ class TestSearchTranscriptBasic:
 
     def test_no_interpreter_returns_empty(self):
         """Without interpreter, current session search returns empty."""
-        transcript_module._interpreter_agent_context = None
+        transcript_module._set_transcript_context(None)
         result = search_transcript("anything")
         assert result == []
 
@@ -82,7 +82,7 @@ class TestSearchTranscriptBasic:
             _make_msg(role="assistant", content="Hi there", uuid="a1"),
             _make_msg(role="user", content="How are you today?", uuid="u2"),
         ]
-        transcript_module._interpreter_agent_context = _mock_agent_context_with_messages(messages)
+        transcript_module._set_transcript_context(_mock_agent_context_with_messages(messages))
 
         results = search_transcript("Hello")
         assert len(results) == 1
@@ -98,7 +98,7 @@ class TestSearchTranscriptBasic:
             _make_msg(role="assistant", content="Hello back", uuid="a1"),
             _make_msg(role="user", content="Goodbye", uuid="u2"),
         ]
-        transcript_module._interpreter_agent_context = _mock_agent_context_with_messages(messages)
+        transcript_module._set_transcript_context(_mock_agent_context_with_messages(messages))
 
         results = search_transcript("Hello")
         assert len(results) == 2
@@ -111,7 +111,7 @@ class TestSearchTranscriptBasic:
             _make_msg(role="user", content="Hello World", uuid="u1"),
             _make_msg(role="assistant", content="hello world", uuid="a1"),
         ]
-        transcript_module._interpreter_agent_context = _mock_agent_context_with_messages(messages)
+        transcript_module._set_transcript_context(_mock_agent_context_with_messages(messages))
 
         results = search_transcript("Hello")
         assert len(results) == 1
@@ -122,7 +122,7 @@ class TestSearchTranscriptBasic:
         messages = [
             _make_msg(role="user", content="Hello", uuid="u1"),
         ]
-        transcript_module._interpreter_agent_context = _mock_agent_context_with_messages(messages)
+        transcript_module._set_transcript_context(_mock_agent_context_with_messages(messages))
 
         results = search_transcript("xyz")
         assert results == []
@@ -136,7 +136,7 @@ class TestSearchTranscriptRegex:
     """Regex search behavior."""
 
     def teardown_method(self):
-        transcript_module._interpreter_agent_context = None
+        transcript_module._set_transcript_context(None)
 
     def test_regex_match(self):
         """Regex search works."""
@@ -145,7 +145,7 @@ class TestSearchTranscriptRegex:
             _make_msg(role="user", content="fix feature xyz", uuid="u2"),
             _make_msg(role="user", content="no changes here", uuid="u3"),
         ]
-        transcript_module._interpreter_agent_context = _mock_agent_context_with_messages(messages)
+        transcript_module._set_transcript_context(_mock_agent_context_with_messages(messages))
 
         results = search_transcript("fix.*\\d+", regex=True)
         assert len(results) == 1
@@ -154,7 +154,7 @@ class TestSearchTranscriptRegex:
     def test_invalid_regex_returns_empty(self):
         """Invalid regex pattern returns empty results (no crash)."""
         messages = [_make_msg(role="user", content="Hello", uuid="u1")]
-        transcript_module._interpreter_agent_context = _mock_agent_context_with_messages(messages)
+        transcript_module._set_transcript_context(_mock_agent_context_with_messages(messages))
 
         results = search_transcript("[invalid", regex=True)
         assert results == []
@@ -168,7 +168,7 @@ class TestSearchTranscriptRole:
     """Role filtering."""
 
     def teardown_method(self):
-        transcript_module._interpreter_agent_context = None
+        transcript_module._set_transcript_context(None)
 
     def test_filter_by_role(self):
         """Role filter restricts to matching messages."""
@@ -177,7 +177,7 @@ class TestSearchTranscriptRole:
             _make_msg(role="assistant", content="TODO noted", uuid="a1"),
             _make_msg(role="user", content="TODO write tests", uuid="u2"),
         ]
-        transcript_module._interpreter_agent_context = _mock_agent_context_with_messages(messages)
+        transcript_module._set_transcript_context(_mock_agent_context_with_messages(messages))
 
         results = search_transcript("TODO", role="user")
         assert len(results) == 2
@@ -188,7 +188,7 @@ class TestSearchTranscriptRole:
         messages = [
             _make_msg(role="assistant", content="TODO", uuid="a1"),
         ]
-        transcript_module._interpreter_agent_context = _mock_agent_context_with_messages(messages)
+        transcript_module._set_transcript_context(_mock_agent_context_with_messages(messages))
 
         results = search_transcript("TODO", role="user")
         assert results == []
@@ -202,13 +202,13 @@ class TestSearchTranscriptLimit:
     """Limit behavior."""
 
     def teardown_method(self):
-        transcript_module._interpreter_agent_context = None
+        transcript_module._set_transcript_context(None)
 
     def test_limit_respected(self):
         """Limit parameter caps results."""
         messages = [_make_msg(role="user", content=f"TODO item {i}", uuid=f"u{i}")
                     for i in range(20)]
-        transcript_module._interpreter_agent_context = _mock_agent_context_with_messages(messages)
+        transcript_module._set_transcript_context(_mock_agent_context_with_messages(messages))
 
         results = search_transcript("TODO", limit=5)
         assert len(results) == 5
@@ -222,14 +222,14 @@ class TestSearchTranscriptSnippet:
     """Snippet generation."""
 
     def teardown_method(self):
-        transcript_module._interpreter_agent_context = None
+        transcript_module._set_transcript_context(None)
 
     def test_snippet_contains_match(self):
         """Snippet should contain the matched content."""
         messages = [
             _make_msg(role="user", content="A " * 100 + "TARGET" + " B " * 100, uuid="u1"),
         ]
-        transcript_module._interpreter_agent_context = _mock_agent_context_with_messages(messages)
+        transcript_module._set_transcript_context(_mock_agent_context_with_messages(messages))
 
         results = search_transcript("TARGET")
         assert len(results) == 1
@@ -245,7 +245,7 @@ class TestSearchTranscriptCrossSession:
     """Cross-session search (scope='all')."""
 
     def teardown_method(self):
-        transcript_module._interpreter_agent_context = None
+        transcript_module._set_transcript_context(None)
 
     def test_scope_all_searches_multiple_sessions(self, tmp_path, monkeypatch):
         """scope='all' searches across multiple session directories."""
@@ -265,7 +265,7 @@ class TestSearchTranscriptCrossSession:
             "helen.runtime.config.resolve_session_dir", fake_resolve
         )
         # Remove in-memory interpreter context to force disk search
-        transcript_module._interpreter_agent_context = None
+        transcript_module._set_transcript_context(None)
 
         results = search_transcript("auth bug", scope="all")
         assert len(results) == 2
@@ -284,7 +284,7 @@ class TestSearchTranscriptCrossSession:
         monkeypatch.setattr(
             "helen.runtime.config.resolve_session_dir", fake_resolve
         )
-        transcript_module._interpreter_agent_context = None
+        transcript_module._set_transcript_context(None)
 
         results = search_transcript("auth bug", session_id="session_A", scope="all")
         assert len(results) == 1
@@ -299,7 +299,7 @@ class TestSearchTranscriptMultimodal:
     """Multimodal content handling."""
 
     def teardown_method(self):
-        transcript_module._interpreter_agent_context = None
+        transcript_module._set_transcript_context(None)
 
     def test_multimodal_content_flattened(self):
         """Multimodal content (list) is flattened to text for search."""
@@ -317,7 +317,7 @@ class TestSearchTranscriptMultimodal:
         agent_context = MagicMock()
         agent_context.transcript_store = store
         agent_context.session_id = "session_test"
-        transcript_module._interpreter_agent_context = agent_context
+        transcript_module._set_transcript_context(agent_context)
 
         results = search_transcript("Hello")
         assert len(results) == 1

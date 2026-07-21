@@ -4,6 +4,44 @@
 
 ---
 
+## [2026-07-20] bugfix | v1.23.4 - 线程局部存储修复 spawn 污染主线程 agent context
+
+**操作**: 将 stdlib 的全局 agent context 改为 `threading.local()` 线程局部存储
+**状态**: ✅ 完成
+
+### Bug 描述
+
+`helen.stdlib.transcript._interpreter_agent_context` 和 `helen.stdlib.context._interpreter_agent_context` 原本是模块级全局变量。当 `spawn` 创建子 Interpreter（在 daemon 线程中运行）时，子 Interpreter 的 `_register_stdlib()` 会调用 `_set_transcript_context()` 覆盖全局变量，导致：
+
+- 主线程 `get_session_id()` 返回错误值（空字符串或 spawned 的 session_id）
+- 主线程后续的 `llm act`、`working_memory_set`、`compress_context` 等所有 stdlib 调用指向错误的 context
+- 消息可能写入 spawned 的 transcript 而非主 transcript
+
+### 修复方案
+
+用 `threading.local()` 替换模块级全局变量：
+
+**`helen/stdlib/transcript.py`**: `_interpreter_agent_context` -> `_agent_context_local = threading.local()` + `_get_agent_context()` getter
+**`helen/stdlib/context.py`**: 三个全局变量 -> `_interp_state_local = threading.local()` + 三个 getter
+**`helen/interpreter/agent_context.py`**: 直接导入全局变量的地方改用 getter 函数
+
+### 效果
+
+```
+Before spawn: session_1784598900_5568c660
+After spawn:  session_1784598900_5568c660  ✅ 相同（修复前会变空）
+```
+
+每个线程有自己的 agent context，互不污染，符合 Helen 的运行时隔离设计。
+
+### 测试
+
+- 3 个新增回归测试（`TestThreadLocalAgentContext`）
+- 5 个测试文件适配新 API
+- 全部 1686 个测试通过，无回归
+
+---
+
 ## [2026-07-20] feature | v1.23.3 — Session Metadata (会话元数据)
 
 **操作**: 在 transcript 文件头自动写入 argv、timestamp、版本等上下文信息

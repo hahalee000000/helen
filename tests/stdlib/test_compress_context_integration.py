@@ -46,10 +46,8 @@ def mock_interpreter(agent_context_with_store):
     mock_manager = Mock()
     mock_manager.MAX_TOKENS = 131072
 
-    _set_interpreter_context(mock_history, mock_manager)
-
-    from helen.stdlib import context
-    context._interpreter_agent_context = agent_ctx
+    # v1.23.4: Use setter (thread-local storage) instead of direct global assignment
+    _set_interpreter_context(mock_history, mock_manager, agent_ctx)
 
     yield agent_ctx, store
 

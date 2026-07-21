@@ -174,6 +174,7 @@ helen/
     - **`spawn`** → 新建 Interpreter → 新建 session_id 与 transcript 目录
     - **普通 agent 调用**（同进程）→ 共享 Interpreter → 共享 session_id，靠 `invocation_id` 区分
     - **跨运行时继承必须显式编程**：用 `resume_session(parent_sid)` 或 `Channel.send(sid)` 传递，不自动共享。这是"显式优于隐式"的体现，避免并发写入污染与状态混乱
+    - **线程隔离 (v1.23.4 fix)**: agent context（`_interpreter_agent_context`）使用 `threading.local()` 线程局部存储，确保 `spawn` 创建的子线程不会污染主线程的 session_id/transcript。修复前 spawn 后主线程 `get_session_id()` 会返回错误值（空字符串或 spawned 的 ID）
   - **Configuration**:
     ```yaml
     transcript:

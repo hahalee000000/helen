@@ -24,14 +24,21 @@ These functions allow applications to control context growth in long-running age
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Global reference to interpreter's history manager (set by interpreter)
-_interpreter_history_manager = None
-_interpreter_history = None
-_interpreter_agent_context = None
+# Thread-local storage for interpreter state.
+#
+# v1.23.4 fix: Previously these were module-level globals, which meant that
+# spawning a child Interpreter (in a daemon thread) would overwrite the
+# main thread's state via _set_interpreter_context(). This caused the main
+# thread to operate on the spawned interpreter's history/context after spawn.
+#
+# With thread-local storage, each thread has its own interpreter state,
+# preserving Helen's runtime isolation design.
+_interp_state_local = threading.local()
 
 
 def _set_interpreter_context(
@@ -42,15 +49,32 @@ def _set_interpreter_context(
     Called by the interpreter during initialization to provide stdlib functions
     with access to the conversation history.
 
+    v1.23.4: Stores in thread-local storage so concurrent Interpreters
+    (e.g. spawn) don't clobber each other's state.
+
     Args:
         history: The interpreter's _history list
         history_manager: The interpreter's HistoryManager instance
         agent_context: The interpreter's AgentContextManager instance (optional)
     """
-    global _interpreter_history, _interpreter_history_manager, _interpreter_agent_context
-    _interpreter_history = history
-    _interpreter_history_manager = history_manager
-    _interpreter_agent_context = agent_context
+    _interp_state_local.history = history
+    _interp_state_local.history_manager = history_manager
+    _interp_state_local.agent_context = agent_context
+
+
+def _get_agent_context() -> Any:
+    """Get the current thread's agent context."""
+    return getattr(_interp_state_local, "agent_context", None)
+
+
+def _get_history() -> list | None:
+    """Get the current thread's history list."""
+    return getattr(_interp_state_local, "history", None)
+
+
+def _get_history_manager() -> Any:
+    """Get the current thread's history manager."""
+    return getattr(_interp_state_local, "history_manager", None)
 
 
 def _get_effective_history() -> list | None:
@@ -58,18 +82,18 @@ def _get_effective_history() -> list | None:
 
     Phase 2 SSOT: When TranscriptStore is enabled (the default since v1.16),
     ``llm act`` writes messages ONLY to TranscriptStore, bypassing the
-    ``_interpreter_history`` list.  Stdlib read functions (``context_stats``,
+    ``_get_history()`` list.  Stdlib read functions (``context_stats``,
     ``context_usage``, ``search_context``, …) must therefore consult
     TranscriptStore first to see the full conversation.
 
     Returns:
         List of Message objects, or None if no context is available at all.
     """
-    if _interpreter_agent_context is not None:
-        store = getattr(_interpreter_agent_context, 'transcript_store', None)
+    if _get_agent_context() is not None:
+        store = getattr(_get_agent_context(), 'transcript_store', None)
         if store is not None:
             return store.read_view()
-    return _interpreter_history
+    return _get_history()
 
 
 def _classify_message(message: Any) -> dict:
@@ -128,7 +152,7 @@ def _compress_context_target(target: str, keep_recent: int = 5) -> dict:
             "kept_messages": int,     # Messages kept intact
         }
     """
-    if _interpreter_history is None:
+    if _get_history() is None:
         return {
             "status": "error",
             "error": "No interpreter context available",
@@ -149,7 +173,7 @@ def _compress_context_target(target: str, keep_recent: int = 5) -> dict:
         }
 
     # Calculate initial token count
-    initial_tokens = sum(msg.token_count for msg in _interpreter_history if hasattr(msg, 'token_count'))
+    initial_tokens = sum(msg.token_count for msg in _get_history() if hasattr(msg, 'token_count'))
 
     if target == "tool_results":
         # Compress old tool results, preserve tool_use decisions
@@ -158,7 +182,7 @@ def _compress_context_target(target: str, keep_recent: int = 5) -> dict:
 
         # Keep the most recent 'keep_recent' tool results
         tool_result_indices = []
-        for i, msg in enumerate(_interpreter_history):
+        for i, msg in enumerate(_get_history()):
             if hasattr(msg, 'message_type'):
                 msg_type = msg.message_type or msg.infer_message_type()
                 if msg_type == "tool":
@@ -167,7 +191,7 @@ def _compress_context_target(target: str, keep_recent: int = 5) -> dict:
         # Mark old tool results for compression (keep recent ones)
         for i, idx in enumerate(tool_result_indices):
             if i < len(tool_result_indices) - keep_recent:
-                msg = _interpreter_history[idx]
+                msg = _get_history()[idx]
                 if hasattr(msg, 'compressed') and not msg.compressed:
                     # Replace content with placeholder
                     msg.content = f"[Tool result cleared: {msg.tool_call_id}]"
@@ -185,10 +209,10 @@ def _compress_context_target(target: str, keep_recent: int = 5) -> dict:
         kept_count = 0
 
         # Find turns to discard (older than keep_recent)
-        if len(_interpreter_history) > keep_recent * 2:
+        if len(_get_history()) > keep_recent * 2:
             # Mark old messages as compressed
-            for i in range(len(_interpreter_history) - keep_recent * 2):
-                msg = _interpreter_history[i]
+            for i in range(len(_get_history()) - keep_recent * 2):
+                msg = _get_history()[i]
                 if hasattr(msg, 'compressed') and not msg.compressed:
                     # Keep system messages
                     if msg.role == "system":
@@ -212,10 +236,10 @@ def _compress_context_target(target: str, keep_recent: int = 5) -> dict:
                 else:
                     kept_count += 1
         else:
-            kept_count = len(_interpreter_history)
+            kept_count = len(_get_history())
 
     # Calculate final token count
-    final_tokens = sum(msg.token_count for msg in _interpreter_history if hasattr(msg, 'token_count'))
+    final_tokens = sum(msg.token_count for msg in _get_history() if hasattr(msg, 'token_count'))
     saved_tokens = initial_tokens - final_tokens
 
     return {
@@ -223,7 +247,7 @@ def _compress_context_target(target: str, keep_recent: int = 5) -> dict:
         "target": target,
         "compressed": compressed_count,
         "saved_tokens": saved_tokens,
-        "kept_messages": len(_interpreter_history),
+        "kept_messages": len(_get_history()),
     }
 
 
@@ -254,7 +278,7 @@ def _clear_context() -> dict:
         This clears all conversation history. The LLM will lose all previous context.
         Use with caution in production applications.
     """
-    if _interpreter_history is None:
+    if _get_history() is None:
         return {
             "status": "error",
             "error": "No interpreter context available",
@@ -262,14 +286,14 @@ def _clear_context() -> dict:
         }
 
     # Calculate tokens before clearing
-    estimated_tokens = sum(msg.token_count for msg in _interpreter_history if hasattr(msg, 'token_count'))
-    cleared_count = len(_interpreter_history)
+    estimated_tokens = sum(msg.token_count for msg in _get_history() if hasattr(msg, 'token_count'))
+    cleared_count = len(_get_history())
 
     # Phase 11: Use AgentContextManager for unified clearing
-    if _interpreter_agent_context is not None:
-        result = _interpreter_agent_context.clear_context()
+    if _get_agent_context() is not None:
+        result = _get_agent_context().clear_context()
         # Also clear the history list itself
-        _interpreter_history.clear()
+        _get_history().clear()
         return {
             "status": "ok",
             "cleared_messages": cleared_count,
@@ -279,7 +303,7 @@ def _clear_context() -> dict:
         }
     else:
         # Fallback: clear directly
-        _interpreter_history.clear()
+        _get_history().clear()
         return {
             "status": "ok",
             "cleared_messages": cleared_count,
@@ -332,7 +356,7 @@ def _compress_context(strategy: str = "auto") -> dict:
         - "truncate" is fast but loses old messages
         - Returns original == compressed if no compression was needed
     """
-    if _interpreter_history is None or _interpreter_history_manager is None:
+    if _get_history() is None or _get_history_manager() is None:
         return {
             "status": "error",
             "error": "No interpreter context available",
@@ -343,9 +367,9 @@ def _compress_context(strategy: str = "auto") -> dict:
 
     # Phase 2 SSOT: When TranscriptStore is enabled, delegate to AgentContextManager
     # which properly records BoundaryMarkers instead of doing destructive in-place replacement.
-    if _interpreter_agent_context is not None and _interpreter_agent_context.transcript_store is not None:
+    if _get_agent_context() is not None and _get_agent_context().transcript_store is not None:
         # Get the current view from TranscriptStore (this is the real history)
-        current_history = _interpreter_agent_context.transcript_store.read_view()
+        current_history = _get_agent_context().transcript_store.read_view()
 
         if len(current_history) <= 1:
             return {
@@ -382,12 +406,12 @@ def _compress_context(strategy: str = "auto") -> dict:
             from helen.runtime.graduated_compression import _force_compact
             compressed = _force_compact(
                 list(current_history),
-                llm_client=getattr(_interpreter_agent_context, 'llm_client', None),
+                llm_client=getattr(_get_agent_context(), 'llm_client', None),
                 target_tokens=max_tokens // 10
             )
             # Record compression in TranscriptStore for audit trail (creates BoundaryMarker)
             if compressed != current_history and len(compressed) < len(current_history):
-                _interpreter_agent_context._record_compression_ssot(
+                _get_agent_context()._record_compression_ssot(
                     current_history, compressed, "force_compact"
                 )
         elif strategy == "truncate":
@@ -396,12 +420,12 @@ def _compress_context(strategy: str = "auto") -> dict:
             compressed = _context_collapse(list(current_history))
             # Record compression in TranscriptStore for audit trail
             if compressed != current_history and len(compressed) < len(current_history):
-                _interpreter_agent_context._record_compression_ssot(
+                _get_agent_context()._record_compression_ssot(
                     current_history, compressed, "context_collapse"
                 )
         elif strategy == "auto":
             # Use AgentContextManager's _compress_history which respects thresholds
-            compressed = _interpreter_agent_context._compress_history(current_history, max_tokens)
+            compressed = _get_agent_context()._compress_history(current_history, max_tokens)
         else:
             return {
                 "status": "error",
@@ -427,17 +451,17 @@ def _compress_context(strategy: str = "auto") -> dict:
         }
 
     # Fallback: Legacy path for when TranscriptStore is not enabled.
-    # This performs destructive in-place replacement on _interpreter_history.
+    # This performs destructive in-place replacement on _get_history().
     # Phase 11: Use AgentContextManager for "auto" strategy (Layer 5)
-    if strategy == "auto" and _interpreter_agent_context is not None:
-        original_count = len(_interpreter_history)
-        result = _interpreter_agent_context.compress_context()
+    if strategy == "auto" and _get_agent_context() is not None:
+        original_count = len(_get_history())
+        result = _get_agent_context().compress_context()
 
         return {
             "status": result.get("status", "ok"),
             "reason": result.get("reason", ""),
             "original_messages": original_count,
-            "compressed_messages": len(_interpreter_history),
+            "compressed_messages": len(_get_history()),
             "original_tokens": result.get("original_tokens", 0),
             "compressed_tokens": result.get("compressed_tokens", 0),
             "saved_tokens": result.get("saved_tokens", 0),
@@ -447,40 +471,40 @@ def _compress_context(strategy: str = "auto") -> dict:
     # Legacy strategies (for backward compatibility)
     if strategy == "none":
         # Calculate tokens using Message.token_count property
-        total_tokens = sum(msg.token_count for msg in _interpreter_history if hasattr(msg, 'token_count'))
+        total_tokens = sum(msg.token_count for msg in _get_history() if hasattr(msg, 'token_count'))
         return {
             "status": "ok",
-            "original_messages": len(_interpreter_history),
-            "compressed_messages": len(_interpreter_history),
+            "original_messages": len(_get_history()),
+            "compressed_messages": len(_get_history()),
             "original_tokens": total_tokens,
             "compressed_tokens": total_tokens,
             "strategy": "none",
         }
 
     # Get stats before compression
-    original_count = len(_interpreter_history)
-    original_tokens = sum(msg.token_count for msg in _interpreter_history if hasattr(msg, 'token_count'))
+    original_count = len(_get_history())
+    original_tokens = sum(msg.token_count for msg in _get_history() if hasattr(msg, 'token_count'))
 
     # Perform compression
     if strategy == "auto":
         # Use HistoryManager's enforce_limit (respects compression_mode setting)
-        _interpreter_history[:] = _interpreter_history_manager.enforce_limit(_interpreter_history)
+        _get_history()[:] = _get_history_manager().enforce_limit(_get_history())
     elif strategy == "summarize":
         # Use _force_compact for explicit user request (no threshold check)
         from helen.runtime.graduated_compression import _force_compact
         compressed = _force_compact(
-            list(_interpreter_history),
-            llm_client=getattr(_interpreter_agent_context, 'llm_client', None) if _interpreter_agent_context else None,
-            target_tokens=_interpreter_history_manager.MAX_TOKENS // 10
+            list(_get_history()),
+            llm_client=getattr(_get_agent_context(), 'llm_client', None) if _get_agent_context() else None,
+            target_tokens=_get_history_manager().MAX_TOKENS // 10
         )
-        if len(compressed) < len(_interpreter_history):
-            _interpreter_history[:] = compressed
+        if len(compressed) < len(_get_history()):
+            _get_history()[:] = compressed
     elif strategy == "truncate":
         # Directly use Layer 4 (_context_collapse) for truncation
         from helen.runtime.graduated_compression import _context_collapse
-        compressed = _context_collapse(list(_interpreter_history))
-        if len(compressed) < len(_interpreter_history):
-            _interpreter_history[:] = compressed
+        compressed = _context_collapse(list(_get_history()))
+        if len(compressed) < len(_get_history()):
+            _get_history()[:] = compressed
     else:
         return {
             "status": "error",
@@ -491,8 +515,8 @@ def _compress_context(strategy: str = "auto") -> dict:
         }
 
     # Get stats after compression
-    compressed_count = len(_interpreter_history)
-    compressed_tokens = sum(msg.token_count for msg in _interpreter_history if hasattr(msg, 'token_count'))
+    compressed_count = len(_get_history())
+    compressed_tokens = sum(msg.token_count for msg in _get_history() if hasattr(msg, 'token_count'))
 
     return {
         "status": "ok",
@@ -524,16 +548,16 @@ def _find_message_by_uuid(uuid: str) -> Any:
         return None
 
     # Prefer TranscriptStore's UUID index (O(1))
-    if _interpreter_agent_context is not None:
-        store = getattr(_interpreter_agent_context, 'transcript_store', None)
+    if _get_agent_context() is not None:
+        store = getattr(_get_agent_context(), 'transcript_store', None)
         if store is not None:
             item = store.get(uuid)
             if item is not None and hasattr(item, 'role'):  # It's a Message, not a BoundaryMarker
                 return item
 
     # Fallback: linear scan of interpreter history
-    if _interpreter_history is not None:
-        for msg in _interpreter_history:
+    if _get_history() is not None:
+        for msg in _get_history():
             if getattr(msg, 'uuid', '') == uuid:
                 return msg
 
@@ -542,8 +566,8 @@ def _find_message_by_uuid(uuid: str) -> Any:
 
 def _get_max_tokens() -> int:
     """Get the configured context window size (max tokens)."""
-    if _interpreter_history_manager is not None:
-        return getattr(_interpreter_history_manager, 'MAX_TOKENS', 0)
+    if _get_history_manager() is not None:
+        return getattr(_get_history_manager(), 'MAX_TOKENS', 0)
     return 0
 
 
@@ -751,15 +775,15 @@ def _delete_message(uuid: str) -> dict:
     deleted_tokens = getattr(msg, 'token_count', 0)
 
     # Remove from interpreter history (list scan, stable even if multiple refs)
-    if _interpreter_history is not None:
+    if _get_history() is not None:
         try:
-            _interpreter_history.remove(msg)
+            _get_history().remove(msg)
         except ValueError:
             pass
 
     # Remove from TranscriptStore (both in-memory transcript and uuid index)
-    if _interpreter_agent_context is not None:
-        store = getattr(_interpreter_agent_context, 'transcript_store', None)
+    if _get_agent_context() is not None:
+        store = getattr(_get_agent_context(), 'transcript_store', None)
         if store is not None:
             # Remove from uuid index
             store._uuid_index.pop(uuid, None)
@@ -814,8 +838,8 @@ def _pin_message(uuid: str) -> dict:
     msg.pinned = True
 
     # If TranscriptStore holds a different reference, update it too
-    if _interpreter_agent_context is not None:
-        store = getattr(_interpreter_agent_context, 'transcript_store', None)
+    if _get_agent_context() is not None:
+        store = getattr(_get_agent_context(), 'transcript_store', None)
         if store is not None:
             ts_msg = store.get(uuid)
             if ts_msg is not None and hasattr(ts_msg, 'pinned'):
@@ -854,8 +878,8 @@ def _unpin_message(uuid: str) -> dict:
 
     msg.pinned = False
 
-    if _interpreter_agent_context is not None:
-        store = getattr(_interpreter_agent_context, 'transcript_store', None)
+    if _get_agent_context() is not None:
+        store = getattr(_get_agent_context(), 'transcript_store', None)
         if store is not None:
             ts_msg = store.get(uuid)
             if ts_msg is not None and hasattr(ts_msg, 'pinned'):
@@ -884,11 +908,11 @@ _WORKING_MEMORY_KEYS = frozenset({"task", "active_files", "decisions", "todos", 
 
 def _get_working_memory() -> Any:
     """Return the active WorkingMemory instance or None."""
-    if _interpreter_agent_context is None:
+    if _get_agent_context() is None:
         return None
-    if not getattr(_interpreter_agent_context, 'working_memory_enabled', False):
+    if not getattr(_get_agent_context(), 'working_memory_enabled', False):
         return None
-    return getattr(_interpreter_agent_context, 'working_memory', None)
+    return getattr(_get_agent_context(), 'working_memory', None)
 
 
 def _working_memory_get(key: str = "") -> dict:
@@ -1098,14 +1122,14 @@ def _set_compression_strategy(strategy: str) -> dict:
     Returns:
         dict: {"status": "ok", "strategy": str} or error
     """
-    if _interpreter_agent_context is None:
+    if _get_agent_context() is None:
         return {"status": "error", "error": "AgentContextManager not available"}
     if strategy not in ("none", "graduated", "traditional"):
         return {
             "status": "error",
             "error": f"Unknown strategy: {strategy}. Use 'graduated' | 'traditional' | 'none'",
         }
-    _interpreter_agent_context.compression_strategy = strategy
+    _get_agent_context().compression_strategy = strategy
     return {"status": "ok", "strategy": strategy}
 
 
@@ -1118,11 +1142,11 @@ def _set_context_window(tokens: int) -> dict:
     Returns:
         dict: {"status": "ok", "max_tokens": int} or error
     """
-    if _interpreter_history_manager is None:
+    if _get_history_manager() is None:
         return {"status": "error", "error": "HistoryManager not available"}
     if not isinstance(tokens, int) or tokens <= 0:
         return {"status": "error", "error": "tokens must be a positive integer"}
-    _interpreter_history_manager.MAX_TOKENS = tokens
+    _get_history_manager().MAX_TOKENS = tokens
     return {"status": "ok", "max_tokens": tokens}
 
 
@@ -1135,9 +1159,9 @@ def _set_working_memory_enabled(enabled: bool) -> dict:
     Returns:
         dict: {"status": "ok", "enabled": bool} or error
     """
-    if _interpreter_agent_context is None:
+    if _get_agent_context() is None:
         return {"status": "error", "error": "AgentContextManager not available"}
-    _interpreter_agent_context.working_memory_enabled = bool(enabled)
+    _get_agent_context().working_memory_enabled = bool(enabled)
     return {"status": "ok", "enabled": bool(enabled)}
 
 
@@ -1150,9 +1174,9 @@ def _set_cache_aware(enabled: bool) -> dict:
     Returns:
         dict: {"status": "ok", "cache_aware": bool} or error
     """
-    if _interpreter_agent_context is None:
+    if _get_agent_context() is None:
         return {"status": "error", "error": "AgentContextManager not available"}
-    _interpreter_agent_context.cache_aware_enabled = bool(enabled)
+    _get_agent_context().cache_aware_enabled = bool(enabled)
     return {"status": "ok", "cache_aware": bool(enabled)}
 
 
@@ -1170,18 +1194,18 @@ def _get_context_config() -> dict:
             "working_memory_max_tokens": int,
         }
     """
-    if _interpreter_agent_context is None or _interpreter_history_manager is None:
+    if _get_agent_context() is None or _get_history_manager() is None:
         return {
             "status": "error",
             "error": "Context managers not available",
         }
-    wm = getattr(_interpreter_agent_context, 'working_memory', None)
+    wm = getattr(_get_agent_context(), 'working_memory', None)
     return {
         "status": "ok",
-        "compression_strategy": getattr(_interpreter_agent_context, 'compression_strategy', 'none'),
-        "max_tokens": getattr(_interpreter_history_manager, 'MAX_TOKENS', 0),
-        "working_memory_enabled": getattr(_interpreter_agent_context, 'working_memory_enabled', False),
-        "cache_aware_enabled": getattr(_interpreter_agent_context, 'cache_aware_enabled', False),
+        "compression_strategy": getattr(_get_agent_context(), 'compression_strategy', 'none'),
+        "max_tokens": getattr(_get_history_manager(), 'MAX_TOKENS', 0),
+        "working_memory_enabled": getattr(_get_agent_context(), 'working_memory_enabled', False),
+        "cache_aware_enabled": getattr(_get_agent_context(), 'cache_aware_enabled', False),
         "working_memory_max_tokens": getattr(wm, 'max_tokens', 0) if wm else 0,
     }
 
@@ -1205,28 +1229,28 @@ def _insert_message(role: str, content: Any, position: str = "end") -> dict:
         dict: {"status": "ok", "uuid": str, "index": int}
     """
     from helen.runtime.history import Message
-    if _interpreter_history is None:
+    if _get_history() is None:
         return {"status": "error", "error": "No interpreter context"}
     if role not in ("system", "user", "assistant", "tool"):
         return {"status": "error", "error": f"Invalid role: {role}"}
 
     msg = Message(role=role, content=content)
     # Assign UUID via TranscriptStore if available (it will assign on append)
-    if _interpreter_agent_context is not None:
-        store = getattr(_interpreter_agent_context, 'transcript_store', None)
+    if _get_agent_context() is not None:
+        store = getattr(_get_agent_context(), 'transcript_store', None)
         if store is not None:
             store.append(msg)
 
     # Insert into interpreter history
     if position == "end" or position is None:
-        _interpreter_history.append(msg)
-        idx = len(_interpreter_history) - 1
+        _get_history().append(msg)
+        idx = len(_get_history()) - 1
     elif position == "start":
-        _interpreter_history.insert(0, msg)
+        _get_history().insert(0, msg)
         idx = 0
     elif isinstance(position, int):
-        idx = max(0, min(position, len(_interpreter_history)))
-        _interpreter_history.insert(idx, msg)
+        idx = max(0, min(position, len(_get_history())))
+        _get_history().insert(idx, msg)
     else:
         return {"status": "error", "error": f"Invalid position: {position}"}
 
@@ -1358,10 +1382,10 @@ def _context_slice(start: int = 0, end: int = -1, role: str = "") -> dict:
             "count": int,
         }
     """
-    if _interpreter_history is None:
+    if _get_history() is None:
         return {"status": "error", "error": "No interpreter context", "messages": [], "count": 0}
 
-    n = len(_interpreter_history)
+    n = len(_get_history())
     if end < 0:
         end = n
     start = max(0, min(start, n))
@@ -1369,7 +1393,7 @@ def _context_slice(start: int = 0, end: int = -1, role: str = "") -> dict:
 
     messages = []
     for i in range(start, end):
-        msg = _interpreter_history[i]
+        msg = _get_history()[i]
         if role and msg.role != role:
             continue
         content = msg.content
@@ -1418,11 +1442,11 @@ def _export_context() -> dict:
             },
         }
     """
-    if _interpreter_history is None:
+    if _get_history() is None:
         return {"status": "error", "error": "No interpreter context"}
 
     messages = []
-    for msg in _interpreter_history:
+    for msg in _get_history():
         content = msg.content
         if isinstance(content, list):
             content = "\n".join(
@@ -1470,7 +1494,7 @@ def _import_context(data: dict) -> dict:
     Optionally restores working memory and config.
 
     v1.23 fix: Single-write semantics — writes to TranscriptStore when enabled,
-    or _interpreter_history when disabled (never both). Imported messages are
+    or _get_history() when disabled (never both). Imported messages are
     tagged with the current invocation_id so they are visible to the caller
     under the per-agent isolation model (v1.22).
 
@@ -1486,7 +1510,7 @@ def _import_context(data: dict) -> dict:
         }
     """
     from helen.runtime.history import Message
-    if _interpreter_history is None:
+    if _get_history() is None:
         return {"status": "error", "error": "No interpreter context"}
     if not isinstance(data, dict):
         return {"status": "error", "error": "data must be a dict"}
@@ -1508,20 +1532,20 @@ def _import_context(data: dict) -> dict:
         pass
 
     # v1.23 fix: Determine active store and clear/write consistently.
-    # TranscriptStore is SSOT when enabled; otherwise _interpreter_history.
+    # TranscriptStore is SSOT when enabled; otherwise _get_history().
     store = None
-    if _interpreter_agent_context is not None:
-        store = getattr(_interpreter_agent_context, 'transcript_store', None)
+    if _get_agent_context() is not None:
+        store = getattr(_get_agent_context(), 'transcript_store', None)
 
     if store is not None:
         # TranscriptStore is SSOT: clear it and write only to it
         store.transcript.clear()
         store._uuid_index.clear()
         store._dirty = True
-        _interpreter_history.clear()  # keep fallback in sync (empty)
+        _get_history().clear()  # keep fallback in sync (empty)
     else:
-        # Fallback: clear _interpreter_history only
-        _interpreter_history.clear()
+        # Fallback: clear _get_history() only
+        _get_history().clear()
 
     # Import messages into active store
     imported = 0
@@ -1542,14 +1566,14 @@ def _import_context(data: dict) -> dict:
             if not msg.uuid:
                 import uuid as _uuid
                 msg.uuid = str(_uuid.uuid4())
-            _interpreter_history.append(msg)
+            _get_history().append(msg)
         imported += 1
 
     # Import working memory if present
     wm_imported = False
     wm_data = data.get("working_memory")
-    if wm_data and _interpreter_agent_context is not None:
-        wm = getattr(_interpreter_agent_context, 'working_memory', None)
+    if wm_data and _get_agent_context() is not None:
+        wm = getattr(_get_agent_context(), 'working_memory', None)
         if wm is not None:
             wm.task_description = wm_data.get("task", "")
             wm.active_files = list(wm_data.get("active_files", []))
@@ -1599,7 +1623,7 @@ def _restore_context(
     4. Calls import_context() to populate the current active context
 
     Unlike ``resume_session()``, which only swaps the TranscriptStore reference,
-    ``restore_context()`` populates ``_interpreter_history`` so the LLM actually
+    ``restore_context()`` populates ``_get_history()`` so the LLM actually
     sees the restored messages on the next call.
 
     Args:
@@ -1656,7 +1680,7 @@ def _restore_context(
     if not session_id:
         return {"status": "error", "error": "session_id is required"}
 
-    if _interpreter_agent_context is None:
+    if _get_agent_context() is None:
         return {"status": "error", "error": "No interpreter agent context"}
 
     # Import required modules
@@ -1767,7 +1791,7 @@ def _restore_context(
                 ),
             }
 
-        # Delegate to import_context to populate _interpreter_history
+        # Delegate to import_context to populate _get_history()
         import_result = _import_context({"messages": messages})
 
         if import_result.get("status") != "ok":

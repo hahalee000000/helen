@@ -721,9 +721,10 @@ class AgentContextManager:
         # Try to read the interpreter's configured compression_mode
         mode = "summarize"
         try:
-            from helen.stdlib.context import _interpreter_history_manager
-            if _interpreter_history_manager is not None:
-                mode = getattr(_interpreter_history_manager, "compression_mode", "summarize")
+            from helen.stdlib.context import _get_history_manager
+            _hist_mgr = _get_history_manager()
+            if _hist_mgr is not None:
+                mode = getattr(_hist_mgr, "compression_mode", "summarize")
         except ImportError:
             pass
 
@@ -1069,8 +1070,10 @@ class AgentContextManager:
         from helen.runtime.history import _message_text
 
         # Get the history reference from stdlib/context.py
+        # v1.23.4: Use thread-local getter to avoid cross-thread contamination
         try:
-            from helen.stdlib.context import _interpreter_history
+            from helen.stdlib.context import _get_history
+            _interpreter_history = _get_history()
         except ImportError:
             _interpreter_history = None
 
