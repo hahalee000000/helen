@@ -1,23 +1,23 @@
 ---
 name: helen-python-bridge
-description: Helen Python Bridge 使用指南 — 让 Python 直接使用 Helen Agent，实现双向 FFI
-version: 1.0.0
+description: Helen Python Bridge 使用指南 — 让 Python 直接使用 Helen Agent 和函数，实现双向 FFI
+version: 1.1.0
 author: Helen Team
-tags: [python, ffi, bridge, integration, agent, interoperability]
+tags: [python, ffi, bridge, integration, agent, interoperability, function]
 ---
 
 # Helen Python Bridge
 
-Helen Python Bridge 允许 Python 开发者直接导入和使用 Helen Agent，就像使用普通的 Python 类一样。这是 Helen 与 Python 生态系统的深度集成方案。
+Helen Python Bridge 允许 Python 开发者直接导入和使用 Helen Agent 与函数，就像使用普通的 Python 类和函数一样。这是 Helen 与 Python 生态系统的深度集成方案。
 
 ## 概述
 
 Python Bridge 实现了 Helen 与 Python 的双向 FFI：
 
 1. **Helen → Python (FFI)**：在 Helen 中使用 Python 库（已有）
-2. **Python → Helen (Bridge)**：在 Python 中使用 Helen Agent（新增）
+2. **Python → Helen (Bridge)**：在 Python 中使用 Helen Agent 和函数（新增）
 
-这让 Helen 成为 Python 生态系统的"原生扩展"，Python 开发者可以像使用 `numpy`、`pandas` 一样使用 Helen Agent。
+这让 Helen 成为 Python 生态系统的"原生扩展"，Python 开发者可以像使用 `numpy`、`pandas` 一样使用 Helen Agent 和函数。
 
 > 📘 **想看双向集成全貌？** 见 `wiki/reference/python-integration.md` — 架构图 + 混合使用示例
 
@@ -178,6 +178,46 @@ interpreter = Interpreter()
 # 多个 agent 共享
 agent1 = HelenAgentWrapper("Agent1", "agents.helen", interpreter)
 agent2 = HelenAgentWrapper("Agent2", "agents.helen", interpreter)
+```
+
+### 调用 Helen 函数 (v1.23.6+)
+
+除了调用 agent，Python Bridge 还支持直接调用 Helen 的普通函数（`fn`）：
+
+```python
+from helen.python_bridge.function_wrapper import HelenFunctionWrapper, load_helen_functions
+
+# 方法 1: 调用单个函数
+add = HelenFunctionWrapper("add", "utils.helen")
+result = add(10, 32)  # 42
+
+greet = HelenFunctionWrapper("greet", "utils.helen")
+result = greet("Python")  # "Hello, Python!"
+
+# 方法 2: 加载所有函数
+functions = load_helen_functions("utils.helen")
+# {'add': <HelenFunctionWrapper>, 'greet': <HelenFunctionWrapper>, ...}
+
+result = functions['add'](100, 200)  # 300
+result = functions['greet']("World")  # "Hello, World!"
+```
+
+**何时使用函数 vs Agent：**
+- **函数 (fn)**：纯计算、工具函数、数据处理（无 LLM 调用）
+- **Agent**：需要 LLM 推理、工具调用、上下文管理
+
+**混合使用：**
+```python
+from helen.python_bridge.agent_wrapper import HelenAgentWrapper
+from helen.python_bridge.function_wrapper import HelenFunctionWrapper
+
+# 同一个 Helen 文件中的 agent 和函数
+agent = HelenAgentWrapper("translator", "app.helen")
+utils = HelenFunctionWrapper("format_text", "app.helen")
+
+# 先用函数处理数据，再用 agent 推理
+processed = utils("raw text")
+result = agent(processed)
 ```
 
 ### 批量处理

@@ -4,6 +4,54 @@
 
 ---
 
+## [2026-07-21] feature | v1.23.6 - LSP 查找所有引用 + Python Bridge 调用函数
+
+**操作**: 新增 LSP referencesProvider + Python Bridge 函数调用支持
+**状态**: ✅ 完成
+
+### 新增功能
+
+#### 1. LSP Find All References (Shift+F12)
+
+VS Code 中按 `Shift+F12` 可查找函数/agent/变量的所有调用位置：
+- 跨文件查找（所有已打开的文档）
+- 支持中文标识符
+- 自动跳过注释和字符串
+- 可选择是否包含定义处
+
+**实现**：`helen/lsp/server.py` 添加 `referencesProvider` capability 和 `_references()` 方法
+
+#### 2. Python Bridge 调用 Helen 函数
+
+新增 `HelenFunctionWrapper`，从 Python 直接调用 Helen 的普通函数（fn）：
+
+```python
+from helen.python_bridge.function_wrapper import HelenFunctionWrapper, load_helen_functions
+
+# 调用单个函数
+add = HelenFunctionWrapper("add", "utils.helen")
+result = add(10, 32)  # 42
+
+# 加载所有函数
+functions = load_helen_functions("utils.helen")
+result = functions['greet']("Python")  # "Hello, Python!"
+```
+
+**实现**：`helen/python_bridge/function_wrapper.py`
+
+#### 3. VS Code 扩展自动检测 helen 路径
+
+扩展启动时自动查找 helen 二进制文件（PATH → ~/.local/bin → 工作区 .venv），无需手动配置 `helen.lsp.path`。
+
+### 版本信息
+
+- Helen: 1.23.5 → 1.23.6
+- VS Code Extension: 1.23.4 → 1.23.5
+- Git commit: `98f71e4` (LSP), `25e8aa6` (Python Bridge)
+- PyPI: `helen-lang==1.23.6`
+
+---
+
 ## [2026-07-20] bugfix | v1.23.4 - 线程局部存储修复 spawn 污染主线程 agent context
 
 **操作**: 将 stdlib 的全局 agent context 改为 `threading.local()` 线程局部存储
