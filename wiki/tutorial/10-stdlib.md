@@ -614,6 +614,32 @@ let full = replay_transcript("session_1783492628_d9d9c0aa", true)
 
 **返回**：消息列表，每条消息包含 `role`、`content`、`uuid`、`timestamp`
 
+### 回放完整会话（v1.23.7+）
+
+使用 `replay_full_session()` 查看主会话及其所有 spawn 子会话的完整执行流程：
+
+```helen
+// 聚合查看主 session + 所有 spawn
+let messages = replay_full_session()
+for msg in messages {
+    // 每条消息包含 session_id 字段，标识来源
+    print("[" + msg["session_id"] + "] " + msg["role"] + ": " + msg["content"][:50])
+}
+
+// 指定根 session
+let messages = replay_full_session("session_abc123")
+```
+
+**参数**：
+- `session_id`（可选）：根会话 ID，默认当前会话
+
+**返回**：所有相关会话的消息列表，按时间戳排序，每条消息包含 `session_id` 字段
+
+**使用场景**：
+- 查看完整的执行流程（包括所有 spawn 的子任务）
+- 调试多 agent 协作
+- 分析 spawn 树的消息分布
+
 ### 导出会话
 
 ```helen
@@ -628,12 +654,16 @@ export_transcript("my_chat.txt", "text")
 
 // 导出指定会话
 export_transcript("old_chat.json", "json", "session_1783492600_abc12345")
+
+// v1.23.7+：导出完整 spawn 树
+export_transcript("full_chat.json", "json", include_spawned=true)
 ```
 
 **参数**：
 - `output_path`：输出文件路径
 - `format`：导出格式（"json"、"markdown"、"text"）
 - `session_id`（可选）：要导出的会话 ID
+- `include_spawned`（可选，v1.23.7+）：是否导出所有 spawn 子会话，默认 false
 
 **返回**：输出文件路径（成功）或空字符串（失败）
 
@@ -658,6 +688,12 @@ let matches = search_transcript("fix.*bug", regex=true)
 // 只搜 user 消息
 let matches = search_transcript("TODO", role="user")
 
+// v1.23.7+：跨 spawn 搜索（搜索当前 session 及其所有 spawn 子 session）
+let matches = search_transcript("error", include_spawned=true)
+for m in matches {
+    print("[" + m["session_id"] + "] " + m["snippet"])
+}
+
 // 中文别名
 let matches = 搜索会话("认证 bug", scope="all")
 ```
@@ -669,6 +705,7 @@ let matches = 搜索会话("认证 bug", scope="all")
 - `role`：按角色过滤（`"user"` / `"assistant"` / `"tool"` / `""` 全部）
 - `regex`：是否按正则匹配
 - `limit`：最大返回数（默认 50）
+- `include_spawned`（可选，v1.23.7+）：是否搜索所有 spawn 子会话，默认 false
 
 **典型用法**：搜索后恢复完整上下文
 
@@ -681,6 +718,12 @@ if len(matches) > 0 {
     // 恢复那个 session 的完整 context
     restore_context(target_session)
     print("已恢复到 session: " + target_session)
+}
+
+// v1.23.7+：在当前 session 及其 spawn 中搜索
+let errors = search_transcript("error", include_spawned=true)
+if len(errors) > 0 {
+    print("找到 " + str(len(errors)) + " 个错误（包括 spawn 子任务）")
 }
 ```
 
@@ -765,6 +808,77 @@ for event in audit {
 - 调试压缩问题
 - 审计对话历史
 
+### Spawn 关系追踪 (v1.23.7+)
+
+v1.23.7 引入 spawn 关系追踪功能，可以查询和管理 spawn 子会话：
+
+```helen
+// 获取当前 session 的直接子 session
+let children = get_spawned_sessions()
+for child in children {
+    print("Spawned: " + child["session_id"])
+    print("  Agent: " + child["agent_name"])
+    print("  Time: " + str(child["timestamp"]))
+}
+
+// 获取完整 spawn 树（包括嵌套 spawn）
+let tree = get_spawn_tree()
+print("Root: " + tree["session_id"])
+for child in tree["children"] {
+    print("  Child: " + child["session_id"])
+    // 递归访问 child["children"]
+}
+
+// 指定根 session
+let tree = get_spawn_tree("session_abc123")
+```
+
+**函数**：
+- `get_spawned_sessions(session_id?)`：获取直接子 session 列表
+- `get_spawn_tree(session_id?)`：获取完整 spawn 树（递归）
+
+**返回**：
+- `get_spawned_sessions`：session 元数据列表，包含 `session_id`、`agent_name`、`timestamp`
+- `get_spawn_tree`：树形结构，包含 `session_id` 和 `children` 数组
+
+**使用场景**：
+- 分析多 agent 协作的 spawn 结构
+- 调试 spawn 关系
+- 可视化执行流程
+
+### 级联删除 (v1.23.7+)
+
+删除 session 时，默认级联删除所有 spawn 子会话，避免孤儿 transcript：
+
+```helen
+// 删除 session 及其所有 spawn（默认）
+delete_session("session_abc123")
+
+// 只删除指定 session，保留 spawn
+delete_session("session_abc123", cascade=false)
+
+// 删除当前 session 及其 spawn
+delete_current_session(confirm=true)  // cascade=true 是默认值
+delete_current_session(confirm=true, cascade=false)  // 保留 spawn
+
+// 清理旧 session（级联删除 spawn）
+cleanup_sessions(keep_count=10)  // 保留最近 10 个，级联删除 spawn
+cleanup_sessions(older_than_days=30, cascade=true)  // 删除 30 天前的
+cleanup_sessions(keep_count=5, cascade=false)  // 不级联，保留 spawn
+```
+
+**参数**：
+- `delete_session(session_id, cascade?)`：`cascade` 默认 true
+- `delete_current_session(confirm?, cascade?)`：`cascade` 默认 true
+- `cleanup_sessions(keep_count?, older_than_days?, cascade?)`：`cascade` 默认 true
+
+**返回值**：包含 `deleted_sessions` 列表，显示实际删除的所有 session ID
+
+**设计原理**：
+- Spawn 是子任务，生命周期应绑定到主 session
+- 避免孤儿 transcript（主 session 删除后，spawn 失去上下文）
+- 简化清理流程，无需手动查找和删除所有 spawn
+
 ### 恢复会话
 
 ```helen
@@ -804,9 +918,12 @@ Transcript 函数支持中文别名，可以直接使用中文函数名：
 | `get_session_id` | `获取会话id` | 获取当前会话 ID |
 | `list_sessions` | `列出会话` | 列出所有会话 |
 | `replay_transcript` | `回放会话` | 回放会话消息 |
+| `replay_full_session` | `回放完整会话` | 回放会话及其 spawn (v1.23.7) |
 | `export_transcript` | `导出会话` | 导出会话到文件 |
 | `get_compression_audit` | `压缩审计` | 获取压缩历史 |
 | `resume_session` | `恢复会话` | 恢复到指定会话 |
+| `get_spawned_sessions` | `获取子会话` | 获取 spawn 子会话 (v1.23.7) |
+| `get_spawn_tree` | `获取会话树` | 获取完整 spawn 树 (v1.23.7) |
 
 **使用示例**：
 
