@@ -366,6 +366,65 @@ main {
 
 ---
 
+## Spawn Transcript 管理 (v1.23.7+)
+
+每个 spawn 的 agent 都有独立的 transcript session。v1.23.7 引入 spawn 关系追踪和级联管理功能。
+
+### 查询 Spawn 关系
+
+```helen
+// 获取当前 session 的所有直接子 session
+设 子会话 = 获取子会话()
+对于 子会话 中的 每个子 {
+    打印("Spawned: " + 每个子["session_id"])
+    打印("  Agent: " + 每个子["agent_name"])
+}
+
+// 获取完整 spawn 树（包括嵌套 spawn）
+设 会话树 = 获取会话树()
+打印("Root: " + 会话树["session_id"])
+对于 会话树["children"] 中的 每个子 {
+    打印("  Child: " + 每个子["session_id"])
+}
+```
+
+### 聚合查看
+
+```helen
+// 查看主 session + 所有 spawn 的完整执行流程
+设 所有消息 = 回放完整会话()
+对于 所有消息 中的 消息 {
+    打印("[" + 消息["session_id"] + "] " + 消息["role"] + ": " + 消息["content"][:50])
+}
+
+// 跨 spawn 搜索
+设 错误 = 搜索会话("error", 包含spawn=true)
+```
+
+### 级联删除
+
+删除 session 时，默认级联删除所有 spawn 子会话，避免孤儿 transcript：
+
+```helen
+// 删除 session 及其所有 spawn（默认）
+删除会话("session_abc123")
+
+// 只删除指定 session，保留 spawn
+删除会话("session_abc123", 级联=false)
+
+// 清理旧 session（级联删除 spawn）
+清理会话(保留数量=10)  // 保留最近 10 个，级联删除 spawn
+```
+
+**设计原理**：
+- Spawn 是子任务，生命周期应绑定到主 session
+- 避免孤儿 transcript（主 session 删除后，spawn 失去上下文）
+- 简化清理流程，无需手动查找和删除所有 spawn
+
+> **详细文档**：参见 `10-stdlib.md` 的 "Transcript 函数" 章节
+
+---
+
 ## 练习
 
 1. 创建两个并发 agent，分别处理不同任务，用 `mailbox.receive()` 获取结果
@@ -375,5 +434,5 @@ main {
 
 ---
 
-**最后更新**: 2026-07-13  
-**版本**: v1.18
+**最后更新**: 2026-07-21  
+**版本**: v1.23.7
