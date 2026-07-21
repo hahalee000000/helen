@@ -4,6 +4,44 @@
 
 ---
 
+## [2026-07-21] feature | v1.23.6+ - Import Hook 支持函数导入
+
+**操作**: 更新 `import_hook.py` 支持自动暴露 Helen 函数
+**状态**: ✅ 完成
+
+### 更新内容
+
+之前 `import_hook` 只支持导入 agent，现在同时支持导入普通函数（`fn`）：
+
+```python
+from helen.python_bridge.import_hook import install_import_hook
+install_import_hook()
+
+# 同时导入 agent 和 function
+from mymodule import my_agent, my_function
+result = my_function(10, 20)  # 直接调用 Helen fn
+agent_result = my_agent()     # 调用 Helen agent
+```
+
+### 实现细节
+
+- `HelenLoader.exec_module()` 现在同时提取 `AgentDeclNode` 和 `FunctionDeclNode`
+- 所有函数包装为 `HelenFunctionWrapper`
+- Agent 和函数共享同一个 `Interpreter` 实例
+- 模块元数据新增 `__interpreter__` 属性（高级用法）
+
+### 注意事项
+
+- 函数名不能与 stdlib 内置函数冲突（如 `calculate`、`print` 等）
+- `const` 常量不通过 import hook 暴露（需要通过 `__interpreter__` 访问）
+
+### 版本信息
+
+- Git commit: `d56ea83`
+- 文件：`helen/python_bridge/import_hook.py`
+
+---
+
 ## [2026-07-21] feature | v1.23.6 - LSP 查找所有引用 + Python Bridge 调用函数
 
 **操作**: 新增 LSP referencesProvider + Python Bridge 函数调用支持

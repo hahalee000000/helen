@@ -81,11 +81,50 @@ print(result)  # "Bonjour"
 
 ### 自动导入
 
-Python Bridge 使用 Import Hook 自动识别 `.helen` 文件：
+Python Bridge 使用 Import Hook 自动识别 `.helen` 文件（v1.23.6+ 支持函数导入）：
 
 ```python
-# 自动加载 translator.helen 文件
-from translator import TranslatorAgent, SummarizerAgent
+# 安装 import hook（一次性）
+from helen.python_bridge.import_hook import install_import_hook
+install_import_hook()
+
+# 自动加载 translator.helen 文件中的 agent 和 function
+from translator import TranslatorAgent, SummarizerAgent, format_text
+```
+
+**Helen 文件示例：**
+
+```helen
+// translator.helen
+const default_lang = "English"
+
+// 普通函数（纯计算，无 LLM 调用）
+fn format_text(text: str): str {
+    返回 text.strip().capitalize()
+}
+
+// Agent（需要 LLM 推理）
+agent TranslatorAgent(text: str, target: str) {
+    description "翻译文本到目标语言"
+    prompt "Translate '{{text}}' to {{target}}"
+    
+    main {
+        return llm act "Translate '{{text}}' to {{target}}"
+    }
+}
+```
+
+**Python 调用：**
+
+```python
+from translator import TranslatorAgent, format_text
+
+# 直接调用函数
+formatted = format_text("  hello world  ")  # "Hello world"
+
+# 调用 agent
+agent = TranslatorAgent()
+result = agent("Hello", "French")  # "Bonjour"
 ```
 
 ### 参数验证
