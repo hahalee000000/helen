@@ -4,6 +4,70 @@
 
 ---
 
+## [2026-07-21] feature | v1.23.7 - Spawn-Aware Transcript Functions
+
+**操作**: 实现 P1 和 P2 spawn-aware transcript functions
+**状态**: ✅ 完成
+
+### 新增功能
+
+#### P1 Functions (High Priority)
+
+1. **replay_full_session()** - 聚合查看完整执行流程
+   - 收集主 session 和所有 spawn 的消息
+   - 按时间戳排序，统一视图
+   - 每条消息包含 `session_id` 字段标识来源
+
+2. **search_transcript(include_spawned=true)** - 跨 spawn 搜索
+   - 搜索主 session 和所有 spawn 的消息
+   - 支持递归搜索嵌套 spawn
+   - 返回结果包含 `session_id` 字段
+
+#### P2 Functions (Medium Priority)
+
+3. **cleanup_sessions(cascade=true)** - 级联清理
+   - 复用 `delete_session(cascade=true)` 实现
+   - 清理旧 session 时自动删除其 spawn
+   - 两个分支（older_than_days 和 keep_count）都支持 cascade
+
+4. **export_transcript(include_spawned=true)** - 导出完整 spawn 树
+   - 导出主 session 和所有 spawn 的消息
+   - 支持 JSON/Markdown/Text 格式
+   - 消息包含 `session_id` 字段
+
+### 使用示例
+
+```helen
+// 查看完整执行流程
+let messages = replay_full_session()
+for msg in messages {
+    print("[{msg.session_id}] {msg.role}: {msg.content[:50]}")
+}
+
+// 跨 spawn 搜索错误
+let errors = search_transcript("error", include_spawned=true)
+
+// 级联清理旧 session
+cleanup_sessions(keep_count=10, cascade=true)
+
+// 导出完整 transcript
+export_transcript("full.json", include_spawned=true)
+```
+
+### 实现细节
+
+- `replay_full_session` 递归收集所有 spawned sessions
+- 消息按时间戳排序，提供统一的时间线视图
+- `cleanup_sessions` 复用 `delete_session(cascade=true)` 保证一致性
+- 所有新功能向后兼容（新参数默认为 false）
+
+### 版本信息
+
+- Git commit: `04a74a9`
+- 文件：`helen/stdlib/transcript.py`, `helen/stdlib/__init__.py`
+
+---
+
 ## [2026-07-21] feature | v1.23.6+ - Import Hook 支持函数导入
 
 **操作**: 更新 `import_hook.py` 支持自动暴露 Helen 函数
