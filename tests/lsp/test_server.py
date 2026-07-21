@@ -391,3 +391,77 @@ class TestLspMessageHandling:
             "params": {},
         })
         assert response is None
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# v1.23.5 regression tests: LSP import resolution with file URI
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestUriToPath:
+    """v1.23.5 fix: _uri_to_path converts file:// URIs to filesystem paths.
+
+    Before v1.23.5, _analyze hard-coded '<lsp>' as the file name. This
+    caused SemanticAnalyzer.visit_import_stmt to fall back to base_dir
+    (process CWD) when resolving relative imports, producing spurious
+    'import file not found' diagnostics.
+    """
+
+    def test_file_uri_to_path(self):
+        server = type('S', (), {})()
+        from helen.lsp.server import HelenLanguageServer
+        result = HelenLanguageServer._uri_to_path("file:///tmp/helen_test/main.helen")
+        assert result == "/tmp/helen_test/main.helen"
+
+    def test_file_uri_with_encoded_chars(self):
+        from helen.lsp.server import HelenLanguageServer
+        result = HelenLanguageServer._uri_to_path(
+            "file:///home/user/my%20project/test.helen"
+        )
+        assert result == "/home/user/my project/test.helen"
+
+    def test_plain_path_passthrough(self):
+        from helen.lsp.server import HelenLanguageServer
+        result = HelenLanguageServer._uri_to_path("/tmp/plain/path.helen")
+        assert result == "/tmp/plain/path.helen"
+
+    def test_analyze_with_uri_resolves_imports(self, tmp_path):
+        """End-to-end: _analyze with file URI finds sibling import."""
+        from helen.lsp.server import HelenLanguageServer
+
+        # Create two files: main.helen imports ./helper.helen
+        helper = tmp_path / "helper.helen"
+        helper.write_text("agent Helper { main { } }\n")
+
+        main = tmp_path / "main.helen"
+        main.write_text(
+            'import "./helper.helen"\n\n'
+            "agent Runner { main { Helper() } }\n"
+        )
+
+        server = HelenLanguageServer.__new__(HelenLanguageServer)
+        diagnostics = server._analyze(main.read_text(), main.as_uri())
+
+        # Should NOT contain "import file not found" error
+        error_messages = [d.message for d in diagnostics if d.severity == 1]
+        assert not any("import file not found" in m for m in error_messages), (
+            f"Import error still reported: {error_messages}"
+        )
+
+    def test_analyze_without_uri_reports_missing_import(self, tmp_path):
+        """Without URI, relative imports cannot be resolved (baseline)."""
+        from helen.lsp.server import HelenLanguageServer
+
+        main = tmp_path / "main.helen"
+        main.write_text(
+            'import "./nonexistent.helen"\n\n'
+            "agent Runner { main { } }\n"
+        )
+
+        server = HelenLanguageServer.__new__(HelenLanguageServer)
+        diagnostics = server._analyze(main.read_text(), "")  # no URI
+
+        error_messages = [d.message for d in diagnostics if d.severity == 1]
+        assert any("import file not found" in m for m in error_messages), (
+            "Expected 'import file not found' when URI is missing"
+        )

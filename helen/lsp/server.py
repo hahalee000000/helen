@@ -433,7 +433,7 @@ class HelenLanguageServer:
             return
 
         try:
-            diagnostics = self._analyze(doc.content)
+            diagnostics = self._analyze(doc.content, uri)
         except Exception as e:
             _log(f"analysis error for {uri}: {e!r}")
             diagnostics = []
@@ -450,12 +450,43 @@ class HelenLanguageServer:
         }
         self._send(notification)
 
-    def _analyze(self, content: str) -> list[Diagnostic]:
+    @staticmethod
+    def _uri_to_path(uri: str) -> str:
+        """Convert a file:// URI to a filesystem path.
+
+        LSP clients send document URIs (e.g. 'file:///tmp/x.helen'). The
+        scanner and import resolver need a real filesystem path so that
+        relative imports resolve against the document's directory, not the
+        LSP process CWD.
+
+        v1.23.5 fix: Previously _analyze hard-coded '<lsp>' as the file name,
+        which caused SemanticAnalyzer.visit_import_stmt to fall back to
+        base_dir (process CWD) when resolving relative imports, producing
+        spurious 'import file not found' diagnostics.
+        """
+        if uri.startswith("file://"):
+            from urllib.parse import urlparse, unquote
+            parsed = urlparse(uri)
+            return unquote(parsed.path)
+        return uri
+
+    def _analyze(self, content: str, uri: str = "") -> list[Diagnostic]:
         """Analyze source code and return diagnostics.
 
-        Runs Lex → Parse → Analyze pipeline and converts errors to LSP diagnostics.
+        Runs Lex -> Parse -> Analyze pipeline and converts errors to LSP diagnostics.
+
+        Args:
+            content: Source code text.
+            uri: Document URI (e.g. 'file:///path/to/file.helen'). Used to
+                resolve relative imports. v1.23.5 fix: previously hard-coded
+                to '<lsp>', causing 'import file not found' for any relative
+                import because the analyzer fell back to the LSP process CWD.
         """
         diagnostics = []
+
+        # Resolve the document's filesystem path so relative imports work.
+        # Falls back to '<lsp>' only when no URI is available (e.g. REPL).
+        file_path = self._uri_to_path(uri) if uri else "<lsp>"
 
         try:
             from helen.core.errors import ErrorReporter  # noqa: PLC0415
@@ -467,7 +498,7 @@ class HelenLanguageServer:
 
             # Lex
             try:
-                scanner = Scanner(source=content, file="<lsp>")
+                scanner = Scanner(source=content, file=file_path)
                 tokens = scanner.scan_all()
             except Exception:
                 return [
@@ -513,7 +544,13 @@ class HelenLanguageServer:
             if not errors.has_errors:
                 # Analyze
                 errors.reset()
-                analyzer = SemanticAnalyzer(errors)
+                # v1.23.5: Set base_dir to the document's directory so that
+                # fallback import resolution (when span.file is unavailable)
+                # still finds files relative to the document, not the LSP
+                # process CWD.
+                import os as _os
+                base_dir = _os.path.dirname(_os.path.abspath(file_path)) if file_path != "<lsp>" else "."
+                analyzer = SemanticAnalyzer(errors, base_dir=base_dir)
                 analyzer.analyze(program)
 
                 for err in errors.errors:
