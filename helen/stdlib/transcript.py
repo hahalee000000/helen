@@ -1509,7 +1509,7 @@ def delete_session(session_id: str, cascade: bool = True) -> dict:
         return {"status": "error", "message": str(e), "session_id": session_id}
 
 
-def delete_current_session(confirm: bool = False) -> dict:
+def delete_current_session(confirm: bool = False, cascade: bool = True) -> dict:
     """Permanently delete the current session and its transcript data.
 
     This is a dangerous operation that deletes all data for the current
@@ -1572,22 +1572,45 @@ def delete_current_session(confirm: bool = False) -> dict:
                 "session_id": session_id,
             }
 
-        # Calculate size before deletion
-        session_path = manager.get_session_dir(session_id)
-        freed_bytes = 0
-        if session_path.exists():
-            freed_bytes = sum(
-                f.stat().st_size
-                for f in session_path.rglob("*")
-                if f.is_file()
-            )
+        # v1.23.7: Collect all sessions to delete (cascade)
+        sessions_to_delete = [session_id]
+        if cascade:
+            def collect_spawns(sid):
+                """Recursively collect all spawned sessions."""
+                spawned = get_spawned_sessions(sid)
+                for spawn_info in spawned:
+                    child_sid = spawn_info.get("session_id", "")
+                    if child_sid and child_sid not in sessions_to_delete:
+                        sessions_to_delete.append(child_sid)
+                        collect_spawns(child_sid)
+            collect_spawns(session_id)
 
-        # Delete the session
-        success = manager.delete_session(session_id)
+        # v1.23.7: Delete all collected sessions (batch delete)
+        total_freed_bytes = 0
+        deleted_sessions = []
 
-        if success:
-            logger.warning("Deleted current session %s, freed %d bytes", session_id, freed_bytes)
+        for sid in sessions_to_delete:
+            # Calculate size before deletion
+            session_path = manager.get_session_dir(sid)
+            freed_bytes = 0
+            if session_path.exists():
+                freed_bytes = sum(
+                    f.stat().st_size
+                    for f in session_path.rglob("*")
+                    if f.is_file()
+                )
 
+            # Delete the session
+            success = manager.delete_session(sid)
+
+            if success:
+                total_freed_bytes += freed_bytes
+                deleted_sessions.append(sid)
+                logger.warning("Deleted session %s, freed %d bytes", sid, freed_bytes)
+            else:
+                logger.warning("Failed to delete session %s", sid)
+
+        if deleted_sessions:
             # Clear the current transcript store
             if _get_agent_context() is not None:
                 store = getattr(_get_agent_context(), "transcript_store", None)
@@ -1599,13 +1622,14 @@ def delete_current_session(confirm: bool = False) -> dict:
             return {
                 "status": "ok",
                 "session_id": session_id,
-                "message": "Current session deleted successfully. A new session will be started.",
-                "freed_bytes": freed_bytes,
+                "message": f"Deleted {len(deleted_sessions)} session(s) successfully. A new session will be started.",
+                "freed_bytes": total_freed_bytes,
+                "deleted_sessions": deleted_sessions,
             }
         else:
             return {
                 "status": "error",
-                "message": "Failed to delete current session",
+                "message": "Failed to delete session(s)",
                 "session_id": session_id,
             }
 
@@ -1614,7 +1638,7 @@ def delete_current_session(confirm: bool = False) -> dict:
         return {"status": "error", "message": str(e), "session_id": session_id}
 
 
-def cleanup_sessions(keep_count: int = 100, older_than_days: int | None = None) -> dict:
+def cleanup_sessions(keep_count: int = 100, older_than_days: int | None = None, cascade: bool = True) -> dict:
     """Clean up old sessions to free disk space.
 
     Permanently deletes old session data from disk. This operation cannot be undone.
