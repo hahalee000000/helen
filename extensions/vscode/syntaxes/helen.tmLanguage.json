@@ -111,15 +111,35 @@
         },
         {
           "name": "keyword.declaration.helen",
-          "match": "(?:\\b(?:let|const|shared|fn|agent|protocol|impl|functions|main|alias)\\b|定义|常量|共享|函数|智能体|协议|实现|函数区|主函|别名)"
+          "match": "(?:\\b(?:let|const|shared|store|fn|agent|protocol|impl|functions|main|alias|test|expect)\\b|定义|常量|共享|仓库|函数|智能体|协议|实现|函数区|主函|别名|测试|期望)"
         },
         {
           "name": "keyword.other.helen",
-          "match": "(?:\\b(?:import|as|call|await|async|llm|act|is)\\b|导入|作为|等待|异步|大模型|执行|是)"
+          "match": "(?:\\b(?:import|as|call|await|async|llm|act|is|context)\\b|导入|作为|等待|异步|大模型|执行|是|上下文)"
+        },
+        {
+          "name": "keyword.concurrency.helen",
+          "match": "(?:\\b(?:spawn|Channel|mailbox_select)\\b|分生|邮箱选择)"
+        },
+        {
+          "name": "keyword.channel.method.helen",
+          "match": "(?:\\b(?:send|receive|try_receive|cancel|close)\\b|发送|接收|尝试接收|取消|关闭)"
+        },
+        {
+          "name": "keyword.llm.callback.helen",
+          "match": "(?:\\b(?:on_chunk|on_complete|on_tool_end|on_media|on_generate)\\b|逐块处理|完成|工具结束|处理媒体|生成)"
+        },
+        {
+          "name": "keyword.multimodal.helen",
+          "match": "(?:\\b(?:media|provider)\\b|媒体)"
         },
         {
           "name": "keyword.agent.property.helen",
           "match": "(?:\\b(?:description|model|tools|temperature|max-turns|streaming|prompt)\\b|描述|模型|工具|温度|最大轮次|流式输出|提示词)"
+        },
+        {
+          "name": "keyword.decoration.helen",
+          "match": "(@open|@strict|@sandbox)"
         }
       ]
     },
