@@ -497,10 +497,86 @@ def replay_transcript(
         return result
 
 
+def replay_full_session(session_id: str = "") -> list[dict[str, Any]]:
+    """Replay transcript from session and all spawned sessions, sorted by time (v1.23.7+).
+
+    Aggregates messages from the root session and all its spawn children
+    (recursively), returning a unified view sorted by timestamp. This provides
+    a complete picture of the execution flow across all related sessions.
+
+    Unlike replay_transcript() which only shows a single session, this function
+    shows the full execution tree including spawn relationships.
+
+    Args:
+        session_id: Root session ID. If empty, uses current session.
+
+    Returns:
+        List of message dicts from all sessions, sorted by timestamp.
+        Each message includes a "session_id" field indicating its origin.
+
+    Example:
+        // View complete execution flow (main + all spawns)
+        let messages = replay_full_session()
+        for msg in messages {
+            print("[{msg.session_id}] {msg.role}: {msg.content[:50]}")
+        }
+
+        // Count messages per session
+        let counts = {}
+        for msg in messages {
+            counts[msg.session_id] = (counts[msg.session_id] or 0) + 1
+        }
+    """
+    # Get root session ID
+    if not session_id:
+        agent_ctx = _get_agent_context()
+        if agent_ctx is None:
+            return []
+        session_id = agent_ctx.session_id
+        if not session_id:
+            return []
+
+    # Collect all session IDs (root + all spawns recursively)
+    all_session_ids = [session_id]
+
+    def collect_spawns(sid):
+        """Recursively collect all spawned sessions."""
+        spawned = get_spawned_sessions(sid)
+        for spawn_info in spawned:
+            child_sid = spawn_info.get("session_id", "")
+            if child_sid and child_sid not in all_session_ids:
+                all_session_ids.append(child_sid)
+                collect_spawns(child_sid)
+
+    collect_spawns(session_id)
+
+    # Aggregate messages from all sessions
+    all_messages = []
+    for sid in all_session_ids:
+        try:
+            messages = replay_transcript(session_id=sid)
+            # Tag each message with its session ID
+            for msg in messages:
+                msg["session_id"] = sid
+                all_messages.append(msg)
+        except Exception as e:
+            # Skip sessions that can't be read
+            logger.debug("Failed to replay session %s: %s", sid, e)
+            continue
+
+    # Sort by timestamp (if available)
+    def get_timestamp(msg):
+        return msg.get("timestamp", 0)
+
+    all_messages.sort(key=get_timestamp)
+    return all_messages
+
+
 def export_transcript(
     output_path: str,
     format: str = "json",
     session_id: str | None = None,
+    include_spawned: bool = False,  # v1.23.7: Export spawn tree
 ) -> str:
     """Export transcript to file.
 
@@ -508,15 +584,26 @@ def export_transcript(
         output_path: Path to output file
         format: Export format: "json", "markdown", or "text"
         session_id: Session to export. If None, uses current session.
+        include_spawned: v1.23.7+ If True, export all spawned sessions
+                        (recursively). Messages include session_id field.
+                        Default False.
 
     Returns:
         The output_path on success, empty string on failure.
 
     Example:
+        // Export current session
         export_transcript("transcript.json", "json")
         export_transcript("transcript.md", "markdown")
+
+        // Export with all spawned sessions
+        export_transcript("full_transcript.json", "json", include_spawned=true)
     """
-    messages = replay_transcript(session_id=session_id, include_compressed=False)
+    # v1.23.7: Use replay_full_session if include_spawned
+    if include_spawned:
+        messages = replay_full_session(session_id=session_id)
+    else:
+        messages = replay_transcript(session_id=session_id, include_compressed=False)
 
     if not messages:
         logger.warning("No messages to export")
@@ -568,6 +655,7 @@ def search_transcript(
     role: str = "",
     regex: bool = False,
     limit: int = 50,
+    include_spawned: bool = False,  # v1.23.7: Search across spawn sessions
 ) -> list[dict[str, Any]]:
     """Search transcript messages by content.
 
@@ -586,6 +674,9 @@ def search_transcript(
               Empty string matches all roles.
         regex: If True, treat query as a regex pattern; otherwise substring.
         limit: Maximum number of matches to return (default 50).
+        include_spawned: v1.23.7+ If True, also search all spawned sessions
+                        (recursively). Results include session_id field to
+                        identify the origin session. Default False.
 
     Returns:
         List of match dicts, ordered by recency (newest first):
@@ -821,6 +912,38 @@ def search_transcript(
     # Newest first (within each session the list is chronological; across
     # sessions we just append, so final reverse gives newest-first overall)
     results.reverse()
+
+    # v1.23.7: If include_spawned, also search all spawned sessions
+    if include_spawned and results:
+        # Get the root session ID (from first result or parameter)
+        root_sid = session_id or get_session_id()
+        if root_sid:
+            # Collect all spawned session IDs
+            spawned_sids = []
+            def collect_spawns(sid):
+                spawned = get_spawned_sessions(sid)
+                for spawn_info in spawned:
+                    child_sid = spawn_info.get("session_id", "")
+                    if child_sid and child_sid not in spawned_sids:
+                        spawned_sids.append(child_sid)
+                        collect_spawns(child_sid)
+            collect_spawns(root_sid)
+
+            # Search each spawned session
+            for child_sid in spawned_sids:
+                if len(results) >= limit:
+                    break
+                child_results = search_transcript(
+                    query=query,
+                    session_id=child_sid,
+                    scope="current",  # Will fall through to disk
+                    role=role,
+                    regex=regex,
+                    limit=limit - len(results),
+                    include_spawned=False,  # Don't recurse infinitely
+                )
+                results.extend(child_results)
+
     return results[:limit]
 
 
@@ -1643,9 +1766,15 @@ def cleanup_sessions(keep_count: int = 100, older_than_days: int | None = None, 
 
     Permanently deletes old session data from disk. This operation cannot be undone.
 
+    v1.23.7: Added cascade parameter. When True (default), also deletes all
+    sessions spawned by the deleted sessions (recursively). This prevents
+    orphaned transcripts from accumulating.
+
     Args:
         keep_count: Keep only the N most recent sessions (default: 100)
         older_than_days: Delete sessions older than N days (optional)
+        cascade: If True (default), also delete spawned sessions. If False,
+                 only delete matching sessions (spawned sessions become orphans).
 
     Returns:
         dict:
@@ -1654,10 +1783,11 @@ def cleanup_sessions(keep_count: int = 100, older_than_days: int | None = None, 
             "deleted_count": int,
             "freed_bytes": int,
             "message": str,
+            "deleted_sessions": list[str],  # v1.23.7: List of deleted session IDs
         }
 
     Examples:
-        // Keep only 50 most recent sessions
+        // Keep only 50 most recent sessions (cascade by default)
         let r = cleanup_sessions(50)
         print("Deleted " + str(r["deleted_count"]) + " sessions")
 
@@ -1667,6 +1797,9 @@ def cleanup_sessions(keep_count: int = 100, older_than_days: int | None = None, 
 
         // Combine both criteria
         let r = cleanup_sessions(keep_count=50, older_than_days=30)
+
+        // Don't cascade (keep spawned sessions)
+        let r = cleanup_sessions(50, cascade=false)
 
     Warning:
         This permanently deletes session data and cannot be undone.
@@ -1689,6 +1822,7 @@ def cleanup_sessions(keep_count: int = 100, older_than_days: int | None = None, 
 
             deleted_count = 0
             freed_bytes = 0
+            deleted_sessions = []
 
             for session in sessions:
                 # Don't delete the current session
@@ -1697,17 +1831,12 @@ def cleanup_sessions(keep_count: int = 100, older_than_days: int | None = None, 
                     continue
 
                 if session.get("modified_at", 0) < cutoff_time:
-                    session_path = manager.get_session_dir(session["session_id"])
-                    if session_path.exists():
-                        # Calculate size before deletion
-                        size = sum(
-                            f.stat().st_size
-                            for f in session_path.rglob("*")
-                            if f.is_file()
-                        )
-                        if manager.delete_session(session["session_id"]):
-                            deleted_count += 1
-                            freed_bytes += size
+                    # v1.23.7: Use delete_session with cascade support
+                    result = delete_session(session["session_id"], cascade=cascade)
+                    if result.get("status") == "ok":
+                        deleted_count += 1
+                        freed_bytes += result.get("freed_bytes", 0)
+                        deleted_sessions.extend(result.get("deleted_sessions", []))
 
             logger.info(
                 "Cleaned up %d sessions older than %d days, freed %d bytes",
@@ -1721,6 +1850,7 @@ def cleanup_sessions(keep_count: int = 100, older_than_days: int | None = None, 
                 "deleted_count": deleted_count,
                 "freed_bytes": freed_bytes,
                 "message": f"Deleted {deleted_count} sessions older than {older_than_days} days",
+                "deleted_sessions": deleted_sessions,
             }
 
         else:
@@ -1743,19 +1873,15 @@ def cleanup_sessions(keep_count: int = 100, older_than_days: int | None = None, 
             to_delete = other_sessions[keep_count:]
             deleted_count = 0
             freed_bytes = 0
+            deleted_sessions = []
 
             for session in to_delete:
-                session_path = manager.get_session_dir(session["session_id"])
-                if session_path.exists():
-                    # Calculate size before deletion
-                    size = sum(
-                        f.stat().st_size
-                        for f in session_path.rglob("*")
-                        if f.is_file()
-                    )
-                    if manager.delete_session(session["session_id"]):
-                        deleted_count += 1
-                        freed_bytes += size
+                # v1.23.7: Use delete_session with cascade support
+                result = delete_session(session["session_id"], cascade=cascade)
+                if result.get("status") == "ok":
+                    deleted_count += 1
+                    freed_bytes += result.get("freed_bytes", 0)
+                    deleted_sessions.extend(result.get("deleted_sessions", []))
 
             logger.info(
                 "Cleaned up %d old sessions, freed %d bytes (keeping %d)",
@@ -1769,6 +1895,7 @@ def cleanup_sessions(keep_count: int = 100, older_than_days: int | None = None, 
                 "deleted_count": deleted_count,
                 "freed_bytes": freed_bytes,
                 "message": f"Deleted {deleted_count} old sessions, keeping {keep_count} most recent",
+                "deleted_sessions": deleted_sessions,
             }
 
     except Exception as e:

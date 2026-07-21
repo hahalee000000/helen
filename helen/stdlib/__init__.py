@@ -167,6 +167,7 @@ from helen.stdlib.transcript import (
     get_spawned_sessions as _get_spawned_sessions,  # v1.23.7: spawn tracking
     get_spawn_tree as _get_spawn_tree,  # v1.23.7: spawn session tree
     replay_transcript as _replay_transcript,
+    replay_full_session as _replay_full_session,  # v1.23.7: aggregate spawn tree
     export_transcript as _export_transcript,
     search_transcript as _search_transcript,  # v1.22: content search
     list_invocations as _list_invocations,  # v1.22: invocation tree
@@ -1262,8 +1263,9 @@ def _register_transcript() -> list[BuiltinFunction]:
         BuiltinFunction("get_spawned_sessions", "Get sessions spawned by the given session", "get_spawned_sessions(session_id?)", _get_spawned_sessions, "transcript"),
         BuiltinFunction("get_spawn_tree", "Get the full session spawn tree (nested spawns)", "get_spawn_tree(session_id?)", _get_spawn_tree, "transcript"),
         BuiltinFunction("replay_transcript", "Replay transcript messages with optional invocation filtering", "replay_transcript(session_id?, include_compressed?, agent?, invocation_id?, last_only?, include_subtree?)", _replay_transcript, "transcript"),
-        BuiltinFunction("export_transcript", "Export transcript to file", "export_transcript(output_path, format?, session_id?)", _export_transcript, "transcript"),
-        BuiltinFunction("search_transcript", "Search transcript messages by content", "search_transcript(query, session_id?, scope?, role?, regex?, limit?)", _search_transcript, "transcript"),
+        BuiltinFunction("replay_full_session", "Replay transcript from session and all spawned sessions (v1.23.7+)", "replay_full_session(session_id?)", _replay_full_session, "transcript"),
+        BuiltinFunction("export_transcript", "Export transcript to file (v1.23.7: include_spawned)", "export_transcript(output_path, format?, session_id?, include_spawned?)", _export_transcript, "transcript"),
+        BuiltinFunction("search_transcript", "Search transcript messages by content (v1.23.7: include_spawned)", "search_transcript(query, session_id?, scope?, role?, regex?, limit?, include_spawned?)", _search_transcript, "transcript"),
         # v1.22: Invocation tree queries (within a single session)
         BuiltinFunction("list_invocations", "List invocations with optional filtering", "list_invocations(session_id?, agent?, limit?, offset?)", _list_invocations, "transcript"),
         BuiltinFunction("get_invocation", "Get metadata for a specific invocation", "get_invocation(invocation_id, session_id?)", _get_invocation, "transcript"),
@@ -1275,9 +1277,9 @@ def _register_transcript() -> list[BuiltinFunction]:
         BuiltinFunction("get_session_dir", "Get resolved transcript session directory", "get_session_dir()", _get_session_dir, "transcript"),
         BuiltinFunction("set_session_dir", "Set transcript session directory at runtime", "set_session_dir(path)", _set_session_dir, "transcript"),
         # v1.21: Session deletion (v1.23.7: enhanced with cascade support)
-        BuiltinFunction("delete_session", "Permanently delete a session (cascade=True deletes spawned sessions)", "delete_session(session_id, cascade?)", _delete_session, "transcript"),
-        BuiltinFunction("delete_current_session", "Permanently delete current session (cascade=True deletes spawned)", "delete_current_session(confirm?, cascade?)", _delete_current_session, "transcript"),
-        BuiltinFunction("cleanup_sessions", "Clean up old sessions (cascade=True deletes spawned)", "cleanup_sessions(keep_count?, older_than_days?, cascade?)", _cleanup_sessions, "transcript"),
+        BuiltinFunction("delete_session", "Permanently delete a session (v1.23.7: cascade=true deletes spawned sessions)", "delete_session(session_id, cascade?)", _delete_session, "transcript"),
+        BuiltinFunction("delete_current_session", "Permanently delete current session (v1.23.7: cascade=true deletes spawned)", "delete_current_session(confirm?, cascade?)", _delete_current_session, "transcript"),
+        BuiltinFunction("cleanup_sessions", "Clean up old sessions (v1.23.7: cascade=true deletes spawned)", "cleanup_sessions(keep_count?, older_than_days?, cascade?)", _cleanup_sessions, "transcript"),
     ]
 
 
