@@ -201,6 +201,142 @@ def list_sessions(scope: str = "") -> list[dict[str, Any]]:
     return results
 
 
+def get_spawned_sessions(session_id: str = "") -> list[dict[str, Any]]:
+    """Get all sessions spawned by the given session (v1.23.7+).
+
+    Returns direct children (sessions whose parent_session_id matches).
+    For the full tree including nested spawns, use get_invocation_tree().
+
+    Args:
+        session_id: Parent session ID. If empty, uses current session.
+
+    Returns:
+        List of spawned session metadata dicts, each containing:
+        - session_id: The spawned session's ID
+        - agent_name: Agent name (if available)
+        - timestamp: Spawn time
+        - scope: "global" | "project"
+
+    Example:
+        let children = get_spawned_sessions()
+        for child in children {
+            print("Spawned: {child.session_id}")
+        }
+
+        // Get full tree (including nested spawns)
+        let tree = get_invocation_tree()
+    """
+    from helen.runtime.config import resolve_session_dir
+    from helen.runtime.session_manager import SessionManager
+    from helen.runtime.transcript_store import SessionMeta
+
+    # Determine target session
+    if not session_id:
+        agent_ctx = _get_agent_context()
+        if agent_ctx is None:
+            return []
+        session_id = agent_ctx.session_id
+        if not session_id:
+            return []
+
+    # Search in both global and project scopes
+    results = []
+    for scope in ["global", "project"]:
+        try:
+            session_dir, _ = resolve_session_dir(scope=scope)
+            manager = SessionManager(base_dir=session_dir)
+
+            # Check all sessions for matching parent_session_id
+            for session_info in manager.list_sessions():
+                child_sid = session_info.get("session_id", "")
+                if not child_sid:
+                    continue
+
+                # Read session meta to get parent_session_id
+                try:
+                    transcript_path = manager.get_session_path(child_sid)
+                    if transcript_path.exists():
+                        from helen.runtime.transcript_store import JSONLBackend
+                        backend = JSONLBackend(transcript_path)
+                        store = TranscriptStore.load_from_backend(backend)
+                        meta = store.read_meta()
+                        if meta and meta.parent_session_id == session_id:
+                            results.append({
+                                "session_id": child_sid,
+                                "parent_session_id": session_id,
+                                "timestamp": meta.timestamp,
+                                "scope": scope,
+                                "argv": meta.argv,
+                            })
+                except Exception:
+                    # Skip sessions that can't be read
+                    pass
+        except Exception:
+            continue
+
+    # Sort by timestamp
+    results.sort(key=lambda s: s.get("timestamp", 0))
+    return results
+
+
+def get_spawn_tree(session_id: str = "") -> dict[str, Any]:
+    """Get the full session spawn tree including nested spawns (v1.23.7+).
+
+    Recursively builds a tree structure showing the complete spawn hierarchy
+    across different sessions. This is different from get_invocation_tree()
+    which shows agent calls within a single session.
+
+    Args:
+        session_id: Root session ID. If empty, uses current session.
+
+    Returns:
+        Tree dict with structure:
+        {
+            "session_id": "session_abc",
+            "children": [
+                {
+                    "session_id": "session_def",
+                    "children": [...]
+                },
+                ...
+            ]
+        }
+
+    Example:
+        let tree = get_spawn_tree()
+        print("Root: {tree.session_id}")
+        for child in tree.children {
+            print("  Spawned: {child.session_id}")
+        }
+    """
+    from helen.runtime.config import resolve_session_dir
+    from helen.runtime.session_manager import SessionManager
+    from helen.runtime.transcript_store import SessionMeta, TranscriptStore
+
+    # Determine target session
+    if not session_id:
+        agent_ctx = _get_agent_context()
+        if agent_ctx is None:
+            return {"session_id": "", "children": []}
+        session_id = agent_ctx.session_id
+        if not session_id:
+            return {"session_id": "", "children": []}
+
+    def build_tree(sid: str) -> dict[str, Any]:
+        """Recursively build tree for session and its children."""
+        node = {"session_id": sid, "children": []}
+
+        # Find direct children
+        children = get_spawned_sessions(sid)
+        for child in children:
+            child_tree = build_tree(child["session_id"])
+            node["children"].append(child_tree)
+
+        return node
+
+    return build_tree(session_id)
+
+
 def replay_transcript(
     session_id: str | None = None,
     include_compressed: bool = False,
@@ -1245,15 +1381,22 @@ def set_session_dir(path: str) -> dict:
 # Session deletion (v1.21)
 # ---------------------------------------------------------------------------
 
-def delete_session(session_id: str) -> dict:
+def delete_session(session_id: str, cascade: bool = True) -> dict:
     """Permanently delete a session and its transcript data.
 
     This removes all data for the specified session from disk, including
     transcript files, compression history, and indexes. This operation
     cannot be undone.
 
+    v1.23.7: Added cascade parameter. When True (default), also deletes all
+    sessions spawned by this session (recursively). This prevents orphaned
+    transcripts from accumulating.
+
     Args:
         session_id: The session ID to delete
+        cascade: If True (default), also delete all spawned sessions.
+                 If False, only delete the specified session (spawned
+                 sessions become orphans).
 
     Returns:
         dict:
@@ -1262,15 +1405,16 @@ def delete_session(session_id: str) -> dict:
             "session_id": str,
             "message": str,
             "freed_bytes": int,  # Only on success
+            "deleted_sessions": list[str],  # v1.23.7: List of deleted session IDs
         }
 
     Example:
+        // Delete session and all its spawns (default)
         let r = delete_session("session_1720435200_a1b2c3d4")
-        if r["status"] == "ok" {
-            print("Deleted session: " + r["session_id"])
-        } else {
-            print("Failed to delete: " + r["message"])
-        }
+        print("Deleted {len(r['deleted_sessions'])} sessions")
+
+        // Delete only the specified session (keep spawns)
+        let r = delete_session("session_1720435200_a1b2c3d4", cascade=false)
 
     Warning:
         This permanently deletes all session data and cannot be undone.
@@ -1308,31 +1452,55 @@ def delete_session(session_id: str) -> dict:
                 "session_id": session_id,
             }
 
-        # Calculate size before deletion
-        session_path = manager.get_session_dir(session_id)
-        freed_bytes = 0
-        if session_path.exists():
-            freed_bytes = sum(
-                f.stat().st_size
-                for f in session_path.rglob("*")
-                if f.is_file()
-            )
+        # v1.23.7: Collect all sessions to delete (cascade)
+        sessions_to_delete = [session_id]
+        if cascade:
+            spawned = get_spawned_sessions(session_id)
+            for spawn_info in spawned:
+                child_sid = spawn_info.get("session_id", "")
+                if child_sid and child_sid != current_session_id:
+                    # Recursively collect nested spawns
+                    nested_result = delete_session(child_sid, cascade=True)
+                    if nested_result.get("status") == "ok":
+                        sessions_to_delete.extend(nested_result.get("deleted_sessions", []))
 
-        # Delete the session
-        success = manager.delete_session(session_id)
+        # Delete all collected sessions
+        total_freed_bytes = 0
+        deleted_sessions = []
 
-        if success:
-            logger.info("Deleted session %s, freed %d bytes", session_id, freed_bytes)
+        for sid in sessions_to_delete:
+            # Calculate size before deletion
+            session_path = manager.get_session_dir(sid)
+            freed_bytes = 0
+            if session_path.exists():
+                freed_bytes = sum(
+                    f.stat().st_size
+                    for f in session_path.rglob("*")
+                    if f.is_file()
+                )
+
+            # Delete the session
+            success = manager.delete_session(sid)
+
+            if success:
+                total_freed_bytes += freed_bytes
+                deleted_sessions.append(sid)
+                logger.info("Deleted session %s, freed %d bytes", sid, freed_bytes)
+            else:
+                logger.warning("Failed to delete session %s", sid)
+
+        if deleted_sessions:
             return {
                 "status": "ok",
                 "session_id": session_id,
-                "message": "Session deleted successfully",
-                "freed_bytes": freed_bytes,
+                "message": f"Deleted {len(deleted_sessions)} session(s) successfully",
+                "freed_bytes": total_freed_bytes,
+                "deleted_sessions": deleted_sessions,
             }
         else:
             return {
                 "status": "error",
-                "message": "Failed to delete session",
+                "message": "Failed to delete session(s)",
                 "session_id": session_id,
             }
 

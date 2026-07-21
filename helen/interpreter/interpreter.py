@@ -125,7 +125,8 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
                  llm_runtime: LLMRuntime | None = None,
                  import_resolver: ImportResolver | None = None,
                  program_args: list[str] | None = None,
-                 transcript_store_enabled: bool = True) -> None:
+                 transcript_store_enabled: bool = True,
+                 parent_session_id: str = "") -> None:  # v1.23.7: Track spawn relationships
         self.errors = errors or ErrorReporter()
         self.environment = Environment()
         self._functions: dict[str, FunctionDeclNode] = {}
@@ -140,6 +141,7 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         self.import_resolver = import_resolver or ImportResolver()
         self._program_args: list[str] = list(program_args) if program_args else []
         self._transcript_store_enabled = transcript_store_enabled
+        self._parent_session_id = parent_session_id  # v1.23.7
         # AI-native observability (P0-P3)
         self.observability = ObservabilityManager()
         # Merge imported agents/functions into local registries
@@ -166,6 +168,7 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
             working_memory_enabled=True,
             cache_aware_enabled=True,
             transcript_store_enabled=self._transcript_store_enabled,
+            parent_session_id=self._parent_session_id,  # v1.23.7
         )
         # v1.22: Invocation tree tracking (see reports/v1.22-invocation-tree-proposal.md)
         # _current_invocation_id: the invocation currently executing (or "" at top-level)
@@ -1292,6 +1295,8 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         import_resolver = self.import_resolver
         program_args = self._program_args
         transcript_enabled = self._transcript_store_enabled
+        # v1.23.7: Pass parent session_id for spawn tracking
+        parent_session_id = self._agent_context.session_id or ""
 
         def run_spawned():
             try:
@@ -1301,6 +1306,7 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
                     import_resolver=import_resolver,
                     program_args=program_args,
                     transcript_store_enabled=transcript_enabled,
+                    parent_session_id=parent_session_id,  # v1.23.7
                 )
                 spawned_interp.environment = env_snapshot
                 # Copy agent/function registries from parent

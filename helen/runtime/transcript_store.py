@@ -131,6 +131,10 @@ class SessionMeta:
     debugging. Designed to be extensible — new fields can be added without
     breaking backward compatibility (old transcripts simply lack them).
 
+    v1.23.7: Added parent_session_id to track spawn relationships. When an
+    agent is spawned, the child session records the parent's session_id,
+    enabling cascade deletion and full session tree queries.
+
     Attributes:
         argv: Command-line arguments (program name + args)
         timestamp: Session start time (Unix epoch)
@@ -140,6 +144,7 @@ class SessionMeta:
         cwd: Working directory at session start
         session_id: Session identifier (matches directory name)
         session_scope: "global" | "project"
+        parent_session_id: Parent session ID (for spawned sessions, empty otherwise)
     """
 
     argv: list[str] = field(default_factory=list)
@@ -150,6 +155,7 @@ class SessionMeta:
     cwd: str = ""
     session_id: str = ""
     session_scope: str = ""
+    parent_session_id: str = ""  # v1.23.7: Track spawn relationships
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to JSON-serializable dict."""
@@ -163,6 +169,7 @@ class SessionMeta:
             "cwd": self.cwd,
             "session_id": self.session_id,
             "session_scope": self.session_scope,
+            "parent_session_id": self.parent_session_id,  # v1.23.7
         }
 
     @classmethod
@@ -177,18 +184,22 @@ class SessionMeta:
             cwd=data.get("cwd", ""),
             session_id=data.get("session_id", ""),
             session_scope=data.get("session_scope", ""),
+            parent_session_id=data.get("parent_session_id", ""),  # v1.23.7
         )
 
     @classmethod
-    def from_current_context(cls, session_id: str = "", session_scope: str = "") -> "SessionMeta":
+    def from_current_context(cls, session_id: str = "", session_scope: str = "", parent_session_id: str = "") -> "SessionMeta":
         """Build SessionMeta from the current process context.
 
         Captures argv, python version, helen version, cwd, platform
         automatically. Used when creating a new session.
 
+        v1.23.7: Added parent_session_id parameter to track spawn relationships.
+
         Args:
             session_id: The session ID (matches directory name)
             session_scope: "global" or "project"
+            parent_session_id: Parent session ID (for spawned sessions)
 
         Returns:
             A new SessionMeta populated from the current environment.
@@ -212,6 +223,7 @@ class SessionMeta:
             cwd=str(Path.cwd()),
             session_id=session_id,
             session_scope=session_scope,
+            parent_session_id=parent_session_id,  # v1.23.7
         )
 
 

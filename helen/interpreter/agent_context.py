@@ -157,6 +157,7 @@ class AgentContextManager:
         compression_enabled: bool | None = None,
         transcript_store_enabled: bool = True,
         session_id: str | None = None,
+        parent_session_id: str = "",  # v1.23.7: Track spawn relationships
     ):
         """Initialize agent context manager.
 
@@ -181,6 +182,8 @@ class AgentContextManager:
             session_id: Optional session ID for transcript persistence.
                 If None and transcript_store_enabled is True, a new session
                 is automatically created.
+            parent_session_id: v1.23.7: Parent session ID for spawned sessions.
+                Used to track spawn relationships and enable cascade deletion.
         """
         # Backward compatibility: compression_enabled → compression_strategy
         if compression_enabled is not None:
@@ -211,6 +214,7 @@ class AgentContextManager:
         self._transcript_store_enabled = transcript_store_enabled
         self._transcript_store_initialized = False
         self._pending_session_id = session_id
+        self._parent_session_id = parent_session_id  # v1.23.7
         if transcript_store_enabled:
             # Don't call _init_transcript_store yet — defer to first access
             pass
@@ -298,11 +302,13 @@ class AgentContextManager:
                     )
                     # v1.23.3: Write session metadata (argv, timestamp, etc.)
                     # for new sessions. This is the first record in the transcript.
+                    # v1.23.7: Include parent_session_id for spawn tracking.
                     try:
                         from helen.runtime.transcript_store import SessionMeta
                         meta = SessionMeta.from_current_context(
                             session_id=self._session_id,
                             session_scope="custom",
+                            parent_session_id=self._parent_session_id,
                         )
                         self._transcript_store.write_meta(meta)
                     except Exception as meta_err:
@@ -352,11 +358,13 @@ class AgentContextManager:
                     )
                     # v1.23.3: Write session metadata (argv, timestamp, etc.)
                     # for new sessions. This is the first record in the transcript.
+                    # v1.23.7: Include parent_session_id for spawn tracking.
                     try:
                         from helen.runtime.transcript_store import SessionMeta
                         meta = SessionMeta.from_current_context(
                             session_id=session_id,
                             session_scope=detected_scope,
+                            parent_session_id=self._parent_session_id,
                         )
                         self._transcript_store.write_meta(meta)
                     except Exception as meta_err:

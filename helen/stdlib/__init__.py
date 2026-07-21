@@ -164,12 +164,14 @@ from helen.stdlib.transcript import (
     get_session_id as _get_session_id,
     get_session_meta as _get_session_meta,  # v1.23.3: session metadata
     list_sessions as _list_sessions,
+    get_spawned_sessions as _get_spawned_sessions,  # v1.23.7: spawn tracking
+    get_spawn_tree as _get_spawn_tree,  # v1.23.7: spawn session tree
     replay_transcript as _replay_transcript,
     export_transcript as _export_transcript,
     search_transcript as _search_transcript,  # v1.22: content search
     list_invocations as _list_invocations,  # v1.22: invocation tree
     get_invocation as _get_invocation,  # v1.22: invocation tree
-    get_invocation_tree as _get_invocation_tree,  # v1.22: invocation tree
+    get_invocation_tree as _get_invocation_tree,  # v1.22: invocation tree (unchanged)
     invocation_path as _invocation_path,  # v1.22: invocation tree
     get_compression_audit as _get_compression_audit,
     resume_session as _resume_session,
@@ -1256,23 +1258,26 @@ def _register_transcript() -> list[BuiltinFunction]:
         BuiltinFunction("get_session_id", "Get current transcript session ID", "get_session_id()", _get_session_id, "transcript"),
         BuiltinFunction("get_session_meta", "Get session metadata (argv, timestamp, version)", "get_session_meta(session_id?)", _get_session_meta, "transcript"),
         BuiltinFunction("list_sessions", "List all transcript sessions", "list_sessions()", _list_sessions, "transcript"),
+        # v1.23.7: Spawn session tracking
+        BuiltinFunction("get_spawned_sessions", "Get sessions spawned by the given session", "get_spawned_sessions(session_id?)", _get_spawned_sessions, "transcript"),
+        BuiltinFunction("get_spawn_tree", "Get the full session spawn tree (nested spawns)", "get_spawn_tree(session_id?)", _get_spawn_tree, "transcript"),
         BuiltinFunction("replay_transcript", "Replay transcript messages with optional invocation filtering", "replay_transcript(session_id?, include_compressed?, agent?, invocation_id?, last_only?, include_subtree?)", _replay_transcript, "transcript"),
         BuiltinFunction("export_transcript", "Export transcript to file", "export_transcript(output_path, format?, session_id?)", _export_transcript, "transcript"),
         BuiltinFunction("search_transcript", "Search transcript messages by content", "search_transcript(query, session_id?, scope?, role?, regex?, limit?)", _search_transcript, "transcript"),
-        # v1.22: Invocation tree queries
+        # v1.22: Invocation tree queries (within a single session)
         BuiltinFunction("list_invocations", "List invocations with optional filtering", "list_invocations(session_id?, agent?, limit?, offset?)", _list_invocations, "transcript"),
         BuiltinFunction("get_invocation", "Get metadata for a specific invocation", "get_invocation(invocation_id, session_id?)", _get_invocation, "transcript"),
-        BuiltinFunction("get_invocation_tree", "Get the full invocation tree for a session", "get_invocation_tree(session_id?)", _get_invocation_tree, "transcript"),
+        BuiltinFunction("get_invocation_tree", "Get the full invocation tree for a session (agent calls)", "get_invocation_tree(session_id?)", _get_invocation_tree, "transcript"),
         BuiltinFunction("invocation_path", "Get human-readable path string for an invocation", "invocation_path(invocation_id, session_id?)", _invocation_path, "transcript"),
         BuiltinFunction("get_compression_audit", "Get compression event history", "get_compression_audit()", _get_compression_audit, "transcript"),
         BuiltinFunction("resume_session", "Resume a previous transcript session", "resume_session(session_id)", _resume_session, "transcript"),
         # v1.20: Session directory access
         BuiltinFunction("get_session_dir", "Get resolved transcript session directory", "get_session_dir()", _get_session_dir, "transcript"),
         BuiltinFunction("set_session_dir", "Set transcript session directory at runtime", "set_session_dir(path)", _set_session_dir, "transcript"),
-        # v1.21: Session deletion
-        BuiltinFunction("delete_session", "Permanently delete a session", "delete_session(session_id)", _delete_session, "transcript"),
-        BuiltinFunction("delete_current_session", "Permanently delete current session", "delete_current_session(confirm?)", _delete_current_session, "transcript"),
-        BuiltinFunction("cleanup_sessions", "Clean up old sessions", "cleanup_sessions(keep_count?, older_than_days?)", _cleanup_sessions, "transcript"),
+        # v1.21: Session deletion (v1.23.7: enhanced with cascade support)
+        BuiltinFunction("delete_session", "Permanently delete a session (cascade=True deletes spawned sessions)", "delete_session(session_id, cascade?)", _delete_session, "transcript"),
+        BuiltinFunction("delete_current_session", "Permanently delete current session (cascade=True deletes spawned)", "delete_current_session(confirm?, cascade?)", _delete_current_session, "transcript"),
+        BuiltinFunction("cleanup_sessions", "Clean up old sessions (cascade=True deletes spawned)", "cleanup_sessions(keep_count?, older_than_days?, cascade?)", _cleanup_sessions, "transcript"),
     ]
 
 
