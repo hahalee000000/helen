@@ -173,6 +173,7 @@ class HelenLanguageServer:
                 "resolveProvider": False,
             },
             "definitionProvider": True,
+            "referencesProvider": True,
             "diagnosticProvider": {
                 "interFileDependencies": False,
                 "workspaceDiagnostics": False,
@@ -210,6 +211,8 @@ class HelenLanguageServer:
             return self._completion(params)
         elif method == "textDocument/definition":
             return self._definition(params)
+        elif method == "textDocument/references":
+            return self._references(params)
         elif method == "textDocument/diagnostic":
             return self._diagnostic(params)
         else:
@@ -232,12 +235,14 @@ class HelenLanguageServer:
 
     def _initialize(self, params: dict[str, Any]) -> dict[str, Any]:
         """Handle initialize request."""
-        _log(f"initialize — helen-lsp 1.10.0, pid={__import__('os').getpid()}")
+        import helen as _helen_pkg  # noqa: PLC0415
+        _lsp_version = getattr(_helen_pkg, "__version__", "unknown")
+        _log(f"initialize — helen-lsp {_lsp_version}, pid={__import__('os').getpid()}")
         return {
             "capabilities": self.capabilities,
             "serverInfo": {
                 "name": "helen-lsp",
-                "version": "1.10.0",
+                "version": _lsp_version,
             },
         }
 
@@ -360,6 +365,105 @@ class HelenLanguageServer:
         result = self._find_definition_at(doc.content, uri, line_num, char_num)
         _log(f"definition: line={line_num} col={char_num} → {result}")
         return result
+
+    def _references(self, params: dict[str, Any]) -> list[dict[str, Any]]:
+        """Handle textDocument/references (find all references/call sites).
+
+        Scans all open documents for references to the symbol at the cursor
+        position. Returns a list of Location objects for each reference found.
+        """
+        uri = params.get("textDocument", {}).get("uri", "")
+        position = params.get("position", {})
+        context = params.get("context", {})
+        include_declaration = context.get("includeDeclaration", True)
+
+        doc = self.documents.get(uri)
+        if doc is None:
+            _log(f"references: doc not found for {uri}")
+            return []
+
+        line_num = position.get("line", 0) + 1
+        char_num = position.get("character", 0) + 1
+
+        # Get the symbol at cursor
+        target = self._get_symbol_at(doc.content, line_num, char_num)
+        if not target:
+            _log(f"references: no symbol at line={line_num} col={char_num}")
+            return []
+
+        _log(f"references: searching for '{target}' across all documents")
+
+        results = []
+        for doc_uri, document in self.documents.items():
+            refs = self._find_references_in(
+                document.content, doc_uri, target, include_declaration
+            )
+            results.extend(refs)
+
+        _log(f"references: found {len(results)} references")
+        return results
+
+    def _get_symbol_at(self, content: str, line: int, col: int) -> str | None:
+        """Extract the symbol name at the given position."""
+        import re  # noqa: PLC0415
+
+        lines = content.split("\n")
+        if not (0 < line <= len(lines)):
+            return None
+
+        current_line = lines[line - 1]
+        # Match word boundaries (includes Unicode/CJK identifiers)
+        for match in re.finditer(r'[\w一-鿿]+', current_line):
+            if match.start() <= col - 1 < match.end():
+                return match.group(0)
+        return None
+
+    def _find_references_in(
+        self, content: str, uri: str, target: str, include_declaration: bool
+    ) -> list[dict[str, Any]]:
+        """Find all references to `target` in the given content."""
+        import re  # noqa: PLC0415
+
+        results = []
+        lines = content.split("\n")
+
+        # Patterns that indicate a declaration (to optionally skip)
+        decl_patterns = [
+            rf'^\s*(?:agent|fn|函数)\s+{re.escape(target)}\s*[\({{]',
+            rf'^\s*(?:shared\s+)?(?:let|const|定义|常量)\s+{re.escape(target)}\s*=',
+        ]
+
+        # Pattern for any reference (word boundary match)
+        # \b in Python regex matches Unicode word boundaries
+        ref_pattern = rf'\b{re.escape(target)}\b'
+
+        for i, line in enumerate(lines):
+            # Skip comments
+            if line.lstrip().startswith(('#', '//', '＃')):
+                continue
+            # Skip string literals (simple heuristic)
+            if f'"{target}"' in line or f"'{target}'" in line:
+                continue
+
+            for match in re.finditer(ref_pattern, line):
+                # Check if this is a declaration
+                is_declaration = any(
+                    re.search(p, line) for p in decl_patterns
+                )
+
+                if is_declaration and not include_declaration:
+                    continue
+
+                start = Position(line=i, character=match.start())
+                end = Position(line=i, character=match.end())
+                results.append(
+                    Location(
+                        uri=uri,
+                        range=Range(start=start, end=end),
+                    ).to_dict()
+                )
+
+        return results
 
     def _find_definition_at(
         self, content: str, uri: str, line: int, col: int

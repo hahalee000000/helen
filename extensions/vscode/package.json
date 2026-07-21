@@ -2,7 +2,7 @@
     "name": "helen-language",
     "displayName": "Helen Language",
     "description": "Helen Agent Programming Language support for VS Code",
-    "version": "1.23.4",
+    "version": "1.23.5",
     "publisher": "helen-lang",
     "engines": {
         "vscode": "^1.75.0"
