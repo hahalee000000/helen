@@ -305,19 +305,61 @@ main {
 | 跨进程恢复对话（程序重启） | **C**: 持久化 session_id + `resume_session` | 跨 Interpreter 生命周期 |
 | 长期知识沉淀（跨项目） | `export_transcript` + 外部知识库 | transcript 是运行时的，知识是持久的 |
 | 多 agent 并行写同一份上下文 | SharedStore + 显式同步 | Channel 是 1:1，SharedStore 支持多写者 |
+| 调试多 agent 协作 / 分析执行流程 | **D**: v1.23.7 自动追踪 + `replay_full_session` | 自动记录 spawn 关系，聚合查看所有消息 |
+| 清理旧 transcript（避免孤儿） | **D**: v1.23.7 级联删除 | 自动删除 spawn 子 session |
+
+**模式 D：v1.23.7+ 自动追踪（推荐用于调试和分析）**
+
+v1.23.7 引入了 spawn 关系的自动追踪和管理：
+
+```helen
+// 自动记录 spawn 关系（无需手动传递 parent_sid）
+main {
+    let m = spawn Worker("任务")  // 自动记录 parent_session_id
+    let result = m.receive()
+}
+
+// 查询 spawn 树（调试和分析）
+let tree = get_spawn_tree()
+print("Root: " + tree["session_id"])
+对于 tree["children"] 中的 每个子 {
+    打印("  Spawn: " + 每个子["session_id"])
+}
+
+// 聚合查看所有 spawn 的消息
+let all_messages = replay_full_session()
+对于 all_messages 中的 msg {
+    打印("[" + msg["session_id"] + "] " + msg["role"] + ": " + msg["content"][:50])
+}
+
+// 级联删除（避免孤儿 transcript）
+删除会话("session_abc", 级联=true)  // 删除主 session + 所有 spawn
+```
+
+**优势**：
+- ✅ 自动追踪：无需手动传递 parent_sid
+- ✅ 完整视图：replay_full_session() 聚合所有 spawn 的消息
+- ✅ 简化清理：级联删除避免孤儿 transcript
+- ✅ 调试友好：可以查看完整的 spawn 树和消息流
+
+> 💡 **何时用模式 D**：当你需要**调试多 agent 协作**、**分析执行流程**、或**清理旧 transcript** 时。对于**运行时上下文接力**，仍然推荐模式 A（显式传递）或模式 B（SharedStore）。
+
+> 📚 **完整 API**：参见 `helen-stdlib` skill 的 "Spawn 关系追踪" 和 "级联删除" 章节
 
 #### 🔑 核心口诀
 
-> **"spawn 即隔离，接力靠显式"**
+> **"spawn 即隔离，接力靠显式，调试用追踪"**
 >
-> - spawn 出去的 agent 默认拿不到父上下文 → 必须传参 + `resume_session`
-> - 重启程序后 transcript 不会自动接上 → 必须持久化 session_id
+> - spawn 出去的 agent 默认拿不到父上下文 → 必须传参 + `resume_session`（模式 A/B）
+> - 重启程序后 transcript 不会自动接上 → 必须持久化 session_id（模式 C）
 > - 跨 agent 结构化数据 → `shared store` + Channel 传递，别指望自动共享
 > - `working_memory_set` 仅用于**5 个固定字段**（`task` / `active_files` / `decisions` / `todos` / `errors`），由 Helen 自动跟踪工具调用；**不是通用 KV 存储**
+> - v1.23.7+ 自动追踪 spawn 关系 → 调试和分析时用 `replay_full_session()` + 级联删除（模式 D）
 
 #### 📚 关联
 
 - 设计原理详见 `helen-agent-patterns` 模式 4（spawn + Channel）
+- v1.23.7 spawn transcript 管理 API 详见 `helen-stdlib` skill
 - API 参考详见 `helen-stdlib` 中 `get_session_id` / `resume_session` / `working_memory_*` 章节
 
 ## 完整工作流示例
