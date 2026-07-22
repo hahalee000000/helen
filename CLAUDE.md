@@ -58,7 +58,7 @@ Layer 2: Runtime (LLM integration)
   TranscriptStore (v1.16: SSOT for all messages, SQLite/JSONL backends, LRU cache, UUID addressing)
 
 Layer 3: Toolchain
-  CLI (run/check/repl/test/quality/doc/init/lsp)
+  CLI (run/check/repl/test/quality/doc/init/lsp) — supports --session/--resume-latest for session recovery (v1.24)
   REPL (multi-line, :help/:reset/:ask/:agent/:trace/:stats/:llm_log/:last_error/:transcript/:sessions/:session_id)
   LSP (diagnostics, completion, go-to-definition, alias-aware)
   VS Code Extension (syntax highlighting + LSP)
@@ -166,6 +166,12 @@ helen/
   - **View Caching**: Dirty flag + cached view for O(1) reads
   - **REPL Commands**: `:transcript [--full|--audit]`, `:sessions`, `:session_id`
   - **Stdlib Functions**: `get_session_id()`, `get_session_meta()`, `list_sessions()`, `replay_transcript()`, `export_transcript()`, `get_compression_audit()`, `get_session_dir()`, `set_session_dir()`, `delete_session(id)`, `delete_current_session(confirm?)`, `cleanup_sessions(keep_count?, older_than_days?)`
+  - **Startup Session Recovery (v1.24)**: CLI 支持启动时恢复历史 session
+    - `helen --session=session_xxx file.helen` — 指定 session_id 启动
+    - `helen --resume-latest file.helen` — 自动恢复最近的 session
+    - `helen repl --resume-latest` / `helen repl -r` — REPL 恢复最近会话
+    - Python API: `Interpreter(session_id="session_xxx")` — 编程接口
+    - 与 `resume_session()` 的区别：启动时直接复用（一个 transcript），运行时导入（两个 transcript）
   - **Session Meta (v1.23.3)**: 每个新 transcript 文件的第一行自动写入 `session_meta` 记录，包含 argv（程序名和调用参数）、timestamp（启动时间）、helen_version、python_version、platform、cwd、session_id、session_scope。用于会话识别、审计追踪和调试。通过 `get_session_meta()` stdlib 函数读取。
   - **Session Scope (v1.20)**: transcripts 默认按作用域存储——项目目录 `.helen/sessions/`（检测到 `.helen/`、`helen.yaml`、`helen.toml` 时）或全局 `~/.helen/sessions/`（REPL、脚本）。通过 `session_scope: "auto"|"global"|"project"` 配置，或 `HELEN_SESSION_DIR` 环境变量强制指定路径
   - **Runtime Isolation (设计原则)**: transcript 按 **Interpreter 实例** 隔离，而非按目录绑定。每个 Interpreter 生命周期内 `get_session_id()` 返回相同值；不同 Interpreter 实例各自独立 transcript。具体规则：

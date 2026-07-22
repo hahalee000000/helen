@@ -501,8 +501,11 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
     return True
 
 
-def repl_command() -> int:
+def repl_command(session_id: str | None = None) -> int:
     """Run the REPL interactive loop.
+
+    Args:
+        session_id: Optional session ID to resume. If None, creates new session.
 
     Returns:
         0 on normal exit.
@@ -527,7 +530,12 @@ def repl_command() -> int:
     cwd = os.getcwd()
     from helen.runtime.import_resolver import ImportResolver
     import_resolver = ImportResolver(base_dir=cwd, error_reporter=errors)
-    interp = Interpreter(errors=errors, llm_runtime=llm_runtime, import_resolver=import_resolver)
+    interp = Interpreter(
+        errors=errors,
+        llm_runtime=llm_runtime,
+        import_resolver=import_resolver,
+        session_id=session_id,  # v1.24: Resume specific session
+    )
     # Enable call stack and execution tracing by default in REPL for better error diagnostics
     interp.observability.call_stack.enabled = True
     interp.observability.tracer.enabled = True

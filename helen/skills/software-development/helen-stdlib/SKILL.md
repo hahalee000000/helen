@@ -939,6 +939,61 @@ export_transcript("full.json", "json", include_spawned=true)
 - `project`: 存储在项目的 `.helen/sessions/`（需要 `.helen/`、`helen.yaml` 或 `helen.toml`）
 - `auto`（默认）: 自动检测项目目录，否则使用全局
 
+### 启动时恢复 Session (v1.24+)
+
+v1.24 新增 CLI 参数，支持在启动时指定恢复历史 session：
+
+```bash
+# 恢复指定 session
+helen --session=session_xxx file.helen
+helen repl --session=session_xxx
+
+# 自动恢复最近的 session
+helen --resume-latest file.helen
+helen repl --resume-latest
+helen repl -r  # 简写
+```
+
+**Python API**：
+
+```python
+from helen.interpreter import Interpreter
+
+# 恢复指定 session
+interp = Interpreter(session_id="session_xxx")
+
+# 恢复最近的 session
+from helen.runtime.session_manager import SessionManager
+manager = SessionManager()
+sessions = manager.list_sessions()
+if sessions:
+    latest_sid = sessions[0]["session_id"]
+    interp = Interpreter(session_id=latest_sid)
+```
+
+**与 `resume_session()` 的区别**：
+
+| 特性 | `--session` (启动时) | `resume_session()` (运行时) |
+|------|---------------------|---------------------------|
+| 时机 | 解释器启动前 | 程序运行中 |
+| 行为 | 直接复用指定 session | 导入历史消息到当前新 session |
+| transcript | 一个文件 | 两个文件 |
+| 适用场景 | REPL 继续工作、调试 | 代码中切换上下文 |
+
+**典型用法**：
+
+```bash
+# 1. 运行程序，记录 session_id
+helen my_agent.helen
+# 输出: 当前 session: session_abc123
+
+# 2. 恢复 session，调试执行流程
+helen --session=session_abc123 debug.helen
+
+# 3. 在 REPL 中继续之前的工作
+helen repl --resume-latest
+```
+
 ## Media（媒体/多模态）
 
 v1.17 引入多模态支持，`MediaPart` 是一等数据类型。

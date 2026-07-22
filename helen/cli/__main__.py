@@ -19,7 +19,7 @@ from helen.cli.docgen import generate_cli as docgen_cli
 from helen.runtime.http_llm import HttpLLMRuntime
 
 
-def run_command(file: str, program_args: list[str] | None = None) -> int:
+def run_command(file: str, program_args: list[str] | None = None, session_id: str | None = None) -> int:
     """Run a Helen program (HLD 5.2 Phase 6).
 
     Pipeline: Lexer → Parser → Analyzer → Interpreter
@@ -27,6 +27,7 @@ def run_command(file: str, program_args: list[str] | None = None) -> int:
     Args:
         file: Path to the Helen source file.
         program_args: Extra CLI arguments to pass to the program as `argv`.
+        session_id: Optional session ID to resume (v1.24).
 
     Returns:
         0 on success, 1 on syntax error, 2 on semantic error, 3 on runtime error.
@@ -104,6 +105,7 @@ def run_command(file: str, program_args: list[str] | None = None) -> int:
         llm_runtime=llm_runtime,
         import_resolver=import_resolver,
         program_args=program_args,
+        session_id=session_id,  # v1.24: Resume specific session
     )
     try:
         interp.interpret(program)
@@ -178,12 +180,13 @@ def _report_errors(errors, source_lines: list[str]) -> None:
         print(format_warning(warn, source_lines))
 
 
-def watch_command(file: str, program_args: list[str] | None = None) -> int:
+def watch_command(file: str, program_args: list[str] | None = None, session_id: str | None = None) -> int:
     """Watch a Helen file and re-run on changes (Issue #33).
 
     Args:
         file: Path to the Helen source file to watch.
         program_args: Extra CLI arguments to pass to the program.
+        session_id: Optional session ID to resume (v1.24).
 
     Returns:
         0 on normal exit (Ctrl+C), 1 on error.
@@ -207,7 +210,7 @@ def watch_command(file: str, program_args: list[str] | None = None) -> int:
                     print(f"\n🔄 [{time.strftime('%H:%M:%S')}] Change detected, running {file}...")
                     print("=" * 60)
                     try:
-                        result = run_command(file, program_args)
+                        result = run_command(file, program_args, session_id=session_id)
                         if result == 0:
                             print("✅ Program completed successfully")
                         else:
@@ -224,12 +227,62 @@ def watch_command(file: str, program_args: list[str] | None = None) -> int:
         return 0
 
 
+def _extract_session_flags(argv: list[str]) -> tuple[str | None, list[str]]:
+    """Extract --session and --resume-latest flags from argv.
+
+    Returns:
+        (session_id, remaining_argv)
+        session_id is resolved (including --resume-latest lookup) or None.
+    """
+    session_id = None
+    resume_latest = False
+    remaining = []
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg.startswith("--session="):
+            session_id = arg.split("=", 1)[1]
+            i += 1
+        elif arg == "--session" and i + 1 < len(argv):
+            session_id = argv[i + 1]
+            i += 2
+        elif arg in ("--resume-latest", "-r"):
+            resume_latest = True
+            i += 1
+        else:
+            remaining.append(arg)
+            i += 1
+
+    # Resolve --resume-latest: find most recent session
+    if resume_latest and not session_id:
+        try:
+            from helen.runtime.session_manager import SessionManager
+            from helen.runtime.config import resolve_session_dir
+            session_dir, _ = resolve_session_dir()
+            manager = SessionManager(base_dir=session_dir)
+            sessions = manager.list_sessions()
+            if sessions:
+                session_id = sessions[0].get("session_id")
+                if session_id:
+                    print(f"Resuming latest session: {session_id}", file=sys.stderr)
+        except Exception:
+            pass  # Fall through to default behavior
+
+    return session_id, remaining
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point."""
     argv = list(argv) if argv is not None else sys.argv[1:]
 
     if not argv:
         return repl_command()
+
+    # Extract global session flags before subcommand dispatch
+    session_id, argv = _extract_session_flags(argv)
+
+    if not argv:
+        return repl_command(session_id=session_id)
 
     # Check for known subcommands
     subcommands = {"check", "repl", "doc", "init", "test", "quality", "lsp", "watch", "template"}
@@ -243,7 +296,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return 1
             return check_command(argv[1], program_args=argv[2:])
         elif first == "repl":
-            return repl_command()
+            return repl_command(session_id=session_id)
         elif first == "doc":
             return docgen_cli()
         elif first == "init":
@@ -258,7 +311,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if len(argv) < 2:
                 print("Error: 'watch' requires a file argument", file=sys.stderr)
                 return 1
-            return watch_command(argv[1], program_args=argv[2:])
+            return watch_command(argv[1], program_args=argv[2:], session_id=session_id)
         elif first == "template":
             return template_command(argv[1:])
     elif first in ("-h", "--help", "help"):
@@ -271,7 +324,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         # Default: treat first argument as a file to run,
         # argv[0] = script name (Issue #30), argv[1:] = program arguments
-        return run_command(first, program_args=[first] + argv[1:])
+        return run_command(first, program_args=[first] + argv[1:], session_id=session_id)
 
     _print_help()
     return 1

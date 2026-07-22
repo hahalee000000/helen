@@ -4,6 +4,64 @@
 
 ---
 
+## [2026-07-22] feature | v1.24 - Session Resume at Startup
+
+**操作**: 实现启动时指定 session_id 恢复功能
+**状态**: ✅ 完成
+
+### 新增功能
+
+#### 1. CLI 参数 `--session` 和 `--resume-latest`
+
+```bash
+# 指定 session_id 启动
+helen --session=session_xxx file.helen
+helen repl --session=session_xxx
+
+# 自动恢复最近的 session
+helen --resume-latest file.helen
+helen repl --resume-latest
+helen repl -r  # 简写
+```
+
+#### 2. Interpreter 支持 session_id 参数
+
+```python
+# Python API
+from helen.interpreter import Interpreter
+
+# 恢复指定 session
+interp = Interpreter(session_id="session_xxx")
+
+# 不指定则创建新 session（默认行为）
+interp = Interpreter()
+```
+
+#### 3. 设计原理
+
+- **连续性**：用户可以在中断的地方继续工作
+- **调试友好**：可以重复调试同一个 session
+- **资源节约**：避免创建大量短命的 transcript 文件
+- **显式优于隐式**：必须明确指定要恢复哪个 session
+
+### 实现细节
+
+- `_extract_session_flags()` 在 `main()` 顶层解析全局 flag
+- `Interpreter.__init__` 新增 `session_id` 参数，传递给 `AgentContextManager`
+- `AgentContextManager` 已有 `session_id` 参数，直接复用
+- `--resume-latest` 自动查找最近修改的 session
+
+### 与 resume_session() 的区别
+
+| 特性 | `--session` (启动时) | `resume_session()` (运行时) |
+|------|---------------------|---------------------------|
+| 时机 | 解释器启动前 | 程序运行中 |
+| 行为 | 直接复用指定 session | 导入历史消息到当前新 session |
+| 结果 | 一个 transcript 文件 | 两个 transcript 文件 |
+| 适用场景 | REPL 继续工作 | 代码中切换上下文 |
+
+---
+
 ## [2026-07-21] feature | v1.23.7 - Spawn-Aware Transcript Functions
 
 **操作**: 实现 P1 和 P2 spawn-aware transcript functions

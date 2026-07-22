@@ -909,6 +909,54 @@ if success {
 - 现在：导入消息到当前 store，LLM 能看到恢复的消息（标记当前 invocation_id）
 - 如果需要按 agent/invocation 精准恢复，使用 `restore_context`
 
+### 启动时恢复会话 (v1.24+)
+
+v1.24 新增 CLI 参数，支持在启动时指定恢复历史 session，而不是每次创建新 session：
+
+```bash
+# 1. 指定 session_id 启动
+helen --session=session_xxx file.helen
+helen repl --session=session_xxx
+
+# 2. 自动恢复最近的 session
+helen --resume-latest file.helen
+helen repl --resume-latest
+helen repl -r  # 简写
+```
+
+**Python API**：
+
+```python
+from helen.interpreter import Interpreter
+
+# 恢复指定 session
+interp = Interpreter(session_id="session_xxx")
+interp.execute_file("file.helen")
+
+# 恢复最近的 session
+from helen.runtime.session_manager import SessionManager
+manager = SessionManager()
+sessions = manager.list_sessions()
+if sessions:
+    latest_sid = sessions[0]["session_id"]
+    interp = Interpreter(session_id=latest_sid)
+```
+
+**与 `resume_session()` 的区别**：
+
+| 特性 | `--session` (启动时) | `resume_session()` (运行时) |
+|------|---------------------|---------------------------|
+| 时机 | 解释器启动前 | 程序运行中 |
+| 行为 | 直接复用指定 session | 导入历史消息到当前新 session |
+| transcript | 一个文件 | 两个文件 |
+| 适用场景 | REPL 继续工作、调试 | 代码中切换上下文 |
+
+**设计原理**：
+- 连续性：在中断的地方继续工作
+- 调试友好：重复调试同一个 session
+- 资源节约：避免创建大量短命的 transcript 文件
+- 显式优于隐式：必须明确指定要恢复哪个 session
+
 ### 中文别名
 
 Transcript 函数支持中文别名，可以直接使用中文函数名：

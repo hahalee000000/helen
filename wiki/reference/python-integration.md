@@ -128,6 +128,56 @@ async def handle_support(query: str):
     return {"response": response}
 ```
 
+### 会话管理 (v1.24+)
+
+在 Python 服务中持久化对话，可以恢复历史 session：
+
+```python
+from helen.interpreter import Interpreter
+
+# 恢复指定 session
+interp = Interpreter(session_id="session_xxx")
+
+# 恢复最近的 session
+from helen.runtime.session_manager import SessionManager
+manager = SessionManager()
+sessions = manager.list_sessions()
+if sessions:
+    latest_sid = sessions[0]["session_id"]
+    interp = Interpreter(session_id=latest_sid)
+
+# 默认行为：创建新 session
+interp = Interpreter()
+```
+
+**Web 服务中的典型用法**：
+
+```python
+from helen.bridge import HelenRuntime
+from helen.interpreter import Interpreter
+
+class ChatService:
+    def __init__(self, user_id: str, session_id: str | None = None):
+        self.user_id = user_id
+        # 恢复之前的对话，或创建新对话
+        self.interp = Interpreter(session_id=session_id)
+        self.runtime = HelenRuntime("chat.helen", interpreter=self.interp)
+        self.agent = self.runtime.get_agent("ChatBot")
+
+    async def chat(self, message: str) -> str:
+        return await self.agent.async_call(message)
+
+# Web 路由
+@app.post("/chat")
+async def chat(user_id: str, message: str, session_id: str | None = None):
+    service = ChatService(user_id, session_id)
+    response = await service.chat(message)
+    return {
+        "response": response,
+        "session_id": service.interp._agent_context.session_id  # 下次恢复用
+    }
+```
+
 ### 详细文档
 
 → [[tutorial/15-python-bridge|Python Bridge 完整教程]]

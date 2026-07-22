@@ -277,6 +277,27 @@ main {
 
 **模式 C：持久化 session_id（适用于跨进程恢复）**
 
+v1.24+ 支持在启动时直接恢复历史 session，无需在代码中调用 `resume_session()`：
+
+```bash
+# 方式 1：CLI 参数（推荐，无需修改代码）
+helen --session=session_xxx file.helen
+helen repl --session=session_xxx
+
+# 方式 2：自动恢复最近的 session
+helen --resume-latest file.helen
+helen repl --resume-latest
+helen repl -r  # 简写
+```
+
+```python
+# 方式 3：Python API
+from helen.interpreter import Interpreter
+interp = Interpreter(session_id="session_xxx")
+```
+
+**代码内恢复（v1.23 之前的方式，仍然可用）**：
+
 ```helen
 // 进程 1：保存当前 session_id 到文件
 main {
@@ -289,12 +310,21 @@ main {
 main {
     if file_exists(".current_session") {
         let prev_sid = read_file(".current_session")
-        resume_session(prev_sid)  // 恢复之前的会话
+        resume_session(prev_sid)  // 恢复之前的会话（运行时）
         let history = replay_transcript()
         print("恢复了 " + str(len(history)) + " 条历史消息")
     }
 }
 ```
+
+**`--session` vs `resume_session()` 的区别**：
+
+| 特性 | `--session` (v1.24 启动时) | `resume_session()` (运行时) |
+|------|---------------------------|---------------------------|
+| 时机 | 解释器启动前 | 程序运行中 |
+| 行为 | 直接复用指定 session | 导入历史消息到当前新 session |
+| transcript | 一个文件 | 两个文件 |
+| 适用场景 | REPL 继续工作、调试 | 代码中切换上下文 |
 
 #### 📊 决策表：何时用哪种接力方式
 
@@ -302,7 +332,8 @@ main {
 |------|---------|------|
 | spawn 子 agent 需要父 transcript | **A**: 传 parent_sid + `resume_session` | 同一进程内直接接力，开销最小 |
 | agent 产出需要被其他 agent 看到 | **B**: `shared store` + Channel 传递 | 结构化数据，避免 transcript 膨胀 |
-| 跨进程恢复对话（程序重启） | **C**: 持久化 session_id + `resume_session` | 跨 Interpreter 生命周期 |
+| 跨进程恢复对话（程序重启） | **C**: `--session` CLI 参数（v1.24）或代码内 `resume_session()` | CLI 参数无需修改代码 |
+| REPL 继续之前的工作 | **C**: `helen repl --resume-latest` | 自动找到最近的 session |
 | 长期知识沉淀（跨项目） | `export_transcript` + 外部知识库 | transcript 是运行时的，知识是持久的 |
 | 多 agent 并行写同一份上下文 | SharedStore + 显式同步 | Channel 是 1:1，SharedStore 支持多写者 |
 | 调试多 agent 协作 / 分析执行流程 | **D**: v1.23.7 自动追踪 + `replay_full_session` | 自动记录 spawn 关系，聚合查看所有消息 |
@@ -348,10 +379,10 @@ let all_messages = replay_full_session()
 
 #### 🔑 核心口诀
 
-> **"spawn 即隔离，接力靠显式，调试用追踪"**
+> **"spawn 即隔离，接力靠显式，调试用追踪，恢复用 --session"**
 >
 > - spawn 出去的 agent 默认拿不到父上下文 → 必须传参 + `resume_session`（模式 A/B）
-> - 重启程序后 transcript 不会自动接上 → 必须持久化 session_id（模式 C）
+> - 重启程序后 transcript 不会自动接上 → 用 `--session` 或 `--resume-latest` 启动恢复（模式 C，v1.24+）
 > - 跨 agent 结构化数据 → `shared store` + Channel 传递，别指望自动共享
 > - `working_memory_set` 仅用于**5 个固定字段**（`task` / `active_files` / `decisions` / `todos` / `errors`），由 Helen 自动跟踪工具调用；**不是通用 KV 存储**
 > - v1.23.7+ 自动追踪 spawn 关系 → 调试和分析时用 `replay_full_session()` + 级联删除（模式 D）
@@ -360,6 +391,7 @@ let all_messages = replay_full_session()
 
 - 设计原理详见 `helen-agent-patterns` 模式 4（spawn + Channel）
 - v1.23.7 spawn transcript 管理 API 详见 `helen-stdlib` skill
+- v1.24 启动时 session 恢复详见 `helen-stdlib` skill 的 "启动时恢复 Session" 章节
 - API 参考详见 `helen-stdlib` 中 `get_session_id` / `resume_session` / `working_memory_*` 章节
 
 ## 完整工作流示例

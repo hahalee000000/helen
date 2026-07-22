@@ -145,6 +145,65 @@ agent1 = HelenAgentWrapper("Agent1", "agents.helen", interpreter)
 agent2 = HelenAgentWrapper("Agent2", "agents.helen", interpreter)
 ```
 
+### 会话管理 (v1.24+)
+
+Interpreter 支持 `session_id` 参数，可以恢复历史会话：
+
+```python
+from helen.interpreter import Interpreter
+
+# 方式 1: 恢复指定 session
+interp = Interpreter(session_id="session_xxx")
+
+# 方式 2: 恢复最近的 session
+from helen.runtime.session_manager import SessionManager
+manager = SessionManager()
+sessions = manager.list_sessions()
+if sessions:
+    latest_sid = sessions[0]["session_id"]
+    interp = Interpreter(session_id=latest_sid)
+
+# 方式 3: 默认创建新 session（向后兼容）
+interp = Interpreter()
+```
+
+**典型用法**：在 Python 服务中持续跟踪对话
+
+```python
+from helen.interpreter import Interpreter
+from helen.python_bridge import HelenAgentWrapper
+
+class ChatService:
+    def __init__(self, session_id: str | None = None):
+        # 可以恢复之前的对话
+        self.interp = Interpreter(session_id=session_id)
+        self.agent = HelenAgentWrapper("ChatBot", "chat.helen", self.interp)
+
+    def chat(self, message: str) -> str:
+        return self.agent(message)
+
+    @property
+    def session_id(self) -> str:
+        return self.interp._agent_context.session_id
+
+# 使用
+service = ChatService()
+print(service.chat("你好"))
+print(f"Session: {service.session_id}")
+
+# 下次可以恢复
+service2 = ChatService(session_id=service.session_id)
+```
+
+**与 `resume_session()` 的区别**：
+
+| 特性 | `Interpreter(session_id=...)` | `resume_session()` |
+|------|------------------------------|-------------------|
+| 时机 | 创建解释器时 | 运行时调用 |
+| 行为 | 直接复用指定 session | 导入历史消息到当前新 session |
+| transcript 文件 | 一个 | 两个 |
+| 适用场景 | Python 服务持续对话 | 代码中切换上下文 |
+
 ### 批量处理
 
 ```python

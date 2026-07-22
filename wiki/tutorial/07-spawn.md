@@ -425,6 +425,73 @@ main {
 
 ---
 
+## Session 恢复与调试 (v1.24+)
+
+### 启动时恢复 Session
+
+v1.24 支持在启动时指定恢复历史 session，方便调试和继续工作：
+
+```bash
+# 恢复指定 session
+helen --session=session_xxx file.helen
+helen repl --session=session_xxx
+
+# 自动恢复最近的 session
+helen --resume-latest file.helen
+helen repl --resume-latest
+helen repl -r  # 简写
+```
+
+### Python API 恢复 Session
+
+```python
+from helen.interpreter import Interpreter
+
+# 恢复指定 session
+interp = Interpreter(session_id="session_xxx")
+
+# 恢复最近的 session
+from helen.runtime.session_manager import SessionManager
+manager = SessionManager()
+sessions = manager.list_sessions()
+if sessions:
+    latest_sid = sessions[0]["session_id"]
+    interp = Interpreter(session_id=latest_sid)
+```
+
+### 调试 Spawn 执行流程
+
+结合 session 恢复和 spawn 追踪，可以完整调试多 agent 协作：
+
+```bash
+# 1. 运行程序，记录 session_id
+helen my_agent.helen
+# 输出: 当前 session: session_abc123
+
+# 2. 恢复 session，查看完整 spawn 树
+helen --session=session_abc123 debug.helen
+```
+
+```helen
+// debug.helen: 分析之前的执行流程
+main {
+    // 查看 spawn 树
+    let tree = get_spawn_tree()
+    print("Spawn 树:")
+    for child in tree["children"] {
+        print("  - " + child["session_id"])
+    }
+
+    // 聚合查看所有消息
+    let all = replay_full_session()
+    for msg in all {
+        print("[" + msg["session_id"] + "] " + msg["role"] + ": " + msg["content"][:50])
+    }
+}
+```
+
+---
+
 ## 练习
 
 1. 创建两个并发 agent，分别处理不同任务，用 `mailbox.receive()` 获取结果
@@ -434,5 +501,5 @@ main {
 
 ---
 
-**最后更新**: 2026-07-21  
-**版本**: v1.23.7
+**最后更新**: 2026-07-22  
+**版本**: v1.24

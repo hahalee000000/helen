@@ -219,6 +219,79 @@ agent1 = HelenAgentWrapper("Agent1", "agents.helen", interpreter)
 agent2 = HelenAgentWrapper("Agent2", "agents.helen", interpreter)
 ```
 
+### 会话管理 (v1.24+)
+
+Interpreter 支持 `session_id` 参数，可以恢复历史会话，实现跨进程对话持久化：
+
+```python
+from helen.interpreter import Interpreter
+
+# 方式 1: 恢复指定 session
+interp = Interpreter(session_id="session_xxx")
+
+# 方式 2: 恢复最近的 session
+from helen.runtime.session_manager import SessionManager
+manager = SessionManager()
+sessions = manager.list_sessions()
+if sessions:
+    latest_sid = sessions[0]["session_id"]
+    interp = Interpreter(session_id=latest_sid)
+
+# 方式 3: 默认创建新 session（向后兼容）
+interp = Interpreter()
+```
+
+**Web 服务中的典型用法**：
+
+```python
+from helen.interpreter import Interpreter
+from helen.python_bridge import HelenAgentWrapper
+
+class ChatService:
+    """支持跨请求对话持久化的聊天服务"""
+
+    def __init__(self, user_id: str, session_id: str | None = None):
+        self.user_id = user_id
+        # 恢复之前的对话，或创建新对话
+        self.interp = Interpreter(session_id=session_id)
+        self.agent = HelenAgentWrapper("ChatBot", "chat.helen", self.interp)
+
+    def chat(self, message: str) -> str:
+        return self.agent(message)
+
+    @property
+    def session_id(self) -> str:
+        """返回当前 session_id，客户端保存后可用于下次恢复"""
+        return self.interp._agent_context.session_id
+
+# Flask/FastAPI Web 服务示例
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
+@app.post("/chat")
+def chat():
+    data = request.json
+    service = ChatService(
+        user_id=data["user_id"],
+        session_id=data.get("session_id"),  # 可选：恢复历史对话
+    )
+    response = service.chat(data["message"])
+    return jsonify({
+        "response": response,
+        "session_id": service.session_id,  # 客户端保存，下次传入
+    })
+```
+
+**`Interpreter(session_id=...)` vs `resume_session()`**：
+
+| 特性 | `Interpreter(session_id=...)` | `resume_session()` |
+|------|------------------------------|-------------------|
+| 时机 | 创建解释器时 | 运行时调用 |
+| 行为 | 直接复用指定 session | 导入历史消息到当前新 session |
+| transcript 文件 | 一个 | 两个 |
+| 适用场景 | Python 服务持续对话 | 代码中切换上下文 |
+
 ### 调用 Helen 函数 (v1.23.6+)
 
 除了调用 agent，Python Bridge 还支持直接调用 Helen 的普通函数（`fn`）：

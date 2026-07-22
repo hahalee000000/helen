@@ -126,6 +126,7 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
                  import_resolver: ImportResolver | None = None,
                  program_args: list[str] | None = None,
                  transcript_store_enabled: bool = True,
+                 session_id: str | None = None,  # v1.24: Resume specific session
                  parent_session_id: str = "") -> None:  # v1.23.7: Track spawn relationships
         self.errors = errors or ErrorReporter()
         self.environment = Environment()
@@ -141,6 +142,7 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         self.import_resolver = import_resolver or ImportResolver()
         self._program_args: list[str] = list(program_args) if program_args else []
         self._transcript_store_enabled = transcript_store_enabled
+        self._session_id = session_id  # v1.24: Resume specific session
         self._parent_session_id = parent_session_id  # v1.23.7
         # AI-native observability (P0-P3)
         self.observability = ObservabilityManager()
@@ -168,6 +170,7 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
             working_memory_enabled=True,
             cache_aware_enabled=True,
             transcript_store_enabled=self._transcript_store_enabled,
+            session_id=self._session_id,  # v1.24: Resume specific session
             parent_session_id=self._parent_session_id,  # v1.23.7
         )
         # v1.22: Invocation tree tracking (see reports/v1.22-invocation-tree-proposal.md)
