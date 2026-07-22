@@ -461,9 +461,12 @@ let large_img = media("high_res_photo.png")
 
 ```helen
 # 默认每次最多 10 个媒体
-let images = [media("img1.png"), media("img2.png"), ...]
-设 result = llm act "分析这些图片" media(images...)
+let images = [media("img1.png"), media("img2.png"), media("img3.png")]
+let result = llm act "分析这些图片" media(images)
 ```
+
+> **动态列表**：`media()` 接受 `list[MediaPart]` 并自动展平，无需 spread 语法。
+> `media(images)` 等价于 `media(img1, img2, img3)`，适合图片数量在运行时才确定的场景。
 
 ## 限制和注意事项
 

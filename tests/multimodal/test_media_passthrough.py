@@ -142,8 +142,8 @@ class TestMediaErrorHandling:
             _media()
 
     def test_invalid_type_raises(self):
-        """media(123) with non-str/non-MediaPart raises TypeError."""
-        with pytest.raises(TypeError, match="must be str or MediaPart"):
+        """media(123) with non-str/non-MediaPart/non-list raises TypeError."""
+        with pytest.raises(TypeError, match="must be str, MediaPart, or list"):
             _media(123)
 
     def test_invalid_type_in_multi_arg_raises(self):
@@ -152,7 +152,7 @@ class TestMediaErrorHandling:
         if png is None:
             pytest.skip("Cannot create temp file")
         img = _media(png)
-        with pytest.raises(TypeError, match="must be str or MediaPart"):
+        with pytest.raises(TypeError, match="must be str, MediaPart, or list"):
             _media(img, 123)
 
 
@@ -186,3 +186,96 @@ class TestMediaLlmActIntegration:
         assert len(media_parts) == 2
         assert media_parts[0] is img1
         assert media_parts[1] is img2
+
+
+class TestMediaListFlattening:
+    """Test media(list) dynamic list flattening (no spread syntax needed).
+
+    v1.25.1: media() accepts a single list argument and flattens it into
+    list[MediaPart], enabling llm act "..." media(images) for dynamic lists.
+    """
+
+    def test_single_list_of_mediaparts_flattens(self, tmp_path):
+        """media([img1, img2]) returns list[MediaPart] (flattened)."""
+        png = _make_png(str(tmp_path / "test.png"))
+        img1, img2 = _media(png), _media(png)
+
+        result = _media([img1, img2])
+        assert isinstance(result, list)
+        assert len(result) == 2
+        assert result[0] is img1
+        assert result[1] is img2
+
+    def test_single_list_of_strings_flattens(self, tmp_path):
+        """media(['a.png', 'b.png']) returns list[MediaPart]."""
+        png1 = _make_png(str(tmp_path / "a.png"))
+        png2 = _make_png(str(tmp_path / "b.png"))
+
+        result = _media([png1, png2])
+        assert isinstance(result, list)
+        assert len(result) == 2
+        assert all(isinstance(p, MediaPart) for p in result)
+
+    def test_single_mixed_list_flattens(self, tmp_path):
+        """media([img, 'path.png']) returns list[MediaPart]."""
+        png1 = _make_png(str(tmp_path / "a.png"))
+        png2 = _make_png(str(tmp_path / "b.png"))
+        img = _media(png1)
+
+        result = _media([img, png2])
+        assert isinstance(result, list)
+        assert len(result) == 2
+        assert result[0] is img
+        assert isinstance(result[1], MediaPart)
+
+    def test_empty_list_returns_empty_list(self):
+        """media([]) returns empty list (no media)."""
+        result = _media([])
+        assert isinstance(result, list)
+        assert len(result) == 0
+
+    def test_single_element_list_flattens_to_list(self, tmp_path):
+        """media([img]) returns list[MediaPart] with 1 element (not unwrapped)."""
+        png = _make_png(str(tmp_path / "test.png"))
+        img = _media(png)
+
+        result = _media([img])
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0] is img
+
+    def test_list_in_multi_arg_flattens(self, tmp_path):
+        """media(img, [img2, img3]) flattens nested list in multi-arg."""
+        png = _make_png(str(tmp_path / "test.png"))
+        img1, img2, img3 = _media(png), _media(png), _media(png)
+
+        result = _media(img1, [img2, img3])
+        assert isinstance(result, list)
+        assert len(result) == 3
+        assert result[0] is img1
+        assert result[1] is img2
+        assert result[2] is img3
+
+    def test_list_with_invalid_item_raises(self):
+        """media([123]) raises TypeError for invalid item."""
+        with pytest.raises(TypeError, match="list item must be str or MediaPart"):
+            _media([123])
+
+    def test_dynamic_list_flatten_in_llm_act_context(self, tmp_path):
+        """media(images) dynamic list produces N media_parts in llm act."""
+        png = _make_png(str(tmp_path / "test.png"))
+        images = [_media(png), _media(png), _media(png)]
+
+        # Simulate llm_mixin flattening for media(images)
+        media_val = _media(images)
+        assert isinstance(media_val, list)
+
+        media_parts = []
+        if isinstance(media_val, MediaPart):
+            media_parts.append(media_val)
+        elif isinstance(media_val, list):
+            for item in media_val:
+                if isinstance(item, MediaPart):
+                    media_parts.append(item)
+
+        assert len(media_parts) == 3

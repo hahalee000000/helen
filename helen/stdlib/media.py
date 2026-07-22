@@ -31,17 +31,23 @@ def _media(*args, media_type: str | None = None) -> MediaPart | list[MediaPart]:
     - ``media("path.png", "image")`` -> single MediaPart (legacy positional type)
     - ``media("url", media_type="video")`` -> single MediaPart (keyword type)
 
+    v1.25.1: Supports dynamic list flattening (no spread syntax needed):
+    - ``media(images)`` -> list[MediaPart] (images is list[MediaPart|str])
+    - Enables ``llm act "..." media(images)`` for dynamic-length lists
+
     Args:
-        *args: One or more sources (file path/URL strings or MediaPart objects).
+        *args: One or more sources (file path/URL strings, MediaPart objects,
+            or a single list of the same).
         media_type: Optional explicit media type ("image", "video", "audio").
             Only applies when a single string source is given.
 
     Returns:
-        MediaPart for single-arg, list[MediaPart] for multi-arg.
+        MediaPart for single str/MediaPart arg, list[MediaPart] for multi-arg
+        or single list arg.
 
     Raises:
         ValueError: If the file doesn't exist or type cannot be determined.
-        TypeError: If an argument is neither str nor MediaPart.
+        TypeError: If an argument is neither str, MediaPart, nor list.
     """
     if len(args) == 0:
         raise ValueError("media() requires at least one argument")
@@ -54,15 +60,18 @@ def _media(*args, media_type: str | None = None) -> MediaPart | list[MediaPart]:
             and args[1] in _VALID_MEDIA_TYPES and media_type is None):
         return _create_media_part(args[0], media_type=args[1])
 
-    # Single argument: passthrough MediaPart or create from string.
+    # Single argument: passthrough MediaPart, create from string, or flatten list.
     if len(args) == 1:
         source = args[0]
         if isinstance(source, MediaPart):
             return source
         if isinstance(source, str):
             return _create_media_part(source, media_type=media_type)
+        if isinstance(source, list):
+            # Flatten list of MediaPart/str into list[MediaPart].
+            return _flatten_media_list(source, media_type=media_type)
         raise TypeError(
-            f"media() argument must be str or MediaPart, got {type(source).__name__}"
+            f"media() argument must be str, MediaPart, or list, got {type(source).__name__}"
         )
 
     # Multiple arguments: return list of MediaParts (each passthrough or created).
@@ -72,9 +81,37 @@ def _media(*args, media_type: str | None = None) -> MediaPart | list[MediaPart]:
             parts.append(arg)
         elif isinstance(arg, str):
             parts.append(_create_media_part(arg, media_type=media_type))
+        elif isinstance(arg, list):
+            parts.extend(_flatten_media_list(arg, media_type=media_type))
         else:
             raise TypeError(
-                f"media() argument must be str or MediaPart, got {type(arg).__name__}"
+                f"media() argument must be str, MediaPart, or list, got {type(arg).__name__}"
+            )
+    return parts
+
+
+def _flatten_media_list(items: list, media_type: str | None = None) -> list[MediaPart]:
+    """Flatten a list of MediaPart/str into list[MediaPart].
+
+    Args:
+        items: List of MediaPart objects and/or file path/URL strings.
+        media_type: Optional explicit media type for string items.
+
+    Returns:
+        list[MediaPart]
+
+    Raises:
+        TypeError: If an item is neither str nor MediaPart.
+    """
+    parts: list[MediaPart] = []
+    for item in items:
+        if isinstance(item, MediaPart):
+            parts.append(item)
+        elif isinstance(item, str):
+            parts.append(_create_media_part(item, media_type=media_type))
+        else:
+            raise TypeError(
+                f"media() list item must be str or MediaPart, got {type(item).__name__}"
             )
     return parts
 

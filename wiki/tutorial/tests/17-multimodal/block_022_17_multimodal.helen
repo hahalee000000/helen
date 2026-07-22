@@ -45,5 +45,5 @@ let videos = parts.filter(是视频)    # 只保留视频
 
 // === Test code ===
 # 默认每次最多 10 个媒体
-let images = [media("img1.png"), media("img2.png"), ...]
-设 result = llm act "分析这些图片" media(images...)
+let images = [media("img1.png"), media("img2.png"), media("img3.png")]
+设 result = llm act "分析这些图片" media(images)
