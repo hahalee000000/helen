@@ -4,6 +4,51 @@
 
 ---
 
+## [2026-07-22] feature | v1.24.1 - Python Bridge Import Hook Session 复用 (Issue #16)
+
+**操作**: 实现 Python Bridge import hook 的 session_id 检测链
+**状态**: ✅ 完成
+**Issue**: #16
+
+### 问题
+
+v1.24 的 `Interpreter` 已支持 `session_id` 参数（CLI 的 `--session`），但 Python Bridge
+的 import hook 在创建 `Interpreter` 时不传这个参数，导致每次 Python 进程重启都创建
+新的 session 目录，transcript 分散。
+
+### 实现
+
+在 `helen/python_bridge/import_hook.py` 中增加 session_id 检测链（按优先级）：
+
+```
+1. set_session_id() 显式设置              （最高优先级，进程内动态控制）
+2. 环境变量 HELEN_SESSION_ID                （跨进程重启恢复）
+3. memento 文件 .helen/current_session_id   （相对 cwd，自动持久化）
+4. None                                    （默认，创建新 session）
+```
+
+- `set_session_id(sid)` / `get_session_id()` 导出为公开 API
+- `HelenLoader.exec_module` 调用 `_detect_session_id()` 并传给 `Interpreter`
+- 向后兼容：都不设置时保持现有行为（自动生成新 session）
+
+### 适用场景
+
+| 场景 | 推荐方式 |
+|------|---------|
+| Web 服务多用户（同进程多 session）| `set_session_id()` |
+| 跨进程重启恢复 | 环境变量 `HELEN_SESSION_ID` |
+| 本地开发自动持久化 | memento 文件 `.helen/current_session_id` |
+| 一次性脚本 | 不设置（默认新 session）|
+
+### 测试
+
+`tests/execution/test_python_bridge_session_id.py`（15 个测试）覆盖：
+- 检测链优先级（显式 > 环境变量 > memento > None）
+- memento 文件读取与空白处理
+- import hook 集成（实际创建的 Interpreter 使用检测到的 session_id）
+
+---
+
 ## [2026-07-22] feature | v1.24 - Session Resume at Startup
 
 **操作**: 实现启动时指定 session_id 恢复功能

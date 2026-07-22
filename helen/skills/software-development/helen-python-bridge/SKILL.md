@@ -292,6 +292,48 @@ def chat():
 | transcript 文件 | 一个 | 两个 |
 | 适用场景 | Python 服务持续对话 | 代码中切换上下文 |
 
+### Import Hook 的 Session 复用 (v1.24.1+，Issue #16)
+
+显式构造 `Interpreter(session_id=...)` 需要自己管理解释器实例。但 import hook 场景
+（`from chat_tui import TUIChatAgent`）是**隐式**创建解释器的，无法在 import 语句中传参。
+
+v1.24.1 为 import hook 增加了 session_id 检测链，按优先级解析：
+
+```
+1. set_session_id() 显式设置              （最高优先级，进程内动态控制）
+2. 环境变量 HELEN_SESSION_ID                （跨进程重启恢复）
+3. memento 文件 .helen/current_session_id   （相对 cwd，自动持久化）
+4. None                                    （默认，创建新 session）
+```
+
+```python
+# 方式 1: 显式 API（多 session 进程，必须在 import 前调用）
+from helen.python_bridge import set_session_id
+set_session_id("session_user_alice")
+from chat_tui import TUIChatAgent   # 复用 alice 的 session
+
+# 方式 2: 环境变量（跨进程重启）
+#   export HELEN_SESSION_ID=session_xxx && python app.py
+from chat_tui import TUIChatAgent   # 自动复用环境变量指定的 session
+
+# 方式 3: memento 文件（自动持久化）
+#   echo "session_xxx" > .helen/current_session_id
+from chat_tui import TUIChatAgent   # 自动读取 memento 复用 session
+
+# 检测当前生效的 session_id
+from helen.python_bridge import get_session_id
+print(get_session_id())
+```
+
+**适用场景**：
+
+| 场景 | 推荐方式 |
+|------|---------|
+| Web 服务多用户（同进程多 session）| `set_session_id()` |
+| 跨进程重启恢复 | 环境变量 `HELEN_SESSION_ID` |
+| 本地开发自动持久化 | memento 文件 |
+| 一次性脚本 | 不设置（默认新 session）|
+
 ### 调用 Helen 函数 (v1.23.6+)
 
 除了调用 agent，Python Bridge 还支持直接调用 Helen 的普通函数（`fn`）：
