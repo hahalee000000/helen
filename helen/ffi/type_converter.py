@@ -5,6 +5,8 @@ Handles automatic type conversion between Helen and Python types.
 
 from typing import Any
 
+from helen.runtime.media import MediaPart
+
 
 class DefaultTypeConverter:
     """Default type converter implementation.
@@ -33,6 +35,9 @@ class DefaultTypeConverter:
                 return None
             case int() | float() | str() | bool():
                 return value
+            case MediaPart():
+                # MediaPart passes through natively
+                return value
             case list():
                 return [self.helen_to_python(item) for item in value]
             case dict():
@@ -57,6 +62,9 @@ class DefaultTypeConverter:
             case None:
                 return None
             case int() | float() | str() | bool():
+                return value
+            case MediaPart():
+                # MediaPart passes through natively
                 return value
             case tuple():
                 return [self.python_to_helen(item) for item in value]

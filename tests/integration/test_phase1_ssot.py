@@ -112,7 +112,8 @@ class TestPhase1SSOT:
 
             content = transcript_path.read_text(encoding="utf-8")
             lines = content.strip().split("\n")
-            assert len(lines) == 2
+            # v1.23.3: First line is session_meta, followed by messages
+            assert len(lines) == 3  # 1 session_meta + 2 messages
         finally:
             config_module.get_transcript_config = original_get_config
 
@@ -168,7 +169,8 @@ class TestPhase1SSOT:
             transcript_path = tmp_path / ctx.session_id / "transcript.jsonl"
             content = transcript_path.read_text(encoding="utf-8")
             lines = content.strip().split("\n")
-            assert len(lines) == 4  # 3 messages + 1 boundary marker
+            # v1.23.3: First line is session_meta
+            assert len(lines) == 5  # 1 session_meta + 3 messages + 1 boundary marker
         finally:
             config_module.get_transcript_config = original_get_config
 
