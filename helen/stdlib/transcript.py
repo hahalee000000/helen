@@ -1284,17 +1284,17 @@ def get_compression_audit() -> list[dict[str, Any]]:
     return store.get_compression_audit()
 
 
-def resume_session(session_id: str) -> bool:
-    """Resume a previous transcript session.
+def resume_session(session_id: str) -> dict:
+    """Resume a previous transcript session (idempotent, preserves call tree).
 
     Imports messages from a previous session into the current TranscriptStore,
     allowing continuation of a past conversation.
 
-    v1.23 fix: Instead of replacing the TranscriptStore reference (which broke
-    per-agent invocation isolation), this now imports messages from the old
-    session into the CURRENT store. Imported messages are tagged with the
-    current invocation_id, making them visible to the caller. The current
-    session_id is preserved — the audit trail continues in the current session.
+    v1.24 improvements:
+    1. Preserves original invocation_id (maintains call tree integrity)
+    2. Adds current invocation_id to visible_to_invocation_ids (ensures visibility)
+    3. Uses UUID deduplication (idempotent — safe to call multiple times)
+    4. Returns detailed status with imported/skipped counts
 
     Use restore_context() for finer-grained control (filter by agent, invocation,
     or restore only the most recent invocation).
@@ -1303,22 +1303,31 @@ def resume_session(session_id: str) -> bool:
         session_id: The session ID to resume
 
     Returns:
-        True if session was successfully resumed, False otherwise
+        dict:
+        {
+            "status": "ok" | "error",
+            "imported_messages": int,        # Number of messages imported
+            "skipped_duplicates": int,       # Number of messages skipped (already exist)
+            "session_id": str,               # The session ID that was resumed
+        }
 
     Example:
-        let success = resume_session("session_1783492628_d9d9c0aa")
-        if success {
-            print("Session resumed successfully")
+        let result = resume_session("session_1783492628_d9d9c0aa")
+        if result.status == "ok" {
+            print("Imported {result.imported_messages} messages")
+            print("Skipped {result.skipped_duplicates} duplicates")
         } else {
-            print("Failed to resume session")
+            print("Failed: {result.error}")
         }
     """
     if _get_agent_context() is None:
-        return False
+        return {"status": "error", "error": "No interpreter agent context",
+                "imported_messages": 0, "skipped_duplicates": 0}
 
     store = getattr(_get_agent_context(), "transcript_store", None)
     if store is None:
-        return False
+        return {"status": "error", "error": "No transcript store",
+                "imported_messages": 0, "skipped_duplicates": 0}
 
     # Import required modules
     from helen.runtime.config import get_transcript_config
@@ -1342,7 +1351,8 @@ def resume_session(session_id: str) -> bool:
 
         # Check if session exists
         if not manager.session_exists(session_id):
-            return False
+            return {"status": "error", "error": f"Session not found: {session_id}",
+                    "imported_messages": 0, "skipped_duplicates": 0}
 
         # Get transcript path
         transcript_path = manager.get_session_path(session_id)
@@ -1358,10 +1368,7 @@ def resume_session(session_id: str) -> bool:
         max_memory_items = config.get("max_memory_items", 1000)
         loaded_store = TranscriptStore.load_from_backend(backend, max_memory_items)
 
-        # v1.23 fix: Import messages from loaded store into current store.
-        # Tag each message with the current invocation_id so they're visible
-        # to the caller under per-agent isolation. Skip BoundaryMarkers
-        # (compression audit trail).
+        # v1.24: Get current invocation_id for visibility tracking
         current_invocation_id = ""
         try:
             from helen.stdlib.llm_control import _interpreter_ref
@@ -1372,30 +1379,57 @@ def resume_session(session_id: str) -> bool:
         except Exception:
             pass
 
+        # v1.24: Build UUID index for deduplication (idempotency)
+        existing_uuids = set(store._uuid_index.keys())
+
+        imported = 0
+        skipped = 0
+
         for item in loaded_store.transcript:
             if isinstance(item, BoundaryMarker):
                 continue
-            # Clone message with current invocation_id
+
+            # v1.24: Idempotency check — skip if UUID already exists
+            if item.uuid in existing_uuids:
+                skipped += 1
+                continue
+
+            # v1.24: Preserve original invocation_id (call tree integrity)
+            # and add current invocation_id to visible_to_invocation_ids (visibility)
             from helen.runtime.history import Message
+            visible_to = list(getattr(item, 'visible_to_invocation_ids', []) or [])
+            if current_invocation_id and current_invocation_id not in visible_to:
+                visible_to.append(current_invocation_id)
+
             msg = Message(
                 role=item.role,
                 content=item.content,
                 tool_calls=list(item.tool_calls) if item.tool_calls else [],
                 tool_call_id=item.tool_call_id,
-                uuid="",  # fresh UUID assigned by store.append()
+                uuid=item.uuid,                      # v1.24: Preserve original UUID
                 compressed=item.compressed,
                 pinned=item.pinned,
-                invocation_id=current_invocation_id,
-                parent_invocation_id="",
+                invocation_id=item.invocation_id,    # v1.24: Preserve original (call tree)
+                parent_invocation_id=item.parent_invocation_id,  # v1.24: Preserve
+                agent_name=item.agent_name,          # v1.24: Preserve
+                visible_to_invocation_ids=visible_to,  # v1.24: Add visibility
             )
             store.append(msg)
+            existing_uuids.add(msg.uuid)
+            imported += 1
 
-        return True
+        return {
+            "status": "ok",
+            "imported_messages": imported,
+            "skipped_duplicates": skipped,
+            "session_id": session_id,
+        }
 
     except Exception as e:
         import logging
         logging.getLogger(__name__).error("Failed to resume session %s: %s", session_id, e)
-        return False
+        return {"status": "error", "error": str(e),
+                "imported_messages": 0, "skipped_duplicates": 0}
 
 
 # ---------------------------------------------------------------------------

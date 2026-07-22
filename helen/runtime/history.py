@@ -302,6 +302,13 @@ class Message:
     invocation_id: str = field(default="", repr=False)
     parent_invocation_id: str = field(default="", repr=False)
 
+    # v1.24: Visibility tracking for cross-invocation context sharing
+    # visible_to_invocation_ids: List of invocation IDs that can see this message
+    # in addition to the original invocation_id. Used by resume_session() and
+    # restore_context() to ensure restored messages are visible to the current
+    # caller while preserving the original invocation_id for call tree integrity.
+    visible_to_invocation_ids: list[str] = field(default_factory=list, repr=False)
+
     @property
     def token_count(self) -> int:
         """Lazily computed token count (model-aware when tiktoken available)."""

@@ -1550,6 +1550,13 @@ def _import_context(data: dict) -> dict:
     # Import messages into active store
     imported = 0
     for m in messages_data:
+        # v1.24: Preserve original invocation_id (call tree integrity)
+        # and add current invocation_id to visible_to_invocation_ids (visibility)
+        original_invocation_id = m.get("invocation_id", "")
+        visible_to = list(m.get("visible_to_invocation_ids", []) or [])
+        if current_invocation_id and current_invocation_id not in visible_to:
+            visible_to.append(current_invocation_id)
+
         msg = Message(
             role=m.get("role", "user"),
             content=m.get("content", ""),
@@ -1558,7 +1565,11 @@ def _import_context(data: dict) -> dict:
             uuid=m.get("uuid", ""),  # v1.23: preserve original UUID if present
             compressed=m.get("compressed", False),
             pinned=m.get("pinned", False),
-            invocation_id=current_invocation_id,  # v1.23: tag with caller's invocation
+            # v1.24: Preserve invocation tree (call tree integrity)
+            invocation_id=original_invocation_id,
+            parent_invocation_id=m.get("parent_invocation_id", ""),
+            agent_name=m.get("agent_name"),
+            visible_to_invocation_ids=visible_to,  # v1.24: Add visibility
         )
         if store is not None:
             store.append(msg)  # assigns UUID only if msg.uuid is empty
@@ -1781,6 +1792,11 @@ def _restore_context(
                 "uuid": item.uuid,
                 "compressed": item.compressed,
                 "pinned": item.pinned,
+                # v1.24: Preserve invocation tree fields
+                "invocation_id": getattr(item, "invocation_id", ""),
+                "parent_invocation_id": getattr(item, "parent_invocation_id", ""),
+                "agent_name": getattr(item, "agent_name"),
+                "visible_to_invocation_ids": list(getattr(item, "visible_to_invocation_ids", []) or []),
             })
 
         if not messages:

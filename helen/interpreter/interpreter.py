@@ -251,12 +251,15 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         # v1.22: Filter by current invocation_id for per-agent isolation.
         # Empty _current_invocation_id means no invocation active (top-level
         # code outside main {}) — no filter.
+        # v1.24: Also check visible_to_invocation_ids for cross-invocation
+        # visibility (used by resume_session/restore_context).
         if not self._current_invocation_id:
             return all_messages
 
         return [
             m for m in all_messages
-            if getattr(m, 'invocation_id', '') == self._current_invocation_id
+            if (getattr(m, 'invocation_id', '') == self._current_invocation_id or
+                self._current_invocation_id in getattr(m, 'visible_to_invocation_ids', []))
         ]
 
     @contextmanager

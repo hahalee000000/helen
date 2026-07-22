@@ -633,6 +633,9 @@ def _item_to_dict(item: Message | BoundaryMarker) -> dict[str, Any]:
             d["invocation_id"] = item.invocation_id
         if item.parent_invocation_id:
             d["parent_invocation_id"] = item.parent_invocation_id
+        # v1.24: Visibility tracking (only include if non-empty, for compactness)
+        if item.visible_to_invocation_ids:
+            d["visible_to_invocation_ids"] = item.visible_to_invocation_ids
         return d
     else:
         raise TypeError(f"Unknown item type: {type(item)}")
@@ -656,6 +659,8 @@ def _item_from_dict(data: dict[str, Any]) -> Message | BoundaryMarker | None:
             agent_name=data.get("agent_name"),
             invocation_id=data.get("invocation_id", ""),
             parent_invocation_id=data.get("parent_invocation_id", ""),
+            # v1.24: Visibility tracking (default to empty list for backward compat)
+            visible_to_invocation_ids=data.get("visible_to_invocation_ids", []),
         )
     elif item_type == "boundary_marker":
         return BoundaryMarker.from_dict(data)

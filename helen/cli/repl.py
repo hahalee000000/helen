@@ -488,12 +488,16 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
         # Import resume_session from stdlib
         from helen.stdlib.transcript import resume_session
 
-        success = resume_session(arg)
-        if success:
+        result = resume_session(arg)
+        if result.get("status") == "ok":
             print(f"Session resumed: {arg}")
+            print(f"Imported {result.get('imported_messages', 0)} messages, "
+                  f"skipped {result.get('skipped_duplicates', 0)} duplicates")
             print("Transcript loaded. Use :transcript to view.")
         else:
+            error = result.get("error", "Unknown error")
             print(f"Failed to resume session: {arg}")
+            print(f"Error: {error}")
             print("Session may not exist or transcript file may be corrupted.")
         return True
 
