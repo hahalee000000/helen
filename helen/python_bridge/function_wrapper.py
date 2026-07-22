@@ -81,19 +81,49 @@ class HelenFunctionWrapper:
             return self.interpreter._functions[self.func_name]
         raise ValueError(f"Function '{self.func_name}' not found in {self.helen_file}")
 
-    def __call__(self, *args) -> Any:
+    def __call__(self, *args, **kwargs) -> Any:
         """
         调用函数
 
         Args:
             *args: 位置参数
+            **kwargs: 关键字参数
 
         Returns:
             函数执行结果
         """
         from .type_converter import helen_to_python
 
-        result = self.interpreter._call_function(self.func_decl, list(args))
+        # 构建完整参数列表
+        param_names = [param.name for param in self.func_decl.params]
+        call_args = []
+
+        # 处理位置参数
+        for i, arg in enumerate(args):
+            if i >= len(param_names):
+                raise TypeError(
+                    f"{self.func_name}() takes {len(param_names)} positional arguments "
+                    f"but {len(args)} were given"
+                )
+            call_args.append(arg)
+
+        # 处理关键字参数
+        for param_name, value in kwargs.items():
+            if param_name not in param_names:
+                raise TypeError(
+                    f"{self.func_name}() got an unexpected keyword argument '{param_name}'"
+                )
+            param_index = param_names.index(param_name)
+            if param_index < len(call_args):
+                raise TypeError(
+                    f"{self.func_name}() got multiple values for argument '{param_name}'"
+                )
+            # 扩展参数列表到足够长度
+            while len(call_args) <= param_index:
+                call_args.append(None)
+            call_args[param_index] = value
+
+        result = self.interpreter._call_function(self.func_decl, call_args)
         return helen_to_python(result)
 
     def __repr__(self) -> str:
