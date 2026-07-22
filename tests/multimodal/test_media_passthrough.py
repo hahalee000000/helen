@@ -279,3 +279,87 @@ class TestMediaListFlattening:
                     media_parts.append(item)
 
         assert len(media_parts) == 3
+
+
+class TestMediaReadOnlyView:
+    """Test media() accepts ReadOnlyView (agent parameters) -- Issue #18.
+
+    v1.25.2: Agent parameters wrapping a list are ReadOnlyView, not list.
+    media() now flattens list-backed ReadOnlyView so dynamic media lists
+    work inside agent main {}.
+    """
+
+    def _make_rov(self, items):
+        """Create a list-backed ReadOnlyView (simulates agent parameter)."""
+        from helen.interpreter.readonly_view import ReadOnlyView
+        return ReadOnlyView(list(items))
+
+    def test_single_readonlyview_of_mediaparts_flattens(self, tmp_path):
+        """media(ReadOnlyView[img1, img2]) returns list[MediaPart]."""
+        png = _make_png(str(tmp_path / "test.png"))
+        img1, img2 = _media(png), _media(png)
+        rov = self._make_rov([img1, img2])
+
+        result = _media(rov)
+        assert isinstance(result, list)
+        assert len(result) == 2
+        assert result[0] is img1
+        assert result[1] is img2
+
+    def test_single_readonlyview_of_strings_flattens(self, tmp_path):
+        """media(ReadOnlyView['a.png', 'b.png']) returns list[MediaPart]."""
+        png1 = _make_png(str(tmp_path / "a.png"))
+        png2 = _make_png(str(tmp_path / "b.png"))
+        rov = self._make_rov([png1, png2])
+
+        result = _media(rov)
+        assert isinstance(result, list)
+        assert len(result) == 2
+        assert all(isinstance(p, MediaPart) for p in result)
+
+    def test_readonlyview_in_multi_arg_flattens(self, tmp_path):
+        """media(img, ReadOnlyView[img2, img3]) flattens nested ROV."""
+        png = _make_png(str(tmp_path / "test.png"))
+        img1, img2, img3 = _media(png), _media(png), _media(png)
+        rov = self._make_rov([img2, img3])
+
+        result = _media(img1, rov)
+        assert isinstance(result, list)
+        assert len(result) == 3
+        assert result[0] is img1
+        assert result[1] is img2
+        assert result[2] is img3
+
+    def test_empty_readonlyview_returns_empty_list(self):
+        """media(ReadOnlyView[]) returns empty list."""
+        rov = self._make_rov([])
+        result = _media(rov)
+        assert isinstance(result, list)
+        assert len(result) == 0
+
+    def test_dict_backed_readonlyview_not_treated_as_list(self):
+        """media(ReadOnlyView{dict}) raises TypeError (not flattened)."""
+        from helen.interpreter.readonly_view import ReadOnlyView
+        rov = ReadOnlyView({"a": 1, "b": 2})  # dict-backed
+
+        with pytest.raises(TypeError, match="must be str, MediaPart, or list"):
+            _media(rov)
+
+    def test_readonlyview_flatten_in_llm_act_context(self, tmp_path):
+        """media(rov) dynamic list produces N media_parts in llm act."""
+        png = _make_png(str(tmp_path / "test.png"))
+        images = [_media(png), _media(png), _media(png)]
+        rov = self._make_rov(images)
+
+        media_val = _media(rov)
+        assert isinstance(media_val, list)
+
+        media_parts = []
+        if isinstance(media_val, MediaPart):
+            media_parts.append(media_val)
+        elif isinstance(media_val, list):
+            for item in media_val:
+                if isinstance(item, MediaPart):
+                    media_parts.append(item)
+
+        assert len(media_parts) == 3

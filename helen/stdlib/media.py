@@ -21,6 +21,26 @@ from typing import Any
 from helen.runtime.media import MediaPart
 
 
+def _is_list_like(value: Any) -> bool:
+    """True if value is a list or list-backed ReadOnlyView (not dict-backed).
+
+    Agent parameters are wrapped in ReadOnlyView (v1.12) to prevent mutation.
+    A list passed to an agent becomes a ReadOnlyView whose underlying _data is
+    a list; media() should treat it as a flatten-able list. Dict-backed views
+    are NOT list-like (Issue #18).
+    """
+    if isinstance(value, list):
+        return True
+    # Lazy import to avoid any module-load cycle
+    try:
+        from helen.interpreter.readonly_view import ReadOnlyView
+    except ImportError:
+        return False
+    if isinstance(value, ReadOnlyView):
+        return isinstance(value._data, list)
+    return False
+
+
 def _media(*args, media_type: str | None = None) -> MediaPart | list[MediaPart]:
     """Create a MediaPart from a file path, URL, or passthrough existing MediaParts.
 
@@ -35,19 +55,23 @@ def _media(*args, media_type: str | None = None) -> MediaPart | list[MediaPart]:
     - ``media(images)`` -> list[MediaPart] (images is list[MediaPart|str])
     - Enables ``llm act "..." media(images)`` for dynamic-length lists
 
+    v1.25.2: Supports ReadOnlyView (agent parameters) -- list passed to an agent
+    is wrapped in ReadOnlyView; media() now flattens it (Issue #18).
+
     Args:
         *args: One or more sources (file path/URL strings, MediaPart objects,
-            or a single list of the same).
+            a list of the same, or a ReadOnlyView wrapping such a list).
         media_type: Optional explicit media type ("image", "video", "audio").
             Only applies when a single string source is given.
 
     Returns:
         MediaPart for single str/MediaPart arg, list[MediaPart] for multi-arg
-        or single list arg.
+        or single list/ReadOnlyView arg.
 
     Raises:
         ValueError: If the file doesn't exist or type cannot be determined.
-        TypeError: If an argument is neither str, MediaPart, nor list.
+        TypeError: If an argument is neither str, MediaPart, list, nor
+            list-backed ReadOnlyView.
     """
     if len(args) == 0:
         raise ValueError("media() requires at least one argument")
@@ -67,9 +91,9 @@ def _media(*args, media_type: str | None = None) -> MediaPart | list[MediaPart]:
             return source
         if isinstance(source, str):
             return _create_media_part(source, media_type=media_type)
-        if isinstance(source, list):
-            # Flatten list of MediaPart/str into list[MediaPart].
-            return _flatten_media_list(source, media_type=media_type)
+        if _is_list_like(source):
+            # list or list-backed ReadOnlyView (agent parameter) -> flatten
+            return _flatten_media_list(list(source), media_type=media_type)
         raise TypeError(
             f"media() argument must be str, MediaPart, or list, got {type(source).__name__}"
         )
@@ -81,8 +105,8 @@ def _media(*args, media_type: str | None = None) -> MediaPart | list[MediaPart]:
             parts.append(arg)
         elif isinstance(arg, str):
             parts.append(_create_media_part(arg, media_type=media_type))
-        elif isinstance(arg, list):
-            parts.extend(_flatten_media_list(arg, media_type=media_type))
+        elif _is_list_like(arg):
+            parts.extend(_flatten_media_list(list(arg), media_type=media_type))
         else:
             raise TypeError(
                 f"media() argument must be str, MediaPart, or list, got {type(arg).__name__}"
