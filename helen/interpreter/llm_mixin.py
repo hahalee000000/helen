@@ -186,11 +186,22 @@ class LlmMixin:
                 prompt = rendered
 
         # Evaluate media expressions (v1.17)
+        # v1.25: Flatten lists returned by media(img1, img2) multi-arg form (Issue #17)
         media_parts = []
         for media_expr in node.media:
             media_val = media_expr.accept(self)
             if isinstance(media_val, MediaPart):
                 media_parts.append(media_val)
+            elif isinstance(media_val, list):
+                for item in media_val:
+                    if isinstance(item, MediaPart):
+                        media_parts.append(item)
+                    elif item is not None:
+                        self.errors.error(
+                            ErrorCode.SEMANTIC_TYPE_ERROR,
+                            f"media() list must contain MediaPart, got {type(item).__name__}",
+                            media_expr.span if hasattr(media_expr, 'span') else None,
+                        )
             elif media_val is not None:
                 self.errors.error(
                     ErrorCode.SEMANTIC_TYPE_ERROR,

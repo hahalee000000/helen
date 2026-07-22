@@ -21,8 +21,66 @@ from typing import Any
 from helen.runtime.media import MediaPart
 
 
-def _media(source: str, media_type: str | None = None) -> MediaPart:
-    """Create a MediaPart from a file path or URL.
+def _media(*args, media_type: str | None = None) -> MediaPart | list[MediaPart]:
+    """Create a MediaPart from a file path, URL, or passthrough existing MediaParts.
+
+    v1.25: Supports MediaPart passthrough and multi-argument form (Issue #17):
+    - ``media("path.png")`` -> single MediaPart (backward compatible)
+    - ``media(img1)`` -> passthrough (img1 is MediaPart, returned as-is)
+    - ``media(img1, img2)`` -> list[MediaPart] (multi-arg, all passthrough/created)
+    - ``media("path.png", "image")`` -> single MediaPart (legacy positional type)
+    - ``media("url", media_type="video")`` -> single MediaPart (keyword type)
+
+    Args:
+        *args: One or more sources (file path/URL strings or MediaPart objects).
+        media_type: Optional explicit media type ("image", "video", "audio").
+            Only applies when a single string source is given.
+
+    Returns:
+        MediaPart for single-arg, list[MediaPart] for multi-arg.
+
+    Raises:
+        ValueError: If the file doesn't exist or type cannot be determined.
+        TypeError: If an argument is neither str nor MediaPart.
+    """
+    if len(args) == 0:
+        raise ValueError("media() requires at least one argument")
+
+    # Legacy positional form: media(source, type) where the second positional
+    # arg is a valid media_type string ("image"/"video"/"audio"). Disambiguated
+    # from multi-source form (e.g. media("a.png", "b.png")) by checking validity.
+    _VALID_MEDIA_TYPES = {"image", "video", "audio"}
+    if (len(args) == 2 and isinstance(args[0], str) and isinstance(args[1], str)
+            and args[1] in _VALID_MEDIA_TYPES and media_type is None):
+        return _create_media_part(args[0], media_type=args[1])
+
+    # Single argument: passthrough MediaPart or create from string.
+    if len(args) == 1:
+        source = args[0]
+        if isinstance(source, MediaPart):
+            return source
+        if isinstance(source, str):
+            return _create_media_part(source, media_type=media_type)
+        raise TypeError(
+            f"media() argument must be str or MediaPart, got {type(source).__name__}"
+        )
+
+    # Multiple arguments: return list of MediaParts (each passthrough or created).
+    parts: list[MediaPart] = []
+    for arg in args:
+        if isinstance(arg, MediaPart):
+            parts.append(arg)
+        elif isinstance(arg, str):
+            parts.append(_create_media_part(arg, media_type=media_type))
+        else:
+            raise TypeError(
+                f"media() argument must be str or MediaPart, got {type(arg).__name__}"
+            )
+    return parts
+
+
+def _create_media_part(source: str, media_type: str | None = None) -> MediaPart:
+    """Create a MediaPart from a file path or URL (original _media logic).
 
     Args:
         source: File path or URL

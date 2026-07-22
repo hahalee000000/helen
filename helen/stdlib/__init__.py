@@ -1287,7 +1287,7 @@ def _register_media() -> list[BuiltinFunction]:
     """Register Media built-in functions."""
     return [
         # Media/multimodal functions (v1.17)
-        BuiltinFunction("media", "Create media from file/URL", "media(source, type?)", _media, "media"),
+        BuiltinFunction("media", "Create media from file/URL/MediaPart (passthrough + multi-arg)", "media(source|MediaPart, ...) | media(source, type?)", _media, "media"),
         BuiltinFunction("media_base64", "Create media from base64 data", "media_base64(data, mime, type?)", _media_base64, "media"),
         BuiltinFunction("is_media", "Check if value is MediaPart", "is_media(value)", _is_media, "media"),
         BuiltinFunction("media_type", "Get media type", "media_type(value)", _media_type_fn, "media"),
