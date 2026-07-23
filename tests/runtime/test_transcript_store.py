@@ -337,3 +337,68 @@ class TestSessionMeta:
         second = json.loads(lines[1])
         assert second["type"] == "message"
         assert second["role"] == "user"
+
+
+class TestRestoreMediaPreservesFields:
+    """Regression test for issue #19.
+
+    _restore_media_in_messages() must preserve ALL Message fields
+    (pinned, invocation_id, parent_invocation_id, agent_name,
+    visible_to_invocation_ids) when reconstructing multimodal messages.
+    Otherwise agent-internal llm act with media() silently loses context.
+    """
+
+    def test_restore_preserves_invocation_tree_fields(self, tmp_path):
+        from helen.runtime.transcript_store import TranscriptStore
+        from helen.runtime.media_storage import MediaStorage
+
+        store = TranscriptStore()
+        store._media_storage = MediaStorage(tmp_path, threshold_mb=0.0)  # always externalize
+
+        msg = Message(
+            role="user",
+            content=[
+                {"type": "text", "text": "look at this"},
+                {"type": "media_ref", "media_ref": "does_not_exist",
+                 "mime": "image/png", "media_type": "image"},
+            ],
+            agent_name="TestAgent",
+            invocation_id="inv_abc",
+            parent_invocation_id="inv_parent",
+            visible_to_invocation_ids=["inv_other"],
+            pinned=True,
+        )
+
+        # Direct call to the private method under test
+        restored = store._restore_media_in_messages([msg])
+
+        assert len(restored) == 1
+        out = restored[0]
+        # v1.19 pinned
+        assert out.pinned is True
+        # v1.22 invocation tree
+        assert out.agent_name == "TestAgent"
+        assert out.invocation_id == "inv_abc"
+        assert out.parent_invocation_id == "inv_parent"
+        # v1.24 visibility
+        assert out.visible_to_invocation_ids == ["inv_other"]
+        # mutation safety: list field must be a copy, not shared
+        out.visible_to_invocation_ids.append("mutated")
+        assert msg.visible_to_invocation_ids == ["inv_other"]
+
+    def test_plain_text_messages_pass_through_unchanged(self, tmp_path):
+        """Non-multimodal messages should not be touched (existing behaviour)."""
+        from helen.runtime.transcript_store import TranscriptStore
+        from helen.runtime.media_storage import MediaStorage
+
+        store = TranscriptStore()
+        store._media_storage = MediaStorage(tmp_path, threshold_mb=0.0)
+
+        msg = Message(
+            role="user",
+            content="plain text",
+            invocation_id="inv_xyz",
+        )
+        restored = store._restore_media_in_messages([msg])
+        assert len(restored) == 1
+        assert restored[0] is msg  # same instance, not a copy

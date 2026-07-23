@@ -1048,7 +1048,10 @@ class TranscriptStore:
             if isinstance(msg.content, list):
                 # Create a copy to avoid modifying the original
                 restored_content = self._media_storage.restore_content_parts(msg.content)
-                # Create a new Message with restored content
+                # Create a new Message with restored content.
+                # Must copy ALL fields — v1.19 pinned, v1.22 invocation tree,
+                # v1.24 visibility — so multimodal messages inside agent main{}
+                # keep their invocation context (issue #19).
                 restored_msg = Message(
                     role=msg.role,
                     content=restored_content,
@@ -1059,7 +1062,12 @@ class TranscriptStore:
                     message_type=msg.message_type,
                     priority=msg.priority,
                     compressed=msg.compressed,
+                    pinned=msg.pinned,
                     uuid=msg.uuid,
+                    agent_name=msg.agent_name,
+                    invocation_id=msg.invocation_id,
+                    parent_invocation_id=msg.parent_invocation_id,
+                    visible_to_invocation_ids=list(msg.visible_to_invocation_ids),
                 )
                 restored_messages.append(restored_msg)
             else:
