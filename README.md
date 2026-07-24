@@ -39,7 +39,7 @@
 | 长对话 Agent | **Helen** | 5 层渐进压缩 + 工作记忆 |
 | 会话审计与回放 | **Helen** | 内置 TranscriptStore SSOT |
 
-📖 详细对比：[Helen vs LangChain vs CrewAI vs AutoGen](docs/COMPARISON.md)
+📖 详细对比：[Helen vs LangChain vs CrewAI vs AutoGen](reports/COMPARISON.md)
 
 ## 🚀 快速开始
 
@@ -277,7 +277,7 @@ MIT License
 ## 📚 文档
 
 - [Wiki 文档](wiki/index.md) - 完整的技术文档
-- [教程](docs/tutorial.md) - 从零开始学习 Helen
+- [教程](reports/tutorial.md) - 从零开始学习 Helen
 - [Python Bridge 教程](wiki/tutorial/15-python-bridge.md) - Python 集成指南
 - [上下文管理](wiki/runtime/context-management.md) - 智能上下文处理（v1.20）
 - [技能系统](wiki/runtime/skills.md) - 技能加载和使用

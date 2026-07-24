@@ -147,7 +147,7 @@ sources: []  # 贡献的源代码文件
 3. 运行时（执行引擎、LLM 集成）
 4. 教程（示例、说明）
 5. 附录（错误码、异常、变更日志）
-6. 同步 docs/ 和 skills/
+6. 同步 reports/ 和 skills/
 
 **更新内容**:
 - 修改相关 wiki 页面
@@ -184,16 +184,16 @@ sources: []  # 贡献的源代码文件
 
 ## 同步任务
 
-### wiki/ → docs/（自动生成）
+### wiki/ → reports/（自动生成）
 
-`docs/tutorial.md` 由 `scripts/build_tutorial.py` 从 `wiki/tutorial/*.md` 自动生成。
+`reports/tutorial.md` 由 `scripts/build_tutorial.py` 从 `wiki/tutorial/*.md` 自动生成。
 
 当教程内容变化时：
 ```bash
 python3 scripts/build_tutorial.py
 ```
 
-不要手动编辑 `docs/tutorial.md`——编辑 `wiki/tutorial/` 下的文件，然后重新生成。
+不要手动编辑 `reports/tutorial.md`——编辑 `wiki/tutorial/` 下的文件，然后重新生成。
 
 ### wiki/ → skills/
 

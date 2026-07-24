@@ -2,7 +2,7 @@
 
 **Location**: `tests/tutorial/run_tutorial_tests.py`
 **Tutorial source**: `~/wiki/helen/tutorial/*.md`
-**Consolidated tutorial**: `~/helen/docs/tutorial.md` (pushed to GitHub, all 10 chapters)
+**Consolidated tutorial**: `~/helen/reports/tutorial.md` (pushed to GitHub, all 10 chapters)
 
 Extracts all `helen`-tagged code blocks from markdown files, runs them through the full compiler pipeline (Lexer → Parser → SemanticAnalyzer → Interpreter), and reports PASS/FAIL/SKIP.
 
@@ -70,6 +70,6 @@ HLD EBNF suggests `as` is optional, but the parser doesn't implement it. Use bar
 
 ## Tutorial Consolidation (2026-06)
 
-Tutorial files live in `~/wiki/helen/tutorial/` which is **NOT a git repo** (wiki is separate). The complete 10-chapter tutorial was consolidated into `~/helen/docs/tutorial.md` and pushed to `https://github.com/hahalee000000/helen`.
+Tutorial files live in `~/wiki/helen/tutorial/` which is **NOT a git repo** (wiki is separate). The complete 10-chapter tutorial was consolidated into `~/helen/reports/tutorial.md` and pushed to `https://github.com/hahalee000000/helen`.
 
-**When updating tutorials**: remember to update both `~/wiki/helen/tutorial/*.md` AND `~/helen/docs/tutorial.md`, or consolidate to a single source of truth.
+**When updating tutorials**: remember to update both `~/wiki/helen/tutorial/*.md` AND `~/helen/reports/tutorial.md`, or consolidate to a single source of truth.
