@@ -38,8 +38,9 @@
 - [[runtime/history|历史管理]] — Token 预算、截断策略、conversation_summary
 - [[runtime/import|模块系统]] — 多格式导入、循环检测、路径安全
 - [[runtime/skills|技能系统]] — 三层搜索架构、两层披露机制
+- [[runtime/working_memory|Working Memory]] - v1.25 system prompt-based 方案：LLM 通过 `<working_memory>` 块主动维护上下文（**v1.25 新特性**）
 
-> 注：`runtime/working_memory`、`runtime/graduated_compression`、`runtime/cache_aware_compression`、`runtime/agent_context` 的内容已合并到 `runtime/context-management`。旧页面已归档至 `_archive/`。
+> 注：`runtime/graduated_compression`、`runtime/cache_aware_compression`、`runtime/agent_context` 的内容已合并到 `runtime/context-management`。旧页面已归档至 `_archive/`。`working_memory` 已用 v1.25 新方案重写。
 
 ### 六、工具链
 - [[toolchain/cli|命令行工具]] — `helen <file>/check/test/quality/repl/doc/init/lsp/template`

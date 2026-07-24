@@ -522,6 +522,60 @@ class AgentContextManager:
             if pattern:
                 self.working_memory._add_decision(f"Searched for: {pattern}")
 
+    def update_from_llm_summary(self, summary: dict[str, list[str]]) -> None:
+        """Update working memory from an LLM-generated summary.
+
+        v1.25: System prompt-based working memory approach. The LLM includes a
+        ``<working_memory>`` block in its response; llm_mixin parses it into a
+        dict and calls this method to merge it into the working memory store.
+
+        Update strategy per field:
+        - ``active_files``: replace (reflects current state, not history)
+        - ``decisions``: append, capped to last 10 (historical context)
+        - ``todos``: replace (current task list)
+        - ``errors``: append, capped to last 5 (recent issues)
+
+        Args:
+            summary: Dict with keys ``active_files``, ``decisions``, ``todos``,
+                ``errors``. Each value is a list of strings. Missing keys are
+                ignored.
+        """
+        if not self.working_memory_enabled:
+            return
+
+        wm = self.working_memory
+
+        # active_files: replace (current state)
+        if "active_files" in summary:
+            new_files = [f for f in summary["active_files"] if f]
+            if new_files:
+                wm.active_files = new_files
+                wm._evict_to_budget()
+
+        # decisions: append (historical), keep last 10
+        if "decisions" in summary:
+            new_decisions = [d for d in summary["decisions"] if d]
+            for d in new_decisions:
+                wm._add_decision(d)
+            if len(wm.recent_decisions) > 10:
+                wm.recent_decisions = wm.recent_decisions[-10:]
+
+        # todos: replace (current task list)
+        if "todos" in summary:
+            new_todos = [t for t in summary["todos"] if t]
+            if new_todos:
+                wm.pending_todos = new_todos
+                wm._evict_to_budget()
+
+        # errors: append (recent), keep last 5
+        if "errors" in summary:
+            new_errors = [e for e in summary["errors"] if e]
+            import time as _time
+            for e in new_errors:
+                wm._add_error("llm_summary", e)
+            if len(wm.error_history) > 5:
+                wm.error_history = wm.error_history[-5:]
+
     def prepare_context(
         self,
         system_prompt: str | None,

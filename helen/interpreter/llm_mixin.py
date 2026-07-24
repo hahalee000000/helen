@@ -304,6 +304,11 @@ class LlmMixin:
         if skill_index:
             system_prompt_parts.append(skill_index)
 
+        # 5. Working Memory Instructions (v1.25: system prompt-based working memory)
+        wm_instructions = self._build_working_memory_instructions()
+        if wm_instructions:
+            system_prompt_parts.append(wm_instructions)
+
         system_prompt = "\n\n".join(system_prompt_parts) if system_prompt_parts else None
 
         # User prompt construction:
@@ -436,7 +441,12 @@ class LlmMixin:
             # P1: Record tool calls + final response to history
             if response:
                 self._record_llm_response_to_history(response)
-            return response.text if response else None
+
+            # v1.25: Extract and apply working memory update from response
+            response_text = response.text if response else None
+            if response_text:
+                self._apply_working_memory_update(response_text)
+            return response_text
         except HelenRuntimeError as e:
             self._log_llm_audit("act", prompt, audit_start, agent_name, model, error=str(e))
             return None
@@ -664,6 +674,10 @@ class LlmMixin:
                 tokens_out=stream_usage.get("completion_tokens", 0),
                 tool_calls=tool_calls_log,
             )
+
+            # v1.25: Extract and apply working memory update from response
+            if full_text:
+                self._apply_working_memory_update(full_text)
 
             return full_text
         except Exception as e:
@@ -1124,6 +1138,129 @@ class LlmMixin:
             self._skill_index_cache = ""
             self._skill_index_mtime = max_mtime
             return ""
+
+    def _build_working_memory_instructions(self: Any) -> str:
+        """Build working memory maintenance instructions for system prompt.
+
+        v1.25: System prompt-based working memory approach.
+        Instructs the LLM to include structured working memory updates in its response,
+        which are then parsed and used to update the working memory store.
+
+        This approach is:
+        - Simpler: No additional LLM calls
+        - Smarter: LLM decides what's important (semantic understanding)
+        - Multilingual: Works in any language
+        - Cost-effective: Zero additional LLM costs
+        """
+        # Check if working memory is enabled
+        agent_ctx = getattr(self, '_agent_context', None)
+        if agent_ctx is not None and not agent_ctx.working_memory_enabled:
+            return ""
+
+        return """## Working Memory Maintenance
+
+At the end of each task, include a working memory update in your response using this format:
+
+<working_memory>
+active_files: [list of files you modified or referenced]
+decisions: [key decisions you made and why]
+todos: [remaining tasks or follow-up items]
+errors: [errors encountered and how you resolved them]
+</working_memory>
+
+Guidelines:
+- Only include fields that have meaningful updates
+- Keep each item concise (one line per item)
+- Focus on information that would help you continue the work in the next invocation
+- Omit the working memory block if there are no meaningful updates
+
+Example:
+<working_memory>
+active_files: [src/auth.py, tests/test_auth.py]
+decisions: [Use JWT tokens instead of sessions for cross-device support]
+todos: [Add password strength validation, Implement 2FA]
+errors: [Fixed token expiration handling - was missing refresh logic]
+</working_memory>
+"""
+
+    def _extract_working_memory_update(self: Any, response: str) -> dict | None:
+        """Extract working memory update from an LLM response.
+
+        v1.25: Parses the ``<working_memory>...</working_memory>`` block that the
+        LLM is instructed (via system prompt) to include at the end of its
+        response. Returns a dict suitable for ``AgentContextManager.update_from_llm_summary``
+        or ``None`` if no block is present.
+
+        The block format is::
+
+            <working_memory>
+            active_files: [file1.py, file2.py]
+            decisions: [decision one, decision two]
+            todos: [task one, task two]
+            errors: [error one]
+            </working_memory>
+
+        Each field is optional; only present fields appear in the result.
+
+        Args:
+            response: Full LLM response text.
+
+        Returns:
+            Dict with keys ``active_files``, ``decisions``, ``todos``,
+            ``errors`` (each a list of strings), or ``None`` if no block found.
+        """
+        import re
+
+        if not response:
+            return None
+
+        # Match <working_memory>...</working_memory> block (case-insensitive, DOTALL)
+        wm_match = re.search(
+            r'<working_memory>(.*?)</working_memory>',
+            response,
+            re.DOTALL | re.IGNORECASE,
+        )
+        if not wm_match:
+            return None
+
+        wm_content = wm_match.group(1).strip()
+        result: dict[str, list[str]] = {}
+
+        # Parse each field: field_name: [item1, item2, ...]
+        for field in ('active_files', 'decisions', 'todos', 'errors'):
+            field_match = re.search(
+                rf'{field}\s*:\s*\[(.*?)\]',
+                wm_content,
+                re.DOTALL,
+            )
+            if field_match:
+                items_str = field_match.group(1)
+                # Split by comma, strip whitespace and surrounding quotes
+                items = [
+                    item.strip().strip('"\'')
+                    for item in items_str.split(',')
+                    if item.strip()
+                ]
+                if items:
+                    result[field] = items
+
+        return result if result else None
+
+    def _apply_working_memory_update(self: Any, response: str) -> None:
+        """Extract and apply a working memory update from an LLM response.
+
+        v1.25: Convenience wrapper called after each ``llm act`` completes.
+        Parses the ``<working_memory>`` block (if any) and merges it into the
+        current agent's working memory store. No-op when working memory is
+        disabled or no block is present.
+        """
+        agent_ctx = getattr(self, '_agent_context', None)
+        if agent_ctx is None or not agent_ctx.working_memory_enabled:
+            return
+
+        wm_update = self._extract_working_memory_update(response)
+        if wm_update:
+            agent_ctx.update_from_llm_summary(wm_update)
 
     def _render_prompt_template(self: Any, template: str) -> str:
         """Render a prompt template by replacing {{var}} with environment values.

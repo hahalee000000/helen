@@ -47,7 +47,7 @@ agent HelenAssistant(question: str, docs_path: str, source_dir: str) {
 }
 
 main {
-    let result = HelenAssistant("test", "reports/tutorial.md", "helen/")
+    let result = HelenAssistant("test", "reports/COMPARISON.md", "helen/")
     return result
 }
 """
@@ -88,7 +88,7 @@ agent HelenAssistant(question: str, docs_path: str, source_dir: str) {
 }
 
 main {
-    let result = HelenAssistant("How to define an agent?", "reports/tutorial.md", "helen/")
+    let result = HelenAssistant("How to define an agent?", "reports/COMPARISON.md", "helen/")
     return result
 }
 """
@@ -130,7 +130,7 @@ agent HelenAssistant(question: str, docs_path: str, source_dir: str) {
 }
 
 main {
-    let result = HelenAssistant("What is an agent?", "reports/tutorial.md", "helen/")
+    let result = HelenAssistant("What is an agent?", "reports/COMPARISON.md", "helen/")
     return result
 }
 """
@@ -172,7 +172,7 @@ agent HelenAssistant(question: str, docs_path: str, source_dir: str) {
 }
 
 main {
-    let result = HelenAssistant("test", "reports/tutorial.md", "helen/")
+    let result = HelenAssistant("test", "reports/COMPARISON.md", "helen/")
     return result
 }
 """
