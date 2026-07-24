@@ -14,7 +14,7 @@ first-class LLM primitives (`llm act`, `llm if`).
 ```bash
 uv pip install -e .                 # Install in editable mode (Python 3.12+, using uv)
 uv pip install -e ".[dev]"          # Install dev dependencies (pytest, flake8)
-# 或者使用传统 pip
+# Or using traditional pip
 pip install -e .                    # Install in editable mode (Python 3.12+)
 pip install -e ".[dev]"             # Install dev dependencies (pytest, flake8)
 
@@ -118,29 +118,29 @@ helen/
   - Chinese aliases: `发送()`, `接收()`, `尝试接收()`, `取消()`, `关闭()`
   - **Streaming interrupt (v1.18)**: `on_chunk` callback return `false` to stop streaming; Ctrl+C during streaming interrupts and preserves REPL state; `spawn` + `Channel.cancel()` can interrupt background agent streaming
   - **Stdlib**: `cancel_llm_call()`, `current_llm_call_id()`, `cancel_all_llm_calls()`
-  - **中文别名**: `取消大模型调用`, `当前大模型调用id`, `取消所有大模型调用`
+  - **Chinese aliases**: `取消大模型调用`, `当前大模型调用id`, `取消所有大模型调用`
 - **ReadOnlyView (v1.12)**: Immutable wrapper for agent parameters
   - Blocks all mutation attempts → raises `ScopeViolationError`
   - Supports `__getitem__`, `__len__`, `__iter__`, `__contains__`, `__bool__`, `__str__`, comparison operators, `__add__`, `__radd__`, `__hash__`
   - Nested iterables auto-wrapped on iteration
   - dict methods: `keys()`, `values()`, `items()`, `get()`
-- **🎯 第一原则：调用者决定上下文（Caller Decides Context）**：**调用 agent 前必须显式考虑要向 agent 提供什么上下文**。Agent 是严格隔离的——每次调用都创建独立执行环境，**不会自动继承**调用者的变量、历史、LLM 上下文。所有信息必须通过参数、`shared store`、`const` 或 Channel 显式传递。这是 Helen "显式优于隐式" 哲学在多 agent 协作中的核心体现。设计多 agent 系统时，第一步是画出上下文流图（调用者 → 参数/SharedStore/Channel → agent）。详见 `helen-agent-collaboration` §"设计原则：调用者决定上下文" 和 `helen-programming-methodology` §5 "上下文接力模式"
+- **🎯 First Principle: Caller Decides Context**: **Before calling an agent, you must explicitly consider what context to provide to the agent**. Agents are strictly isolated — each invocation creates an independent execution environment and **does not automatically inherit** the caller's variables, history, or LLM context. All information must be passed explicitly through parameters, `shared store`, `const`, or Channel. This is the core manifestation of Helen's "explicit over implicit" philosophy in multi-agent collaboration. When designing multi-agent systems, the first step is to draw a context flow diagram (caller → parameters/SharedStore/Channel → agent). See `helen-agent-collaboration` §"Design Principle: Caller Decides Context" and `helen-programming-methodology` §5 "Context Relay Pattern"
 - **Agent scope isolation (v1.10)**: `agent main {}` runs in isolated environment. Module-level `let` is **not** visible inside agent main (compile-time error). Module-level `const` is auto-visible (read-only sharing). Use `shared let` for cross-agent visible mutable variables. Closures in agent main can capture local variables.
 - **Closure value capture**: Closures capture a **deep copy** of reference-type variables (snapshot semantics, immune to subsequent modifications)
 - **LLM primitives**: `llm act` (tool-calling loop + optional callbacks, usable as expression since v1.10), `llm if` (LLM-routed branching)
   - v1.14: `llm stream` **deleted** — streaming merged into `llm act` with optional callbacks
-  - v1.17: 新增 `on_media` / `on_generate` / `provider` 子句，支持多模态输入与文生图/视频
-  - v1.21: 新增 `on_tool_end fn(name, result)` 回调——在每个工具执行后调用，返回 str/dict 注入 hint 到下一次 LLM 调用，返回 null 不注入。用于 agentic loop 中间引导 LLM 方向。Hint 自动持久化到 TranscriptStore，可通过 `:transcript` 查看
+  - v1.17: Added `on_media` / `on_generate` / `provider` clauses for multimodal input and text-to-image/video generation
+  - v1.21: Added `on_tool_end fn(name, result)` callback — invoked after each tool execution; returns str/dict to inject a hint into the next LLM call, returns null to skip injection. Used to guide LLM direction mid agentic loop. Hints are automatically persisted to TranscriptStore and can be viewed via `:transcript`
   - Syntax: `llm act "prompt" [media(...)] [provider("...")] [on_media fn(...)] [on_generate fn(...)] [on_chunk fn(...)] [on_complete fn(...)] [on_tool_end fn(...)]`
-  - 中文别名：`逐块处理`(on_chunk)、`完成`(on_complete)、`工具结束`(on_tool_end)、`处理媒体`(on_media)、`生成`(on_generate)
-- **Multimodal support (v1.17)**: 回调即适配器——协议差异由用户回调处理，Helen 核心不内置 provider 格式
-  - **`media()` stdlib 函数**：普通函数（非关键字），返回 `MediaPart` 对象，自动识别文件路径/URL/base64
-  - **`MediaPart` 数据类型**：一等公民，可赋值、传参、存入列表；字段：`source`/`content`/`mime`/`media_type`/`metadata`
-  - **`on_media fn(parts, provider)`**：多模态输入适配器，将 `MediaPart` 列表转换为 provider 特定格式（Content Parts）；不指定时使用默认 OpenAI 兼容适配器
-  - **`on_generate fn(params)`**：将生成能力注册为工具，LLM 在工具循环中决定是否调用；支持文生图、文生视频等，协议差异完全由回调处理
-  - **设计原则**：协议未统一时不固化进语法；未来新模态/新协议无需修改语言核心，用户更新回调或 skill 即可
-  - **配套 skill**：`multimodal-providers` 提供各主流 provider（OpenAI/Claude/Gemini/Seedance/Kling 等）的标准回调写法模板
-  - **中文别名**：`媒体()`, `媒体base64()`, `是媒体()`, `媒体类型()`, `处理媒体 fn(...)`, `生成 fn(...)`
+  - Chinese aliases: `逐块处理`(on_chunk)、`完成`(on_complete)、`工具结束`(on_tool_end)、`处理媒体`(on_media)、`生成`(on_generate)
+- **Multimodal support (v1.17)**: Callbacks as adapters — protocol differences are handled by user callbacks; Helen core does not hardcode provider formats
+  - **`media()` stdlib function**: An ordinary function (not a keyword) that returns `MediaPart` objects, auto-detecting file paths/URLs/base64
+  - **`MediaPart` data type**: First-class citizen — can be assigned, passed as arguments, stored in lists; fields: `source`/`content`/`mime`/`media_type`/`metadata`
+  - **`on_media fn(parts, provider)`**: Multimodal input adapter that converts `MediaPart` lists to provider-specific format (Content Parts); uses the default OpenAI-compatible adapter when not specified
+  - **`on_generate fn(params)`**: Registers generation capability as a tool; the LLM decides whether to call it in the tool loop; supports text-to-image, text-to-video, etc.; protocol differences are entirely handled by callbacks
+  - **Design principle**: Do not hardcode protocols into syntax when they are not yet unified; future new modalities/protocols require zero language core changes — users simply update callbacks or skills
+  - **Companion skill**: `multimodal-providers` provides standard callback templates for mainstream providers (OpenAI/Claude/Gemini/Seedance/Kling, etc.)
+  - **Chinese aliases**: `媒体()`, `媒体base64()`, `是媒体()`, `媒体类型()`, `处理媒体 fn(...)`, `生成 fn(...)`
 - **spawn + Channel (v1.18)**: `spawn Agent(...)` spawns an agent and returns a Channel (mailbox) immediately. The spawned agent runs in an isolated environment with a deep-copied snapshot of ALL variables (including SharedStore). Inter-agent data sharing is done explicitly by passing SharedStore references through Channel messages. `mailbox_select([m1, m2, ...])` provides multi-channel select (first-ready wins). Old async/await/detach keywords and `channel X { fields }` declaration syntax removed (v1.18).
 - **Short-circuit evaluation (v1.10)**: `&&` and `||` short-circuit
 - **Type system**: 14 types including Optional (`str?`), Union (`int | str`), Protocol, Agent, Literal. Return type annotation uses `:` syntax only (`fn foo(): int {}`); `->` syntax removed (v1.10)
@@ -166,21 +166,21 @@ helen/
   - **View Caching**: Dirty flag + cached view for O(1) reads
   - **REPL Commands**: `:transcript [--full|--audit]`, `:sessions`, `:session_id`
   - **Stdlib Functions**: `get_session_id()`, `get_session_meta()`, `list_sessions()`, `replay_transcript()`, `export_transcript()`, `get_compression_audit()`, `get_session_dir()`, `set_session_dir()`, `delete_session(id)`, `delete_current_session(confirm?)`, `cleanup_sessions(keep_count?, older_than_days?)`
-  - **Startup Session Recovery (v1.24)**: CLI 支持启动时恢复历史 session
-    - `helen --session=session_xxx file.helen` — 指定 session_id 启动
-    - `helen --resume-latest file.helen` — 自动恢复最近的 session
-    - `helen repl --resume-latest` / `helen repl -r` — REPL 恢复最近会话
-    - Python API: `Interpreter(session_id="session_xxx")` — 编程接口
-    - 与 `resume_session()` 的区别：启动时直接复用（一个 transcript），运行时导入（两个 transcript）
-  - **Session Meta (v1.23.3)**: 每个新 transcript 文件的第一行自动写入 `session_meta` 记录，包含 argv（程序名和调用参数）、timestamp（启动时间）、helen_version、python_version、platform、cwd、session_id、session_scope。用于会话识别、审计追踪和调试。通过 `get_session_meta()` stdlib 函数读取。
-  - **Session Scope (v1.20)**: transcripts 默认按作用域存储——项目目录 `.helen/sessions/`（检测到 `.helen/`、`helen.yaml`、`helen.toml` 时）或全局 `~/.helen/sessions/`（REPL、脚本）。通过 `session_scope: "auto"|"global"|"project"` 配置，或 `HELEN_SESSION_DIR` 环境变量强制指定路径
-  - **Runtime Isolation (设计原则)**: transcript 按 **Interpreter 实例** 隔离，而非按目录绑定。每个 Interpreter 生命周期内 `get_session_id()` 返回相同值；不同 Interpreter 实例各自独立 transcript。具体规则：
-    - **同一进程内**多次调用 `get_session_id()` → 相同 ID（属性 getter）
-    - **重启程序** → 新 Interpreter → 新 session_id（`session_{timestamp}_{uuid8}`）
-    - **`spawn`** → 新建 Interpreter → 新建 session_id 与 transcript 目录
-    - **普通 agent 调用**（同进程）→ 共享 Interpreter → 共享 session_id，靠 `invocation_id` 区分
-    - **跨运行时继承必须显式编程**：用 `resume_session(parent_sid)` 或 `Channel.send(sid)` 传递，不自动共享。这是"显式优于隐式"的体现，避免并发写入污染与状态混乱
-    - **线程隔离 (v1.23.4 fix)**: agent context（`_interpreter_agent_context`）使用 `threading.local()` 线程局部存储，确保 `spawn` 创建的子线程不会污染主线程的 session_id/transcript。修复前 spawn 后主线程 `get_session_id()` 会返回错误值（空字符串或 spawned 的 ID）
+  - **Startup Session Recovery (v1.24)**: CLI supports resuming historical sessions at startup
+    - `helen --session=session_xxx file.helen` — Start with a specified session_id
+    - `helen --resume-latest file.helen` — Automatically resume the most recent session
+    - `helen repl --resume-latest` / `helen repl -r` — REPL resumes the most recent conversation
+    - Python API: `Interpreter(session_id="session_xxx")` — Programmatic interface
+    - Difference from `resume_session()`: startup reuse (single transcript) vs. runtime import (two transcripts)
+  - **Session Meta (v1.23.3)**: The first line of each new transcript file automatically writes a `session_meta` record, containing argv (program name and invocation arguments), timestamp (startup time), helen_version, python_version, platform, cwd, session_id, session_scope. Used for session identification, audit trail, and debugging. Read via the `get_session_meta()` stdlib function.
+  - **Session Scope (v1.20)**: Transcripts are stored by scope by default — project directory `.helen/sessions/` (when `.helen/`, `helen.yaml`, `helen.toml` are detected) or global `~/.helen/sessions/` (REPL, scripts). Configured via `session_scope: "auto"|"global"|"project"`, or the `HELEN_SESSION_DIR` environment variable to force a specific path
+  - **Runtime Isolation (Design Principle)**: Transcripts are isolated by **Interpreter instance**, not by directory binding. Within each Interpreter's lifecycle, `get_session_id()` returns the same value; different Interpreter instances each have their own independent transcript. Specific rules:
+    - **Within the same process**, multiple calls to `get_session_id()` → same ID (property getter)
+    - **Program restart** → new Interpreter → new session_id (`session_{timestamp}_{uuid8}`)
+    - **`spawn`** → new Interpreter → new session_id and transcript directory
+    - **Regular agent calls** (same process) → shared Interpreter → shared session_id, distinguished by `invocation_id`
+    - **Cross-runtime inheritance must be explicit**: Use `resume_session(parent_sid)` or `Channel.send(sid)` to pass; no automatic sharing. This embodies "explicit over implicit" and prevents concurrent write pollution and state confusion
+    - **Thread isolation (v1.23.4 fix)**: Agent context (`_interpreter_agent_context`) uses `threading.local()` thread-local storage, ensuring that child threads created by `spawn` do not pollute the main thread's session_id/transcript. Before the fix, `get_session_id()` on the main thread would return incorrect values (empty string or the spawned ID) after spawn
   - **Configuration**:
     ```yaml
     transcript:
@@ -205,14 +205,14 @@ transcript:
   enabled: true
   backend: "sqlite"
   session_scope: "auto"                  # v1.20: "auto" (default) | "global" | "project"
-  session_dir: "~/.helen/sessions"       # scope=global 时使用
-  project_session_dir: ".helen/sessions" # scope=project 时使用
+  session_dir: "~/.helen/sessions"       # Used when scope=global
+  project_session_dir: ".helen/sessions" # Used when scope=project
   max_memory_items: 1000
 
 multimodal:                          # v1.17
-  max_media_size_mb: 20              # 单个媒体最大 20MB
-  max_media_per_request: 10          # 每次最多 10 个媒体
-  video_frame_interval: 1.0          # 默认视频抽帧间隔（秒）
+  max_media_size_mb: 20              # Max 20MB per single media
+  max_media_per_request: 10          # Max 10 media per request
+  video_frame_interval: 1.0          # Default video frame extraction interval (seconds)
   media_cache_dir: "~/.helen/media_cache"
 ```
 Also supports `.env` format and falls back to `~/.hermes/.env`.
