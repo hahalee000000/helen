@@ -443,9 +443,10 @@ class LlmMixin:
                 self._record_llm_response_to_history(response)
 
             # v1.25: Extract and apply working memory update from response
+            # v1.25.1: Remove <working_memory> block from response before returning
             response_text = response.text if response else None
             if response_text:
-                self._apply_working_memory_update(response_text)
+                response_text = self._apply_working_memory_update(response_text)
             return response_text
         except HelenRuntimeError as e:
             self._log_llm_audit("act", prompt, audit_start, agent_name, model, error=str(e))
@@ -676,8 +677,9 @@ class LlmMixin:
             )
 
             # v1.25: Extract and apply working memory update from response
+            # v1.25.1: Remove <working_memory> block from response before returning
             if full_text:
-                self._apply_working_memory_update(full_text)
+                full_text = self._apply_working_memory_update(full_text)
 
             return full_text
         except Exception as e:
@@ -1246,21 +1248,42 @@ errors: [Fixed token expiration handling - was missing refresh logic]
 
         return result if result else None
 
-    def _apply_working_memory_update(self: Any, response: str) -> None:
+    def _apply_working_memory_update(self: Any, response: str) -> str:
         """Extract and apply a working memory update from an LLM response.
 
         v1.25: Convenience wrapper called after each ``llm act`` completes.
         Parses the ``<working_memory>`` block (if any) and merges it into the
         current agent's working memory store. No-op when working memory is
         disabled or no block is present.
+
+        Returns the response text with the <working_memory> block removed (if present).
+
+        Args:
+            response: Full LLM response text.
+
+        Returns:
+            Response text with <working_memory> block stripped, or original text if no block.
         """
+        import re
+
         agent_ctx = getattr(self, '_agent_context', None)
         if agent_ctx is None or not agent_ctx.working_memory_enabled:
-            return
+            return response
 
         wm_update = self._extract_working_memory_update(response)
         if wm_update:
             agent_ctx.update_from_llm_summary(wm_update)
+
+        # Remove the <working_memory> block from response text (v1.25.1 fix)
+        # This prevents users from seeing the internal working memory update block
+        cleaned_response = re.sub(
+            r'<working_memory>.*?</working_memory>\s*',
+            '',
+            response,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+
+        return cleaned_response
 
     def _render_prompt_template(self: Any, template: str) -> str:
         """Render a prompt template by replacing {{var}} with environment values.
