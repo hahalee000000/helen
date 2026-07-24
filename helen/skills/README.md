@@ -1,113 +1,113 @@
 # Helen Skills
 
-Helen 技能系统 — 为 AI Agent 提供专业知识和工作流。
+Helen skill system — providing professional knowledge and workflows for AI agents.
 
-## 目录结构
+## Directory Structure
 
 ```
-~/helen/skills/                    ← 内置技能（随语言分发）
-├── README.md                      ← 本文件
-├── LICENSE-THIRD-PARTY.md         ← 第三方许可声明
-├── software-development/          ← 开发方法论技能
-│   ├── helen-language-development/   ← Helen 语言模式与陷阱
-│   ├── helen-syntax/                 ← Helen 语法参考
-│   ├── helen-stdlib/                 ← 标准库使用指南
-│   ├── helen-agent-patterns/         ← Agent 设计模式
-│   ├── helen-testing/                ← 测试框架与 TDD 工作流
-│   ├── helen-quality/                ← 7 维质量评估工具
-│   ├── code-quality/                 ← 代码质量评估方法论
-│   ├── debugging/                    ← 调试方法论
+~/helen/skills/                    ← Built-in skills (distributed with the language)
+├── README.md                      ← This file
+├── LICENSE-THIRD-PARTY.md         ← Third-party license notices
+├── software-development/          ← Development methodology skills
+│   ├── helen-language-development/   ← Helen language patterns and pitfalls
+│   ├── helen-syntax/                 ← Helen syntax reference
+│   ├── helen-stdlib/                 ← Standard library usage guide
+│   ├── helen-agent-patterns/         ← Agent design patterns
+│   ├── helen-testing/                ← Testing framework and TDD workflow
+│   ├── helen-quality/                ← 7-dimension quality assessment tool
+│   ├── code-quality/                 ← Code quality assessment methodology
+│   ├── debugging/                    ← Debugging methodology
 │   ├── test-driven-development/      ← TDD RED-GREEN-REFACTOR
-│   ├── writing-plans/                ← 实现计划编写
-│   ├── plan/                         ← 计划模式（只写不执行）
-│   └── subagent-driven-development/  ← 子代理执行工作流
-└── devops/                        ← DevOps 技能
-    ├── hellen-consistency-checker/   ← 设计文档一致性检查
-    └── github/                       ← GitHub 工作流（PR、issue、CI/CD）
+│   ├── writing-plans/                ← Implementation plan writing
+│   ├── plan/                         ← Plan mode (write-only, no execution)
+│   └── subagent-driven-development/  ← Subagent execution workflow
+└── devops/                        ← DevOps skills
+    ├── hellen-consistency-checker/   ← Design document consistency checking
+    └── github/                       ← GitHub workflow (PR, issue, CI/CD)
 ```
 
-## 技能搜索优先级
+## Skill Search Priority
 
-Helen 按以下顺序搜索技能（高优先级覆盖低优先级）：
+Helen searches for skills in the following order (higher priority overrides lower):
 
-| 优先级 | 位置 | 说明 |
-|--------|------|------|
-| 1（最高） | `<project>/.helen/skills/` | **项目级** — 当前项目特有的技能 |
-| 2 | `~/.helen/skills/` | **用户级** — 用户的全局技能 |
-| 3 | `<helen-install>/skills/` | **内置** — 随 Helen 语言分发（本目录） |
-| 4 | `~/.hermes/skills/` | **Hermes 回退** — 兼容 Hermes Agent |
-| 5（最低） | `~/.hermes/hermes-agent/skills/` | **Hermes agent 技能** |
+| Priority | Location | Description |
+|----------|----------|-------------|
+| 1 (highest) | `<project>/.helen/skills/` | **Project-level** — Skills specific to the current project |
+| 2 | `~/.helen/skills/` | **User-level** — User's global skills |
+| 3 | `<helen-install>/skills/` | **Built-in** — Distributed with Helen language (this directory) |
+| 4 | `~/.hermes/skills/` | **Hermes fallback** — Compatible with Hermes Agent |
+| 5 (lowest) | `~/.hermes/hermes-agent/skills/` | **Hermes agent skills** |
 
-### 项目级技能
+### Project-Level Skills
 
-在你的项目根目录创建 `.helen/skills/` 目录，添加项目特有的技能：
+Create a `.helen/skills/` directory in your project root to add project-specific skills:
 
 ```
 my-project/
 ├── .helen/
 │   └── skills/
 │       └── my-api/
-│           └── SKILL.md       # 项目 API 文档
+│           └── SKILL.md       # Project API documentation
 ├── main.helen
 └── agents/
 ```
 
-项目级技能优先级最高，可以覆盖内置技能和用户技能。
+Project-level skills have the highest priority and can override built-in and user skills.
 
-## 技能如何工作
+## How Skills Work
 
-Helen 使用**两层技能披露**机制：
+Helen uses a **two-tier skill disclosure** mechanism:
 
-1. **Tier 1 — 技能索引**：轻量级元数据（名称 + 描述）注入到系统提示的 `<available_skills>` 部分。帮助 AI 代理决定加载哪个技能。
+1. **Tier 1 — Skill Index**: Lightweight metadata (name + description) injected into the `<available_skills>` section of the system prompt. Helps AI agents decide which skill to load.
 
-2. **Tier 2 — 完整内容**：当代理需要某个技能时，调用 `load_skill` 工具读取完整的 `SKILL.md` 内容。
+2. **Tier 2 — Full Content**: When an agent needs a skill, it calls the `load_skill` tool to read the complete `SKILL.md` content.
 
-## 技能格式
+## Skill Format
 
-每个技能是一个包含 `SKILL.md` 文件的目录，使用 YAML frontmatter：
+Each skill is a directory containing a `SKILL.md` file with YAML frontmatter:
 
 ```markdown
 ---
 name: skill-name
-description: "技能描述"
+description: "Skill description"
 version: 1.0.0
-author: 作者名
+author: Author Name
 license: MIT
 tags: [tag1, tag2]
 ---
 
-# 技能标题
+# Skill Title
 
-技能内容（Markdown 格式）...
+Skill content (in Markdown format)...
 ```
 
-技能还可以包含：
-- `references/` — 参考文档
-- `templates/` — 模板文件
-- `scripts/` — 辅助脚本
-- `assets/` — 静态资源
+Skills can also include:
+- `references/` — Reference documents
+- `templates/` — Template files
+- `scripts/` — Helper scripts
+- `assets/` — Static resources
 
-## 内置技能列表
+## Built-in Skills List
 
-| 技能 | 类别 | 说明 |
-|------|------|------|
-| `helen-language-development` | Helen 专属 | Helen 语言模式、陷阱、最佳实践 |
-| `helen-syntax` | Helen 专属 | Helen 语法参考（关键字、类型、表达式） |
-| `helen-stdlib` | Helen 专属 | 193 个标准库函数使用指南 |
-| `helen-agent-patterns` | Helen 专属 | Agent 设计模式（路由、并发、错误处理） |
-| `helen-testing` | Helen 专属 | 测试框架与 TDD 工作流 |
-| `helen-quality` | Helen 专属 | 7 维质量评估工具（CLI + API） |
-| `code-quality` | 开发 | 7 维代码质量评估方法论 |
-| `debugging` | 开发 | 系统化调试方法论 |
-| `test-driven-development` | 开发 | TDD RED-GREEN-REFACTOR 工作流 |
-| `writing-plans` | 开发 | 实现计划编写指南 |
-| `plan` | 开发 | 计划模式（只写计划，不执行） |
-| `subagent-driven-development` | 开发 | 子代理驱动的开发工作流 |
-| `hellen-consistency-checker` | DevOps | 设计文档与代码一致性检查 |
-| `github` | DevOps | GitHub 工作流（PR、issue、CI/CD） |
+| Skill | Category | Description |
+|-------|----------|-------------|
+| `helen-language-development` | Helen-specific | Helen language patterns, pitfalls, best practices |
+| `helen-syntax` | Helen-specific | Helen syntax reference (keywords, types, expressions) |
+| `helen-stdlib` | Helen-specific | Usage guide for 193 standard library functions |
+| `helen-agent-patterns` | Helen-specific | Agent design patterns (routing, concurrency, error handling) |
+| `helen-testing` | Helen-specific | Testing framework and TDD workflow |
+| `helen-quality` | Helen-specific | 7-dimension quality assessment tool (CLI + API) |
+| `code-quality` | Development | 7-dimension code quality assessment methodology |
+| `debugging` | Development | Systematic debugging methodology |
+| `test-driven-development` | Development | TDD RED-GREEN-REFACTOR workflow |
+| `writing-plans` | Development | Implementation plan writing guide |
+| `plan` | Development | Plan mode (write plans only, no execution) |
+| `subagent-driven-development` | Development | Subagent-driven development workflow |
+| `hellen-consistency-checker` | DevOps | Design document and code consistency checking |
+| `github` | DevOps | GitHub workflow (PR, issue, CI/CD) |
 
-## 归属声明
+## Attribution
 
-本目录中的大部分技能源自 [Hermes Agent](https://github.com/NousResearch/hermes-agent) by Nous Research，遵循 MIT 许可证使用。详见 `LICENSE-THIRD-PARTY.md`。
+Most skills in this directory are derived from [Hermes Agent](https://github.com/NousResearch/hermes-agent) by Nous Research, used under the MIT license. See `LICENSE-THIRD-PARTY.md` for details.
 
-每个技能目录包含 `ATTRIBUTION.md` 文件，提供具体的归属信息。
+Each skill directory contains an `ATTRIBUTION.md` file with specific attribution information.
