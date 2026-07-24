@@ -256,26 +256,26 @@ Helen's 16 built-in skills can be categorized for Claude Code conversion:
 ### Helen-Specific Skills (convert for Helen development assistance)
 | Skill | Lines | Purpose |
 |-------|-------|---------|
-| helen-syntax | 967 | Complete language syntax reference (92 keywords, types, expressions) |
-| helen-stdlib | 533 | 198 built-in functions reference with examples |
-| helen-testing | 589 | Test framework usage, TDD workflow, agent testing |
-| helen-quality | 107 | 7-dimension quality assessment guide |
-| helen-agent-patterns | 1115 | Agent design patterns (7 patterns + history management) |
-| helen-agent-collaboration | 773 | Multi-agent collaboration patterns (6 patterns) |
-| helen-language-development | 472 | Language implementation patterns (AST, parser, interpreter extension) |
-| helen-programming-methodology | 437 | Contract-first + TDD + quality workflow |
-| hellen-consistency-checker | 1040 | Design document consistency checking |
+| helen-syntax | 632 | Complete language syntax reference (89 keywords, types, expressions) |
+| helen-stdlib | 739 | 203 built-in functions reference with examples |
+| helen-testing | 705 | Test framework usage, TDD workflow, agent testing |
+| helen-quality | 133 | 7-dimension quality assessment guide |
+| helen-agent-patterns | 815 | Single agent design patterns (7 patterns + best practices) |
+| helen-agent-collaboration | 545 | Multi-agent collaboration patterns (6 patterns) |
+| helen-language-development | 674 | Language implementation patterns (AST, parser, interpreter extension) |
+| helen-programming-methodology | 383 | Contract-first + TDD + quality workflow |
+| helen-python-bridge | 576 | Python ↔ Helen integration (FFI + Bridge) |
+| hellen-consistency-checker | 1041 | Design document consistency checking |
 
 ### Generic Skills (already applicable to any project)
 | Skill | Lines | Purpose |
 |-------|-------|---------|
-| code-quality | 403 | 7-dimension scoring, pre-commit verification, parallel cleanup |
-| debugging | 302 | Systematic debugging methodology + language-specific tools |
-| plan | 339 | Plan mode: write actionable plans without execution |
-| test-driven-development | 355 | Strict TDD enforcement (RED-GREEN-REFACTOR) |
-| subagent-driven-development | 625 | Execute plans via subagents with 2-stage review |
-| writing-plans | 300 | Implementation plan writing craft |
-| github | 324 | Complete GitHub workflow (PRs, issues, CI/CD) |
+| code-quality | 402 | 7-dimension scoring, pre-commit verification, parallel cleanup |
+| debugging | 610 | Systematic debugging methodology + language-specific tools |
+| planning | 330 | Plan mode + implementation plan writing craft (merged from plan + writing-plans) |
+| test-driven-development | 354 | Strict TDD enforcement (RED-GREEN-REFACTOR) |
+| subagent-driven-development | 624 | Execute plans via subagents with 2-stage review |
+| github | 323 | Complete GitHub workflow (PRs, issues, CI/CD) |
 
 ### Conversion Strategy
 1. **Direct mapping**: Helen's SKILL.md format is already compatible with Claude Code skill format (both use YAML frontmatter + markdown)

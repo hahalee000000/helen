@@ -1,7 +1,7 @@
 ---
 name: helen-agent-collaboration
 description: "Helen Agent 协作模式 — 多 Agent 协作、编排、分工、数据流、共享状态、作用域隔离"
-version: 1.18.0
+version: 1.19.0
 author: Helen Team
 license: MIT
 tags: [helen, agent, collaboration, orchestration, workflow, multi-agent, shared-let, scope-isolation, v1.12, read-only-params, ground-truth-injection, v1.17, spawn, channel, v1.18]
@@ -13,184 +13,35 @@ tags: [helen, agent, collaboration, orchestration, workflow, multi-agent, shared
 
 ## 核心概念
 
-### 🎯 设计原则：调用者决定上下文（Caller Decides Context）
+> 💡 **单 Agent 设计模式、作用域隔离、上下文管理详见 `helen-agent-patterns`**
 
-> **"调用 agent 前先问：它需要知道什么？"**
->
-> Agent 是严格隔离的——调用前必须显式考虑要向 agent 提供什么上下文。
+### 🎯 调用者决定上下文（Caller Decides Context）
 
-这是 Helen 多 agent 协作的**第一原则**。无论是同步调用 `call Agent(...)`、还是 `spawn Agent(...)`，每次调用都会创建一个全新的、独立的执行环境。**Agent 不会自动继承调用者的任何变量、历史、或 LLM 上下文**。
-
-#### 为什么这样设计？
-
-1. **可预测性**：agent 看到什么完全由参数决定，不会被外层状态污染
-2. **可复用性**：同一个 agent 在不同调用点可以用不同上下文工作
-3. **可测试性**：测试 agent 不需要构造完整的外层环境
-4. **安全性**：敏感数据不会被意外泄漏给不需要的 agent
-5. **并发友好**：spawn 出去的 agent 不会默默读写主 transcript
-
-#### 调用 agent 前的思考清单
+Agent 严格隔离——每次调用/spawn 创建全新执行环境，**不自动继承**调用者的变量、历史或 LLM 上下文。调用前必须显式考虑提供什么上下文：
 
 ```
-┌─ 调用者 ──────────────────────────────────────────┐
-│  let user_data = {...}                            │
-│  let config = {...}                               │
-│  let history = [...]                              │
-│                                                   │
-│  ❓ 调用 MyAgent 前，先问：                       │
-│  • 它需要 user_data 吗？→ 通过参数传入             │
-│  • 它需要 config 吗？→ 用 const 或参数             │
-│  • 它需要 history 吗？→ 通过参数或 resume_session │
-│  • 它要修改共享状态吗？→ 用 shared store           │
-│  • 它要返回结果吗？→ 用返回值或 Channel            │
-└───────────────────────────────────────────────────┘
+调用者 ──参数──► Agent 输入
+      ──SharedStore──► 共享状态
+      ◄──返回值/Channel── Agent 输出
 ```
-
-#### ❌ 错误模式：隐式假设
 
 ```helen
+// ❌ 错误：假设模块变量自动可见
 let user_name = "Alice"
+agent Greeter { main { print("Hello " + user_name) } }  // 编译错误！
 
-agent Greeter {
-    main {
-        // ❌ 错误：假设 user_name 自动可见
-        // 编译会报 "undefined variable: user_name"
-        print("Hello " + user_name)
-    }
-}
+// ✅ 正确：显式传递
+agent Greeter(user_name: str) { main { print("Hello " + user_name) } }
+main { Greeter("Alice") }
 ```
-
-#### ✅ 正确模式：显式传递
-
-```helen
-agent Greeter(user_name: str) {
-    main {
-        // ✅ 通过参数进入 agent
-        print("Hello " + user_name)
-    }
-}
-
-main {
-    let user_name = "Alice"
-    Greeter(user_name)  // 显式传递
-}
-```
-
-#### 上下文传递方式速查
 
 | 场景 | 推荐方式 |
 |------|---------|
-| 一次性输入 | 参数传递 `Agent(x, y)` |
-| 只读配置 | `const` 模块常量（自动可见） |
-| 跨 agent 共享可变状态 | `shared store` / `shared let`（仅值类型） |
-| spawn 子 agent 的输出 | Channel 消息 `ch.send(result)` |
+| 一次性输入 | 参数 `Agent(x, y)` |
+| 只读配置 | `const`（自动可见） |
+| 跨 agent 共享可变状态 | `shared store` |
+| spawn 子 agent 输出 | Channel `ch.send(result)` |
 | 跨进程恢复对话 | `resume_session(sid)` |
-| LLM 看到的上下文 | agent 的 `prompt` 模板（`{{var}}` 占位符） |
-
-> 💡 完整的"上下文接力模式"详见 `helen-programming-methodology` §5
-
-### Agent 是一等公民
-
-在 Helen 中，Agent 是语言级别的一等构造，可以像函数一样被调用：
-
-```helen
-agent MyAgent(input: str) {
-    description "我的 Agent"
-    prompt """
-    处理输入: {{input}}
-    """
-    
-    functions {
-        fn process(data: str): str {
-            return "processed: " + data
-        }
-    }
-    
-    main {
-        llm act
-    }
-}
-
-// 调用 Agent（像调用函数一样）
-let result = MyAgent("hello")
-print(result)
-```
-
-### Agent 作用域隔离（v1.10/v1.12）
-
-**重要**：Agent main 在完全隔离的环境中运行。
-
-| 变量类型 | 在 agent main 中 | 使用场景 |
-|---------|-----------------|---------|
-| 模块级 `let` | ❌ 不可见 | 仅在 functions 块中使用 |
-| 模块级 `const` | ✅ 只读 | 全局常量配置 |
-| `shared let`（值类型） | ✅ 可读写 | 跨 Agent 共享简单状态 |
-| 局部变量 | ✅ 可见 | 闭包可捕获 |
-
-**v1.12 重要变更**：
-- `shared let` **只允许值类型**（int, float, str, bool）
-- 引用类型（list, dict）通过**参数传递**，自动只读包装
-- 需要共享可变引用类型时，使用返回值或显式副本
-
-### 协作中的状态管理
-
-**v1.12 推荐模式**：使用值类型计数器 + 引用类型通过参数传递
-
-```helen
-// ✅ v1.12: shared let 只用于值类型
-shared let task_count = 0
-shared let completed_count = 0
-const MAX_CONCURRENT = 5
-
-// 引用类型通过参数传递
-agent TaskProducer(tasks: list, queue: list) {
-    description "Produce tasks to queue"
-    
-    main {
-        // 创建副本后修改（参数是只读的）
-        let my_queue = list(queue)
-        for task in tasks {
-            my_queue.append(task)
-            task_count = task_count + 1
-        }
-        print("Queued " + str(task_count) + " tasks")
-        return my_queue
-    }
-}
-
-agent TaskWorker(worker_id: str, queue: list, completed: map) {
-    description "Process tasks from queue"
-    
-    main {
-        let my_queue = list(queue)
-        let my_completed = dict(completed)
-        
-        while len(my_queue) > 0 {
-            let task = my_queue.pop(0)
-            print("Worker " + worker_id + " processing: " + task)
-            
-            // 模拟处理
-            let result = llm act "Process: " + task
-            
-            // 记录完成
-            my_completed[task] = "done by " + worker_id
-            completed_count = completed_count + 1
-        }
-        
-        return { "queue": my_queue, "completed": my_completed }
-    }
-}
-
-// 协作流程（v1.18: spawn + Channel）
-let initial_queue = []
-let queue = TaskProducer(["task1", "task2", "task3"], initial_queue)
-let w1 = spawn TaskWorker("W1", queue, {})
-let w2 = spawn TaskWorker("W2", queue, {})
-let r1 = w1.receive()
-let r2 = w2.receive()
-print("Completed: " + str(completed_count))
-```
-```
 
 ## 协作模式
 
@@ -579,127 +430,37 @@ agent SolutionSelector(problem: str) {
 
 ## 共享状态最佳实践
 
-### 1. 使用 shared let 进行跨 Agent 通信（v1.12）
+> 💡 详细示例和反模式详见 `helen-agent-patterns` § 作用域隔离 / § 最佳实践 6
 
-**v1.12 更新**: `shared let` 只允许值类型。引用类型通过参数传递。
+协作中共享状态的方式选择：
 
-```helen
-// ✅ v1.12 正确：shared let 只用于值类型
-shared let message_count = 0
-shared let last_message = ""
+| 方式 | 适用场景 | 约束 |
+|------|---------|------|
+| `shared let` | 跨 agent 值类型计数器/标志 | v1.12: 仅 int/float/str/bool |
+| `const` | 只读配置（agent 中自动可见） | 不可变 |
+| 参数传递 | 引用类型（list/dict） | 自动只读包装，需修改时 `list(x)` 创建副本 |
+| `shared store` | 复杂可变共享状态 | RLock 线程安全，`_` 前缀私有 |
+| Channel | agent 间消息/结果传递 | spawn 返回 Channel |
 
-agent Producer(msg: str) {
-    main {
-        message_count = message_count + 1
-        last_message = msg
-        // 引用类型通过返回值传递
-        return [msg]
-    }
-}
+**关键规则**：`shared let` 禁止引用类型；模块级 `let` 在 agent main 中不可见（编译错误）。
 
-agent Consumer(messages: list) {
-    main {
-        for msg in messages {
-            print("消费: " + msg)
-        }
-        print("总计: " + str(message_count) + " 条消息")
-    }
-}
-
-// 使用
-let msgs = Producer("hello")
-Consumer(msgs)
-```
-
-### 2. 使用 const 进行只读配置共享
-
-```helen
-// ✅ 正确：常量配置
-const API_URL = "https://api.example.com"
-const MAX_RETRIES = 3
-const TIMEOUT = 30
-
-agent ApiClient(endpoint: str) {
-    main {
-        // const 在 agent main 中自动可见
-        let url = API_URL + "/" + endpoint
-        return llm act "调用 API: " + url
-    }
-}
-```
-
-### 3. 避免模块级 let
-
-```helen
-// ❌ 错误：模块级 let 在 agent main 中不可见
-let counter = 0
-
-agent BadCounter {
-    main {
-        // 编译错误！
-        counter = counter + 1
-    }
-}
-
-// ✅ 正确：使用 shared let
-shared let good_counter = 0
-
-agent GoodCounter {
-    main {
-        good_counter = good_counter + 1
-    }
-}
-```
-
-### 4. 使用 Shared Store 共享引用类型（v1.12）
-
-`shared let` 限制为值类型。需要共享 list/dict 时，使用 `shared store`：
+Shared Store 快速示例：
 
 ```helen
 shared store TaskRegistry {
     tasks: dict = {}
     _counter: int = 0
-
-    fn register(task_name: str, task_data: any) {
-        _counter += 1
-        tasks[task_name] = task_data
-    }
-
-    fn get(task_name: str): any { return tasks[task_name] }
+    fn register(name: str, data: any) { _counter += 1; tasks[name] = data }
+    fn get(name: str): any { return tasks[name] }
     fn size(): int { return len(tasks) }
-    fn all(): dict { return tasks }
 }
 
-agent Producer(registry: TaskRegistry) {
-    main {
-        registry.register("task_1", {status: "pending", priority: 1})
-        registry.register("task_2", {status: "pending", priority: 2})
-    }
-}
-
-agent Consumer(registry: TaskRegistry) {
-    main {
-        for i in range(registry.size()) {
-            // 通过方法安全访问共享 dict
-            let task = registry.get("task_" + str(i + 1))
-            // 处理任务
-        }
-    }
-}
-
-main {
-    let registry = TaskRegistry
-    spawn Producer(registry)
-    spawn Consumer(registry)
-}
+agent Producer(r: TaskRegistry) { main { r.register("t1", {status: "pending"}) } }
+agent Consumer(r: TaskRegistry) { main { let t = r.get("t1") } }
+main { let r = TaskRegistry; spawn Producer(r); spawn Consumer(r) }
 ```
 
-**Shared Store 优势**:
-- 线程安全（RLock 保护所有字段访问）
-- `_` 前缀字段为私有，agent 不可直接访问
-- 方法封装逻辑，避免散落的锁操作
-
-### 5. 使用 Channel 消息队列进行 Agent 间通信（v1.18）
+### 使用 Channel 消息队列进行 Agent 间通信（v1.18）
 
 v1.18 引入 `spawn` + Channel 消息队列，替代旧的 async/await 并发模型：
 
@@ -739,7 +500,7 @@ main {
 | 多路复用选择 | mailbox_select([m1, m2, ...]) |
 | 需要线程安全的字段访问 | Shared Store |
 
-### 6. 向下游 Agent 传播环境事实（v1.17）
+### 向下游 Agent 传播环境事实（v1.17）
 
 编排者（orchestrator）最常见的失误：**自己掌握环境事实，却不在 prompt 中传给下游 Agent**。LLM 看不见运行时环境，缺什么就会编什么。
 
@@ -767,110 +528,30 @@ agent Worker(task: str, cwd: str, branch: str, now: str) {
 
 原则：**谁拥有事实，谁负责注入**。共享的 `shared store` 适合状态，但时间/OS/路径等不可变事实直接走 `{{}}` 进 prompt，开销最低、最不容易出错。详见 **helen-agent-patterns § 最佳实践 7**。
 
-## 错误处理
+## 错误处理与性能
 
-### 并发任务错误处理
+**并发错误处理**：spawn + Channel 配合 try/catch AggregateError：
 
 ```helen
 agent RobustOrchestrator(tasks: list) {
-    description "带错误处理的编排器"
-    
     main {
         let mailboxes = []
-        for task in tasks {
-            mailboxes.append(spawn TaskWorker(task))
-        }
-        
+        for task in tasks { mailboxes.append(spawn TaskWorker(task)) }
         try {
             let results = []
-            for mailbox in mailboxes {
-                results.append(mailbox.receive())
-            }
+            for mb in mailboxes { results.append(mb.receive()) }
             return results
         } catch AggregateError as e {
             print("部分任务失败: " + str(len(e.errors)))
-            
-            // 处理失败的任务
-            let successes = []
-            for i in range(len(tasks)) {
-                if i < len(results) {
-                    successes.append(results[i])
-                }
-            }
-            return successes
+            return []  // 处理失败情况
         }
     }
 }
 ```
 
-## 性能优化
-
-### 1. 合理控制并发数
-
-```helen
-const MAX_CONCURRENT = 5
-
-agent BatchProcessor(items: list) {
-    main {
-        let results = []
-        
-        // 分批处理（v1.18: spawn）
-        for i in range(0, len(items), MAX_CONCURRENT) {
-            let batch = items[i:i + MAX_CONCURRENT]
-            let mailboxes = []
-            
-            for item in batch {
-                mailboxes.append(spawn Worker(item))
-            }
-            
-            for mailbox in mailboxes {
-                results.append(mailbox.receive())
-            }
-        }
-        
-        return results
-    }
-}
-```
-
-### 2. 使用缓存减少重复计算（v1.12）
-
-**v1.12 模式**: 缓存通过参数传递，使用返回值返回更新后的缓存。
-
-```helen
-// v1.12: 用值类型跟踪缓存统计
-shared let cache_hits = 0
-shared let cache_misses = 0
-
-agent CachedWorker(task_id: str, cache: map) {
-    main {
-        // 检查缓存（cache 是只读视图）
-        if task_id in cache {
-            cache_hits = cache_hits + 1
-            return { "result": cache[task_id], "cache": cache }
-        }
-        
-        cache_misses = cache_misses + 1
-        
-        // 执行计算
-        let result = llm act "处理任务: " + task_id
-        
-        // 创建更新后的缓存副本
-        let updated_cache = dict(cache)
-        updated_cache[task_id] = result
-        
-        return { "result": result, "cache": updated_cache }
-    }
-}
-
-// 使用
-let my_cache = {}
-let r1 = CachedWorker("task1", my_cache)
-let r2 = CachedWorker("task2", r1["cache"])
-let r3 = CachedWorker("task1", r2["cache"])  // 命中缓存
-print("缓存命中: " + str(cache_hits))
-print("缓存未命中: " + str(cache_misses))
-```
+**性能要点**：
+- **分批并发**：`for i in range(0, len(items), MAX_CONCURRENT)` 控制每次 spawn 数量
+- **缓存**：通过参数传递 cache map，返回值返回更新后副本，`shared let` 跟踪命中统计
 
 ## 相关技能
 
@@ -878,25 +559,6 @@ print("缓存未命中: " + str(cache_misses))
 - **helen-syntax** — Helen 语法（shared let、const、agent main 等）
 - **subagent-driven-development** — 子代理驱动开发工作流
 
-## 📦 内置模板库
-
-Helen 提供一组内置模板，涵盖本文档中讨论的所有协作模式：
-
-```bash
-# 查看所有模板
-helen template --list
-
-# 查看协作相关模板
-helen template shared_store          # SharedStore 数据交换
-helen template spawn_channel         # spawn + Channel 并发
-helen template pipeline              # Agent 管道
-
-# 复制模板到当前目录开始开发
-helen template shared_store --copy my_collaboration.helen
-```
-
-每个模板都是完整可运行的示例，遵循 **"调用者决定上下文"** 原则。
-
 ## 延伸阅读
 
-- **[[Agent 提示词工程完全指南]]**（`wiki/reference/agent-system-prompt-guide.md`）— 来自 Claude Code 逆向工程的 agent prompt 设计方法论。编排者 agent 的 prompt 尤其需要遵循该指南的"原则优先于流程"和"注入环境事实"两条。
+- **[[Agent 提示词工程完全指南]]**（`wiki/reference/agent-system-prompt-guide.md`）— agent prompt 设计方法论，编排者 agent 尤其需要遵循"原则优先于流程"和"注入环境事实"。

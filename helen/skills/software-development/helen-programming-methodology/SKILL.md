@@ -198,246 +198,36 @@ if evaluation["updates"] != null {
 }
 ```
 
-### 5. 上下文接力（Context Handoff Pattern）
+### 5. 上下文接力（Context Handoff）
 
-Helen 的 transcript 按 **Interpreter 实例隔离**（spawn 创建新 Interpreter → 新 session_id）。这意味着：**任何你希望被后继上下文利用的信息，必须显式保存和传递**——不能依赖自动继承。
+Helen 的 transcript 按 **Interpreter 实例隔离**（spawn 创建新 Interpreter → 新 session_id），任何跨 agent / 跨进程的上下文传递都必须**显式编程**——这是 Helen "显式优于隐式"哲学的核心体现。
 
-这是 Helen "显式优于隐式"哲学在上下文管理上的核心体现。
+核心口诀：**"spawn 即隔离，接力靠显式，调试用追踪，恢复用 --session"**
 
-#### ❌ 反模式：假设自动继承
-
-```helen
-// 错误：以为 spawn 出去的 worker 会自动共享 main 的 transcript
-agent Worker(task: str, ch: Channel) {
-    main {
-        // ❌ 这里的 session_id 不是 main 的那个！
-        let sid = get_session_id()
-        ch.send("done in " + sid)
-        // main 拿到这个 ID 后找不到对应 transcript，因为 spawn 创建了新 session
-    }
-}
-
-// 错误：以为重启程序后 get_session_id() 还能拿到之前的 ID
-main {
-    let sid = get_session_id()
-    // ❌ 下次运行程序，sid 就变了
-}
-```
-
-#### ✅ 正确模式：三种接力方式
-
-**模式 A：显式传递 session_id（适用于 spawn 场景）**
-
-```helen
-agent Worker(task: str, parent_sid: str, ch: Channel) {
-    main {
-        resume_session(parent_sid)  // 显式继承父 transcript
-        // 现在 get_session_id() 与父相同
-        let result = llm act "执行任务: " + task
-        ch.send(result)
-    }
-}
-
-main {
-    let parent_sid = get_session_id()
-    let m = spawn Worker("分析日志", parent_sid)
-    let result = m.receive()
-    print("Worker 结果: " + result)
-}
-```
-
-**模式 B：SharedStore 显式保存（适用于跨 agent 数据交换）**
-
-> ⚠️ 注意：`working_memory_set(key, value)` 只接受 5 个固定 key（`task` / `active_files` / `decisions` / `todos` / `errors`），**不是通用 key-value 存储**。跨 agent 的结构化数据交换应使用 `shared store`。
-
-```helen
-shared store AnalysisStore {
-    results: dict = {}
-}
-
-agent Analyzer(file: str, ch: Channel) {
-    main {
-        let result = llm act "分析文件 " + file + " 的 bug"
-        AnalysisStore.results[file] = result   // 显式保存到 SharedStore
-        ch.send({"status": "ok", "file": file})
-    }
-}
-
-main {
-    let m = spawn Analyzer("main.py")
-    let msg = m.receive()
-    if msg["status"] == "ok" {
-        let data = AnalysisStore.results[msg["file"]]  // 显式取回
-        print("分析结果: " + data)
-    }
-}
-```
-
-> 💡 `working_memory_set` 适合**自动跟踪**（LLM 看到的"当前任务/活动文件/最近决策"），`SharedStore` 适合**跨 agent 结构化数据交换**。
-
-**模式 C：持久化 session_id（适用于跨进程恢复）**
-
-v1.24+ 支持在启动时直接恢复历史 session，无需在代码中调用 `resume_session()`：
-
-```bash
-# 方式 1：CLI 参数（推荐，无需修改代码）
-helen --session=session_xxx file.helen
-helen repl --session=session_xxx
-
-# 方式 2：自动恢复最近的 session
-helen --resume-latest file.helen
-helen repl --resume-latest
-helen repl -r  # 简写
-```
-
-```python
-# 方式 3：Python API
-from helen.interpreter import Interpreter
-interp = Interpreter(session_id="session_xxx")
-```
-
-**代码内恢复（v1.23 之前的方式，仍然可用）**：
-
-```helen
-// 进程 1：保存当前 session_id 到文件
-main {
-    let my_sid = get_session_id()
-    write_file(".current_session", my_sid)  // 持久化
-    // ... 工作 ...
-}
-
-// 进程 2：读取并恢复
-main {
-    if file_exists(".current_session") {
-        let prev_sid = read_file(".current_session")
-        resume_session(prev_sid)  // 恢复之前的会话（运行时）
-        let history = replay_transcript()
-        print("恢复了 " + str(len(history)) + " 条历史消息")
-    }
-}
-```
-
-**`--session` vs `resume_session()` 的区别**：
-
-| 特性 | `--session` (v1.24 启动时) | `resume_session()` (运行时) |
-|------|---------------------------|---------------------------|
-| 时机 | 解释器启动前 | 程序运行中 |
-| 行为 | 直接复用指定 session | 导入历史消息到当前新 session |
-| transcript | 一个文件 | 两个文件 |
-| 适用场景 | REPL 继续工作、调试 | 代码中切换上下文 |
-
-#### 📊 决策表：何时用哪种接力方式
-
-| 场景 | 推荐模式 | 原因 |
-|------|---------|------|
-| spawn 子 agent 需要父 transcript | **A**: 传 parent_sid + `resume_session` | 同一进程内直接接力，开销最小 |
-| agent 产出需要被其他 agent 看到 | **B**: `shared store` + Channel 传递 | 结构化数据，避免 transcript 膨胀 |
-| 跨进程恢复对话（程序重启） | **C**: `--session` CLI 参数（v1.24）或代码内 `resume_session()` | CLI 参数无需修改代码 |
-| REPL 继续之前的工作 | **C**: `helen repl --resume-latest` | 自动找到最近的 session |
-| 长期知识沉淀（跨项目） | `export_transcript` + 外部知识库 | transcript 是运行时的，知识是持久的 |
-| 多 agent 并行写同一份上下文 | SharedStore + 显式同步 | Channel 是 1:1，SharedStore 支持多写者 |
-| 调试多 agent 协作 / 分析执行流程 | **D**: v1.23.7 自动追踪 + `replay_full_session` | 自动记录 spawn 关系，聚合查看所有消息 |
-| 清理旧 transcript（避免孤儿） | **D**: v1.23.7 级联删除 | 自动删除 spawn 子 session |
-
-**模式 D：v1.23.7+ 自动追踪（推荐用于调试和分析）**
-
-v1.23.7 引入了 spawn 关系的自动追踪和管理：
-
-```helen
-// 自动记录 spawn 关系（无需手动传递 parent_sid）
-main {
-    let m = spawn Worker("任务")  // 自动记录 parent_session_id
-    let result = m.receive()
-}
-
-// 查询 spawn 树（调试和分析）
-let tree = get_spawn_tree()
-print("Root: " + tree["session_id"])
-对于 tree["children"] 中的 每个子 {
-    打印("  Spawn: " + 每个子["session_id"])
-}
-
-// 聚合查看所有 spawn 的消息
-let all_messages = replay_full_session()
-对于 all_messages 中的 msg {
-    打印("[" + msg["session_id"] + "] " + msg["role"] + ": " + msg["content"][:50])
-}
-
-// 级联删除（避免孤儿 transcript）
-删除会话("session_abc", 级联=true)  // 删除主 session + 所有 spawn
-```
-
-**优势**：
-- ✅ 自动追踪：无需手动传递 parent_sid
-- ✅ 完整视图：replay_full_session() 聚合所有 spawn 的消息
-- ✅ 简化清理：级联删除避免孤儿 transcript
-- ✅ 调试友好：可以查看完整的 spawn 树和消息流
-
-> 💡 **何时用模式 D**：当你需要**调试多 agent 协作**、**分析执行流程**、或**清理旧 transcript** 时。对于**运行时上下文接力**，仍然推荐模式 A（显式传递）或模式 B（SharedStore）。
-
-> 📚 **完整 API**：参见 `helen-stdlib` skill 的 "Spawn 关系追踪" 和 "级联删除" 章节
-
-#### 🔑 核心口诀
-
-> **"spawn 即隔离，接力靠显式，调试用追踪，恢复用 --session"**
->
-> - spawn 出去的 agent 默认拿不到父上下文 → 必须传参 + `resume_session`（模式 A/B）
-> - 重启程序后 transcript 不会自动接上 → 用 `--session` 或 `--resume-latest` 启动恢复（模式 C，v1.24+）
-> - 跨 agent 结构化数据 → `shared store` + Channel 传递，别指望自动共享
-> - `working_memory_set` 仅用于**5 个固定字段**（`task` / `active_files` / `decisions` / `todos` / `errors`），由 Helen 自动跟踪工具调用；**不是通用 KV 存储**
-> - v1.23.7+ 自动追踪 spawn 关系 → 调试和分析时用 `replay_full_session()` + 级联删除（模式 D）
-
-#### 📚 关联
-
-- 设计原理详见 `helen-agent-patterns` 模式 4（spawn + Channel）
-- v1.23.7 spawn transcript 管理 API 详见 `helen-stdlib` skill
-- v1.24 启动时 session 恢复详见 `helen-stdlib` skill 的 "启动时恢复 Session" 章节
-- API 参考详见 `helen-stdlib` 中 `get_session_id` / `resume_session` / `working_memory_*` 章节
+> 💡 完整的上下文接力模式（spawn 传参、SharedStore、--session 恢复、自动追踪）详见 **helen-agent-collaboration** skill。
 
 ## 完整工作流示例
 
+四阶段闭环示例（以 JWT 认证模块为例）：
+
 ```helen
 // Phase 1: 契约设计
-let requirement = "实现一个安全的用户认证模块"
-let context = "项目: auth_service, 需要 JWT 支持"
-let contract = call_contractor(requirement, context)
-print("✅ Phase 1 完成: 契约设计")
-print(contract)
+let contract = call_contractor("实现用户认证模块", "需要 JWT 支持")
 
-// 用户确认契约后继续
-
-// Phase 2 RED: 生成测试
-let source = ""  // 空实现
-let tests = call_test_builder(source, contract)
+// Phase 2 RED-GREEN: TDD 开发
+let tests = call_test_builder("", contract)
 write_file("tests/test_auth.helen", tests)
-let red_check = run_helen_tests("tests/")
-print("✅ Phase 2 RED 完成: 测试全部 FAIL")
-
-// Phase 2 GREEN: 编写实现
-let impl = call_implementer(source, tests, contract)
+let impl = call_implementer("", tests, contract)
 write_file("src/auth.helen", impl)
-let green_check = run_helen_tests("tests/")
-if green_check["success"] {
-    print("✅ Phase 2 GREEN 完成: 测试全部 PASS")
-}
 
 // Phase 3: 质量评估
-let before = get_quality_scores("src/auth.helen")
-let quality = call_quality_gate("src/auth.helen", before)
-print("✅ Phase 3 完成: 质量评估")
-print(quality)
-
+let quality = call_quality_gate("src/auth.helen")
 if quality["verdict"] == "NEEDS_IMPROVEMENT" {
     // 回到 Phase 2 改进
-    print("⚠️ 质量不达标，需要改进")
 }
 
 // Phase 4: 技能评估
-let summary = "实现了 JWT 认证模块，发现需要处理 token 过期的边界情况"
-let files = "src/auth.helen, tests/test_auth.helen"
-let skills = call_skill_evaluator(summary, files)
-print("✅ Phase 4 完成: 技能评估")
-print(skills)
+let skills = call_skill_evaluator("实现了 JWT 认证", "src/auth.helen, tests/test_auth.helen")
 ```
 
 ## Helen 语法注意事项
@@ -515,215 +305,49 @@ test_case("valid input", "test_function")
 
 ## 质量改进建议
 
-### 安全性改进
+**安全性**：输入验证 + 参数化查询（避免 SQL 注入），禁止硬编码密钥。
+
+**可维护性**：提取重复逻辑为公共函数，避免多处重复的错误处理代码。
 
 ```helen
-// ❌ 不安全
-fn process_user_input(input: str): map {
-    let query = "SELECT * FROM users WHERE name = '" + input + "'"
-    // SQL 注入风险
-}
-
-// ✅ 安全
-fn process_user_input(input: str): map {
-    if !is_valid_input(input) {
-        return create_error(ERROR_INVALID_INPUT, "Invalid input")
-    }
-    let query = "SELECT * FROM users WHERE name = ?"
-    let params = [input]
-    // 使用参数化查询
-}
-```
-
-### 可维护性改进
-
-```helen
-// ❌ 难维护（重复逻辑）
+// ❌ 重复逻辑散布多处
 fn process_a(input: str): map {
-    if len(input) == 0 {
-        return {"status": "error", "code": 1001}
-    }
-    // ... 处理逻辑
+    if len(input) == 0 { return {"status": "error", "code": 1001} }
+    // ...
 }
 
-fn process_b(input: str): map {
-    if len(input) == 0 {
-        return {"status": "error", "code": 1001}
-    }
-    // ... 类似的处理逻辑
-}
-
-// ✅ 易维护（提取公共函数）
+// ✅ 提取公共验证函数
 fn validate_input(input: str): map {
-    if len(input) == 0 {
-        return create_error(1001, "Empty input")
-    }
+    if len(input) == 0 { return create_error(1001, "Empty input") }
     return create_success(input)
-}
-
-fn process_a(input: str): map {
-    let validation = validate_input(input)
-    if validation["status"] == "error" {
-        return validation
-    }
-    // ... 处理逻辑
 }
 ```
 
 ## 技能自进化示例
 
-### 场景 1：发现新陷阱
+每次任务完成后，评估是否产生新技能或需要更新现有技能：
 
+**场景 1：发现新陷阱** → 创建新技能
 ```helen
-// 任务：实现递归斐波那契
-// 问题：n > 30 时栈溢出
-
-let task_summary = """
-实现了递归斐波那契函数，发现 n > 30 时会导致栈溢出。
-解决方案：改用迭代实现，或使用尾递归优化。
-"""
-
-// SkillEvaluator 评估
+let task_summary = "递归斐波那契 n>30 栈溢出，改用迭代实现"
 let evaluation = call_skill_evaluator(task_summary, "src/math.helen")
-
-// 结果：建议创建新技能
-// {
-//   "new_skills": [{
-//     "name": "recursion-stack-overflow",
-//     "category": "error-patterns",
-//     "tags": "[helen, recursion, stack-overflow, performance]",
-//     "content": "# 递归栈溢出\n\n## 触发条件\n- 递归深度 > 30\n- 无尾递归优化\n\n## 解决方案\n1. 改用迭代实现\n2. 使用尾递归（如果 Helen 支持）\n3. 增加递归深度检查"
-//   }]
-// }
-
-save_new_skill("recursion-stack-overflow", "error-patterns", "[helen, recursion, stack-overflow]", "...")
+// 建议创建 "recursion-stack-overflow" 技能
 ```
 
-### 场景 2：更新现有技能
-
+**场景 2：更新现有技能** → 补充文档
 ```helen
-// 任务：使用 helen-testing 技能编写测试
-// 问题：发现技能文档没提到 mock 对象必须在 test_suite 外部定义
-
-let task_summary = """
-使用 helen-testing 技能编写测试，发现 mock 对象必须在 test_suite 外部定义，
-不能在 test_case 内部定义，否则会导致作用域错误。
-"""
-
-// SkillEvaluator 评估
+let task_summary = "发现 helen-testing 未说明 mock 对象必须在 test_suite 外部定义"
 let evaluation = call_skill_evaluator(task_summary, "tests/test_api.helen")
-
-// 结果：建议更新现有技能
-// {
-//   "updates": [{
-//     "name": "helen-testing",
-//     "path": "~/.helen/skills/software-development/helen-testing/SKILL.md",
-//     "addition": "\n## 新陷阱\n- mock 对象必须在 test_suite 外部定义，不能在 test_case 内部"
-//   }]
-// }
-
-update_existing_skill("~/.helen/skills/software-development/helen-testing/SKILL.md", "## 新陷阱\n...")
+// 建议更新 helen-testing 技能文档
 ```
 
 ---
 
 ## 开发工作流中的缓存管理
 
-### 开发环境 vs 生产环境
+开发时需注意 ImportResolver 缓存行为：CLI 每次新进程自动重新加载，REPL 和 Web 服务的长进程会缓存已加载模块。开发时优先用 CLI，REPL 中修改文件后用 `:reset` 重置。
 
-| 环境 | 缓存行为 | 建议做法 |
-|------|---------|---------|
-| **CLI 开发** (`helen file.helen`) | 每次新进程，自动重新加载 | ✅ 无需特殊处理 |
-| **REPL 开发** | 进程内缓存，修改后不生效 | ⚠️ 需手动清除或重启 REPL |
-| **Web 服务** | 长进程，缓存持续存在 | ⚠️ 实现热重载或每次新建 Interpreter |
-| **生产环境** | 追求稳定性，禁用热重载 | ✅ 预加载，运行时不重新编译 |
-
-### 开发时的最佳实践
-
-```bash
-# 1. 优先使用 CLI 开发
-helen my_agent.helen              # 每次新进程，自动重新加载
-helen check my_agent.helen        # 语法检查，不执行
-
-# 2. REPL 中开发时，定期重置
-:reset                            # 重置 REPL 环境
-
-# 3. Web 服务开发时，提供热重载 API
-# POST /reload → 清除 ImportResolver 缓存
-```
-
-### Python 集成时的缓存管理
-
-```python
-# 开发环境：每次都重新加载
-from helen.interpreter import Interpreter
-
-def run_helen(file_path: str):
-    interp = Interpreter()  # 新建实例 = 清空缓存
-    return interp.execute_file(file_path)
-
-# 生产环境：预加载 + 复用
-class HelenService:
-    def __init__(self, agent_file: str):
-        self.interp = Interpreter()
-        self.interp.execute_file(agent_file)  # 启动时加载一次
-    
-    def run(self):
-        return self.interp.execute("call MainAgent()")
-```
-
-### 常见陷阱
-
-**❌ 陷阱 1**: 在 REPL 中修改 `.helen` 文件后继续测试
-```python
-# REPL 中
-interp.execute_file("agent.helen")  # 加载 v1
-# 修改 agent.helen...
-interp.execute_file("agent.helen")  # ❌ 仍是 v1！
-```
-
-**✅ 解决**: 重启 REPL 或手动清除缓存
-```python
-interp.import_resolver._cached_results.clear()
-interp.import_resolver._loaded.clear()
-```
-
-**❌ 陷阱 2**: Web 服务全局复用 Interpreter
-```python
-interp = Interpreter()  # 全局实例
-
-@app.post("/chat")
-def chat():
-    return interp.execute_file("chat_agent.helen")  # ❌ 永远用首次加载的版本
-```
-
-**✅ 解决**: 每次请求新建或使用 mtime 检查
-```python
-@app.post("/chat")
-def chat():
-    interp = Interpreter()  # 每次新建
-    return interp.execute_file("chat_agent.helen")
-```
-
-### 调试工具
-
-```python
-# 检查缓存状态
-def show_cache_status(interp):
-    print(f"缓存文件数: {len(interp.import_resolver._cached_results)}")
-    print(f"已加载文件:")
-    for path in interp.import_resolver._loaded:
-        print(f"  - {path}")
-
-# 使用
-show_cache_status(interp)
-```
-
-### 相关文档
-
-- `wiki/runtime/import.md` — 缓存机制详解
-- `helen-agent-patterns` — Agent 开发模式
-- `helen-stdlib` — stdlib 使用注意事项
+> 💡 开发时的缓存管理（REPL/Web 服务陷阱、Python 集成、调试工具）详见 **helen-language-development** skill § ImportResolver 缓存机制。
 
 ---
 
@@ -733,3 +357,10 @@ show_cache_status(interp)
 - [Helen 标准库](./helen-stdlib/SKILL.md)
 - [TDD 工作流](./test-driven-development/SKILL.md)
 - [代码质量评估](./code-quality/SKILL.md)
+
+## 相关技能
+
+- **helen-agent-patterns** — Agent 设计模式
+- **helen-agent-collaboration** — 多 Agent 协作模式
+- **helen-testing** — 测试框架使用指南
+- **helen-quality** — 代码质量评估

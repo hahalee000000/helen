@@ -1,19 +1,63 @@
 ---
-name: writing-plans
-description: "Write implementation plans: bite-sized tasks, paths, code."
-version: 1.1.0
-author: Hermes Agent (adapted from obra/superpowers)
-license: MIT
-platforms: [linux, macos, windows]
-metadata:
-  hermes:
-    tags: [planning, design, implementation, workflow, documentation]
-    related_skills: [subagent-driven-development, test-driven-development, requesting-code-review]
+name: planning
+description: "Plan mode and implementation plan writing: bite-sized tasks, exact paths, complete code"
+version: 1.0.0
+author: Helen Team
+tags: [planning, plan-mode, implementation, workflow, design, documentation]
+related_skills: [subagent-driven-development, test-driven-development]
 ---
 
-# Writing Implementation Plans
+# Planning
 
-## Overview
+Use this skill when you need to create an implementation plan before execution.
+
+## Part 1: Plan Mode
+
+### Core Behavior
+
+When in plan mode, you are planning only:
+
+- Do not implement code
+- Do not edit project files except the plan markdown file
+- Do not run mutating terminal commands, commit, push, or perform external actions
+- You may inspect the repo or other context with read-only commands/tools when needed
+- Your deliverable is a markdown plan saved under `.helen/plans/`
+
+### Output Requirements
+
+Write a markdown plan that is concrete and actionable. Include when relevant:
+
+- Goal
+- Current context / assumptions
+- Proposed approach
+- Step-by-step plan
+- Files likely to change
+- Tests / validation
+- Risks, tradeoffs, and open questions
+
+If the task is code-related, include exact file paths, likely test targets, and verification steps.
+
+### Save Location
+
+Save the plan under:
+- `.helen/plans/YYYY-MM-DD_HHMMSS-<slug>.md`
+
+Treat that as relative to the active working directory. If the runtime provides a specific target path, use that exact path.
+
+### Interaction Style
+
+- If the request is clear enough, write the plan directly
+- If no explicit instruction accompanies `/plan`, infer the task from the current conversation context
+- If it is genuinely underspecified, ask a brief clarifying question instead of guessing
+- After saving the plan, reply briefly with what you planned and the saved path
+
+---
+
+## Part 2: Writing Implementation Plans Well
+
+The craft of authoring a good implementation plan — the content that goes inside the markdown file.
+
+### Overview
 
 Write comprehensive implementation plans assuming the implementer has zero context for the codebase and questionable taste. Document everything they need: which files to touch, complete code, testing commands, docs to check, how to verify. Give them bite-sized tasks. DRY. YAGNI. TDD. Frequent commits.
 
@@ -21,21 +65,19 @@ Assume the implementer is a skilled developer but knows almost nothing about the
 
 **Core principle:** A good plan makes implementation obvious. If someone has to guess, the plan is incomplete.
 
-## When to Use
+### When to Use
 
 **Always use before:**
 - Implementing multi-step features
 - Breaking down complex requirements
 - Delegating to subagents via subagent-driven-development
 
-**Not for design documents:** If the task is about architecture decisions, language design, system design, or API contracts (capturing *what* and *why*, not *how to implement*), use the `design-specification` skill instead. Design specs answer philosophical questions and trade-offs; implementation plans answer file paths, code, and test commands.
-
 **Don't skip when:**
 - Feature seems simple (assumptions cause bugs)
 - You plan to implement it yourself (future you needs guidance)
 - Working alone (documentation matters)
 
-## Bite-Sized Task Granularity
+### Bite-Sized Task Granularity
 
 **Each task = 2-5 minutes of focused work.**
 
@@ -64,16 +106,14 @@ Every step is one action:
 [15 lines, 1 file]
 ```
 
-## Plan Document Structure
+### Plan Document Structure
 
-### Header (Required)
+#### Header (Required)
 
 Every plan MUST start with:
 
 ```markdown
 # [Feature Name] Implementation Plan
-
-> **For Hermes:** Use subagent-driven-development skill to implement this plan task-by-task.
 
 **Goal:** [One sentence describing what this builds]
 
@@ -84,7 +124,7 @@ Every plan MUST start with:
 ---
 ```
 
-### Task Structure
+#### Task Structure
 
 Each task follows this format:
 
@@ -131,9 +171,9 @@ git commit -m "feat: add specific feature"
 ```
 ````
 
-## Writing Process
+### Writing Process
 
-### Step 1: Understand Requirements
+#### Step 1: Understand Requirements
 
 Read and understand:
 - Feature requirements
@@ -141,7 +181,7 @@ Read and understand:
 - Acceptance criteria
 - Constraints
 
-### Step 2: Explore the Codebase
+#### Step 2: Explore the Codebase
 
 Use Helen tools to understand the project:
 
@@ -159,7 +199,7 @@ find_files(path="tests/", pattern="**/test_*.py")
 read_file(path="src/app.py")
 ```
 
-### Step 3: Design Approach
+#### Step 3: Design Approach
 
 Decide:
 - Architecture pattern
@@ -167,7 +207,7 @@ Decide:
 - Dependencies needed
 - Testing strategy
 
-### Step 4: Write Tasks
+#### Step 4: Write Tasks
 
 Create tasks in order:
 1. Setup/infrastructure
@@ -176,7 +216,7 @@ Create tasks in order:
 4. Integration
 5. Cleanup/documentation
 
-### Step 5: Add Complete Details
+#### Step 5: Add Complete Details
 
 For each task, include:
 - **Exact file paths** (not "the config file" but `src/config/settings.py`)
@@ -184,7 +224,7 @@ For each task, include:
 - **Exact commands** with expected output
 - **Verification steps** that prove the task works
 
-### Step 6: Review the Plan
+#### Step 6: Review the Plan
 
 Check:
 - [ ] Tasks are sequential and logical
@@ -195,23 +235,14 @@ Check:
 - [ ] No missing context
 - [ ] DRY, YAGNI, TDD principles applied
 
-### Step 7: Save the Plan
+### Principles
 
-```bash
-mkdir -p docs/plans
-# Save plan to docs/plans/YYYY-MM-DD-feature-name.md
-git add docs/plans/
-git commit -m "docs: add implementation plan for [feature]"
-```
-
-## Principles
-
-### DRY (Don't Repeat Yourself)
+#### DRY (Don't Repeat Yourself)
 
 **Bad:** Copy-paste validation in 3 places
 **Good:** Extract validation function, use everywhere
 
-### YAGNI (You Aren't Gonna Need It)
+#### YAGNI (You Aren't Gonna Need It)
 
 **Bad:** Add "flexibility" for future requirements
 **Good:** Implement only what's needed now
@@ -232,7 +263,7 @@ class User:
         self.email = email
 ```
 
-### TDD (Test-Driven Development)
+#### TDD (Test-Driven Development)
 
 Every task that produces code should include the full TDD cycle:
 1. Write failing test
@@ -242,7 +273,7 @@ Every task that produces code should include the full TDD cycle:
 
 See `test-driven-development` skill for details.
 
-### Frequent Commits
+#### Frequent Commits
 
 Commit after every task:
 ```bash
@@ -250,29 +281,29 @@ git add [files]
 git commit -m "type: description"
 ```
 
-## Common Mistakes
+### Common Mistakes
 
-### Vague Tasks
+#### Vague Tasks
 
 **Bad:** "Add authentication"
 **Good:** "Create User model with email and password_hash fields"
 
-### Incomplete Code
+#### Incomplete Code
 
 **Bad:** "Step 1: Add validation function"
 **Good:** "Step 1: Add validation function" followed by the complete function code
 
-### Missing Verification
+#### Missing Verification
 
 **Bad:** "Step 3: Test it works"
 **Good:** "Step 3: Run `pytest tests/test_auth.py -v`, expected: 3 passed"
 
-### Missing File Paths
+#### Missing File Paths
 
 **Bad:** "Create the model file"
 **Good:** "Create: `src/models/user.py`"
 
-## Execution Handoff
+### Execution Handoff
 
 After saving the plan, offer the execution approach:
 
