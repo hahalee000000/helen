@@ -1,119 +1,119 @@
-# 教程 07: 并发编程 (spawn)
+# Tutorial 07: Concurrent Programming (spawn)
 
-> spawn / Channel 消息队列 / mailbox_select / 显式共享 / fire-and-forget / 错误处理
-
----
-
-## 概述
-
-Helen v1.18 使用 `spawn` + Channel 消息队列实现并发。`spawn Agent(...)` 返回一个 Channel（邮箱），用于双向通信。
-
-**核心原则**：
-- 一个并发原语（`spawn`）+ 一个通信机制（Channel 消息队列）
-- **隔离优先**：snapshot 全部深复制，agent 默认与外部环境完全隔离
-- **上下文显式传递**：spawn 创建的 agent **完全看不到**父 agent 的变量、transcript、working memory——它只能看到传入的参数和 Channel。**调用前必须显式决定要传什么上下文**
-- 共享是显式的：通过 Channel 传递 SharedStore 引用
-
-> 💡 这条原则适用于所有 agent 调用，不只是 spawn。详见 [教程 05: 核心设计原则](05-agents.md#核心设计原则调用者决定上下文)。
+> spawn / Channel message queue / mailbox_select / explicit sharing / fire-and-forget / error handling
 
 ---
 
-## spawn 基本用法
+## Overview
+
+Helen v1.18 uses `spawn` + Channel message queues for concurrency. `spawn Agent(...)` returns a Channel (mailbox) for bidirectional communication.
+
+**Core principles**:
+- One concurrency primitive (`spawn`) + one communication mechanism (Channel message queue)
+- **Isolation first**: snapshot deep-copies everything; agents are fully isolated from the outer environment by default
+- **Explicit context passing**: a spawned agent **cannot see** the parent agent's variables, transcript, or working memory at all — it can only see the arguments passed in and the Channel. **You must explicitly decide what context to pass before spawning**
+- Sharing is explicit: pass SharedStore references through Channels
+
+> 💡 This principle applies to all agent calls, not just spawn. See [Tutorial 05: Core Design Principles](05-agents.md#core-design-principle-caller-decides-context).
+
+---
+
+## Basic spawn Usage
 
 ```helen
 agent Worker(task: str, reply: Channel) {
-    description "后台工作 agent"
+    description "Background worker agent"
     main {
-        let result = "处理完成: " + task
+        let result = "Processing complete: " + task
         reply.send(result)
-        // 函数结束 → reply 自动关闭 → 主线程 receive() 收到 null
+        // Function ends → reply auto-closes → main thread receive() gets null
     }
 }
 
 main {
-    let mailbox = spawn Worker("数据分析")
+    let mailbox = spawn Worker("data analysis")
     let result = mailbox.receive()
-    print(result)  // "处理完成: 数据分析"
+    print(result)  // "Processing complete: data analysis"
 }
 ```
 
-**要点**：
-- `spawn` 返回 `Channel` 类型（邮箱）
-- spawned agent 的**最后一个参数**接收通信 channel（由 spawn 自动注入）
-- `reply.send(msg)` 发送消息到主线程
-- `mailbox.receive()` 阻塞等待消息
+**Key points**:
+- `spawn` returns a `Channel` type (mailbox)
+- The spawned agent's **last parameter** receives the communication channel (auto-injected by spawn)
+- `reply.send(msg)` sends a message to the main thread
+- `mailbox.receive()` blocks waiting for a message
 
 ---
 
-## Channel 消息队列
+## Channel Message Queue
 
 ### send / receive
 
 ```helen
-// 发送消息
+// Send a message
 mailbox.send("hello")
 
-// 阻塞接收
+// Blocking receive
 let msg = mailbox.receive()
 
-// 带超时的接收
-let msg = mailbox.receive(5.0)  // 5 秒超时，返回 null
+// Receive with timeout
+let msg = mailbox.receive(5.0)  // 5 second timeout, returns null
 ```
 
-### try_receive（非阻塞）
+### try_receive (non-blocking)
 
 ```helen
 let msg = mailbox.try_receive()
 if msg == null {
-    print("暂无消息")
+    print("No messages yet")
 }
 ```
 
-### cancel（取消）
+### cancel
 
 ```helen
-mailbox.cancel()  // 发送取消信号 + 关闭通道
+mailbox.cancel()  // Send cancel signal + close channel
 ```
 
-spawned agent 内部可通过 `reply.cancel_event` 检查取消信号：
+The spawned agent can check the cancel signal via `reply.cancel_event`:
 
 ```helen
 agent LongTask(reply: Channel) {
     main {
         for i in range(100) {
             if reply.cancel_event.is_set() { break }
-            // 执行工作...
-            reply.send("进度: " + str(i))
+            // Do work...
+            reply.send("Progress: " + str(i))
         }
     }
 }
 ```
 
-### 流式中断（cancel_event + on_chunk 返回 false）
+### Streaming Interrupt (cancel_event + on_chunk returning false)
 
-当 spawned agent 正在流式输出 LLM 响应时，主线程可通过 `mailbox.cancel()` 发送取消信号。spawned agent 内部可通过两种方式响应：
+When a spawned agent is streaming LLM output, the main thread can send a cancel signal via `mailbox.cancel()`. The spawned agent can respond in two ways:
 
-1. **检查 `reply.cancel_event`**：在循环中检测取消信号
-2. **`on_chunk` 回调返回 `false`**：立即中断 LLM 流式输出
+1. **Check `reply.cancel_event`**: detect the cancel signal inside a loop
+2. **`on_chunk` callback returns `false`**: immediately interrupt LLM streaming
 
 ```helen
 agent StreamWorker(prompt: str, reply: Channel) {
     main {
         let result = llm act prompt on_chunk fn(chunk: str) {
-            // 检查取消信号：如果主线程已取消，返回 false 中断流式
+            // Check cancel signal: if main thread has cancelled, return false to stop streaming
             if reply.cancel_event.is_set() {
-                return false  // 立即停止 LLM 流式输出
+                return false  // Immediately stop LLM streaming
             }
             reply.send({type: "chunk", data: chunk})
-            return true  // 继续接收下一个 chunk
+            return true  // Continue receiving next chunk
         }
         reply.send({type: "done", data: result})
     }
 }
 
 main {
-    let mailbox = spawn StreamWorker("写一篇长文")
-    // 读取前 3 个 chunk 后取消
+    let mailbox = spawn StreamWorker("Write a long essay")
+    // Cancel after reading the first 3 chunks
     let count = 0
     loop {
         let msg = mailbox.receive()
@@ -121,20 +121,20 @@ main {
         print(msg["data"])
         count = count + 1
         if count >= 3 {
-            mailbox.cancel()  // 发送取消信号
+            mailbox.cancel()  // Send cancel signal
             break
         }
     }
 }
 ```
 
-### close（关闭）
+### close
 
 ```helen
-mailbox.close()  // 关闭通道，对端 receive() 返回 null
+mailbox.close()  // Close channel; the other end's receive() returns null
 ```
 
-### 完整示例：流式进度
+### Full Example: Streaming Progress
 
 ```helen
 agent LongTask(prompt: str, reply: Channel) {
@@ -147,14 +147,14 @@ agent LongTask(prompt: str, reply: Channel) {
 }
 
 main {
-    let mailbox = spawn LongTask("写一篇关于 AI 的论文")
+    let mailbox = spawn LongTask("Write an AI research paper")
     loop {
         let msg = mailbox.receive()
         if msg == null { break }
         if msg["type"] == "progress" {
             print(msg["data"])
         } else {
-            print("完成: " + msg["data"])
+            print("Done: " + msg["data"])
         }
     }
 }
@@ -162,33 +162,33 @@ main {
 
 ---
 
-## 竞争模式 (mailbox_select)
+## Racing Pattern (mailbox_select)
 
-`mailbox_select([m1, m2, ...])` 从多个 channel 中接收第一个到达的消息：
+`mailbox_select([m1, m2, ...])` receives the first message that arrives from multiple channels:
 
 ```helen
 agent StrategyA(problem: str, reply: Channel) {
     main {
-        let result = llm act "策略A解决: " + problem
+        let result = llm act "Strategy A solves: " + problem
         reply.send(result)
     }
 }
 
 agent StrategyB(problem: str, reply: Channel) {
     main {
-        let result = llm act "策略B解决: " + problem
+        let result = llm act "Strategy B solves: " + problem
         reply.send(result)
     }
 }
 
 main {
-    let m1 = spawn StrategyA("复杂问题")
-    let m2 = spawn StrategyB("复杂问题")
+    let m1 = spawn StrategyA("complex problem")
+    let m2 = spawn StrategyB("complex problem")
 
     let result = mailbox_select([m1, m2])
-    print("最快结果: " + result["message"])
+    print("Fastest result: " + result["message"])
 
-    // 取消另一个
+    // Cancel the other one
     if result["endpoint"] == m1 {
         m2.cancel()
     } else {
@@ -199,9 +199,9 @@ main {
 
 ---
 
-## 显式共享（通过 Channel 传递 SharedStore）
+## Explicit Sharing (Passing SharedStore via Channel)
 
-spawned agent 默认与外部环境完全隔离。如需访问主线程的 shared store，通过 channel 显式传递引用：
+Spawned agents are fully isolated from the outer environment by default. To access the main thread's shared store, explicitly pass the reference through the channel:
 
 ```helen
 shared store Counter {
@@ -212,7 +212,7 @@ shared store Counter {
 
 agent Worker(reply: Channel) {
     main {
-        // 从 channel 接收 shared store 引用
+        // Receive shared store reference from channel
         let store = reply.receive()
         store.inc()
         store.inc()
@@ -222,33 +222,33 @@ agent Worker(reply: Channel) {
 
 main {
     let mailbox = spawn Worker()
-    mailbox.send(Counter)           // 显式传递引用
+    mailbox.send(Counter)           // Explicitly pass reference
     print(mailbox.receive())        // "done"
-    print(Counter.get())            // 2 — 同一个对象，修改可见
+    print(Counter.get())            // 2 — same object, modifications are visible
 }
 ```
 
-**为什么需要显式传递？**
-- snapshot 全部深复制，spawned agent 默认得到 SharedStore 的独立副本
-- 通过 channel 传递引用是**有意为之**的共享，开发者明确知道哪些状态被共享
+**Why explicit passing?**
+- Snapshots deep-copy everything; spawned agents get an independent copy of SharedStore by default
+- Passing references through channels is **intentional** sharing — the developer explicitly knows which state is shared
 
 ---
 
-## fire-and-forget
+## Fire-and-Forget
 
-不需要结果时，忽略 spawn 的返回值：
+When you don't need the result, ignore spawn's return value:
 
 ```helen
-spawn Logger("系统启动日志")
-spawn Monitor("健康检查")
-print("系统已启动")  // 立即执行，不等待 spawned agent 完成
+spawn Logger("System startup log")
+spawn Monitor("Health check")
+print("System started")  // Executes immediately, doesn't wait for spawned agents
 ```
 
 ---
 
-## 双向通信
+## Bidirectional Communication
 
-Channel 支持双向通信，主线程和 spawned agent 可以互发消息：
+Channels support bidirectional communication — the main thread and spawned agent can send messages to each other:
 
 ```helen
 agent Calculator(reply: Channel) {
@@ -273,14 +273,14 @@ main {
 
 ---
 
-## 错误处理
+## Error Handling
 
-spawned agent 中未捕获的异常会通过 channel 传播：
+Uncaught exceptions in spawned agents propagate through the channel:
 
 ```helen
 agent RiskyTask(reply: Channel) {
     main {
-        let result = 100 / 0  // 抛出异常
+        let result = 100 / 0  // Throws exception
         reply.send(result)
     }
 }
@@ -289,28 +289,28 @@ main {
     let mailbox = spawn RiskyTask()
     let msg = mailbox.receive()
     if msg != null && msg["__error__"] == true {
-        print("spawned agent 出错: " + msg["message"])
+        print("Spawned agent error: " + msg["message"])
     }
 }
 ```
 
-**生命周期**：
+**Lifecycle**:
 
-| 事件 | 行为 |
-|------|------|
-| spawned agent 正常结束 | `reply.close()` → 主线程 `receive()` 返回 null |
-| spawned agent 异常 | `reply.send({__error__: true, message: ...})` + `reply.close()` |
-| 主线程 `mailbox.cancel()` | cancel_event.set() → spawned agent 可检查取消信号 |
-| 主线程进程退出 | daemon 线程随之死亡 |
+| Event | Behavior |
+|-------|----------|
+| Spawned agent finishes normally | `reply.close()` → main thread `receive()` returns null |
+| Spawned agent throws exception | `reply.send({__error__: true, message: ...})` + `reply.close()` |
+| Main thread `mailbox.cancel()` | cancel_event.set() → spawned agent can check cancel signal |
+| Main thread process exits | Daemon threads die with it |
 
 ---
 
-## 中文别名
+## Chinese Aliases
 
-所有关键字和方法都有中文别名：
+All keywords and methods have Chinese aliases:
 
-| 英文 | 中文 |
-|------|------|
+| English | Chinese |
+|---------|---------|
 | `spawn` | `分生` |
 | `mailbox.send()` | `邮箱.发送()` |
 | `mailbox.receive()` | `邮箱.接收()` |
@@ -319,7 +319,7 @@ main {
 | `mailbox.close()` | `邮箱.关闭()` |
 | `mailbox_select([...])` | `邮箱选择([...])` |
 
-中文示例：
+Chinese example:
 
 ```helen
 智能体 工作者(任务: str, 回复: 消息通道) {
@@ -337,120 +337,120 @@ main {
 
 ---
 
-## 与旧 async/await 的对比
+## Comparison with Old async/await
 
-| 旧 async/await | 新 spawn |
-|----------------|---------------|
+| Old async/await | New spawn |
+|-----------------|-----------|
 | `let t = async Agent(...)` | `let m = spawn Agent(...)` |
 | `result = await t` | `result = m.receive()` |
 | `await [t1, t2]` | `[m1.receive(), m2.receive()]` |
-| `detach Agent(...)` | `spawn Agent(...)`（忽略返回值） |
+| `detach Agent(...)` | `spawn Agent(...)` (ignore return value) |
 
-**为什么替换？**
-- `async/await` 底层是线程池，与 `threading.Thread` 无本质区别
-- spawn + channel 能覆盖所有场景，且在流式、取消、竞争模式上更好
-- 一个并发原语比两个更清晰
-
----
-
-## 注意事项
-
-| 规则 | 说明 |
-|---|---|
-| `spawn` 参数 | 必须是 agent 调用 |
-| 最后一个参数 | 必须是 `Channel` 类型（由 spawn 自动注入） |
-| 返回类型 | `Channel`（主线程端点） |
-| 隔离 | snapshot 全部深复制，无例外 |
-| 共享 | 通过 channel 显式传递引用 |
-| daemon 线程 | spawned agent 在 daemon 线程中运行 |
+**Why the replacement?**
+- `async/await` was backed by a thread pool, with no essential difference from `threading.Thread`
+- spawn + channel covers all scenarios and is better for streaming, cancellation, and racing patterns
+- One concurrency primitive is clearer than two
 
 ---
 
-## Spawn Transcript 管理 (v1.23.7+)
+## Important Notes
 
-每个 spawn 的 agent 都有独立的 transcript session。v1.23.7 引入 spawn 关系追踪和级联管理功能。
-
-### 查询 Spawn 关系
-
-```helen
-// 获取当前 session 的所有直接子 session
-设 子会话 = 获取子会话()
-对于 子会话 中的 每个子 {
-    打印("Spawned: " + 每个子["session_id"])
-    打印("  Agent: " + 每个子["agent_name"])
-}
-
-// 获取完整 spawn 树（包括嵌套 spawn）
-设 会话树 = 获取会话树()
-打印("Root: " + 会话树["session_id"])
-对于 会话树["children"] 中的 每个子 {
-    打印("  Child: " + 每个子["session_id"])
-}
-```
-
-### 聚合查看
-
-```helen
-// 查看主 session + 所有 spawn 的完整执行流程
-设 所有消息 = 回放完整会话()
-对于 所有消息 中的 消息 {
-    打印("[" + 消息["session_id"] + "] " + 消息["role"] + ": " + 消息["content"][:50])
-}
-
-// 跨 spawn 搜索
-设 错误 = 搜索会话("error", 包含spawn=true)
-```
-
-### 级联删除
-
-删除 session 时，默认级联删除所有 spawn 子会话，避免孤儿 transcript：
-
-```helen
-// 删除 session 及其所有 spawn（默认）
-删除会话("session_abc123")
-
-// 只删除指定 session，保留 spawn
-删除会话("session_abc123", 级联=false)
-
-// 清理旧 session（级联删除 spawn）
-清理会话(保留数量=10)  // 保留最近 10 个，级联删除 spawn
-```
-
-**设计原理**：
-- Spawn 是子任务，生命周期应绑定到主 session
-- 避免孤儿 transcript（主 session 删除后，spawn 失去上下文）
-- 简化清理流程，无需手动查找和删除所有 spawn
-
-> **详细文档**：参见 `10-stdlib.md` 的 "Transcript 函数" 章节
+| Rule | Description |
+|------|-------------|
+| `spawn` argument | Must be an agent call |
+| Last parameter | Must be `Channel` type (auto-injected by spawn) |
+| Return type | `Channel` (main thread endpoint) |
+| Isolation | Snapshot deep-copies everything, no exceptions |
+| Sharing | Explicitly pass references through channels |
+| Daemon threads | Spawned agents run in daemon threads |
 
 ---
 
-## Session 恢复与调试 (v1.24+)
+## Spawn Transcript Management (v1.23.7+)
 
-### 启动时恢复 Session
+Each spawned agent has its own transcript session. v1.23.7 introduces spawn relationship tracking and cascading management.
 
-v1.24 支持在启动时指定恢复历史 session，方便调试和继续工作：
+### Querying Spawn Relationships
+
+```helen
+// Get all direct child sessions of the current session
+let children = get_spawned_sessions()
+for child in children {
+    print("Spawned: " + child["session_id"])
+    print("  Agent: " + child["agent_name"])
+}
+
+// Get the full spawn tree (including nested spawns)
+let tree = get_spawn_tree()
+print("Root: " + tree["session_id"])
+for child in tree["children"] {
+    print("  Child: " + child["session_id"])
+}
+```
+
+### Aggregate View
+
+```helen
+// View the main session + all spawned complete execution flow
+let all_messages = replay_full_session()
+for msg in all_messages {
+    print("[" + msg["session_id"] + "] " + msg["role"] + ": " + msg["content"][:50])
+}
+
+// Cross-spawn search
+let errors = search_transcript("error", include_spawned=true)
+```
+
+### Cascading Deletion
+
+When deleting a session, all spawned child sessions are cascade-deleted by default to avoid orphan transcripts:
+
+```helen
+// Delete session and all its spawns (default)
+delete_session("session_abc123")
+
+// Delete only the specified session, keep spawns
+delete_session("session_abc123", cascade=false)
+
+// Clean up old sessions (cascade-deletes spawns)
+cleanup_sessions(keep_count=10)  // Keep the most recent 10, cascade-delete spawns
+```
+
+**Design rationale**:
+- Spawns are child tasks; their lifecycle should be bound to the main session
+- Avoids orphan transcripts (spawns lose context after the main session is deleted)
+- Simplifies cleanup — no need to manually find and delete all spawns
+
+> **Detailed docs**: See the "Transcript Functions" section in `10-stdlib.md`
+
+---
+
+## Session Recovery and Debugging (v1.24+)
+
+### Recovering Sessions at Startup
+
+v1.24 supports specifying a historical session to recover at startup, convenient for debugging and continuing work:
 
 ```bash
-# 恢复指定 session
+# Recover a specific session
 helen --session=session_xxx file.helen
 helen repl --session=session_xxx
 
-# 自动恢复最近的 session
+# Automatically recover the most recent session
 helen --resume-latest file.helen
 helen repl --resume-latest
-helen repl -r  # 简写
+helen repl -r  # Shorthand
 ```
 
-### Python API 恢复 Session
+### Python API Session Recovery
 
 ```python
 from helen.interpreter import Interpreter
 
-# 恢复指定 session
+# Recover a specific session
 interp = Interpreter(session_id="session_xxx")
 
-# 恢复最近的 session
+# Recover the most recent session
 from helen.runtime.session_manager import SessionManager
 manager = SessionManager()
 sessions = manager.list_sessions()
@@ -459,30 +459,30 @@ if sessions:
     interp = Interpreter(session_id=latest_sid)
 ```
 
-### 调试 Spawn 执行流程
+### Debugging Spawn Execution Flow
 
-结合 session 恢复和 spawn 追踪，可以完整调试多 agent 协作：
+Combining session recovery and spawn tracking, you can fully debug multi-agent collaboration:
 
 ```bash
-# 1. 运行程序，记录 session_id
+# 1. Run the program, note the session_id
 helen my_agent.helen
-# 输出: 当前 session: session_abc123
+# Output: Current session: session_abc123
 
-# 2. 恢复 session，查看完整 spawn 树
+# 2. Recover the session, view the full spawn tree
 helen --session=session_abc123 debug.helen
 ```
 
 ```helen
-// debug.helen: 分析之前的执行流程
+// debug.helen: Analyze the previous execution flow
 main {
-    // 查看 spawn 树
+    // View spawn tree
     let tree = get_spawn_tree()
-    print("Spawn 树:")
+    print("Spawn tree:")
     for child in tree["children"] {
         print("  - " + child["session_id"])
     }
 
-    // 聚合查看所有消息
+    // Aggregate view of all messages
     let all = replay_full_session()
     for msg in all {
         print("[" + msg["session_id"] + "] " + msg["role"] + ": " + msg["content"][:50])
@@ -492,14 +492,14 @@ main {
 
 ---
 
-## 练习
+## Exercises
 
-1. 创建两个并发 agent，分别处理不同任务，用 `mailbox.receive()` 获取结果
-2. 实现竞争模式：两个 agent 解决同一问题，用 `mailbox_select` 取最快结果
-3. 实现双向通信：spawned agent 接收指令，返回计算结果
-4. 使用 shared store + channel 实现显式共享的计数器
+1. Create two concurrent agents handling different tasks, use `mailbox.receive()` to get results
+2. Implement a racing pattern: two agents solve the same problem, use `mailbox_select` to take the fastest result
+3. Implement bidirectional communication: spawned agent receives instructions and returns computation results
+4. Use shared store + channel to implement an explicitly-shared counter
 
 ---
 
-**最后更新**: 2026-07-22  
-**版本**: v1.24
+**Last updated**: 2026-07-22  
+**Version**: v1.24

@@ -1,106 +1,106 @@
-# Agent 提示词工程完全指南 — 来自 Claude Code 逆向工程的启示
+# The Complete Guide to Agent Prompt Engineering — Insights from Claude Code Reverse Engineering
 
-> 基于对 Claude Code v2.0.14 系统提示词的逆向工程、DeepAgents 框架源码分析，以及 Helen 语言自身的 agent 设计实践。
-> 原文：[The Complete Guide to Writing Agent System Prompts](https://fengliu.substack.com/) — Feng Liu, 2026-03-20
-> 本文：针对 Helen 语言改写，所有示例均为 Helen 语法
+> Based on reverse engineering of Claude Code v2.0.14 system prompts, DeepAgents framework source analysis, and Helen's own agent design practices.
+> Original: [The Complete Guide to Writing Agent System Prompts](https://fengliu.substack.com/) — Feng Liu, 2026-03-20
+> This version: Adapted for Helen; all examples use Helen syntax
 
-**日期**：2026-07-11
-**适用版本**：Helen v1.17+
-
----
-
-## 〇、本文定位
-
-这篇指南回答一个问题：**如何为 Helen 的 agent 写出高质量的 `prompt` 和 `description`？**
-
-它不教 Helen 语法（见 [[syntax/grammar]] 与 [[tutorial/05-agents]]），而是聚焦于 **agent 提示词的设计哲学、结构布局、写作原则、常见反模式**——这些是语法之外、决定 agent 质量的"软知识"。
-
-核心洞察来自对 Claude Code 系统提示词的逆向工程。Claude Code 本身就是一个复杂的 agent，其系统提示词经过 Anthropic 大量实战打磨。我们把这些经验**翻译到 Helen 的语境**—— Helen 的 `agent {}` 块、`prompt`/`description` 字段、`tools` 列表、`context {}` 配置，就是 Helen agent 的"系统提示词"。
+**Date**: 2026-07-11
+**Applicable version**: Helen v1.17+
 
 ---
 
-## 一、设计哲学：Harness Mindset
+## 0. Positioning of This Guide
+
+This guide answers one question: **How do you write high-quality `prompt` and `description` fields for Helen agents?**
+
+It does not teach Helen syntax (see [[syntax/grammar]] and [[tutorial/05-agents]]); instead, it focuses on the **design philosophy, structural layout, writing principles, and common anti-patterns** of agent prompts — the "soft knowledge" beyond syntax that determines agent quality.
+
+Core insights come from reverse engineering Claude Code's system prompt. Claude Code itself is a complex agent, and its system prompt has been extensively battle-tested by Anthropic. We **translate these lessons into Helen's context** — Helen's `agent {}` blocks, `prompt`/`description` fields, `tools` lists, and `context {}` configurations are the "system prompt" for Helen agents.
+
+---
+
+## 1. Design Philosophy: Harness Mindset
 
 > "An agent is a model. Not a framework. Not a prompt chain." — shareAI-lab/learn-claude-code
 
-LLM 已经会推理、规划、执行。你的 agent 提示词**不是教它思考**，而是**为它搭建工作环境**。
+LLMs already know how to reason, plan, and execute. Your agent prompt is **not teaching it to think** — it is **building its work environment**.
 
-像招一个资深工程师：你不会给他一份 20 步清单让他一步步照做。你会说：**我们是谁、边界在哪、什么是好的交付**，然后让他自己干活。
+Think of it like hiring a senior engineer: you would not give them a 20-step checklist to follow mechanically. You would say: **who we are, what the boundaries are, and what good delivery looks like**, then let them do their work.
 
-### 1.1 Agent 提示词的四项职责
+### 1.1 Four Responsibilities of an Agent Prompt
 
-Helen agent 的 `prompt` 只有四件事要做：
+A Helen agent's `prompt` has only four things to do:
 
-| # | 职责 | Helen 字段 | 例子 |
-|---|------|-----------|------|
-| 1 | 告诉它**是谁** | `description` | `"Review code for bugs and security issues"` |
-| 2 | 画出**边界** | `prompt` + `@sandbox` | `NEVER expose API keys` |
-| 3 | 定义**什么是好** | `prompt` | `Always explain changes before making them` |
-| 4 | 提供**工具和知识** | `tools` + `load_skill` | `tools = ["read_file", "shell_exec"]` |
+| # | Responsibility | Helen Field | Example |
+|---|---------------|-------------|---------|
+| 1 | Tell it **who it is** | `description` | `"Review code for bugs and security issues"` |
+| 2 | Draw **boundaries** | `prompt` + `@sandbox` | `NEVER expose API keys` |
+| 3 | Define **what good looks like** | `prompt` | `Always explain changes before making them` |
+| 4 | Provide **tools and knowledge** | `tools` + `load_skill` | `tools = ["read_file", "shell_exec"]` |
 
-其他一切都是噪声。
+Everything else is noise.
 
-### 1.2 Harness 公式
+### 1.2 The Harness Formula
 
 ```
-Harness = 工具 + 知识 + 观察 + 行动接口 + 权限
+Harness = Tools + Knowledge + Observation + Action Interface + Permissions
 ```
 
-Helen 的实现：
-- **工具**：`tools = [...]` 列表，10 个内置 + `load_skill` 加载领域知识
-- **知识**：`prompt` 中的领域上下文 + 通过 `{{}}` 注入的环境事实
-- **观察**：`working-memory`、`transcript`、`:stats`
-- **行动接口**：`llm act` + 工具调用循环
-- **权限**：`@open` / `@strict` / `@sandbox` 隔离级别
+Helen's implementation:
+- **Tools**: `tools = [...]` list — 10 built-in tools + `load_skill` for domain knowledge
+- **Knowledge**: Domain context in `prompt` + environment facts injected via `{{}}`
+- **Observation**: `working-memory`, `transcript`, `:stats`
+- **Action interface**: `llm act` + tool call loop
+- **Permissions**: `@open` / `@strict` / `@sandbox` isolation levels
 
-不要把 agent 写成流程图——模型会自己决定执行顺序。
+Do not write the agent as a flowchart — the model will decide the execution order itself.
 
 ---
 
-## 二、提示词结构布局
+## 2. Prompt Structural Layout
 
-### 2.1 推荐顺序（逆向工程自 Claude Code v2.0.14）
+### 2.1 Recommended Order (Reverse Engineered from Claude Code v2.0.14)
 
 ```
 ┌─────────────────────────────────────────────┐
-│ 1. 身份 Identity             │ ← 首读，锚定行为
-│ 2. 安全边界 Safety           │ ← IMPORTANT 标记，不可妥协
-│ 3. 语气风格 Tone & Style     │ ← 控制输出形态
-│ 4. 核心工作流 Core Workflow  │ ← 如何干活
-│ 5. 工具使用策略 Tool Policy  │ ← 工具选择优先级
-│ 6. 领域知识 Domain Knowledge │ ← 按需加载，不预填
-│ 7. 环境信息 Env Info         │ ← 运行时注入
-│ 8. 关键提醒 Reminders        │ ← 重申最重要规则
+│ 1. Identity                  │ ← Read first; anchors behavior
+│ 2. Safety Boundaries         │ ← IMPORTANT marked; non-negotiable
+│ 3. Tone & Style              │ ← Controls output form
+│ 4. Core Workflow             │ ← How to do the work
+│ 5. Tool Usage Policy         │ ← Tool selection priorities
+│ 6. Domain Knowledge          │ ← Load on demand; do not pre-fill
+│ 7. Environment Info          │ ← Injected at runtime
+│ 8. Reminders                 │ ← Reiterate the most important rules
 ├─────────────────────────────────────────────┤
-│ [工具定义 — 系统自动注入]     │ ← 不可编辑，通常很长
+│ [Tool Definitions — auto-injected by system] │ ← Not editable; usually very long
 ├─────────────────────────────────────────────┤
-│ [用户消息]                    │
+│ [User Messages]                              │
 └─────────────────────────────────────────────┘
 ```
 
-### 2.2 为什么这个顺序
+### 2.2 Why This Order
 
-LLM 有 **U 形注意力曲线** —— 对开头和结尾最关注，中段容易"失忆"（"Lost in the Middle" 效应）。
+LLMs have a **U-shaped attention curve** — they pay the most attention to the beginning and end, while the middle tends to be "forgotten" (the "Lost in the Middle" effect).
 
-- **身份 + 安全放开头**：primacy effect（首因效应）
-- **核心工作流放中上段**：最重要的内容
-- **工具定义由系统注入**：Claude Code 的工具定义约 11,438 tokens，会把你的自定义内容"推"回前面——反而提升依从性
-- **关键提醒放结尾**：recency effect（近因效应）
+- **Identity + Safety at the beginning**: primacy effect
+- **Core Workflow in the upper-middle**: the most important content
+- **Tool definitions injected by the system**: Claude Code's tool definitions are ~11,438 tokens, which "pushes" your custom content back toward the front — paradoxically improving compliance
+- **Reminders at the end**: recency effect
 
-Claude Code 把安全声明在开头和结尾各写一遍——不是工程师健忘，是懂 U 形注意力。
+Claude Code repeats its safety statements at both the beginning and the end — not because the engineers are forgetful, but because they understand U-shaped attention.
 
 ---
 
-## 三、Helen agent 的提示词结构
+## 3. Helen Agent Prompt Structure
 
-### 3.1 完整示例
+### 3.1 Complete Example
 
 ```helen
 agent CodeReviewer {
-    // ── 1. 身份 ──────────────────────────────────────
+    // ── 1. Identity ─────────────────────────────────────
     description "Review code for correctness, security, and style"
 
-    // ── 2-8. 完整 prompt ────────────────────────────
+    // ── 2-8. Full prompt ─────────────────────────────────
     prompt """
     You are a senior code reviewer with 20 years of experience.
 
@@ -149,40 +149,40 @@ agent CodeReviewer {
 }
 ```
 
-### 3.2 Helen 字段映射
+### 3.2 Helen Field Mapping
 
-| 通用原则 | Helen 字段 | 说明 |
-|---------|-----------|------|
-| Identity | `description` | 1-3 句，锚定角色 |
-| Safety / Tone / Workflow / … | `prompt` | 用 markdown 分段 |
-| 工具策略 | `prompt` 内说明 + `tools` 列表 | 列表控制**能用什么**；prompt 控制**何时用** |
-| 环境信息 | `prompt` 中用 `{{}}` 插值 | **永远注入，不要假设**（见 §7） |
-| 按需知识 | `tools = [..., "load_skill"]` + `load_skill("xxx")` | 两层披露，不要知识倾倒 |
-| 提醒 | `prompt` 末段 | 重申最重要的 2-3 条 |
-| 上下文策略 | `context {}` 块 | 压缩、工作记忆、缓存感知 |
+| General Principle | Helen Field | Description |
+|-------------------|-------------|-------------|
+| Identity | `description` | 1-3 sentences; anchors the role |
+| Safety / Tone / Workflow / … | `prompt` | Use markdown sections |
+| Tool policy | `prompt` explanation + `tools` list | List controls **what is available**; prompt controls **when to use** |
+| Environment info | `{{}}` interpolation in `prompt` | **Always inject; never assume** (see §7) |
+| On-demand knowledge | `tools = [..., "load_skill"]` + `load_skill("xxx")` | Two-tier disclosure; do not dump knowledge |
+| Reminders | Final section of `prompt` | Reiterate the 2-3 most important rules |
+| Context strategy | `context {}` block | Compression, working memory, cache awareness |
 
 ---
 
-## 四、逐节写作指南
+## 4. Section-by-Section Writing Guide
 
-### 4.1 Identity — 是谁
+### 4.1 Identity — Who It Is
 
-**目标**：1-3 句话锚定角色。
+**Goal**: Anchor the role in 1-3 sentences.
 
 ```helen
-// ✅ 好
+// ✅ Good
 description "Senior Rust engineer specializing in concurrent systems"
 
-// ❌ 空泛
+// ❌ Vague
 description "A helpful AI assistant"
 
-// ❌ 太长（浪费 token）
+// ❌ Too long (wastes tokens)
 description "You are a wise and experienced software engineer who has worked at many top tech companies and has deep knowledge of..."
 ```
 
-### 4.2 Safety — 硬边界
+### 4.2 Safety — Hard Boundaries
 
-**目标**：不可违反的行为约束。
+**Goal**: Behavioral constraints that must not be violated.
 
 ```helen
 prompt """
@@ -192,15 +192,15 @@ MUST NOT modify files outside the working directory.
 """
 ```
 
-写作要点：
-- 用 `IMPORTANT:` 前缀 — Claude 的指令层级训练对它有额外权重
-- 用绝对语言：`NEVER` / `MUST NOT` / `Refuse to`
-- 双向约束：同时说明**允许**和**禁止**
-- 开头放一次、结尾再放一次（U 形注意力双保险）
+Writing tips:
+- Use the `IMPORTANT:` prefix — Claude's instruction hierarchy training gives it extra weight
+- Use absolute language: `NEVER` / `MUST NOT` / `Refuse to`
+- Bidirectional constraints: state both what is **allowed** and what is **prohibited**
+- Place once at the beginning and once again at the end (U-shaped attention double insurance)
 
-### 4.3 Tone & Style — 输出形态
+### 4.3 Tone & Style — Output Form
 
-**目标**：具体可测试的行为规则。
+**Goal**: Specific, testable behavioral rules.
 
 ```helen
 prompt """
@@ -212,16 +212,16 @@ prompt """
 """
 ```
 
-**关键**：「专业客观性」这一段极其重要——它压制模型的"谄媚倾向"。如果 agent 要做判断（代码评审、架构选择、方案评估），必须有类似条款。
+**Key point**: The "professional objectivity" paragraph is critically important — it suppresses the model's "sycophancy tendency." If the agent needs to make judgments (code review, architecture choices, solution evaluation), it must include a similar clause.
 
-### 4.4 Core Workflow — 最重要的一节
+### 4.4 Core Workflow — The Most Important Section
 
-**目标**：教模型**如何工作**——方法论，不是机械步骤。
+**Goal**: Teach the model **how to work** — methodology, not mechanical steps.
 
-核心原则：**给原则，不给流程**（Give principles, not procedures）。
+Core principle: **Give principles, not procedures**.
 
 ```helen
-// ✅ 原则（可泛化）
+// ✅ Principles (generalizable)
 prompt """
 Core workflow:
 - Understand existing code before modifying it.
@@ -230,7 +230,7 @@ Core workflow:
 - Verify your changes work (run tests, lint).
 """
 
-// ❌ 流程（僵化）
+// ❌ Procedure (rigid)
 prompt """
 Step 1: Read the file.
 Step 2: Find the bug.
@@ -240,13 +240,13 @@ Step 5: Commit.
 """
 ```
 
-原则可以泛化到模型没见过的场景；流程只能在预期内执行。
+Principles can generalize to scenarios the model has never seen; procedures can only execute within expected parameters.
 
-**例外**：当输出要被下游**机器**消费时（agent 间通信、API 响应格式），才用严格 schema——原则管行为，schema 管接口。
+**Exception**: When the output will be consumed by a **machine** downstream (inter-agent communication, API response formats), use strict schemas — principles govern behavior, schemas govern interfaces.
 
-### 4.5 Tool Usage Policy — 消歧
+### 4.5 Tool Usage Policy — Disambiguation
 
-**目标**：多个工具能做同一件事时，告诉模型优先选哪个。
+**Goal**: When multiple tools can do the same thing, tell the model which to prefer.
 
 ```helen
 prompt """
@@ -260,21 +260,21 @@ prompt """
 """
 ```
 
-要点：
-- 用 "A instead of B" 表达优先级
-- 说明**为什么**优先（"reduces context usage"、"better user experience"）
-- 定义并行策略（独立 → 并行，依赖 → 顺序）
-- 处理工具被拒的场景——否则模型会无限重试
+Key points:
+- Express priorities using "A instead of B"
+- Explain **why** something is preferred ("reduces context usage", "better user experience")
+- Define parallelism strategy (independent → parallel, dependent → sequential)
+- Handle the tool-rejection scenario — otherwise the model will retry indefinitely
 
-### 4.6 Domain Knowledge — 按需加载
+### 4.6 Domain Knowledge — Load On Demand
 
-**核心原则**：渐进披露，不要知识倾倒。
+**Core principle**: Progressive disclosure; do not dump knowledge.
 
 ```helen
-// ❌ 把 200 个 API 都塞进 prompt → token 爆炸
+// ❌ Stuffing all 200 APIs into the prompt → token explosion
 prompt "Here is the complete API documentation: ..."
 
-// ✅ 让 agent 按需加载
+// ✅ Let the agent load on demand
 agent Worker {
     tools = ["load_skill", "read_file"]
     main {
@@ -284,16 +284,16 @@ agent Worker {
 }
 ```
 
-Helen 的 Skills 系统（两层披露）就是为此设计的：
-- **Tier 1**：系统提示词里只注入**技能索引**（名字 + 描述 + 标签）
-- **Tier 2**：agent 通过 `load_skill` 工具按需加载完整内容
+Helen's Skills system (two-tier disclosure) is designed for exactly this:
+- **Tier 1**: Only the **skill index** (name + description + tags) is injected into the system prompt
+- **Tier 2**: The agent loads full content on demand via the `load_skill` tool
 
-### 4.7 Environment Info — 运行时事实
+### 4.7 Environment Info — Runtime Facts
 
-**核心原则**：**永远注入，永不假设**——agent 无法知道你未告知的事实。
+**Core principle**: **Always inject; never assume** — the agent cannot know facts you have not told it.
 
 ```helen
-// ✅ 注入真实值
+// ✅ Inject real values
 agent DevAgent(cwd: str) {
     prompt """
     Working directory: {{cwd}}
@@ -304,22 +304,22 @@ agent DevAgent(cwd: str) {
     main { return llm act "..." }
 }
 
-// ❌ 让 LLM 猜
+// ❌ Let the LLM guess
 prompt "You are a helpful engineer."
-// LLM 不知道 cwd，会编一个听起来合理的
+// The LLM does not know cwd and will fabricate a plausible-sounding value
 ```
 
-LLM 被训练成"必须回答"——缺上下文时它会自信地编造。注入事实把这个故障模式变成非问题。
+LLMs are trained to "always answer" — when lacking context, they will confidently fabricate. Injecting facts turns this failure mode into a non-issue.
 
-详见 [[helen-agent-patterns § 最佳实践 7]]。
+See [[helen-agent-patterns § Best Practice 7]].
 
-### 4.8 Reminders — 最后强化
+### 4.8 Reminders — Final Reinforcement
 
-只重申 2-3 条**最**重要的规则：
+Only reiterate the 2-3 **most** important rules:
 
 ```helen
 prompt """
-[... 前面几节 ...]
+[... previous sections ...]
 
 ## Reminders
 IMPORTANT: Minimal changes only.
@@ -330,63 +330,63 @@ IMPORTANT: NEVER break backward compatibility.
 
 ---
 
-## 五、Token 预算
+## 5. Token Budget
 
-### 5.1 推荐分配
+### 5.1 Recommended Allocation
 
-| 章节 | 推荐 token | 说明 |
-|------|-----------|------|
-| Identity + Safety | 200-500 | 简洁但不可妥协 |
-| Tone & Style | 300-800 | 规则必须具体 |
-| Core Workflow | 500-2,000 | 最重要，值得花 token |
-| Tool Usage Policy | 300-1,000 | 取决于工具数量 |
-| Domain Knowledge | 0-1,000 | 优先按需加载 |
-| Environment Info | 100-300 | 动态生成 |
-| Reminders | 100-300 | 只重申 essentials |
-| **你的部分合计** | **1,500-6,000** | |
-| 工具定义（系统注入） | 5,000-15,000 | 不在你控制范围 |
+| Section | Recommended Tokens | Description |
+|---------|-------------------|-------------|
+| Identity + Safety | 200-500 | Concise but non-negotiable |
+| Tone & Style | 300-800 | Rules must be specific |
+| Core Workflow | 500-2,000 | Most important; worth the tokens |
+| Tool Usage Policy | 300-1,000 | Depends on tool count |
+| Domain Knowledge | 0-1,000 | Prefer on-demand loading |
+| Environment Info | 100-300 | Dynamically generated |
+| Reminders | 100-300 | Only reiterate essentials |
+| **Your subtotal** | **1,500-6,000** | |
+| Tool definitions (system-injected) | 5,000-15,000 | Outside your control |
 
-### 5.2 上下文退化曲线
+### 5.2 Context Degradation Curve
 
-社区实测（Reddit u/CodeMonke_）的真实依从性退化：
+Community-measured (Reddit u/CodeMonke_) actual compliance degradation:
 
-| 上下文长度 | 依从性 |
-|-----------|--------|
-| < 80K tokens | 稳定 |
-| 80K - 120K | 指令遵循开始退化 |
-| > 120K | 显著退化——模型"忘记"早期指令 |
-| > 180K | 严重退化 |
+| Context Length | Compliance |
+|---------------|------------|
+| < 80K tokens | Stable |
+| 80K - 120K | Instruction following begins to degrade |
+| > 120K | Significant degradation — model "forgets" earlier instructions |
+| > 180K | Severe degradation |
 
-**200K 上下文窗口 ≠ 200K 有效上下文**。
+**A 200K context window ≠ 200K effective context**.
 
-Helen 的应对：
-- `context { compression "graduated" }` — 五层渐进压缩
-- `context { cache-aware true }` — 缓存感知，保留稳定前缀
-- `context { working-memory true }` — 工作记忆自动跟踪关键信息
+Helen's countermeasures:
+- `context { compression "graduated" }` — Five-layer graduated compression
+- `context { cache-aware true }` — Cache-aware; preserves stable prefix
+- `context { working-memory true }` — Working memory automatically tracks key information
 
 ---
 
-## 六、写作原则
+## 6. Writing Principles
 
-### 6.1 原则优先，而非流程
+### 6.1 Principles Over Procedures
 
 ```
 ❌ "Step 1: Read file. Step 2: Find bug. Step 3: Fix. Step 4: Test."
 ✅ "Always understand existing code before modifying it. Verify your changes work."
 ```
 
-原则能泛化；流程只能机械执行，遇到意外就僵住。
+Principles generalize; procedures can only execute mechanically and freeze when encountering the unexpected.
 
-### 6.2 硬约束用绝对语言
+### 6.2 Use Absolute Language for Hard Constraints
 
-| 强度 | 用词 | 用于 |
-|------|------|------|
-| 绝对禁止 | `NEVER` / `MUST NOT` | 安全、不可逆操作 |
-| 强要求 | `ALWAYS` / `MUST` | 核心工作流规则 |
-| 推荐 | `recommended` / `prefer` | 有例外的最佳实践 |
-| 建议 | `consider` / `you may` | 可选优化 |
+| Strength | Wording | Used For |
+|----------|---------|----------|
+| Absolutely prohibited | `NEVER` / `MUST NOT` | Safety, irreversible operations |
+| Strong requirement | `ALWAYS` / `MUST` | Core workflow rules |
+| Recommended | `recommended` / `prefer` | Best practices with exceptions |
+| Suggested | `consider` / `you may` | Optional optimizations |
 
-### 6.3 用例子代替解释
+### 6.3 Use Examples Instead of Explanations
 
 ```helen
 prompt """
@@ -401,19 +401,19 @@ assistant: Clients are marked as failed in `connectToServer`
 """
 ```
 
-一个例子胜过 100 字解释。用 `<example>` 标签包裹；同时提供正反例。
+One example is worth 100 words of explanation. Wrap in `<example>` tags; provide both positive and negative examples.
 
-### 6.4 双向约束
+### 6.4 Bidirectional Constraints
 
 ```
 ✅ "Use `read_file` for reading files."
 ✅ "Do NOT use `shell_exec cat` for file inspection."
-双向 → 清晰无歧义。
+Bidirectional → clear and unambiguous.
 ```
 
-只说"做这个"→ 模型不知何时不该做；只说"别做这个"→ 模型不知该用什么替代。
+Only saying "do this" → the model does not know when not to do it; only saying "don't do this" → the model does not know what to do instead.
 
-### 6.5 解释 why，不只 what
+### 6.5 Explain Why, Not Just What
 
 ```
 ❌ "Don't use `git commit --amend`."
@@ -421,232 +421,232 @@ assistant: Clients are marked as failed in `connectToServer`
     ONLY use --amend when you explicitly requested it."
 ```
 
-解释 why 让模型能在边缘情况下做出正确判断。
+Explaining why enables the model to make correct judgments in edge cases.
 
-### 6.6 结构优先于散文
+### 6.6 Structure Over Prose
 
-- **Markdown 标题** (`##` / `###`) — 模型识别层级
-- **列表** 优先于段落 — 每条规则独立可测
-- **XML 标签** 包裹特殊内容：`<example>`、`<env>`
-- **表格** 用于对比和映射
+- **Markdown headings** (`##` / `###`) — the model recognizes hierarchy
+- **Lists** preferred over paragraphs — each rule is independently testable
+- **XML tags** wrap special content: `<example>`, `<env>`
+- **Tables** for comparisons and mappings
 
-永远不要倾倒非结构化文本——结构化 prompt 在依从性测试中**始终**优于自然语言散文。
+Never dump unstructured text — structured prompts **consistently** outperform natural language prose in compliance tests.
 
 ---
 
-## 七、反模式——这些在浪费你的 token
+## 7. Anti-Patterns — These Are Wasting Your Tokens
 
-### 7.1 伪装成 agent 的 prompt chain
+### 7.1 Prompt Chains Disguised as Agents
 
 ```
 ❌ "First call tool A. Then tool B with result. Then format JSON. Then save."
 ```
 
-这不是 agent prompt，是流水线脚本。模型会机械执行，失去自主规划能力。
+This is not an agent prompt; it is a pipeline script. The model will execute mechanically and lose its ability to plan autonomously.
 
-**修复**：告诉模型**目标和约束**，让它自己决定步骤。
+**Fix**: Tell the model the **goal and constraints**; let it decide the steps.
 
-### 7.2 谄媚工程
+### 7.2 Sycophancy Engineering
 
 ```
 ❌ "You are an EXTREMELY TALENTED and INCREDIBLY EXPERIENCED senior engineer..."
 ```
 
-赞美和最高级形容词**不提升输出质量**。模型没有自尊心需要哄。省这 15 个 token 写真正的规则。
+Praise and superlative adjectives **do not improve output quality**. The model does not have an ego to manage. Save those 15 tokens for real rules.
 
-### 7.3 知识倾倒
+### 7.3 Knowledge Dumping
 
 ```
 ❌ "Here is the complete API documentation for our 200 endpoints..."
 ```
 
-吃掉上下文窗口，加速上下文腐烂。
+This eats up the context window and accelerates context rot.
 
-**修复**：按需加载——"use `load_skill` to retrieve documentation when needed."
+**Fix**: Load on demand — "use `load_skill` to retrieve documentation when needed."
 
-### 7.4 重复工具定义
+### 7.4 Duplicating Tool Definitions
 
-工具定义已经说"`read_file` reads a file"——不要在 prompt 里再说一遍。
-只在 prompt 里写**工具定义没覆盖的内容**：何时用、为何优先、优先级。
+The tool definition already says "`read_file` reads a file" — do not repeat it in the prompt.
+Only write in the prompt what **the tool definition does not cover**: when to use it, why it is preferred, priorities.
 
-### 7.5 缺失的失败处理
+### 7.5 Missing Failure Handling
 
-不告诉模型"工具被拒怎么办"，它就会无限重试失败的调用。
+If you do not tell the model "what to do when a tool is rejected," it will retry failed calls indefinitely.
 
-**必须包含**：
+**Must include**:
 ```
 If a tool call is denied, do not re-attempt the exact same call.
 Think about why it was denied and adjust your approach.
 ```
 
-### 7.6 忽视上下文窗口衰减
+### 7.6 Ignoring Context Window Decay
 
-200K 上下文 ≠ 200K 有效上下文。实测 80K 开始退化。
+200K context ≠ 200K effective context. Measurements show degradation starting at 80K.
 
-**必须有压缩策略**——Helen 的 `context { compression "graduated" }` 是默认行为，但你应该了解它在做什么。
-
----
-
-## 八、动态注入——被忽视的利器
-
-### 8.1 为什么需要
-
-系统提示词只在对话开头出现一次。随着对话变长，模型对早期指令的依从性会衰减（80K+ tokens 明显）。**在对话中途注入提醒 = 通过近因效应刷新规则**。
-
-心智模型：
-- **系统提示词 = 宪法**：一次确立，长期权威
-- **中途注入 = 备忘录**：定期发送，维持执行力度
-
-### 8.2 Helen 的注入机制
-
-Helen 通过多种方式实现中途注入：
-
-| 机制 | 位置 | 触发 |
-|------|------|------|
-| `prompt` + `{{}}` 插值 | agent 启动时 | 每次 agent 调用 |
-| `working-memory` | 系统消息内 | 自动跟踪文件/决策/TODO/错误 |
-| `context { compression }` | 上下文压缩时 | 自动渐进压缩 |
-| `load_skill` 工具 | 工具调用结果 | agent 按需 |
-| 工具结果 | tool message | 每次工具返回 |
-
-### 8.3 注入的最佳实践
-
-- **用 XML 标签包裹**（`<system-reminder>`）— 模型能区分系统注入和用户发言
-- **不要每条消息都注入**——每次注入都消耗 token，只在必要时注入
-- **保持简短**——提醒不是第二个系统提示词，只重申 1-2 条关键规则
-- **不要与系统提示词矛盾**——提醒是补充和强化，不是覆盖
-- **用于动态切换**——plan mode、readonly mode、feature flags
-
-### 8.4 System Prompt vs. 中途注入：分工
-
-| 场景 | 系统提示词 | 中途注入 |
-|------|----------|---------|
-| 角色定义 | ✅ | ❌ |
-| 安全约束 | ✅ 首次声明 | ✅ 周期性重复 |
-| 工作流方法论 | ✅ | ❌ |
-| 模式切换（plan mode） | ❌ | ✅ |
-| 文件变更通知 | ❌ | ✅ |
-| 日期 / 环境 | ✅ 初始值 | ✅ 更新值 |
-| 行为纠正 | ❌ | ✅ |
-| 工具使用提醒 | ✅ 规则定义 | ✅ 执行推动 |
+**A compression strategy is essential** — Helen's `context { compression "graduated" }` is the default behavior, but you should understand what it is doing.
 
 ---
 
-## 九、Prompt Cache — 节省 90% 重复 token
+## 8. Dynamic Injection — The Overlooked Power Tool
 
-### 9.1 关键数字
+### 8.1 Why It Is Needed
 
-| 指标 | 值 |
-|------|-----|
-| Cache 命中成本 | 正常价的 10%（节省 90%） |
-| Cache 写入成本 | 正常价的 125%（首次多 25%） |
-| Cache TTL | 5 分钟 |
-| 最小可缓存长度 | 1,024 tokens |
-| 缓存粒度 | 前缀匹配 |
+The system prompt only appears once at the start of a conversation. As the conversation grows, the model's compliance with early instructions decays (noticeable at 80K+ tokens). **Injecting reminders mid-conversation = refreshing rules via the recency effect**.
 
-### 9.2 如何改变 prompt 设计
+Mental model:
+- **System prompt = constitution**: established once; long-term authority
+- **Mid-conversation injection = memo**: sent periodically; maintains execution discipline
 
-**核心原则**：静态内容在前，动态内容在后。
+### 8.2 Helen's Injection Mechanisms
+
+Helen implements mid-conversation injection through multiple mechanisms:
+
+| Mechanism | Location | Trigger |
+|-----------|----------|---------|
+| `prompt` + `{{}}` interpolation | Agent startup | Each agent invocation |
+| `working-memory` | Within system messages | Auto-tracks files/decisions/TODOs/errors |
+| `context { compression }` | During context compression | Automatic graduated compression |
+| `load_skill` tool | Tool call result | Agent on demand |
+| Tool results | Tool message | Each tool return |
+
+### 8.3 Injection Best Practices
+
+- **Wrap in XML tags** (`<system-reminder>`) — the model can distinguish system injections from user speech
+- **Do not inject on every message** — each injection costs tokens; only inject when necessary
+- **Keep it brief** — reminders are not a second system prompt; only reiterate 1-2 key rules
+- **Do not contradict the system prompt** — reminders supplement and reinforce, not override
+- **Use for dynamic switching** — plan mode, readonly mode, feature flags
+
+### 8.4 System Prompt vs. Mid-Conversation Injection: Division of Labor
+
+| Scenario | System Prompt | Mid-Conversation Injection |
+|----------|--------------|---------------------------|
+| Role definition | ✅ | ❌ |
+| Safety constraints | ✅ Initial statement | ✅ Periodic repetition |
+| Workflow methodology | ✅ | ❌ |
+| Mode switching (plan mode) | ❌ | ✅ |
+| File change notifications | ❌ | ✅ |
+| Date / environment | ✅ Initial value | ✅ Updated value |
+| Behavior correction | ❌ | ✅ |
+| Tool usage reminders | ✅ Rule definition | ✅ Execution nudging |
+
+---
+
+## 9. Prompt Cache — Save 90% on Repeated Tokens
+
+### 9.1 Key Numbers
+
+| Metric | Value |
+|--------|-------|
+| Cache hit cost | 10% of normal price (saves 90%) |
+| Cache write cost | 125% of normal price (25% more upfront) |
+| Cache TTL | 5 minutes |
+| Minimum cacheable length | 1,024 tokens |
+| Cache granularity | Prefix matching |
+
+### 9.2 How It Changes Prompt Design
+
+**Core principle**: Static content first, dynamic content last.
 
 ```
-✅ Cache 友好布局：
-System prompt (静态)             ← Cache breakpoint 1
-Tool definitions (静态)          ← Cache breakpoint 2
-Project rules (偶尔变)           ← Cache breakpoint 3
-Conversation history           ← Breakpoint 4 滚动窗口
+✅ Cache-friendly layout:
+System prompt (static)             ← Cache breakpoint 1
+Tool definitions (static)          ← Cache breakpoint 2
+Project rules (occasionally change)← Cache breakpoint 3
+Conversation history               ← Breakpoint 4: rolling window
 
-❌ Cache 破坏布局：
+❌ Cache-breaking layout:
 System prompt
-  DYNAMIC TIMESTAMP             ← 每次请求都变，后面全部 cache miss
+  DYNAMIC TIMESTAMP                ← Changes every request; everything after cache misses
 Tool definitions
 Conversation history
 ```
 
-**陷阱**：在系统提示词中间放动态时间戳，后面所有内容都变成 cache miss。一个放错位置的时间戳就能让你为几千 token 付全价。
+**Trap**: Placing a dynamic timestamp in the middle of the system prompt turns everything after it into cache misses. A single misplaced timestamp can cost you full price for thousands of tokens.
 
-### 9.3 设计建议
+### 9.3 Design Recommendations
 
-- 系统提示词里**不放高频动态值**——日期（每日变）可以，精确时间戳不行
-- 动态上下文（git status 等）放**中途注入**，不要放系统提示词
-- 保持工具定义稳定——不要运行时动态增删工具
-- 对话历史用**滚动窗口**——缓存前 N 条，只有最新的是 cache miss
+- **Do not place high-frequency dynamic values** in the system prompt — date (changes daily) is fine; precise timestamps are not
+- Place dynamic context (git status, etc.) in **mid-conversation injection**, not the system prompt
+- Keep tool definitions stable — do not dynamically add/remove tools at runtime
+- Use a **rolling window** for conversation history — cache the first N messages; only the newest is a cache miss
 
-Helen 的 `context { cache-aware true }` 就是为此设计的——保留前 30% 消息作为稳定前缀，把缓存命中率从 10-20% 提到 70-80%。
-
----
-
-## 十、Checklist
-
-写完 agent prompt 后，对照此清单：
-
-### 结构
-- [ ] 身份（description）在最前面？
-- [ ] 安全约束用 `IMPORTANT:` 标记，结尾重复？
-- [ ] 各节用 `##` / `###` 清晰分隔？
-- [ ] 例子用 `<example>` 标签包裹？
-
-### Token 预算
-- [ ] 你自己的部分 < 6,000 tokens？
-- [ ] 没有重复工具定义已有的内容？
-- [ ] 领域知识按需加载，不是预填？
-- [ ] 没有冗长的角色背景故事？
-
-### 规则质量
-- [ ] 每条规则可 true/false 测试？
-- [ ] 硬约束用绝对语言（NEVER/MUST）？
-- [ ] 软建议用推荐语言（recommended/prefer）？
-- [ ] 关键规则解释了 why，不只是 what？
-- [ ] 双向约束（要做 + 不要做）？
-
-### Agent 行为
-- [ ] 给原则，不是 20 步机械流程？
-- [ ] 处理了"工具调用被拒"场景？
-- [ ] 处理了"遇到障碍"策略（不要暴力重试）？
-- [ ] 有上下文管理策略（压缩阈值）？
-
-### 不该有的
-- [ ] 没有谄媚/最高级形容词？
-- [ ] 没有多余的"you are a helpful AI"？
-- [ ] 不是伪装成 agent 的 prompt chain？
-- [ ] 没有用户没要求的功能？
+Helen's `context { cache-aware true }` is designed for exactly this — it preserves the first 30% of messages as a stable prefix, raising cache hit rates from 10-20% to 70-80%.
 
 ---
 
-## 十一、如果今天重新开始
+## 10. Checklist
 
-作者（以及我们）的建议：
+After writing an agent prompt, check against this list:
 
-1. **前 3 行**就写完身份 + 安全。两句讲 agent 是谁；硬约束用 NEVER/MUST；结尾重复安全规则。
-2. **核心工作流写成原则**，最多 4-5 条。软规则用 `recommended`/`prefer`，硬规则用 `NEVER`/`MUST`。
-3. **你的部分预算 1,500-6,000 tokens**。工具定义会再加 5,000-15,000。超过 6K 说明你在倾倒应该按需加载的知识。
-4. **一切结构化**——Markdown 标题、列表、XML 例子。结构化 prompt 始终胜过自然语言散文。
-5. **从第一天就设计中途注入**——系统提示词里声明 `<system-reminder>` 标签；用它刷新关键规则、切换模式、更新上下文。
-6. **为缓存设计**——静态在前、动态在后。永远不要在系统提示词主体里放高频变化值。
+### Structure
+- [ ] Is identity (description) at the very front?
+- [ ] Are safety constraints marked with `IMPORTANT:` and repeated at the end?
+- [ ] Are sections clearly separated with `##` / `###`?
+- [ ] Are examples wrapped in `<example>` tags?
 
-> **讽刺的是，最好的系统提示词都很短**。Claude Code 的自定义指令（不算工具定义）短得出人意料。每一行都挣到了它的位置。
+### Token Budget
+- [ ] Is your own portion < 6,000 tokens?
+- [ ] Are you not repeating content already in tool definitions?
+- [ ] Is domain knowledge loaded on demand, not pre-filled?
+- [ ] Is there no lengthy role backstory?
+
+### Rule Quality
+- [ ] Is each rule testable as true/false?
+- [ ] Do hard constraints use absolute language (NEVER/MUST)?
+- [ ] Do soft recommendations use advisory language (recommended/prefer)?
+- [ ] Do key rules explain why, not just what?
+- [ ] Are constraints bidirectional (do + do not)?
+
+### Agent Behavior
+- [ ] Are you giving principles, not a 20-step mechanical procedure?
+- [ ] Have you handled the "tool call rejected" scenario?
+- [ ] Have you handled the "encountered an obstacle" strategy (no brute-force retries)?
+- [ ] Is there a context management strategy (compression thresholds)?
+
+### What Should Not Be There
+- [ ] No sycophancy / superlative adjectives?
+- [ ] No redundant "you are a helpful AI"?
+- [ ] Not a prompt chain disguised as an agent?
+- [ ] No features the user did not ask for?
+
+---
+
+## 11. If Starting From Scratch Today
+
+Our recommendations (and the original author's):
+
+1. **First 3 lines**: Complete identity + safety. Two sentences about who the agent is; hard constraints use NEVER/MUST; repeat safety rules at the end.
+2. **Core workflow as principles**, at most 4-5 items. Soft rules use `recommended`/`prefer`; hard rules use `NEVER`/`MUST`.
+3. **Budget 1,500-6,000 tokens for your portion**. Tool definitions will add another 5,000-15,000. Exceeding 6K means you are dumping knowledge that should be loaded on demand.
+4. **Structure everything** — Markdown headings, lists, XML examples. Structured prompts always outperform natural language prose.
+5. **Design for mid-conversation injection from day one** — Declare `<system-reminder>` tags in the system prompt; use them to refresh key rules, switch modes, and update context.
+6. **Design for cache** — Static first, dynamic last. Never place high-frequency changing values in the body of the system prompt.
+
+> **Ironically, the best system prompts are short.** Claude Code's custom instructions (excluding tool definitions) are surprisingly brief. Every line has earned its place.
 >
-> 提示词工程不是找巧妙窍门，而是纪律——说得更少、说得更准、相信模型自己想明白剩下的。
+> Prompt engineering is not about finding clever tricks — it is about discipline: say less, say precisely, and trust the model to figure out the rest.
 >
-> **模型比你的提示词聪明。设计环境，而不是设计行为。**
+> **The model is smarter than your prompt. Design the environment, not the behavior.**
 
 ---
 
-## 参考
+## References
 
-| 来源 | 关键洞察 |
-|------|---------|
-| Claude Code v2.0.14 系统提示词 | 完整生产 agent prompt 结构参考 |
-| Reddit: Understanding Claude Code's 3 System Prompt Methods | Output Styles / --append / --system-prompt 深度解析；上下文腐烂实测数据 |
-| shareAI-lab/learn-claude-code | "The model is the agent" 哲学；Harness 工程方法论 |
-| Anthropic Prompt Engineering Docs | 官方 prompt 最佳实践 |
-| DeepAgents Framework | 渐进披露中间件、Summarization 策略 |
-| Feng Liu, "The Complete Guide to Writing Agent System Prompts", 2026-03-20 | 本文原始材料 |
+| Source | Key Insight |
+|--------|------------|
+| Claude Code v2.0.14 system prompt | Complete production agent prompt structure reference |
+| Reddit: Understanding Claude Code's 3 System Prompt Methods | Deep analysis of Output Styles / --append / --system-prompt; measured context rot data |
+| shareAI-lab/learn-claude-code | "The model is the agent" philosophy; Harness engineering methodology |
+| Anthropic Prompt Engineering Docs | Official prompt best practices |
+| DeepAgents Framework | Progressive disclosure middleware; Summarization strategy |
+| Feng Liu, "The Complete Guide to Writing Agent System Prompts", 2026-03-20 | Original source material |
 
-## 相关 Helen 文档
+## Related Helen Documentation
 
-- [[tutorial/05-agents]] — Helen agent 语法入门
-- [[tutorial/11-building-agents]] — 多 agent 系统构建
-- [[runtime/prompt-builder]] — Helen 提示词构建系统实现
-- [[runtime/context-management]] — 上下文管理架构（权威文档）
-- `helen-agent-patterns` 技能 — 设计模式与最佳实践
-- `helen-agent-collaboration` 技能 — 多 agent 协作模式
+- [[tutorial/05-agents]] — Helen agent syntax introduction
+- [[tutorial/11-building-agents]] — Building multi-agent systems
+- [[runtime/prompt-builder]] — Helen prompt builder system implementation
+- [[runtime/context-management]] — Context management architecture (authoritative reference)
+- `helen-agent-patterns` skill — Design patterns and best practices
+- `helen-agent-collaboration` skill — Multi-agent collaboration patterns

@@ -1,62 +1,62 @@
-# 技能系统
+# Skill System
 
-> Helen 技能系统 — 为 AI Agent 提供专业知识和工作流
+> Helen Skill System — Providing AI Agents with expertise and workflows
 
 ---
 
-## 概述
+## Overview
 
-Helen 技能系统采用**三层搜索架构**，确保语言自带知识、用户自定义和项目特定技能都能被正确使用。
+Helen's skill system uses a **three-tier search architecture** to ensure language-bundled knowledge, user-custom skills, and project-specific skills are all correctly utilized.
 
 ```
 ┌─────────────────────────────────────────┐
-│  🥇 项目级  <project>/.helen/skills/    │  ← 最高优先级
+│  🥇 Project   <project>/.helen/skills/  │  ← Highest priority
 ├─────────────────────────────────────────┤
-│  🥈 用户级  ~/.helen/skills/            │  ← 用户全局技能
+│  🥈 User      ~/.helen/skills/          │  ← User global skills
 ├─────────────────────────────────────────┤
-│  🥉 内置    ~/helen/skills/             │  ← 随语言分发
+│  🥉 Built-in  ~/helen/skills/           │  ← Distributed with language
 ├─────────────────────────────────────────┤
-│  4️⃣ Hermes  ~/.hermes/skills/          │  ← 兼容回退
+│  4️⃣ Hermes    ~/.hermes/skills/         │  ← Compatibility fallback
 ├─────────────────────────────────────────┤
-│  5️⃣ Hermes  ~/.hermes/hermes-agent/    │  ← 兼容回退
-│           skills/                       │
+│  5️⃣ Hermes    ~/.hermes/hermes-agent/   │  ← Compatibility fallback
+│              skills/                     │
 └─────────────────────────────────────────┘
 ```
 
-**高优先级覆盖低优先级**：如果多个目录中有同名技能，优先级高的版本会被使用。
+**Higher priority overrides lower**: If a skill with the same name exists in multiple directories, the higher-priority version is used.
 
 ---
 
-## 三层搜索详解
+## Three-Tier Search Details
 
-### 🥇 项目级技能
+### 🥇 Project-Level Skills
 
-位于项目根目录的 `.helen/skills/`，用于存放项目特有的知识：
+Located in the project root's `.helen/skills/`, used for project-specific knowledge:
 
 ```
 my-project/
 ├── .helen/
 │   └── skills/
 │       └── my-api/
-│           └── SKILL.md       # 项目 API 文档
+│           └── SKILL.md       # Project API documentation
 ├── main.helen
 └── agents/
 ```
 
-**用途**：
-- 项目 API 文档
-- 业务规则说明
-- 团队编码规范
-- 部署指南
+**Use cases**:
+- Project API documentation
+- Business rule descriptions
+- Team coding standards
+- Deployment guides
 
-**优点**：
-- 可以 git 提交，团队共享
-- 不污染用户全局技能
-- 优先级最高，确保项目知识被优先使用
+**Advantages**:
+- Can be git-committed, shared across the team
+- Does not pollute user global skills
+- Highest priority, ensuring project knowledge is used first
 
-### 🥈 用户级技能
+### 🥈 User-Level Skills
 
-位于 `~/.helen/skills/`，用于存放用户的全局技能：
+Located in `~/.helen/skills/`, used for user's global skills:
 
 ```bash
 ~/.helen/
@@ -66,59 +66,59 @@ my-project/
         └── SKILL.md
 ```
 
-**用途**：
-- 个人常用工作流
-- 跨项目通用的自定义技能
+**Use cases**:
+- Personal commonly-used workflows
+- Cross-project custom skills
 
-### 🥉 内置技能
+### 🥉 Built-in Skills
 
-位于 `<helen-install>/skills/`，随 Helen 语言一起分发：
+Located in `<helen-install>/skills/`, distributed with Helen:
 
 ```
 ~/helen/skills/
 ├── README.md
 ├── LICENSE-THIRD-PARTY.md
 ├── software-development/
-│   ├── helen-language-development/   # Helen 语言模式与陷阱
-│   ├── helen-syntax/                 # 语法参考
-│   ├── helen-stdlib/                 # 标准库指南
-│   ├── helen-security/               # 安全最佳实践
-│   ├── helen-agent-patterns/         # Agent 设计模式
-│   ├── code-quality/                 # 7 维质量评估
-│   ├── debugging/                    # 调试方法论
-│   ├── test-driven-development/      # TDD 工作流
+│   ├── helen-language-development/   # Helen language patterns and pitfalls
+│   ├── helen-syntax/                 # Syntax reference
+│   ├── helen-stdlib/                 # Standard library guide
+│   ├── helen-security/               # Security best practices
+│   ├── helen-agent-patterns/         # Agent design patterns
+│   ├── code-quality/                 # 7-dimension quality assessment
+│   ├── debugging/                    # Debugging methodology
+│   ├── test-driven-development/      # TDD workflow
 │   └── ...
 └── devops/
-    ├── hellen-consistency-checker/   # 设计一致性检查
-    └── github/                       # GitHub 工作流
+    ├── hellen-consistency-checker/   # Design consistency checker
+    └── github/                       # GitHub workflow
 ```
 
-**当前内置 13 个技能**：
+**Currently 13 built-in skills**:
 
-| 技能 | 类别 | 说明 |
+| Skill | Category | Description |
 |------|------|------|
-| `helen-language-development` | Helen 专属 | 语言模式、陷阱、最佳实践 |
-| `helen-syntax` | Helen 专属 | 语法参考（关键字、类型、表达式） |
-| `helen-stdlib` | Helen 专属 | 193 个标准库函数使用指南 |
-| `helen-agent-patterns` | Helen 专属 | Agent 设计模式 |
-| `code-quality` | 开发 | 7 维代码质量评估 |
-| `debugging` | 开发 | 系统化调试方法论 |
-| `test-driven-development` | 开发 | TDD RED-GREEN-REFACTOR |
-| `writing-plans` | 开发 | 实现计划编写 |
-| `plan` | 开发 | 计划模式（只写不执行） |
-| `subagent-driven-development` | 开发 | 子代理驱动开发 |
-| `hellen-consistency-checker` | DevOps | 设计文档一致性检查 |
-| `github` | DevOps | GitHub 工作流 |
+| `helen-language-development` | Helen-specific | Language patterns, pitfalls, best practices |
+| `helen-syntax` | Helen-specific | Syntax reference (keywords, types, expressions) |
+| `helen-stdlib` | Helen-specific | 193 standard library functions guide |
+| `helen-agent-patterns` | Helen-specific | Agent design patterns |
+| `code-quality` | Development | 7-dimension code quality assessment |
+| `debugging` | Development | Systematic debugging methodology |
+| `test-driven-development` | Development | TDD RED-GREEN-REFACTOR |
+| `writing-plans` | Development | Implementation plan writing |
+| `plan` | Development | Plan mode (write-only, no execution) |
+| `subagent-driven-development` | Development | Subagent-driven development |
+| `hellen-consistency-checker` | DevOps | Design document consistency checking |
+| `github` | DevOps | GitHub workflow |
 
 ---
 
-## 两层披露机制
+## Two-Phase Disclosure Mechanism
 
-Helen 使用**两层技能披露**，平衡知识覆盖和 token 消耗：
+Helen uses **two-phase skill disclosure** to balance knowledge coverage and token consumption:
 
-### Tier 1 — 技能索引（轻量）
+### Tier 1 — Skill Index (Lightweight)
 
-所有技能的名称、描述和标签被收集成索引，注入到 LLM 的系统提示中：
+All skills' names, descriptions, and tags are collected into an index and injected into the LLM's system prompt:
 
 ```
 <available_skills>
@@ -128,108 +128,108 @@ use load_skill tool to load full content.
   devops:
     - github: Complete GitHub workflow (tags: GitHub, Git, Pull-Requests, Issues, Code-Review)
   software-development:
-    - helen-syntax: Helen 语法参考 (tags: helen, syntax, reference, language)
-    - helen-stdlib: 193 个标准库函数 (tags: helen, stdlib, builtins, reference)
+    - helen-syntax: Helen syntax reference (tags: helen, syntax, reference, language)
+    - helen-stdlib: 193 standard library functions (tags: helen, stdlib, builtins, reference)
   ...
 </available_skills>
 ```
 
-**特点**：
-- 包含 name + description + category + **tags**（轻量级）
-- tags 字段帮助 LLM 通过关键词快速定位相关技能，提升命中率
-- 帮助 LLM 决定需要加载哪个技能
+**Features**:
+- Contains name + description + category + **tags** (lightweight)
+- Tags field helps LLM quickly locate relevant skills via keywords, improving hit rate
+- Helps LLM decide which skill to load
 
-### Tier 2 — 完整加载（按需）
+### Tier 2 — Full Load (On-Demand)
 
-当 LLM 需要某个技能的详细内容时，调用 `load_skill` 工具：
+When the LLM needs detailed content of a skill, it calls the `load_skill` tool:
 
 ```python
-# LLM 通过 function calling 调用
+# LLM calls via function calling
 load_skill(name="helen-stdlib")
-# 返回完整的 SKILL.md 内容
+# Returns full SKILL.md content
 
-# 也可以同时列出参考文档
+# Can also list reference documents at the same time
 load_skill(name="helen-language-development", include_references=True)
-# 返回 SKILL.md 内容 + references/ 目录文件列表
+# Returns SKILL.md content + references/ directory file list
 ```
 
-**特点**：
-- 按需加载，节省 token
-- `include_references=true` 可同时获取参考文档列表
+**Features**:
+- On-demand loading, saves tokens
+- `include_references=true` can also fetch the reference document list
 
-### Tier 3 — 参考文档（深度查阅）
+### Tier 3 — Reference Documents (Deep Dive)
 
-技能可能包含 `references/` 目录，存放深度参考文档。通过以下方式访问：
+Skills may contain a `references/` directory for in-depth reference documents. Accessible via:
 
 ```python
-# 方式 1：列出所有参考文档（名称、路径、大小、预览）
+# Approach 1: List all reference documents (name, path, size, preview)
 list_skill_references(name="helen-language-development")
 
-# 方式 2：load_skill 时附带引用列表
+# Approach 2: Include reference list with load_skill
 load_skill(name="helen-language-development", include_references=True)
 
-# 方式 3：用 read_file 加载具体参考文档
+# Approach 3: Load specific reference document with read_file
 read_file(path=".../helen-language-development/references/parser-disambiguation.md")
 ```
 
-**`list_skill_references` 返回格式**：
+**`list_skill_references` return format**:
 ```json
 {
   "name": "helen-language-development",
   "skill_path": ".../SKILL.md",
   "references": [
-    {"name": "parser-disambiguation.md", "path": "...", "size": 3200, "preview": "# Parser 消歧..."},
+    {"name": "parser-disambiguation.md", "path": "...", "size": 3200, "preview": "# Parser disambiguation..."},
     ...
   ],
   "total": 17
 }
 ```
 
-**特点**：
-- 参考文档不自动加载，由 LLM 按需查阅
-- 每个参考文件附带前 3 行预览，帮助 LLM 判断是否需要加载
+**Features**:
+- Reference documents are not automatically loaded; LLM consults them on demand
+- Each reference file includes a 3-line preview to help LLM decide whether to load it
 
 ---
 
-## 技能格式
+## Skill Format
 
-每个技能是一个包含 `SKILL.md` 的目录：
+Each skill is a directory containing `SKILL.md`:
 
 ```
 my-skill/
-├── SKILL.md          # 必需：技能主文件
-├── references/       # 可选：参考文档
-├── templates/        # 可选：模板文件
-├── scripts/          # 可选：辅助脚本
-└── assets/           # 可选：静态资源
+├── SKILL.md          # Required: Skill main file
+├── references/       # Optional: Reference documents
+├── templates/        # Optional: Template files
+├── scripts/          # Optional: Helper scripts
+└── assets/           # Optional: Static resources
 ```
 
-### SKILL.md 格式
+### SKILL.md Format
 
 ```markdown
 ---
 name: my-skill
-description: "技能描述"
+description: "Skill description"
 version: 1.0.0
-author: 作者名
+author: Author name
 license: MIT
 tags: [helen, tutorial]
 ---
 
-# 技能标题
+# Skill Title
 
-## 概述
-技能内容...
+## Overview
+Skill content...
 
-## 示例
-代码示例...
+## Examples
+Code examples...
 ```
 
 ---
 
-## 创建自定义技能
+## Creating Custom Skills
 
-### 1. 项目级技能
+### 1. Project-Level Skill
 
 ```bash
 cd my-project/
@@ -237,7 +237,7 @@ mkdir -p .helen/skills/my-api/
 cat > .helen/skills/my-api/SKILL.md << 'EOF'
 ---
 name: my-api
-description: "My Project API 文档"
+description: "My Project API Documentation"
 version: 1.0.0
 ---
 
@@ -249,25 +249,25 @@ version: 1.0.0
 EOF
 ```
 
-### 2. 用户级技能
+### 2. User-Level Skill
 
 ```bash
 mkdir -p ~/.helen/skills/my-workflow/
-# 创建 SKILL.md...
+# Create SKILL.md...
 ```
 
 ---
 
-## 实现细节
+## Implementation Details
 
-技能搜索由 `helen/runtime/config.py` 的 `get_skill_dirs()` 函数实现：
+Skill search is implemented by the `get_skill_dirs()` function in `helen/runtime/config.py`:
 
 ```python
 def get_skill_dirs() -> list[Path]:
-    """返回技能目录列表，按优先级排序。"""
+    """Return skill directory list, sorted by priority."""
     dirs = []
 
-    # 1. 项目级（当前目录向上查找 .helen/skills/）
+    # 1. Project-level (walk up from current directory for .helen/skills/)
     cwd = Path.cwd()
     for parent in [cwd] + list(cwd.parents):
         project_skills = parent / ".helen" / "skills"
@@ -275,18 +275,18 @@ def get_skill_dirs() -> list[Path]:
             dirs.append(project_skills)
             break
 
-    # 2. 用户级
+    # 2. User-level
     helen_skills = Path.home() / ".helen" / "skills"
     if helen_skills.exists():
         dirs.append(helen_skills)
 
-    # 3. 内置（随 Helen 安装）
+    # 3. Built-in (distributed with Helen)
     helen_package = Path(__file__).parent.parent.parent
     builtin_skills = helen_package / "skills"
     if builtin_skills.exists():
         dirs.append(builtin_skills)
 
-    # 4-5. Hermes 回退
+    # 4-5. Hermes fallback
     hermes_skills = Path.home() / ".hermes" / "skills"
     if hermes_skills.exists():
         dirs.append(hermes_skills)
@@ -296,11 +296,11 @@ def get_skill_dirs() -> list[Path]:
 
 ---
 
-## 统计
+## Statistics
 
-| 层级 | 技能数 | 说明 |
+| Tier | Skill Count | Description |
 |------|--------|------|
-| 内置 | 13 | 随 Helen 分发 |
-| Hermes 回退 | 63 | 兼容 Hermes Agent |
-| Hermes Agent | 73 | Hermes 核心技能 |
-| **总计** | **149** | 所有可用技能 |
+| Built-in | 13 | Distributed with Helen |
+| Hermes fallback | 63 | Hermes Agent compatibility |
+| Hermes Agent | 73 | Hermes core skills |
+| **Total** | **149** | All available skills |

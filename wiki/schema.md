@@ -1,56 +1,56 @@
 # Helen Wiki Schema
 
-> 本文件定义 Helen 语言 wiki 的结构、约定和维护流程。
+> This file defines the structure, conventions, and maintenance workflow of the Helen language wiki.
 
 ---
 
-## Wiki 结构
+## Wiki Structure
 
 ```
 wiki/
-├── index.md              # 内容索引（按类别组织）
-├── log.md                # 操作日志（按时间倒序）
-├── schema.md             # 本文件（wiki 约定）
-├── lint-report-*.md      # Lint 报告（按需生成）
+├── index.md              # Content index (organized by category)
+├── log.md                # Operation log (reverse chronological)
+├── schema.md             # This file (wiki conventions)
+├── lint-report-*.md      # Lint reports (generated on demand)
 │
-├── overview/             # 语言概述
+├── overview/             # Language overview
 │   ├── design-philosophy.md
 │   ├── language-spec.md
 │   └── architecture.md
 │
-├── syntax/               # 前端编译
-│   ├── lexical.md        # 词法分析
-│   ├── grammar.md        # 语法规范
-│   └── keywords.md       # 关键字参考
+├── syntax/               # Frontend compilation
+│   ├── lexical.md        # Lexical analysis
+│   ├── grammar.md        # Grammar specification
+│   └── keywords.md       # Keyword reference
 │
-├── compiler/             # 中间表示与语义
-│   ├── ast.md            # AST 节点定义
-│   ├── semantic.md       # 语义分析
-│   └── types.md          # 类型系统
+├── compiler/             # Intermediate representation and semantics
+│   ├── ast.md            # AST node definitions
+│   ├── semantic.md       # Semantic analysis
+│   └── types.md          # Type system
 │
-├── interpreter/          # 解释执行
-│   ├── execution.md      # 执行引擎
-│   ├── llm-integration.md # LLM 集成
-│   └── spawn.md     # 并发与 spawn
+├── interpreter/          # Interpretive execution
+│   ├── execution.md      # Execution engine
+│   ├── llm-integration.md # LLM integration
+│   └── spawn.md     # Concurrency and spawn
 │
-├── runtime/              # 运行时系统
-│   ├── llm-runtime.md    # LLM 运行时
-│   ├── prompt-builder.md # 提示词构建
-│   ├── memory.md         # 内存系统
-│   ├── history.md        # 历史管理
-│   ├── import.md         # 模块系统
-│   └── skills.md         # 技能系统
+├── runtime/              # Runtime systems
+│   ├── llm-runtime.md    # LLM runtime
+│   ├── prompt-builder.md # Prompt building
+│   ├── memory.md         # Memory system
+│   ├── history.md        # History management
+│   ├── import.md         # Module system
+│   └── skills.md         # Skill system
 │
-├── toolchain/            # 工具链
-│   ├── cli.md            # 命令行工具
-│   ├── testing.md        # 测试框架
-│   ├── quality.md        # 质量评估
-│   ├── lsp.md            # 语言服务器
-│   ├── vscode.md         # VS Code 扩展
-│   ├── stdlib.md         # 标准库
-│   └── error-format.md   # 错误格式化
+├── toolchain/            # Toolchain
+│   ├── cli.md            # Command-line tools
+│   ├── testing.md        # Testing framework
+│   ├── quality.md        # Quality assessment
+│   ├── lsp.md            # Language server
+│   ├── vscode.md         # VS Code extension
+│   ├── stdlib.md         # Standard library
+│   └── error-format.md   # Error formatting
 │
-├── tutorial/             # 教程（17 章）
+├── tutorial/             # Tutorial (17 chapters)
 │   ├── 01-getting-started.md
 │   ├── 02-variables-and-types.md
 │   ├── 03-functions.md
@@ -68,232 +68,232 @@ wiki/
 │   ├── 15-python-bridge.md
 │   └── 16-quality-assessment.md
 │
-└── appendix/             # 附录
-    ├── error-codes.md    # 错误码参考
-    ├── exceptions.md     # 异常层次
-    ├── changelog.md      # 版本历史
-    └── hld-compliance.md # HLD 合规
+└── appendix/             # Appendix
+    ├── error-codes.md    # Error code reference
+    ├── exceptions.md     # Exception hierarchy
+    ├── changelog.md      # Version history
+    └── hld-compliance.md # HLD compliance
 ```
 
 ---
 
-## 页面约定
+## Page Conventions
 
-每个 wiki 页面应包含：
+Each wiki page should include:
 
 ### YAML Frontmatter
 
 ```yaml
 ---
-title: 页面标题
+title: Page Title
 type: entity | concept | reference | tutorial | appendix
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
 version: v1.18
-sources: []  # 贡献的源代码文件
+sources: []  # Contributing source code files
 ---
 ```
 
-### 正文结构
+### Body Structure
 
-1. **标题和简介** - 一句话说明
-2. **核心内容** - 分章节组织
-3. **示例** - 代码示例（Helen 语法）
-4. **相关页面** - Wikilinks 到相关概念
+1. **Title and introduction** — One-sentence description
+2. **Core content** — Organized into sections
+3. **Examples** — Code examples (Helen syntax)
+4. **Related pages** — Wikilinks to related concepts
 
 ### Wikilinks
 
-使用 `[[path/to/page]]` 或 `[[path/to/page|显示文本]]` 语法。
+Use `[[path/to/page]]` or `[[path/to/page|display text]]` syntax.
 
-**常用链接**:
-- `[[syntax/keywords]]` - 关键字参考
-- `[[compiler/types]]` - 类型系统
-- `[[runtime/llm-runtime]]` - LLM 运行时
-- `[[tutorial/05-agents]]` - Agent 编程教程
-
----
-
-## 维护流程
-
-### 1. Lint（健康检查）
-
-**触发条件**:
-- 定期（建议每月一次）
-- Helen 语言大版本更新后
-- 发现文档不一致时
-
-**检查项目**:
-- 版本号一致性
-- 关键字计数和列表
-- Token/AST/Visitor 计数
-- 新特性是否已文档化
-- 跨页面引用是否正确
-- 过时内容标记
-
-**输出**:
-- `lint-report-YYYY-MM-DD.md` - 详细报告
-- 更新 `log.md` - 记录操作
-
-### 2. Update（更新）
-
-**触发条件**:
-- Helen 语言代码变更
-- Lint 报告发现问题
-- 用户请求
-
-**更新顺序**:
-1. 基础信息（版本号、计数）
-2. 语法和语义（关键字、语法规范）
-3. 运行时（执行引擎、LLM 集成）
-4. 教程（示例、说明）
-5. 附录（错误码、异常、变更日志）
-6. 同步 reports/ 和 skills/
-
-**更新内容**:
-- 修改相关 wiki 页面
-- 更新 `index.md`（如有新页面）
-- 更新 `log.md` - 记录操作
-
-### 3. Ingest（摄入新内容）
-
-**触发条件**:
-- 添加新教程
-- 添加新特性文档
-- 添加新的参考材料
-
-**流程**:
-1. 读取新内容
-2. 提取关键信息
-3. 更新相关页面
-4. 更新 `index.md`
-5. 更新 `log.md`
-
-### 4. Query（查询）
-
-**触发条件**:
-- 用户提问
-- 需要综合分析
-
-**流程**:
-1. 读取 `index.md` 找到相关页面
-2. 读取相关页面
-3. 综合答案
-4. 如有价值，可反馈为新页面
+**Common links**:
+- `[[syntax/keywords]]` — Keyword reference
+- `[[compiler/types]]` — Type system
+- `[[runtime/llm-runtime]]` — LLM runtime
+- `[[tutorial/05-agents]]` — Agent programming tutorial
 
 ---
 
-## 同步任务
+## Maintenance Workflow
 
-### wiki/ → reports/（自动生成）
+### 1. Lint (Health Check)
 
-`reports/tutorial.md` 由 `scripts/build_tutorial.py` 从 `wiki/tutorial/*.md` 自动生成。
+**Triggers**:
+- Periodically (recommended: once a month)
+- After a major Helen language version update
+- When documentation inconsistency is discovered
 
-当教程内容变化时：
+**Check items**:
+- Version number consistency
+- Keyword count and list
+- Token/AST/Visitor counts
+- Whether new features are documented
+- Cross-page references correctness
+- Outdated content flags
+
+**Output**:
+- `lint-report-YYYY-MM-DD.md` — Detailed report
+- Update `log.md` — Record the operation
+
+### 2. Update
+
+**Triggers**:
+- Helen language code changes
+- Lint report finds issues
+- User request
+
+**Update order**:
+1. Base information (version numbers, counts)
+2. Syntax and semantics (keywords, grammar specification)
+3. Runtime (execution engine, LLM integration)
+4. Tutorial (examples, descriptions)
+5. Appendix (error codes, exceptions, changelog)
+6. Sync reports/ and skills/
+
+**Update content**:
+- Modify relevant wiki pages
+- Update `index.md` (if there are new pages)
+- Update `log.md` — Record the operation
+
+### 3. Ingest (New Content)
+
+**Triggers**:
+- Adding a new tutorial
+- Adding new feature documentation
+- Adding new reference material
+
+**Workflow**:
+1. Read new content
+2. Extract key information
+3. Update relevant pages
+4. Update `index.md`
+5. Update `log.md`
+
+### 4. Query
+
+**Triggers**:
+- User question
+- Comprehensive analysis needed
+
+**Workflow**:
+1. Read `index.md` to find relevant pages
+2. Read the relevant pages
+3. Synthesize the answer
+4. If valuable, may be fed back as a new page
+
+---
+
+## Synchronization Tasks
+
+### wiki/ → reports/ (auto-generated)
+
+`reports/tutorial.md` is auto-generated by `scripts/build_tutorial.py` from `wiki/tutorial/*.md`.
+
+When tutorial content changes:
 ```bash
 python3 scripts/build_tutorial.py
 ```
 
-不要手动编辑 `reports/tutorial.md`——编辑 `wiki/tutorial/` 下的文件，然后重新生成。
+Do not manually edit `reports/tutorial.md` — edit files under `wiki/tutorial/` and regenerate.
 
 ### wiki/ → skills/
 
-当 wiki 更新时，检查是否需要同步到 `skills/`：
-- 语法变化影响技能模板
-- 新特性需要在技能中体现
-- `hellen-consistency-checker` 检查规则更新
+When the wiki is updated, check if synchronization to `skills/` is needed:
+- Syntax changes that affect skill templates
+- New features that need to be reflected in skills
+- `hellen-consistency-checker` rule updates
 
-### 代码 → wiki
+### Code → wiki
 
-当 Helen 代码更新时：
-1. 检查 `helen/core/tokens.py` - 关键字变化
-2. 检查 `helen/core/ast.py` - AST 节点变化
-3. 检查 `helen/interpreter/` - 执行逻辑变化
-4. 检查 `helen/runtime/` - 运行时变化
-5. 检查 `helen/stdlib/` - 内置函数变化
-6. 更新相关 wiki 页面
-
----
-
-## 版本追踪
-
-当前版本: **v1.18**
-
-**版本历史**:
-- v1.8: 函数式编程增强（管道操作符、模式匹配增强）
-- v1.9: 中文关键字、基础 agent 支持
-- v1.10: shared let、agent 作用域隔离、子脚本赋值、短路求值、异步 HTTP
-- v1.12: 隔离装饰器、shared store/channel、ReadOnlyView
-- v1.13: channel 通道、中文关键字补全
-- v1.14: llm stream 合并到 llm act、流式回调
-- v1.15: Phase 1-7 上下文管理（工作记忆、渐进压缩、缓存感知、三通道上下文）
-- v1.16: TranscriptStore SSOT（SQLite/JSONL 后端、LRU 缓存、UUID 寻址）
-- v1.17: 多模态格式适配器 stdlib
-- v1.18: spawn 并发原语（替代 async/await/detach）、Channel 消息队列、snapshot 全部深复制
-
-**需要追踪的特性**:
-- 关键字列表（英文 + 中文）: 89 (44.5 + 44.5)
-- Token 类型数量: 83
-- AST 节点数量: 60
-- Visitor 方法数量: 54
-- 内置函数数量: 255（255 中文别名）
-- 新特性列表（见 changelog.md）
+When Helen code is updated:
+1. Check `helen/core/tokens.py` — Keyword changes
+2. Check `helen/core/ast.py` — AST node changes
+3. Check `helen/interpreter/` — Execution logic changes
+4. Check `helen/runtime/` — Runtime changes
+5. Check `helen/stdlib/` — Built-in function changes
+6. Update relevant wiki pages
 
 ---
 
-## 质量标准
+## Version Tracking
 
-### 准确性
+Current version: **v1.18**
 
-- 所有数据必须与实际代码一致
-- 代码示例必须可运行
-- 链接必须有效
+**Version history**:
+- v1.8: Functional programming enhancements (pipe operator, pattern matching enhancements)
+- v1.9: Chinese keywords, basic agent support
+- v1.10: shared let, agent scope isolation, subscript assignment, short-circuit evaluation, async HTTP
+- v1.12: Isolation decorators, shared store/channel, ReadOnlyView
+- v1.13: channel messaging, Chinese keyword completion
+- v1.14: llm stream merged into llm act, streaming callbacks
+- v1.15: Phase 1-7 context management (working memory, graduated compression, cache-aware, three-channel context)
+- v1.16: TranscriptStore SSOT (SQLite/JSONL backends, LRU cache, UUID addressing)
+- v1.17: Multimodal format adapter stdlib
+- v1.18: spawn concurrency primitive (replacing async/await/detach), Channel message queue, full deep-copy snapshot
 
-### 完整性
-
-- 所有关键字都有文档
-- 所有特性都有说明
-- 所有示例都有注释
-
-### 一致性
-
-- 术语统一（如 "agent" vs "智能体"）
-- 格式统一（代码块、标题层级）
-- 版本信息统一
-
-### 可读性
-
-- 清晰的章节结构
-- 适当的代码示例
-- 有用的 wikilinks
+**Metrics to track**:
+- Keyword list (English + Chinese): 89 (44.5 + 44.5)
+- Token type count: 83
+- AST node count: 60
+- Visitor method count: 54
+- Built-in function count: 255 (255 Chinese aliases)
+- New features list (see changelog.md)
 
 ---
 
-## 工具
+## Quality Standards
 
-### 使用的工具
+### Accuracy
 
-- `llm-wiki` skill - wiki 维护
-- `Read` / `Write` / `Edit` - 文件操作
-- `Bash` - 代码分析
-- `grep` / `find` - 搜索
+- All data must match the actual code
+- Code examples must be runnable
+- Links must work
 
-### 自动化脚本
+### Completeness
 
-可以创建脚本自动检查：
-- 版本号一致性
-- 关键字计数
-- 链接有效性
+- All keywords are documented
+- All features are described
+- All examples have comments
+
+### Consistency
+
+- Terminology unified (e.g., "agent" vs "智能体")
+- Formatting unified (code blocks, heading levels)
+- Version information unified
+
+### Readability
+
+- Clear section structure
+- Appropriate code examples
+- Useful wikilinks
 
 ---
 
-## 参考
+## Tools
+
+### Tools Used
+
+- `llm-wiki` skill — wiki maintenance
+- `Read` / `Write` / `Edit` — File operations
+- `Bash` — Code analysis
+- `grep` / `find` — Search
+
+### Automation Scripts
+
+Scripts can be created to automatically check:
+- Version number consistency
+- Keyword count
+- Link validity
+
+---
+
+## References
 
 - **Karpathy LLM Wiki Pattern**: https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
-- **Helen CLAUDE.md**: 项目指令
-- **Helen HLD**: 高层设计文档（如有）
+- **Helen CLAUDE.md**: Project instructions
+- **Helen HLD**: High-level design document (if available)
 
 ---
 
-**最后更新**: 2026-07-13  
-**维护者**: LLM (Claude)  
-**版本**: v1.18
+**Last updated**: 2026-07-13  
+**Maintained by**: LLM (Claude)  
+**Version**: v1.18

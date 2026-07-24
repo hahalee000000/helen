@@ -1,6 +1,6 @@
 ---
 name: helen-language-development
-description: "Helen 语言实现模式 — AST/解析器/解释器扩展、async/await、异常层级、作用域隔离、共享变量、v1.14 特性（Shared Store、Channel、llm act 流式统一）、v1.16 TranscriptStore SSOT"
+description: "Helen Language Development Patterns — AST/parser/interpreter extension, async/await, exception hierarchy, scope isolation, shared variables, v1.14 features (Shared Store, Channel, llm act streaming unification), v1.16 TranscriptStore SSOT"
 version: 1.16.0
 author: Helen Team
 license: MIT
@@ -14,7 +14,7 @@ Development patterns and pitfalls for the Helen programming language (~/helen/).
 ## Quick Start & Environment
 
 - **Python**: 3.12+ (required)
-- **Package Manager**: uv (推荐) 或 pip
+- **Package Manager**: uv (recommended) or pip
 - **Install**: `cd ~/helen && uv pip install -e ".[dev]"`
 - **CLI**: `helen` (REPL), `helen <file>` (run), `helen check <file>` (lint)
 - **Tests**: `cd ~/helen && pytest`
@@ -168,37 +168,37 @@ def snapshot(self) -> Environment:
 def visit_agent_decl(self, node: AgentDeclNode):
     # Create isolated scope for agent main
     self.env.begin_scope()
-    
+
     # Check: module-level let should not be accessible
     for name in used_names:
         if name in module_level_lets:
             raise SemanticError(f"'{name}' is not visible in agent main")
-    
+
     # v1.12: Also check function_vars initializers
     for var in node.function_vars:
         self._check_initializer_in_agent_scope(var.initializer)
-    
+
     # v1.12: shared let must be value type
     for var in shared_let_declarations:
         if not self._is_value_type(var.type):
             raise SemanticError(f"shared let must be value type")
-    
+
     # Allow: const and shared let
     self._check_body(node.main_body)
-    
+
     self.env.end_scope()
 
 # In Interpreter._call_agent
 def _call_agent(self, agent, args):
     call_env = Environment()
-    
+
     # v1.12: Wrap mutable params in ReadOnlyView
     for param in agent.params:
         value = args.get(param.name)
         if isinstance(value, (list, dict)):
             value = ReadOnlyView(value)
         call_env.define(param.name, value)
-    
+
     # v1.12: Evaluate defaults in agent env, not caller env
     old_env = self.environment
     self.environment = call_env
@@ -228,7 +228,7 @@ def visit_shared_decl(self, node: SharedDeclNode):
 def visit_agent_decl(self, node: AgentDeclNode):
     # Track which shared vars are accessed
     accessed_shared = self._find_shared_access(node.main_body)
-    
+
     # Validate: all accessed vars must be declared as shared
     for name in accessed_shared:
         if name not in self.shared_vars:
@@ -288,15 +288,15 @@ map["key"] = value   // map key assignment
 
 Helen supports 92 keywords in both English and Chinese. See `references/chinese-keyword-implementation.md` for the full mapping table.
 
-**v1.12 新增**: `store`/`仓库`（Shared Store 声明）
-**v1.13 新增**: `channel`/`通道`（Channel 声明）
-**v1.14 删除**: `stream`/`流式执行`（流式功能合并到 `llm act`）
+**Added in v1.12**: `store`/`仓库` (Shared Store declaration)
+**Added in v1.13**: `channel`/`通道` (Channel declaration)
+**Removed in v1.14**: `stream`/`流式执行` (streaming merged into `llm act`)
 
 ## v1.12 Features: Shared Store + Isolation Enhancements
 
 ### Shared Store (`shared store`)
 
-`shared store` 为跨 agent 共享可变引用类型提供结构化方式：
+`shared store` provides a structured way to share mutable reference types across agents:
 
 ```python
 # AST: SharedStoreDeclNode(StatementNode)
@@ -318,11 +318,11 @@ class SharedStore:
 
 ### Isolation Enhancements
 
-- **参数默认值**: evaluate in agent env, not caller env
-- **functions{} 变量**: evaluate in agent env
-- **闭包值捕获**: snapshot values instead of env reference
-- **引用类型参数**: auto-wrap in ReadOnlyView
-- **复合赋值**: `arr[i]=x`, `obj.field=x` now check isolation
+- **Parameter defaults**: evaluate in agent env, not caller env
+- **functions{} variables**: evaluate in agent env
+- **Closure value capture**: snapshot values instead of env reference
+- **Reference type parameters**: auto-wrap in ReadOnlyView
+- **Compound assignment**: `arr[i]=x`, `obj.field=x` now check isolation
 - **@open/@strict/@sandbox**: isolation level decorators
 
 ### `@` (AT) Token
@@ -335,7 +335,7 @@ class SharedStore:
 
 ### Channel (`channel`)
 
-`channel` 声明类型安全的 agent 间通信端点。运行时复用 `SharedStore` 类。
+`channel` declares type-safe communication endpoints between agents. At runtime, it reuses the `SharedStore` class.
 
 ```python
 # AST: ChannelDeclNode(StatementNode)
@@ -346,7 +346,7 @@ class SharedStore:
 # Interpreter: visit_channel_decl() — creates SharedStore instance (same as shared store)
 ```
 
-**语义差异**: channel 是通信端点（message-passing），shared store 是共享状态容器（shared-memory）。运行时行为完全一致。
+**Semantic difference**: channel is a communication endpoint (message-passing), shared store is a shared state container (shared-memory). Runtime behavior is identical.
 
 ## v1.14 Features: llm stream merged into llm act
 
@@ -367,7 +367,7 @@ else:
     return self._visit_llm_act_sync(...)
 ```
 
-**关键字变化**: 94 → 92 (removed `stream`/`流式执行`)
+**Keyword count change**: 94 → 92 (removed `stream`/`流式执行`)
 
 ## Testing Patterns
 
@@ -467,12 +467,12 @@ snapshot = self.env.snapshot()
 
 ### Architecture Overview
 
-TranscriptStore 是 v1.16 引入的消息唯一真实来源（Single Source of Truth），替代了之前的双写架构：
+TranscriptStore is the Single Source of Truth (SSOT) for messages introduced in v1.16, replacing the previous dual-write architecture:
 
 ```
 helen/runtime/
 ├── transcript_store.py    # TranscriptStore + BoundaryMarker + Backends
-├── session_manager.py     # 会话生命周期管理
+├── session_manager.py     # Session lifecycle management
 └── config.py              # get_transcript_config()
 
 helen/interpreter/
@@ -480,16 +480,16 @@ helen/interpreter/
 └── interpreter.py         # _history @property (read-only view)
 
 helen/stdlib/
-└── transcript.py          # 6 个 stdlib 函数
+└── transcript.py          # 6 stdlib functions
 ```
 
 ### Key Components
 
-1. **TranscriptStore**: append-only 存储，支持 JSONL/SQLite 后端
-2. **BoundaryMarker**: 记录压缩事件（非破坏性压缩）
-3. **SessionManager**: 会话创建/恢复/清理
-4. **LRU Cache**: 内存优化（边界感知驱逐）
-5. **View Cache**: dirty flag + 缓存，O(1) 读取
+1. **TranscriptStore**: append-only storage, supports JSONL/SQLite backends
+2. **BoundaryMarker**: records compression events (non-destructive compression)
+3. **SessionManager**: session creation/resume/cleanup
+4. **LRU Cache**: memory optimization (boundary-aware eviction)
+5. **View Cache**: dirty flag + cache, O(1) reads
 
 ### Implementation Patterns
 
@@ -560,63 +560,63 @@ pytest tests/stdlib/test_transcript.py
 
 ---
 
-## ⚠️ Critical Knowledge: ImportResolver 缓存机制
+## ⚠️ Critical Knowledge: ImportResolver Cache Mechanism
 
-### 问题背景
+### Problem Background
 
-开发者在 REPL、Jupyter 或长时间运行的服务中修改 `.helen` 文件后，经常遇到"新代码不生效"的问题。这是因为 `ImportResolver` 使用了**内存级缓存**。
+Developers working in REPL, Jupyter, or long-running services often encounter "new code not taking effect" after modifying `.helen` files. This is because `ImportResolver` uses an **in-memory cache**.
 
-### 缓存行为
+### Cache Behavior
 
 ```python
 # helen/runtime/import_resolver.py
 class ImportResolver:
     def __init__(self):
-        self._cached_results: dict[str, ImportResult] = {}  # 内存缓存
-        self._loaded: set[str] = set()                      # 循环导入检测
+        self._cached_results: dict[str, ImportResult] = {}  # In-memory cache
+        self._loaded: set[str] = set()                      # Circular import detection
 ```
 
-| 场景 | 缓存行为 | 新代码生效？ |
-|------|---------|------------|
-| `helen main.helen` (CLI) | 每次新进程，无缓存 | ✅ 总是生效 |
-| REPL 中 `import` | 首次加载后缓存 | ❌ 修改后不生效 |
-| Web 服务复用 Interpreter | 首次加载后缓存 | ❌ 修改后不生效 |
-| 每次请求新建 Interpreter | 缓存自动清空 | ✅ 总是生效 |
+| Scenario | Cache Behavior | New Code Takes Effect? |
+|----------|---------------|----------------------|
+| `helen main.helen` (CLI) | New process each time, no cache | ✅ Always takes effect |
+| `import` in REPL | Cached after first load | ❌ Not effective after modification |
+| Web service reusing Interpreter | Cached after first load | ❌ Not effective after modification |
+| New Interpreter per request | Cache auto-cleared | ✅ Always takes effect |
 
-### 关键陷阱
+### Key Pitfall
 
-**❌ 错误模式**（开发时常见）：
+**❌ Wrong pattern** (common during development):
 ```python
 from helen.interpreter import Interpreter
 
 interp = Interpreter()
-interp.execute_file("agent.helen")  # 加载 v1
+interp.execute_file("agent.helen")  # Loads v1
 
-# 修改 agent.helen...
+# Modify agent.helen...
 
-interp.execute_file("agent.helen")  # ❌ 仍然是 v1！
+interp.execute_file("agent.helen")  # ❌ Still v1!
 ```
 
-**✅ 正确模式**（方案 1）：
+**✅ Correct pattern** (Approach 1):
 ```python
 def run_agent():
-    interp = Interpreter()  # 每次新建实例
+    interp = Interpreter()  # Create new instance each time
     return interp.execute_file("agent.helen")
 ```
 
-**✅ 正确模式**（方案 2 - 手动清缓存）：
+**✅ Correct pattern** (Approach 2 - manual cache clear):
 ```python
 interp = Interpreter()
 interp.execute_file("agent.helen")
 
-# 修改文件后
+# After modifying the file
 interp.import_resolver._cached_results.clear()
 interp.import_resolver._loaded.clear()
 
-interp.execute_file("agent.helen")  # ✅ 新代码生效
+interp.execute_file("agent.helen")  # ✅ New code takes effect
 ```
 
-**✅ 正确模式**（方案 3 - mtime 检查）：
+**✅ Correct pattern** (Approach 3 - mtime check):
 ```python
 import os
 
@@ -624,7 +624,7 @@ class SmartInterpreter:
     def __init__(self):
         self.interp = Interpreter()
         self._mtimes = {}
-    
+
     def execute_if_changed(self, path: str):
         mtime = os.path.getmtime(path)
         if self._mtimes.get(path, 0) < mtime:
@@ -633,42 +633,42 @@ class SmartInterpreter:
         return self.interp.execute_file(path)
 ```
 
-### Helen vs Python 缓存对比
+### Helen vs Python Cache Comparison
 
-| 特性 | Helen ImportResolver | Python `__pycache__` |
-|------|---------------------|---------------------|
-| 缓存位置 | 内存 | 磁盘 (`.pyc`) |
-| 跨进程 | ❌ 不持久化 | ✅ 持久化 |
-| 进程重启 | 自动清空 | 保留 |
-| 文件修改后 | 需手动清除 | 自动失效 (mtime) |
+| Feature | Helen ImportResolver | Python `__pycache__` |
+|---------|---------------------|---------------------|
+| Cache location | In-memory | Disk (`.pyc`) |
+| Cross-process | ❌ Not persisted | ✅ Persisted |
+| Process restart | Auto-cleared | Preserved |
+| After file modification | Manual clear needed | Auto-invalidated (mtime) |
 
-### 为什么 Helen 不用磁盘缓存？
+### Why Doesn't Helen Use Disk Cache?
 
-1. **Helen 是解释型语言**，没有 bytecode 编译步骤
-2. **解析速度快**，缓存收益不明显
-3. **开发体验优先**，避免"旧代码幽灵"问题
-4. **进程隔离**，每次执行都是干净环境
+1. **Helen is an interpreted language** — no bytecode compilation step
+2. **Parsing is fast** — cache benefit is marginal
+3. **Developer experience first** — avoids "ghost of old code" problems
+4. **Process isolation** — each execution starts with a clean environment
 
-### 调试技巧
+### Debugging Tips
 
 ```python
-# 检查缓存状态
+# Check cache status
 print(f"Cached: {len(interp.import_resolver._cached_results)} files")
 print(f"Loaded: {interp.import_resolver._loaded}")
 
-# 强制清除
+# Force clear
 interp.import_resolver._cached_results.clear()
 interp.import_resolver._loaded.clear()
 ```
 
-### 相关文档
+### Related Documentation
 
-- `wiki/runtime/import.md` — 完整的缓存机制说明
-- `wiki/tutorial/08-modules.md` — 开发时的注意事项
-- GitHub Issue #15 — 问题诊断报告
+- `wiki/runtime/import.md` — Full cache mechanism documentation
+- `wiki/tutorial/08-modules.md` — Development-time considerations
+- GitHub Issue #15 — Problem diagnosis report
 
 ---
 
-**最后更新**: 2026-07-16  
-**版本**: v1.21
+**Last updated**: 2026-07-16
+**Version**: v1.21
 - **helen-testing** — Testing framework and TDD workflow

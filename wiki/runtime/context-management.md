@@ -1,279 +1,286 @@
-# 上下文管理架构 (Context Management Architecture)
+# Context Management Architecture
 
-> **版本**: v1.23 | **最后更新**: 2026-07-18
-> 统一说明 Helen 的上下文管理系统，替换原 `agent_context.md`、`graduated_compression.md`、`cache_aware_compression.md`、`working_memory.md` 中的分散描述。
+> **Version**: v1.23 | **Last Updated**: 2026-07-18
+> Unified description of Helen's context management system, replacing the scattered descriptions in `agent_context.md`, `graduated_compression.md`, `cache_aware_compression.md`, and `working_memory.md`.
 
 ---
 
-## 零、设计哲学与生命周期
+## 0. Design Philosophy and Lifecycle
 
-> 在深入实现细节之前，先厘清上下文管理的本质问题：**Context 应该存在多久？**
+> Before diving into implementation details, let's clarify the essential question of context management: **How long should Context exist?**
 
-### 0.1 核心区分：Context vs Transcript
+### 0.1 Core Distinction: Context vs Transcript
 
-Helen 有两套看似重叠实则职责分明的系统：
+Helen has two seemingly overlapping but actually distinct systems:
 
-| | **Context（上下文）** | **Transcript（转录）** |
+| | **Context** | **Transcript** |
 |---|---|---|
-| 本质 | LLM **当前看到**的信息 | LLM **曾经说过**的完整记录 |
-| 目的 | 支撑推理 | 审计、恢复、追溯 |
-| 可变性 | 压缩、裁剪、替换 | 只追加，不可变（[[runtime/transcript-store|TranscriptStore SSOT]]） |
-| 生命周期 | 会话级，可销毁 | 持久化（SQLite/JSONL） |
-| 类比 | 工作台——当前正在用的东西 | 档案柜——所有历史都在 |
+| Nature | Information the LLM **currently sees** | Complete record of what the LLM **has ever said** |
+| Purpose | Support reasoning | Audit, recovery, tracing |
+| Mutability | Compressed, trimmed, replaced | Append-only, immutable ([[runtime/transcript-store|TranscriptStore SSOT]]) |
+| Lifecycle | Session-level, destroyable | Persistent (SQLite/JSONL) |
+| Analogy | Workbench — what's currently in use | Filing cabinet — all history is here |
 
-**设计原则**：Context 管理追求**在有限窗口内做到极致**，Transcript 追求**完整不丢失**。两者的分离让系统既高效（context 激进压缩不心疼）又安全（transcript 完整可审计）。
+**Design Principle**: Context management strives for **maximizing information quality within a limited window**; Transcript strives for **completeness without loss**. The separation allows the system to be both efficient (context can be aggressively compressed without concern) and safe (transcript is complete and auditable).
 
-> Context 是"此刻 LLM 该知道什么"，Transcript 是"LLM 曾经知道什么"。
+> Context is "what the LLM should know right now"; Transcript is "what the LLM has ever known."
 
-### 0.2 四层生命周期架构
+### 0.2 Four-Layer Lifecycle Architecture
 
-Context 的持续时间是分层的，每一层服务于不同的推理粒度：
+Context duration is layered, with each layer serving a different reasoning granularity:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Layer 3: Transcript（审计层）                              │
-│  生命周期：永久                                             │
-│  职责：不参与 LLM 推理，但可通过 replay_transcript() 恢复   │
-│  实现：[[runtime/transcript-store|TranscriptStore SSOT]]     │
+│  Layer 3: Transcript (Audit Layer)                          │
+│  Lifecycle: Permanent                                       │
+│  Responsibility: Does not participate in LLM reasoning,     │
+│    but can be restored via replay_transcript()              │
+│  Implementation: [[runtime/transcript-store|TranscriptStore SSOT]] │
 ├─────────────────────────────────────────────────────────────┤
-│  Layer 2: Pinned Context（持久关注层）                      │
-│  生命周期：跨 llm act 调用，Agent 会话内                    │
-│  职责：用户显式 pin 的关键信息，免疫所有 5 层压缩           │
-│  实现：pin_message(uuid)、working_memory_set()              │
+│  Layer 2: Pinned Context (Persistent Focus Layer)           │
+│  Lifecycle: Across llm act calls, within Agent session      │
+│  Responsibility: User-explicitly pinned critical info,      │
+│    immune to all 5 compression layers                       │
+│  Implementation: pin_message(uuid), working_memory_set()    │
 ├─────────────────────────────────────────────────────────────┤
-│  Layer 1: Active Context（活跃层）⭐ 核心                   │
-│  生命周期：Agent 会话（main {} 执行期）                     │
-│  职责：多轮 llm act 之间的对话历史 + 工具调用结果           │
-│  实现：AgentContextManager + 渐进压缩 + 三通道              │
+│  Layer 1: Active Context (Active Layer) ⭐ Core             │
+│  Lifecycle: Agent session (during main {} execution)        │
+│  Responsibility: Conversation history + tool call results   │
+│    across multiple llm act calls                            │
+│  Implementation: AgentContextManager + graduated            │
+│    compression + three-channel                              │
 ├─────────────────────────────────────────────────────────────┤
-│  Layer 0: Working Memory（即时层）                          │
-│  生命周期：单次 llm act 调用内部                            │
-│  职责：当前任务焦点、活跃文件、最近决策                     │
-│  实现：WorkingMemory 自动更新                               │
+│  Layer 0: Working Memory (Immediate Layer)                  │
+│  Lifecycle: Within a single llm act call                    │
+│  Responsibility: Current task focus, active files,          │
+│    recent decisions                                         │
+│  Implementation: WorkingMemory auto-update                  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**关键设计决策**：
+**Key Design Decisions**:
 
-1. **Layer 0 是临时的注意力引导**——单次 `llm act` 返回后即可销毁，不需要持久化。
-2. **Layer 1 的边界 = 单次 `main {}` 的执行期**（v1.22 实现）——每次 agent `main {}` 调用都是 fresh context，main {} 退出后丢弃。同一 agent 多次调用之间也不共享。详见 §0.5。
-3. **Layer 2 是用户主动声明"这些信息重要"的机制**——和 Layer 1 共享同一个 token 窗口，但享有压缩豁免权。
-4. **Layer 3 不是 Context**——它是 SSOT 审计记录，通过 `replay_transcript()` / `export_transcript()` 按需恢复。
+1. **Layer 0 is ephemeral attention guidance** — it can be destroyed once a single `llm act` returns; no persistence needed.
+2. **Layer 1 boundary = a single `main {}` execution** (implemented in v1.22) — each agent `main {}` call gets a fresh context, discarded when main {} exits. Even multiple calls of the same agent do not share context. See §0.5.
+3. **Layer 2 is the mechanism for users to actively declare "this information is important"** — it shares the same token window as Layer 1 but enjoys compression immunity.
+4. **Layer 3 is not Context** — it is the SSOT audit record, restored on demand via `replay_transcript()` / `export_transcript()`.
 
-### 0.3 Context 应该持久化多久？
+### 0.3 How Long Should Context Persist?
 
-| 问题 | 答案 | 理由 |
+| Question | Answer | Rationale |
 |---|---|---|
-| 跨 `llm act` 调用？ | ✅ 是 | 这是 Active Context 的核心价值——多轮工具调用需要连续性 |
-| 跨 agent？ | ❌ 不隐式共享 | 通过 [[interpreter/spawn|Channel / SharedStore]] 显式传递，避免作用域污染 |
-| 跨 Helen 进程？ | ❌ 不 | 进程重启通常意味着用户意图变了；通过 Transcript 恢复即可 |
-| 跨用户会话（天/周级）？ | ❌ 不是 context 的职责 | 是 [[runtime/skills|Skills]] / 外部记忆 / 文件的职责 |
+| Across `llm act` calls? | ✅ Yes | This is the core value of Active Context — multi-turn tool calls need continuity |
+| Across agents? | ❌ Not implicitly shared | Explicitly passed via [[interpreter/spawn|Channel / SharedStore]] to avoid scope pollution |
+| Across Helen processes? | ❌ No | Process restart usually means user intent has changed; restore via Transcript instead |
+| Across user sessions (day/week-level)? | ❌ Not context's responsibility | This is the job of [[runtime/skills|Skills]] / external memory / files |
 
-**跨进程为什么不该靠 context 持久化**：
+**Why cross-process recovery should not rely on context persistence**:
 
-1. 跨进程恢复需要反序列化整个上下文状态（环境、压缩标记、pin 状态、working memory），复杂度很高
-2. 进程重启时用户意图通常已变，旧上下文的价值下降
-3. 如果真需要延续，应该通过 **显式导出/导入** 或**文件持久化**完成（见下文"跨会话恢复的实际路径"）
-4. 把"持久化"的责任从 context 剥离，让 context 可以激进压缩而不必顾虑信息丢失
+1. Cross-process recovery would require deserializing the entire context state (environment, compression markers, pin state, working memory) — very complex.
+2. User intent usually changes upon process restart, reducing the value of old context.
+3. If continuity is truly needed, it should be done through **explicit export/import** or **file persistence** (see "Practical path for cross-session recovery" below).
+4. Stripping the "persistence" responsibility from context allows context to be aggressively compressed without worrying about information loss.
 
-**跨会话的"记忆"应该靠什么**：
+**What should "memory" across sessions rely on**:
 
-- **`restore_context(session_id)`** ⭐ (v1.21+)：直接从旧 transcript session 恢复成 active context。内部读取 TranscriptStore、保留所有字段（`tool_calls`/`tool_call_id`/`compressed`/`pinned`/`uuid`）、调用 `import_context()` 填充当前历史。**一步到位，无需手写格式适配。**
-- **`search_transcript(query)`** ⭐ (v1.22+)：按**内容**搜索持久化 transcript。支持 `scope="all"` 跨所有 session 搜索、`regex=true` 正则匹配、`role="user"` 角色过滤。一般场景下用户记不住 session_id，但记得内容——用 `search_transcript` 找到匹配的 session_id，再用 `restore_context` 恢复。详见 [[runtime/transcript-store|TranscriptStore SSOT §search_transcript]]。
-- **`export_context()` / `import_context(data)`**：会话结束前导出 context 快照（含 messages + working_memory + config）到文件，下次启动时读入并导入。适合需要同时保存 working_memory 和 config 的场景
-- **`replay_transcript(session_id)`**：读取旧 transcript 的消息列表（审计/查看用），**不会**自动注入到当前 context，且返回格式与 `import_context()` 不兼容
-- **文件持久化**：用户把关键信息写入文件，下次启动时读入
-- **Skills**：把模式、偏好、项目约定沉淀为 skill，不依赖上下文
+- **`restore_context(session_id)`** ⭐ (v1.21+): Directly restores an old transcript session as active context. Internally reads TranscriptStore, preserves all fields (`tool_calls`/`tool_call_id`/`compressed`/`pinned`/`uuid`), calls `import_context()` to populate current history. **One-step, no manual format adaptation needed.**
+- **`search_transcript(query)`** ⭐ (v1.22+): Searches persistent transcript by **content**. Supports `scope="all"` for cross-session search, `regex=true` for regex matching, `role="user"` for role filtering. In typical scenarios, users can't remember session_id but remember content — use `search_transcript` to find matching session_ids, then `restore_context` to recover. See [[runtime/transcript-store|TranscriptStore SSOT §search_transcript]].
+- **`export_context()` / `import_context(data)`**: Exports context snapshot (messages + working_memory + config) to file before session ends, reads back and imports on next startup. Suitable when both working_memory and config need to be saved.
+- **`replay_transcript(session_id)`**: Reads old transcript message list (for audit/viewing), does **not** automatically inject into current context, and the return format is incompatible with `import_context()`.
+- **File persistence**: User writes critical information to files, reads back on next startup.
+- **Skills**: Codify patterns, preferences, and project conventions as skills — independent of context.
 
-**`restore_context` vs `resume_session` 的区别**：
+**`restore_context` vs `resume_session`**:
 
 | | `restore_context(session_id)` | `resume_session(session_id)` |
 |---|---|---|
-| 恢复目标 | **Active Context**（LLM 看到的对话历史） | **Active Context** + 保持审计追踪连续性 |
-| 操作方式 | 清空当前历史，导入旧会话消息 | 导入旧会话消息到当前 store |
-| LLM 能看到恢复的消息？ | ✅ 能 | ✅ 能（v1.23 修复后） |
-| 调用树过滤 | 支持（按 agent/invocation 过滤） | 不支持（导入全部消息） |
-| session_id 变化 | 保持当前 session_id | 保持当前 session_id（v1.23 修复后） |
-| 适用场景 | 接续旧会话的特定 agent/invocation | 恢复整个旧会话的所有消息 |
+| Restoration target | **Active Context** (conversation history seen by LLM) | **Active Context** + maintains audit trail continuity |
+| Operation | Clears current history, imports old session messages | Imports old session messages into current store |
+| Can LLM see restored messages? | ✅ Yes | ✅ Yes (after v1.23 fix) |
+| Invocation tree filtering | Supported (filter by agent/invocation) | Not supported (imports all messages) |
+| session_id change | Keeps current session_id | Keeps current session_id (after v1.23 fix) |
+| Use case | Resume specific agent/invocation from old session | Restore all messages from an entire old session |
 
-**v1.23 变更**：`resume_session` 从"替换 transcript store 引用"改为"导入消息到当前 store"。这意味着：
-- 恢复的消息现在对 LLM 可见（标记当前 invocation_id）
-- 当前 session_id 保持不变（审计追踪连续）
-- 如果需要按 agent/invocation 精准恢复，使用 `restore_context`
+**v1.23 change**: `resume_session` changed from "replacing transcript store reference" to "importing messages into current store". This means:
+- Restored messages are now visible to the LLM (tagged with current invocation_id)
+- Current session_id remains unchanged (audit trail stays continuous)
+- If precise recovery by agent/invocation is needed, use `restore_context`
 
-### 0.4 `context {}` 配置的生命周期语义
+### 0.4 Lifecycle Semantics of `context {}` Configuration
 
-Agent 声明中的 `context { ... }` 配置绑定了 Active Context 的行为策略：
+The `context { ... }` configuration in agent declarations binds Active Context behavior policies:
 
 ```helen
 agent MyAgent {
     context {
-        compression "graduated"       // 压缩策略
-        cache-aware true              // 缓存感知
-        working-memory true           // 工作记忆
-        working-memory-tokens 5000    // 工作记忆 token 预算
+        compression "graduated"       // Compression strategy
+        cache-aware true              // Cache-aware
+        working-memory true           // Working memory
+        working-memory-tokens 5000    // Working memory token budget
     }
     main { ... }
 }
 ```
 
-**语义**：这些配置控制 Agent 会话期间 Active Context 如何管理自己，**不控制跨会话持久化**。每次 `helen` 进程启动，Agent 都从 fresh context 开始。如果需要延续旧会话，有两种方式：
+**Semantics**: These configurations control how Active Context manages itself during the Agent session, **not cross-session persistence**. Each `helen` process startup begins with a fresh context. To continue an old session, there are two approaches:
 
 ```helen
-// 方式 1（推荐）：从旧 transcript session 直接恢复 active context
+// Approach 1 (recommended): Restore active context directly from old transcript session
 let sessions = list_sessions()
-// ... 选择要恢复的 session_id ...
+// ... select the session_id to restore ...
 let r = restore_context("session_1783492628_d9d9c0aa")
 // r: {status: "ok", restored_messages: 42, boundary_markers: 3, note: "..."}
 
-// 方式 2：导出/导入完整快照（保留 working_memory + config）
-// 会话结束前保存
+// Approach 2: Export/import full snapshot (preserves working_memory + config)
+// Save before session ends
 let snapshot = export_context()
 write_file("context_snapshot.json", to_json(snapshot.context))
-// 新会话启动时恢复
+// Restore at new session startup
 let saved = parse_json(read_file("context_snapshot.json"))
 import_context(saved)
 ```
 
-**方式 1 vs 方式 2**：
-- `restore_context(session_id)`：恢复 **messages**，字段完整（含 tool_calls、pinned、compressed、uuid）。**不**恢复 working_memory 和 config（因为 transcript 不存这些）。
-- `export_context() / import_context()`：恢复 messages + working_memory + config 全部，但需要先写文件再读回。
+**Approach 1 vs Approach 2**:
+- `restore_context(session_id)`: Restores **messages** with complete fields (including tool_calls, pinned, compressed, uuid). Does **not** restore working_memory and config (since transcript doesn't store these).
+- `export_context() / import_context()`: Restores messages + working_memory + config all together, but requires writing to file first then reading back.
 
-**未来考虑**：
-- 如果 Helen 支持 agent 复用/池化，需要明确——同一 agent 多次执行，context 是否复用？设计倾向：**不复用**，每次执行都是 fresh context。跨执行的延续通过 `restore_context()` 或参数传入。
+**Future consideration**:
+- If Helen supports agent reuse/pooling, it needs to be clarified — whether context is reused across multiple executions of the same agent. Design tendency: **no reuse**, each execution gets fresh context. Cross-execution continuity is achieved via `restore_context()` or parameters.
 
-### 0.5 v1.22 实现：Per-Main Fresh Context + Invocation Tree
+### 0.5 v1.22 Implementation: Per-Main Fresh Context + Invocation Tree
 
-> **状态**：已实现（v1.22）。详见 `reports/v1.22-invocation-tree-proposal.md`。
+> **Status**: Implemented (v1.22). See `reports/v1.22-invocation-tree-proposal.md`.
 
-v1.22 把上述设计原则落地为两个核心机制：
+v1.22 implements the above design principles as two core mechanisms:
 
-**1. Per-Main Fresh Context（每次 main {} 都是 fresh）**
+**1. Per-Main Fresh Context (every main {} is fresh)**
 
-每次进入 agent `main {}`（或顶层 main）时，interpreter 创建一个新的 `invocation_id`。`_history` 属性按 `invocation_id` 过滤--LLM 只看到当前 invocation 的消息。main {} 退出后，invocation 结束，下一次调用又是 fresh。
+Each time the interpreter enters an agent `main {}` (or top-level main), it creates a new `invocation_id`. The `_history` property is filtered by `invocation_id` — the LLM only sees messages from the current invocation. When main {} exits, the invocation ends; the next call is fresh again.
 
-实现位置：`helen/interpreter/interpreter.py`
-- `_enter_invocation(agent_name)` / `_exit_invocation()`：管理 invocation 栈
-- `_call_agent`：进入 agent 时 `_enter_invocation`，finally 块 `_exit_invocation`
-- `visit_main_block`：顶层 main 也创建 invocation
-- `_history` property：按 `_current_invocation_id` 过滤
+Implementation location: `helen/interpreter/interpreter.py`
+- `_enter_invocation(agent_name)` / `_exit_invocation()`: Manage the invocation stack
+- `_call_agent`: Calls `_enter_invocation` when entering an agent, `_exit_invocation` in the finally block
+- `visit_main_block`: Top-level main also creates an invocation
+- `_history` property: Filters by `_current_invocation_id`
 
-**2. Invocation Tree（调用树）**
+**2. Invocation Tree**
 
-每条消息带三个新字段（`helen/runtime/history.py` 的 `Message` dataclass）：
-- `agent_name`：产生该消息的 agent 名（顶层为 `None`）
-- `invocation_id`：本次 main {} 执行的唯一 ID
-- `parent_invocation_id`：父调用的 invocation_id（构建调用树）
+Each message carries three new fields (in the `Message` dataclass of `helen/runtime/history.py`):
+- `agent_name`: The agent name that produced this message (`None` for top-level)
+- `invocation_id`: Unique ID for this main {} execution
+- `parent_invocation_id`: The parent invocation's invocation_id (builds the call tree)
 
-transcript 仍然记录**所有**消息（SSOT 审计完整），但 active context 按 invocation 过滤。
+The transcript still records **all** messages (SSOT audit complete), but active context is filtered by invocation.
 
-**查询 API**（`helen/stdlib/transcript.py`）：
-- `list_invocations(session_id?, agent?, limit?, offset?)`：列出 invocation
-- `get_invocation(invocation_id, session_id?)`：查单个 invocation 元数据
-- `get_invocation_tree(session_id?)`：获取完整调用树（嵌套结构）
-- `invocation_path(invocation_id, session_id?)`：调用路径字符串（如 `top -> A -> C`）
+**Query API** (`helen/stdlib/transcript.py`):
+- `list_invocations(session_id?, agent?, limit?, offset?)`: List invocations
+- `get_invocation(invocation_id, session_id?)`: Get single invocation metadata
+- `get_invocation_tree(session_id?)`: Get complete invocation tree (nested structure)
+- `invocation_path(invocation_id, session_id?)`: Invocation path string (e.g., `top -> A -> C`)
 
-**扩展的过滤参数**：
+**Extended filtering parameters**:
 - `replay_transcript(..., agent?, invocation_id?, last_only?, include_subtree?)`
 - `restore_context(session_id, invocation_id?, agent?, last_only?, include_subtree?)`
 
-**隔离边界**：
+**Isolation Boundaries**:
 
-| 场景 | 是否共享 active context |
+| Scenario | Active context shared? |
 |---|---|
-| 同一 agent 的 `main {}` 内部多次 `llm act` | 累积（工具循环必需） |
-| 同一 agent 的两次 `main {}` 调用 | 隔离（每次 fresh） |
-| 不同 agent 的 `main {}` | 隔离 |
-| 嵌套调用：Outer 调 Inner 后 | Outer 看不到 Inner 的消息 |
-| `spawn A()` 并发 | 隔离 |
-| 跨 `helen` 进程 | 隔离 |
+| Multiple `llm act` calls within the same agent's `main {}` | Accumulates (required for tool loop) |
+| Two calls of the same agent's `main {}` | Isolated (fresh each time) |
+| Different agents' `main {}` | Isolated |
+| Nested calls: Outer calls Inner | Outer cannot see Inner's messages |
+| `spawn A()` concurrency | Isolated |
+| Across `helen` processes | Isolated |
 
-**中文别名**：`列出调用`、`获取调用`、`获取调用树`、`调用路径`。
+**Chinese aliases**: `列出调用`, `获取调用`, `获取调用树`, `调用路径`.
 
-### 0.6 v1.23 修复：Invocation 隔离的实现修正
+### 0.6 v1.23 Fix: Invocation Isolation Implementation Correction
 
-> **状态**：已修复（v1.23，2026-07-18）。
+> **Status**: Fixed (v1.23, 2026-07-18).
 
-v1.22 实现了 per-main fresh context 的设计，但 v1.23 发现并修复了关键实现缺陷：
+v1.22 implemented the per-main fresh context design, but v1.23 found and fixed a critical implementation defect:
 
-**问题 1：`_prepare_history_for_llm()` 绕过 invocation 过滤**
+**Problem 1: `_prepare_history_for_llm()` bypassed invocation filtering**
 
-v1.22 中，`_prepare_history_for_llm()` 直接读取 `transcript_store.read_view()`，绕过了 `_history` property 的 invocation_id 过滤。这导致 agent 之间能看到彼此的上下文，违反了 per-main fresh context 的设计原则。
+In v1.22, `_prepare_history_for_llm()` directly read `transcript_store.read_view()`, bypassing the `_history` property's invocation_id filtering. This caused agents to see each other's context, violating the per-main fresh context design principle.
 
-**修复**：`_prepare_history_for_llm()` 统一走 `self._history`（包含 invocation_id 过滤）。
+**Fix**: `_prepare_history_for_llm()` now uniformly uses `self._history` (which includes invocation_id filtering).
 
-**问题 2：`_import_context()` 双存储不一致**
+**Problem 2: `_import_context()` dual-store inconsistency**
 
-`_import_context()` 同时写入 `_interpreter_history` 和 `TranscriptStore`，导致数据不一致。且导入的消息没有标记 `invocation_id`，无法正确隔离。
+`_import_context()` wrote to both `_interpreter_history` and `TranscriptStore`, causing data inconsistency. Moreover, imported messages were not tagged with `invocation_id`, preventing correct isolation.
 
-**修复**：改为单写策略——TranscriptStore 启用时只写 TranscriptStore，否则只写 `_interpreter_history`。导入的消息标记当前 `invocation_id`。
+**Fix**: Changed to single-write strategy — only writes to TranscriptStore when enabled, otherwise only writes to `_interpreter_history`. Imported messages are tagged with the current `invocation_id`.
 
-**问题 3：`resume_session()` 语义错误**
+**Problem 3: `resume_session()` semantic error**
 
-`resume_session()` 直接替换 TranscriptStore 引用，导致恢复的消息不受 invocation 隔离控制。
+`resume_session()` directly replaced the TranscriptStore reference, causing restored messages to escape invocation isolation control.
 
-**修复**：改为导入消息到当前 store 并标记 `invocation_id`，保持审计追踪的连续性。
+**Fix**: Changed to import messages into the current store and tag with `invocation_id`, maintaining audit trail continuity.
 
-**验证测试**：
+**Validation tests**:
 
 ```helen
-// v1.23 之前的 bug（已修复）
-agent AgentA { main { return llm act "我是 Alice" } }
-agent AgentB { main { return llm act "我叫什么？" } }
+// Bug before v1.23 (now fixed)
+agent AgentA { main { return llm act "I am Alice" } }
+agent AgentB { main { return llm act "What is my name?" } }
 
 let a = AgentA()
 let b = AgentB()
-// v1.22（bug）：AgentB 能回答 "Alice" ❌
-// v1.23（修复）：AgentB 看不到 AgentA 的上下文 ✅
+// v1.22 (bug): AgentB could answer "Alice" ❌
+// v1.23 (fix): AgentB cannot see AgentA's context ✅
 ```
 
-**相关文件**：
-- `helen/interpreter/llm_mixin.py`：`_prepare_history_for_llm()` 修复
-- `helen/stdlib/context.py`：`_import_context()` 单写策略
-- `helen/stdlib/transcript.py`：`resume_session()` 导入语义
-- `tests/interpreter/test_v123_invocation_isolation.py`：新增隔离验证测试
+**Related files**:
+- `helen/interpreter/llm_mixin.py`: `_prepare_history_for_llm()` fix
+- `helen/stdlib/context.py`: `_import_context()` single-write strategy
+- `helen/stdlib/transcript.py`: `resume_session()` import semantics
+- `tests/interpreter/test_v123_invocation_isolation.py`: New isolation validation tests
 
 ---
 
-## 一、总览
+## 1. Overview
 
-Helen 的上下文管理由四个子系统协作组成，目标是在有限的上下文窗口中最大化 LLM 获得的信息质量：
+Helen's context management is composed of four cooperating subsystems, aiming to maximize the quality of information the LLM receives within a limited context window:
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                    AgentContextManager (统一入口)                  │
+│                    AgentContextManager (Unified Entry)            │
 │                  helen/interpreter/agent_context.py                │
 │                                                                   │
 │   prepare_context(system_prompt, history, max_tokens)             │
 │       │                                                           │
-│       ├─► _compress_history()        ← 统一压缩入口               │
-│       │     ├─ strategy="none"        → 跳过                      │
-│       │     ├─ strategy="traditional" → HistoryManager 单层压缩   │
-│       │     └─ strategy="graduated"   → 5 层渐进管线              │
-│       │     └─ if cache_aware: _apply_cache_aware_wrap()          │
-│       │          保留前 30% 消息不变，对可压缩区重新运行基础策略    │
+│       ├─► _compress_history()        ← Unified compression entry │
+│       │     ├─ strategy="none"        → Skip                     │
+│       │     ├─ strategy="traditional" → HistoryManager           │
+│       │     │                          single-layer compression  │
+│       │     └─ strategy="graduated"   → 5-layer pipeline         │
+│       │     └─ if cache_aware: _apply_cache_aware_wrap()         │
+│       │          Preserve first 30% messages, re-run base        │
+│       │          strategy on compressible suffix                 │
 │       │                                                           │
-│       └─► build_three_channel_context()  ← 三通道构建             │
-│             ├─ Channel 1 (15%): 系统指令                          │
-│             ├─ Channel 2 (50%): 工作记忆 (受预算截断)             │
-│             └─ Channel 3 (35%): 对话历史                          │
+│       └─► build_three_channel_context() ← Three-channel build    │
+│             ├─ Channel 1 (15%): System instructions              │
+│             ├─ Channel 2 (50%): Working memory (budget-truncated)│
+│             └─ Channel 3 (35%): Conversation history             │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-### 子系统对照
+### Subsystem Reference
 
-| 子系统 | 文件 | 职责 |
+| Subsystem | File | Responsibility |
 |--------|------|------|
-| 工作记忆 | `runtime/working_memory.py` | 跟踪当前任务状态（活跃文件、决策、TODO、错误） |
-| 渐进压缩 | `runtime/graduated_compression.py` | 5 层渐进式压缩管线（零成本优先） |
-| 缓存感知 | 集成在 `agent_context.py` 中 | 保留稳定前缀，提高 prompt cache 命中率 |
-| 历史管理 | `runtime/history.py` | Message 数据结构、token 估算、传统压缩 |
+| Working Memory | `runtime/working_memory.py` | Tracks current task state (active files, decisions, TODOs, errors) |
+| Graduated Compression | `runtime/graduated_compression.py` | 5-layer graduated compression pipeline (zero-cost first) |
+| Cache-Aware | Integrated in `agent_context.py` | Preserves stable prefix, improves prompt cache hit rate |
+| History Management | `runtime/history.py` | Message data structure, token estimation, traditional compression |
 
 ---
 
-## 二、AgentContextManager — 统一入口
+## 2. AgentContextManager — Unified Entry
 
-### 2.1 类定义
+### 2.1 Class Definition
 
 ```python
 class AgentContextManager:
@@ -284,32 +291,32 @@ class AgentContextManager:
         working_memory_enabled: bool = True,
         cache_aware_enabled: bool = True,
         *,
-        compression_enabled: bool | None = None,  # 向后兼容 shim
+        compression_enabled: bool | None = None,  # Backward-compat shim
     ):
 ```
 
-**`compression_strategy` 三个值的含义**：
+**Meanings of `compression_strategy` values**:
 
-| 策略 | 路径 | 特点 |
+| Strategy | Path | Characteristics |
 |------|------|------|
-| `"none"` | 跳过压缩 | 适合短对话 |
-| `"graduated"` | `graduated_compress()` — 5 层管线 | 最廉价动作优先，零成本层不调用 LLM |
-| `"traditional"` | `HistoryManager.enforce_limit()` | 旧版单层 summarize/truncate，简单可预测 |
+| `"none"` | Skip compression | Suitable for short conversations |
+| `"graduated"` | `graduated_compress()` — 5-layer pipeline | Cheapest-action-first, zero-cost layers don't call LLM |
+| `"traditional"` | `HistoryManager.enforce_limit()` | Legacy single-layer summarize/truncate, simple and predictable |
 
-**`cache_aware_enabled`**：包裹（而非替代）基础策略。启用后保留前 30% 消息作为缓存稳定区，仅对后缀运行基础压缩。可与 `graduated` 或 `traditional` 任意组合。
+**`cache_aware_enabled`**: Wraps (not replaces) the base strategy. When enabled, preserves the first 30% of messages as a cache-stable zone, running base compression only on the suffix. Can be combined with either `graduated` or `traditional`.
 
-**向后兼容**：`compression_enabled=True/False` 仍可使用，通过 property 映射到 `"graduated"` / `"none"`。
+**Backward compatibility**: `compression_enabled=True/False` still works, mapped to `"graduated"` / `"none"` via property.
 
-### 2.2 核心调用流程
+### 2.2 Core Call Flow
 
 ```
 prepare_context()
     │
     ├─► _compress_history(history, max_tokens)
     │     │
-    │     │  # Step 1: 选择基础压缩
+    │     │  # Step 1: Select base compression
     │     ├─ strategy == "none" or len(history) <= 10:
-    │     │     return history  (跳过)
+    │     │     return history  (skip)
     │     │
     │     ├─ strategy == "traditional":
     │     │     return HistoryManager(context_window=max_tokens).enforce_limit(history)
@@ -317,22 +324,22 @@ prepare_context()
     │     └─ strategy == "graduated":
     │           return graduated_compress(history, usage_ratio, max_tokens)
     │
-    │     # Step 2: 缓存感知包裹 (if cache_aware_enabled)
+    │     # Step 2: Cache-aware wrapping (if cache_aware_enabled)
     │     └─ _apply_cache_aware_wrap(compressed, original_history, max_tokens)
-    │           cache_zone = original_history[:N]       # 前 30%，原样保留
-    │           suffix     = original_history[N:]        # 后缀
+    │           cache_zone = original_history[:N]       # First 30%, preserved as-is
+    │           suffix     = original_history[N:]        # Suffix
     │           return cache_zone + base_compress(suffix, adjusted_budget)
     │
     └─► build_three_channel_context(system_prompt, working_memory, compressed)
-          ├─ Channel 1: system prompt (截断到 15% 预算)
+          ├─ Channel 1: System prompt (truncated to 15% budget)
           ├─ Channel 2: working_memory.to_context(budget_chars=50%*max_tokens)
-          └─ Channel 3: 历史消息 (从新到旧填充 35% 预算)
+          └─ Channel 3: History messages (fill 35% budget from newest to oldest)
 ```
 
-### 2.3 Interpreter 集成
+### 2.3 Interpreter Integration
 
 ```python
-# interpreter.py — 初始化
+# interpreter.py — Initialization
 self._agent_context = AgentContextManager(
     working_memory_tokens=5000,
     compression_strategy="graduated",
@@ -340,26 +347,26 @@ self._agent_context = AgentContextManager(
     cache_aware_enabled=True,
 )
 
-# llm_mixin.py — 每次 llm act 前应用 agent 的 context {} 配置
+# llm_mixin.py — Apply agent's context {} config before each llm act
 self._agent_context.compression_strategy = ctx_config.compression
 self._agent_context.working_memory_enabled = ctx_config.working_memory
 self._agent_context.cache_aware_enabled = ctx_config.cache_aware
 ```
 
-### 2.4 Agent 声明配置
+### 2.4 Agent Declaration Configuration
 
 ```helen
 agent SmartAssistant {
     context {
         compression "graduated"       // "none" | "graduated" | "traditional"
-        cache-aware true              // 缓存感知包裹
-        working-memory true           // 工作记忆
-        working-memory-tokens 5000    // 工作记忆词元预算
+        cache-aware true              // Cache-aware wrapping
+        working-memory true           // Working memory
+        working-memory-tokens 5000    // Working memory token budget
     }
     main { ... }
 }
 
-// 中文关键字
+// Chinese keywords
 agent 智能助手 {
     上下文 {
         压缩 "graduated"
@@ -373,52 +380,52 @@ agent 智能助手 {
 
 ---
 
-## 三、工作记忆 (Working Memory)
+## 3. Working Memory
 
-### 3.1 数据结构
+### 3.1 Data Structure
 
 ```python
 @dataclass
 class WorkingMemory:
-    task_description: str = ""         # 当前任务描述（永不淘汰，最高优先级）
-    active_files: list[str]            # 活跃文件（受 token 预算淘汰）
-    recent_decisions: list[str]        # 最近决策（受 token 预算淘汰）
-    pending_todos: list[str]           # 待办事项（受 token 预算淘汰）
-    error_history: list[dict]          # 错误记录（受 token 预算淘汰）
-    max_tokens: int = 5000             # token 预算
+    task_description: str = ""         # Current task description (never evicted, highest priority)
+    active_files: list[str]            # Active files (evicted under token budget)
+    recent_decisions: list[str]        # Recent decisions (evicted under token budget)
+    pending_todos: list[str]           # Pending TODOs (evicted under token budget)
+    error_history: list[dict]          # Error records (evicted under token budget)
+    max_tokens: int = 5000             # Token budget
 ```
 
-**Token 级淘汰（v1.15+）**：`_add_active_file`、`_add_decision`、`_add_todo`、`_add_error` 每次添加后检查总 token 数。超出 `max_tokens` 时，按优先级从低到高淘汰最旧条目：
+**Token-level eviction (v1.15+)**: `_add_active_file`, `_add_decision`, `_add_todo`, `_add_error` each check total token count after adding. When `max_tokens` is exceeded, the oldest entries are evicted from lowest to highest priority:
 
 ```
-淘汰顺序（最先淘汰 → 最后淘汰）:
+Eviction order (first evicted → last evicted):
 Pending TODOs → Recent Decisions → Active Files → Error History
-（task_description 永不淘汰）
+(task_description is never evicted)
 ```
 
-**与旧版差异**：旧版使用硬编码列表长度上限（10/10/20/5），新版改为 token 预算驱动。条目大小不均时更精确，大条目（长路径、长错误）更快触发淘汰。
+**Difference from legacy version**: The old version used hardcoded list length limits (10/10/20/5); the new version uses token-budget-driven eviction. More precise when entries vary in size — large entries (long paths, long errors) trigger eviction sooner.
 
-### 3.2 自动更新
+### 3.2 Auto-Update
 
-通过 `AgentContextManager` 在两个时机自动更新：
+Updated automatically via `AgentContextManager` at two points:
 
-- **`update_from_message(content, role)`**：从消息内容正则提取文件引用、TODO、决策
-- **`update_from_tool_call(tool_name, tool_args, tool_result)`**：从工具调用结构化跟踪
+- **`update_from_message(content, role)`**: Regex-extracts file references, TODOs, decisions from message content
+- **`update_from_tool_call(tool_name, tool_args, tool_result)`**: Structured tracking from tool calls
 
-| 工具 | 效果 |
+| Tool | Effect |
 |------|------|
-| `read_file` | 添加到 `active_files` |
-| `write_file` / `patch_file` | 添加到 `active_files` + 记录决策 |
-| `shell_exec` (失败) | 添加到 `error_history` |
-| `glob_files` / `grep_files` | 记录搜索决策 |
+| `read_file` | Add to `active_files` |
+| `write_file` / `patch_file` | Add to `active_files` + record decision |
+| `shell_exec` (failure) | Add to `error_history` |
+| `glob_files` / `grep_files` | Record search decision |
 
-### 3.3 格式化输出与预算截断
+### 3.3 Formatted Output and Budget Truncation
 
-`to_context(budget_chars=None)` 将工作记忆格式化为 Markdown 字符串：
+`to_context(budget_chars=None)` formats working memory as a Markdown string:
 
 ```
 ## Current Task
-修复认证 bug
+Fix authentication bug
 
 ## Recent Errors
 - Command: pytest
@@ -429,10 +436,10 @@ Pending TODOs → Recent Decisions → Active Files → Error History
 - tests/test_auth.py
 ```
 
-**当提供 `budget_chars` 时**，按优先级从低到高渐进丢弃分区：
+**When `budget_chars` is provided**, partitions are progressively dropped from lowest to highest priority:
 
 ```
-Pending TODOs (最先丢弃)
+Pending TODOs (dropped first)
     ↓
 Recent Decisions
     ↓
@@ -440,34 +447,34 @@ Active Files
     ↓
 Recent Errors
     ↓
-Current Task (最后丢弃，必要时截断正文到行边界)
+Current Task (dropped last, body truncated to line boundary if needed)
 ```
 
-### 3.4 已知限制
+### 3.4 Known Limitations
 
-`max_tokens` 字段当前仅用于 `build_three_channel_context` 中的预算计算。`WorkingMemory` 本身不执行 token 级别的淘汰——只依赖列表长度上限（10/10/20/5）。
+The `max_tokens` field is currently only used for budget calculations in `build_three_channel_context`. `WorkingMemory` itself does not perform token-level eviction — it relies only on list length limits (10/10/20/5).
 
 ---
 
-## 四、渐进压缩管线 (Graduated Compression)
+## 4. Graduated Compression Pipeline
 
-### 4.1 五层管线
+### 4.1 Five-Layer Pipeline
 
-位于 `helen/runtime/graduated_compression.py`，设计原则："最廉价动作优先"——每层只在更便宜的层不够用时才触发。
+Located in `helen/runtime/graduated_compression.py`, design principle: "cheapest action first" — each layer only triggers when cheaper layers are insufficient.
 
-| 层级 | 阈值 | 策略 | 成本 | 机制 |
+| Layer | Threshold | Strategy | Cost | Mechanism |
 |------|------|------|------|------|
-| Layer 1 | 60% | Budget Reduction | 零 | 替换 >4000 字符的工具结果为引用指针 |
-| Layer 2 | 70% | Snip | 零 | 丢弃过时轮次，保留最近 8 轮 |
-| Layer 3 | 80% | Microcompact | 零 | 清除旧工具结果内容，保留 `tool_use` 决策 ⭐ |
-| Layer 4 | 90% | Context Collapse | 零 | 归档旧轮次，**投射时间线视图**（分段摘要，保留时间结构） |
-| Layer 5 | 95% | Auto-Compact | **零或高** | 优先调用 `LLMSummarizer` 进行语义摘要；LLM 不可用时回退到零成本结构摘要 |
+| Layer 1 | 60% | Budget Reduction | Zero | Replaces >4000-char tool results with reference pointers |
+| Layer 2 | 70% | Snip | Zero | Drops stale turns, keeps recent 8 turns |
+| Layer 3 | 80% | Microcompact | Zero | Clears old tool result content, preserves `tool_use` decisions ⭐ |
+| Layer 4 | 90% | Context Collapse | Zero | Archives old turns, **projects timeline view** (segmented summaries preserving temporal structure) |
+| Layer 5 | 95% | Auto-Compact | **Zero or High** | Preferentially calls `LLMSummarizer` for semantic summary; falls back to zero-cost structural summary when LLM unavailable |
 
-**Pinned 消息免疫压缩**（v1.19）：被 `pin_message(uuid)` 标记的消息在所有 5 层中都被保留：Layer 1 不替换其内容、Layer 2 不丢弃、Layer 3 不清除、Layer 4 不归档、Layer 5 不摘要。用于保护关键上下文（系统提示、关键决策、few-shot 示例等）。`Message.pinned: bool` 字段加入 `history.py`，`TranscriptStore` 持久化时一并保存。
+**Pinned message compression immunity** (v1.19): Messages marked by `pin_message(uuid)` are preserved across all 5 layers: Layer 1 doesn't replace their content, Layer 2 doesn't drop them, Layer 3 doesn't clear them, Layer 4 doesn't archive them, Layer 5 doesn't summarize them. Used to protect critical context (system prompts, key decisions, few-shot examples, etc.). `Message.pinned: bool` field added to `history.py`, persisted alongside in `TranscriptStore`.
 
-**Layer 4 改进（时间线保留）**：受 RCC (Recurrent Context Compression) 和 CogCanvas 启发，Context Collapse 现在将旧消息分段（每 10 条一块），每段提取文件引用、工具使用、用户意图，生成时间线视图，保留任务进展的时序结构。
+**Layer 4 improvement (timeline preservation)**: Inspired by RCC (Recurrent Context Compression) and CogCanvas, Context Collapse now segments old messages (10 per block), extracts file references, tool usage, and user intent from each segment, generating a timeline view that preserves the temporal structure of task progress.
 
-**Layer 5 改进（LLM 语义摘要）**：当 `llm_client` 参数提供时，`_auto_compact` 调用 `LLMSummarizer` 生成高质量语义摘要，保留任务目标、关键决策、文件变更等。LLM 不可用时回退到零成本结构摘要（提取文件路径、工具计数、用户意图等）。
+**Layer 5 improvement (LLM semantic summary)**: When `llm_client` parameter is provided, `_auto_compact` calls `LLMSummarizer` to generate high-quality semantic summaries, preserving task objectives, key decisions, file changes, etc. Falls back to zero-cost structural summary (extracting file paths, tool counts, user intent, etc.) when LLM is unavailable.
 
 ### 4.2 API
 
@@ -476,13 +483,13 @@ def graduated_compress(
     history: list[Message],
     usage_ratio: float,
     max_tokens: int = 131072,
-    llm_client: Callable | None = None,  # 新增：Layer 5 LLM 客户端
+    llm_client: Callable | None = None,  # New: Layer 5 LLM client
 ) -> tuple[list[Message], str]:
     """
     Args:
-        llm_client: 可选 LLM 客户端，用于 Layer 5 语义摘要。
-                    签名: llm_client(messages) -> str
-                    为 None 时 Layer 5 回退到结构摘要。
+        llm_client: Optional LLM client for Layer 5 semantic summary.
+                    Signature: llm_client(messages) -> str
+                    When None, Layer 5 falls back to structural summary.
 
     Returns:
         (compressed_history, layer_used)
@@ -491,28 +498,28 @@ def graduated_compress(
     """
 ```
 
-### 4.3 Microcompact 核心创新
+### 4.3 Microcompact Core Innovation
 
-区分"行动"（`tool_use` blocks）和"数据"（`tool_result` content）：
-- ✅ 保留 `tool_use` blocks — "LLM 决定做什么"
-- ❌ 清除旧 `tool_result` content — "工具返回了什么"
+Distinguishes between "actions" (`tool_use` blocks) and "data" (`tool_result` content):
+- ✅ Preserves `tool_use` blocks — "what the LLM decided to do"
+- ❌ Clears old `tool_result` content — "what the tool returned"
 
-效果：用 20% 的 token 保留 80% 的决策上下文。
+Effect: Uses 20% of tokens to preserve 80% of decision context.
 
-### 4.4 Context Collapse 时间线视图
+### 4.4 Context Collapse Timeline View
 
-**设计思想**：受 CogCanvas 和 RCC 启发，保留对话的时序结构，避免传统摘要丢失"何时发生"的信息。
+**Design idea**: Inspired by CogCanvas and RCC, preserves the temporal structure of conversation, avoiding the "when did this happen" information loss of traditional summaries.
 
-**算法**：
-1. 将旧消息分段（每 10 条一块）
-2. 每段提取：
-   - 时间标记（消息索引范围）
-   - 文件引用（正则提取路径）
-   - 工具使用（统计 tool_calls）
-   - 用户意图（首行截取）
-3. 生成时间线摘要 + 全局统计
+**Algorithm**:
+1. Segments old messages (10 per block)
+2. For each segment, extracts:
+   - Time markers (message index range)
+   - File references (regex-extracted paths)
+   - Tool usage (counts tool_calls)
+   - User intent (first line truncated)
+3. Generates timeline summary + global statistics
 
-**示例输出**：
+**Example output**:
 ```
 [Context Collapse: 30 turns archived as timeline]
   [0-10] Files: main.py, utils.py | Tools: read_file(3), write_file(1) | Tasks: Fix auth bug
@@ -522,337 +529,337 @@ def graduated_compress(
 [Preserved: last 20 turns for continuity]
 ```
 
-### 4.5 Auto-Compact LLM 语义摘要
+### 4.5 Auto-Compact LLM Semantic Summary
 
-**启用方式**：在 `AgentContextManager` 初始化时传入 `llm_client`：
+**Enablement**: Pass `llm_client` during `AgentContextManager` initialization:
 
 ```python
 agent_context = AgentContextManager(
     compression_strategy="graduated",
-    llm_client=my_llm_client,  # 签名: (messages) -> str
+    llm_client=my_llm_client,  # Signature: (messages) -> str
 )
 ```
 
-**LLM 摘要格式**（由 `LLMSummarizer` 生成）：
+**LLM summary format** (generated by `LLMSummarizer`):
 ```
 ## Task Objective
-[用户目标]
+[User objective]
 
 ## Key Decisions
-- [决策 1 及理由]
+- [Decision 1 and reasoning]
 
 ## File Changes
-- path/to/file.py: [变更内容]
+- path/to/file.py: [change description]
 
 ## Completed
-- [已完成项]
+- [completed items]
 
 ## Pending
-- [ ] [待办项]
+- [ ] [pending items]
 ```
 
-**回退机制**：LLM 调用失败时自动回退到结构摘要，确保压缩流程不中断。
+**Fallback mechanism**: Automatically falls back to structural summary on LLM call failure, ensuring the compression pipeline is not interrupted.
 
 ---
 
-## 五、缓存感知压缩 (Cache-Aware Compression)
+## 5. Cache-Aware Compression
 
-### 5.1 设计动机
+### 5.1 Design Motivation
 
-大多数 LLM API 支持 prompt cache：对话前缀被缓存，重复使用时成本降低 50-90%。**修改前缀会导致缓存失效**。
+Most LLM APIs support prompt caching: the conversation prefix is cached, reducing cost by 50-90% on reuse. **Modifying the prefix invalidates the cache**.
 
-传统的渐进压缩（如 Snip 丢弃早期消息、Context Collapse 在开头插入摘要）会无意中破坏缓存。
+Traditional graduated compression (e.g., Snip dropping early messages, Context Collapse inserting summaries at the beginning) inadvertently breaks the cache.
 
-### 5.2 当前实现：包裹模式
+### 5.2 Current Implementation: Wrap Mode
 
-缓存感知作为**包裹层**而非独立策略：
+Cache-awareness acts as a **wrapping layer** rather than an independent strategy:
 
 ```
-原始历史: [msg1, msg2, ..., msg50]
+Original history: [msg1, msg2, ..., msg50]
                 ↓
-┌─ cache zone (前 30%) ─┐  ┌─ compressible zone (后 70%) ─┐
-│ msg1..msg15 (原样保留) │  │ msg16..msg50 (运行基础压缩)   │
-└────────────────────────┘  └──────────────────────────────┘
+┌─ cache zone (first 30%) ─┐  ┌─ compressible zone (last 70%) ─┐
+│ msg1..msg15 (preserved)  │  │ msg16..msg50 (base compression)│
+└──────────────────────────┘  └────────────────────────────────┘
                 ↓
-结果: [msg1..msg15 (不变)] + [compressed msg16..msg50]
+Result: [msg1..msg15 (unchanged)] + [compressed msg16..msg50]
 ```
 
-**核心保证**：前缀不变 → prompt cache 命中。
+**Core guarantee**: Prefix unchanged → prompt cache hit.
 
-### 5.3 与基础策略的组合
+### 5.3 Combinations with Base Strategies
 
-| 组合 | 行为 |
+| Combination | Behavior |
 |------|------|
-| `graduated` + `cache_aware` | 5 层管线仅应用于后缀 |
-| `traditional` + `cache_aware` | 单层压缩仅应用于后缀 |
-| `none` + `cache_aware` | 无意义，跳过 |
+| `graduated` + `cache_aware` | 5-layer pipeline applied only to suffix |
+| `traditional` + `cache_aware` | Single-layer compression applied only to suffix |
+| `none` + `cache_aware` | Meaningless, skipped |
 
-### 5.4 常量
+### 5.4 Constants
 
 ```python
-DEFAULT_CACHE_ZONE_RATIO = 0.30     # 前 30% 为缓存区
-MIN_CACHE_ZONE_MESSAGES = 5         # 最少 5 条消息
-BATCH_COMPRESSION_THRESHOLD = 0.75  # 使用率 ≥75% 才触发
+DEFAULT_CACHE_ZONE_RATIO = 0.30     # First 30% as cache zone
+MIN_CACHE_ZONE_MESSAGES = 5         # Minimum 5 messages
+BATCH_COMPRESSION_THRESHOLD = 0.75  # Trigger when usage ≥75%
 ```
 
 ---
 
-## 六、三通道上下文 (Three-Channel Context)
+## 6. Three-Channel Context
 
-### 6.1 预算分配
+### 6.1 Budget Allocation
 
-`build_three_channel_context()` 将上下文分为三个通道：
+`build_three_channel_context()` divides context into three channels:
 
-| 通道 | 预算 | 内容 | 截断方式 |
+| Channel | Budget | Content | Truncation Method |
 |------|------|------|----------|
-| Channel 1 | 15% × max_tokens | 系统提示 | 字符级截断 |
-| Channel 2 | min(50% × max_tokens, working_memory.max_tokens) | 工作记忆 | 分区优先级丢弃 |
-| Channel 3 | 35% × max_tokens | 对话历史 | 从新到旧填充 |
+| Channel 1 | 15% × max_tokens | System prompt | Character-level truncation |
+| Channel 2 | min(50% × max_tokens, working_memory.max_tokens) | Working memory | Partition-priority dropping |
+| Channel 3 | 35% × max_tokens | Conversation history | Fill from newest to oldest |
 
-### 6.2 Channel 2 预算截断
+### 6.2 Channel 2 Budget Truncation
 
-工作记忆通过 `to_context(budget_chars=...)` 执行预算截断。当内容超出预算时，按优先级渐进丢弃分区（详见 §3.3）。
+Working memory performs budget truncation via `to_context(budget_chars=...)`. When content exceeds budget, partitions are progressively dropped by priority (see §3.3).
 
 ---
 
-## 七、传统压缩 (Traditional Compression)
+## 7. Traditional Compression
 
 ### 7.1 HistoryManager
 
-位于 `helen/runtime/history.py`，是 Helen 早期的压缩实现。当 `compression_strategy="traditional"` 时使用。
+Located in `helen/runtime/history.py`, this is Helen's early compression implementation. Used when `compression_strategy="traditional"`.
 
 ```python
 class HistoryManager:
     compression_mode: str  # "summarize" | "truncate" | "none"
 
     def enforce_limit(self, history, budget_ratio=0.8) -> list[Message]:
-        """三层压缩：最近消息保留 → 中间消息压缩 → 最老消息丢弃"""
+        """Three-layer compression: recent messages preserved → middle compressed → oldest dropped"""
 ```
 
-### 7.2 与渐进压缩的区别
+### 7.2 Difference from Graduated Compression
 
-| 维度 | 传统压缩 | 渐进压缩 |
+| Dimension | Traditional | Graduated |
 |------|---------|---------|
-| 层级 | 单层 | 5 层 |
-| 触发 | 超过预算后一次性压缩 | 渐进式（60%→70%→80%→90%→95%）|
-| 内容选择 | 无差别对待 | 区分行动和数据 |
-| LLM 调用 | 否 | 否（所有层零成本）|
-| 适用场景 | 简单短对话 | 长时间运行的 Agent |
+| Layers | Single | 5 |
+| Trigger | One-shot after exceeding budget | Gradual (60%→70%→80%→90%→95%) |
+| Content selection | No differentiation | Distinguishes actions from data |
+| LLM calls | No | No (all layers zero-cost) |
+| Use case | Simple short conversations | Long-running Agents |
 
 ---
 
-## 八、stdlib 函数
+## 8. Stdlib Functions
 
 ### 8.1 `clear_context()`
 
 ```helen
 let result = clear_context()
-// 返回: {status: "ok", cleared_messages: 15, cleared_tokens: 8000}
+// Returns: {status: "ok", cleared_messages: 15, cleared_tokens: 8000}
 ```
 
-清除对话历史。
+Clears conversation history.
 
-**已知限制**：当前只清除 `_interpreter_history`，不清除 `AgentContextManager.working_memory`。工作记忆中的活跃文件、决策、TODO、错误会在清除后残留。
+**Known limitation**: Currently only clears `_interpreter_history`, not `AgentContextManager.working_memory`. Active files, decisions, TODOs, and errors in working memory persist after clearing.
 
 ### 8.2 `compress_context(strategy)`
 
 ```helen
-let result = compress_context("auto")      // 按 HistoryManager.compression_mode
-let result = compress_context("summarize")  // 拼接旧消息为摘要
-let result = compress_context("truncate")   // 丢弃旧消息
-let result = compress_context("none")       // 无操作
-// 返回: {status, original_messages, compressed_messages, original_tokens, compressed_tokens, strategy}
+let result = compress_context("auto")      // Per HistoryManager.compression_mode
+let result = compress_context("summarize")  // Concatenates old messages as summary
+let result = compress_context("truncate")   // Drops old messages
+let result = compress_context("none")       // No-op
+// Returns: {status, original_messages, compressed_messages, original_tokens, compressed_tokens, strategy}
 ```
 
-**已知限制**：当前实现中 `enforce_limit()` / `_summarize_compress()` / `_truncate_compress()` 的返回值被丢弃，历史实际未被修改（bug）。
+**Known limitation**: In the current implementation, the return values of `enforce_limit()` / `_summarize_compress()` / `_truncate_compress()` are discarded, so the history is not actually modified (bug).
 
 ### 8.3 `compress_context(target, keep_recent)`
 
 ```helen
 let result = compress_context(target="tool_results", keep_recent=5)
-// 清除旧工具结果，保留 tool_use 决策
+// Clears old tool results, preserves tool_use decisions
 let result = compress_context(target="stale_turns", keep_recent=8)
-// 丢弃过时轮次
+// Drops stale turns
 ```
 
-### 8.4 `clear_context()` / `compress_context()` 中文别名
+### 8.4 `clear_context()` / `compress_context()` Chinese Aliases
 
 ```helen
 清除上下文()     // = clear_context()
 压缩上下文()     // = compress_context()
 ```
 
-### 8.5 v1.19 新增：上下文检查与细粒度操作
+### 8.5 v1.19 Additions: Context Inspection and Fine-Grained Operations
 
-v1.19 之前，上下文管理 API 只有"批量清空"和"批量压缩"两种粗粒度动作，Agent 既**看不见**当前上下文状态、也**动不了**单条消息。v1.19 补齐了**6 个维度**的 API。
+Before v1.19, context management APIs only had "bulk clear" and "bulk compress" coarse-grained actions — agents could neither **see** the current context state nor **manipulate** individual messages. v1.19 fills in APIs across **6 dimensions**.
 
-#### 8.5.1 检查类（Inspection）
+#### 8.5.1 Inspection
 
 ```helen
-// context_stats() — 详细统计
+// context_stats() — Detailed statistics
 let stats = context_stats()
-// 返回:
+// Returns:
 // {
 //   status: "ok",
-//   message_count: 42,        // 消息总数
-//   total_tokens: 18000,      // 估算 token 总数
-//   usage_ratio: 0.45,        // 上下文窗口占用率（0.0–1.0+）
-//   max_tokens: 40000,        // 配置的上下文窗口大小
+//   message_count: 42,        // Total message count
+//   total_tokens: 18000,      // Estimated total tokens
+//   usage_ratio: 0.45,        // Context window usage (0.0–1.0+)
+//   max_tokens: 40000,        // Configured context window size
 //   by_role: {system: 1, user: 15, assistant: 14, tool: 12},
-//   compressed_count: 5,      // 已经被压缩的消息数
-//   pinned_count: 2,          // 被钉住的消息数
+//   compressed_count: 5,      // Number of compressed messages
+//   pinned_count: 2,          // Number of pinned messages
 // }
 
-// context_usage() — 简化版，只返回占用率
+// context_usage() — Simplified version, returns only usage ratio
 if context_usage() > 0.7 {
     compress_context("auto")
 }
 ```
 
-#### 8.5.2 单条消息访问与操作
+#### 8.5.2 Single Message Access and Operations
 
 ```helen
-// 读取
-get_message(uuid)      // 按 UUID 读取消息快照
+// Read
+get_message(uuid)      // Read message snapshot by UUID
 
-// 写入
-insert_message(role, content, position?)   // 插入新消息（默认追加到末尾）
-replace_message(uuid, new_content)         // 替换消息内容
-delete_message(uuid)                       // 逻辑删除（审计保留）
+// Write
+insert_message(role, content, position?)   // Insert new message (appends to end by default)
+replace_message(uuid, new_content)         // Replace message content
+delete_message(uuid)                       // Logical delete (preserved in audit)
 
-// 钉住（Compression Immunity）
-pin_message(uuid)      // 钉住消息，所有 5 层压缩都跳过
-unpin_message(uuid)    // 取消钉住
+// Pin (Compression Immunity)
+pin_message(uuid)      // Pin message, skipped by all 5 compression layers
+unpin_message(uuid)    // Unpin
 ```
 
-Pinned 消息在 Layer 1–5 全部保留：
-- Layer 1：不替换其 tool 输出
-- Layer 2：不丢弃（即使是"过期"轮次）
-- Layer 3：不清除其内容
-- Layer 4：不归档（保留在投射视图中）
-- Layer 5：不参与语义摘要
+Pinned messages are preserved across Layers 1–5:
+- Layer 1: Does not replace their tool output
+- Layer 2: Does not drop (even if "stale" turn)
+- Layer 3: Does not clear their content
+- Layer 4: Does not archive (preserved in projection view)
+- Layer 5: Does not participate in semantic summary
 
-#### 8.5.3 工作记忆访问（P1）
+#### 8.5.3 Working Memory Access (P1)
 
 ```helen
-// 读取（key 为空时返回全部）
-let data = working_memory_get("task")         // 返回任务描述
-let all = working_memory_get()                // 返回全部字段
+// Read (empty key returns all)
+let data = working_memory_get("task")         // Returns task description
+let all = working_memory_get()                // Returns all fields
 
-// 写入（list 类型 key 默认追加，也可整体替换）
+// Write (list-type keys append by default, can also replace entirely)
 working_memory_set("task", "Build feature X")
-working_memory_set("active_files", "new.py")  // 追加
-working_memory_set("active_files", ["a.py"])  // 替换
+working_memory_set("active_files", "new.py")  // Append
+working_memory_set("active_files", ["a.py"])  // Replace
 
-// 删除（item 为空时清空整个字段）
+// Remove (empty item clears the entire field)
 working_memory_remove("task")
 working_memory_remove("active_files", "old.py")
 
-// 清空全部
+// Clear all
 working_memory_clear()
 ```
 
-**可用 keys**: `task` | `active_files` | `decisions` | `todos` | `errors`
+**Available keys**: `task` | `active_files` | `decisions` | `todos` | `errors`
 
-#### 8.5.4 运行时配置（P2）
+#### 8.5.4 Runtime Configuration (P2)
 
-v1.19 之前，这些配置只能在 `agent context {}` 块中声明。v1.19 支持运行时修改。
+Before v1.19, these configurations could only be declared in `agent context {}` blocks. v1.19 supports runtime modification.
 
 ```helen
 set_compression_strategy("graduated")   // "graduated" | "traditional" | "none"
-set_context_window(64000)               // 设置上下文窗口大小（token 数）
-set_working_memory_enabled(true)        // 开关工作记忆
-set_cache_aware(true)                   // 开关缓存感知
-let cfg = get_context_config()          // 查询当前配置
+set_context_window(64000)               // Set context window size (token count)
+set_working_memory_enabled(true)        // Toggle working memory
+set_cache_aware(true)                   // Toggle cache-aware
+let cfg = get_context_config()          // Query current config
 // cfg: {compression_strategy, max_tokens, working_memory_enabled, cache_aware_enabled, ...}
 ```
 
-#### 8.5.5 查询（P3）
+#### 8.5.5 Query (P3)
 
 ```helen
-// 全文搜索
+// Full-text search
 let r = search_context("TODO", role="user", limit=10)
 // r.matches: [{uuid, role, snippet, index}, ...]
 
-// 上下文切片
+// Context slice
 let slice = context_slice(start=5, end=20, role="")
 // slice.messages: [{uuid, role, content, token_count, compressed, pinned, index}, ...]
 ```
 
-#### 8.5.6 多 Agent 上下文共享（P2/P3）
+#### 8.5.6 Multi-Agent Context Sharing (P2/P3)
 
 ```helen
-// 导出当前上下文为可传输的 dict
+// Export current context as transferable dict
 let snapshot = export_context()
 // snapshot.context: {messages, working_memory, config}
 
-// 导入上下文（替换当前历史）
+// Import context (replaces current history)
 import_context(snapshot.context)
 
-// Fork：返回与 export_context 相同结构的深拷贝
+// Fork: Returns deep copy with same structure as export_context
 let forked = fork_context()
-// 修改 forked 不影响原上下文
+// Modifying forked does not affect original context
 ```
 
-典型用途：通过 Channel 把当前对话上下文传给另一个 Agent；保存上下文到磁盘；fork 后并行探索多个方向。
+Typical uses: Pass current conversation context to another agent via Channel; save context to disk; fork to explore multiple directions in parallel.
 
-#### 8.5.6b 跨会话恢复（v1.21+）
+#### 8.5.6b Cross-Session Recovery (v1.21+)
 
 ```helen
-// 列出所有旧会话
+// List all old sessions
 let sessions = list_sessions()
 for s in sessions {
     print("{s.session_id}: {s.message_count} msgs, scope={s.scope}")
 }
 
-// 从旧 transcript session 直接恢复 active context
+// Restore active context directly from old transcript session
 let r = restore_context("session_1783492628_d9d9c0aa")
 // r: {
 //   status: "ok",
 //   restored_messages: 42,
 //   session_id: "session_1783492628_d9d9c0aa",
-//   boundary_markers: 3,       // 跳过的压缩边界标记数
+//   boundary_markers: 3,       // Number of compression boundary markers skipped
 //   note: "Working memory and context config are not persisted..."
 // }
 
-// 中文别名
+// Chinese alias
 let r2 = 恢复上下文("session_1783492628_d9d9c0aa")
 ```
 
-**`restore_context(session_id)` 的语义**：
+**Semantics of `restore_context(session_id)`**:
 
-1. 从磁盘读取指定 session 的 TranscriptStore
-2. 遍历所有 Message（跳过 BoundaryMarker），保留完整字段：`role`、`content`、`tool_calls`、`tool_call_id`、`uuid`、`compressed`、`pinned`
-3. 内部调用 `import_context()` 替换当前 `_interpreter_history`
-4. 恢复后，下一次 `llm act` 调用就能看到旧会话的所有消息
+1. Reads the specified session's TranscriptStore from disk
+2. Iterates all Messages (skipping BoundaryMarkers), preserving complete fields: `role`, `content`, `tool_calls`, `tool_call_id`, `uuid`, `compressed`, `pinned`
+3. Internally calls `import_context()` to replace current `_interpreter_history`
+4. After restoration, the next `llm act` call can see all messages from the old session
 
-**限制**：只恢复 messages。**不**恢复 working_memory 和 context config（transcript 不存这些）。需要时通过 `working_memory_set()` / `set_compression_strategy()` 等手动恢复。
+**Limitation**: Only restores messages. Does **not** restore working_memory and context config (transcript doesn't store these). Use `working_memory_set()` / `set_compression_strategy()` etc. for manual restoration when needed.
 
-**与 `resume_session()` 的区别**：
+**Difference from `resume_session()`**:
 
 | | `restore_context` | `resume_session` |
 |---|---|---|
-| 恢复目标 | Active Context（LLM 看到的） | TranscriptStore（审计记录） |
-| LLM 能看到恢复的消息？ | ✅ 能 | ❌ 不能（只换 SSOT 引用） |
-| 适用场景 | 接续旧会话继续工作 | 切换到旧 transcript 流 |
+| Restoration target | Active Context (what LLM sees) | TranscriptStore (audit record) |
+| Can LLM see restored messages? | ✅ Yes | ❌ No (only swaps SSOT reference) |
+| Use case | Continue work from old session | Switch to old transcript stream |
 
-#### 8.5.7 生命周期钩子（P1）
+#### 8.5.7 Lifecycle Hooks (P1)
 
 ```helen
-// 注册压缩事件回调
+// Register compression event callback
 on_compression(callback)
-// callback 接收：{layer, original_tokens, compressed_tokens, ...}
+// callback receives: {layer, original_tokens, compressed_tokens, ...}
 
-// 注册上下文溢出回调（预留接口）
+// Register context overflow callback (reserved interface)
 on_context_overflow(callback)
 
-// 传 None 清除回调
+// Pass None to clear callback
 on_compression(None)
 ```
 
-#### 8.5.8 中文别名（v1.19 全部 24 个 + v1.21 新增 1 个）
+#### 8.5.8 Chinese Aliases (v1.19 all 24 + v1.21 new 1)
 
-| 英文名 | 中文名 |
+| English Name | Chinese Name |
 |--------|--------|
 | context_stats | 上下文统计 |
 | context_usage | 上下文占用率 |
@@ -880,95 +887,95 @@ on_compression(None)
 | on_compression | 压缩回调 |
 | on_context_overflow | 溢出回调 |
 
-#### 8.5.9 内部化
+#### 8.5.9 Internalized
 
-原 stdlib 函数 `classify_message` 已内部化为 `_classify_message`，不再对外暴露。中文别名"消息分类"同步移除。
-
----
-
-## 九、已知问题与限制
-
-> 以下是当前架构中的已知问题，按严重程度排列。
-
-### 9.1 架构问题
-
-**已修复**：
-- ✅ `LLMSummarizer` 已集成到 Layer 5：通过 `graduated_compress(llm_client=...)` 传递，LLM 不可用时回退到结构摘要
-- ✅ `WorkingMemory` 已改为 token 级淘汰：`_evict_to_budget()` 按优先级淘汰最旧条目
-
-### 9.2 文档与代码不符
-
-**已修复**：
-- ✅ `wiki/runtime/working_memory.md`：已更新为正确的 API（`to_context(budget_chars)`、Channel 2 预算截断）
-- ✅ `wiki/runtime/history.md`：已更新 `estimate_tokens` 描述，说明字符类型感知和 CJK 支持
+The stdlib function `classify_message` has been internalized to `_classify_message` and is no longer exposed externally. Chinese alias "消息分类" is removed accordingly.
 
 ---
 
-## 十、数据流总览
+## 9. Known Issues and Limitations
+
+> The following are known issues in the current architecture, sorted by severity.
+
+### 9.1 Architectural Issues
+
+**Fixed**:
+- ✅ `LLMSummarizer` integrated into Layer 5: Passed via `graduated_compress(llm_client=...)`, falls back to structural summary when LLM unavailable
+- ✅ `WorkingMemory` changed to token-level eviction: `_evict_to_budget()` evicts oldest entries by priority
+
+### 9.2 Documentation-Code Mismatch
+
+**Fixed**:
+- ✅ `wiki/runtime/working_memory.md`: Updated with correct API (`to_context(budget_chars)`, Channel 2 budget truncation)
+- ✅ `wiki/runtime/history.md`: Updated `estimate_tokens` description, documenting character-type awareness and CJK support
+
+---
+
+## 10. Data Flow Overview
 
 ```
-用户输入 prompt
+User input prompt
     │
     ▼
 visit_llm_act_expr()
     │
-    ├─► 读取 agent.context_config
-    │   └─► 更新 AgentContextManager 的 strategy/cache_aware/working_memory 设置
+    ├─► Read agent.context_config
+    │   └─► Update AgentContextManager's strategy/cache_aware/working_memory settings
     │
     ├─► _add_to_history("user", prompt)
-    │   ├─► 追加 Message 到 self._history
-    │   ├─► HistoryManager.enforce_limit()    ← 传统压缩（第一层）
-    │   └─► agent_context.update_from_message() ← 更新工作记忆
+    │   ├─► Append Message to self._history
+    │   ├─► HistoryManager.enforce_limit()    ← Traditional compression (first layer)
+    │   └─► agent_context.update_from_message() ← Update working memory
     │
-    ├─► LLM 调用 + 工具循环
+    ├─► LLM call + tool loop
     │   └─► _record_llm_response_to_history()
-    │       ├─► 追加 assistant/tool Message
-    │       └─► agent_context.update_from_tool_call() ← 更新工作记忆
+    │       ├─► Append assistant/tool Message
+    │       └─► agent_context.update_from_tool_call() ← Update working memory
     │
     └─► _prepare_history_for_llm()
         └─► agent_context.prepare_context()
-            ├─► _compress_history()           ← 渐进压缩 + 缓存感知包裹（第二层）
-            └─► build_three_channel_context() ← 三通道构建
-                ├─ Channel 1: 系统指令 (15%)
-                ├─ Channel 2: 工作记忆 (50%, 受预算截断)
-                └─ Channel 3: 对话历史 (35%)
+            ├─► _compress_history()           ← Graduated compression + cache-aware wrapping (second layer)
+            └─► build_three_channel_context() ← Three-channel build
+                ├─ Channel 1: System instructions (15%)
+                ├─ Channel 2: Working memory (50%, budget-truncated)
+                └─ Channel 3: Conversation history (35%)
                     │
                     ▼
-                发送给 LLM API
+                Send to LLM API
 ```
 
-**注意**：图中标注了"第一层"和"第二层"压缩——这是当前双重压缩问题的根源。`_add_to_history()` 中的 `enforce_limit()` 使用传统算法先压一次，`prepare_context()` 中的 `_compress_history()` 使用渐进算法再压一次。
+**Note**: The diagram labels "first layer" and "second layer" compression — this is the root of the current dual-compression issue. `enforce_limit()` in `_add_to_history()` uses the traditional algorithm to compress once, then `_compress_history()` in `prepare_context()` uses the graduated algorithm to compress again.
 
 ---
 
-## 十一、文件索引
+## 11. File Index
 
-| 文件 | 职责 |
+| File | Responsibility |
 |------|------|
-| `helen/interpreter/agent_context.py` | 统一入口：AgentContextManager、工作记忆更新、压缩编排、三通道构建 |
-| `helen/runtime/working_memory.py` | WorkingMemory 数据类、`to_context(budget_chars)` 格式化、`build_three_channel_context()` |
-| `helen/runtime/graduated_compression.py` | 5 层渐进管线、`graduated_compress()`、各层函数 |
-| `helen/runtime/cache_aware_compression.py` | `CacheAwareCompressor` 类（当前未被 agent_context 调用）、便捷函数 |
-| `helen/runtime/history.py` | Message 数据类、HistoryManager（传统压缩、token 估算）|
-| `helen/runtime/llm_summarizer.py` | LLMSummarizer、`auto_compact()`（当前未集成）|
-| `helen/stdlib/context.py` | `clear_context()`、`compress_context()`、`compress_context_target()` |
-| `helen/core/ast.py` | `ContextConfigNode` AST 节点 |
-| `helen/core/parser.py` | `context {}` 块解析 |
-| `helen/interpreter/llm_mixin.py` | `context_config` 应用、历史更新集成 |
+| `helen/interpreter/agent_context.py` | Unified entry: AgentContextManager, working memory update, compression orchestration, three-channel build |
+| `helen/runtime/working_memory.py` | WorkingMemory dataclass, `to_context(budget_chars)` formatting, `build_three_channel_context()` |
+| `helen/runtime/graduated_compression.py` | 5-layer graduated pipeline, `graduated_compress()`, per-layer functions |
+| `helen/runtime/cache_aware_compression.py` | `CacheAwareCompressor` class (currently not called by agent_context), convenience functions |
+| `helen/runtime/history.py` | Message dataclass, HistoryManager (traditional compression, token estimation) |
+| `helen/runtime/llm_summarizer.py` | LLMSummarizer, `auto_compact()` (currently not integrated) |
+| `helen/stdlib/context.py` | `clear_context()`, `compress_context()`, `compress_context_target()` |
+| `helen/core/ast.py` | `ContextConfigNode` AST node |
+| `helen/core/parser.py` | `context {}` block parsing |
+| `helen/interpreter/llm_mixin.py` | `context_config` application, history update integration |
 
 ---
 
-## 十二、参考文献
+## 12. References
 
-本文档描述的上下文管理系统借鉴了以下学术研究：
+The context management system described in this document draws from the following academic research:
 
-- **RCC (Recurrent Context Compression)** — 分段摘要，保留时序结构 → Layer 4 Context Collapse
-- **CogCanvas** — 保留时间细节，避免信息丢失 → Layer 4 时间线视图
-- **DAST (Dynamic Allocation)** — 动态分配压缩 tokens（未来改进方向）
+- **RCC (Recurrent Context Compression)** — Segmented summary preserving temporal structure → Layer 4 Context Collapse
+- **CogCanvas** — Preserving temporal details, avoiding information loss → Layer 4 timeline view
+- **DAST (Dynamic Allocation)** — Dynamically allocating compression tokens (future improvement direction)
 
-详见 [[runtime/context-compression-research|上下文压缩研究资料]]。
+See [[runtime/context-compression-research|Context Compression Research]].
 
 ---
 
-**最后更新**: 2026-07-17
-**版本**: v1.22
+**Last Updated**: 2026-07-17
+**Version**: v1.22

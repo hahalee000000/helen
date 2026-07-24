@@ -1,18 +1,18 @@
-# 语法规范 (Grammar)
+# Grammar
 
-> 模块 M2 | `helen/core/parser.py` | 测试: `tests/parser/`
-
----
-
-## 概述
-
-Helen Parser 使用 **Pratt Parsing**（10 级优先级表）+ 递归下降，将 Token 流转换为 AST。
+> Module M2 | `helen/core/parser.py` | Tests: `tests/parser/`
 
 ---
 
-## EBNF 完整语法
+## Overview
 
-### 程序与块
+The Helen Parser uses **Pratt Parsing** (10-level precedence table) + recursive descent to convert a token stream into an AST.
+
+---
+
+## Full EBNF Grammar
+
+### Programs and Blocks
 
 ```ebnf
 program       → declaration* main_block?
@@ -21,7 +21,7 @@ decorator     → "@" IDENTIFIER
 main_block    → "main" "{" statement* "}"
 ```
 
-### Agent 声明
+### Agent Declarations
 
 ```ebnf
 agent_decl    → "agent" IDENTIFIER "{" agent_body "}"
@@ -40,15 +40,15 @@ var_decl      → ("let" | "const" | "shared" "let") IDENTIFIER ("=" expression)
 ```
 
 **v1.10 shared let**:
-- `shared let` 声明跨 agent 可见的可变变量
-- 模块级 `let` 在 agent main 中不可见（编译时错误）
-- 模块级 `const` 自动可见（只读共享）
+- `shared let` declares cross-agent visible mutable variables
+- Module-level `let` is not visible inside agent main (compile-time error)
+- Module-level `const` is auto-visible (read-only sharing)
 
-**v1.12 隔离注解**:
-- `@open` / `@strict` / `@sandbox` 修饰 agent 声明
-- `@open`: 可访问模块 `let`
-- `@strict`: shared let 深拷贝注入
-- `@sandbox`: 禁用外部工具，禁止 shared let
+**v1.12 isolation annotations**:
+- `@open` / `@strict` / `@sandbox` decorate agent declarations
+- `@open`: Can access module `let`
+- `@strict`: Deep-copies shared let on access
+- `@sandbox`: Disables external tools, prohibits shared let
 
 ### Shared Store (v1.12)
 
@@ -59,13 +59,13 @@ store_field       → var_decl
 store_method      → "fn" IDENTIFIER "(" fn_params? ")" fn_body
 ```
 
-**语义**:
-- `shared store`: 受控的共享可变状态（跨 agent 共享引用类型）
-- 运行时复用 `SharedStore` 类（RLock 线程安全）
-- `_` 前缀字段/方法为私有，agent 不可直接访问
-- **v1.18**: `channel X { fields }` 声明语法已删除，channel 现在通过 `Channel()` 构造函数或 `spawn` 创建
+**Semantics**:
+- `shared store`: Controlled shared mutable state (reference type shared across agents)
+- Reuses the `SharedStore` class at runtime (RLock thread-safe)
+- `_` prefixed fields/methods are private — not directly accessible from agent code
+- **v1.18**: `channel X { fields }` declaration syntax has been removed; channels are now created via `Channel()` constructor or `spawn`
 
-### 函数声明
+### Function Declarations
 
 ```ebnf
 fn_decl       → "fn" IDENTIFIER "(" fn_params? ")" fn_body
@@ -74,13 +74,13 @@ fn_param      → IDENTIFIER (":" type)?
 fn_body       → "{" statement* "}"
 ```
 
-### 导入
+### Imports
 
 ```ebnf
 import_stmt   → "import" string ("as" IDENTIFIER)?
 ```
 
-### 语句
+### Statements
 
 ```ebnf
 statement     → var_decl
@@ -101,9 +101,9 @@ var_decl      → ("let" | "const" | "shared" "let") IDENTIFIER ("=" expression)
 expr_stmt     → expression
 ```
 
-**v1.10 shared let**: 在顶层声明中可用，用于跨 agent 共享可变状态。
+**v1.10 shared let**: Available in top-level declarations for sharing mutable state across agents.
 
-### 控制流
+### Control Flow
 
 ```ebnf
 if_stmt       → "if" "(" expression ")" "{" statement* "}" ("else" ("if" expression "{" statement* "}")?)?
@@ -114,7 +114,7 @@ continue_stmt → "continue"
 return_stmt   → "return" expression?
 ```
 
-### 模式匹配
+### Pattern Matching
 
 ```ebnf
 match_stmt    → "match" expression "{" case+ default? "}"
@@ -128,13 +128,13 @@ guard         → "if" expression
 default       → "default" "{" statement* "}"
 ```
 
-**v1.8 模式匹配增强**：
-- **通配符模式**: `case _ { }` 匹配任何值（可作为默认分支）
-- **变量绑定**: `case x { }` 绑定匹配值到变量
-- **类型模式**: `case is Type { }` 检查值的类型
-- **类型模式带绑定**: `case is Type name { }` 检查类型并绑定到变量
+**v1.8 pattern matching enhancements**:
+- **Wildcard pattern**: `case _ { }` matches any value (can serve as default branch)
+- **Variable binding**: `case x { }` binds the matched value to a variable
+- **Type pattern**: `case is Type { }` checks the value's type
+- **Type pattern with binding**: `case is Type name { }` checks type and binds to a variable
 
-### 异常处理
+### Exception Handling
 
 ```ebnf
 try_stmt      → "try" "{" statement* "}" (catch_clause+ catch_all? | catch_all) finally_block?
@@ -144,7 +144,7 @@ finally_block → "finally" "{" statement* "}"
 throw_stmt    → "throw" type ("(" expression ")")? ";"?
 ```
 
-### LLM 语句
+### LLM Statements
 
 ```ebnf
 llm_stmt      → llm_act | llm_if
@@ -161,16 +161,16 @@ llm_branch    → "branch" string "{" statement* "}"
               | "default" "{" statement* "}"
 ```
 
-**v1.14 变更**: `llm stream` 已删除，`llm act` 通过可选的 `on_chunk`/`on_complete` 回调支持流式输出。无回调时为同步执行（`act()`），有回调时为流式执行（`act_stream()`）。
+**v1.14 change**: `llm stream` has been removed; `llm act` supports streaming via optional `on_chunk`/`on_complete` callbacks. Without callbacks it executes synchronously (`act()`); with callbacks it executes as a stream (`act_stream()`).
 
-### 调用
+### Calls
 
 ```ebnf
 call_stmt     → "call" IDENTIFIER "(" call_args? ")"
 call_args     → expression ("," expression)*
 ```
 
-### 表达式（Pratt 11 级优先级）
+### Expressions (Pratt 11-level precedence)
 
 ```ebnf
 expression    → assignment
@@ -194,16 +194,16 @@ map_entry     → expression ":" expression
 spawn_expr → "spawn" IDENTIFIER "(" args? ")"
 ```
 
-**v1.8 管道操作符**：
-- `value |> fn` 等价于 `fn(value)`
-- 左结合，低优先级（优先级 2）
-- 支持链式调用：`value |> fn1 |> fn2`
+**v1.8 pipe operator**:
+- `value |> fn` is equivalent to `fn(value)`
+- Left-associative, low precedence (level 2)
+- Supports chained calls: `value |> fn1 |> fn2`
 
 ---
 
-## Pratt Parsing 优先级表
+## Pratt Parsing Precedence Table
 
-| 优先级 | 运算符 | 结合性 | 示例 |
+| Precedence | Operator | Associativity | Example |
 |---|---|---|---|
 | 1 | `=` | Right | `x = y = 0` |
 | 2 | `\|>` | Left | `value \|> fn1 \|> fn2` |
@@ -219,22 +219,22 @@ spawn_expr → "spawn" IDENTIFIER "(" args? ")"
 
 ---
 
-## `llm` 上下文关键字消歧
+## `llm` Context Keyword Disambiguation
 
-`llm` 既是关键字，又可能作为标识符。Parser 通过 **peek 逻辑** 消歧：
+`llm` is both a keyword and a potential identifier. The parser disambiguates via **peek logic**:
 
 ```python
-# peek 看到 "llm" 时，检查下一个 token
+# When peek sees "llm", check the next token
 if peek() == "act":     → parse_llm_act()
 elif peek() == "if":    → parse_llm_if()
-else:                   → 作为标识符处理
+else:                   → Treat as identifier
 ```
 
 ---
 
-## `spawn` 前缀处理
+## `spawn` Prefix Handling
 
-`spawn` 是一元前缀表达式，后接 agent 调用：
+`spawn` is a unary prefix expression followed by an agent call:
 
 ```python
 if peek() == "spawn":
@@ -245,9 +245,9 @@ if peek() == "spawn":
 
 ---
 
-## Panic Mode 错误恢复
+## Panic Mode Error Recovery
 
-当 Parser 遇到意外 Token 时，进入 panic mode 并同步到语句边界：
+When the parser encounters an unexpected token, it enters panic mode and synchronizes to a statement boundary:
 
 ```python
 def _synchronize(self):
@@ -260,116 +260,116 @@ def _synchronize(self):
         self.advance()
 ```
 
-同步点：分号 `;` 和 语句起始关键字。
+Synchronization points: semicolons `;` and statement-starting keywords.
 
 ---
 
-## 测试覆盖
+## Test Coverage
 
-- ✅ Agent 声明与参数
-- ✅ 函数声明与调用
-- ✅ 控制流 (if/for/while/match)
-- ✅ 异常处理 (try/catch/finally/throw)
-- ✅ LLM 语句 (act/if)
-- ✅ 并发调用 (spawn)
-- ✅ 表达式优先级
-- ✅ Panic mode 恢复
-- ✅ 类型注解解析
+- ✅ Agent declarations and parameters
+- ✅ Function declarations and calls
+- ✅ Control flow (if/for/while/match)
+- ✅ Exception handling (try/catch/finally/throw)
+- ✅ LLM statements (act/if)
+- ✅ Concurrent calls (spawn)
+- ✅ Expression precedence
+- ✅ Panic mode recovery
+- ✅ Type annotation parsing
 
-### v1.10 语法更新
+### v1.10 Syntax Updates
 
-#### 1. 子脚本/字段赋值 (v1.10)
+#### 1. Subscript/Field Assignment (v1.10)
 
-赋值语句的左侧现在支持索引访问和字段访问：
+The left-hand side of assignment statements now supports index access and field access:
 
 ```helen
-// 数组索引赋值
+// Array index assignment
 let arr = [1, 2, 3]
-arr[0] = 10  // ✅ 合法
+arr[0] = 10  // ✅ Legal
 
-// 对象字段赋值
+// Object field assignment
 let obj = { name: "Alice", age: 30 }
-obj.name = "Bob"  // ✅ 合法
-obj["age"] = 31   // ✅ 也合法
+obj.name = "Bob"  // ✅ Legal
+obj["age"] = 31   // ✅ Also legal
 ```
 
-**EBNF 更新**:
+**EBNF update**:
 ```ebnf
 assignment → (call | IDENTIFIER) "=" assignment | pipe
 ```
 
-其中 `call` 包含索引访问 (`[i]`) 和字段访问 (`.field`)。
+Where `call` includes index access (`[i]`) and field access (`.field`).
 
-#### 2. 短路求值 (v1.10)
+#### 2. Short-Circuit Evaluation (v1.10)
 
-`&&` 和 `||` 运算符现在支持短路求值：
+`&&` and `||` operators now support short-circuit evaluation:
 
 ```helen
-// && 短路
-let x = false && expensiveCall()  // expensiveCall() 不会执行
-let y = true && expensiveCall()   // expensiveCall() 会执行
+// && short-circuit
+let x = false && expensiveCall()  // expensiveCall() is not executed
+let y = true && expensiveCall()   // expensiveCall() is executed
 
-// || 短路
-let a = true || expensiveCall()   // expensiveCall() 不会执行
-let b = false || expensiveCall()  // expensiveCall() 会执行
+// || short-circuit
+let a = true || expensiveCall()   // expensiveCall() is not executed
+let b = false || expensiveCall()  // expensiveCall() is executed
 ```
 
-**优先级表**:
-- `||` 优先级 3（左结合）
-- `&&` 优先级 4（左结合）
-- `&&` 优先级高于 `||`
+**Precedence table**:
+- `||` precedence 3 (left-associative)
+- `&&` precedence 4 (left-associative)
+- `&&` has higher precedence than `||`
 
-#### 3. 返回类型注解语法 (v1.10)
+#### 3. Return Type Annotation Syntax (v1.10)
 
-仅支持 `:` 语法，`->` 语法已移除：
+Only the `:` syntax is supported; `->` syntax has been removed:
 
 ```helen
-// ✅ 正确语法
+// ✅ Correct syntax
 fn add(a: int, b: int): int {
   return a + b
 }
 
-// ❌ 已移除
+// ❌ Removed
 // fn add(a: int, b: int) -> int { ... }
 ```
 
-**EBNF 更新**:
+**EBNF update**:
 ```ebnf
 fn_decl → "fn" IDENTIFIER "(" fn_params? ")" (":" type)? fn_body
 ```
 
-### v1.12 语法更新
+### v1.12 Syntax Updates
 
-#### 1. 隔离级别注解 (v1.12)
+#### 1. Isolation Level Annotations (v1.12)
 
-Agent 声明前可添加 `@open`/`@strict`/`@sandbox` 隔离注解：
+Agent declarations can be prefixed with `@open`/`@strict`/`@sandbox` isolation annotations:
 
 ```ebnf
 declaration → decorator? (agent_decl | ...)
 decorator   → "@" IDENTIFIER
 ```
 
-#### 2. Shared Store 声明 (v1.12)
+#### 2. Shared Store Declarations (v1.12)
 
 ```ebnf
 shared_store_decl → "shared" "store" IDENTIFIER "{" store_body "}"
 store_body        → (store_field | store_method)*
 ```
 
-### v1.13 语法更新
+### v1.13 Syntax Updates
 
-#### 1. Channel 声明 (v1.13, **v1.18 已删除**)
+#### 1. Channel Declarations (v1.13, **removed in v1.18**)
 
 ```ebnf
-// 已删除：
+// Removed:
 // channel_decl → "channel" IDENTIFIER "{" store_body "}"
 ```
 
-v1.18 起 `channel X { fields }` 声明语法已删除。Channel 现在通过 `Channel()` 构造函数或 `spawn` 创建。
+As of v1.18, `channel X { fields }` declaration syntax has been removed. Channels are now created via `Channel()` constructor or `spawn`.
 
-### v1.14 语法更新
+### v1.14 Syntax Updates
 
-#### 1. `llm stream` 删除，`llm act` 增加回调
+#### 1. `llm stream` Removed, `llm act` Gains Callbacks
 
 ```ebnf
 llm_act → "llm" "act" act_target? act_args? string?
@@ -377,25 +377,23 @@ llm_act → "llm" "act" act_target? act_args? string?
            ("on_complete" expression)?
 ```
 
-`llm stream` 已删除（`STREAM` TokenType 移除），`LlmStreamStmtNode` 移除。流式功能通过 `on_chunk`/`on_complete` 回调整合到 `llm act`。
+`llm stream` has been removed (`STREAM` TokenType removed), `LlmStreamStmtNode` removed. Streaming functionality is integrated into `llm act` via `on_chunk`/`on_complete` callbacks.
 
-### v1.18 语法更新
+### v1.18 Syntax Updates
 
-#### 1. spawn 并发原语
+#### 1. spawn Concurrency Primitive
 
 ```ebnf
 spawn_expr → "spawn" IDENTIFIER "(" args? ")"
 ```
 
-`spawn` 是一元前缀表达式，返回 `Channel` 类型。
+`spawn` is a unary prefix expression that returns a `Channel` type.
 
-#### 2. 删除 async/await/detach/channel 声明
+#### 2. Removed async/await/detach/channel Declarations
 
-- `async_call_stmt` 已删除
-- `async_call_expr` 已删除
-- `detach_stmt` 已删除
-- `channel_decl` 已删除
-- `for_await_stmt` 已删除
-- 关键字 `async`/`await`/`detach`/`channel`（声明语法）+ 中文 `异步`/`等待`/`分离`/`通道`（声明语法）全部删除
-
-
+- `async_call_stmt` removed
+- `async_call_expr` removed
+- `detach_stmt` removed
+- `channel_decl` removed
+- `for_await_stmt` removed
+- Keywords `async`/`await`/`detach`/`channel` (declaration syntax) + Chinese `异步`/`等待`/`分离`/`通道` (declaration syntax) all removed

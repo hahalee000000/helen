@@ -1,6 +1,6 @@
 ---
 name: helen-python-bridge
-description: Helen Python Bridge 使用指南 — 让 Python 直接使用 Helen Agent 和函数，实现双向 FFI
+description: Helen Python Bridge Usage Guide — Let Python directly use Helen Agents and functions, enabling bidirectional FFI
 version: 1.1.0
 author: Helen Team
 tags: [python, ffi, bridge, integration, agent, interoperability, function]
@@ -8,158 +8,158 @@ tags: [python, ffi, bridge, integration, agent, interoperability, function]
 
 # Helen Python Bridge
 
-Helen Python Bridge 允许 Python 开发者直接导入和使用 Helen Agent 与函数，就像使用普通的 Python 类和函数一样。这是 Helen 与 Python 生态系统的深度集成方案。
+Helen Python Bridge allows Python developers to directly import and use Helen Agents and functions, just like using regular Python classes and functions. This is Helen's deep integration with the Python ecosystem.
 
-## 概述
+## Overview
 
-Python Bridge 实现了 Helen 与 Python 的双向 FFI：
+Python Bridge implements bidirectional FFI between Helen and Python:
 
-1. **Helen → Python (FFI)**：在 Helen 中使用 Python 库（已有）
-2. **Python → Helen (Bridge)**：在 Python 中使用 Helen Agent 和函数（新增）
+1. **Helen → Python (FFI)**: Use Python libraries in Helen (existing)
+2. **Python → Helen (Bridge)**: Use Helen Agents and functions in Python (new)
 
-这让 Helen 成为 Python 生态系统的"原生扩展"，Python 开发者可以像使用 `numpy`、`pandas` 一样使用 Helen Agent 和函数。
+This makes Helen a "native extension" of the Python ecosystem — Python developers can use Helen Agents and functions just like `numpy`, `pandas`, etc.
 
-> 📘 **想看双向集成全貌？** 见 `wiki/reference/python-integration.md` — 架构图 + 混合使用示例
+> 📘 **Want the full picture of bidirectional integration?** See `wiki/reference/python-integration.md` — architecture diagram + mixed usage examples
 
-## Helen → Python（FFI）速查
+## Helen → Python (FFI) Quick Reference
 
-本文档侧重 **Python → Helen** 方向。如果你需要的是 **Helen → Python**（在 Helen 中调用 Python 库），核心语法如下：
+This document focuses on the **Python → Helen** direction. If you need **Helen → Python** (calling Python libraries from Helen), the core syntax is:
 
 ```helen
-// 导入 Python 模块（无扩展名 = Python 模块）
+// Import Python modules (no extension = Python module)
 import "math" as math
 import "json" as json
 import "mylib.renderer" as PyRenderer
 
-// 调用函数 / 访问常量
+// Call functions / access constants
 let s = json.dumps({"k": "v"})
 let pi = math.pi
 
-// 实例化 Python 类 + 调用方法
+// Instantiate Python classes + call methods
 let encoder = json.JSONEncoder()
-let result = encoder.encode({"x": 1})        // 自然方法调用（推荐）
-let result2 = encoder.call("encode", {"x": 1})  // 按方法名调用（动态场景）
+let result = encoder.encode({"x": 1})        // Natural method call (recommended)
+let result2 = encoder.call("encode", {"x": 1})  // Call by method name (dynamic scenarios)
 ```
 
-**要点：**
-- 类实例化：`PyModule.ClassName()` — 类是可调用的
-- 方法调用：优先用 `obj.method()`；`obj.call("method")` 用于动态方法名
-- 嵌套导入：被导入的 `.helen` 模块中的 Python 导入完全可用
+**Key points:**
+- Class instantiation: `PyModule.ClassName()` — classes are callable
+- Method calls: prefer `obj.method()`; use `obj.call("method")` for dynamic method names
+- Nested imports: Python imports in imported `.helen` modules are fully available
 
-→ 详细教程：`wiki/tutorial/09-python-ffi.md`
+→ Detailed tutorial: `wiki/tutorial/09-python-ffi.md`
 
-## 快速开始
+## Quick Start
 
-### 1. 创建 Helen Agent
+### 1. Create a Helen Agent
 
 ```helen
 // translator.helen
 agent TranslatorAgent(text: str, target: str) {
-    description "翻译文本到目标语言"
+    description "Translate text to target language"
     prompt "Translate '{{text}}' to {{target}}"
-    
+
     main {
         return llm act "Translate '{{text}}' to {{target}}"
     }
 }
 ```
 
-### 2. 在 Python 中使用
+### 2. Use It in Python
 
 ```python
 from translator import TranslatorAgent
 
-# 创建 agent 实例
+# Create agent instance
 agent = TranslatorAgent()
 
-# 调用 agent
+# Call agent
 result = agent("Hello", "French")
 print(result)  # "Bonjour"
 ```
 
-## 核心特性
+## Core Features
 
-### 自动导入
+### Automatic Import
 
-Python Bridge 使用 Import Hook 自动识别 `.helen` 文件（v1.23.6+ 支持函数导入）：
+Python Bridge uses Import Hook to automatically recognize `.helen` files (function import supported since v1.23.6+):
 
 ```python
-# 安装 import hook（一次性）
+# Install import hook (one-time)
 from helen.python_bridge.import_hook import install_import_hook
 install_import_hook()
 
-# 自动加载 translator.helen 文件中的 agent 和 function
+# Auto-load agents and functions from translator.helen
 from translator import TranslatorAgent, SummarizerAgent, format_text
 ```
 
-**Helen 文件示例：**
+**Helen file example:**
 
 ```helen
 // translator.helen
 const default_lang = "English"
 
-// 普通函数（纯计算，无 LLM 调用）
+// Regular function (pure computation, no LLM calls)
 fn format_text(text: str): str {
     返回 text.strip().capitalize()
 }
 
-// Agent（需要 LLM 推理）
+// Agent (requires LLM reasoning)
 agent TranslatorAgent(text: str, target: str) {
-    description "翻译文本到目标语言"
+    description "Translate text to target language"
     prompt "Translate '{{text}}' to {{target}}"
-    
+
     main {
         return llm act "Translate '{{text}}' to {{target}}"
     }
 }
 ```
 
-**Python 调用：**
+**Python usage:**
 
 ```python
 from translator import TranslatorAgent, format_text
 
-# 直接调用函数
+# Call function directly
 formatted = format_text("  hello world  ")  # "Hello world"
 
-# 调用 agent
+# Call agent
 agent = TranslatorAgent()
 result = agent("Hello", "French")  # "Bonjour"
 ```
 
-### 参数验证
+### Parameter Validation
 
 ```python
 agent = TranslatorAgent()
 
-# ✅ 正确调用
+# ✅ Correct call
 result = agent("Hello", target="French")
 
-# ❌ 缺少必需参数
+# ❌ Missing required argument
 result = agent("Hello")  # TypeError: missing required argument
 
-# ❌ 未知参数
+# ❌ Unknown argument
 result = agent("Hello", target="French", extra="value")  # TypeError
 ```
 
-### 类型转换
+### Type Conversion
 
-自动在 Python 和 Helen 类型之间转换：
+Automatically converts between Python and Helen types:
 
 ```python
 # Python → Helen
 agent(42, "text", [1, 2, 3], {"key": "value"})
 
 # Helen → Python
-result = agent(...)  # 自动转换为 Python 类型
+result = agent(...)  # Automatically converted to Python types
 ```
 
-支持的类型：
-- 基本类型：`int`, `float`, `str`, `bool`
-- 集合类型：`list`, `dict`
-- 空值：`None`
+Supported types:
+- Primitives: `int`, `float`, `str`, `bool`
+- Collections: `list`, `dict`
+- Null: `None`
 
-### 异步调用
+### Async Calls
 
 ```python
 import asyncio
@@ -172,26 +172,26 @@ async def main():
 asyncio.run(main())
 ```
 
-### 关键字参数
+### Keyword Arguments
 
 ```python
 agent = TranslatorAgent()
 
-# 位置参数
+# Positional arguments
 result = agent("Hello", "French")
 
-# 关键字参数
+# Keyword arguments
 result = agent(text="Hello", target="French")
 
-# 混合使用
+# Mixed usage
 result = agent("Hello", target="French")
 ```
 
-## 高级用法
+## Advanced Usage
 
-### 装饰器模式
+### Decorator Pattern
 
-使用 `@helen_agent` 装饰器简化调用：
+Use the `@helen_agent` decorator to simplify calls:
 
 ```python
 from helen.python_bridge import helen_agent
@@ -203,33 +203,33 @@ def translate(text: str, target: str) -> str:
 result = translate("Hello", "French")
 ```
 
-### 共享解释器
+### Shared Interpreter
 
-多个 agent 可以共享同一个解释器实例：
+Multiple agents can share the same interpreter instance:
 
 ```python
 from helen.interpreter import Interpreter
 from helen.python_bridge import HelenAgentWrapper
 
-# 创建共享解释器
+# Create shared interpreter
 interpreter = Interpreter()
 
-# 多个 agent 共享
+# Multiple agents sharing it
 agent1 = HelenAgentWrapper("Agent1", "agents.helen", interpreter)
 agent2 = HelenAgentWrapper("Agent2", "agents.helen", interpreter)
 ```
 
-### 会话管理 (v1.24+)
+### Session Management (v1.24+)
 
-Interpreter 支持 `session_id` 参数，可以恢复历史会话，实现跨进程对话持久化：
+Interpreter supports the `session_id` parameter to resume historical sessions, enabling cross-process conversation persistence:
 
 ```python
 from helen.interpreter import Interpreter
 
-# 方式 1: 恢复指定 session
+# Approach 1: Resume a specific session
 interp = Interpreter(session_id="session_xxx")
 
-# 方式 2: 恢复最近的 session
+# Approach 2: Resume the most recent session
 from helen.runtime.session_manager import SessionManager
 manager = SessionManager()
 sessions = manager.list_sessions()
@@ -237,22 +237,22 @@ if sessions:
     latest_sid = sessions[0]["session_id"]
     interp = Interpreter(session_id=latest_sid)
 
-# 方式 3: 默认创建新 session（向后兼容）
+# Approach 3: Create new session by default (backward compatible)
 interp = Interpreter()
 ```
 
-**Web 服务中的典型用法**：
+**Typical usage in web services**:
 
 ```python
 from helen.interpreter import Interpreter
 from helen.python_bridge import HelenAgentWrapper
 
 class ChatService:
-    """支持跨请求对话持久化的聊天服务"""
+    """Chat service with cross-request conversation persistence"""
 
     def __init__(self, user_id: str, session_id: str | None = None):
         self.user_id = user_id
-        # 恢复之前的对话，或创建新对话
+        # Resume previous conversation or create a new one
         self.interp = Interpreter(session_id=session_id)
         self.agent = HelenAgentWrapper("ChatBot", "chat.helen", self.interp)
 
@@ -261,10 +261,10 @@ class ChatService:
 
     @property
     def session_id(self) -> str:
-        """返回当前 session_id，客户端保存后可用于下次恢复"""
+        """Return current session_id; client can save it for next-time resumption"""
         return self.interp._agent_context.session_id
 
-# Flask/FastAPI Web 服务示例
+# Flask/FastAPI web service example
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
@@ -274,81 +274,81 @@ def chat():
     data = request.json
     service = ChatService(
         user_id=data["user_id"],
-        session_id=data.get("session_id"),  # 可选：恢复历史对话
+        session_id=data.get("session_id"),  # Optional: resume historical conversation
     )
     response = service.chat(data["message"])
     return jsonify({
         "response": response,
-        "session_id": service.session_id,  # 客户端保存，下次传入
+        "session_id": service.session_id,  # Client saves this and passes it next time
     })
 ```
 
-**`Interpreter(session_id=...)` vs `resume_session()`**：
+**`Interpreter(session_id=...)` vs `resume_session()`**:
 
-| 特性 | `Interpreter(session_id=...)` | `resume_session()` |
-|------|------------------------------|-------------------|
-| 时机 | 创建解释器时 | 运行时调用 |
-| 行为 | 直接复用指定 session | 导入历史消息到当前新 session |
-| transcript 文件 | 一个 | 两个 |
-| 适用场景 | Python 服务持续对话 | 代码中切换上下文 |
+| Feature | `Interpreter(session_id=...)` | `resume_session()` |
+|---------|------------------------------|-------------------|
+| Timing | At interpreter creation | Called at runtime |
+| Behavior | Directly reuses specified session | Imports history into current new session |
+| Transcript files | One | Two |
+| Use case | Python service persistent conversation | Switching context within code |
 
-### Import Hook 的 Session 复用 (v1.24.1+，Issue #16)
+### Import Hook Session Reuse (v1.24.1+, Issue #16)
 
-显式构造 `Interpreter(session_id=...)` 需要自己管理解释器实例。但 import hook 场景
-（`from chat_tui import TUIChatAgent`）是**隐式**创建解释器的，无法在 import 语句中传参。
+Explicitly constructing `Interpreter(session_id=...)` requires managing interpreter instances yourself. But the import hook scenario
+(`from chat_tui import TUIChatAgent`) creates interpreters **implicitly** — you cannot pass arguments in an import statement.
 
-v1.24.1 为 import hook 增加了 session_id 检测链，按优先级解析：
+v1.24.1 adds a session_id detection chain to the import hook, resolved by priority:
 
 ```
-1. set_session_id() 显式设置              （最高优先级，进程内动态控制）
-2. 环境变量 HELEN_SESSION_ID                （跨进程重启恢复）
-3. memento 文件 .helen/current_session_id   （相对 cwd，自动持久化）
-4. None                                    （默认，创建新 session）
+1. set_session_id() explicit setting         (highest priority, in-process dynamic control)
+2. Environment variable HELEN_SESSION_ID      (cross-process restart recovery)
+3. Memento file .helen/current_session_id     (relative to cwd, auto-persisted)
+4. None                                       (default, create new session)
 ```
 
 ```python
-# 方式 1: 显式 API（多 session 进程，必须在 import 前调用）
+# Approach 1: Explicit API (multi-session process, must call before import)
 from helen.python_bridge import set_session_id
 set_session_id("session_user_alice")
-from chat_tui import TUIChatAgent   # 复用 alice 的 session
+from chat_tui import TUIChatAgent   # Reuses alice's session
 
-# 方式 2: 环境变量（跨进程重启）
+# Approach 2: Environment variable (cross-process restart)
 #   export HELEN_SESSION_ID=session_xxx && python app.py
-from chat_tui import TUIChatAgent   # 自动复用环境变量指定的 session
+from chat_tui import TUIChatAgent   # Automatically reuses session from env var
 
-# 方式 3: memento 文件（自动持久化）
+# Approach 3: Memento file (auto-persisted)
 #   echo "session_xxx" > .helen/current_session_id
-from chat_tui import TUIChatAgent   # 自动读取 memento 复用 session
+from chat_tui import TUIChatAgent   # Automatically reads memento to reuse session
 
-# 检测当前生效的 session_id
+# Check currently effective session_id
 from helen.python_bridge import get_session_id
 print(get_session_id())
 ```
 
-**适用场景**：
+**Applicable scenarios**:
 
-| 场景 | 推荐方式 |
-|------|---------|
-| Web 服务多用户（同进程多 session）| `set_session_id()` |
-| 跨进程重启恢复 | 环境变量 `HELEN_SESSION_ID` |
-| 本地开发自动持久化 | memento 文件 |
-| 一次性脚本 | 不设置（默认新 session）|
+| Scenario | Recommended Approach |
+|----------|---------------------|
+| Web service multi-user (multiple sessions in same process) | `set_session_id()` |
+| Cross-process restart recovery | Environment variable `HELEN_SESSION_ID` |
+| Local development auto-persistence | Memento file |
+| One-off scripts | Don't set (default new session) |
 
-### 调用 Helen 函数 (v1.23.6+)
+### Calling Helen Functions (v1.23.6+)
 
-除了调用 agent，Python Bridge 还支持直接调用 Helen 的普通函数（`fn`）：
+Besides calling agents, Python Bridge also supports directly calling Helen's regular functions (`fn`):
 
 ```python
 from helen.python_bridge.function_wrapper import HelenFunctionWrapper, load_helen_functions
 
-# 方法 1: 调用单个函数
+# Method 1: Call a single function
 add = HelenFunctionWrapper("add", "utils.helen")
 result = add(10, 32)  # 42
 
 greet = HelenFunctionWrapper("greet", "utils.helen")
 result = greet("Python")  # "Hello, Python!"
 
-# 方法 2: 加载所有函数
+# Method 2: Load all functions
 functions = load_helen_functions("utils.helen")
 # {'add': <HelenFunctionWrapper>, 'greet': <HelenFunctionWrapper>, ...}
 
@@ -356,25 +356,25 @@ result = functions['add'](100, 200)  # 300
 result = functions['greet']("World")  # "Hello, World!"
 ```
 
-**何时使用函数 vs Agent：**
-- **函数 (fn)**：纯计算、工具函数、数据处理（无 LLM 调用）
-- **Agent**：需要 LLM 推理、工具调用、上下文管理
+**When to use functions vs agents:**
+- **Functions (fn)**: pure computation, utility functions, data processing (no LLM calls)
+- **Agents**: require LLM reasoning, tool calls, context management
 
-**混合使用：**
+**Mixed usage:**
 ```python
 from helen.python_bridge.agent_wrapper import HelenAgentWrapper
 from helen.python_bridge.function_wrapper import HelenFunctionWrapper
 
-# 同一个 Helen 文件中的 agent 和函数
+# Agent and function from the same Helen file
 agent = HelenAgentWrapper("translator", "app.helen")
 utils = HelenFunctionWrapper("format_text", "app.helen")
 
-# 先用函数处理数据，再用 agent 推理
+# Process data with function first, then reason with agent
 processed = utils("raw text")
 result = agent(processed)
 ```
 
-### 批量处理
+### Batch Processing
 
 ```python
 from agents import TranslatorAgent
@@ -386,7 +386,7 @@ results = [agent(text, target="French") for text in texts]
 print(results)  # ["Bonjour", "Monde", "IA"]
 ```
 
-### 错误处理
+### Error Handling
 
 ```python
 from agents import TranslatorAgent
@@ -396,28 +396,28 @@ agent = TranslatorAgent()
 try:
     result = agent("Hello", target="French")
 except TypeError as e:
-    print(f"参数错误: {e}")
+    print(f"Parameter error: {e}")
 except Exception as e:
-    print(f"执行错误: {e}")
+    print(f"Execution error: {e}")
 ```
 
-## 使用场景
+## Use Cases
 
-### AI Agent 开发
+### AI Agent Development
 
 ```python
 from agents import ResearchAgent, AnalysisAgent
 
-# 研究阶段
+# Research phase
 researcher = ResearchAgent()
 findings = researcher("quantum computing", depth="deep")
 
-# 分析阶段
+# Analysis phase
 analyzer = AnalysisAgent()
 insights = analyzer(findings)
 ```
 
-### 多 Agent 协作
+### Multi-Agent Collaboration
 
 ```python
 from workflow import PlannerAgent, ExecutorAgent, ReviewerAgent
@@ -432,7 +432,7 @@ reviewer = ReviewerAgent()
 feedback = reviewer(result)
 ```
 
-### LLM 应用
+### LLM Applications
 
 ```python
 from llm_agents import ChatBot, Summarizer, Translator
@@ -447,7 +447,7 @@ translator = Translator()
 translated = translator(summary, target="Chinese")
 ```
 
-## API 参考
+## API Reference
 
 ### HelenAgentWrapper
 
@@ -455,31 +455,31 @@ translated = translator(summary, target="Chinese")
 class HelenAgentWrapper:
     def __init__(self, agent_name: str, helen_file: str, interpreter=None):
         """
-        初始化包装器
-        
+        Initialize wrapper
+
         Args:
-            agent_name: Agent 名称
-            helen_file: Helen 文件路径
-            interpreter: 可选的解释器实例（用于共享）
+            agent_name: Agent name
+            helen_file: Helen file path
+            interpreter: Optional interpreter instance (for sharing)
         """
-    
+
     def __call__(self, *args, **kwargs) -> Any:
-        """调用 agent"""
-    
+        """Call agent"""
+
     async def async_call(self, *args, **kwargs) -> Any:
-        """异步调用 agent"""
+        """Async call agent"""
 ```
 
-### 装饰器
+### Decorators
 
 ```python
 @helen_agent(helen_file: str, agent_name: str = None)
 def my_function(...):
-    """将函数包装为 Helen agent 调用"""
+    """Wrap function as Helen agent call"""
 
 @helen_module(helen_file: str)
 class MyModule:
-    """将类包装为 Helen agents 集合"""
+    """Wrap class as Helen agents collection"""
 ```
 
 ### Import Hook
@@ -487,46 +487,46 @@ class MyModule:
 ```python
 from helen.python_bridge import install_import_hook
 
-# 自动安装（默认）
+# Auto-install (default)
 install_import_hook()
 
-# 手动卸载
+# Manual uninstall
 from helen.python_bridge import uninstall_import_hook
 uninstall_import_hook()
 ```
 
-## 实现原理
+## Implementation Principles
 
-1. **Import Hook**：使用 Python 的 `sys.meta_path` 拦截模块导入
-2. **动态类生成**：解析 Helen 文件，为每个 agent 动态创建 Python 类
-3. **类型转换**：自动在 Python 和 Helen 类型之间转换
-4. **参数验证**：检查参数类型和必需参数
-5. **异步支持**：提供 `async_call` 方法用于异步调用
+1. **Import Hook**: Uses Python's `sys.meta_path` to intercept module imports
+2. **Dynamic class generation**: Parses Helen files and dynamically creates Python classes for each agent
+3. **Type conversion**: Automatically converts between Python and Helen types
+4. **Parameter validation**: Checks argument types and required parameters
+5. **Async support**: Provides `async_call` method for async invocations
 
-## 限制
+## Limitations
 
-- 需要 Python 3.10+（因为 Helen 使用 match 语句）
-- 当前只支持 agent 调用，不支持 Helen 的其他特性
-- 类型转换目前只支持基本类型（int, float, str, bool, list, dict）
+- Requires Python 3.10+ (because Helen uses match statements)
+- Currently only supports agent calls, not other Helen features
+- Type conversion currently only supports basic types (int, float, str, bool, list, dict)
 
-## 未来计划
+## Future Plans
 
-- 支持更多 Helen 特性（函数、类等）
-- 改进类型转换（支持自定义类型）
-- 添加类型提示生成
-- 支持 Helen 模块系统
+- Support more Helen features (functions, classes, etc.)
+- Improve type conversion (support custom types)
+- Add type hint generation
+- Support Helen module system
 
-## 相关资源
+## Related Resources
 
-- 完整教程：[[tutorial/15-python-bridge]]
-- 示例代码：`examples/python_bridge/`
-- Python FFI 教程：[[tutorial/09-python-ffi]]
+- Full tutorial: [[tutorial/15-python-bridge]]
+- Example code: `examples/python_bridge/`
+- Python FFI tutorial: [[tutorial/09-python-ffi]]
 
-## 最佳实践
+## Best Practices
 
-### 1. 使用共享解释器
+### 1. Use a Shared Interpreter
 
-当需要创建多个 agent 实例时，使用共享解释器可以提高性能：
+When you need to create multiple agent instances, using a shared interpreter improves performance:
 
 ```python
 from helen.interpreter import Interpreter
@@ -537,38 +537,38 @@ agent1 = HelenAgentWrapper("Agent1", "agents.helen", interpreter)
 agent2 = HelenAgentWrapper("Agent2", "agents.helen", interpreter)
 ```
 
-### 2. 批量处理
+### 2. Batch Processing
 
-对于大量数据处理，使用列表推导式进行批量调用：
+For large-scale data processing, use list comprehensions for batch calls:
 
 ```python
 results = [agent(item) for item in items]
 ```
 
-### 3. 错误处理
+### 3. Error Handling
 
-始终使用 try-except 捕获可能的错误：
+Always use try-except to catch potential errors:
 
 ```python
 try:
     result = agent(data)
 except TypeError as e:
-    print(f"参数错误: {e}")
+    print(f"Parameter error: {e}")
 except Exception as e:
-    print(f"执行错误: {e}")
+    print(f"Execution error: {e}")
 ```
 
-### 4. 异步调用
+### 4. Async Calls
 
-对于耗时的 agent 调用，使用异步方式避免阻塞：
+For time-consuming agent calls, use async to avoid blocking:
 
 ```python
 result = await agent.async_call(data)
 ```
 
-### 5. 类型提示
+### 5. Type Hints
 
-使用类型提示提高代码可读性：
+Use type hints to improve code readability:
 
 ```python
 def process_data(data: list, agent: TranslatorAgent) -> str:

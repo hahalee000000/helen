@@ -1,25 +1,25 @@
-# 教程 06: LLM 语句
+# Tutorial 06: LLM Statements
 
-> llm act / llm if 实战
+> llm act / llm if in practice
 
 ---
 
-## LLM 语句概述
+## LLM Statements Overview
 
-Helen 有两个关键字级 LLM 语句：
+Helen has two keyword-level LLM statements:
 
-| 语句 | 用途 | 返回值 |
-|---|---|---|
-| `llm act` | 让 LLM 执行任务（支持可选流式回调） | 响应文本 |
-| `llm if` | 让 LLM 分类路由 | 执行匹配分支或返回值 |
+| Statement | Purpose | Return Value |
+|-----------|---------|--------------|
+| `llm act` | Have the LLM execute a task (supports optional streaming callbacks) | Response text |
+| `llm if` | Have the LLM classify and route | Executes the matched branch or returns a value |
 
 ---
 
 ## llm act
 
-### 基本用法
+### Basic Usage
 
-`llm act` 用于直接调用 LLM，传入 prompt 字符串：
+`llm act` is used to directly call the LLM with a prompt string:
 
 ```helen
 main {
@@ -29,9 +29,9 @@ main {
 }
 ```
 
-### 在 agent 中使用
+### Using Inside an Agent
 
-在 agent 的 `main` 块中，`llm act` 会自动使用 agent 的配置（model、temperature 等）：
+In an agent's `main` block, `llm act` automatically uses the agent's configuration (model, temperature, etc.):
 
 ```helen
 agent Translator(text: str, target: str) {
@@ -44,7 +44,7 @@ agent Translator(text: str, target: str) {
     """
 
     main {
-        // bare form：自动使用渲染后的 prompt
+        // bare form: automatically uses the rendered prompt
         let result = llm act
         return result
     }
@@ -56,9 +56,9 @@ main {
 }
 ```
 
-### 带动态 prompt
+### With Dynamic Prompts
 
-可以在 `llm act` 后传入表达式，动态构建 prompt：
+You can pass expressions after `llm act` to dynamically build prompts:
 
 ```helen
 main {
@@ -70,45 +70,45 @@ main {
 
 ---
 
-`llm act` 也可以作为表达式直接使用，不需要 agent 上下文：
+`llm act` can also be used directly as an expression, without agent context:
 
 ```helen
-// 顶层直接调用
+// Direct top-level call
 llm act "translate hello to chinese."
 
-// 在函数中使用
+// Use inside a function
 fn translate(text, target) {
     return llm act "translate " + text + " to " + target
 }
 
-// 赋值给变量
+// Assign to a variable
 let result = llm act "summarize this article"
 
-// 字符串拼接构建 prompt
+// String concatenation to build prompts
 let topic = "climate change"
 let analysis = llm act "analyze the impact of " + topic
 ```
 
-**语法对比：**
+**Syntax comparison:**
 
-| 形式 | 语法 | 用途 |
-|------|------|------|
-| 表达式形式 | `llm act <expr>` | 直接调用 LLM，expr 的值作为 prompt |
-| Bare form | `llm act` | 在 agent main 中省略参数，自动使用渲染后的 prompt |
+| Form | Syntax | Purpose |
+|------|--------|---------|
+| Expression form | `llm act <expr>` | Directly call the LLM; the expr value is used as the prompt |
+| Bare form | `llm act` | Omit arguments in agent main; automatically uses the rendered prompt |
 
-**注意：** 语句形式 `llm act Agent(args) "desc"` 已废弃，请使用 `Agent(args)` 调用 agent。
+**Note:** The statement form `llm act Agent(args) "desc"` is deprecated; use `Agent(args)` to call agents instead.
 
-**何时使用表达式形式：**
-- 快速原型测试，不想定义 agent
-- 动态构建 prompt
-- 在 REPL 中直接调用 LLM
-- 简单的 LLM 调用场景
+**When to use the expression form:**
+- Quick prototyping without defining an agent
+- Dynamically building prompts
+- Directly calling the LLM from the REPL
+- Simple LLM call scenarios
 
 ---
 
 ## llm if
 
-### 基本用法
+### Basic Usage
 
 ```helen
 llm if "Classify email priority" {
@@ -130,9 +130,9 @@ llm if "Classify email priority" {
 }
 ```
 
-**注意**: `llm if` 使用 `branch` 关键字定义分支，不是 `case`。每个分支用 `{ }` 包裹代码块。
+**Note**: `llm if` uses the `branch` keyword to define branches, not `case`. Each branch is followed by a `{ }` block.
 
-### 嵌套使用
+### Nested Usage
 
 ```helen
 let query = "How do I reset my password?"
@@ -162,13 +162,13 @@ llm if "Classify query type" {
 
 ---
 
-## llm act 流式输出（on_chunk / on_complete）
+## llm act Streaming Output (on_chunk / on_complete)
 
-`llm act` 支持可选的 `on_chunk` 和 `on_complete` 回调，用于逐 chunk 流式输出 LLM 响应，适用于长文本生成场景。
+`llm act` supports optional `on_chunk` and `on_complete` callbacks for streaming LLM responses chunk by chunk, useful for long text generation scenarios.
 
-### 基本用法
+### Basic Usage
 
-使用 `on_chunk` 指定回调函数，自定义处理每个 chunk：
+Use `on_chunk` to specify a callback function for custom processing of each chunk:
 
 ```helen
 fn handle_chunk(chunk) {
@@ -180,7 +180,7 @@ main {
 }
 ```
 
-使用 `on_complete` 指定流式传输完成后的回调：
+Use `on_complete` to specify a callback after streaming is finished:
 
 ```helen
 fn handle_chunk(chunk) {
@@ -188,7 +188,7 @@ fn handle_chunk(chunk) {
 }
 
 fn on_done() {
-    print("\n\n✅ 流式传输完成")
+    print("\n\n✅ Streaming complete")
 }
 
 main {
@@ -196,14 +196,14 @@ main {
 }
 ```
 
-`on_complete` 回调在流式传输完成后调用，适合用于：
-- 显示完成提示
-- 记录统计信息（如总 token 数）
-- 触发后续操作
+The `on_complete` callback is called after streaming finishes, suitable for:
+- Displaying completion notifications
+- Logging statistics (e.g., total token count)
+- Triggering follow-up actions
 
-### 在 agent 中使用
+### Using Inside an Agent
 
-`llm act` 的流式回调在 agent 内自动使用 agent 的配置（model、temperature、prompt）：
+Streaming callbacks for `llm act` automatically use the agent's configuration (model, temperature, prompt) when inside an agent:
 
 ```helen
 agent Poet(topic: str) {
@@ -215,12 +215,12 @@ agent Poet(topic: str) {
 
     main {
         fn print_chunk(chunk: str) { stream_print(chunk) }
-        llm act on_chunk print_chunk    // bare form：使用渲染后的 prompt
+        llm act on_chunk print_chunk    // bare form: uses the rendered prompt
     }
 }
 ```
 
-### 动态 prompt
+### Dynamic Prompts
 
 ```helen
 fn print_chunk(chunk: str) {
@@ -233,24 +233,24 @@ main {
 }
 ```
 
-### 与其他 LLM 语句对比
+### Comparison with Other LLM Statements
 
-| 语句 | 用途 | 输出方式 |
-|------|------|----------|
-| `llm act` | 获取完整响应文本（可选流式回调） | 等待完成后返回，或通过 on_chunk 逐 chunk 输出 |
-| `llm if` | LLM 分类路由 | 等待完成后执行分支 |
+| Statement | Purpose | Output Method |
+|-----------|---------|---------------|
+| `llm act` | Get the complete response text (optional streaming callbacks) | Waits for completion then returns, or streams chunk by chunk via on_chunk |
+| `llm if` | LLM classification and routing | Waits for completion then executes the matched branch |
 
-### 工具执行回调（on_tool_end）
+### Tool Execution Callback (on_tool_end)
 
-`llm act` 支持 `on_tool_end` 回调，在每个工具执行完毕后调用。回调可以返回字符串或 dict，作为 hint 注入对话历史，让 LLM 在下一次生成时看到。这在需要在 agentic loop 中间引导 LLM 方向时非常有用。
+`llm act` supports an `on_tool_end` callback that is called after each tool execution. The callback can return a string or dict, which is injected as a hint into the conversation history for the LLM to see on the next generation. This is very useful for guiding the LLM's direction in the middle of an agentic loop.
 
-**回调签名**：`fn(tool_name: str, tool_result: str): str | dict | null`
+**Callback signature**: `fn(tool_name: str, tool_result: str): str | dict | null`
 
-- 返回字符串 → 自动注入为 `user` 消息，带 `[System Hint]` 前缀
-- 返回 dict → `{"role": "user"|"system", "content": "..."}` 完全控制消息格式
-- 返回 null → 不注入
+- Returns a string → Automatically injected as a `user` message with a `[System Hint]` prefix
+- Returns a dict → `{"role": "user"|"system", "content": "..."}` for full control over message format
+- Returns null → Nothing is injected
 
-**持久化**：所有注入的 hint 自动保存到 TranscriptStore，可通过 REPL 的 `:transcript` 命令查看，支持会话重放和审计。
+**Persistence**: All injected hints are automatically saved to TranscriptStore and can be viewed via the REPL's `:transcript` command, supporting session replay and auditing.
 
 ```helen
 agent Coder {
@@ -261,10 +261,10 @@ agent Coder {
             on_chunk fn(c) { stream_print(c) }
             on_tool_end fn(name, result) {
                 if name == "write_file" {
-                    return "文件已写入，下一步可以运行测试验证"
+                    return "File written; next step is to run tests to verify"
                 }
                 if name == "shell_exec" {
-                    return {"role": "system", "content": "注意：不要执行危险命令"}
+                    return {"role": "system", "content": "Warning: do not execute dangerous commands"}
                 }
                 return null
             }
@@ -272,68 +272,68 @@ agent Coder {
 }
 ```
 
-使用中文别名：
+Using Chinese aliases:
 
 ```helen
 llm act "Create hello.py" 工具结束 fn(name, result) {
-    return "提示内容"
+    return "hint content"
 }
 ```
 
-**典型应用场景**：
-- 工具执行后提供下一步建议，引导 LLM 方向
-- 安全审计：在 shell_exec 后注入安全警告
-- 外部状态同步：查询外部队列，将新信息注入对话
-- 进度追踪：在文件操作后更新 TODO 列表
+**Typical use cases**:
+- Provide next-step suggestions after tool execution to guide the LLM's direction
+- Security auditing: inject security warnings after shell_exec
+- External state synchronization: query external queues and inject new information into the conversation
+- Progress tracking: update TODO lists after file operations
 
 ---
 
-## 对比：何时使用哪个？
+## Comparison: When to Use Which?
 
-| 场景 | 使用 |
-|---|---|
-| 需要 LLM 返回文本 | `llm act` |
-| 需要 LLM 做分类决策 | `llm if` |
-| 需要 LLM 从选项中选择并执行代码 | `llm if` + `branch` |
-| 需要实时输出生成过程 | `llm act` + `on_chunk` 回调 |
-| 需要在工具执行后引导 LLM | `llm act` + `on_tool_end` 回调 |
-| 多步骤决策 | 嵌套 `llm if` |
-| 需要结果变量 | `llm if` 或 `llm act` |
+| Scenario | Use |
+|----------|-----|
+| Need the LLM to return text | `llm act` |
+| Need the LLM to make a classification decision | `llm if` |
+| Need the LLM to choose from options and execute code | `llm if` + `branch` |
+| Need real-time output of the generation process | `llm act` + `on_chunk` callback |
+| Need to guide the LLM after tool execution | `llm act` + `on_tool_end` callback |
+| Multi-step decision | Nested `llm if` |
+| Need a result variable | `llm if` or `llm act` |
 
 ---
 
-## 对话历史自动记录
+## Automatic Conversation History Recording
 
-每次 LLM 交互自动记录到对话历史：
+Every LLM interaction is automatically recorded in the conversation history:
 
 ```helen
 main {
-    // 自动记录: [user] "Classify email priority"
+    // Automatically recorded: [user] "Classify email priority"
     llm if "Classify email priority" {
         branch "urgent" { print("Urgent!") }
         default { print("Other") }
     }
-    // 自动记录: [assistant] "[routed to: urgent]"
+    // Automatically recorded: [assistant] "[routed to: urgent]"
 
-    // 下次 LLM 调用会包含上面的历史作为上下文
+    // The next LLM call will include the above history as context
     llm act "Draft response for the email"
 }
 ```
 
-### 上下文窗口保护
+### Context Window Protection
 
-对话历史会自动裁剪后传给 LLM，你不需要手动管理上下文长度：
+The conversation history is automatically trimmed before being passed to the LLM; you don't need to manually manage context length:
 
-- **自动裁剪**：每次 LLM 调用前，根据上下文窗口大小自动删除最旧消息
-- **自动压缩**：历史过长时，旧消息会被压缩成摘要
-- **工具结果上限**：单次工具循环的结果数量有上限，避免上下文爆炸
-- **上下文超限恢复**：API 返回 context-too-large 错误时，自动重试
+- **Automatic trimming**: Before each LLM call, the oldest messages are automatically deleted based on the context window size
+- **Automatic compression**: When history is too long, old messages are compressed into summaries
+- **Tool result cap**: There is a limit on the number of results per tool loop to avoid context explosion
+- **Context overflow recovery**: When the API returns a context-too-large error, it automatically retries
 
 ---
 
-## REPL 中的 LLM 调用
+## LLM Calls in the REPL
 
-在 REPL 中，`llm act` 表达式会调用真实的 LLM（通过 HTTP API）：
+In the REPL, `llm act` expressions call a real LLM (via the HTTP API):
 
 ```bash
 $ helen repl
@@ -344,14 +344,14 @@ $ helen repl
 '4'
 ```
 
-**说明：**
-- REPL 和脚本模式都直接调用 LLM API
-- 响应时间：7-11 秒（取决于网络和模型）
-- 自动从 `~/.helen/config.yaml` 或 `~/.helen/.env` 读取配置
-- 向后兼容 `~/.hermes/.env` 配置
+**Notes:**
+- Both REPL and script modes call the LLM API directly
+- Response time: 7-11 seconds (depending on network and model)
+- Automatically reads configuration from `~/.helen/config.yaml` or `~/.helen/.env`
+- Backward compatible with `~/.hermes/.env` configuration
 
-**配置：**
-确保 `~/.helen/config.yaml` 包含：
+**Configuration:**
+Ensure `~/.helen/config.yaml` contains:
 ```yaml
 llm:
   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
@@ -359,7 +359,7 @@ llm:
   model: "qwen3.7-plus"
 ```
 
-或使用 `~/.helen/.env`：
+Or use `~/.helen/.env`:
 ```
 HELEN_API_KEY=***
 HELEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
@@ -367,9 +367,9 @@ HELEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 
 ---
 
-## Function Calling（工具调用）
+## Function Calling (Tool Calls)
 
-当 Agent 配置了 `tools = [...]` 时，`llm act` 会自动进入 function calling 循环：
+When an agent is configured with `tools = [...]`, `llm act` automatically enters the function calling loop:
 
 ```helen
 agent Researcher(topic) {
@@ -381,45 +381,45 @@ agent Researcher(topic) {
 }
 ```
 
-**执行流程：**
+**Execution flow:**
 
-1. LLM 收到 prompt + 工具 schema
-2. LLM 返回工具调用请求 → Helen 执行工具 → 结果返回 LLM
-3. 循环直到 LLM 输出最终文本响应
-4. 达到 `max_turns - 1` 时自动注入 nudge 提示，强制 LLM 输出最终答案
+1. The LLM receives the prompt + tool schemas
+2. The LLM returns a tool call request → Helen executes the tool → results are returned to the LLM
+3. The loop continues until the LLM outputs a final text response
+4. When `max_turns - 1` is reached, a nudge prompt is automatically injected to force the LLM to produce a final answer
 
-**内置工具列表（10 个）：**
+**Built-in tool list (10):**
 
-| 工具 | 功能 | 参数 |
-|------|------|------|
-| `web_search` | 搜索网页（Bing） | `query: str` |
-| `web_fetch` | 获取网页内容 | `url: str` |
-| `read_file` | 读取文件 | `path: str` |
-| `write_file` | 写入文件（覆盖） | `path: str, content: str` |
-| `patch_file` | 精确修改文件（自动处理空白/缩进等差异） | `path: str, old_string: str, new_string: str` |
-| `shell_exec` | 执行 shell 命令 | `command: str` |
-| `calculate` | 数学计算 | `expression: str` |
-| `find_files` | 按 glob 模式查找文件 | `path: str, pattern: str = "**/*", max_results: int = 200` |
-| `search_files` | 按内容搜索文件（文本/正则） | `path: str, pattern: str, regex: bool = false, case_sensitive: bool = true, max_results: int = 100` |
-| `load_skill` | 加载技能文档（总是可用） | `name: str, include_references: bool = false` |
-| `list_skill_references` | 列出技能参考文档 | `name: str` |
+| Tool | Function | Parameters |
+|------|----------|------------|
+| `web_search` | Search the web (Bing) | `query: str` |
+| `web_fetch` | Fetch web page content | `url: str` |
+| `read_file` | Read a file | `path: str` |
+| `write_file` | Write to a file (overwrite) | `path: str, content: str` |
+| `patch_file` | Precisely modify files (automatically handles whitespace/indentation differences) | `path: str, old_string: str, new_string: str` |
+| `shell_exec` | Execute shell commands | `command: str` |
+| `calculate` | Math calculations | `expression: str` |
+| `find_files` | Find files by glob pattern | `path: str, pattern: str = "**/*", max_results: int = 200` |
+| `search_files` | Search files by content (text/regex) | `path: str, pattern: str, regex: bool = false, case_sensitive: bool = true, max_results: int = 100` |
+| `load_skill` | Load skill documentation (always available) | `name: str, include_references: bool = false` |
+| `list_skill_references` | List skill reference documents | `name: str` |
 
-### patch_file 模糊匹配
+### patch_file Fuzzy Matching
 
-`patch_file` 使用 `old_string` → `new_string` 模式精确修改文件，内置多种匹配策略处理 LLM 生成代码的常见差异（空白、缩进、转义、Unicode 等）：
+`patch_file` uses the `old_string` → `new_string` pattern to precisely modify files, with multiple built-in matching strategies to handle common differences in LLM-generated code (whitespace, indentation, escaping, Unicode, etc.):
 
 ```helen
-// 修改文件中的特定函数
+// Modify a specific function in a file
 llm act "Read /tmp/main.py and change the function name from 'foo' to 'bar'"
 ```
 
-通常你不需要关心匹配细节——LLM 生成的代码即使和原文有细微差异，`patch_file` 也能正确处理。
+Usually you don't need to worry about matching details — even if the LLM-generated code has subtle differences from the original, `patch_file` can handle it correctly.
 
 ---
 
-## Agent prompt 与 system_prompt
+## Agent prompt vs system_prompt
 
-Agent 的 `prompt` 字段在 `llm act` 时作为 **system_prompt** 注入 LLM 调用：
+The agent's `prompt` field is injected as **system_prompt** in LLM calls when using `llm act`:
 
 ```helen
 agent Translator(text) {
@@ -429,28 +429,28 @@ agent Translator(text) {
     {{text}}
     """
     main {
-        // prompt 渲染后 → system_prompt
+        // The rendered prompt → system_prompt
         // "Translate the following text to French:\nHello"
-        // → 作为 {"role": "system"} 注入
+        // → Injected as {"role": "system"}
         return llm act "Please translate accurately"
-        // → 作为 {"role": "user"} 注入
+        // → Injected as {"role": "user"}
     }
 }
 ```
 
-**消息结构：**
+**Message structure:**
 ```json
 [
   {"role": "system", "content": "<description>\n<skills>\n<rendered prompt>"},
-  {"role": "user", "content": "llm act 的表达式值"}
+  {"role": "user", "content": "llm act expression value"}
 ]
 ```
 
 ---
 
-## 练习
+## Exercises
 
-1. 创建一个 llm if 三层嵌套的分类系统
-2. 使用 llm if 让 LLM 选择算法策略并返回结果
-3. 使用 llm act 实现一个翻译管道
-4. 观察多次 LLM 调用后的对话历史
+1. Create a three-level nested classification system using llm if
+2. Use llm if to have the LLM select an algorithm strategy and return the result
+3. Use llm act to implement a translation pipeline
+4. Observe the conversation history after multiple LLM calls

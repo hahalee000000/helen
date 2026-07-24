@@ -1,88 +1,88 @@
-# Claude Code 上下文管理详解：Budget Reduction 与 Context Collapse
+# Claude Code Context Management Deep Dive: Budget Reduction and Context Collapse
 
-> 深入分析 Claude Code 压缩管线的两个关键层
+> In-depth analysis of two key layers in the Claude Code compaction pipeline
 
-**日期**：2026-07-06
-**来源**：arXiv:2604.14228v2 (Liu et al., 2026)
+**Date**: 2026-07-06
+**Source**: arXiv:2604.14228v2 (Liu et al., 2026)
 
 ---
 
-## 一、Budget Reduction（Layer 1）：大工具输出 → 引用指针
+## 1. Budget Reduction (Layer 1): Large Tool Outputs → Reference Pointers
 
-### 1.1 核心机制
+### 1.1 Core Mechanism
 
-**函数**: `applyToolResultBudget()`
-**位置**: query.ts（在每次模型调用前执行）
-**状态**: 总是启用，无 feature flag
-**成本**: 零推理成本（纯内容替换）
+**Function**: `applyToolResultBudget()`
+**Location**: query.ts (executed before every model call)
+**Status**: Always enabled, no feature flag
+**Cost**: Zero inference cost (pure content replacement)
 
-#### 工作原理
+#### How It Works
 
-Budget Reduction 是压缩管线的第一层，在每次模型调用前执行。它的核心职责是：
+Budget Reduction is the first layer of the compaction pipeline, executed before every model call. Its core responsibility is:
 
 ```
-对每个工具结果消息:
-  检查大小是否超过 maxResultSizeChars 限制
-  ├── 超过 → 替换为"内容引用"（content reference）
-  └── 未超过 → 保持原样
+For each tool result message:
+  Check whether its size exceeds the maxResultSizeChars limit
+  ├── Exceeds → Replace with a "content reference"
+  └── Does not exceed → Keep as-is
 ```
 
-#### 关键设计决策
+#### Key Design Decisions
 
-**1. 豁免机制**
+**1. Exemption Mechanism**
 
-某些工具被标记为"豁免"，不受预算削减影响：
+Certain tools are marked as "exempt" and not subject to budget reduction:
 
 ```typescript
-// 工具定义中的 maxResultSizeChars 字段
-// 如果为 Infinity 或未设置（非有限值），则该工具的输出不被削减
+// The maxResultSizeChars field in tool definitions
+// If Infinity or unset (non-finite), the tool's output is not reduced
 {
   name: "important_tool",
-  maxResultSizeChars: Infinity,  // 豁免：保留完整输出
+  maxResultSizeChars: Infinity,  // Exempt: preserve full output
 }
 
 {
   name: "regular_tool",
-  maxResultSizeChars: 10000,     // 正常：超过 10000 字符会被替换
+  maxResultSizeChars: 10000,     // Normal: replaced if over 10000 chars
 }
 ```
 
-**设计理由**：某些工具的输出对后续推理至关重要（如关键错误信息、结构化数据），不能被截断。
+**Design rationale**: Some tool outputs are critical for subsequent reasoning (e.g., key error messages, structured data) and must not be truncated.
 
-**2. 内容引用（Content Reference）**
+**2. Content Reference**
 
-论文未给出"内容引用"的确切格式，但可以推断其结构：
+The paper does not provide the exact format of "content references," but its structure can be inferred:
 
 ```
-原始工具结果（15KB）:
+Original tool result (15KB):
 ┌─────────────────────────────────────────┐
 │ import React from 'react';              │
 │ import { useState } from 'react';       │
-│ ... (15KB 代码内容) ...                  │
+│ ... (15KB of code content) ...          │
 │ export default Component;               │
 └─────────────────────────────────────────┘
 
-替换后的内容引用（~200 字符）:
+Replaced content reference (~200 chars):
 ┌─────────────────────────────────────────┐
 │ [read_file: src/component.tsx, 15KB]    │
-│ 前 100 字符: import React from...       │
-│ 后 100 字符: ...export default...       │
+│ First 100 chars: import React from...   │
+│ Last 100 chars: ...export default...    │
 └─────────────────────────────────────────┘
 ```
 
-**推断的依据**：
-- 论文说"replacing oversized outputs with content references"
-- 论文提到"persisted for agent and session query sources to enable reconstruction on resume"
-- 这意味着引用包含足够信息让模型知道文件存在、大小、首尾内容
+**Inference basis**:
+- The paper says "replacing oversized outputs with content references"
+- The paper mentions "persisted for agent and session query sources to enable reconstruction on resume"
+- This implies the reference contains enough information for the model to know the file exists, its size, and its head/tail content
 
-**3. 持久化与恢复**
+**3. Persistence and Recovery**
 
 ```typescript
-// 内容替换被持久化到磁盘
-// 存储在 agent 和 session 查询源中
-// 目的：在 session resume 时可以重建
+// Content replacements are persisted to disk
+// Stored in agent and session query sources
+// Purpose: can be reconstructed on session resume
 
-// 伪代码：
+// Pseudocode:
 persistContentReplacement({
   tool_use_id: "toolu_01ABC...",
   original_content_hash: "sha256:...",
@@ -91,194 +91,194 @@ persistContentReplacement({
   timestamp: Date.now(),
 })
 
-// Resume 时：
-reconstructFromDisk() → 恢复替换记录，可以继续压缩历史
+// On resume:
+reconstructFromDisk() → Restores replacement records; can continue compressing history
 ```
 
-### 1.2 与 Microcompact 的组合设计
+### 1.2 Compositional Design with Microcompact
 
-**关键洞察**：Budget Reduction 在 Microcompact 之前运行，因为两者在不同层面操作，组合无冲突。
-
-```
-执行顺序：
-1. Budget Reduction → 检查内容（content-level）
-   └─ 替换超大工具输出为引用指针
-
-2. Microcompact → 按 ID 操作（ID-level）
-   └─ 通过 tool_use_id 识别要压缩的对
-   └─ 不检查内容，只操作结构
-```
-
-**为什么这个顺序重要**：
+**Key insight**: Budget Reduction runs before Microcompact because the two operate at different levels and compose without conflict.
 
 ```
-如果反过来：
-  Microcompact 先运行 → 清除旧的 tool_result 内容
-  Budget Reduction 后运行 → 试图检查已清除的内容 → 无效
+Execution order:
+1. Budget Reduction → Checks content (content-level)
+   └─ Replaces oversized tool outputs with reference pointers
 
-正确顺序：
-  Budget Reduction 先运行 → 检查并替换超大内容
-  Microcompact 后运行 → 按 ID 压缩，不关心内容是什么
+2. Microcompact → Operates by ID (ID-level)
+   └─ Identifies pairs to compress via tool_use_id
+   └─ Does not inspect content; only manipulates structure
 ```
 
-**代码层面的组合**：
+**Why this ordering matters**:
+
+```
+If reversed:
+  Microcompact runs first → Clears old tool_result content
+  Budget Reduction runs second → Tries to inspect already-cleared content → ineffective
+
+Correct order:
+  Budget Reduction runs first → Checks and replaces oversized content
+  Microcompact runs second → Compresses by ID; does not care what the content is
+```
+
+**Code-level composition**:
 
 ```typescript
-// query.ts:365-453 的执行顺序
+// Execution order in query.ts:365-453
 function prepareMessagesForQuery(messagesForQuery) {
-  // Layer 1: 总是运行
+  // Layer 1: Always runs
   messages = applyToolResultBudget(messagesForQuery);
-  // 此时：超大工具输出已替换为引用指针
-  // 但 tool_use_id 保持不变
+  // At this point: oversized tool outputs are replaced with reference pointers
+  // But tool_use_ids remain unchanged
 
   // ... Layer 2: Snip ...
 
-  // Layer 3: 按 tool_use_id 操作
+  // Layer 3: Operates by tool_use_id
   messages = microcompact(messages);
-  // 此时：旧的 tool_use/tool_result 对被压缩
-  // 不检查内容，只按 ID 识别
+  // At this point: old tool_use/tool_result pairs are compressed
+  // Does not inspect content; only identifies by ID
 }
 ```
 
-### 1.3 实际效果预估
+### 1.3 Practical Effect Estimation
 
 ```
-场景：50 轮对话，每次 read_file 返回 10-50KB 代码
+Scenario: 50-turn conversation; each read_file returns 10-50KB of code
 
-原始状态：
-  - 50 个 read_file 调用
-  - 平均 20KB/调用
-  - 总计 ~1MB 工具输出
-  - 约 250K tokens（超出 200K 窗口）
+Original state:
+  - 50 read_file calls
+  - Average 20KB per call
+  - Total ~1MB of tool output
+  - Approximately 250K tokens (exceeds 200K window)
 
-Budget Reduction 后：
-  - 50 个 read_file 调用
-  - 超过 10KB 的输出被替换为引用指针（~200 字符）
-  - 假设 30 个被替换，20 个保留
-  - 30 × 200 字符 + 20 × 20KB = 6KB + 400KB = ~406KB
-  - 约 100K tokens（减少 60%）
+After Budget Reduction:
+  - 50 read_file calls
+  - Outputs over 10KB are replaced with reference pointers (~200 chars)
+  - Suppose 30 are replaced, 20 are retained
+  - 30 × 200 chars + 20 × 20KB = 6KB + 400KB = ~406KB
+  - Approximately 100K tokens (60% reduction)
 
-关键保留：
-  ✅ tool_use 块（模型记得"我读了哪些文件"）
-  ✅ 引用指针（模型知道"文件存在，大小 X KB"）
-  ✅ 首尾内容（模型可以看到文件的开头和结尾）
-  ❌ 完整内容（丢失，但可以通过再次 read_file 恢复）
+What is preserved:
+  ✅ tool_use blocks (model remembers "which files I read")
+  ✅ Reference pointers (model knows "the file exists, size X KB")
+  ✅ Head/tail content (model can see the beginning and end of the file)
+  ❌ Full content (lost, but can be recovered by re-reading the file)
 ```
 
-### 1.4 论文未给出的细节
+### 1.4 Details Not Provided in the Paper
 
-以下信息在论文中**未明确说明**，需要参考源码或实验推断：
+The following information is **not explicitly stated** in the paper and requires source code inspection or experimental inference:
 
-1. **`maxResultSizeChars` 的默认值**
-   - 论文只说"configurable size"
-   - 推测值：10KB-50KB（基于典型代码文件大小）
+1. **Default value of `maxResultSizeChars`**
+   - The paper only says "configurable size"
+   - Estimated: 10KB-50KB (based on typical code file sizes)
 
-2. **内容引用的确切格式**
-   - 论文只说"content references"
-   - 推测包含：工具名、文件名、大小、首尾片段
+2. **Exact format of content references**
+   - The paper only says "content references"
+   - Estimated to include: tool name, file name, size, head/tail fragments
 
-3. **哪些工具被标记为豁免**
-   - 论文只说"exempt tools"
-   - 推测：`search_files`、`grep` 等返回结构化结果的工具可能被豁免
+3. **Which tools are marked as exempt**
+   - The paper only says "exempt tools"
+   - Estimated: tools like `search_files`, `grep` that return structured results may be exempt
 
-4. **持久化的确切存储位置**
-   - 论文说"persisted for agent and session query sources"
-   - 推测：存储在 session transcript (JSONL) 中
+4. **Exact storage location for persistence**
+   - The paper says "persisted for agent and session query sources"
+   - Estimated: stored in the session transcript (JSONL)
 
 ---
 
-## 二、Context Collapse（Layer 4）：读时投影
+## 2. Context Collapse (Layer 4): Read-Time Projection
 
-### 2.1 核心机制
+### 2.1 Core Mechanism
 
-**函数**: `applyCollapsesIfNeeded()`
-**位置**: query.ts（feature-gated，动态 `require()`）
+**Function**: `applyCollapsesIfNeeded()`
+**Location**: query.ts (feature-gated, dynamic `require()`)
 **Feature Flag**: `CONTEXT_COLLAPSE`
-**成本**: 零推理成本（纯读时投影）
-**状态**: 不修改底层数据
+**Cost**: Zero inference cost (pure read-time projection)
+**Status**: Does not modify underlying data
 
-#### 工作原理
+#### How It Works
 
-Context Collapse 是五层中**唯一不修改消息数组**的层。它是一个**读时投影**（read-time projection），在底层完整历史之上投射一个折叠视图。
+Context Collapse is the **only layer** among the five that does not modify the message array. It is a **read-time projection** that projects a collapsed view over the full underlying history.
 
 ```
-底层存储 (REPL array)              读时视图 (messagesForQuery)
+Underlying Storage (REPL array)              Read-Time View (messagesForQuery)
 ┌─────────────────────────┐       ┌───────────────────────────┐
 │ Turn 1: user+assistant  │       │                           │
-│ Turn 2: user+assistant  │       │ [折叠摘要: 前 20 轮]       │
-│ Turn 3: user+assistant  │  ──→  │ Turn 21: user+assistant   │
-│ ...                     │       │ Turn 22: user+assistant   │
-│ Turn 20: user+assistant │       │ ...                       │
-│ Turn 21: user+assistant │       │ Turn 50: user+assistant   │
-│ ...                     │       └───────────────────────────┘
-│ Turn 50: user+assistant │
+│ Turn 2: user+assistant  │       │ [Collapse summary:        │
+│ Turn 3: user+assistant  │       │  first 20 turns]          │
+│ ...                     │  ──→  │ Turn 21: user+assistant   │
+│ Turn 20: user+assistant │       │ Turn 22: user+assistant   │
+│ Turn 21: user+assistant │       │ ...                       │
+│ ...                     │       │ Turn 50: user+assistant   │
+│ Turn 50: user+assistant │       └───────────────────────────┘
 └─────────────────────────┘
-完整历史永不修改              模型只看到折叠视图
-（append-only JSONL）          （投影到 messagesForQuery）
+Full history is never modified        Model only sees the collapsed view
+(append-only JSONL)                   (projected into messagesForQuery)
 ```
 
-### 2.2 源码注释解读
+### 2.2 Source Code Comment Interpretation
 
-论文引用了源码中的关键注释：
+The paper quotes key comments from the source code:
 
 > **"Nothing is yielded; the collapsed view is a read-time projection over the REPL's full history. Summary messages live in the collapse store, not the REPL array. This is what makes collapses persist across turns."**
 
-逐句解读：
+Sentence-by-sentence interpretation:
 
 **"Nothing is yielded"**
-- Context Collapse 不产生新的消息
-- 不像 Auto-Compact 那样生成摘要消息并插入历史
-- 它只是"投射"一个视图
+- Context Collapse does not produce new messages
+- Unlike Auto-Compact, which generates summary messages and inserts them into the history
+- It merely "projects" a view
 
 **"read-time projection over the REPL's full history"**
-- REPL array 是底层存储（append-only JSONL）
-- "read-time" 意味着在读取时动态计算
-- "projection" 是数据库术语，指从完整数据中选择一个子集
+- The REPL array is the underlying storage (append-only JSONL)
+- "read-time" means dynamically computed at read time
+- "projection" is a database term referring to selecting a subset from the full data
 
 **"Summary messages live in the collapse store, not the REPL array"**
-- 折叠摘要存储在独立的 "collapse store" 中
-- 不写入 REPL array（底层历史）
-- 这是关键的架构决策
+- Collapse summaries are stored in a separate "collapse store"
+- Not written into the REPL array (underlying history)
+- This is a key architectural decision
 
 **"This is what makes collapses persist across turns"**
-- 因为摘要在独立的 store 中
-- 所以跨轮次持久化
-- 即使 REPL array 增长，折叠视图仍然有效
+- Because summaries are in a separate store
+- They persist across turns
+- Even as the REPL array grows, the collapsed view remains effective
 
-### 2.3 与其他层的根本区别
+### 2.3 Fundamental Difference from Other Layers
 
-| 层级 | 是否修改消息数组 | 底层数据 | 持久化方式 |
-|------|----------------|----------|-----------|
-| Budget Reduction | ✅ 修改 | 修改（替换内容） | 写入 REPL array |
-| Snip | ✅ 修改 | 修改（删除消息） | 写入 REPL array |
-| Microcompact | ✅ 修改 | 修改（清除内容） | 写入 REPL array |
-| **Context Collapse** | ❌ 不修改 | **不修改** | **collapse store** |
-| Auto-Compact | ✅ 修改 | 修改（追加摘要） | 写入 REPL array |
+| Layer | Modifies Message Array | Underlying Data | Persistence Method |
+|-------|------------------------|-----------------|-------------------|
+| Budget Reduction | ✅ Modifies | Modified (replaces content) | Writes to REPL array |
+| Snip | ✅ Modifies | Modified (deletes messages) | Writes to REPL array |
+| Microcompact | ✅ Modifies | Modified (clears content) | Writes to REPL array |
+| **Context Collapse** | ❌ Does not modify | **Not modified** | **collapse store** |
+| Auto-Compact | ✅ Modifies | Modified (appends summary) | Writes to REPL array |
 
-**为什么 Context Collapse 选择"不修改"？**
+**Why does Context Collapse choose "not modifying"?**
 
 ```
-设计哲学：append-only 设计优先于可审计性
+Design philosophy: append-only design prioritized over auditability
 
-优势：
-✅ 可以 resume（从磁盘恢复完整历史）
-✅ 可以 fork（基于完整历史创建分支）
-✅ 可以 audit（审查完整历史）
-✅ 不会丢失信息（只是隐藏，不是删除）
+Advantages:
+✅ Can resume (restore full history from disk)
+✅ Can fork (create branches based on full history)
+✅ Can audit (review full history)
+✅ No information is lost (only hidden, not deleted)
 
-劣势：
-❌ 结构化查询需要事后重建
-   （如"显示所有修改文件 X 的工具调用"需要扫描完整历史）
+Disadvantages:
+❌ Structured queries require post-hoc reconstruction
+   (e.g., "show all tool calls that modified file X" requires scanning full history)
 ```
 
-### 2.4 实现细节推断
+### 2.4 Inferred Implementation Details
 
-论文未给出确切实现，但可以基于架构推断：
+The paper does not provide the exact implementation, but it can be inferred from the architecture:
 
-#### Collapse Store 的数据结构
+#### Collapse Store Data Structure
 
 ```typescript
-// 推断的 collapse store 结构
+// Inferred collapse store structure
 interface CollapseStore {
   sessionId: string;
   collapses: Collapse[];
@@ -286,27 +286,27 @@ interface CollapseStore {
 
 interface Collapse {
   id: string;
-  turnRange: [number, number];  // 折叠的轮次范围 [1, 20]
-  summary: string;               // 折叠摘要
-  createdAt: number;             // 创建时间
-  tokenCount: number;            // 摘要的 token 数
+  turnRange: [number, number];  // Collapsed turn range [1, 20]
+  summary: string;               // Collapse summary
+  createdAt: number;             // Creation timestamp
+  tokenCount: number;            // Token count of the summary
 }
 
-// 示例：
+// Example:
 {
   sessionId: "sess_01ABC...",
   collapses: [
     {
       id: "collapse_001",
       turnRange: [1, 20],
-      summary: "前 20 轮：用户要求修复 auth.test.ts，模型读取了 auth.ts、auth.test.ts，发现测试失败原因...",
+      summary: "First 20 turns: User requested a fix for auth.test.ts; model read auth.ts and auth.test.ts, discovered the test failure cause...",
       createdAt: 1704067200000,
       tokenCount: 500,
     },
     {
       id: "collapse_002",
       turnRange: [21, 40],
-      summary: "轮次 21-40：模型修改了 auth.ts，运行测试，修复了 3 个错误...",
+      summary: "Turns 21-40: Model modified auth.ts, ran tests, fixed 3 bugs...",
       createdAt: 1704067500000,
       tokenCount: 600,
     }
@@ -314,41 +314,41 @@ interface Collapse {
 }
 ```
 
-#### applyCollapsesIfNeeded() 的伪代码
+#### Pseudocode for applyCollapsesIfNeeded()
 
 ```typescript
 function applyCollapsesIfNeeded(messagesForQuery: Message[]): Message[] {
   if (!feature("CONTEXT_COLLAPSE")) {
-    return messagesForQuery;  // Feature flag 关闭，不折叠
+    return messagesForQuery;  // Feature flag off; do not collapse
   }
 
   const collapseStore = loadCollapseStore(sessionId);
   if (collapseStore.collapses.length === 0) {
-    return messagesForQuery;  // 没有折叠，返回原视图
+    return messagesForQuery;  // No collapses; return original view
   }
 
-  // 构建折叠视图
+  // Build collapsed view
   const collapsedView: Message[] = [];
 
   for (const collapse of collapseStore.collapses) {
-    // 检查当前消息是否在这个折叠范围内
+    // Check if current messages fall within this collapse range
     const messagesInRange = messagesForQuery.filter(
       msg => msg.turnNumber >= collapse.turnRange[0]
           && msg.turnNumber <= collapse.turnRange[1]
     );
 
     if (messagesInRange.length > 0) {
-      // 用折叠摘要替换这些消息
+      // Replace these messages with the collapse summary
       collapsedView.push({
         role: "system",
-        content: `[对话折叠] ${collapse.summary}`,
+        content: `[Conversation collapse] ${collapse.summary}`,
         turnNumber: collapse.turnRange[0],
         isCollapseSummary: true,
       });
     }
   }
 
-  // 添加未被折叠的消息
+  // Add messages that are not collapsed
   const nonCollapsedMessages = messagesForQuery.filter(
     msg => !collapseStore.collapses.some(
       c => msg.turnNumber >= c.turnRange[0] && msg.turnNumber <= c.turnRange[1]
@@ -357,204 +357,204 @@ function applyCollapsesIfNeeded(messagesForQuery: Message[]): Message[] {
 
   collapsedView.push(...nonCollapsedMessages);
 
-  // 按轮次排序
+  // Sort by turn number
   collapsedView.sort((a, b) => a.turnNumber - b.turnNumber);
 
   return collapsedView;
 }
 ```
 
-### 2.5 折叠的触发与创建
+### 2.5 Collapse Triggering and Creation
 
-论文未说明折叠是如何触发的，但可以推断：
-
-```
-推断的折叠触发条件：
-
-1. 轮次数量阈值
-   - 当对话超过 N 轮（如 50 轮）
-   - 自动创建折叠摘要
-
-2. Token 阈值
-   - 当历史超过 M tokens（如 100K）
-   - 对最早的 N 轮创建折叠
-
-3. 显式触发
-   - 用户或系统调用折叠命令
-   - 如 "/compact" 或自动压缩
-
-折叠摘要的生成：
-- 可能使用 LLM 生成摘要
-- 也可能是简单的规则提取（如"前 N 轮，涉及文件 X, Y, Z"）
-- 论文未说明
-```
-
-### 2.6 与其他压缩层的协作
+The paper does not explain how collapses are triggered, but it can be inferred:
 
 ```
-执行顺序与职责分工：
+Inferred collapse trigger conditions:
+
+1. Turn count threshold
+   - When conversation exceeds N turns (e.g., 50 turns)
+   - Automatically create collapse summary
+
+2. Token threshold
+   - When history exceeds M tokens (e.g., 100K)
+   - Create collapse for the earliest N turns
+
+3. Explicit trigger
+   - User or system invokes a collapse command
+   - e.g., "/compact" or auto-compaction
+
+How collapse summaries are generated:
+- Possibly using an LLM to generate a summary
+- Could also be simple rule-based extraction (e.g., "First N turns, involving files X, Y, Z")
+- The paper does not specify
+```
+
+### 2.6 Collaboration with Other Compression Layers
+
+```
+Execution order and division of responsibilities:
 
 Layer 1 (Budget Reduction):
-  └─ 替换单个超大工具输出
-  └─ 不关心轮次，只关心单个消息大小
+  └─ Replace individual oversized tool outputs
+  └─ Does not care about turns; only cares about individual message size
 
 Layer 2 (Snip):
-  └─ 丢弃过时的轮次
-  └─ 修改 REPL array（删除消息）
+  └─ Discard stale turns
+  └─ Modifies REPL array (deletes messages)
 
 Layer 3 (Microcompact):
-  └─ 清除旧工具结果内容
-  └─ 按 tool_use_id 操作
+  └─ Clear old tool result content
+  └─ Operates by tool_use_id
 
-Layer 4 (Context Collapse):  ← 唯一不修改的层
-  └─ 投射折叠视图
-  └─ 不修改 REPL array
-  └─ 摘要在 collapse store 中
+Layer 4 (Context Collapse):  ← The only non-modifying layer
+  └─ Project collapsed view
+  └─ Does not modify REPL array
+  └─ Summaries in collapse store
 
 Layer 5 (Auto-Compact):
-  └─ LLM 语义压缩
-  └─ 生成摘要并写入 REPL array
+  └─ LLM semantic compression
+  └─ Generate summary and write to REPL array
 
-协作示例：
-  1. Budget Reduction 替换大输出 → 减少单消息体积
-  2. Snip 丢弃过时轮次 → 减少轮次数量
-  3. Microcompact 清除旧结果 → 减少工具数据体积
-  4. Context Collapse 投射折叠视图 → 模型看到压缩视图
-  5. Auto-Compact 生成摘要 → 最后手段
+Collaboration example:
+  1. Budget Reduction replaces large outputs → reduces individual message size
+  2. Snip discards stale turns → reduces turn count
+  3. Microcompact clears old results → reduces tool data size
+  4. Context Collapse projects collapsed view → model sees compressed view
+  5. Auto-Compact generates summary → last resort
 ```
 
-### 2.7 Feature Flag 与动态加载
+### 2.7 Feature Flag and Dynamic Loading
 
 ```typescript
-// query.ts 中的 feature-gated 加载
-// 由于 bun:bundle tree-shaking 约束，使用动态 require()
+// Feature-gated loading in query.ts
+// Uses dynamic require() due to bun:bundle tree-shaking constraints
 
-// 错误方式（会被 tree-shaking 移除）：
+// Wrong approach (would be tree-shaken away):
 import { applyCollapsesIfNeeded } from "./contextCollapse";
 if (feature("CONTEXT_COLLAPSE")) {
   messages = applyCollapsesIfNeeded(messages);
 }
 
-// 正确方式（动态 require）：
+// Correct approach (dynamic require):
 if (feature("CONTEXT_COLLAPSE")) {
   const { applyCollapsesIfNeeded } = require("./contextCollapse");
   messages = applyCollapsesIfNeeded(messages);
 }
 ```
 
-**为什么用动态 `require()`？**
+**Why use dynamic `require()`?**
 
-- Bun 的 bundler 会在编译时做 tree-shaking
-- `feature()` 只在 if/ternary 条件中工作
-- 静态 `import` 会被 bundler 分析并可能移除
-- 动态 `require()` 绕过 tree-shaking，确保代码在运行时可用
+- Bun's bundler performs tree-shaking at compile time
+- `feature()` only works within if/ternary conditions
+- Static `import` is analyzed by the bundler and may be removed
+- Dynamic `require()` bypasses tree-shaking, ensuring the code is available at runtime
 
-### 2.8 实际效果预估
+### 2.8 Practical Effect Estimation
 
 ```
-场景：100 轮对话，每轮平均 2K tokens
+Scenario: 100-turn conversation, averaging 2K tokens per turn
 
-原始状态：
-  - 100 轮 × 2K tokens = 200K tokens
-  - 刚好达到 200K 窗口上限
-  - 无法继续对话
+Original state:
+  - 100 turns × 2K tokens = 200K tokens
+  - Just reaches the 200K window limit
+  - Cannot continue the conversation
 
-Context Collapse 后（假设折叠前 60 轮）：
-  - 折叠摘要：60 轮 → 1 条摘要（~2K tokens）
-  - 未折叠消息：40 轮 × 2K tokens = 80K tokens
-  - 总计：2K + 80K = 82K tokens
-  - 减少 59%
-  - 可以继续对话
+After Context Collapse (assuming first 60 turns are collapsed):
+  - Collapse summary: 60 turns → 1 summary (~2K tokens)
+  - Non-collapsed messages: 40 turns × 2K tokens = 80K tokens
+  - Total: 2K + 80K = 82K tokens
+  - 59% reduction
+  - Can continue the conversation
 
-关键特性：
-  ✅ 完整历史仍在磁盘（可以 resume/fork/audit）
-  ✅ 模型只看到折叠视图（节省上下文）
-  ✅ 折叠摘要持久化（跨轮次有效）
-  ✅ 可以"展开"折叠（如果需要审查历史）
+Key features:
+  ✅ Full history still on disk (can resume/fork/audit)
+  ✅ Model only sees the collapsed view (saves context)
+  ✅ Collapse summaries are persisted (valid across turns)
+  ✅ Collapses can be "expanded" (if history review is needed)
 ```
 
-### 2.9 论文未给出的细节
+### 2.9 Details Not Provided in the Paper
 
-1. **折叠摘要如何生成**
-   - 用 LLM 还是规则？
-   - 摘要的质量如何？
-   - 论文未说明
+1. **How collapse summaries are generated**
+   - Using an LLM or rules?
+   - What is the quality of the summaries?
+   - The paper does not specify
 
-2. **折叠的触发条件**
-   - 轮次阈值？Token 阈值？显式命令？
-   - 论文未说明
+2. **Collapse trigger conditions**
+   - Turn threshold? Token threshold? Explicit command?
+   - The paper does not specify
 
-3. **折叠摘要的质量控制**
-   - 如何确保摘要保留关键信息？
-   - 论文未说明
+3. **Quality control of collapse summaries**
+   - How is it ensured that summaries retain key information?
+   - The paper does not specify
 
-4. **如何"展开"折叠**
-   - 用户或系统如何恢复完整历史视图？
-   - 论文未说明
+4. **How to "expand" collapses**
+   - How does the user or system restore the full history view?
+   - The paper does not specify
 
-5. **多个折叠的合并策略**
-   - 如果有多个折叠，如何组合？
-   - 论文未说明
+5. **Merging strategy for multiple collapses**
+   - If there are multiple collapses, how are they combined?
+   - The paper does not specify
 
 ---
 
-## 三、对比总结
+## 3. Comparison Summary
 
-| 维度 | Budget Reduction | Context Collapse |
-|------|-----------------|------------------|
-| **层级** | Layer 1 | Layer 4 |
-| **成本** | 零 | 零 |
-| **Feature Flag** | 无（总是启用） | `CONTEXT_COLLAPSE` |
-| **修改消息数组** | ✅ 是 | ❌ 否 |
-| **修改底层数据** | ✅ 是（替换内容） | ❌ 否（纯投影） |
-| **操作粒度** | 单个消息 | 轮次范围 |
-| **保留信息** | 引用指针（首尾+大小） | 折叠摘要 |
-| **可恢复性** | 通过磁盘记录恢复 | 完整历史始终可用 |
-| **主要目标** | 减少单个超大输出 | 减少长时间对话的体积 |
-| **与其他层的关系** | 在 Microcompact 前运行 | 独立投影，不干扰其他层 |
-| **持久化** | 写入 REPL array | collapse store（独立） |
-| **用户可见性** | 低（内容被替换） | 低（"operates without user-visible output"） |
+| Dimension | Budget Reduction | Context Collapse |
+|-----------|-----------------|------------------|
+| **Layer** | Layer 1 | Layer 4 |
+| **Cost** | Zero | Zero |
+| **Feature Flag** | None (always enabled) | `CONTEXT_COLLAPSE` |
+| **Modifies message array** | ✅ Yes | ❌ No |
+| **Modifies underlying data** | ✅ Yes (replaces content) | ❌ No (pure projection) |
+| **Operation granularity** | Individual messages | Turn ranges |
+| **Preserved information** | Reference pointers (head/tail + size) | Collapse summaries |
+| **Recoverability** | Restored via disk records | Full history always available |
+| **Primary target** | Reduce individual oversized outputs | Reduce volume of long conversations |
+| **Relationship with other layers** | Runs before Microcompact | Independent projection; does not interfere with other layers |
+| **Persistence** | Writes to REPL array | collapse store (independent) |
+| **User visibility** | Low (content is replaced) | Low ("operates without user-visible output") |
 
 ---
 
-## 四、对 Helen 的启示
+## 4. Implications for Helen
 
-### 4.1 Budget Reduction 的启示
+### 4.1 Insights from Budget Reduction
 
-**核心思想**：不是删除工具输出，而是替换为"引用指针"
+**Core idea**: Instead of deleting tool outputs, replace them with "reference pointers"
 
 ```python
-# Helen 可以实现的简化版本
+# Simplified version Helen could implement
 
 def budget_reduction(messages, max_chars=10000):
-    """Budget Reduction: 替换超大工具输出"""
+    """Budget Reduction: Replace oversized tool outputs"""
     for msg in messages:
         if msg.role == "tool" and len(msg.content) > max_chars:
-            # 保留首尾
+            # Preserve head and tail
             head = msg.content[:200]
             tail = msg.content[-200:]
-            # 替换为引用
-            msg.content = f"[工具结果: {msg.tool_name}, {len(msg.content)} 字符]\n"
-            msg.content += f"前 200 字符: {head}...\n"
-            msg.content += f"后 200 字符: ...{tail}"
-            msg._original_hash = hash(msg.content)  # 用于恢复
+            # Replace with reference
+            msg.content = f"[Tool result: {msg.tool_name}, {len(msg.content)} chars]\n"
+            msg.content += f"First 200 chars: {head}...\n"
+            msg.content += f"Last 200 chars: ...{tail}"
+            msg._original_hash = hash(msg.content)  # For recovery
     return messages
 ```
 
-**关键设计决策**：
-1. 保留首尾（模型可以看到文件的开头和结尾）
-2. 保留大小信息（模型知道文件的规模）
-3. 保留 tool_use_id（与 Microcompact 组合）
+**Key design decisions**:
+1. Preserve head and tail (model can see the beginning and end of the file)
+2. Preserve size information (model knows the file's scale)
+3. Preserve tool_use_id (composes with Microcompact)
 
-### 4.2 Context Collapse 的启示
+### 4.2 Insights from Context Collapse
 
-**核心思想**：不修改底层数据，只投射视图
+**Core idea**: Do not modify underlying data; only project a view
 
 ```python
-# Helen 可以实现的简化版本
+# Simplified version Helen could implement
 
 class CollapseStore:
-    """折叠存储"""
+    """Collapse storage"""
     def __init__(self):
         self.collapses = []  # List[Collapse]
 
@@ -565,18 +565,18 @@ class CollapseStore:
         })
 
 def context_collapse(messages, collapse_store):
-    """Context Collapse: 投射折叠视图"""
+    """Context Collapse: Project collapsed view"""
     collapsed_view = []
 
-    # 添加折叠摘要
+    # Add collapse summaries
     for collapse in collapse_store.collapses:
         start, end = collapse["turn_range"]
         collapsed_view.append({
             "role": "system",
-            "content": f"[对话折叠: 轮次 {start}-{end}]\n{collapse['summary']}",
+            "content": f"[Conversation collapse: turns {start}-{end}]\n{collapse['summary']}",
         })
 
-    # 添加未被折叠的消息
+    # Add messages that are not collapsed
     for msg in messages:
         if not any(start <= msg.turn <= end for start, end in collapse_store.get_ranges()):
             collapsed_view.append(msg)
@@ -584,17 +584,17 @@ def context_collapse(messages, collapse_store):
     return collapsed_view
 ```
 
-**关键设计决策**：
-1. 不修改 `messages` 列表（底层历史）
-2. 返回新的 `collapsed_view`（读时投影）
-3. 折叠摘要在独立的 `CollapseStore` 中
+**Key design decisions**:
+1. Do not modify the `messages` list (underlying history)
+2. Return a new `collapsed_view` (read-time projection)
+3. Collapse summaries are in an independent `CollapseStore`
 
 ---
 
-## 五、参考资料
+## 5. References
 
 - arXiv:2604.14228v2 — "Dive into Claude Code: The Design Space of Today's and Future AI Agent Systems" (Liu et al., UCL, April 2026)
-- Claude Code 源码 v2.1.88（通过论文分析推断）
-- query.ts:365-453（压缩管线执行位置）
-- compact.ts（Auto-Compact 实现）
-- sessionStorage.ts（session 持久化）
+- Claude Code source v2.1.88 (inferred through paper analysis)
+- query.ts:365-453 (compaction pipeline execution location)
+- compact.ts (Auto-Compact implementation)
+- sessionStorage.ts (session persistence)

@@ -1,86 +1,86 @@
-# 上下文压缩研究资料 (Context Compression Research)
+# Context Compression Research
 
-> **最后更新**: 2026-07-07
-> 本文档记录 Helen 上下文管理系统借鉴的学术研究和技术文章，供后续改进参考。
+> **Last Updated**: 2026-07-07
+> This document records the academic research and technical articles that Helen's context management system draws from, for future improvement reference.
 
 ---
 
-## 一、核心借鉴
+## 1. Core Inspirations
 
-Helen 的渐进压缩管线（特别是 Layer 4 Context Collapse 和 Layer 5 Auto-Compact）借鉴了以下研究成果：
+Helen's graduated compression pipeline (especially Layer 4 Context Collapse and Layer 5 Auto-Compact) draws from the following research:
 
-| 算法/框架 | 来源 | Helen 借鉴点 | 实现位置 |
+| Algorithm/Framework | Source | Helen Inspiration | Implementation Location |
 |-----------|------|--------------|----------|
-| **RCC** (Recurrent Context Compression) | [OpenReview 2024] | 分段摘要，保留时序结构 | `graduated_compression.py::_context_collapse` |
-| **CogCanvas** | [arXiv 2025] | 保留时间细节，避免信息丢失 | `graduated_compression.py::_summarize_block` |
-| **DAST** (Dynamic Allocation) | [ACL 2025] | 动态分配压缩 tokens（未来改进方向） | 未实现 |
+| **RCC** (Recurrent Context Compression) | [OpenReview 2024] | Segmented summary preserving temporal structure | `graduated_compression.py::_context_collapse` |
+| **CogCanvas** | [arXiv 2025] | Preserving temporal details, avoiding information loss | `graduated_compression.py::_summarize_block` |
+| **DAST** (Dynamic Allocation) | [ACL 2025] | Dynamically allocating compression tokens (future improvement) | Not implemented |
 
 ---
 
-## 二、重要论文
+## 2. Key Papers
 
 ### 2.1 Recurrent Context Compression (RCC)
 
-**标题**: Recurrent Context Compression: Efficiently Expanding the Context Window of LLM
+**Title**: Recurrent Context Compression: Efficiently Expanding the Context Window of LLM
 
-**来源**: OpenReview / arXiv (2024)
+**Source**: OpenReview / arXiv (2024)
 
-**链接**: https://openreview.net/forum?id=GYk0thSY1M
+**Link**: https://openreview.net/forum?id=GYk0thSY1M
 
-**核心思想**:
-- 迭代式压缩，重复压缩上下文以保留重要信息
-- 使用有界内存表示无限交互流
-- 每次压缩都基于之前的压缩结果，形成"递归摘要"
+**Core idea**:
+- Iterative compression, repeatedly compressing context to retain important information
+- Uses bounded memory to represent an infinite interaction stream
+- Each compression is based on the previous compressed result, forming "recursive summaries"
 
-**Helen 借鉴**:
+**Helen inspiration**:
 ```python
-# Layer 4: Context Collapse 采用分段摘要
-# 将旧消息分成多个时间块，每块独立摘要
+# Layer 4: Context Collapse uses segmented summaries
+# Old messages are divided into time blocks, each summarized independently
 block_size = 10
 blocks = []
 for i in range(0, len(old_msgs), block_size):
     block = old_msgs[i:i + block_size]
     blocks.append((i, i + len(block), block))
 
-# 每个块生成独立摘要，保留时间线
+# Each block generates an independent summary, preserving the timeline
 for block_idx, (start, end, block) in enumerate(blocks):
     block_summary = _summarize_block(block, start, end)
 ```
 
-**与 RCC 的区别**:
-- RCC 使用 LLM 进行递归摘要（有成本）
-- Helen Layer 4 使用零成本结构摘要（正则提取）
-- Helen Layer 5 可选启用 LLM 语义摘要
+**Difference from RCC**:
+- RCC uses LLM for recursive summarization (has cost)
+- Helen Layer 4 uses zero-cost structural summary (regex extraction)
+- Helen Layer 5 optionally enables LLM semantic summary
 
 ---
 
 ### 2.2 CogCanvas: Compression-Resistant Cognitive Artifacts
 
-**标题**: CogCanvas: Compression-Resistant Cognitive Artifacts for Long Summarization
+**Title**: CogCanvas: Compression-Resistant Cognitive Artifacts for Long Summarization
 
-**来源**: arXiv (Dec 2025)
+**Source**: arXiv (Dec 2025)
 
-**链接**: https://arxiv.org/html/2601.00821v1
+**Link**: https://arxiv.org/html/2601.00821v1
 
-**核心思想**:
-- 解决摘要过程中时间细节丢失的问题
-- 提出"认知工件"概念：保留任务进展的关键节点
-- 强调时序结构对长对话理解的重要性
+**Core idea**:
+- Solves the problem of temporal detail loss during summarization
+- Proposes the "cognitive artifact" concept: preserving key task progress nodes
+- Emphasizes the importance of temporal structure for long conversation understanding
 
-**Helen 借鉴**:
+**Helen inspiration**:
 ```python
-# Layer 4: 保留时间标记
+# Layer 4: Preserving time markers
 def _summarize_block(block, start_idx, end_idx):
-    parts = [f"  [{start_idx}-{end_idx}]"]  # 时间标记
+    parts = [f"  [{start_idx}-{end_idx}]"]  # Time markers
     
-    # 提取文件引用（任务进展节点）
+    # Extract file references (task progress nodes)
     file_refs = set()
     for msg in block:
         matches = re.finditer(r'[\w./-]+\.(?:py|js|ts|...)', msg.content)
         for m in matches:
             file_refs.add(m.group())
     
-    # 提取工具使用（行动记录）
+    # Extract tool usage (action records)
     tool_counts = {}
     for msg in block:
         if msg.role == "assistant" and msg.tool_calls:
@@ -89,7 +89,7 @@ def _summarize_block(block, start_idx, end_idx):
                 tool_counts[name] = tool_counts.get(name, 0) + 1
 ```
 
-**输出示例**:
+**Example output**:
 ```
 [Context Collapse: 30 turns archived as timeline]
   [0-10] Files: main.py, utils.py | Tools: read_file(3) | Tasks: Fix auth bug
@@ -101,35 +101,35 @@ def _summarize_block(block, start_idx, end_idx):
 
 ### 2.3 DAST: Dynamic Allocation of Compression Tokens
 
-**标题**: DAST: Context-Aware Compression in LLMs via Dynamic Allocation
+**Title**: DAST: Context-Aware Compression in LLMs via Dynamic Allocation
 
-**来源**: ACL 2025 Findings
+**Source**: ACL 2025 Findings
 
-**链接**: https://aclanthology.org/2025.findings-acl.1055.pdf
+**Link**: https://aclanthology.org/2025.findings-acl.1055.pdf
 
-**核心思想**:
-- 动态分配压缩 tokens，基于 LLM 对上下文重要性的理解
-- 不同部分获得不同的压缩比例
-- 关键信息获得更多 tokens，冗余信息被激进压缩
+**Core idea**:
+- Dynamically allocates compression tokens based on LLM's understanding of context importance
+- Different parts receive different compression ratios
+- Critical information gets more tokens; redundant information is aggressively compressed
 
-**Helen 现状**:
-- 当前未实现（需要 LLM 参与压缩决策）
-- 未来可作为 Layer 5 的增强选项
+**Helen current status**:
+- Not currently implemented (requires LLM participation in compression decisions)
+- Could serve as an enhancement option for Layer 5 in the future
 
-**潜在实现方向**:
+**Potential implementation direction**:
 ```python
-# 伪代码：动态分配压缩
+# Pseudocode: Dynamic allocation compression
 def _dynamic_compress(history, llm_client):
-    # 1. LLM 评估每条消息的重要性
+    # 1. LLM evaluates importance of each message
     importance_scores = llm_client.evaluate_importance(history)
     
-    # 2. 根据重要性分配 tokens
+    # 2. Allocate tokens based on importance
     for msg, score in zip(history, importance_scores):
-        if score > 0.8:  # 高重要性
+        if score > 0.8:  # High importance
             keep_full(msg)
-        elif score > 0.5:  # 中等重要性
+        elif score > 0.5:  # Medium importance
             keep_summary(msg)
-        else:  # 低重要性
+        else:  # Low importance
             drop_or_minimal(msg)
 ```
 
@@ -137,166 +137,166 @@ def _dynamic_compress(history, llm_client):
 
 ### 2.4 Context Codec: Formal Framework
 
-**标题**: A Formal Framework for Verifiable LLM Context Compression
+**Title**: A Formal Framework for Verifiable LLM Context Compression
 
-**来源**: arXiv (May 2026)
+**Source**: arXiv (May 2026)
 
-**链接**: https://arxiv.org/html/2605.17304v1
+**Link**: https://arxiv.org/html/2605.17304v1
 
-**核心思想**:
-- 提出 commitment-level 的形式化框架
-- 使用数学方法验证压缩的正确性
-- 保证压缩后的上下文保留关键信息
+**Core idea**:
+- Proposes a commitment-level formal framework
+- Uses mathematical methods to verify compression correctness
+- Guarantees that compressed context retains critical information
 
-**Helen 相关性**:
-- 理论性强，短期不直接应用
-- 长期可用于验证压缩管线的正确性
+**Helen relevance**:
+- Highly theoretical; not directly applicable in the short term
+- Could be used long-term to verify compression pipeline correctness
 
 ---
 
 ### 2.5 AUTOSUMM: Comprehensive Framework
 
-**标题**: AUTOSUMM: A Comprehensive Framework for LLM-Based Summarization
+**Title**: AUTOSUMM: A Comprehensive Framework for LLM-Based Summarization
 
-**来源**: ACL 2025 Industry
+**Source**: ACL 2025 Industry
 
-**链接**: https://aclanthology.org/2025.acl-industry.35.pdf
+**Link**: https://aclanthology.org/2025.acl-industry.35.pdf
 
-**核心思想**:
-- 针对客户-顾问对话的自动摘要框架
-- 多层次摘要策略
-- 工业级应用案例
+**Core idea**:
+- Automated summarization framework for customer-advisor conversations
+- Multi-level summarization strategies
+- Industrial-grade application case studies
 
-**Helen 相关性**:
-- `LLMSummarizer` 的设计参考了类似的多层次策略
-- 结构化摘要格式（任务目标、关键决策、文件变更等）
+**Helen relevance**:
+- `LLMSummarizer` design was inspired by similar multi-level strategies
+- Structured summary format (task objectives, key decisions, file changes, etc.)
 
 ---
 
-## 三、技术文章
+## 3. Technical Articles
 
 ### 3.1 Semantic Compression (Quarkiverse/LangChain4J)
 
-**链接**: https://docs.quarkiverse.io/quarkus-langchain4j/dev/guide-semantic-compression.html
+**Link**: https://docs.quarkiverse.io/quarkus-langchain4j/dev/guide-semantic-compression.html
 
-**核心思想**:
-- 语义压缩作为截断的替代方案
-- 使用 LLM 生成摘要保留关键上下文
-- 适用于长对话场景
+**Core idea**:
+- Semantic compression as an alternative to truncation
+- Uses LLM to generate summaries preserving critical context
+- Suitable for long conversation scenarios
 
-**Helen 借鉴**:
-- Layer 5 Auto-Compact 实现了类似的语义压缩
-- 通过 `llm_client` 参数可选启用
+**Helen inspiration**:
+- Layer 5 Auto-Compact implements similar semantic compression
+- Optionally enabled via `llm_client` parameter
 
 ---
 
 ### 3.2 You Don't Need RAG. You Need Semantic Compression.
 
-**链接**: https://pub.towardsai.net/you-dont-need-rag-you-need-semantic-compression-74d41d65bac1
+**Link**: https://pub.towardsai.net/you-dont-need-rag-you-need-semantic-compression-74d41d65bac1
 
-**来源**: Towards AI (Mar 2026)
+**Source**: Towards AI (Mar 2026)
 
-**核心思想**:
-- 当源材料远超上下文窗口时，语义压缩优于 RAG
-- 多主题覆盖时需要源归属
-- 压缩比与信息保留的权衡
+**Core idea**:
+- Semantic compression outperforms RAG when source material far exceeds the context window
+- Source attribution needed when covering multiple topics
+- Tradeoff between compression ratio and information retention
 
-**Helen 相关性**:
-- 验证了 Helen 的渐进压缩策略
-- Layer 1-4 零成本 + Layer 5 语义压缩的混合策略
+**Helen relevance**:
+- Validates Helen's graduated compression strategy
+- Hybrid approach: Layers 1-4 zero-cost + Layer 5 semantic compression
 
 ---
 
 ### 3.3 Compressing Context (Factory.ai)
 
-**链接**: https://factory.ai/news/compressing-context
+**Link**: https://factory.ai/news/compressing-context
 
-**来源**: Factory.ai (Jul 2025)
+**Source**: Factory.ai (Jul 2025)
 
-**核心思想**:
-- 使用摘要模型实时压缩对话
-- 保持在上下文窗口内
-- 工业实践经验
+**Core idea**:
+- Uses summarization models to compress conversations in real-time
+- Keeps within context window
+- Industrial best practices
 
-**Helen 借鉴**:
-- `AgentContextManager` 的实时压缩机制
-- `prepare_context()` 在每次 LLM 调用前应用压缩
+**Helen inspiration**:
+- `AgentContextManager`'s real-time compression mechanism
+- `prepare_context()` applies compression before each LLM call
 
 ---
 
-## 四、综述论文
+## 4. Survey Papers
 
 ### 4.1 Context Compression for LLM Agents: A Survey
 
-**链接**: https://www.preprints.org/manuscript/202605.2065
+**Link**: https://www.preprints.org/manuscript/202605.2065
 
-**来源**: Preprints.org (May 2026)
+**Source**: Preprints.org (May 2026)
 
-**核心内容**:
-- 全面调查 LLM Agent 的上下文压缩方法
-- 涵盖观察压缩（工具输出、HTML DOM、日志、截图）
-- 分析失败模式和最佳实践
+**Core content**:
+- Comprehensive survey of context compression methods for LLM Agents
+- Covers observation compression (tool outputs, HTML DOM, logs, screenshots)
+- Analyzes failure modes and best practices
 
-**Helen 定位**:
-- Helen 的渐进压缩管线属于"记忆状态压缩"类别
-- 5 层策略覆盖了从零成本到高成本的全谱
+**Helen positioning**:
+- Helen's graduated compression pipeline belongs to the "memory state compression" category
+- The 5-layer strategy covers the full spectrum from zero-cost to high-cost
 
 ---
 
 ### 4.2 Prompt Compression in LLMs — Making Every Token Count
 
-**链接**: https://medium.com/@sahin.samia/prompt-compression-in-large-language-models-llms-making-every-token-count-078a2d1c7e03
+**Link**: https://medium.com/@sahin.samia/prompt-compression-in-large-language-models-llms-making-every-token-count-078a2d1c7e03
 
-**来源**: Medium (Feb 2025)
+**Source**: Medium (Feb 2025)
 
-**核心内容**:
-- 去除冗余、简化句子结构
-- 利用专门的压缩技术最小化 token 使用
-- 实用技巧汇总
+**Core content**:
+- Removing redundancy, simplifying sentence structure
+- Using specialized compression techniques to minimize token usage
+- Collection of practical tips
 
 ---
 
-## 五、压缩比对比
+## 5. Compression Ratio Comparison
 
-根据研究文献，不同压缩策略的典型效果：
+Based on research literature, typical effects of different compression strategies:
 
-| 压缩级别 | 压缩比 | 准确率影响 | 适用场景 |
+| Compression Level | Compression Ratio | Accuracy Impact | Use Case |
 |---------|--------|-----------|---------|
-| 轻度压缩 (Light) | 2-3× | <5% 准确率损失 | 大多数场景 |
-| 中度压缩 (Moderate) | 5-7× | 中等准确率损失 | 成本敏感场景 |
-| 激进压缩 (Aggressive) | 10×+ | 显著准确率损失 | 极长对话 |
+| Light | 2-3× | <5% accuracy loss | Most scenarios |
+| Moderate | 5-7× | Moderate accuracy loss | Cost-sensitive scenarios |
+| Aggressive | 10×+ | Significant accuracy loss | Very long conversations |
 
-**Helen 策略**:
-- Layer 1-3: 轻度压缩（保留大部分信息）
-- Layer 4: 中度压缩（时间线摘要）
-- Layer 5: 激进压缩（LLM 语义摘要，10×+ 压缩比）
-
----
-
-## 六、未来改进方向
-
-基于研究资料，以下是 Helen 上下文管理的潜在改进方向：
-
-### 6.1 短期（易实现）
-
-- [ ] **自适应压缩阈值**: 根据对话类型动态调整 Layer 触发阈值
-- [ ] **压缩质量评估**: 添加压缩前后的信息保留度指标
-
-### 6.2 中期（需要实验）
-
-- [ ] **DAST 集成**: 使用 LLM 评估消息重要性，动态分配压缩 tokens
-- [ ] **多层次摘要**: 结合 AUTOSUMM 的多层次策略，生成更精细的摘要
-
-### 6.3 长期（研究性质）
-
-- [ ] **形式化验证**: 参考 Context Codec，验证压缩正确性
-- [ ] **认知工件保留**: 深化 CogCanvas 思想，保留更多任务进展节点
+**Helen strategy**:
+- Layer 1-3: Light compression (preserves most information)
+- Layer 4: Moderate compression (timeline summary)
+- Layer 5: Aggressive compression (LLM semantic summary, 10×+ compression ratio)
 
 ---
 
-## 七、引用格式
+## 6. Future Improvement Directions
 
-如需引用 Helen 的上下文压缩系统，请使用：
+Based on research materials, potential improvement directions for Helen's context management:
+
+### 6.1 Short-term (Easy to Implement)
+
+- [ ] **Adaptive compression thresholds**: Dynamically adjust Layer trigger thresholds based on conversation type
+- [ ] **Compression quality assessment**: Add pre/post-compression information retention metrics
+
+### 6.2 Medium-term (Requires Experimentation)
+
+- [ ] **DAST integration**: Use LLM to evaluate message importance, dynamically allocate compression tokens
+- [ ] **Multi-level summarization**: Combine AUTOSUMM's multi-level strategies for more refined summaries
+
+### 6.3 Long-term (Research-oriented)
+
+- [ ] **Formal verification**: Reference Context Codec to verify compression correctness
+- [ ] **Cognitive artifact preservation**: Deepen CogCanvas ideas, preserve more task progress nodes
+
+---
+
+## 7. Citation Format
+
+To cite Helen's context compression system, please use:
 
 ```bibtex
 @misc{helen-context-compression,
@@ -310,6 +310,6 @@ def _dynamic_compress(history, llm_client):
 
 ---
 
-**最后更新**: 2026-07-07  
-**维护者**: Helen Team  
-**状态**: 活跃维护
+**Last Updated**: 2026-07-07  
+**Maintainer**: Helen Team  
+**Status**: Actively maintained

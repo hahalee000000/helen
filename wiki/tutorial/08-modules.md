@@ -1,10 +1,10 @@
-# 教程 08: 模块与导入
+# Tutorial 08: Modules and Imports
 
-> import / 多格式 / 跨文件复用 / 路径安全
+> import / multi-format / cross-file reuse / path safety
 
 ---
 
-## 基本导入
+## Basic Import
 
 ```helen
 // utils.helen
@@ -22,13 +22,13 @@ import "./utils.helen"
 
 main {
     let result = double(21)    // 42
-    Helper()              // 使用导入的 Agent
+    Helper()              // Use the imported Agent
 }
 ```
 
 ---
 
-## 导入别名
+## Import Aliases
 
 ```helen
 import "./math_utils.helen" as math
@@ -40,9 +40,9 @@ main {
 
 ---
 
-## 多格式导入
+## Multi-Format Import
 
-### 导入 .json
+### Importing .json
 
 ```helen
 // config.json
@@ -56,12 +56,12 @@ main {
 import "./config.json" as cfg
 
 main {
-    // cfg 包含解析后的 JSON 数据
-    // (在 v1 中通过环境变量或运行时访问)
+    // cfg contains the parsed JSON data
+    // (accessed via environment variables or runtime in v1)
 }
 ```
 
-### 导入 .md
+### Importing .md
 
 ```helen
 // prompt.md
@@ -73,15 +73,15 @@ Be concise but thorough.
 import "./prompt.md" as system_prompt
 
 main {
-    // system_prompt 包含纯文本内容
+    // system_prompt contains the plain text content
 }
 ```
 
 ---
 
-## import 不执行 main
+## import Does Not Execute main
 
-被导入文件的 `main` 块**不会**自动执行：
+The imported file's `main` block is **not** automatically executed:
 
 ```helen
 // lib.helen
@@ -97,35 +97,35 @@ main {
 import "./lib.helen"
 
 main {
-    utility()    // ✅ 可以使用函数
-    // lib.helen 的 main 不会执行
+    utility()    // ✅ Can use the function
+    // lib.helen's main does not execute
 }
 ```
 
 ---
 
-## 路径安全
+## Path Safety
 
-### 允许的导入
-
-```helen
-import "./utils.helen"          // ✅ 当前目录
-import "./lib/helpers.helen"    // ✅ 子目录
-import "../sibling/utils.helen" // ✅ 同级目录（在安全范围内）
-```
-
-### 拦截的导入
+### Allowed imports
 
 ```helen
-import "../../secrets.helen"    // ❌ 路径越界
-import "/etc/passwd"             // ❌ 绝对路径
+import "./utils.helen"          // ✅ Current directory
+import "./lib/helpers.helen"    // ✅ Subdirectory
+import "../sibling/utils.helen" // ✅ Sibling directory (within safe bounds)
 ```
 
-路径安全检查确保导入文件在项目目录内。
+### Blocked imports
+
+```helen
+import "../../secrets.helen"    // ❌ Path escapes boundary
+import "/etc/passwd"             // ❌ Absolute path
+```
+
+Path safety checks ensure imported files stay within the project directory.
 
 ---
 
-## 循环导入检测
+## Circular Import Detection
 
 ```helen
 // a.helen
@@ -133,7 +133,7 @@ import "./b.helen"
 fn from_a() { return "A" }
 
 // b.helen
-import "./a.helen"    // 循环导入，静默跳过
+import "./a.helen"    // Circular import, silently skipped
 fn from_b() { return "B" }
 
 // main.helen
@@ -141,13 +141,13 @@ import "./a.helen"
 
 main {
     from_a()    // ✅
-    from_b()    // ✅ (b.helen 从 main 导入)
+    from_b()    // ✅ (b.helen imported from main)
 }
 ```
 
 ---
 
-## 项目结构示例
+## Example Project Structure
 
 ```
 my-project/
@@ -174,78 +174,78 @@ import "./utils/text.helen" as text_utils
 import "./config.json" as config
 
 main {
-    // 使用所有导入的 Agent 和工具
+    // Use all imported Agents and utilities
 }
 ```
 
 ---
 
-## 练习
+## Exercises
 
-1. 创建一个 utils.helen 文件，包含常用函数
-2. 在 main.helen 中导入并使用这些函数
-3. 创建一个 config.json 并导入
-4. 尝试循环导入，观察行为
+1. Create a utils.helen file with commonly used functions
+2. Import and use those functions in main.helen
+3. Create a config.json and import it
+4. Try circular imports and observe the behavior
 
 ---
 
-## ⚠️ 开发时的重要提示：模块缓存
+## ⚠️ Important Development Note: Module Caching
 
-### 问题：修改 .helen 文件后不生效？
+### Problem: Changes to .helen files don't take effect?
 
-Helen 的 `ImportResolver` 使用**内存级缓存**来加速重复导入。这意味着：
+Helen's `ImportResolver` uses an **in-memory cache** to speed up repeated imports. This means:
 
-- ✅ **CLI 模式**（`helen main.helen`）：每次都重新加载，无需担心
-- ❌ **REPL / 长时间运行的服务**：修改文件后不会自动重新加载
+- ✅ **CLI mode** (`helen main.helen`): reloads every time, no worries
+- ❌ **REPL / long-running services**: files are not automatically reloaded after modification
 
-### 示例场景
+### Example Scenario
 
 ```python
-# 场景 1: Python REPL 中开发
+# Scenario 1: Developing in Python REPL
 from helen.interpreter import Interpreter
 
 interp = Interpreter()
-interp.execute_file("agent.helen")  # 加载 v1
+interp.execute_file("agent.helen")  # Loads v1
 
-# 修改 agent.helen（添加新功能）...
+# Modify agent.helen (add new features)...
 
-interp.execute_file("agent.helen")  # ❌ 仍然是 v1！
+interp.execute_file("agent.helen")  // ❌ Still v1!
 ```
 
-### 解决方案
+### Solutions
 
-#### 方案 1: 使用 CLI（推荐用于开发）
+#### Solution 1: Use CLI (recommended for development)
 
 ```bash
-# 每次执行都是新进程，自动重新加载
+# Each execution is a new process, automatically reloads
 helen main.helen
 ```
 
-#### 方案 2: 在代码中创建新实例
+#### Solution 2: Create a new instance in code
 
 ```python
 def run_agent():
-    # 每次创建新的 Interpreter，缓存自动清空
+    # Create a new Interpreter each time; cache is automatically cleared
     interp = Interpreter()
     return interp.execute_file("agent.helen")
 ```
 
-#### 方案 3: 手动清除缓存
+#### Solution 3: Manually clear the cache
 
 ```python
 interp = Interpreter()
 interp.execute_file("agent.helen")
 
-# 修改文件后，手动清除缓存
+# After modifying files, manually clear the cache
 interp.import_resolver._cached_results.clear()
 interp.import_resolver._loaded.clear()
 
-# 重新执行
-interp.execute_file("agent.helen")  # ✅ 使用新代码
+# Re-execute
+interp.execute_file("agent.helen")  // ✅ Uses new code
 ```
 
-### 深入理解
+### Deeper Understanding
 
-详见 [runtime/import.md - 缓存机制](../runtime/import.md#缓存机制开发者必读)
+See [runtime/import.md - Caching Mechanism](../runtime/import.md#caching-mechanism-developer-must-read)
 
 ---

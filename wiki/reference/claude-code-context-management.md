@@ -1,64 +1,67 @@
-# Claude Code 上下文管理技术详解
+# Claude Code Context Management Technical Deep Dive
 
-> 基于 arXiv:2604.14228v2 (Liu et al., 2026)、Anthropic 官方文档整理
+> Compiled from arXiv:2604.14228v2 (Liu et al., 2026) and Anthropic official documentation
 
-**日期**：2026-07-06
-**来源**：
+**Date**: 2026-07-06
+**Sources**:
 - [arXiv:2604.14228v2 — "Dive into Claude Code"](https://arxiv.org/html/2604.14228v2)
 - [Context Editing API](https://platform.claude.com/docs/en/build-with-claude/context-editing)
 - [Context Windows](https://platform.claude.com/docs/en/build-with-claude/context-windows)
 
 ---
 
-## 一、整体架构概览
+## 1. Overall Architecture Overview
 
-Claude Code 的上下文管理由三个独立但互补的系统组成：
+Claude Code's context management consists of three independent but complementary systems:
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                     客户端 (Claude Code)                      │
+│                     Client (Claude Code)                      │
 │                                                              │
 │  ┌────────────────────────────────────────────────────────┐  │
-│  │  5 层渐进式压缩管线 (Graduated Compaction Pipeline)     │  │
-│  │  执行位置: query.ts:365-453                              │  │
-│  │  执行时机: 每次模型调用前                                 │  │
+│  │  5-Layer Graduated Compaction Pipeline                 │  │
+│  │  Location: query.ts:365-453                             │  │
+│  │  Timing: Before every model call                       │  │
 │  │                                                        │  │
-│  │  Layer 1: Budget Reduction  (零成本，总是启用)           │  │
-│  │  Layer 2: Snip              (零成本，feature flag)       │  │
-│  │  Layer 3: Microcompact      (零成本，缓存感知路径可选)   │  │
-│  │  Layer 4: Context Collapse  (零成本，纯读时投影)         │  │
-│  │  Layer 5: Auto-Compact      (LLM 调用，最后手段)         │  │
+│  │  Layer 1: Budget Reduction  (zero cost, always on)     │  │
+│  │  Layer 2: Snip              (zero cost, feature flag)  │  │
+│  │  Layer 3: Microcompact      (zero cost, cache-aware    │  │
+│  │                                 path optional)         │  │
+│  │  Layer 4: Context Collapse  (zero cost, read-time      │  │
+│  │                                 projection)            │  │
+│  │  Layer 5: Auto-Compact      (LLM call, last resort)   │  │
 │  └────────────────────────────────────────────────────────┘  │
 │                                                              │
 │  ┌────────────────────────────────────────────────────────┐  │
-│  │  附加机制                                               │  │
+│  │  Additional Mechanisms                                  │  │
 │  │  - Reactive Compaction (REACTIVE_COMPACT flag)          │  │
-│  │  - Prompt-too-long 恢复级联                             │  │
+│  │  - Prompt-too-long recovery cascade                     │  │
 │  └────────────────────────────────────────────────────────┘  │
 │                                                              │
 ├──────────────────────────────────────────────────────────────┤
-│                     API 层 (Anthropic)                        │
+│                     API Layer (Anthropic)                     │
 │                                                              │
 │  ┌────────────────────────────────────────────────────────┐  │
-│  │  Context Editing (服务端编辑)                            │  │
-│  │  Beta: context-management-2025-06-27                     │  │
+│  │  Context Editing (server-side editing)                  │  │
+│  │  Beta: context-management-2025-06-27                    │  │
 │  │                                                        │  │
-│  │  策略 1: clear_tool_uses_20250919 (工具结果清除)         │  │
-│  │  策略 2: clear_thinking_20251015 (思考块清除)            │  │
-│  │  策略 3: compact_20260112 (服务端压缩)                   │  │
+│  │  Strategy 1: clear_tool_uses_20250919                   │  │
+│  │  Strategy 2: clear_thinking_20251015                    │  │
+│  │  Strategy 3: compact_20260112                           │  │
 │  └────────────────────────────────────────────────────────┘  │
 │                                                              │
 │  ┌────────────────────────────────────────────────────────┐  │
-│  │  Context Awareness (上下文感知)                          │  │
-│  │  - 自动注入 token 预算标签到系统提示                     │  │
-│  │  - 每次工具调用后注入剩余容量更新                        │  │
+│  │  Context Awareness                                      │  │
+│  │  - Auto-injects token budget labels into system prompt  │  │
+│  │  - Injects remaining capacity updates after each tool   │  │
 │  └────────────────────────────────────────────────────────┘  │
 │                                                              │
 │  ┌────────────────────────────────────────────────────────┐  │
-│  │  上下文窗口                                              │  │
-│  │  - 200K tokens (旧模型)                                 │  │
-│  │  - 1M tokens (Claude 4.6+ 系列)                         │  │
-│  │  - 溢出行为: Claude 4.5+ 优雅停止; 旧模型返回错误        │  │
+│  │  Context Window                                         │  │
+│  │  - 200K tokens (older models)                           │  │
+│  │  - 1M tokens (Claude 4.6+ series)                       │  │
+│  │  - Overflow behavior: Claude 4.5+ stops gracefully;     │  │
+│  │    older models return errors                           │  │
 │  └────────────────────────────────────────────────────────┘  │
 │                                                              │
 └──────────────────────────────────────────────────────────────┘
@@ -66,382 +69,383 @@ Claude Code 的上下文管理由三个独立但互补的系统组成：
 
 ---
 
-## 二、5 层渐进式压缩管线（核心）
+## 2. The 5-Layer Graduated Compaction Pipeline (Core)
 
-### 设计哲学："最廉价动作优先"（Cheapest Move First）
+### Design Philosophy: "Cheapest Move First"
 
-来自论文原文：
+From the original paper:
 
 > "The graduated design reflects a lazy-degradation principle: apply the least disruptive compression first, escalating only when cheaper strategies prove insufficient."
 
-五层按成本从低到高排列，每层只在更便宜的层不够用时才升级：
+The five layers are arranged from lowest to highest cost; each layer only activates when cheaper layers prove insufficient:
 
-| 层级 | 名称 | 推理成本 | 启用状态 | 核心机制 |
-|------|------|----------|----------|----------|
-| 1 | Budget Reduction | 零（纯内容替换） | **总是启用** | 大工具输出 → 引用指针 |
-| 2 | Snip | 零（纯消息裁剪） | Feature flag `HISTORY_SNIP` | 丢弃过时历史段 |
-| 3 | Microcompact | 零（结构操作） | 时间路径总是启用；缓存路径 flag `CACHED_MICROCOMPACT` | 按 tool_use_id 清除旧工具结果 |
-| 4 | Context Collapse | 零（读时投影） | Feature flag `CONTEXT_COLLAPSE` | 读时投射折叠视图，不修改底层数据 |
-| 5 | Auto-Compact | **一次 LLM 推理** | 默认启用，用户可关闭 | LLM 语义摘要 |
+| Layer | Name | Inference Cost | Enabled State | Core Mechanism |
+|-------|------|----------------|---------------|----------------|
+| 1 | Budget Reduction | Zero (pure content replacement) | **Always enabled** | Large tool outputs → reference pointers |
+| 2 | Snip | Zero (pure message trimming) | Feature flag `HISTORY_SNIP` | Discard stale history segments |
+| 3 | Microcompact | Zero (structural operations) | Temporal path always on; cache path flag `CACHED_MICROCOMPACT` | Clear old tool results by tool_use_id |
+| 4 | Context Collapse | Zero (read-time projection) | Feature flag `CONTEXT_COLLAPSE` | Project collapsed view at read time; does not modify underlying data |
+| 5 | Auto-Compact | **One LLM inference** | Enabled by default; user can disable | LLM semantic summary |
 
-### 执行流程
+### Execution Flow
 
 ```python
-# query.ts:365-453 — 每次模型调用前的管线
+# query.ts:365-453 — Pipeline before every model call
 def prepare_messages_for_query(messages_for_query):
-    """五层管线按顺序执行"""
+    """Five-layer pipeline executes sequentially"""
 
-    # Layer 1: 总是运行 — 替换超大工具输出
+    # Layer 1: Always runs — replace oversized tool outputs
     messages = apply_tool_result_budget(messages_for_query)
 
-    # Layer 2: Feature flag 控制 — 裁剪过时历史
+    # Layer 2: Feature flag controlled — trim stale history
     if feature("HISTORY_SNIP"):
         result = snip_compact_needed(messages)
         messages = result.messages
-        snip_tokens_freed = result.tokens_freed  # 关键：传递给 auto-compact
+        snip_tokens_freed = result.tokens_freed  # Key: passed to auto-compact
 
-    # Layer 3: 时间路径总是运行；缓存路径 flag 控制
+    # Layer 3: Temporal path always runs; cache path flag controlled
     result = microcompact(messages)
     messages = result.messages
     compaction_info = result.compaction_info
 
-    # Layer 4: Feature flag 控制 — 折叠视图
+    # Layer 4: Feature flag controlled — collapse view
     if feature("CONTEXT_COLLAPSE"):
         messages = apply_collapse_if_needed(messages)
 
-    # Layer 5: 最后手段 — 只在前面四层都不够时触发
+    # Layer 5: Last resort — only triggers when all four prior layers are insufficient
     if context_still_exceeds_pressure_threshold(messages):
-        messages = compact_conversation(messages)  # LLM 调用
+        messages = compact_conversation(messages)  # LLM call
 
     return messages
 ```
 
-**关键设计细节**：
-- Layer 1 在 Layer 3 之前运行，因为 Layer 1 检查内容（content-level），Layer 3 按 ID 操作（ID-level），两者组合无冲突
-- Layer 2 释放的 token 数（`snip_tokens_freed`）显式传递给 Layer 5，因为 token 计数器从最后一条 assistant 消息的 `usage` 字段推导，而 snip 不修改该消息
-- Layer 4 是唯一不修改消息数组的层 — 它是纯读时投影
+**Key design details**:
+- Layer 1 runs before Layer 3 because Layer 1 operates at the content level while Layer 3 operates by ID — the two compose without conflict
+- The token count freed by Layer 2 (`snip_tokens_freed`) is explicitly passed to Layer 5, because token counters are inferred from the `usage` field of the last assistant message, and snip does not modify that message
+- Layer 4 is the only layer that does not modify the message array — it is a pure read-time projection
 
 ---
 
-### Layer 1: Budget Reduction（预算削减）
+### Layer 1: Budget Reduction
 
-**函数**: `applyToolResultBudget()`
-**成本**: 零推理成本（纯内容替换）
-**状态**: 总是启用，无 feature flag
+**Function**: `applyToolResultBudget()`
+**Cost**: Zero inference cost (pure content replacement)
+**Status**: Always enabled, no feature flag
 
-#### 机制
+#### Mechanism
 
-对每个工具结果消息，检查大小是否超过 `maxResultSizeChars` 限制：
-- 超过 → 替换为"内容引用"（content reference / pointer）
-- 未超过 → 保持原样
+For each tool result message, check whether its size exceeds the `maxResultSizeChars` limit:
+- Exceeds → Replace with a "content reference" (content reference / pointer)
+- Does not exceed → Keep as-is
 
-#### 豁免工具
+#### Exempted Tools
 
-`maxResultSizeChars` 为 **非有限值**（`Infinity` 或未设置）的工具不受预算削减影响。
+Tools whose `maxResultSizeChars` is a **non-finite value** (`Infinity` or unset) are not subject to budget reduction.
 
-#### 持久化
+#### Persistence
 
-内容替换被持久化到 agent 和 session 查询源，以便在恢复（resume）时可以重建。
+Content replacements are persisted to agent and session query sources so they can be reconstructed on resume.
 
-#### 与 Microcompact 的关系
+#### Relationship with Microcompact
 
-Budget Reduction 在 Microcompact 之前运行，因为：
-- Budget Reduction = **内容层**操作（检查工具结果的内容大小）
-- Microcompact = **结构层**操作（按 tool_use_id 识别要压缩的对，不检查内容）
+Budget Reduction runs before Microcompact because:
+- Budget Reduction = **content-level** operation (checks tool result content size)
+- Microcompact = **structural-level** operation (identifies pairs to compress by tool_use_id, without inspecting content)
 
-#### 论文未给出的细节
-- `maxResultSizeChars` 的具体值
-- "内容引用"的具体格式
+#### Details Not Provided in the Paper
+- The specific value of `maxResultSizeChars`
+- The exact format of "content references"
 
 ---
 
-### Layer 2: Snip（裁剪）
+### Layer 2: Snip
 
-**函数**: `snipCompactIfNeeded()`
-**成本**: 零推理成本（纯消息裁剪）
-**状态**: Feature flag `HISTORY_SNIP`
+**Function**: `snipCompactIfNeeded()`
+**Cost**: Zero inference cost (pure message trimming)
+**Status**: Feature flag `HISTORY_SNIP`
 
-#### 机制
+#### Mechanism
 
-轻量级裁剪，移除较旧的历史段。处理"时间深度"（temporal depth）问题 — 随对话推进累积的旧轮次。
+Lightweight trimming that removes older history segments. Addresses the "temporal depth" problem — stale turns that accumulate as the conversation progresses.
 
-#### 返回值
+#### Return Value
 
 ```python
 {
-    "messages": [...],           # 裁剪后的消息列表
-    "tokensFreed": int,          # 释放的 token 数
-    "boundaryMessage": Message,  # 边界消息（标记裁剪点）
+    "messages": [...],           # The trimmed message list
+    "tokensFreed": int,          # Number of tokens freed
+    "boundaryMessage": Message,  # Boundary message (marks the snip point)
 }
 ```
 
-#### 关键的管道传递
+#### Critical Pipeline Handoff
 
-`snipTokensFreed` 值显式传递给 auto-compact。原因：
-- 主 token 计数器从最近一条 assistant 消息的 `usage` 字段推导上下文大小
-- Snip 不修改该消息，所以其原始 `input_tokens` 仍然attached
-- 如果不显式传递，snip 的节省对计数器不可见
+The `snipTokensFreed` value is explicitly passed to auto-compact. The reason:
+- The main token counter infers context size from the `usage` field of the most recent assistant message
+- Snip does not modify that message, so its original `input_tokens` remain attached
+- Without explicit handoff, snip's savings would be invisible to the counter
 
-#### 什么使一个轮次"过时"
+#### What Makes a Turn "Stale"
 
-论文未给出精确算法或阈值。只说 snip "removes older history segments"。
+The paper does not provide a precise algorithm or threshold. It only says snip "removes older history segments."
 
 ---
 
-### Layer 3: Microcompact（微压缩）— 核心创新
+### Layer 3: Microcompact — Core Innovation
 
-**成本**: 零推理成本
-**状态**: 时间路径总是启用；缓存感知路径由 `CACHED_MICROCOMPACT` flag 控制
+**Cost**: Zero inference cost
+**Status**: Temporal path always enabled; cache-aware path controlled by `CACHED_MICROCOMPACT` flag
 
-#### 两条子路径
+#### Two Sub-paths
 
-1. **时间路径**（总是运行）— 基于时间的压缩
-2. **缓存感知路径**（flag 控制）— 使用 API 返回的实际缓存删除数据
+1. **Temporal path** (always runs) — time-based compression
+2. **Cache-aware path** (flag controlled) — uses actual cache deletion data returned by the API
 
-#### 核心机制：按 tool_use_id 操作
+#### Core Mechanism: Operates by tool_use_id
 
 > "Microcompact operates purely by `tool_use_id` and **never inspects content**."
 
-这是 Microcompact 的关键结构洞察：
-- 通过 tool_use_id 识别哪些 tool_use/tool_result 对需要压缩
-- **不检查工具结果的内容**
-- 与 Budget Reduction 在不同层面操作，无冲突
+This is Microcompact's key structural insight:
+- Identifies which tool_use/tool_result pairs to compress via tool_use_id
+- **Does not inspect the content of tool results**
+- Operates at a different level than Budget Reduction, with no conflict
 
-#### 缓存感知路径的精妙设计
+#### Subtle Design of the Cache-Aware Path
 
-当启用缓存感知路径时：
-- **边界消息被延迟到 API 响应之后**
-- 使用 API 返回的**实际 `cache_deleted_input_tokens`** 而非估算值
-- 系统不猜测释放了多少缓存，而是从响应中读取实际数字
+When the cache-aware path is enabled:
+- **Boundary messages are deferred until after the API response**
+- Uses the API's **actual `cache_deleted_input_tokens`** rather than estimated values
+- The system does not guess how much cache was freed — it reads the actual number from the response
 
-#### 返回值
+#### Return Value
 
 ```python
 {
     "messages": [...],
     "compactionInfo": {
-        "pendingCacheEdits": [...]  # 缓存感知路径的待处理编辑
+        "pendingCacheEdits": [...]  # Pending edits for the cache-aware path
     }
 }
 ```
 
-#### 推断的 tool_use vs tool_result 处理
+#### Inferred Handling of tool_use vs tool_result
 
-虽然论文没有明确描述块级转换，但可以推断：
-- **tool_use 块**（assistant 消息中的工具调用决策）→ 保留
-- **tool_result 块**（user 消息中的工具返回数据）→ 替换为占位文本
+Although the paper does not explicitly describe block-level transformation, it can be inferred:
+- **tool_use blocks** (tool call decisions in assistant messages) → Preserved
+- **tool_result blocks** (tool return data in user messages) → Replaced with placeholder text
 
-这意味着模型"记得自己做了什么"（tool_use），但"不记得工具返回了什么"（tool_result）。
+This means the model "remembers what it decided to do" (tool_use) but "does not remember what the tool returned" (tool_result).
 
 ---
 
-### Layer 4: Context Collapse（上下文折叠）
+### Layer 4: Context Collapse
 
-**函数**: `applyCollapsesIfNeeded()`
-**成本**: 零推理成本
-**状态**: Feature flag `CONTEXT_COLLAPSE`
+**Function**: `applyCollapsesIfNeeded()`
+**Cost**: Zero inference cost
+**Status**: Feature flag `CONTEXT_COLLAPSE`
 
-#### 架构独特性：纯读时投影
+#### Architectural Uniqueness: Pure Read-Time Projection
 
 > "Nothing is yielded; the collapsed view is a read-time projection over the REPL's full history. Summary messages live in the collapse store, not the REPL array. This is what makes collapses persist across turns."
 
-**与其他四层的根本区别**：
-| 层级 | 是否修改消息数组 | 底层数据 |
-|------|----------------|----------|
-| Budget Reduction | ✅ 修改 | 修改 |
-| Snip | ✅ 修改 | 修改 |
-| Microcompact | ✅ 修改 | 修改 |
-| **Context Collapse** | ❌ 不修改 | **不修改** |
-| Auto-Compact | ✅ 修改 | 修改 |
+**Fundamental difference from the other four layers**:
+| Layer | Modifies Message Array | Underlying Data |
+|-------|------------------------|-----------------|
+| Budget Reduction | ✅ Modifies | Modified |
+| Snip | ✅ Modifies | Modified |
+| Microcompact | ✅ Modifies | Modified |
+| **Context Collapse** | ❌ Does not modify | **Not modified** |
+| Auto-Compact | ✅ Modifies | Modified |
 
-Context Collapse 是唯一不修改底层数据的层。
+Context Collapse is the only layer that does not modify the underlying data.
 
-#### 工作机制
+#### How It Works
 
 ```
-底层存储 (REPL array)        读时视图 (messagesForQuery)
+Underlying Storage (REPL array)        Read-Time View (messagesForQuery)
 ┌─────────────────────┐     ┌─────────────────────────┐
 │ Turn 1: user+asst   │     │                         │
-│ Turn 2: user+asst   │ ──→ │ [折叠摘要: 前 N 轮]      │
-│ Turn 3: user+asst   │     │ Turn N-2: user+asst     │
-│ Turn 4: user+asst   │     │ Turn N-1: user+asst     │
-│ Turn 5: user+asst   │     │ Turn N:   user+asst     │
-└─────────────────────┘     └─────────────────────────┘
-完整历史永不修改             模型只看到折叠视图
+│ Turn 2: user+asst   │ ──→ │ [Collapse summary:      │
+│ Turn 3: user+asst   │     │  first N turns]          │
+│ Turn 4: user+asst   │     │ Turn N-2: user+asst     │
+│ Turn 5: user+asst   │     │ Turn N-1: user+asst     │
+└─────────────────────┘     │ Turn N:   user+asst     │
+                            └─────────────────────────┘
+Full history is never modified        Model only sees the collapsed view
 ```
 
-#### 存储
+#### Storage
 
-- 摘要消息存储在独立的 **"collapse store"** 中
-- 折叠跨轮次持久化（因为存在 store 中，不是临时数组）
-- 用户不可见 — "operates without user-visible output"
+- Summary messages are stored in a separate **"collapse store"**
+- Collapses persist across turns (because they live in the store, not a temporary array)
+- Invisible to users — "operates without user-visible output"
 
 ---
 
-### Layer 5: Auto-Compact（自动压缩）— 最后手段
+### Layer 5: Auto-Compact — Last Resort
 
-**函数**: `compactConversation()` (compact.ts)
-**成本**: 一次完整 LLM 推理调用
-**状态**: 默认启用，用户可配置关闭
+**Function**: `compactConversation()` (compact.ts)
+**Cost**: One full LLM inference call
+**Status**: Enabled by default; user can configure off
 
-#### 触发条件
+#### Trigger Condition
 
 > "Auto-compact fires **only when the context still exceeds the pressure threshold** after all four previous shapers have run."
 
-即只有当前面四层都不够时，才触发 LLM 压缩。
+In other words, LLM compression is triggered only when the first four layers are all insufficient.
 
-#### LLM 摘要流程
+#### LLM Summary Flow
 
 ```python
 def compact_conversation(messages):
-    # 1. PreCompact hooks 先触发 — 允许 hook 注入自定义指令
+    # 1. PreCompact hooks fire first — allow hooks to inject custom instructions
     hook_results = run_pre_compact_hooks()
 
-    # 2. 创建摘要请求
-    summary_prompt = get_compact_prompt()  # 摘要提示词
+    # 2. Create summary request
+    summary_prompt = get_compact_prompt()  # Summary prompt
 
-    # 3. 调用 LLM 生成压缩摘要（一次完整的推理调用）
+    # 3. Call LLM to generate compressed summary (one full inference call)
     summary_response = llm_call(
         messages=build_summary_messages(messages),
         prompt=summary_prompt,
     )
 
-    # 4. 构建压缩后消息
+    # 4. Build post-compaction messages
     return build_post_compact_messages(
-        boundary_marker,       # 压缩边界标记
-        summary_messages,      # 摘要消息
-        messages_to_keep,      # 保留的最近消息
-        attachments,           # 运行时状态附件
-        hook_results,          # hook 结果
+        boundary_marker,       # Compression boundary marker
+        summary_messages,      # Summary messages
+        messages_to_keep,      # Most recent messages retained
+        attachments,           # Runtime state attachments
+        hook_results,          # Hook results
     )
 ```
 
-#### 边界标记的"mostly-append"设计
+#### The "mostly-append" Design of Boundary Markers
 
 ```python
-# build_post_compact_messages 返回:
+# build_post_compact_messages returns:
 [
-    boundary_marker,       # 压缩边界，附带 preserved-segment 元数据
-    ...summary_messages,   # LLM 生成的摘要
-    ...messages_to_keep,   # 保留的最近消息
-    ...attachments,        # 运行时状态（plans, skills, agents）
-    ...hook_results,       # hook 注入的内容
+    boundary_marker,       # Compression boundary, with preserved-segment metadata
+    ...summary_messages,   # LLM-generated summary
+    ...messages_to_keep,   # Retained recent messages
+    ...attachments,        # Runtime state (plans, skills, agents)
+    ...hook_results,       # Hook-injected content
 ]
 
-# 边界标记附带元数据:
+# Boundary marker carries metadata:
 boundary_marker.metadata = {
-    "headUuid": "...",     # 头部保留段的 UUID
-    "anchorUuid": "...",   # 锚点 UUID
-    "tailUuid": "...",     # 尾部保留段的 UUID
+    "headUuid": "...",     # UUID of the head preserved segment
+    "anchorUuid": "...",   # Anchor UUID
+    "tailUuid": "...",     # UUID of the tail preserved segment
 }
 ```
 
-这些 UUID 使 session loader 能够在**读时修补消息链**：
-- 保留的消息保持其原始 `parentUuids`
-- Loader 使用边界元数据正确链接
+These UUIDs enable the session loader to **repair message links at read time**:
+- Preserved messages retain their original `parentUuids`
+- The loader uses boundary metadata to link correctly
 
-**关键设计原则**：压缩通常**不修改或删除之前写入的 transcript 行** — 只追加新的边界和摘要事件。
+**Key design principle**: Compaction typically **does not modify or delete previously written transcript lines** — it only appends new boundary and summary events.
 
-#### 压缩后的运行时状态重建
+#### Runtime State Reconstruction After Compaction
 
-压缩丢弃了之前的 attachment 消息，但不丢弃底层状态。因此：
-- 压缩后，attachment builders 从**实时 app 状态**重新发布（plans、skills、async agents）
-- 确保模型知道当前进行中的工作
+Compaction discards previous attachment messages but does not discard the underlying state. Therefore:
+- After compaction, attachment builders republish from **live app state** (plans, skills, async agents)
+- Ensures the model is aware of current in-progress work
 
-#### 缓存行为（实验数据）
+#### Cache Behavior (Experimental Data)
 
-GrowthBook feature flag 控制压缩路径是否复用主对话的 prompt cache：
+A GrowthBook feature flag controls whether the compaction path reuses the main conversation's prompt cache:
 
 ```
-实验（2026 年 1 月）:
-- "false path"（不复用 cache）→ 98% cache miss
-- 但只消耗 ~0.76% 的 fleet cache_creation tokens
+Experiment (January 2026):
+- "false path" (no cache reuse) → 98% cache miss
+- But only consumed ~0.76% of fleet cache_creation tokens
 ```
 
-#### 论文未给出的细节
-- 确切的"压力阈值"数值
-- `getCompactPrompt()` 的确切内容
-- 用于摘要调用的模型
-- 摘要的确切 token 目标
+#### Details Not Provided in the Paper
+- The exact "pressure threshold" value
+- The exact content of `getCompactPrompt()`
+- The model used for the summary call
+- The exact token target for the summary
 
 ---
 
-## 三、附加压缩机制
+## 3. Additional Compression Mechanisms
 
-### 3.1 Reactive Compaction（反应式压缩）
+### 3.1 Reactive Compaction
 
 **Feature flag**: `REACTIVE_COMPACT`
 
 ```
-触发条件: 在轮次执行期间，上下文接近容量上限
-行为: 只摘要刚好够释放空间的内容
-限制: hasAttemptedReactiveCompact flag 确保每轮最多触发一次
+Trigger condition: During a turn's execution, context approaches capacity
+Behavior: Summarizes only enough content to free space
+Limitation: hasAttemptedReactiveCompact flag ensures at most one trigger per turn
 ```
 
-### 3.2 Prompt-too-long 恢复级联
+### 3.2 Prompt-too-long Recovery Cascade
 
-当 API 返回 `prompt_too_long` 错误时：
+When the API returns a `prompt_too_long` error:
 
 ```
-步骤 1: 尝试 context-collapse overflow recovery
-步骤 2: 如果失败 → 尝试 reactive compaction
-步骤 3: 如果仍失败 → 终止，reason: 'prompt_too_long'
+Step 1: Attempt context-collapse overflow recovery
+Step 2: If that fails → attempt reactive compaction
+Step 3: If still failing → terminate, reason: 'prompt_too_long'
 ```
 
 ---
 
-## 四、服务端 Context Editing API
+## 4. Server-Side Context Editing API
 
-### 4.1 API 概览
+### 4.1 API Overview
 
 ```
 Beta header: context-management-2025-06-27
-运行位置: 服务端（API 侧），在 prompt 到达 Claude 之前应用
-客户端状态: 不修改 — 客户端维护完整的未修改对话历史
+Runs at: Server side (API side), applied before the prompt reaches Claude
+Client state: Unmodified — the client maintains the full unmodified conversation history
 ```
 
-**核心原则**：Context editing 是**服务端应用**的。客户端应用维护完整的未修改对话历史，不需要与编辑后的版本同步。
+**Core principle**: Context editing is **server-side applied**. The client application maintains the full unmodified conversation history and does not need to synchronize with the edited version.
 
-### 4.2 策略 1: 工具结果清除 (clear_tool_uses_20250919)
+### 4.2 Strategy 1: Tool Result Clearing (clear_tool_uses_20250919)
 
-#### 参数详解
+#### Parameter Details
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `trigger` | 100,000 input_tokens | 策略激活阈值。可以是 `input_tokens` 或 `tool_uses` 类型 |
-| `keep` | 3 tool_uses | 清除后保留的最近工具调用/结果对数量。API 按时间顺序移除最旧的 |
-| `clear_at_least` | 无 | 确保每次激活至少清除的 token 数。如果无法清除到最少，策略**不会被应用** |
-| `exclude_tools` | 无 | 永不清除的工具名列表。保护重要上下文 |
-| `clear_tool_inputs` | false | 是否同时清除工具调用参数。默认只清除结果，保留 Claude 的工具调用可见 |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `trigger` | 100,000 input_tokens | Strategy activation threshold. Can be `input_tokens` or `tool_uses` type |
+| `keep` | 3 tool_uses | Number of recent tool call/result pairs to retain after clearing. The API removes the oldest in chronological order |
+| `clear_at_least` | None | Ensures each activation clears at least this many tokens. If it cannot clear at least this amount, the strategy **is not applied** |
+| `exclude_tools` | None | List of tool names that are never cleared. Protects important context |
+| `clear_tool_inputs` | false | Whether to also clear tool call parameters. By default only clears results, keeping Claude's tool calls visible |
 
-#### 行为细节
+#### Behavioral Details
 
 ```
-激活时:
-1. API 按时间顺序清除最旧的工具结果
-2. 每个被清除的结果替换为占位文本，让 Claude 知道它被移除了
-3. 默认保留 Claude 的 tool_use 块（工具调用决策）
-4. 如果 clear_tool_inputs=true，同时清除工具调用参数
+On activation:
+1. API clears the oldest tool results in chronological order
+2. Each cleared result is replaced with placeholder text so Claude knows it was removed
+3. By default preserves Claude's tool_use blocks (tool call decisions)
+4. If clear_tool_inputs=true, also clears tool call parameters
 
-保留的内容:
-✅ System prompt — 永不清除
-✅ User messages — 永不清除
-✅ Assistant text — 永不清除
-✅ tool_use blocks（默认）— Claude 的决策记录
+What is preserved:
+✅ System prompt — never cleared
+✅ User messages — never cleared
+✅ Assistant text — never cleared
+✅ tool_use blocks (default) — Claude's decision records
 
-清除的内容:
-❌ 旧的 tool_result content — 工具返回的原始数据
-❌ (可选) tool_use parameters — 工具调用参数
+What is cleared:
+❌ Old tool_result content — raw data returned by tools
+❌ (optional) tool_use parameters — tool call arguments
 ```
 
-#### 代码示例
+#### Code Examples
 
 ```python
-# 基础使用
+# Basic usage
 response = client.beta.messages.create(
     model="claude-opus-4-8",
     max_tokens=4096,
-    messages=[{"role": "user", "content": "搜索 AI 最新进展"}],
+    messages=[{"role": "user", "content": "Search for the latest AI advances"}],
     tools=[{"type": "web_search_20250305", "name": "web_search"}],
     betas=["context-management-2025-06-27"],
     context_management={
@@ -449,11 +453,11 @@ response = client.beta.messages.create(
     },
 )
 
-# 高级配置
+# Advanced configuration
 response = client.beta.messages.create(
     model="claude-opus-4-8",
     max_tokens=4096,
-    messages=[{"role": "user", "content": "创建一个 Python 计算器"}],
+    messages=[{"role": "user", "content": "Create a Python calculator"}],
     tools=[
         {"type": "text_editor_20250728", "name": "str_replace_based_edit_tool"},
         {"type": "web_search_20250305", "name": "web_search"},
@@ -465,62 +469,62 @@ response = client.beta.messages.create(
             "trigger": {"type": "input_tokens", "value": 30000},
             "keep": {"type": "tool_uses", "value": 3},
             "clear_at_least": {"type": "input_tokens", "value": 5000},
-            "exclude_tools": ["web_search"],  # web_search 结果永不清除
+            "exclude_tools": ["web_search"],  # web_search results are never cleared
         }]
     },
 )
 ```
 
-#### 缓存行为
+#### Cache Behavior
 
 ```
-清除工具结果 → 使缓存的 prompt 前缀失效
-每次清除 → 产生 cache write 费用
-后续请求 → 可以复用新缓存的前缀
+Clearing tool results → invalidates cached prompt prefix
+Each clear → incurs cache write cost
+Subsequent requests → can reuse the newly cached prefix
 
-最佳实践:
-- 使用 clear_at_least 确保每次清除的 token 数足够多，
-  使缓存失效的代价值得
-- 否则频繁的小量清除会导致 cache 不断失效
+Best practice:
+- Use clear_at_least to ensure each clearing removes enough tokens
+  to justify the cache invalidation cost
+- Otherwise, frequent small clearings will continuously invalidate the cache
 ```
 
-### 4.3 策略 2: 思考块清除 (clear_thinking_20251015)
+### 4.3 Strategy 2: Thinking Block Clearing (clear_thinking_20251015)
 
-#### 参数
+#### Parameters
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `keep` | 模型特定 | 保留的最近包含思考块的 assistant 轮次数 |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `keep` | Model-specific | Number of recent assistant turns with thinking blocks to retain |
 
-**keep 格式**:
+**keep format**:
 ```python
-{"type": "thinking_turns", "value": 2}  # 保留最近 2 轮的思考
-"all"                                    # 保留所有思考块（最大化缓存命中）
+{"type": "thinking_turns", "value": 2}  # Keep the most recent 2 turns of thinking
+"all"                                    # Keep all thinking blocks (maximize cache hits)
 ```
 
-**各模型的默认行为**:
+**Default behavior per model class**:
 
-| 模型类别 | 保留所有思考 | 只保留最后一轮思考 |
-|----------|-------------|-------------------|
-| Opus | 4.5+ | 4.1 及以下 |
-| Sonnet | 4.6+ | 4.5 及以下 |
-| Haiku | (无) | 所有模型 |
+| Model Class | Keeps All Thinking | Only Keeps Last Turn |
+|-------------|--------------------|---------------------|
+| Opus | 4.5+ | 4.1 and below |
+| Sonnet | 4.6+ | 4.5 and below |
+| Haiku | (none) | All models |
 
-#### 缓存行为
+#### Cache Behavior
 
 ```
-保留思考块 → 缓存保持有效 ✅
-清除思考块 → 缓存在清除点失效 ❌
+Keeping thinking blocks → cache remains valid ✅
+Clearing thinking blocks → cache is invalidated at the clearing point ❌
 
-选择 keep 参数时的权衡:
-- 更多思考块 = 更多推理连续性 = 更好的缓存
-- 更少思考块 = 更多上下文空间
+Trade-off when choosing the keep parameter:
+- More thinking blocks = more reasoning continuity = better cache
+- Fewer thinking blocks = more context space
 ```
 
-#### 代码示例
+#### Code Examples
 
 ```python
-# 保留最近 2 轮的思考
+# Keep the most recent 2 turns of thinking
 response = client.beta.messages.create(
     model="claude-opus-4-8",
     max_tokens=16000,
@@ -535,11 +539,11 @@ response = client.beta.messages.create(
     },
 )
 
-# 组合两个策略（注意顺序：thinking 必须在前面）
+# Combining two strategies (note ordering: thinking must come first)
 context_management={
     "edits": [
         {
-            "type": "clear_thinking_20251015",          # ← 必须在前
+            "type": "clear_thinking_20251015",          # ← must be first
             "keep": {"type": "thinking_turns", "value": 2},
         },
         {
@@ -551,7 +555,7 @@ context_management={
 }
 ```
 
-### 4.4 响应格式
+### 4.4 Response Format
 
 ```json
 {
@@ -576,7 +580,7 @@ context_management={
 }
 ```
 
-**Token counting 端点的特殊响应**:
+**Special response for the Token counting endpoint**:
 ```json
 {
   "input_tokens": 25000,
@@ -584,49 +588,49 @@ context_management={
     "original_input_tokens": 70000
   }
 }
-// 可以看到清除前 70K → 清除后 25K，节省 45K tokens
+// Shows 70K before clearing → 25K after clearing, saving 45K tokens
 ```
 
-### 4.5 策略 3: 服务端压缩 (compact_20260112)
+### 4.5 Strategy 3: Server-Side Compaction (compact_20260112)
 
-**Anthropic 推荐**: 服务端压缩是管理长对话的**首选策略**，优于 SDK 端的 `compaction_control`（已弃用）。
+**Anthropic's recommendation**: Server-side compaction is the **preferred strategy** for managing long conversations, superseding the SDK-side `compaction_control` (deprecated).
 
-#### 基本信息
+#### Basic Information
 
-| 项目 | 说明 |
-|------|------|
+| Item | Description |
+|------|-------------|
 | Beta header | `compact-2026-01-12` |
-| 策略类型 | `compact_20260112` |
-| 运行位置 | 服务端（API 侧） |
-| 客户端状态 | 客户端维护完整历史，API 自动处理压缩 |
+| Strategy type | `compact_20260112` |
+| Runs at | Server side (API side) |
+| Client state | Client maintains full history; API handles compaction automatically |
 
-#### 工作原理
+#### How It Works
 
 ```
-1. 客户端发送请求，附带 context_management.edits 配置
-2. API 监控 input_tokens，达到阈值时触发压缩
-3. Claude 将旧对话历史压缩为结构化摘要
-4. 响应中包含一个 type="compaction" 的内容块
-5. 后续请求追加响应到消息列表，API 自动丢弃 compaction 块之前的内容
+1. Client sends a request with context_management.edits configuration
+2. API monitors input_tokens and triggers compaction when threshold is reached
+3. Claude compresses old conversation history into a structured summary
+4. Response includes a type="compaction" content block
+5. Subsequent requests append the response to the message list; the API automatically discards content before the compaction block
 ```
 
-**关键特性**:
-- ✅ 无需客户端压缩代码
-- ✅ 自动处理 token 计算
-- ✅ 多次压缩支持（同一对话可触发多次）
-- ✅ 与 server tools（web_search 等）兼容
+**Key features**:
+- ✅ No client-side compaction code needed
+- ✅ Automatic token counting
+- ✅ Multiple compactions supported (same conversation can trigger multiple times)
+- ✅ Compatible with server tools (web_search, etc.)
 
-#### 参数详解
+#### Parameter Details
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `trigger` | object | 必需 | 触发条件。目前仅支持 `{"type": "input_tokens", "value": N}` |
-| `trigger.type` | string | - | 必须是 `"input_tokens"` |
-| `trigger.value` | int | - | 触发阈值（input token 数） |
-| `pause_after_compaction` | bool | false | 是否在生成摘要后暂停响应 |
-| `custom_instructions` | string | 模型特定的默认提示 | 自定义摘要提示，**完全替换**默认提示 |
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `trigger` | object | Required | Trigger condition. Currently only supports `{"type": "input_tokens", "value": N}` |
+| `trigger.type` | string | - | Must be `"input_tokens"` |
+| `trigger.value` | int | - | Trigger threshold (input token count) |
+| `pause_after_compaction` | bool | false | Whether to pause the response after generating the summary |
+| `custom_instructions` | string | Model-specific default prompt | Custom summary prompt; **completely replaces** the default prompt |
 
-#### 基础使用示例
+#### Basic Usage Example
 
 ```python
 # Python
@@ -668,7 +672,7 @@ curl https://api.anthropic.com/v1/messages \
   }'
 ```
 
-#### 长对话完整示例
+#### Full Long Conversation Example
 
 ```python
 client = anthropic.Anthropic()
@@ -690,20 +694,20 @@ def chat(user_message: str) -> str:
         },
     )
 
-    # 追加响应（包含 compaction 块）到消息列表
+    # Append response (which may include compaction block) to message list
     messages.append({"role": "assistant", "content": response.content})
     return response.content[0].text if response.content else ""
 
-# 可以无限次调用 chat()，API 自动处理压缩
-chat("帮我构建一个 Python 网络爬虫")
-chat("添加对 JavaScript 渲染页面的支持")
-chat("现在添加限速和错误处理")
-# ... 持续数百轮对话
+# Can call chat() indefinitely; the API handles compression automatically
+chat("Help me build a Python web scraper")
+chat("Add support for JavaScript-rendered pages")
+chat("Now add rate limiting and error handling")
+# ... continue for hundreds of turns
 ```
 
-#### pause_after_compaction 模式
+#### pause_after_compaction Mode
 
-启用 `pause_after_compaction` 允许在压缩后插入额外消息（如保留最近的交换）：
+Enabling `pause_after_compaction` allows inserting additional messages after compaction (e.g., preserving recent exchanges):
 
 ```python
 response = client.beta.messages.create(
@@ -720,21 +724,21 @@ response = client.beta.messages.create(
     },
 )
 
-# 检查是否触发了压缩暂停
+# Check whether compaction pause was triggered
 if response.stop_reason == "compaction":
-    # 响应只包含 compaction 块
+    # Response contains only the compaction block
     compaction_block = response.content[0]
 
-    # 保留最近的交换（例如最后 3 条消息）
+    # Preserve the most recent exchange (e.g., last 3 messages)
     preserved = messages[-3:]
 
-    # 构建新消息列表：compaction + 保留的消息
+    # Build new message list: compaction + preserved messages
     messages = [
         {"role": "assistant", "content": [compaction_block]},
         *preserved,
     ]
 
-    # 继续请求
+    # Continue requesting
     response = client.beta.messages.create(
         betas=["compact-2026-01-12"],
         model="claude-opus-4-8",
@@ -749,7 +753,7 @@ if response.stop_reason == "compaction":
     )
 ```
 
-#### 自定义摘要提示
+#### Custom Summary Prompt
 
 ```python
 response = client.beta.messages.create(
@@ -767,11 +771,11 @@ response = client.beta.messages.create(
 )
 ```
 
-**注意**: `custom_instructions` **完全替换**默认提示，不是补充。
+**Note**: `custom_instructions` **completely replaces** the default prompt, not supplements it.
 
-#### Token 预算追踪
+#### Token Budget Tracking
 
-长任务可结合 `trigger` 和压缩计数器估算总消耗：
+Long tasks can combine `trigger` and compaction counters to estimate total consumption:
 
 ```python
 TRIGGER_THRESHOLD = 100_000
@@ -792,21 +796,21 @@ response = client.beta.messages.create(
     },
 )
 
-# 统计压缩次数估算总消耗
+# Track compaction count to estimate total consumption
 if response.stop_reason == "compaction":
     n_compactions += 1
     estimated_total = n_compactions * TRIGGER_THRESHOLD
     if estimated_total >= TOTAL_TOKEN_BUDGET:
-        # 预算用完，要求模型收尾
+        # Budget exhausted; ask the model to wrap up
         messages.append({
             "role": "user",
             "content": "Please wrap up your current work and summarize the final state."
         })
 ```
 
-#### 响应格式
+#### Response Format
 
-当触发压缩时，响应包含 `compaction` 类型的内容块：
+When compaction is triggered, the response includes a content block of type `compaction`:
 
 ```json
 {
@@ -819,7 +823,7 @@ if response.stop_reason == "compaction":
       "summary": "The user requested help building a web scraper..."
     }
   ],
-  "stop_reason": "compaction",  // 或 "end_turn"（如果未触发压缩）
+  "stop_reason": "compaction",  // or "end_turn" if compaction was not triggered
   "usage": {
     "input_tokens": 150000,
     "output_tokens": 500
@@ -830,81 +834,81 @@ if response.stop_reason == "compaction":
 }
 ```
 
-#### 缓存行为
+#### Cache Behavior
 
 ```
-压缩后:
-- 摘要成为新内容，需要写入缓存
-- 如果不设置缓存断点，系统提示缓存也会失效
+After compaction:
+- The summary is new content and requires a cache write
+- Without a cache breakpoint, the system prompt cache is also invalidated
 
-最佳实践:
-- 在系统提示末尾设置 cache breakpoint
-- 系统提示保持独立缓存
-- 压缩时只需写入新的摘要缓存条目
+Best practice:
+- Set a cache breakpoint at the end of the system prompt
+- The system prompt remains independently cached
+- On compaction, only a new summary cache entry needs to be written
 ```
 
-#### 计费与限制
+#### Billing and Limits
 
-- 压缩需要额外的采样步骤，计入 rate limits 和计费
-- 响应中的 `usage` 数组显示每次采样的使用情况
-- 重新应用之前的 `compaction` 块**不产生额外费用**
+- Compaction requires an additional sampling step, counted toward rate limits and billing
+- The `usage` array in the response shows usage for each sampling step
+- Re-applying a previous `compaction` block **incurs no additional cost**
 
-#### 与服务端工具配合
+#### Working with Server Tools
 
-当使用 server tools（web_search 等）时：
-- 压缩触发检查在每个采样迭代开始时
-- 单次请求可能触发多次压缩
-- SDK 可能错误计算 token 使用（包含服务端工具内部调用的累积读取）
+When using server tools (web_search, etc.):
+- Compaction trigger check occurs at the start of each sampling iteration
+- A single request may trigger multiple compactions
+- The SDK may miscalculate token usage (includes cumulative reads from server tool internal calls)
 
-**建议**: 使用服务端工具时避免客户端 compaction，优先使用服务端 compaction。
+**Recommendation**: When using server tools, avoid client-side compaction; prefer server-side compaction.
 
-#### 已知问题
+#### Known Issues
 
-模型在内部摘要步骤中偶尔会调用工具而不是写摘要。解决方法：
+The model occasionally calls tools instead of writing a summary during the internal summarization step. Workaround:
 
 ```python
 "custom_instructions": "Include relevant information in the summary for continuing the task in the next context window. Do not call any tools while writing this summary; respond with text only."
 ```
 
-#### 支持的模型
+#### Supported Models
 
-- Claude Opus 4.x 系列
-- Claude Sonnet 4.x 系列
-- 使用请求中的模型进行摘要（**无法使用更便宜的模型**）
-
----
-
-### 4.6 SDK Compaction（已弃用）
-
-**Anthropic 强烈推荐服务端 compaction，SDK compaction 已被弃用。**
-
-SDK 的 `compaction_control` 参数在 Python、TypeScript、Ruby SDK 中已弃用，未来版本将移除。SDK 启用时会发出弃用警告。
-
-**SDK compaction 的问题**:
-- 客户端运行，需要额外集成代码
-- Token 使用计算不准确（特别是使用服务端工具时）
-- 客户端限制
-
-**仅当需要客户端控制摘要过程时才使用 SDK compaction。**
+- Claude Opus 4.x series
+- Claude Sonnet 4.x series
+- Uses the model from the request for summarization (**cannot use a cheaper model**)
 
 ---
 
-### 4.7 策略选择指南
+### 4.6 SDK Compaction (Deprecated)
 
-| 场景 | 推荐策略 |
-|------|---------|
-| 长对话（>100k tokens） | `compact_20260112`（服务端压缩） |
-| 工具密集型工作流 | `clear_tool_uses_20250919` |
-| 使用扩展思考 | `clear_thinking_20251015` |
-| 需要精细控制 | 组合多个策略 |
-| 需要保持推理连续性 | `clear_thinking` + 保留最近思考 |
+**Anthropic strongly recommends server-side compaction; SDK compaction is deprecated.**
 
-**策略组合示例**:
+The SDK's `compaction_control` parameter is deprecated in the Python, TypeScript, and Ruby SDKs and will be removed in a future version. The SDK emits a deprecation warning when enabled.
+
+**Problems with SDK compaction**:
+- Runs client-side; requires additional integration code
+- Token usage calculation is inaccurate (especially with server tools)
+- Client-side limitations
+
+**Only use SDK compaction when you need client-side control over the summarization process.**
+
+---
+
+### 4.7 Strategy Selection Guide
+
+| Scenario | Recommended Strategy |
+|----------|---------------------|
+| Long conversations (>100k tokens) | `compact_20260112` (server-side compaction) |
+| Tool-intensive workflows | `clear_tool_uses_20250919` |
+| Using extended thinking | `clear_thinking_20251015` |
+| Need fine-grained control | Combine multiple strategies |
+| Need to maintain reasoning continuity | `clear_thinking` + retain recent thinking |
+
+**Strategy combination example**:
 ```python
 context_management={
     "edits": [
         {
-            "type": "clear_thinking_20251015",  # 必须在前
+            "type": "clear_thinking_20251015",  # must be first
             "keep": {"type": "thinking_turns", "value": 2},
         },
         {
@@ -921,149 +925,149 @@ context_management={
 }
 ```
 
-**注意**: `clear_thinking` 必须在其他策略之前。
+**Note**: `clear_thinking` must come before other strategies.
 
-## 五、Context Awareness（上下文感知）
+## 5. Context Awareness
 
-### 5.1 自动注入机制
+### 5.1 Auto-Injection Mechanism
 
-Anthropic API 自动为支持的模型注入上下文感知标签：
+The Anthropic API automatically injects context awareness labels for supported models:
 
-**系统提示中的预算标签**:
+**Budget label in the system prompt**:
 ```xml
 <budget:token_budget>200000</budget:token_budget>
 ```
 
-**每次工具调用后的更新**:
+**Updates after each tool call**:
 ```xml
 <system_warning>Token usage: 35000/200000; 165000 remaining</system_warning>
 ```
 
-### 5.2 支持的模型
+### 5.2 Supported Models
 
-| 模型 | 预算值 |
-|------|--------|
+| Model | Budget Value |
+|-------|-------------|
 | Claude Sonnet 5, Sonnet 4.6 | 1M tokens |
 | Claude Sonnet 4.5, Haiku 4.5 | 200K tokens |
 
-### 5.3 更新模型的行为
+### 5.3 Updated Model Behavior
 
-Claude Opus 4.7+、Fable 5、Mythos 5 **不再接收这些注入标签**，而是可以使用 task budgets（beta 功能）显式设置预算。
+Claude Opus 4.7+, Fable 5, Mythos 5 **no longer receive these injected labels**; instead, they can use task budgets (beta feature) to explicitly set budgets.
 
 ---
 
-## 六、上下文窗口管理
+## 6. Context Window Management
 
-### 6.1 窗口大小
+### 6.1 Window Sizes
 
-| 模型 | 窗口大小 | 最大输出 |
-|------|---------|---------|
+| Model | Window Size | Max Output |
+|-------|------------|------------|
 | Claude Opus 4.8/4.7/4.6 | 1M | — |
 | Claude Sonnet 5/4.6 | 1M | — |
 | Claude Fable 5 / Mythos 5 | 1M | 128K tokens |
 | Claude Sonnet 4.5 | 200K | — |
-| 其他模型 | 200K | — |
+| Other models | 200K | — |
 
-### 6.2 什么计入上下文窗口
+### 6.2 What Counts Toward the Context Window
 
 ```
-计入的内容:
+What counts:
 ✅ System prompt
-✅ messages 数组中的每条消息
-✅ 工具结果、图片、文档
-✅ 工具定义 (tool definitions)
-✅ Claude 生成的输出（包括扩展思考）
-✅ 所有历史对话
+✅ Each message in the messages array
+✅ Tool results, images, documents
+✅ Tool definitions
+✅ Claude-generated output (including extended thinking)
+✅ All conversation history
 
-⚠️ Prompt cache 的 token 也计入窗口
-   (cache 只影响费用，不影响计数)
+⚠️ Prompt cache tokens also count toward the window
+   (cache only affects cost, not counting)
 ```
 
-### 6.3 溢出行为
+### 6.3 Overflow Behavior
 
 ```
-情况 1: 仅输入超过窗口
-  → 所有模型返回 400 error: "prompt is too long"
+Case 1: Input only exceeds the window
+  → All models return 400 error: "prompt is too long"
 
-情况 2: 输入 + max_tokens 超过窗口
-  Claude 4.5+ 及更新模型:
-    → API 接受请求，生成到限制时停止
+Case 2: Input + max_tokens exceeds the window
+  Claude 4.5+ and newer models:
+    → API accepts the request; generates until the limit then stops
     → stop_reason: "model_context_window_exceeded"
-  旧模型:
-    → 返回验证错误
-    → 可通过 beta header 启用新行为:
+  Older models:
+    → Returns a validation error
+    → New behavior can be enabled via beta header:
       model-context-window-exceeded-2025-08-26
 ```
 
-### 6.4 扩展思考与上下文
+### 6.4 Extended Thinking and Context
 
-**保留思考块的模型**（默认）:
+**Models that retain thinking blocks** (default):
 - Opus 4.5+, Sonnet 4.6+, Fable 5, Mythos 5, Mythos Preview
-- 之前的思考块作为输入 token 计费
+- Previous thinking blocks are billed as input tokens
 
-**自动剥离思考块的模型**（默认）:
-- 更早的 Opus/Sonnet 模型, 所有 Haiku 模型
-- API 自动从对话历史中剥离
+**Models that automatically strip thinking blocks** (default):
+- Earlier Opus/Sonnet models, all Haiku models
+- The API automatically strips them from conversation history
 
-**关键要求**: 返回工具结果时，必须包含**完整未修改的思考块**（包括加密签名）。修改思考块会导致 API 错误。
+**Key requirement**: When returning tool results, you must include the **complete unmodified thinking block** (including the cryptographic signature). Modifying thinking blocks causes API errors.
 
 ---
 
-## 七、关键设计原则总结
+## 7. Key Design Principles Summary
 
-### 7.1 "行动 > 数据"原则
-
-```
-Claude Code 的核心洞察:
-
-✅ 保留 tool_use blocks — "LLM 决定做什么"
-❌ 清除 tool_result content — "工具返回了什么"
-
-理由:
-- 工具的原始输出（文件内容、搜索结果）体积大，且通常在处理后不再需要
-- LLM 的工具调用决策记录了推理路径，对未来决策有参考价值
-- 用 20% 的 token 保留 80% 的决策上下文
-```
-
-### 7.2 "最廉价动作优先"原则
+### 7.1 "Actions > Data" Principle
 
 ```
-成本阶梯:
-  零成本 → 内容替换 (Layer 1)
-  零成本 → 消息裁剪 (Layer 2)
-  零成本 → 结构压缩 (Layer 3)
-  零成本 → 读时投影 (Layer 4)
-  LLM 调用 → 语义压缩 (Layer 5)  ← 只在前面都不够时
+Claude Code's core insight:
 
-每层只在更便宜的层不够用时才激活
+✅ Preserve tool_use blocks — "what the LLM decided to do"
+❌ Clear tool_result content — "what the tool returned"
+
+Rationale:
+- Raw tool output (file contents, search results) is large and usually no longer needed after processing
+- The LLM's tool call decisions record the reasoning path and have reference value for future decisions
+- Use 20% of tokens to preserve 80% of decision context
 ```
 
-### 7.3 "mostly-append"持久化原则
+### 7.2 "Cheapest Move First" Principle
 
 ```
-压缩不修改不删除之前的 transcript 行
-只追加新的边界和摘要事件
-保留的消息保持原始 parentUuids
-读时通过边界元数据修补消息链
+Cost ladder:
+  Zero cost → Content replacement (Layer 1)
+  Zero cost → Message trimming (Layer 2)
+  Zero cost → Structural compression (Layer 3)
+  Zero cost → Read-time projection (Layer 4)
+  LLM call → Semantic compression (Layer 5)  ← only when all prior layers are insufficient
+
+Each layer only activates when cheaper layers prove insufficient
 ```
 
-### 7.4 "缓存感知"原则
+### 7.3 "mostly-append" Persistence Principle
 
 ```
-Microcompact 缓存路径:
-- 延迟边界消息到 API 响应之后
-- 使用实际的 cache_deleted_input_tokens
-- 不猜测，从响应中读取
-
-缓存失效的代价管理:
-- clear_at_least 确保每次清除量足够大
-- 避免频繁小量清除导致 cache 不断失效
+Compaction does not modify or delete previous transcript lines
+Only appends new boundary and summary events
+Preserved messages retain their original parentUuids
+At read time, boundary metadata repairs the message chain
 ```
 
-### 7.5 "上下文质量 > 数量"原则
+### 7.4 "Cache-Aware" Principle
 
 ```
-来自 Anthropic 文档:
+Microcompact cache path:
+- Defers boundary messages until after the API response
+- Uses actual cache_deleted_input_tokens
+- Does not guess; reads from the response
+
+Cache invalidation cost management:
+- clear_at_least ensures each clearing removes enough tokens
+- Avoids frequent small clearings that continuously invalidate the cache
+```
+
+### 7.5 "Context Quality > Quantity" Principle
+
+```
+From Anthropic documentation:
 
 "Context is a finite resource with diminishing returns —
  irrelevant content degrades model focus."
@@ -1078,55 +1082,55 @@ Microcompact 缓存路径:
 
 ---
 
-## 八、 quantitative 数据
+## 8. Quantitative Data
 
-### 性能数据
+### Performance Data
 
-| 指标 | 数值 | 来源 |
-|------|------|------|
-| 上下文编辑启用后性能提升 | **29%** | Anthropic 报告 |
-| 清理代码对 Claude Code 的影响 | token 减少 **7-8%**，文件复查减少 **34%** | 对照实验 |
-| Prompt cache 过期 | 不活跃 **5 分钟**后过期 | 论文 KAIROS 部分 |
-| Fleet cache 成本（不复用路径） | **~0.76%** 的 fleet cache_creation | 2026 年 1 月实验 |
-| 不复用路径 cache miss 率 | **98%** | 同上 |
-| 自动批准率轨迹 | <50 会话 **~20%** → 750 会话 **>40%** | 纵向使用数据 |
-| 95% 每步准确率下 100 步任务成功率 | **0.6%** | 引用研究 |
+| Metric | Value | Source |
+|--------|-------|--------|
+| Performance improvement with context editing enabled | **29%** | Anthropic report |
+| Impact of cleanup code on Claude Code | Token reduction **7-8%**, file review reduction **34%** | Controlled experiment |
+| Prompt cache expiration | Expires after **5 minutes** of inactivity | Paper KAIROS section |
+| Fleet cache cost (non-reuse path) | **~0.76%** of fleet cache_creation | January 2026 experiment |
+| Non-reuse path cache miss rate | **98%** | Same as above |
+| Auto-approval rate trajectory | <50 sessions **~20%** → 750 sessions **>40%** | Longitudinal usage data |
+| 100-step task success rate at 95% per-step accuracy | **0.6%** | Cited research |
 
-### 压缩效果
+### Compression Effect
 
 ```
-典型场景: 50 轮对话，大量工具调用
+Typical scenario: 50-turn conversation with heavy tool usage
 
-渐进式压缩流程:
-  原始: ~200K tokens (接近 200K 窗口)
-  Layer 1: 替换大工具输出 → ~160K (减少 20%)
-  Layer 2: 丢弃过时轮次 → ~130K (减少 35%)
-  Layer 3: 清除旧工具结果 → ~80K (减少 60%)
-           保留所有 tool_use 决策
-  Layer 4: 折叠视图 → ~60K (减少 70%)
-  Layer 5: LLM 压缩 → ~40K (减少 80%)
-           语义摘要保留关键信息
+Graduated compression flow:
+  Original: ~200K tokens (near the 200K window)
+  Layer 1: Replace large tool outputs → ~160K (20% reduction)
+  Layer 2: Discard stale turns → ~130K (35% reduction)
+  Layer 3: Clear old tool results → ~80K (60% reduction)
+           Preserve all tool_use decisions
+  Layer 4: Collapse view → ~60K (70% reduction)
+  Layer 5: LLM compaction → ~40K (80% reduction)
+           Semantic summary preserves key information
 
-典型恢复: 60-70% 的上下文窗口
-下次压缩触发: 在新的可用容量的 60% 处
+Typical recovery: 60-70% of the context window
+Next compaction trigger: At 60% of new available capacity
 ```
 
 ---
 
-## 九、与 Helen 的对应关系
+## 9. Correspondence with Helen
 
-| Claude Code 概念 | Helen 对应 | 差距 |
-|-----------------|-----------|------|
-| 5 层渐进压缩 | 1 层（80% 触发） | 缺 4 层 |
-| Microcompact (按 ID 清除工具结果) | 无 | 核心缺失 |
-| Context Collapse (读时投影) | 无 | 概念新颖 |
-| Auto-Compact (LLM 语义压缩) | "summarize"（只是拼接） | 非真正 LLM 摘要 |
-| Reactive Compaction | 无 | 缺 |
-| Context Editing API | 无 | 缺服务端编辑 |
-| Context Awareness (token 标签) | 无 | 模型不知道剩余容量 |
-| 工具结果清除策略 | 截断到 16K | 更粗糙 |
-| 思考块清除策略 | 无扩展思考 | N/A |
-| mostly-append 持久化 | 无 | 缺 |
-| 缓存感知压缩 | 无 | 缺 |
-| 边界标记 UUID 链修补 | 无 | 缺 |
-| "行动 > 数据"区分 | 无差别对待消息 | 核心缺失 |
+| Claude Code Concept | Helen Equivalent | Gap |
+|--------------------|-----------------|-----|
+| 5-layer graduated compaction | 1 layer (80% trigger) | Missing 4 layers |
+| Microcompact (clear tool results by ID) | None | Core missing |
+| Context Collapse (read-time projection) | None | Novel concept |
+| Auto-Compact (LLM semantic compaction) | "summarize" (just concatenation) | Not true LLM summary |
+| Reactive Compaction | None | Missing |
+| Context Editing API | None | Missing server-side editing |
+| Context Awareness (token labels) | None | Model does not know remaining capacity |
+| Tool result clearing strategy | Truncate to 16K | Coarser |
+| Thinking block clearing strategy | No extended thinking | N/A |
+| mostly-append persistence | None | Missing |
+| Cache-aware compaction | None | Missing |
+| Boundary marker UUID chain repair | None | Missing |
+| "Actions > Data" distinction | No differentiated treatment of messages | Core missing |

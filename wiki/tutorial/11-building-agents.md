@@ -1,54 +1,54 @@
-# 教程 11: 构建多 Agent 系统
+# Tutorial 11: Building Multi-Agent Systems
 
-> 完整案例：从需求到实现
+> Complete case study: from requirements to implementation
 
 ---
 
-## ⚠️ 设计原则：调用者决定上下文
+## ⚠️ Design Principle: Caller Decides Context
 
-在进入案例之前，请牢记 Helen 多 agent 系统的核心设计原则：
+Before diving into the case study, keep the core design principle of Helen's multi-agent system in mind:
 
-> **Agent 是严格隔离的——调用前必须显式考虑要向 agent 提供什么上下文。**
+> **Agents are strictly isolated — you must explicitly consider what context to provide to an agent before calling it.**
 
-多 agent 系统最常见的错误是**假设 agent 会自动看到外层的变量或历史**。在 Helen 中，这永远不会发生。
+The most common mistake in multi-agent systems is **assuming agents will automatically see outer variables or history**. In Helen, this never happens.
 
-设计多 agent 系统时，请先画出**上下文流图**：
+When designing multi-agent systems, start by drawing a **context flow diagram**:
 
 ```
-[调用者]
+[Caller]
   │
-  ├─── 参数 ────────────► [Agent A 需要的输入]
+  ├─── Arguments ──────────► [Inputs Agent A needs]
   │
-  ├─── SharedStore 引用 ─► [Agent A 需要访问的共享状态]
+  ├─── SharedStore reference ► [Shared state Agent A needs to access]
   │
-  └─── Channel ──────────► [Agent A 输出的结果流向]
+  └─── Channel ─────────────► [Where Agent A's output goes]
 ```
 
-**检查清单**：
-- 每个 agent 完成任务**最少**需要哪些信息？
-- 这些信息是否都通过参数或共享状态显式传递了？
-- 不同 agent 之间**不应该**知道的上下文，是否真的隔离了？
+**Checklist**:
+- What is the **minimum** information each agent needs to complete its task?
+- Is all this information explicitly passed through arguments or shared state?
+- Is context that different agents **shouldn't** know about actually isolated?
 
-> 💡 详见 [教程 05: 核心设计原则](05-agents.md#核心设计原则调用者决定上下文)
-
----
-
-## 案例：智能客服系统
-
-### 需求
-
-构建一个智能客服系统，能够：
-1. 理解用户问题
-2. 分类问题类型
-3. 根据类型调用不同专业 Agent
-4. 生成满意回复
+> 💡 See [Tutorial 05: Core Design Principles](05-agents.md#core-design-principle-caller-decides-context)
 
 ---
 
-## 第一步：定义 Agent
+## Case Study: Intelligent Customer Service System
+
+### Requirements
+
+Build an intelligent customer service system that can:
+1. Understand user questions
+2. Classify question types
+3. Route to different specialized Agents based on type
+4. Generate satisfactory responses
+
+---
+
+## Step 1: Define Agents
 
 ```helen
-// 问题分类器
+// Question classifier
 agent QuestionClassifier {
     description "Classify customer questions into categories"
     model "gpt-4"
@@ -63,7 +63,7 @@ agent QuestionClassifier {
     """
 }
 
-// 产品专家
+// Product expert
 agent ProductExpert {
     description "Answer product-related questions"
     model "gpt-4"
@@ -74,7 +74,7 @@ agent ProductExpert {
     """
 }
 
-// 账单专家
+// Billing expert
 agent BillingExpert {
     description "Handle billing inquiries"
     model "gpt-4"
@@ -85,7 +85,7 @@ agent BillingExpert {
     """
 }
 
-// 技术支持
+// Technical support
 agent TechSupport {
     description "Provide technical support"
     model "gpt-4"
@@ -96,7 +96,7 @@ agent TechSupport {
     """
 }
 
-// 回复润色器
+// Response polisher
 agent ResponsePolisher {
     description "Polish responses to be friendly and professional"
     temperature 0.5
@@ -109,13 +109,13 @@ agent ResponsePolisher {
 
 ---
 
-## 第二步：实现路由逻辑
+## Step 2: Implement Routing Logic
 
 ```helen
 main {
     let customer_question = "How do I reset my password?"
 
-    // 第一步：分类
+    // Step 1: Classify
     llm if "Classify customer question" {
         branch "product" {
             print("📦 Product question")
@@ -139,10 +139,10 @@ main {
         }
     }
 
-    // 第三步：润色回复
+    // Step 3: Polish the response
     let polished = ResponsePolisher(answer)
 
-    // 第四步：输出
+    // Step 4: Output
     print("\n--- Response to Customer ---")
     print(polished)
 }
@@ -150,43 +150,43 @@ main {
 
 ---
 
-## 第三步：添加并发优化
+## Step 3: Add Concurrency Optimization
 
 ```helen
-// 知识库查询 agent — 接收 reply Channel 用于返回结果
+// Knowledge base query agent — receives reply Channel to return results
 agent KnowledgeBase(query: str, reply: Channel) {
     description "Search knowledge base"
     prompt "Search knowledge base for: {{query}}"
     main {
-        let result = llm act "搜索知识库: " + query
+        let result = llm act "Search knowledge base: " + query
         reply.send(result)
     }
 }
 
-// 历史查询 agent — 接收 reply Channel 用于返回结果
+// History lookup agent — receives reply Channel to return results
 agent HistoryLookup(topic: str, reply: Channel) {
     description "Lookup relevant history"
     prompt "Find relevant history for: {{topic}}"
     main {
-        let result = llm act "查找相关历史: " + topic
+        let result = llm act "Find relevant history: " + topic
         reply.send(result)
     }
 }
 
-// 优化的版本：并发查询知识库（v1.18+ spawn 模式）
+// Optimized version: concurrent knowledge base queries (v1.18+ spawn pattern)
 main {
     let question = "How do I reset my password?"
 
-    // 并发获取上下文：spawn 返回 Channel
+    // Concurrently fetch context: spawn returns Channel
     let kb_mailbox = spawn KnowledgeBase(question)
     let history_mailbox = spawn HistoryLookup("password reset")
 
-    // 从 Channel 接收结果
+    // Receive results from Channels
     let kb_result = kb_mailbox.receive()
     let history_result = history_mailbox.receive()
     let full_context = kb_result + "\n" + history_result
 
-    // 先分类（串行，需要结果路由）
+    // Classify first (serial, needs result for routing)
     llm if "Classify customer question" {
         branch "technical" {
             let answer = TechSupport(question + "\nContext: " + full_context)
@@ -203,7 +203,7 @@ main {
 
 ---
 
-## 第四步：添加错误处理
+## Step 4: Add Error Handling
 
 ```helen
 main {
@@ -234,22 +234,22 @@ main {
 
 ---
 
-## 第五步：优化上下文管理 (v1.15+)
+## Step 5: Optimize Context Management (v1.15+)
 
-Helen v1.15 引入了完整的上下文管理增强，可以为每个 agent 独立配置：
+Helen v1.15 introduces comprehensive context management enhancements, configurable independently for each agent:
 
 ```helen
-// 技术支持 agent：优化上下文管理
+// Technical support agent: optimized context management
 agent TechSupport {
     description "Provide technical support"
     model "gpt-4"
     
-    // 上下文配置
+    // Context configuration
     context {
-        compression "graduated"      // 渐进压缩
-        cache-aware true             // 缓存感知
-        working-memory true          // 工作记忆
-        working-memory-tokens 8000   // 更大的工作记忆
+        compression "graduated"      // Graduated compression
+        cache-aware true             // Cache-aware
+        working-memory true          // Working memory
+        working-memory-tokens 8000   // Larger working memory
     }
     
     tools ["read_file", "web_search"]
@@ -260,13 +260,13 @@ agent TechSupport {
     """
 }
 
-// 产品专家：简单的上下文配置
+// Product expert: simple context configuration
 agent ProductExpert {
     description "Answer product questions"
     
     context {
-        compression "none"           // 不压缩（短对话）
-        working-memory false         // 禁用工作记忆
+        compression "none"           // No compression (short conversations)
+        working-memory false         // Disable working memory
     }
     
     prompt """
@@ -275,65 +275,65 @@ agent ProductExpert {
 }
 ```
 
-### 上下文管理最佳实践
+### Context Management Best Practices
 
-| Agent 类型 | 推荐配置 | 说明 |
-|-----------|---------|------|
-| 研究型 Agent | `compression "graduated"` + `working-memory true` | 长对话，需要跟踪文件 |
-| 快速响应 Agent | `compression "none"` + `working-memory false` | 短对话，快速响应 |
-| 多轮对话 Agent | `cache-aware true` + `working-memory-tokens 8000` | 提高缓存命中率 |
+| Agent Type | Recommended Config | Description |
+|-----------|-------------------|-------------|
+| Research Agent | `compression "graduated"` + `working-memory true` | Long conversations, needs file tracking |
+| Quick Response Agent | `compression "none"` + `working-memory false` | Short conversations, fast responses |
+| Multi-turn Agent | `cache-aware true` + `working-memory-tokens 8000` | Improve cache hit rate |
 
 ---
 
-## 第六步：使用工作记忆 (v1.15+)
+## Step 6: Using Working Memory (v1.15+)
 
-工作记忆自动跟踪 agent 执行过程中的关键信息：
+Working memory automatically tracks key information during agent execution:
 
 ```helen
-// 辅助函数：修复代码
+// Helper function: fix code
 fn fix_code(code: str): str {
-    // 实际的代码修复逻辑
-    return code  // 简化示例
+    // Actual code repair logic
+    return code  // Simplified example
 }
 
 agent CodeReviewer {
     description "Review code changes"
     
     context {
-        working-memory true  // 自动跟踪文件操作
+        working-memory true  // Auto-track file operations
     }
     
     tools ["read_file", "write_file", "patch_file"]
     
     functions {
         fn fix_code(code: str): str {
-            // 实际的代码修复逻辑
-            return code  // 简化示例
+            // Actual code repair logic
+            return code  // Simplified example
         }
     }
     
     main {
-        // 自动跟踪：读取的文件
+        // Auto-tracked: files read
         let code = read_file("src/main.py")
         
-        // 自动跟踪：修改的文件
+        // Auto-tracked: files modified
         let fixed = fix_code(code)
         write_file("src/main.py", fixed)
         
-        // LLM 现在知道哪些文件被修改了
+        // LLM now knows which files were modified
         return llm act "Review the changes"
-        // 工作记忆包含：
-        // - 活跃文件: src/main.py
-        // - 最近决策: Modified src/main.py
+        // Working memory contains:
+        // - Active files: src/main.py
+        // - Recent decisions: Modified src/main.py
     }
 }
 ```
 
 ---
 
-## 第七步：监控上下文使用 (v1.15+)
+## Step 7: Monitoring Context Usage (v1.15+)
 
-在 REPL 中使用 `:stats` 查看上下文使用情况：
+Use `:stats` in the REPL to view context usage:
 
 ```
 > :stats
@@ -355,13 +355,13 @@ agent CodeReviewer {
 
 ---
 
-## 第八步：多 Agent 协作模式（v1.18+）
+## Step 8: Multi-Agent Collaboration Patterns (v1.18+)
 
-在实际应用中，多个 Agent 经常需要**共享状态**或**相互通信**。Helen 提供两种机制：`shared store`（共享状态容器）和 **spawn + Channel**（消息通信）。
+In real applications, multiple Agents often need to **share state** or **communicate with each other**. Helen provides two mechanisms: `shared store` (shared state container) and **spawn + Channel** (message communication).
 
-### 使用 Shared Store 共享状态
+### Sharing State with Shared Store
 
-假设我们的客服系统需要跟踪所有会话的统计信息：
+Suppose our customer service system needs to track statistics across all sessions:
 
 ```helen
 shared store SessionStats {
@@ -388,13 +388,13 @@ shared store SessionStats {
     }
 }
 
-// Agent 接收 reply Channel 和 sessionId 参数
+// Agent receives reply Channel and sessionId parameters
 agent CustomerService(sessionId: str, question: str, reply: Channel) {
     description "Handle customer session"
     main {
         SessionStats.startSession(sessionId)
         
-        // 处理客户问题...
+        // Handle customer question...
         let response = llm act Assistant "Question: " + question
         
         SessionStats.endSession(sessionId)
@@ -402,12 +402,12 @@ agent CustomerService(sessionId: str, question: str, reply: Channel) {
     }
 }
 
-// 多个 Agent 并发运行（v1.18+ spawn 模式）
+// Multiple agents running concurrently (v1.18+ spawn pattern)
 let mb1 = spawn CustomerService("session-1", "How to reset password?")
 let mb2 = spawn CustomerService("session-2", "Billing issue")
 let mb3 = spawn CustomerService("session-3", "Technical support")
 
-// 等待所有会话完成
+// Wait for all sessions to complete
 let r1 = mb1.receive()
 let r2 = mb2.receive()
 let r3 = mb3.receive()
@@ -415,36 +415,36 @@ let r3 = mb3.receive()
 print("Resolution rate: " + SessionStats.getResolutionRate())
 ```
 
-### 使用 Channel 传递消息
+### Passing Messages with Channels
 
-假设我们需要一个后台任务处理队列：
+Suppose we need a background task processing queue:
 
 ```helen
-// 生产者 Agent：生成任务并通过 Channel 发送
+// Producer Agent: generates tasks and sends via Channel
 agent TaskProducer(reply: Channel) {
     description "Produce tasks"
     main {
         reply.send("send-email-1")
         reply.send("send-email-2")
         reply.send("send-email-3")
-        reply.send("done")  // 完成信号
+        reply.send("done")  // Completion signal
     }
 }
 
-// 消费者 Agent：从 Channel 接收并处理任务
+// Consumer Agent: receives from Channel and processes tasks
 agent TaskConsumer(task: str, reply: Channel) {
     description "Consume tasks"
     main {
         print("Processing: " + task)
-        // 处理任务...
+        // Process the task...
         reply.send("completed: " + task)
     }
 }
 
-// 生产者并发运行
+// Producer runs concurrently
 let producer_mb = spawn TaskProducer()
 
-// 消费所有任务
+// Consume all tasks
 let task = producer_mb.receive()
 while (task != "done") {
     let consumer_mb = spawn TaskConsumer(task)
@@ -455,22 +455,22 @@ while (task != "done") {
 producer_mb.close()
 ```
 
-### 协作模式选择
+### Choosing a Collaboration Pattern
 
-| 模式 | 适用场景 | 示例 |
-|------|---------|------|
-| **Shared Store** | 多个 Agent 读写同一份数据 | 统计计数器、缓存、配置 |
-| **Channel（spawn）** | Agent 间传递消息/事件 | 任务队列、结果回报、信号 |
+| Pattern | Suitable Scenario | Examples |
+|---------|------------------|----------|
+| **Shared Store** | Multiple Agents read/write the same data | Statistics counters, caches, configuration |
+| **Channel (spawn)** | Passing messages/events between Agents | Task queues, result reporting, signals |
 
-**最佳实践**：
-- ✅ 用 `shared store` 管理**全局状态**（统计、配置、缓存）
-- ✅ 用 `spawn` + Channel 实现**消息通信**（队列、事件、信号）
-- ✅ 用 `mailbox_select` 监听多个 Channel 的结果
-- ✅ Channel 自动注入为 Agent 最后一个参数，无需手动传递
+**Best practices**:
+- ✅ Use `shared store` to manage **global state** (statistics, configuration, caches)
+- ✅ Use `spawn` + Channel for **message communication** (queues, events, signals)
+- ✅ Use `mailbox_select` to listen for results from multiple Channels
+- ✅ Channel is auto-injected as the Agent's last parameter — no manual passing needed
 
 ---
 
-## 项目结构
+## Project Structure
 
 ```
 customer-service/
@@ -488,14 +488,14 @@ customer-service/
 
 ---
 
-## 运行与验证
+## Running and Verification
 
 ```bash
-# 验证
+# Verify
 $ helen check customer-service/main.helen
 ✓ customer-service/main.helen: OK
 
-# 运行
+# Run
 $ helen customer-service/main.helen
 🔧 Technical question
 
@@ -503,27 +503,27 @@ $ helen customer-service/main.helen
 --- Response to Customer ---
 To reset your password, please follow these steps...
 
-# 生成文档
+# Generate documentation
 $ helen doc customer-service/main.helen --format markdown
 ```
 
 ---
 
-## 总结
+## Summary
 
-通过这个案例，你学会了：
-1. ✅ 声明多个 Agent 及其配置
-2. ✅ 使用 `llm if` 进行智能路由
-3. ✅ 使用 `spawn` + Channel 并发获取上下文
-4. ✅ 使用 `try-catch` 处理 LLM 异常
-5. ✅ 组织多文件项目结构
+Through this case study, you learned how to:
+1. ✅ Declare multiple Agents with their configurations
+2. ✅ Use `llm if` for intelligent routing
+3. ✅ Use `spawn` + Channel to concurrently fetch context
+4. ✅ Use `try-catch` to handle LLM exceptions
+5. ✅ Organize multi-file project structures
 
 ---
 
-## 下一步
+## Next Steps
 
-- 探索 LSP 在 IDE 中的补全和诊断功能
-- 使用 `helen repl` 快速原型
-- 阅读 [[../reference/agent-system-prompt-guide|Agent 提示词工程完全指南]] — 来自 Claude Code 逆向工程的 agent prompt 设计方法论
-- 阅读 [[overview/design-philosophy|设计哲学]] 深入了解语言理念
-- 查看 [[appendix/error-codes|错误码参考]] 排查问题
+- Explore LSP completion and diagnostics in your IDE
+- Use `helen repl` for rapid prototyping
+- Read [[../reference/agent-system-prompt-guide|Agent Prompt Engineering Complete Guide]] — agent prompt design methodology reverse-engineered from Claude Code
+- Read [[overview/design-philosophy|Design Philosophy]] to understand the language's design principles in depth
+- Check [[appendix/error-codes|Error Code Reference]] for troubleshooting

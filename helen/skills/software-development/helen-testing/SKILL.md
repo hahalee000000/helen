@@ -1,23 +1,23 @@
 ---
 name: helen-testing
-description: "Helen 测试框架使用指南 — TDD 工作流、断言 API、CLI 选项、Agent 测试、v1.10 异常处理"
+description: "Helen Testing Framework Guide — TDD Workflow, Assertion API, CLI Options, Agent Testing, v1.10 Exception Handling"
 version: 1.1.0
 author: Helen Team
 license: MIT
 tags: [helen, testing, tdd, assertions, cli, agent-testing, exception-handling, v1.10]
 ---
 
-# Helen 测试框架
+# Helen Testing Framework
 
-## 概述
+## Overview
 
-Helen 内置完整的测试框架，支持 TDD 开发模式。v1.10 增强了异常处理和 Agent 测试支持。
+Helen includes a complete testing framework with TDD development workflow support. v1.10 enhanced exception handling and agent testing capabilities.
 
-## 快速开始
+## Quick Start
 
-### 1. 创建测试文件
+### 1. Create a Test File
 
-**方式 1：回调风格（推荐）**
+**Approach 1: Callback style (recommended)**
 
 ```helen
 // calculator_test.helen
@@ -34,7 +34,7 @@ test_suite("Calculator", fn() {
 run_tests()
 ```
 
-**方式 2：自动发现（最简单）**
+**Approach 2: Auto-discovery (simplest)**
 
 ```helen
 // calculator_test.helen
@@ -50,57 +50,57 @@ fn test_subtract() {
 run_tests()
 ```
 
-### 2. 运行测试
+### 2. Run Tests
 
 ```bash
 helen test calculator_test.helen
 ```
 
-## 断言 API
+## Assertion API
 
-### 基础断言
+### Basic Assertions
 
-| 函数 | 说明 |
+| Function | Description |
 |------|------|
-| `assert_true(condition)` | 断言条件为真 |
-| `assert_equal(actual, expected)` | 断言相等 |
-| `assert_not_equal(a, b)` | 断言不等 |
-| `assert_contains(haystack, needle)` | 断言容器包含元素 |
-| `assert_throws(fn)` | 断言抛出异常 |
+| `assert_true(condition)` | Asserts condition is true |
+| `assert_equal(actual, expected)` | Asserts equality |
+| `assert_not_equal(a, b)` | Asserts inequality |
+| `assert_contains(haystack, needle)` | Asserts container contains element |
+| `assert_throws(fn)` | Asserts an exception is thrown |
 
-**assert_contains 示例：**
+**assert_contains example:**
 
 ```helen
 fn test_contains() {
-    // 字符串
+    // String
     assert_contains("hello world", "world")
     
-    // 数组
+    // Array
     assert_contains([1, 2, 3], 2)
     
-    // 对象
+    // Object
     assert_contains({"name": "Helen", "version": "1.0"}, "name")
 }
 ```
 
-### Expect 链式 API
+### Expect Chain API
 
 ```helen
 expect(value)
-    .toBe(expected)           // 严格相等
-    .toEqual(expected)        // 深度相等
-    .toContain(item)          // 包含
-    .toBeGreaterThan(n)       // 大于
-    .toBeLessThan(n)          // 小于
-    .toMatch(pattern)         // 正则匹配
-    .toStartWith(prefix)      // 开头是
-    .toEndWith(suffix)        // 结尾是
-    .toHaveLength(n)          // 长度
-    .toHaveProperty(key)      // 属性存在
-    .toThrow()                // 抛出异常
+    .toBe(expected)           // Strict equality
+    .toEqual(expected)        // Deep equality
+    .toContain(item)          // Contains
+    .toBeGreaterThan(n)       // Greater than
+    .toBeLessThan(n)          // Less than
+    .toMatch(pattern)         // Regex match
+    .toStartWith(prefix)      // Starts with
+    .toEndWith(suffix)        // Ends with
+    .toHaveLength(n)          // Length check
+    .toHaveProperty(key)      // Property exists
+    .toThrow()                // Throws exception
 ```
 
-**示例：**
+**Example:**
 
 ```helen
 fn test_expect_api() {
@@ -111,21 +111,21 @@ fn test_expect_api() {
 }
 ```
 
-### 异常测试（v1.10 增强）
+### Exception Testing (v1.10 enhanced)
 
 ```helen
 fn test_exceptions() {
-    // 基础异常测试
+    // Basic exception testing
     assert_throws(fn() {
         throw RuntimeError("error")
     })
     
-    // 特定异常类型（v1.10）
+    // Specific exception type (v1.10)
     expect(fn() {
         throw LLMError("API failed")
     }).toThrow()
     
-    // 检查异常消息
+    // Check exception message
     try {
         throw RuntimeError("specific error")
     } catch RuntimeError as e {
@@ -134,9 +134,9 @@ fn test_exceptions() {
 }
 ```
 
-### v1.10 异常层级
+### v1.10 Exception Hierarchy
 
-Helen v1.10 增强了异常处理，所有 Python stdlib 异常都被包装为 `RuntimeError`：
+Helen v1.10 enhanced exception handling — all Python stdlib exceptions are wrapped as `RuntimeError`:
 
 ```
 AnyError
@@ -144,37 +144,37 @@ AnyError
 │   ├── TimeoutError
 │   └── ModelError
 ├── ToolError
-├── RuntimeError          // 包含所有 stdlib Python 异常
+├── RuntimeError          // Wraps all stdlib Python exceptions
 │   ├── ValueError
 │   ├── TypeError
 │   ├── KeyError
 │   └── ...
 ├── AssertionError
-└── AggregateError        // 并发任务错误聚合
+└── AggregateError        // Aggregated concurrent task errors
 ```
 
-**测试异常示例：**
+**Exception testing examples:**
 
 ```helen
 fn test_runtime_errors() {
-    // stdlib 异常被包装为 RuntimeError
+    // stdlib exceptions are wrapped as RuntimeError
     expect(fn() {
-        let x = int("not a number")  // 会抛出 RuntimeError
+        let x = int("not a number")  // Throws RuntimeError
     }).toThrow()
     
-    // 捕获并检查
+    // Catch and inspect
     try {
         let arr = [1, 2, 3]
-        let x = arr[10]  // 索引越界
+        let x = arr[10]  // Index out of bounds
     } catch RuntimeError as e {
         assert_contains(e.message, "index")
     }
 }
 ```
 
-## 测试 Agent
+## Testing Agents
 
-### 测试简单 Agent
+### Testing a Simple Agent
 
 ```helen
 agent Adder(a: int, b: int) {
@@ -191,7 +191,7 @@ fn test_adder_agent() {
 }
 ```
 
-### 测试带工具的 Agent
+### Testing an Agent with Tools
 
 ```helen
 agent FileProcessor(path: str) {
@@ -205,19 +205,19 @@ agent FileProcessor(path: str) {
 }
 
 fn test_file_processor() {
-    // 准备测试文件
+    // Prepare test file
     write_file("test_input.txt", "hello world")
     
-    // 测试
+    // Test
     let result = FileProcessor("test_input.txt")
     assert_equal(result, 11)
     
-    // 清理
+    // Cleanup
     delete_file("test_input.txt")
 }
 ```
 
-### 测试 Agent 作用域隔离（v1.10）
+### Testing Agent Scope Isolation (v1.10)
 
 ```helen
 shared let shared_counter = 0
@@ -227,17 +227,17 @@ agent CounterAgent {
     description "Test scope isolation"
     
     main {
-        // ✅ const 可见
+        // ✅ const is visible
         assert_true(MAX_VALUE > 0)
         
-        // ✅ shared let 可见
+        // ✅ shared let is visible
         shared_counter = shared_counter + 1
         return shared_counter
     }
 }
 
 fn test_agent_scope_isolation() {
-    shared_counter = 0  // 重置
+    shared_counter = 0  // Reset
     
     let r1 = CounterAgent()
     assert_equal(r1, 1)
@@ -249,7 +249,7 @@ fn test_agent_scope_isolation() {
 }
 ```
 
-### 测试并发 Agent
+### Testing Concurrent Agents
 
 ```helen
 agent SlowWorker(id: str, delay: int) {
@@ -276,13 +276,13 @@ fn test_concurrent_agents() {
     
     let elapsed = timestamp() - start
     
-    // 应该并发执行，总时间约 1 秒
+    // Should execute concurrently, total time ~1 second
     assert_true(elapsed < 2)
     assert_equal(len(results), 3)
 }
 ```
 
-### 测试 Agent 错误处理
+### Testing Agent Error Handling
 
 ```helen
 agent FailingAgent(task: str) {
@@ -297,29 +297,29 @@ agent FailingAgent(task: str) {
 }
 
 fn test_agent_error_handling() {
-    // 正常情况
+    // Normal case
     let result = FailingAgent("ok")
     assert_equal(result, "success: ok")
     
-    // 异常情况
+    // Error case
     expect(fn() {
         FailingAgent("fail")
     }).toThrow()
 }
 ```
 
-## 测试套件组织
+## Test Suite Organization
 
-### 使用 before_each / after_each
+### Using before_each / after_each
 
 ```helen
 before_each(fn() {
-    // 每个测试前执行
+    // Runs before each test
     write_file("test_data.txt", "initial")
 })
 
 after_each(fn() {
-    // 每个测试后执行
+    // Runs after each test
     delete_file("test_data.txt")
 })
 
@@ -335,7 +335,7 @@ fn test_modify_data() {
 }
 ```
 
-### 嵌套测试套件
+### Nested Test Suites
 
 ```helen
 test_suite("Math", fn() {
@@ -361,123 +361,123 @@ test_suite("Math", fn() {
 run_tests()
 ```
 
-## CLI 选项
+## CLI Options
 
-### 基本用法
+### Basic Usage
 
 ```bash
-# 运行所有测试
+# Run all tests
 helen test my_test.helen
 
-# 运行特定测试套件
+# Run a specific test suite
 helen test my_test.helen --suite "Math"
 
-# 运行特定测试用例
+# Run a specific test case
 helen test my_test.helen --only "adds numbers"
 
-# JSON 输出
+# JSON output
 helen test my_test.helen --json
 
-# 详细输出
+# Verbose output
 helen test my_test.helen --verbose
 
-# Watch 模式（文件变化自动重跑）
+# Watch mode (auto-rerun on file changes)
 helen test my_test.helen --watch
 ```
 
-### 过滤测试
+### Filtering Tests
 
 ```bash
-# 只运行匹配的测试
+# Only run matching tests
 helen test my_test.helen --only "test_add"
 
-# 排除匹配的测试
+# Exclude matching tests
 helen test my_test.helen --skip "slow_tests"
 
-# 组合过滤
+# Combined filtering
 helen test my_test.helen --suite "Math" --only "addition"
 ```
 
-## 测试最佳实践
+## Testing Best Practices
 
-### 1. 测试命名规范
+### 1. Test Naming Conventions
 
 ```helen
-// ✅ 清晰的测试命名
+// ✅ Clear test names
 fn test_add_positive_numbers() { ... }
 fn test_add_negative_numbers() { ... }
 fn test_add_zero() { ... }
 
-// ❌ 模糊的命名
+// ❌ Vague names
 fn test_add() { ... }
 fn test1() { ... }
 ```
 
-### 2. 独立测试
+### 2. Independent Tests
 
 ```helen
-// ✅ 每个测试独立
+// ✅ Each test is independent
 fn test_feature_a() {
     let data = setup_data()
     assert_equal(process(data), expected_a)
 }
 
 fn test_feature_b() {
-    let data = setup_data()  // 重新设置
+    let data = setup_data()  // Re-setup
     assert_equal(process(data), expected_b)
 }
 
-// ❌ 测试间依赖
+// ❌ Inter-test dependencies
 fn test_feature_a() {
     global_data = setup_data()
     assert_equal(process(global_data), expected_a)
 }
 
 fn test_feature_b() {
-    // 依赖 test_feature_a 的结果
+    // Depends on test_feature_a's result
     assert_equal(process(global_data), expected_b)
 }
 ```
 
-### 3. 测试边界条件
+### 3. Test Boundary Conditions
 
 ```helen
 fn test_edge_cases() {
-    // 空输入
+    // Empty input
     assert_equal(process([]), [])
     
-    // 单元素
+    // Single element
     assert_equal(process([1]), [1])
     
-    // 最大值
+    // Maximum value
     assert_equal(process([MAX_INT]), [MAX_INT])
     
-    // 边界值
+    // Boundary values
     assert_equal(process([0]), [0])
     assert_equal(process([-1]), [-1])
 }
 ```
 
-### 4. 使用 mock 数据
+### 4. Using Mock Data
 
 ```helen
 fn test_with_mock_data() {
-    // 准备 mock 数据
+    // Prepare mock data
     let mock_user = {
         "id": 1,
         "name": "Test User",
         "email": "test@example.com"
     }
     
-    // 测试
+    // Test
     let result = format_user(mock_user)
     assert_equal(result, "Test User (test@example.com)")
 }
 ```
 
-## 持续集成
+## Continuous Integration
 
-### GitHub Actions 示例
+### GitHub Actions Example
 
 ```yaml
 name: Helen Tests
@@ -498,94 +498,94 @@ jobs:
           fi
 ```
 
-### 测试覆盖率
+### Test Coverage
 
-`helen quality` 的测试覆盖维度（权重 15%）基于文件位置启发式评分：
+The test coverage dimension of `helen quality` (weight 15%) uses file-location heuristics for scoring:
 
-| 策略 | 得分 | 条件 |
+| Strategy | Score | Condition |
 |------|:----:|------|
-| `// @test-location:` 注解 | **8.0** | 源文件中注解指向已有测试文件 |
-| 同级测试文件 | **8.0** | `<name>_test.helen` 或 `test_<name>.helen` |
-| 父级 `tests/` 匹配 | **7.0** | 父级 `tests/` 中有文件名匹配的 `*.py` |
-| 同级 `tests/` 目录 | **6.0** | 源文件旁 `tests/` 目录含任意测试 |
-| 无测试 | **2.0** | 未找到测试 |
+| `// @test-location:` annotation | **8.0** | Annotation in source file points to existing test file |
+| Sibling test file | **8.0** | `<name>_test.helen` or `test_<name>.helen` |
+| Parent `tests/` match | **7.0** | `*.py` in parent `tests/` with matching filename |
+| Sibling `tests/` directory | **6.0** | `tests/` directory next to source file contains any tests |
+| No tests | **2.0** | No tests found |
 
-**Agent 程序提示**：集成测试的文件名通常不与源文件 stem 匹配，容易落入 6.0。使用 `// @test-location:` 注解显式声明测试位置可得 8.0：
+**Tip for agent programs**: Integration test filenames often don't match the source file stem, so they tend to fall into the 6.0 tier. Use `// @test-location:` annotations to explicitly declare test locations and get 8.0:
 
 ```helen
 // @test-location: tests/integration/test_my_agent.py
 
 agent MyAgent {
-    description "示例 agent"
-    main { llm act "执行任务" }
+    description "Example agent"
+    main { llm act "Execute task" }
 }
 ```
 
-## 调试测试
+## Debugging Tests
 
-> **核心心智模型**：`pytest` 告诉你"坏没坏"，Helen 自带工具（`debug`/`trace_on`/`:last_error`/`:llm_log`）告诉你"坏在哪里、为什么"。开发 Helen 应用时两者结合使用。
+> **Core mental model**: `pytest` tells you "whether something is broken", Helen's built-in tools (`debug`/`trace_on`/`:last_error`/`:llm_log`) tell you "where it's broken and why". Use both together when developing Helen applications.
 
-### 开发 Helen 应用时，何时用什么工具
+### When to Use Which Tool
 
-| 场景 | 用什么 | 为什么 |
+| Scenario | What to Use | Why |
 |------|--------|--------|
-| 改完代码，验证没破坏旧功能 | `pytest` | 自动化回归 |
-| 验证 stdlib 函数行为 | `pytest`（Python 单元测试） | Python 层可直接 assert |
-| 验证新 agent 行为 | `helen <agent.helen>` + `:llm_log` | 需要真实 LLM 调用链路 |
-| 程序运行报错 | REPL + `:last_error` | 结构化错误快照（call_stack/scope） |
-| 追踪解释器执行流程 | `trace_on()` + `get_trace()` | 看 Python 单元测试看不到的 |
-| 变量值不符合预期 | `debug()` 在关键点打桩 | 结构化输出变量状态 |
-| LLM 行为异常 | `:llm_log -v` | 看真实 prompt/response |
-| 性能问题 | `context_stats()` / `stopwatch_*()` | 上下文占用 + 计时 |
+| Verify no regressions after code changes | `pytest` | Automated regression testing |
+| Verify stdlib function behavior | `pytest` (Python unit tests) | Can assert directly at Python layer |
+| Verify new agent behavior | `helen <agent.helen>` + `:llm_log` | Needs real LLM call chain |
+| Program throws an error | REPL + `:last_error` | Structured error snapshot (call_stack/scope) |
+| Trace interpreter execution flow | `trace_on()` + `get_trace()` | Reveals what Python unit tests can't see |
+| Unexpected variable values | `debug()` at key checkpoints | Structured variable state output |
+| LLM behaving oddly | `:llm_log -v` | See actual prompt/response |
+| Performance issues | `context_stats()` / `stopwatch_*()` | Context usage + timing |
 
-### 使用 debug() 函数
+### Using debug() Function
 
-在关键位置打桩，输出结构化调试信息到 stderr：
+Place checkpoints at key positions to output structured debug info to stderr:
 
 ```helen
 fn test_complex_logic() {
     let input = [1, 2, 3, 4, 5]
     
-    // 入口打桩：记录输入状态
-    debug("test_complex_logic 输入", {"input": input, "len": len(input)})
+    // Entry checkpoint: log input state
+    debug("test_complex_logic input", {"input": input, "len": len(input)})
     
     let result = process(input)
     
-    // 出口打桩：记录输出状态
-    debug("test_complex_logic 输出", {"result": result})
+    // Exit checkpoint: log output state
+    debug("test_complex_logic output", {"result": result})
     
     assert_equal(result, [2, 4, 6, 8, 10])
 }
 ```
 
-**在 Agent 中布局 debug 的最佳实践**：
+**Best practices for placing debug in agents**:
 
 ```helen
 agent MyAgent(task: str) {
     main {
-        // 1. 入口打桩：记录参数
-        debug("MyAgent 启动", {"task": task})
+        // 1. Entry checkpoint: log parameters
+        debug("MyAgent started", {"task": task})
         
-        // 2. 前置断言
-        assert len(task) > 0, "task 不能为空"
+        // 2. Pre-condition assertion
+        assert len(task) > 0, "task must not be empty"
         
-        // 3. LLM 调用
+        // 3. LLM call
         let result = llm act task
-        debug("LLM 返回", {"len": len(result)})
+        debug("LLM returned", {"len": len(result)})
         
-        // 4. 结果验证
-        assert len(result) > 0, "LLM 返回空"
+        // 4. Result validation
+        assert len(result) > 0, "LLM returned empty"
         
-        // 5. 出口打桩
-        debug("MyAgent 完成", {})
+        // 5. Exit checkpoint
+        debug("MyAgent completed", {})
         return result
     }
 }
 ```
 
-### 使用 trace
+### Using Trace
 
-用 `trace_on()` / `trace_off()` 包裹可疑代码块，追踪执行轨迹：
+Wrap suspicious code blocks with `trace_on()` / `trace_off()` to trace execution:
 
 ```helen
 fn test_with_trace() {
@@ -602,9 +602,9 @@ fn test_with_trace() {
 }
 ```
 
-### 使用 :last_error 结构化错误
+### Using :last_error Structured Errors
 
-程序报错时，进 REPL 用 `:last_error` 看结构化错误快照：
+When a program errors, enter REPL and use `:last_error` to see the structured error snapshot:
 
 ```bash
 $ helen myagent.helen
@@ -620,86 +620,85 @@ $ helen repl
 }
 ```
 
-分析 `call_stack` 定位哪个函数出问题，分析 `scope` 看变量值是否符合预期。
+Analyze `call_stack` to locate which function failed, analyze `scope` to check if variable values match expectations.
 
-### 使用 :llm_log 检查 LLM 调用
+### Using :llm_log to Inspect LLM Calls
 
-当 Agent 行为奇怪（答案不对、工具调用异常）时：
+When an agent behaves oddly (wrong answers, abnormal tool calls):
 
 ```bash
 $ helen repl
 > :llm_log -v
 ```
 
-看 LLM 实际收到的 prompt、返回的 response、token 用量、调用时长。常见定位：
+See the actual prompt the LLM received, the response, token usage, and call duration. Common diagnoses:
 
-- **prompt 不对** → 检查 prompt 模板中的变量替换
-- **response 被截断** → 看 `max_tokens` / `timeout` 配置
-- **tool_calls 异常** → 检查 `tools` 注册和 schema
-- **调用失败** → 看 `error` 字段和 `duration_ms`
+- **Wrong prompt** → Check variable substitution in the prompt template
+- **Truncated response** → Check `max_tokens` / `timeout` configuration
+- **Abnormal tool_calls** → Check `tools` registration and schema
+- **Call failed** → Check `error` field and `duration_ms`
 
-### 常见调试场景速查
+### Common Debugging Scenarios Quick Reference
 
-| 症状 | 第一步 |
+| Symptom | First Step |
 |------|--------|
-| Agent 给错答案 | `:llm_log -v` 看 LLM 真实调用 |
-| 工具调用死循环 | `debug()` 在每次 tool 前后打桩 |
-| 上下文被意外压缩 | `context_stats()` 查看占用率 |
-| spawn 后子 agent 异常 | 子 agent 入口加 `debug("spawned", {...})` |
-| 闭包捕获值不对 | 闭包体内 `debug("captured", {"x": x})` |
-| 多 Agent 数据错乱 | 收发两端都加 `debug()` 对比 |
-| LLM 流式中断 | `on_chunk fn(c) { debug("chunk", c) }` |
-| 性能慢 | `stopwatch_start()` + `debug("elapsed", {...})` |
+| Agent gives wrong answer | `:llm_log -v` to see actual LLM calls |
+| Tool call infinite loop | `debug()` before and after each tool call |
+| Context unexpectedly compressed | `context_stats()` to check usage |
+| Spawned child agent misbehaves | Add `debug("spawned", {...})` at child agent entry |
+| Closure captures wrong value | `debug("captured", {"x": x})` inside closure body |
+| Multi-agent data corruption | Add `debug()` on both send and receive ends to compare |
+| LLM streaming interrupted | `on_chunk fn(c) { debug("chunk", c) }` |
+| Slow performance | `stopwatch_start()` + `debug("elapsed", {...})` |
 
-> **完整 cookbook 参见 `debugging` skill §5**：含决策树 + 10 个场景的详细代码示例。
+> **Full cookbook in the `debugging` skill §5**: includes a decision tree + detailed code examples for 10 scenarios.
 
-## 相关技能
+## Related Skills
 
-- **test-driven-development** — TDD 方法论详解
-- **helen-agent-patterns** — Agent 设计模式
-- **debugging** — 调试方法论
+- **test-driven-development** — TDD methodology in depth
+- **helen-agent-patterns** — Agent design patterns
+- **debugging** — Debugging methodology
 
 
 
-## 测试陷阱与注意事项
+## Testing Pitfalls and Notes
 
-### `is` 类型检查不能在函数参数内使用
+### `is` Type Check Cannot Be Used Inside Function Arguments
 
 ```helen
-// ❌ 错误：`is` 操作符不能在函数调用参数中使用
+// ❌ Wrong: `is` operator cannot be used inside function call arguments
 fn test_type_check() {
-    assert_true(x is list)      // 解析错误！
-    assert_true(x is str)       // 解析错误！
+    assert_true(x is list)      // Parse error!
+    assert_true(x is str)       // Parse error!
 }
 
-// ✅ 正确：使用 isinstance() 或 type() 函数
+// ✅ Correct: use isinstance() or type() function
 fn test_type_check() {
-    assert_true(isinstance(x, "list"))   // isinstance 检查类型
+    assert_true(isinstance(x, "list"))   // isinstance checks type
     
-    // 或者使用 type() 函数
+    // Or use the type() function
     let t = type(x)
     assert_equal(t, "list")
 }
 ```
 
-### Agent 测试需要 LLM 调用
+### Agent Tests Require LLM Calls
 
-测试包含 `llm act` 的 Agent 时，测试会实际调用 LLM API。建议：
-- 将纯逻辑函数（不依赖 LLM）和 Agent 分开测试
-- 纯逻辑测试可以快速运行，Agent 测试标记为集成测试
-- 使用 `--filter` 或 `--skip` 选择性运行
+When testing agents that contain `llm act`, the tests will make actual LLM API calls. Recommendations:
+- Separate pure logic functions (no LLM dependency) from agent tests
+- Pure logic tests can run quickly; mark agent tests as integration tests
+- Use `--filter` or `--skip` to run selectively
 
 ```helen
-// 纯逻辑函数 — 快速单元测试
+// Pure logic function — fast unit test
 fn test_get_config() {
     let config = get_default_config()
     assert_equal(len(config), 4)
 }
 
-// Agent 测试 — 需要 LLM，较慢
+// Agent test — requires LLM, slower
 fn test_agent_returns_valid_structure() {
     let result = MyAgent("test input")
     assert_true(has_key(result, "output"))
 }
 ```
-

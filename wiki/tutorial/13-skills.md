@@ -1,34 +1,34 @@
-# 教程 13: 技能系统
+# Tutorial 13: Skill System
 
-> 让 Agent 带着专业知识工作
+> Let Agents work with domain expertise
 
 ---
 
-## 什么是技能？
+## What Are Skills?
 
-技能（Skill）是模块化的知识单元，以 Markdown 文件形式存在。它们让 LLM 在需要时加载特定领域的知识，而不是把所有知识塞进 system prompt。
+Skills are modular knowledge units that exist as Markdown files. They allow the LLM to load domain-specific knowledge on demand, instead of stuffing everything into the system prompt.
 
-## Agent vs Skill：本质区别
+## Agent vs Skill: Fundamental Difference
 
-> **Agent 是"谁来做"，Skill 是"怎么做"的知识。**
+> **An Agent is "who does it"; a Skill is the knowledge of "how to do it."**
 
-| 维度 | Agent（智能体） | Skill（技能） |
-|------|----------------|--------------|
-| **本质** | 运行时实体 | 静态文档 |
-| **语言级别** | 一等公民（语法支持） | 外部概念（纯 Markdown） |
-| **可调用** | ✅ `Agent()` 像函数调用 | ❌ 不可调用 |
-| **有状态** | ✅ 维护对话/工具状态 | ❌ 无状态 |
-| **执行逻辑** | ✅ `main { }` 块 | ❌ 无执行逻辑 |
-| **用途** | **执行**任务 | **指导**如何执行 |
+| Dimension | Agent | Skill |
+|-----------|-------|-------|
+| **Nature** | Runtime entity | Static document |
+| **Language level** | First-class citizen (syntax support) | External concept (pure Markdown) |
+| **Callable** | Yes — `Agent()` called like a function | No — not callable |
+| **Stateful** | Yes — maintains conversation/tool state | No — stateless |
+| **Execution logic** | Yes — `main { }` block | No — no execution logic |
+| **Purpose** | **Execute** tasks | **Guide** how to execute |
 
-**Agent 是执行者**：有 model、temperature、tools，可被调用、组合，实际执行 LLM 调用和工具操作。像**员工**。
+**Agents are executors**: they have model, temperature, tools; they can be called and composed, and they actually perform LLM calls and tool operations. Think of them as **employees**.
 
-**Skill 是知识库**：纯 Markdown 文档，提供模式、最佳实践、API 用法，被 Agent 读取作为上下文。像**手册**。
+**Skills are knowledge bases**: they are pure Markdown documents that provide patterns, best practices, and API usage; agents read them as context. Think of them as **manuals**.
 
-**用 Agent** 当你需要实际执行操作、维护状态、被代码调用。  
-**用 Skill** 当你需要提供知识、文档化工作流、让多个 Agent 共享知识。
+**Use an Agent** when you need to actually perform operations, maintain state, or be called from code.
+**Use a Skill** when you need to provide knowledge, document workflows, or share knowledge across multiple agents.
 
-**实际关系**：Agent 可以加载 Skill 作为知识源：
+**Practical relationship**: An agent can load a skill as a knowledge source:
 
 ```helen
 agent Developer {
@@ -40,20 +40,20 @@ agent Developer {
 }
 ```
 
-## 技能目录结构
+## Skill Directory Structure
 
 ```
 ~/.helen/skills/
 ├── web-search/
-│   ├── SKILL.md           # 主文件（必须）
-│   ├── references/        # 参考资料
-│   ├── templates/         # 模板文件
-│   └── scripts/           # 辅助脚本
+│   ├── SKILL.md           # Main file (required)
+│   ├── references/        # Reference materials
+│   ├── templates/         # Template files
+│   └── scripts/           # Helper scripts
 └── code-review/
     └── SKILL.md
 ```
 
-## SKILL.md 格式
+## SKILL.md Format
 
 ```markdown
 ---
@@ -76,24 +76,24 @@ tags: [web, search, research]
 3. Summarize findings
 ```
 
-## 三层搜索架构
+## Three-Tier Search Architecture
 
-技能按优先级从高到低搜索：
+Skills are searched in priority order from highest to lowest:
 
-| 优先级 | 目录 | 说明 |
-|--------|------|------|
-| 1（最高） | `<project>/.helen/skills/` | 项目级，团队共享 |
-| 2 | `~/.helen/skills/` | 用户级，个人全局 |
-| 3 | `<helen>/skills/` | 内置级，随语言分发（13 个） |
-| 可选 | `~/.hermes/skills/` | Hermes 回退（如已安装） |
+| Priority | Directory | Description |
+|----------|-----------|-------------|
+| 1 (highest) | `<project>/.helen/skills/` | Project-level, shared by the team |
+| 2 | `~/.helen/skills/` | User-level, personal global |
+| 3 | `<helen>/skills/` | Built-in, distributed with the language (13 skills) |
+| Optional | `~/.hermes/skills/` | Hermes fallback (if installed) |
 
-同名技能，高优先级覆盖低优先级。
+For skills with the same name, higher priority overrides lower priority.
 
-## 两层披露机制
+## Two-Tier Disclosure Mechanism
 
-### 第一层：技能索引
+### Tier 1: Skill Index
 
-所有技能的 name + description + **tags** 被扫描并注入 system prompt：
+The name + description + **tags** of all skills are scanned and injected into the system prompt:
 
 ```
 <available_skills>
@@ -108,113 +108,113 @@ load_skill and follow its instructions. Err on the side of loading.
 </available_skills>
 ```
 
-**v1.15 强化**：技能索引现在包含 **MUST load** 强制指令，要求 LLM 在技能相关时必须加载，而不是可选的。这确保 agent 在生成代码前主动学习相关技能，避免猜测 API 和语法。
+**v1.15 enhancement**: The skill index now includes a **MUST load** mandatory directive, requiring the LLM to load relevant skills instead of treating them as optional. This ensures the agent proactively learns relevant skills before generating code, avoiding guesses about API and syntax.
 
-**tags 字段**是提升技能命中率的关键。LLM 根据标签中的关键词匹配用户意图，比仅靠 description 文字匹配更准确。建议使用统一的命名规范（小写、英文关键词）。
+**The tags field** is key to improving skill hit rates. The LLM matches user intent using keywords in the tags, which is more accurate than relying solely on description text matching. Use a consistent naming convention (lowercase, English keywords).
 
-### 第二层：按需加载
+### Tier 2: On-Demand Loading
 
-LLM 看到索引后，判断需要时调用 `load_skill` 工具获取完整内容。
+After seeing the index, the LLM calls the `load_skill` tool to fetch the full content when needed.
 
 ```helen
-// 基本加载
+// Basic loading
 load_skill("helen-testing")
 
-// 同时列出参考文档
+// Also list reference documents
 load_skill("helen-language-development", include_references=true)
 ```
 
-### 第三层：参考文档
+### Tier 3: Reference Documents
 
-技能可包含 `references/` 目录，存放深度参考文档。LLM 可通过以下方式访问：
+Skills can include a `references/` directory containing in-depth reference documents. The LLM can access them as follows:
 
 ```helen
-// 列出所有参考文档（名称、路径、大小、前 3 行预览）
+// List all reference documents (name, path, size, first 3 lines preview)
 list_skill_references("helen-language-development")
 
-// 用 read_file 加载具体参考文档
+// Use read_file to load a specific reference document
 read_file(".../references/parser-disambiguation.md")
 ```
 
-参考文档不自动加载，由 LLM 按需查阅，节省 token。
+Reference documents are not loaded automatically — the LLM consults them on demand, saving tokens.
 
-## LLM 语句中的技能感知
+## Skill Awareness in LLM Statements
 
-`llm act` 自动注入技能索引到 system prompt：
+`llm act` automatically injects the skill index into the system prompt:
 
 ```helen
 agent Researcher(query) {
     description: "Research topics using web search"
     
     main {
-        // LLM 在这里可以看到所有可用技能
+        // The LLM can see all available skills here
         llm act "Research: " + query
     }
 }
 ```
 
-LLM 在执行时会看到所有可用技能，并能根据需要参考相关技能的知识。
+The LLM sees all available skills at execution time and can consult relevant skill knowledge as needed.
 
-## 技能管理最佳实践
+## Skill Management Best Practices
 
-### 命名规范
-
-```
-✅ web-search, code-review, data-analysis
-❌ WebSearch, code_review, dataAnalysis
-```
-
-### 粒度控制
+### Naming Convention
 
 ```
-✅ 一个技能 = 一个明确的任务领域
-❌ 一个技能 = 所有事情（太宽泛）
-❌ 一个技能 = 一行指令（太细碎）
+Yes: web-search, code-review, data-analysis
+No:  WebSearch, code_review, dataAnalysis
 ```
 
-### 分层组织
+### Granularity Control
 
 ```
-项目级（.helen/skills/）  → 项目特定规范、API 约定
-用户级（~/.helen/skills/） → 个人偏好、常用工作流
-内置级（helen/skills/）    → 通用技能、语言相关
+Yes: one skill = one clear task domain
+No:  one skill = everything (too broad)
+No:  one skill = a single instruction (too granular)
 ```
 
-## 内置技能
+### Layered Organization
 
-Helen 自带 16 个内置技能，分为 Helen 语言专用和通用两类：
+```
+Project-level (.helen/skills/)  -> Project-specific conventions, API patterns
+User-level (~/.helen/skills/)   -> Personal preferences, common workflows
+Built-in (helen/skills/)        -> General skills, language-related
+```
 
-### Helen 语言专用技能
+## Built-in Skills
 
-| 技能 | 行数 | 说明 |
-|------|------|------|
-| `helen-syntax` | 632 | 完整语言语法参考（89 关键字、类型、表达式） |
-| `helen-stdlib` | 739 | 203 个内置函数分类参考与示例 |
-| `helen-testing` | 705 | 测试框架使用、TDD 工作流、Agent 测试 |
-| `helen-quality` | 133 | 7 维质量评估指南 |
-| `helen-agent-patterns` | 815 | 单 Agent 设计模式（7 大模式 + 最佳实践） |
-| `helen-agent-collaboration` | 545 | 多 Agent 协作模式（6 大模式） |
-| `helen-language-development` | 674 | 语言实现模式（AST、解析器、解释器扩展） |
-| `helen-programming-methodology` | 383 | 契约驱动 + TDD + 质量评估工作流 |
-| `helen-python-bridge` | 576 | Python ↔ Helen 集成（FFI + Bridge） |
-| `hellen-consistency-checker` | 1041 | 设计文档一致性检查 |
+Helen ships with 16 built-in skills, divided into Helen-specific and generic categories:
 
-### 通用技能
+### Helen-Specific Skills
 
-| 技能 | 行数 | 说明 |
-|------|------|------|
-| `code-quality` | 402 | 7 维评分、预提交验证、并行清理 |
-| `debugging` | 610 | 系统化调试方法论 + 语言特定工具 |
-| `planning` | 330 | Plan 模式 + 实现计划编写技巧（由 plan 和 writing-plans 合并） |
-| `test-driven-development` | 354 | 严格 TDD 执行（RED-GREEN-REFACTOR） |
-| `subagent-driven-development` | 624 | 通过子 Agent 执行计划，两阶段审查 |
-| `github` | 323 | 完整 GitHub 工作流（PR、Issue、CI/CD） |
+| Skill | Lines | Description |
+|-------|-------|-------------|
+| `helen-syntax` | 632 | Complete language syntax reference (89 keywords, types, expressions) |
+| `helen-stdlib` | 739 | 203 built-in functions categorized reference with examples |
+| `helen-testing` | 705 | Test framework usage, TDD workflow, Agent testing |
+| `helen-quality` | 133 | 7-dimension quality assessment guide |
+| `helen-agent-patterns` | 815 | Single agent design patterns (7 patterns + best practices) |
+| `helen-agent-collaboration` | 545 | Multi-agent collaboration patterns (6 patterns) |
+| `helen-language-development` | 674 | Language implementation patterns (AST, parser, interpreter extension) |
+| `helen-programming-methodology` | 383 | Contract-driven + TDD + quality assessment workflow |
+| `helen-python-bridge` | 576 | Python <-> Helen integration (FFI + Bridge) |
+| `hellen-consistency-checker` | 1041 | Design document consistency checking |
 
-> 💡 技能系统经过重组优化，总行数从 10,672 减少到 9,086（-15%），上下文占用显著降低。
+### Generic Skills
 
-## 练习
+| Skill | Lines | Description |
+|-------|-------|-------------|
+| `code-quality` | 402 | 7-dimension scoring, pre-commit verification, parallel cleanup |
+| `debugging` | 610 | Systematic debugging methodology + language-specific tools |
+| `planning` | 330 | Plan mode + implementation plan writing craft (merged from plan + writing-plans) |
+| `test-driven-development` | 354 | Strict TDD enforcement (RED-GREEN-REFACTOR) |
+| `subagent-driven-development` | 624 | Execute plans via subagents with 2-stage review |
+| `github` | 323 | Complete GitHub workflow (PRs, issues, CI/CD) |
 
-1. 在 `~/.helen/skills/` 下创建一个 `greeting` 技能
-2. 为当前项目创建 `.helen/skills/` 目录，添加项目规范技能
-3. 在 REPL 中用 `:ask` 测试技能是否被正确感知
-4. 编写 Helen 程序，使用 `llm act` 调用会参考技能的 Agent
+> The skill system has been restructured and optimized, reducing total lines from 10,672 to 9,086 (-15%), significantly lowering context usage.
+
+## Exercises
+
+1. Create a `greeting` skill under `~/.helen/skills/`
+2. Create a `.helen/skills/` directory for the current project and add a project-specific skill
+3. Use `:ask` in the REPL to test whether the skill is correctly recognized
+4. Write a Helen program that uses `llm act` to call an agent that consults skills

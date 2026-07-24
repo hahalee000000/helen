@@ -1,70 +1,70 @@
-# VS Code 扩展
+# VS Code Extension
 
-> 模块 M13 | `extensions/vscode/` | 测试: `tests/extension/test_vscode_extension.py`
-
----
-
-## 概述
-
-Helen VS Code 扩展提供完整的 IDE 支持：
-- 🎨 语法高亮
-- 🔍 Language Server Protocol (LSP) 集成
-- ⚡ 实时诊断
-- 💡 代码补全
-- 🚀 跳转定义
+> Module M13 | `extensions/vscode/` | Tests: `tests/extension/test_vscode_extension.py`
 
 ---
 
-## 文件结构
+## Overview
+
+The Helen VS Code extension provides full IDE support:
+- 🎨 Syntax highlighting
+- 🔍 Language Server Protocol (LSP) integration
+- ⚡ Real-time diagnostics
+- 💡 Code completion
+- 🚀 Go to definition
+
+---
+
+## File Structure
 
 ```
 extensions/vscode/
-├── package.json                      # 扩展清单
-├── language-configuration.json       # 语言配置
-├── tsconfig.json                     # TypeScript 配置
+├── package.json                      # Extension manifest
+├── language-configuration.json       # Language configuration
+├── tsconfig.json                     # TypeScript configuration
 ├── src/
-│   └── extension.ts                  # LSP 客户端入口
+│   └── extension.ts                  # LSP client entry point
 └── syntaxes/
-    └── helen.tmLanguage.json        # TextMate 语法
+    └── helen.tmLanguage.json        # TextMate grammar
 ```
 
 ---
 
-## 安装
+## Installation
 
-### 前置条件
+### Prerequisites
 
-1. **安装 Helen**：
+1. **Install Helen**:
 ```bash
-# 推荐：从 PyPI 安装
+# Recommended: Install from PyPI
 pip install helen-lang
 
-# 或者从源码安装（开发者）
+# Or install from source (developers)
 git clone https://github.com/hahalee000000/helen.git
 cd helen
 pip install -e .
 ```
 
-2. **验证安装**：
+2. **Verify installation**:
 ```bash
 helen --version   # Helen 1.20.0
-helen lsp         # 应启动 LSP 服务器（按 Ctrl+C 退出）
+helen lsp         # Should start the LSP server (press Ctrl+C to exit)
 ```
 
-### 从源码安装扩展
+### Install Extension from Source
 
 ```bash
 cd extensions/vscode
 npm install
 npm run compile
 npx vsce package
-# 在 VS Code 中安装生成的 .vsix 文件
+# Install the generated .vsix file in VS Code
 ```
 
-### 从源码目录安装（开发模式）
+### Install from Source Directory (Development Mode)
 
 ```bash
-# 复制扩展目录到 VS Code 扩展目录
+# Copy the extension directory to the VS Code extensions directory
 # Linux/macOS:
 cp -r extensions/vscode ~/.vscode/extensions/helen-language
 
@@ -74,70 +74,70 @@ xcopy /E /I extensions/vscode %USERPROFILE%\.vscode\extensions\helen-language
 
 ---
 
-## 功能
+## Features
 
-### 语法高亮
+### Syntax Highlighting
 
-自动为 `.helen` 文件提供语法高亮：
+Automatic syntax highlighting for `.helen` files:
 
-| Scope | 匹配内容 | 颜色主题建议 |
+| Scope | Matches | Color Theme Suggestion |
 |---|---|---|
-| `keyword.control.helen` | if/else/for/while/break/continue/return/match/case/default/try/catch/finally/in/as | 关键字色 |
-| `keyword.declaration.helen` | let/const/fn/agent/protocol/impl/functions/main | 声明色 |
-| `keyword.other.helen` | import/as/call/await/async/llm/act/stream/is | 特殊关键字色 |
-| `keyword.agent.property.helen` | description/model/tools/sub-agents/temperature/max-turns/streaming/prompt/memory | 修饰符色 |
-| `support.type.helen` | string/int/float/bool/list/dict/any/number/void | 类型色 |
-| `string.quoted.double.helen` | `"..."` | 字符串色 |
-| `comment.line.double-slash.helen` | `// ...` | 注释色 |
-| `comment.block.helen` | `/* ... */` | 块注释色 |
-| `constant.language.boolean.helen` | true/false | 布尔色 |
-| `constant.language.null.helen` | null | 空值色 |
-| `constant.numeric.integer.helen` | `42` | 数字色 |
-| `constant.numeric.float.helen` | `3.14` | 浮点色 |
-| `keyword.operator.*.helen` | `+ - * / % == != > < >= <= && \|\| ! = ..` | 运算符色 |
-| `entity.name.function.helen` | `fn_name(` | 函数名色 |
-| `entity.name.type.agent.helen` | `agent Name` | Agent 名色 |
+| `keyword.control.helen` | if/else/for/while/break/continue/return/match/case/default/try/catch/finally/in/as | Keyword color |
+| `keyword.declaration.helen` | let/const/fn/agent/protocol/impl/functions/main | Declaration color |
+| `keyword.other.helen` | import/as/call/await/async/llm/act/stream/is | Special keyword color |
+| `keyword.agent.property.helen` | description/model/tools/sub-agents/temperature/max-turns/streaming/prompt/memory | Modifier color |
+| `support.type.helen` | string/int/float/bool/list/dict/any/number/void | Type color |
+| `string.quoted.double.helen` | `"..."` | String color |
+| `comment.line.double-slash.helen` | `// ...` | Comment color |
+| `comment.block.helen` | `/* ... */` | Block comment color |
+| `constant.language.boolean.helen` | true/false | Boolean color |
+| `constant.language.null.helen` | null | Null color |
+| `constant.numeric.integer.helen` | `42` | Number color |
+| `constant.numeric.float.helen` | `3.14` | Float color |
+| `keyword.operator.*.helen` | `+ - * / % == != > < >= <= && \|\| ! = ..` | Operator color |
+| `entity.name.function.helen` | `fn_name(` | Function name color |
+| `entity.name.type.agent.helen` | `agent Name` | Agent name color |
 
 ### Language Server (LSP)
 
-#### 实时诊断
+#### Real-Time Diagnostics
 
-- 语法错误即时显示
-- 语义错误检查
-- 类型错误提示
+- Syntax errors shown instantly
+- Semantic error checking
+- Type error reporting
 
-#### 代码补全
+#### Code Completion
 
-- 关键字补全（40+ 关键字）
-- 类型补全（string, int, float, bool, list, dict, any）
-- stdlib 函数补全（print, len, str_upper, regex_match 等）
+- Keyword completion (40+ keywords)
+- Type completion (string, int, float, bool, list, dict, any)
+- Stdlib function completion (print, len, str_upper, regex_match, etc.)
 
-#### 跳转定义
+#### Go to Definition
 
-支持跳转到：
-- Agent 声明
-- 函数声明
-- 变量声明（let/const）
+Supports jumping to:
+- Agent declarations
+- Function declarations
+- Variable declarations (let/const)
 
-使用 `Ctrl+Click`（或 `Cmd+Click` on macOS）跳转到定义。
+Use `Ctrl+Click` (or `Cmd+Click` on macOS) to jump to definition.
 
 ---
 
-## 配置
+## Configuration
 
-### 扩展设置
+### Extension Settings
 
-在 VS Code 设置中（`Ctrl+,`）搜索 `helen`：
+In VS Code settings (`Ctrl+,`), search for `helen`:
 
-| 设置 | 说明 | 默认值 |
-|------|------|--------|
-| `helen.lsp.path` | LSP 服务器可执行文件路径 | `"helen"` |
-| `helen.lsp.args` | LSP 服务器参数 | `["lsp"]` |
-| `helen.lsp.enabled` | 启用/禁用 Language Server | `true` |
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `helen.lsp.path` | LSP server executable path | `"helen"` |
+| `helen.lsp.args` | LSP server arguments | `["lsp"]` |
+| `helen.lsp.enabled` | Enable/disable Language Server | `true` |
 
-### 示例配置
+### Example Configuration
 
-如果 Helen 安装在自定义位置：
+If Helen is installed in a custom location:
 
 ```json
 {
@@ -148,36 +148,36 @@ xcopy /E /I extensions/vscode %USERPROFILE%\.vscode\extensions\helen-language
 
 ---
 
-## 命令
+## Commands
 
 ### Helen: Restart Language Server
 
-重启 Language Server。
+Restarts the Language Server.
 
-**使用方法**：
-1. 按 `Ctrl+Shift+P` 打开命令面板
-2. 输入 `Helen: Restart Language Server`
-3. 按 Enter
-
----
-
-## 状态栏
-
-扩展在状态栏右侧显示 "Helen" 指示器：
-- 点击可重启 Language Server
-- 鼠标悬停显示 "Helen Language Server"
+**Usage**:
+1. Press `Ctrl+Shift+P` to open the Command Palette
+2. Type `Helen: Restart Language Server`
+3. Press Enter
 
 ---
 
-## 语言配置
+## Status Bar
 
-### 括号配对
+The extension shows a "Helen" indicator on the right side of the status bar:
+- Click to restart the Language Server
+- Hover to show "Helen Language Server"
+
+---
+
+## Language Configuration
+
+### Bracket Pairing
 
 ```json
 "brackets": [["{", "}"], ["[", "]"], ["(", ")"]]
 ```
 
-### 自动闭合
+### Auto-Closing Pairs
 
 ```json
 "autoClosingPairs": [
@@ -188,7 +188,7 @@ xcopy /E /I extensions/vscode %USERPROFILE%\.vscode\extensions\helen-language
 ]
 ```
 
-### 注释
+### Comments
 
 ```json
 "comments": {
@@ -197,7 +197,7 @@ xcopy /E /I extensions/vscode %USERPROFILE%\.vscode\extensions\helen-language
 }
 ```
 
-### 缩进
+### Indentation
 
 ```json
 "indentationRules": {
@@ -208,43 +208,43 @@ xcopy /E /I extensions/vscode %USERPROFILE%\.vscode\extensions\helen-language
 
 ---
 
-## 故障排除
+## Troubleshooting
 
-### Language Server 未启动
+### Language Server Not Starting
 
-1. **检查 Helen 安装**：
+1. **Check Helen installation**:
    ```bash
    which helen
    helen help
    ```
 
-2. **检查 VS Code 设置**：
-   - 打开设置（`Ctrl+,`）
-   - 搜索 "helen"
-   - 验证 `helen.lsp.path` 正确
+2. **Check VS Code settings**:
+   - Open settings (`Ctrl+,`)
+   - Search for "helen"
+   - Verify `helen.lsp.path` is correct
 
-3. **检查输出面板**：
-   - 查看 → 输出
-   - 从下拉菜单选择 "Helen Language Server"
-   - 查看错误消息
+3. **Check the Output panel**:
+   - View → Output
+   - Select "Helen Language Server" from the dropdown
+   - Check for error messages
 
-### 语法高亮不工作
+### Syntax Highlighting Not Working
 
-1. 确保文件扩展名为 `.helen`
-2. 检查语言模式（右下角）
-3. 手动设置语言：`Ctrl+Shift+P` → "Change Language Mode" → "Helen"
+1. Make sure the file extension is `.helen`
+2. Check the language mode (bottom-right corner)
+3. Manually set the language: `Ctrl+Shift+P` → "Change Language Mode" → "Helen"
 
-### 补全不工作
+### Completion Not Working
 
-1. 等待 Language Server 初始化（检查状态栏）
-2. 检查输出面板中的错误
-3. 尝试重启 Language Server
+1. Wait for the Language Server to initialize (check the status bar)
+2. Check the Output panel for errors
+3. Try restarting the Language Server
 
 ---
 
-## 开发
+## Development
 
-### 构建
+### Build
 
 ```bash
 cd extensions/vscode
@@ -252,26 +252,26 @@ npm install
 npm run compile
 ```
 
-### 打包
+### Package
 
 ```bash
 npx vsce package
-# 生成 helen-language-1.8.0.vsix
+# Generates helen-language-1.8.0.vsix
 ```
 
-### 测试
+### Test
 
 ```bash
-# 在 VS Code 中按 F5 启动扩展开发宿主
-# 在新窗口中打开 .helen 文件
+# Press F5 in VS Code to launch the Extension Development Host
+# Open a .helen file in the new window
 ```
 
 ---
 
-## 示例代码
+## Sample Code
 
 ```helen
-// 定义 AI agent
+// Define an AI agent
 agent code_reviewer {
     description = "Reviews code for quality"
     model = "gpt-4"
@@ -285,7 +285,7 @@ agent code_reviewer {
     }
 }
 
-// 模式匹配
+// Pattern matching
 fn categorize(error: dict) -> string {
     let code = error["code"] ?? 0
     return match code {
@@ -295,12 +295,12 @@ fn categorize(error: dict) -> string {
     }
 }
 
-// 协议（接口）
+// Protocol (interface)
 protocol Validator {
     fn validate(data: any) -> bool
 }
 
-// 主入口
+// Main entry point
 fn main() {
     let result = code_reviewer.review("print('hello')")
     print(result)
@@ -309,26 +309,26 @@ fn main() {
 
 ---
 
-## 语言参考
+## Language Reference
 
-完整的 Helen 语言文档：
-- [Helen GitHub 仓库](https://github.com/hahalee00000/helen)
-- [Helen 高级设计文档](https://github.com/hahalee00000/helen/blob/main/documents/Helen_High_Level_Design_v1.2.md)
+Complete Helen language documentation:
+- [Helen GitHub Repository](https://github.com/hahalee00000/helen)
+- [Helen High Level Design Document](https://github.com/hahalee00000/helen/blob/main/documents/Helen_High_Level_Design_v1.2.md)
 
-### 关键特性
+### Key Features
 
-- **Agent 声明** - 带 LLM 配置的 AI agent
-- **模式匹配** - `match/case` 表达式
-- **协议** - `protocol/impl` 接口
-- **错误处理** - `try/catch/finally`
-- **并发** - `spawn` / Channel 消息队列
-- **标准库** - 常用工具函数
+- **Agent declarations** — AI agents with LLM configuration
+- **Pattern matching** — `match/case` expressions
+- **Protocols** — `protocol/impl` interfaces
+- **Error handling** — `try/catch/finally`
+- **Concurrency** — `spawn` / Channel message queues
+- **Standard library** — Common utility functions
 
 ---
 
-## 贡献
+## Contributing
 
-欢迎贡献！请在 [GitHub](https://github.com/hahalee00000/helen) 上提交 issue 或 PR。
+Contributions welcome! Please submit issues or PRs on [GitHub](https://github.com/hahalee00000/helen).
 
 ---
 

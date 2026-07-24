@@ -1,20 +1,20 @@
-# 命令行工具 (CLI)
+# Command-Line Tools (CLI)
 
-> 模块 M11 | `helen/cli/__main__.py` + `repl.py` + `formatter.py` + `docgen.py`
+> Module M11 | `helen/cli/__main__.py` + `repl.py` + `formatter.py` + `docgen.py`
 
 ---
 
-## 子命令
+## Subcommands
 
 ```bash
-$ helen <file> [args...]  # 编译 + 执行（args 传入程序作为 argv）
-$ helen check <file>       # 仅验证 (Lex + Parse + Analyze)
-$ helen repl               # 交互式解释器
-$ helen doc <files...>     # 生成文档
-$ helen init               # 初始化配置目录
-$ helen lsp                # 启动 Language Server (LSP)
-$ helen test <file>        # 运行测试
-$ helen quality <file>     # 7维质量评估
+$ helen <file> [args...]  # Compile + execute (args passed to the program as argv)
+$ helen check <file>       # Validate only (Lex + Parse + Analyze)
+$ helen repl               # Interactive interpreter
+$ helen doc <files...>     # Generate documentation
+$ helen init               # Initialize config directory
+$ helen lsp                # Start Language Server (LSP)
+$ helen test <file>        # Run tests
+$ helen quality <file>     # 7-dimension quality assessment
 ```
 
 ---
@@ -25,23 +25,23 @@ $ helen quality <file>     # 7维质量评估
 $ helen lsp
 ```
 
-启动 Helen Language Server，通过 stdin/stdout 进行 JSON-RPC 2.0 通信。
+Starts the Helen Language Server, communicating via JSON-RPC 2.0 over stdin/stdout.
 
-### 用途
+### Usage
 
-- **VS Code 集成**：安装 [Helen VS Code 扩展](vscode.md) 后自动启动
-- **手动测试**：`echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | helen lsp`
-- **自定义 IDE**：为其他编辑器提供 LSP 支持
+- **VS Code integration**: Automatically started after installing the [Helen VS Code extension](vscode.md)
+- **Manual testing**: `echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | helen lsp`
+- **Custom IDEs**: Provides LSP support for other editors
 
-### 功能
+### Features
 
-| 功能 | 说明 |
-|------|------|
-| 实时诊断 | 语法和语义错误即时提示 |
-| 代码补全 | 关键字、类型、stdlib 函数 |
-| 跳转定义 | 跳转到 agent/fn/let 声明 |
+| Feature | Description |
+|---------|-------------|
+| Real-time diagnostics | Instant syntax and semantic error reporting |
+| Code completion | Keywords, types, stdlib functions |
+| Go to definition | Jump to agent/fn/let declarations |
 
-详见 [LSP 文档](lsp.md) 和 [VS Code 扩展文档](vscode.md)。
+See also [LSP Documentation](lsp.md) and [VS Code Extension Documentation](vscode.md).
 
 ---
 
@@ -59,19 +59,19 @@ Next steps:
   3. Run a Helen program: helen <file.helen>
 ```
 
-初始化 Helen 独立配置目录 `~/.helen/`：
+Initializes the Helen standalone config directory `~/.helen/`:
 
-| 创建内容 | 说明 |
-|---------|------|
-| `~/.helen/` | Helen 主目录 |
-| `~/.helen/skills/` | Skill 目录 |
-| `~/.helen/config.yaml` | LLM API 配置模板 |
+| Created | Description |
+|---------|-------------|
+| `~/.helen/` | Helen home directory |
+| `~/.helen/skills/` | Skill directory |
+| `~/.helen/config.yaml` | LLM API config template |
 
-如果 `config.yaml` 已存在，不会覆盖，仅提示编辑。
+If `config.yaml` already exists, it will not be overwritten — you will only be prompted to edit it.
 
-### 配置文件格式
+### Configuration File Format
 
-YAML 格式 (`~/.helen/config.yaml`)：
+YAML format (`~/.helen/config.yaml`):
 
 ```yaml
 llm:
@@ -82,7 +82,7 @@ llm:
   timeout: 60
 ```
 
-.env 格式 (`~/.helen/.env`)：
+.env format (`~/.helen/.env`):
 
 ```bash
 HELEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
@@ -90,21 +90,21 @@ HELEN_API_KEY=your-api-key-here
 HELEN_MODEL=qwen3.7-plus
 ```
 
-### 配置加载优先级
+### Config Loading Priority
 
-| 优先级 | 文件 | 说明 |
-|--------|------|------|
-| 1（最低） | `~/.hermes/.env` | Hermes 兼容回退 |
+| Priority | File | Description |
+|----------|------|-------------|
+| 1 (lowest) | `~/.hermes/.env` | Hermes compatibility fallback |
 | 2 | `~/.helen/.env` | Helen .env |
 | 3 | `~/.helen/config.yml` | Helen YAML |
-| 4（最高） | `~/.helen/config.yaml` | Helen YAML |
+| 4 (highest) | `~/.helen/config.yaml` | Helen YAML |
 
-### Skill 目录优先级
+### Skill Directory Priority
 
-| 优先级 | 目录 | 说明 |
-|--------|------|------|
-| 1（最高） | `~/.helen/skills/` | Helen 原生 |
-| 2 | `~/.hermes/skills/` | Hermes 回退 |
+| Priority | Directory | Description |
+|----------|-----------|-------------|
+| 1 (highest) | `~/.helen/skills/` | Helen native |
+| 2 | `~/.hermes/skills/` | Hermes fallback |
 | 3 | `~/.hermes/hermes-agent/skills/` | Hermes agent |
 
 ---
@@ -117,55 +117,55 @@ $ helen main.helen --verbose --output=json --port=8080 input.txt
 $ helen main.helen --transcript-log=/tmp/my_transcript.jsonl
 ```
 
-执行完整编译链：
-1. Lexer → 词法分析
-2. Parser → 语法分析
-3. SemanticAnalyzer → 语义分析
-4. Interpreter → 解释执行
+Executes the full compilation pipeline:
+1. Lexer → Lexical analysis
+2. Parser → Syntax analysis
+3. SemanticAnalyzer → Semantic analysis
+4. Interpreter → Interpretation and execution
 
-退出码：`0`=成功 `1`=词法错误 `2`=语法错误 `3`=语义/运行时错误
+Exit codes: `0` = success, `1` = lexical error, `2` = syntax error, `3` = semantic/runtime error
 
-### Transcript 日志 (v1.16)
+### Transcript Log (v1.16)
 
-使用 `--transcript-log` 参数将对话记录保存到指定文件：
+Use the `--transcript-log` option to save conversation records to a specified file:
 
 ```bash
 $ helen chat.helen --transcript-log=/tmp/chat_session.jsonl
 $ helen agent.helen --transcript-log=/var/log/helen/agent.db
 ```
 
-**参数格式**：
-- `--transcript-log <path>` — 指定 transcript 输出路径
-- `--transcript-log=<path>` — 等号格式也支持
+**Parameter format**:
+- `--transcript-log <path>` — Specify transcript output path
+- `--transcript-log=<path>` — Equals-sign format also supported
 
-**文件类型**：
-- `.jsonl` 扩展名 — 使用 JSONL 后端（人类可读）
-- `.db` 扩展名 — 使用 SQLite 后端（高性能）
+**File types**:
+- `.jsonl` extension — Uses JSONL backend (human-readable)
+- `.db` extension — Uses SQLite backend (high-performance)
 
-**用途**：
-- 调试对话历史
-- 导出会话记录
-- 自定义存储位置
-- 生产环境审计
+**Use cases**:
+- Debugging conversation history
+- Exporting session records
+- Custom storage location
+- Production environment auditing
 
-**配置优先级**：
-1. `--transcript-log` CLI 参数（最高）
-2. `~/.helen/config.yaml` 中的 `transcript.session_dir`
-3. 默认值 `~/.helen/sessions/`
+**Configuration priority**:
+1. `--transcript-log` CLI argument (highest)
+2. `transcript.session_dir` in `~/.helen/config.yaml`
+3. Default `~/.helen/sessions/`
 
-详见 [TranscriptStore 文档](../runtime/transcript-store.md)。
+See also [TranscriptStore Documentation](../runtime/transcript-store.md).
 
-### 程序参数（argv）
+### Program Arguments (argv)
 
-文件名之后的所有参数会传递给 Helen 程序，在程序中可通过三种方式访问：
+All arguments after the filename are passed to the Helen program and can be accessed in three ways:
 
-| 访问方式 | 类型 | 说明 |
-|---------|------|------|
-| `argv` | `const list<str>` | 预定义常量，包含所有命令行参数 |
-| `get_cli_args()` | `list<str>` | 标准库函数，返回与 argv 相同的列表 |
-| `parse_cli_args(spec?)` | `map` | 结构化解析（支持 flag、key=value、位置参数） |
+| Access Method | Type | Description |
+|---------------|------|-------------|
+| `argv` | `const list<str>` | Predefined constant containing all command-line arguments |
+| `get_cli_args()` | `list<str>` | Stdlib function, returns the same list as argv |
+| `parse_cli_args(spec?)` | `map` | Structured parsing (supports flags, key=value, positional arguments) |
 
-**示例**：
+**Example**:
 
 ```bash
 $ helen my_tool.helen --verbose --output=json --port=8080 input.txt
@@ -174,14 +174,14 @@ $ helen my_tool.helen --verbose --output=json --port=8080 input.txt
 ```helen
 // my_tool.helen
 
-// 1. 直接访问 argv
+// 1. Direct access to argv
 print(argv)  // ["--verbose", "--output=json", "--port=8080", "input.txt"]
 
-// 2. 自动解析
+// 2. Auto-parse
 let parsed = parse_cli_args()
 // {verbose: true, output: "json", port: "8080", _positional: ["input.txt"]}
 
-// 3. 结构化解析（带类型和默认值）
+// 3. Structured parsing (with types and defaults)
 let spec = {
     "verbose": {"type": "flag", "default": false},
     "output": {"type": "string", "default": "text"},
@@ -191,9 +191,9 @@ let config = parse_cli_args(spec)
 // {verbose: true, output: "json", port: 8080, _positional: ["input.txt"]}
 ```
 
-> **注意**：`argv` 是 `const`，不可重新赋值。它在 agent 作用域中自动可见（通过 const 只读共享机制）。
+> **Note**: `argv` is `const` and cannot be reassigned. It is auto-visible inside agent scope (via the const read-only sharing mechanism).
 
-> **注意**：嵌套 map 字面量中的 `}}` 会被词法分析器识别为模板引用关闭符（`TEMPLATE_CLOSE`），需要在两个 `}` 之间加空格：`} }`。
+> **Note**: In nested map literals, `}}` is recognized by the lexer as a template reference closer (`TEMPLATE_CLOSE`). You need to add a space between the two braces: `} }`.
 
 ---
 
@@ -204,19 +204,19 @@ $ helen check main.helen
 ✓ main.helen: OK
 ```
 
-执行前端验证（不执行）：
-1. Lexer → 词法分析
-2. Parser → 语法分析
-3. SemanticAnalyzer → 语义分析
+Executes frontend validation (no execution):
+1. Lexer → Lexical analysis
+2. Parser → Syntax analysis
+3. SemanticAnalyzer → Semantic analysis
 
-`check` 也支持传入程序参数（用于验证使用了 `argv` 的程序）：
+`check` also supports passing program arguments (for validating programs that use `argv`):
 
 ```
 $ helen check main.helen --verbose --output=json
 ✓ main.helen: OK
 ```
 
-用于 CI/CD 中的代码质量检查。
+Useful for code quality checks in CI/CD.
 
 ---
 
@@ -234,41 +234,41 @@ In multi-line mode (...), press Enter on empty line or Ctrl+C to cancel
 >>>
 ```
 
-### 交互特性
+### Interactive Features
 
-| 功能 | 说明 |
-|------|------|
-| **光标移动** | 支持方向键 ← → 移动光标，↑ ↓ 浏览历史 |
-| **命令历史** | 自动保存输入历史，可用 ↑ ↓ 翻阅 |
-| **Tab 补全** | 按 Tab 键触发补全（如关键字） |
+| Feature | Description |
+|---------|-------------|
+| **Cursor movement** | Arrow keys ← → to move cursor, ↑ ↓ to browse history |
+| **Command history** | Input history automatically saved, browse with ↑ ↓ |
+| **Tab completion** | Press Tab to trigger completion (e.g., keywords) |
 
-### REPL 命令
+### REPL Commands
 
 ```
-:help               显示帮助信息
-:reset              清除所有定义（函数、agent）
-:list               列出所有已定义的函数和 agent
-:undefine <name>    删除指定的函数或 agent 定义
-:ask <question>     向 AI 助手提问（使用 LLM 回答 Helen 语言相关问题）
-:trace on|off       开启/关闭执行追踪
-:trace show [n]     显示最近 n 条追踪记录（默认 50）
-:last_error [-v]    显示上次错误的结构化上下文（-v 显示执行追踪）
-:llm_log [n] [-v]   显示最近 n 次 LLM 调用审计日志（-v 显示详细信息）
-:stats              显示上下文窗口使用统计（Phase 4）
-:transcript         显示当前 transcript（SSOT 有效视图）
-:transcript --full  显示完整 transcript（包括压缩的消息）
-:transcript --audit 显示压缩审计追踪
-:sessions           列出所有 transcript 会话
-:session_id         显示当前会话 ID
-:resume <id>        恢复到指定的 transcript 会话
-exit                退出 REPL
+:help               Show help
+:reset              Clear all definitions (functions, agents)
+:list               List all defined functions and agents
+:undefine <name>    Remove a specific function or agent definition
+:ask <question>     Ask the AI assistant (uses LLM to answer Helen language questions)
+:trace on|off       Enable/disable execution tracing
+:trace show [n]     Show last n trace entries (default 50)
+:last_error [-v]    Show structured context of last error (-v shows execution trace)
+:llm_log [n] [-v]   Show last n LLM call audit logs (-v shows details)
+:stats              Show context window usage statistics (Phase 4)
+:transcript         Show current transcript (SSOT effective view)
+:transcript --full  Show full transcript (including compressed messages)
+:transcript --audit Show compression audit trail
+:sessions           List all transcript sessions
+:session_id         Show current session ID
+:resume <id>        Resume a specific transcript session
+exit                Exit REPL
 ```
 
-> **注意**：REPL 中调用栈追踪和执行追踪默认开启，无需手动 `:trace on`。
+> **Note**: Stack traces and execution tracing are enabled by default in the REPL — no need for manual `:trace on`.
 
-#### Transcript 命令 (v1.16)
+#### Transcript Commands (v1.16)
 
-Transcript 命令用于管理和查看对话历史记录：
+Transcript commands are used to manage and view conversation history:
 
 ```
 >>> :session_id
@@ -299,39 +299,39 @@ Compression audit (3 events):
       Summary: Compressed conversation...
 ```
 
-**恢复会话**：
+**Resuming a session**:
 ```
 >>> :resume session_1783503800_abc12345
 Session resumed: session_1783503800_abc12345
 Transcript loaded. Use :transcript to view.
 ```
 
-详见 [TranscriptStore 文档](../runtime/transcript-store.md)。
+See also [TranscriptStore Documentation](../runtime/transcript-store.md).
 
-#### :ask — AI 助手
+#### :ask — AI Assistant
 
-`:ask` 命令启动一个内置的 Helen 语言专家 Agent，可以回答关于 Helen 语法、标准库、用法等问题：
+The `:ask` command launches a built-in Helen language expert Agent that can answer questions about Helen syntax, standard library, usage, etc.:
 
 ```
 >>> :ask 标准库有哪些字符串函数？
 🤔 Thinking...
 
 Helen 标准库提供 36 个字符串函数，包括：
-- upper/lower/strip — 大小写和空白处理
-- split/join — 分割和连接
-- replace/find — 替换和查找
-- regex_match/regex_replace — 正则表达式
+- upper/lower/strip — Case and whitespace handling
+- split/join — Splitting and joining
+- replace/find — Replacing and finding
+- regex_match/regex_replace — Regular expressions
 ...
 ```
 
-`:ask` 使用 `HelenAssistant` agent（定义在 `stdlib/_helen_assistant.helen`），具备：
-- 完整的 Helen 语言知识（语法、类型系统、标准库）
-- 可访问 `read_file`、`write_file`、`web_search` 等工具
-- 对话历史上下文（同一 REPL 会话内保持）
+`:ask` uses the `HelenAssistant` agent (defined in `stdlib/_helen_assistant.helen`), which has:
+- Complete Helen language knowledge (syntax, type system, standard library)
+- Access to tools such as `read_file`, `write_file`, `web_search`
+- Conversation history context (maintained within the same REPL session)
 
-### 多行输入
+### Multi-Line Input
 
-当括号未闭合时，REPL 进入多行模式（`...` 提示符）：
+When brackets are unclosed, the REPL enters multi-line mode (`...` prompt):
 
 ```
 >>> agent Trans(text) {
@@ -341,21 +341,21 @@ Helen 标准库提供 36 个字符串函数，包括：
 ... }
 ```
 
-**退出多行模式的方法：**
+**Ways to exit multi-line mode:**
 
-| 方式 | 说明 |
-|------|------|
-| **空行** | 在 `...` 提示符下直接按 Enter（输入空行） |
-| **Ctrl+C** | 取消当前多行输入，返回 `>>>` 提示符 |
-| **Ctrl+D** | 退出整个 REPL |
+| Method | Description |
+|--------|-------------|
+| **Empty line** | Press Enter at the `...` prompt (enter an empty line) |
+| **Ctrl+C** | Cancel current multi-line input, return to `>>>` prompt |
+| **Ctrl+D** | Exit the entire REPL |
 
-### 多行输入检测
+### Multi-Line Input Detection
 
-REPL 使用轻量状态机判断是否需要继续输入：
+The REPL uses a lightweight state machine to determine whether to continue input:
 
 ```python
 def _needs_continuation(buffer: str) -> bool:
-    """检测括号/引号是否未闭合。"""
+    """Detect unclosed brackets/quotes."""
     brace_count = paren_count = bracket_count = 0
     in_string = False
     escape_next = False
@@ -382,11 +382,11 @@ def _needs_continuation(buffer: str) -> bool:
     return brace_count > 0 or paren_count > 0 or bracket_count > 0
 ```
 
-当括号未闭合时，显示 `...` 提示符等待更多输入。
+When brackets are unclosed, the `...` prompt is shown waiting for more input.
 
-### 错误格式化
+### Error Formatting
 
-REPL 使用 `format_error()` 输出结构化错误：
+The REPL uses `format_error()` to output structured errors:
 
 ```
 Error: [E0311] at <repl>:2:5
@@ -417,13 +417,13 @@ $ helen doc main.helen
 ...
 ```
 
-支持 `--format markdown|json` 和 `-o output_file`。
+Supports `--format markdown|json` and `-o output_file`.
 
 ---
 
-## 错误格式化器 (formatter.py)
+## Error Formatter (formatter.py)
 
-遵循 HLD 3.11.2 格式：
+Follows HLD 3.11.2 format:
 
 ```python
 def format_error(error: HelenError) -> str:
@@ -437,9 +437,9 @@ def format_error(error: HelenError) -> str:
     """
 ```
 
-输出包含：
-1. 错误标题：`Error: [E{code}] at {file}:{line}:{col}`
-2. 源码行
-3. 定位符 `^^^^`
-4. 错误消息
-5. 错误码说明
+Output includes:
+1. Error header: `Error: [E{code}] at {file}:{line}:{col}`
+2. Source code line
+3. Caret indicator `^^^^`
+4. Error message
+5. Error code description

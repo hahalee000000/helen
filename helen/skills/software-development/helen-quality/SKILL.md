@@ -1,6 +1,6 @@
 ---
 name: helen-quality
-description: "Helen 7 维质量评估使用指南 — 代码分析、安全评分、CI 集成"
+description: "Helen 7-Dimension Quality Assessment Guide — Code Analysis, Security Scoring, CI Integration"
 version: 1.0.0
 author: Helen Team
 license: MIT
@@ -9,13 +9,13 @@ metadata:
     tags: [helen, quality, assessment, security, ci]
 ---
 
-# Helen 质量评估
+# Helen Quality Assessment
 
-## 概述
+## Overview
 
-Helen 内置 7 维质量评估框架，自动化分析 Helen 程序的质量。
+Helen includes a built-in 7-dimension quality assessment framework that automates quality analysis of Helen programs.
 
-## 快速开始
+## Quick Start
 
 ### CLI
 
@@ -26,7 +26,7 @@ helen quality my_program.helen --threshold 7.5
 helen quality my_program.helen --dimension security
 ```
 
-### 在代码中
+### In Code
 
 ```helen
 let source = read_file("my_program.helen")
@@ -34,21 +34,21 @@ let scores = quality_score(source, "my_program.helen")
 print("Grade: " + scores["grade"])
 ```
 
-## 7 个维度
+## 7 Dimensions
 
-| 维度 | 权重 | 评估内容 |
+| Dimension | Weight | What It Evaluates |
 |------|:----:|---------|
-| 架构设计 | 20% | 函数长度、复杂度、嵌套、参数 |
-| 代码质量 | 15% | 注释率、函数长度、复杂度 |
-| 安全性 | 20% | 危险模式检测 |
-| 测试覆盖 | 15% | 测试文件存在性 |
-| 文档 | 10% | docstring 覆盖率 |
-| 可维护性 | 10% | 长函数、高复杂度函数 |
-| 工程规范 | 10% | 命名、文件大小 |
+| Architecture | 20% | Function length, complexity, nesting, parameters |
+| Code Quality | 15% | Comment ratio, function length, complexity |
+| Security | 20% | Dangerous pattern detection |
+| Test Coverage | 15% | Test file existence |
+| Documentation | 10% | Docstring coverage |
+| Maintainability | 10% | Long functions, high-complexity functions |
+| Engineering | 10% | Naming, file size |
 
-## 评分等级
+## Grade Levels
 
-| 等级 | 范围 |
+| Grade | Range |
 |:----:|:----:|
 | S | 9.0-10.0 |
 | A | 7.5-8.9 |
@@ -60,7 +60,7 @@ print("Grade: " + scores["grade"])
 
 ### `analyze_code(source, filename?)`
 
-代码指标：
+Code metrics:
 - `total_lines`, `code_lines`, `comment_lines`
 - `function_count`, `agent_count`
 - `avg_complexity`, `max_complexity`
@@ -68,23 +68,23 @@ print("Grade: " + scores["grade"])
 
 ### `check_security(source)`
 
-安全问题：
+Security issues:
 - `line`, `severity`, `pattern`, `message`
 
 ### `quality_score(source, file_path?)`
 
-7 维评分：
+7-dimension scores:
 - `architecture`, `code_quality`, `security`
 - `test_coverage`, `documentation`, `maintainability`, `engineering`
 - `total`, `grade`
 
 ### `quality_report(source, filename?)`
 
-格式化报告字符串。
+Formatted report string.
 
-## 安全检查
+## Security Checks
 
-| 模式 | 严重度 |
+| Pattern | Severity |
 |------|:------:|
 | `eval()` | HIGH |
 | `exec()` | HIGH |
@@ -93,43 +93,43 @@ print("Grade: " + scores["grade"])
 | `import subprocess` | MEDIUM |
 | `input()` | LOW |
 
-## 测试覆盖评分详解
+## Test Coverage Scoring Details
 
-测试覆盖维度（权重 15%）基于文件位置启发式评分，按最高得分命中：
+The test coverage dimension (weight 15%) uses file-location heuristics, scored by the highest matching tier:
 
-| 策略 | 得分 | 条件 |
+| Strategy | Score | Condition |
 |------|:----:|------|
-| `// @test-location:` 注解 | **8.0** | 源文件中包含注解指向已有测试文件 |
-| 同级测试文件 | **8.0** | 存在 `<name>_test.helen` 或 `test_<name>.helen` |
-| 父级 `tests/` 匹配 | **7.0** | 父级 `tests/` 目录中有文件名包含源文件 stem 的 `*.py` |
-| 同级 `tests/` 目录 | **6.0** | 源文件旁有 `tests/` 目录含任意测试文件 |
-| 无测试 | **2.0** | 未找到任何测试 |
+| `// @test-location:` annotation | **8.0** | Source file contains annotation pointing to existing test file |
+| Sibling test file | **8.0** | `<name>_test.helen` or `test_<name>.helen` exists |
+| Parent `tests/` match | **7.0** | `*.py` in parent `tests/` directory with filename containing source file stem |
+| Sibling `tests/` directory | **6.0** | `tests/` directory next to source file contains any test files |
+| No tests | **2.0** | No tests found |
 
-### `// @test-location:` 注解
+### `// @test-location:` Annotation
 
-Agent 密集型程序的集成测试通常放在独立的 `tests/` 目录，文件名与源文件 stem 不一定匹配，容易落入 6.0 上限。使用注解可以显式声明测试位置，直接得 8.0：
+Integration tests for agent-heavy programs are typically placed in a separate `tests/` directory, where filenames don't necessarily match the source file stem — these tend to fall into the 6.0 tier. Using an annotation explicitly declares the test location, scoring 8.0 directly:
 
 ```helen
 // @test-location: tests/integration/test_programmer.py
 
 agent Programmer {
-    description "代码编写助手"
+    description "Code writing assistant"
     main {
-        llm act "编写代码"
+        llm act "Write code"
     }
 }
 ```
 
-注解路径支持绝对路径和相对路径（相对于源文件），文件必须实际存在。
+The annotation path supports both absolute and relative paths (relative to the source file). The file must actually exist.
 
-## CI 集成
+## CI Integration
 
 ```bash
 helen quality src/*.helen --threshold 7.0 --json > quality.json
 ```
 
-## 相关文档
+## Related Documentation
 
-- [教程](../../docs/tutorial.md#质量评估)
+- [Tutorial](../../docs/tutorial.md#质量评估)
 - [Wiki](../../../wiki/helen/toolchain/quality.md)
-- [示例](../../examples/quality_example.helen)
+- [Example](../../examples/quality_example.helen)

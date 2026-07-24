@@ -1,87 +1,87 @@
 ---
 name: helen-agent-collaboration
-description: "Helen Agent 协作模式 — 多 Agent 协作、编排、分工、数据流、共享状态、作用域隔离"
+description: "Helen Agent Collaboration Patterns — Multi-agent collaboration, orchestration, task division, data flow, shared state, scope isolation"
 version: 1.19.0
 author: Helen Team
 license: MIT
 tags: [helen, agent, collaboration, orchestration, workflow, multi-agent, shared-let, scope-isolation, v1.12, read-only-params, ground-truth-injection, v1.17, spawn, channel, v1.18]
 ---
 
-# Helen Agent 协作模式
+# Helen Agent Collaboration Patterns
 
-本技能描述 Helen 语言中多 Agent 协作的模式和最佳实践（v1.18 更新：spawn + Channel 替代 async/await）。
+This skill describes patterns and best practices for multi-agent collaboration in the Helen language (v1.18 update: spawn + Channel replaces async/await).
 
-## 核心概念
+## Core Concepts
 
-> 💡 **单 Agent 设计模式、作用域隔离、上下文管理详见 `helen-agent-patterns`**
+> 💡 **For single-agent design patterns, scope isolation, and context management, see `helen-agent-patterns`**
 
-### 🎯 调用者决定上下文（Caller Decides Context）
+### 🎯 Caller Decides Context
 
-Agent 严格隔离——每次调用/spawn 创建全新执行环境，**不自动继承**调用者的变量、历史或 LLM 上下文。调用前必须显式考虑提供什么上下文：
+Agents are strictly isolated — each call/spawn creates a brand-new execution environment and **does not automatically inherit** the caller's variables, history, or LLM context. Before calling, you must explicitly consider what context to provide:
 
 ```
-调用者 ──参数──► Agent 输入
-      ──SharedStore──► 共享状态
-      ◄──返回值/Channel── Agent 输出
+Caller ──parameters──► Agent Input
+       ──SharedStore──► Shared State
+       ◄──return value/Channel── Agent Output
 ```
 
 ```helen
-// ❌ 错误：假设模块变量自动可见
+// ❌ Wrong: assuming module variables are auto-visible
 let user_name = "Alice"
-agent Greeter { main { print("Hello " + user_name) } }  // 编译错误！
+agent Greeter { main { print("Hello " + user_name) } }  // Compile error!
 
-// ✅ 正确：显式传递
+// ✅ Right: pass explicitly
 agent Greeter(user_name: str) { main { print("Hello " + user_name) } }
 main { Greeter("Alice") }
 ```
 
-| 场景 | 推荐方式 |
-|------|---------|
-| 一次性输入 | 参数 `Agent(x, y)` |
-| 只读配置 | `const`（自动可见） |
-| 跨 agent 共享可变状态 | `shared store` |
-| spawn 子 agent 输出 | Channel `ch.send(result)` |
-| 跨进程恢复对话 | `resume_session(sid)` |
+| Scenario | Recommended Approach |
+|----------|---------------------|
+| One-off input | Parameters `Agent(x, y)` |
+| Read-only config | `const` (auto-visible) |
+| Cross-agent mutable state | `shared store` |
+| Spawned sub-agent output | Channel `ch.send(result)` |
+| Cross-process session resume | `resume_session(sid)` |
 
-## 协作模式
+## Collaboration Patterns
 
-### 模式 1：顺序链（Sequential Chain）
+### Pattern 1: Sequential Chain
 
-多个 Agent 按顺序执行，前一个的输出作为后一个的输入。
+Multiple agents execute in sequence; each agent's output becomes the next agent's input.
 
 ```helen
 agent WorkflowOrchestrator(requirement: str) {
-    description "工作流编排器 - 顺序链模式"
+    description "Workflow orchestrator - sequential chain pattern"
     prompt """
-    需求: {{requirement}}
-    
-    工作流程：
-    1. 调用 ContractDesigner 设计接口
-    2. 调用 TestBuilder 生成测试
-    3. 调用 Implementer 编写实现
-    4. 调用 QualityChecker 评估质量
+    Requirement: {{requirement}}
+
+    Workflow:
+    1. Call ContractDesigner to design the interface
+    2. Call TestBuilder to generate tests
+    3. Call Implementer to write the implementation
+    4. Call QualityChecker to assess quality
     """
-    
+
     functions {
         fn run_workflow(req: str): map {
-            // Step 1: 契约设计
+            // Step 1: Contract design
             let contract = ContractDesigner(req)
-            print("✅ Step 1: 契约设计完成")
-            
-            // Step 2: 测试生成
+            print("✅ Step 1: Contract design complete")
+
+            // Step 2: Test generation
             let tests = TestBuilder(contract)
             write_file("tests/generated.helen", tests)
-            print("✅ Step 2: 测试生成完成")
-            
-            // Step 3: 实现编写
+            print("✅ Step 2: Test generation complete")
+
+            // Step 3: Implementation
             let impl = Implementer(contract, tests)
             write_file("src/implementation.helen", impl)
-            print("✅ Step 3: 实现编写完成")
-            
-            // Step 4: 质量评估
+            print("✅ Step 3: Implementation complete")
+
+            // Step 4: Quality assessment
             let quality = QualityChecker("src/implementation.helen")
-            print("✅ Step 4: 质量评估完成")
-            
+            print("✅ Step 4: Quality assessment complete")
+
             return {
                 "contract": contract,
                 "tests": tests,
@@ -90,29 +90,29 @@ agent WorkflowOrchestrator(requirement: str) {
             }
         }
     }
-    
+
     main {
         let result = run_workflow(requirement)
-        print("工作流完成")
+        print("Workflow complete")
     }
 }
 ```
 
-**适用场景**：
-- 任务有明确的阶段划分
-- 后一阶段依赖前一阶段的输出
-- 需要严格的执行顺序
+**When to use**:
+- The task has clearly defined phases
+- Each phase depends on the previous phase's output
+- Strict execution order is required
 
-### 模式 2：并行扇出（Parallel Fan-out）
+### Pattern 2: Parallel Fan-out
 
-同时调用多个 Agent 处理不同的子任务，然后汇总结果。
+Call multiple agents concurrently to process different sub-tasks, then aggregate the results.
 
 ```helen
-// v1.12: 结果通过返回值传递，不用 shared let
+// v1.12: Results passed via return values, not shared let
 shared let completed_count = 0
 
 agent CodeAnalyzer(path: str) {
-    description "分析代码文件"
+    description "Analyze a code file"
     main {
         completed_count = completed_count + 1
         return { "path": path, "status": "ok", "issues": 0 }
@@ -120,36 +120,36 @@ agent CodeAnalyzer(path: str) {
 }
 
 agent ResultSummarizer(results: list) {
-    description "汇总结果"
+    description "Summarize results"
     main {
         return { "total": len(results), "status": "done" }
     }
 }
 
 agent ParallelOrchestrator(file_paths: list) {
-    description "并行编排器 - 扇出模式"
+    description "Parallel orchestrator - fan-out pattern"
     prompt """
-    文件列表: {{file_paths}}
-    
-    并行分析每个文件，然后汇总结果。
+    File list: {{file_paths}}
+
+    Analyze each file in parallel, then aggregate the results.
     """
-    
+
     functions {
         fn analyze_files_parallel(paths: list): map {
-            // 启动并行分析（v1.18: spawn）
+            // Launch parallel analysis (v1.18: spawn)
             let mailboxes = []
             for path in paths {
                 let mailbox = spawn CodeAnalyzer(path)
                 mailboxes.append(mailbox)
             }
-            
-            // 逐个接收结果
+
+            // Collect results one by one
             let results = []
             for mailbox in mailboxes {
                 results.append(mailbox.receive())
             }
-            
-            // 汇总结果
+
+            // Summarize results
             let summary = ResultSummarizer(results)
             return {
                 "individual": results,
@@ -157,133 +157,133 @@ agent ParallelOrchestrator(file_paths: list) {
             }
         }
     }
-    
+
     main {
         let result = analyze_files_parallel(file_paths)
-        print("分析完成，共 " + str(len(result["individual"])) + " 个文件")
-        print("完成计数: " + str(completed_count))
+        print("Analysis complete, " + str(len(result["individual"])) + " files total")
+        print("Completed count: " + str(completed_count))
     }
 }
 ```
 
-**适用场景**：
-- 多个独立子任务可以并行
-- 需要汇总多个结果
-- 提高吞吐量
+**When to use**:
+- Multiple independent sub-tasks can run in parallel
+- Results from multiple agents need to be aggregated
+- Higher throughput is desired
 
-### 模式 3：管道（Pipeline）
+### Pattern 3: Pipeline
 
-多个 Agent 组成处理管道，每个阶段处理特定方面。
+Multiple agents form a processing pipeline; each stage handles a specific aspect.
 
 ```helen
-// v1.12: 使用值类型计数器跟踪进度
+// v1.12: Using value-type counters to track progress
 shared let pipeline_stage = 0
 
 agent DataCollector(source: str) {
-    description "阶段 1: 数据收集"
+    description "Stage 1: Data collection"
     tools = ["web_search", "web_fetch"]
-    
+
     main {
         let raw_data = llm act "Collect data from: " + source
         pipeline_stage = 1
-        print("✅ 数据收集完成")
-        return raw_data  // 通过返回值传递
+        print("✅ Data collection complete")
+        return raw_data  // Pass via return value
     }
 }
 
 agent DataCleaner(data: str) {
-    description "阶段 2: 数据清洗"
-    
+    description "Stage 2: Data cleaning"
+
     main {
         let cleaned = llm act "Clean this data: " + data
         pipeline_stage = 2
-        print("✅ 数据清洗完成")
+        print("✅ Data cleaning complete")
         return cleaned
     }
 }
 
 agent DataAnalyzer(data: str) {
-    description "阶段 3: 数据分析"
-    
+    description "Stage 3: Data analysis"
+
     main {
         let analysis = llm act "Analyze: " + data
         pipeline_stage = 3
-        print("✅ 数据分析完成")
+        print("✅ Data analysis complete")
         return analysis
     }
 }
 
 agent DataReporter(analysis: str) {
-    description "阶段 4: 生成报告"
-    
+    description "Stage 4: Report generation"
+
     main {
         let report = llm act "Generate report from: " + analysis
         pipeline_stage = 4
-        print("✅ 报告生成完成")
+        print("✅ Report generation complete")
         return report
     }
 }
 
-// 管道执行
+// Pipeline execution
 agent DataPipeline(source: str) {
-    description "完整数据处理管道"
-    
+    description "Complete data processing pipeline"
+
     main {
         let raw = DataCollector(source)
         let cleaned = DataCleaner(raw)
         let analysis = DataAnalyzer(cleaned)
         let report = DataReporter(analysis)
-        
-        print("管道执行完成")
+
+        print("Pipeline execution complete")
         return report
     }
 }
 ```
 
-### 模式 4：路由分发（Router）
+### Pattern 4: Router
 
-根据输入内容路由到不同的专业 Agent。
+Route input to different specialized agents based on content.
 
 ```helen
 agent TechSupport(query: str) {
-    description "技术支持"
-    prompt "你是技术支持专家。"
+    description "Technical support"
+    prompt "You are a technical support expert."
     main {
-        return llm act "解答技术问题: " + query
+        return llm act "Answer the technical question: " + query
     }
 }
 
 agent BillingSupport(query: str) {
-    description "账单支持"
-    prompt "你是账单支持专家。"
+    description "Billing support"
+    prompt "You are a billing support expert."
     main {
-        return llm act "解答账单问题: " + query
+        return llm act "Answer the billing question: " + query
     }
 }
 
 agent SalesSupport(query: str) {
-    description "销售支持"
-    prompt "你是销售顾问。"
+    description "Sales support"
+    prompt "You are a sales consultant."
     main {
-        return llm act "解答销售问题: " + query
+        return llm act "Answer the sales question: " + query
     }
 }
 
-// 路由 Agent
+// Router agent
 agent SupportRouter(query: str) {
-    description "智能路由客服查询"
-    
+    description "Intelligent router for customer queries"
+
     functions {
         fn classify(query: str): str {
-            // 使用 LLM 进行分类
-            let category = llm act "分类查询到: tech, billing, sales. 查询: " + query
+            // Use LLM to classify
+            let category = llm act "Classify query into: tech, billing, sales. Query: " + query
             return category
         }
     }
-    
+
     main {
         let category = classify(query)
-        
+
         if category == "tech" {
             return TechSupport(query)
         } else if category == "billing" {
@@ -291,106 +291,106 @@ agent SupportRouter(query: str) {
         } else if category == "sales" {
             return SalesSupport(query)
         } else {
-            return llm act "通用回复: " + query
+            return llm act "Generic reply: " + query
         }
     }
 }
 ```
 
-### 模式 5：层级协作（Hierarchical）
+### Pattern 5: Hierarchical
 
-主 Agent 协调多个子 Agent，子 Agent 可以继续分解任务。
+A lead agent coordinates multiple sub-agents; sub-agents can further decompose tasks.
 
 ```helen
-// v1.12: 使用值类型跟踪状态
+// v1.12: Using value types to track state
 shared let project_phase = "init"
 shared let project_progress = 0
 
 agent ProjectManager(requirement: str) {
-    description "项目经理 - 总体协调"
-    
+    description "Project manager - overall coordination"
+
     main {
         project_phase = "planning"
-        
-        // 阶段 1: 需求分析
+
+        // Phase 1: Requirement analysis
         let analysis = RequirementAnalyst(requirement)
         project_progress = 25
-        
-        // 阶段 2: 架构设计
+
+        // Phase 2: Architecture design
         let architecture = Architect(analysis)
         project_progress = 50
-        
-        // 阶段 3: 并行开发（v1.18: spawn + Channel）
+
+        // Phase 3: Parallel development (v1.18: spawn + Channel)
         let frontend_mb = spawn FrontendDev(architecture)
         let backend_mb = spawn BackendDev(architecture)
         let dev_results = [frontend_mb.receive(), backend_mb.receive()]
         project_progress = 80
-        
-        // 阶段 4: 集成测试
+
+        // Phase 4: Integration testing
         let integration = IntegrationTester(dev_results)
         project_progress = 100
         project_phase = "complete"
-        
+
         return integration
     }
 }
 
 agent RequirementAnalyst(req: str) {
-    description "需求分析师"
+    description "Requirement analyst"
     main {
-        return llm act "分析需求: " + req
+        return llm act "Analyze requirements: " + req
     }
 }
 
 agent Architect(analysis: str) {
-    description "架构师"
+    description "Architect"
     main {
-        return llm act "设计架构: " + analysis
+        return llm act "Design architecture: " + analysis
     }
 }
 
 agent FrontendDev(arch: str) {
-    description "前端开发"
+    description "Frontend developer"
     tools = ["write_file"]
     main {
-        return llm act "实现前端: " + arch
+        return llm act "Implement frontend: " + arch
     }
 }
 
 agent BackendDev(arch: str) {
-    description "后端开发"
+    description "Backend developer"
     tools = ["write_file"]
     main {
-        return llm act "实现后端: " + arch
+        return llm act "Implement backend: " + arch
     }
 }
 
 agent IntegrationTester(results: list) {
-    description "集成测试"
+    description "Integration tester"
     main {
-        return llm act "执行集成测试"
+        return llm act "Run integration tests"
     }
 }
 ```
 
-### 模式 6：竞争与选择（Compete & Select）
+### Pattern 6: Compete & Select
 
-多个 Agent 竞争解决同一问题，选择最佳结果。
+Multiple agents compete to solve the same problem; select the best result.
 
 ```helen
 shared let best_solution = null
 shared let best_score = 0
 
 agent SolutionGenerator(problem: str, strategy: str) {
-    description "生成解决方案"
-    
+    description "Generate a solution"
+
     main {
-        let solution = llm act "用 " + strategy + " 策略解决: " + problem
-        
-        // 自我评估
-        let score = llm act "评估方案质量(0-100): " + solution
-        
-        // 更新最佳方案（需要并发安全）
+        let solution = llm act "Solve using " + strategy + " strategy: " + problem
+
+        // Self-evaluation
+        let score = llm act "Evaluate solution quality (0-100): " + solution
+
+        // Update best solution (needs concurrency safety)
         if score > best_score {
             best_score = score
             best_solution = {
@@ -399,52 +399,52 @@ agent SolutionGenerator(problem: str, strategy: str) {
                 "score": score
             }
         }
-        
+
         return solution
     }
 }
 
 agent SolutionSelector(problem: str) {
-    description "竞争选择最佳方案"
-    
+    description "Compete to select the best solution"
+
     main {
-        // 多种策略并行竞争（v1.18: spawn）
-        let strategies = ["分治法", "动态规划", "贪心算法", "回溯法"]
+        // Parallel competition with multiple strategies (v1.18: spawn)
+        let strategies = ["divide-and-conquer", "dynamic-programming", "greedy", "backtracking"]
         let mailboxes = []
-        
+
         for strategy in strategies {
             let mailbox = spawn SolutionGenerator(problem, strategy)
             mailboxes.append(mailbox)
         }
-        
-        // 接收所有结果
+
+        // Collect all results
         for mailbox in mailboxes {
             mailbox.receive()
         }
-        
-        // 返回最佳方案
+
+        // Return the best solution
         return best_solution
     }
 }
 ```
 
-## 共享状态最佳实践
+## Shared State Best Practices
 
-> 💡 详细示例和反模式详见 `helen-agent-patterns` § 作用域隔离 / § 最佳实践 6
+> 💡 For detailed examples and anti-patterns, see `helen-agent-patterns` § Scope Isolation / § Best Practice 6
 
-协作中共享状态的方式选择：
+How to choose the right sharing mechanism for collaboration:
 
-| 方式 | 适用场景 | 约束 |
-|------|---------|------|
-| `shared let` | 跨 agent 值类型计数器/标志 | v1.12: 仅 int/float/str/bool |
-| `const` | 只读配置（agent 中自动可见） | 不可变 |
-| 参数传递 | 引用类型（list/dict） | 自动只读包装，需修改时 `list(x)` 创建副本 |
-| `shared store` | 复杂可变共享状态 | RLock 线程安全，`_` 前缀私有 |
-| Channel | agent 间消息/结果传递 | spawn 返回 Channel |
+| Mechanism | When to Use | Constraints |
+|-----------|-------------|-------------|
+| `shared let` | Cross-agent value-type counters/flags | v1.12: only int/float/str/bool |
+| `const` | Read-only config (auto-visible in agents) | Immutable |
+| Parameter passing | Reference types (list/dict) | Auto-wrapped as read-only; use `list(x)` to create a mutable copy |
+| `shared store` | Complex mutable shared state | RLock thread-safe, `_` prefix for private fields |
+| Channel | Message/result passing between agents | spawn returns a Channel |
 
-**关键规则**：`shared let` 禁止引用类型；模块级 `let` 在 agent main 中不可见（编译错误）。
+**Key rules**: `shared let` forbids reference types; module-level `let` is not visible inside agent main (compile error).
 
-Shared Store 快速示例：
+Shared Store quick example:
 
 ```helen
 shared store TaskRegistry {
@@ -460,12 +460,12 @@ agent Consumer(r: TaskRegistry) { main { let t = r.get("t1") } }
 main { let r = TaskRegistry; spawn Producer(r); spawn Consumer(r) }
 ```
 
-### 使用 Channel 消息队列进行 Agent 间通信（v1.18）
+### Using Channel Message Queues for Inter-Agent Communication (v1.18)
 
-v1.18 引入 `spawn` + Channel 消息队列，替代旧的 async/await 并发模型：
+v1.18 introduces `spawn` + Channel message queues, replacing the old async/await concurrency model:
 
 ```helen
-// spawn 返回 Channel（邮箱）
+// spawn returns a Channel (mailbox)
 agent Sender(output: Channel) {
     main {
         output.send("Hello from sender")
@@ -484,25 +484,25 @@ agent Receiver(input: Channel) {
 }
 
 main {
-    // 创建 channel 连接 sender 和 receiver
-    // 通过 spawn 启动并发 agent
+    // Create channel to connect sender and receiver
+    // Launch concurrent agent via spawn
     let mb1 = spawn Sender(null)
     let result = mb1.receive()
 }
 ```
 
-**v1.18 Channel 消息队列 vs Shared Store**:
+**v1.18 Channel Message Queue vs Shared Store**:
 
-| 场景 | 推荐 |
-|------|------|
-| 多个 Agent 读写同一个状态 | Shared Store |
-| Agent 间传递消息/任务结果 | spawn + Channel |
-| 多路复用选择 | mailbox_select([m1, m2, ...]) |
-| 需要线程安全的字段访问 | Shared Store |
+| Scenario | Recommendation |
+|----------|---------------|
+| Multiple agents reading/writing the same state | Shared Store |
+| Passing messages/task results between agents | spawn + Channel |
+| Multiplexed selection | mailbox_select([m1, m2, ...]) |
+| Thread-safe field access required | Shared Store |
 
-### 向下游 Agent 传播环境事实（v1.17）
+### Propagating Ground Truth to Downstream Agents (v1.17)
 
-编排者（orchestrator）最常见的失误：**自己掌握环境事实，却不在 prompt 中传给下游 Agent**。LLM 看不见运行时环境，缺什么就会编什么。
+The most common orchestrator mistake: **holding ground-truth facts but not injecting them into the prompt for downstream agents**. The LLM cannot see the runtime environment — whatever is missing, it will fabricate.
 
 ```helen
 // ✅ Orchestrator resolves ground truth once, fans out via {{}}
@@ -526,11 +526,11 @@ agent Worker(task: str, cwd: str, branch: str, now: str) {
 }
 ```
 
-原则：**谁拥有事实，谁负责注入**。共享的 `shared store` 适合状态，但时间/OS/路径等不可变事实直接走 `{{}}` 进 prompt，开销最低、最不容易出错。详见 **helen-agent-patterns § 最佳实践 7**。
+Principle: **Whoever owns the facts is responsible for injecting them**. A shared `shared store` works for mutable state, but immutable facts like time/OS/path are cheapest and least error-prone passed directly into the prompt via `{{}}`. See **helen-agent-patterns § Best Practice 7** for details.
 
-## 错误处理与性能
+## Error Handling & Performance
 
-**并发错误处理**：spawn + Channel 配合 try/catch AggregateError：
+**Concurrent error handling**: Combine spawn + Channel with try/catch AggregateError:
 
 ```helen
 agent RobustOrchestrator(tasks: list) {
@@ -542,23 +542,23 @@ agent RobustOrchestrator(tasks: list) {
             for mb in mailboxes { results.append(mb.receive()) }
             return results
         } catch AggregateError as e {
-            print("部分任务失败: " + str(len(e.errors)))
-            return []  // 处理失败情况
+            print("Some tasks failed: " + str(len(e.errors)))
+            return []  // Handle the failure case
         }
     }
 }
 ```
 
-**性能要点**：
-- **分批并发**：`for i in range(0, len(items), MAX_CONCURRENT)` 控制每次 spawn 数量
-- **缓存**：通过参数传递 cache map，返回值返回更新后副本，`shared let` 跟踪命中统计
+**Performance tips**:
+- **Batched concurrency**: `for i in range(0, len(items), MAX_CONCURRENT)` to control how many agents to spawn per batch
+- **Caching**: Pass a cache map via parameters; return the updated copy; use `shared let` to track hit statistics
 
-## 相关技能
+## Related Skills
 
-- **helen-agent-patterns** — Agent 设计模式详解
-- **helen-syntax** — Helen 语法（shared let、const、agent main 等）
-- **subagent-driven-development** — 子代理驱动开发工作流
+- **helen-agent-patterns** — Detailed agent design patterns
+- **helen-syntax** — Helen language syntax (shared let, const, agent main, etc.)
+- **subagent-driven-development** — Sub-agent-driven development workflow
 
-## 延伸阅读
+## Further Reading
 
-- **[[Agent 提示词工程完全指南]]**（`wiki/reference/agent-system-prompt-guide.md`）— agent prompt 设计方法论，编排者 agent 尤其需要遵循"原则优先于流程"和"注入环境事实"。
+- **[[The Complete Guide to Agent Prompt Engineering]]** (`wiki/reference/agent-system-prompt-guide.md`) — Agent prompt design methodology; orchestrator agents especially should follow "principles over procedures" and "inject ground-truth facts".

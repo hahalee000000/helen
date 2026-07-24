@@ -1,25 +1,25 @@
-# 教程 09: Python FFI
+# Tutorial 09: Python FFI
 
-> 导入 Python 库 / 调用 Python 函数 / 类型自动转换
-
----
-
-## 概述
-
-Helen 支持通过 Python FFI（外部函数接口）直接导入和使用 Python 库。这让 Helen 可以访问 Python 的整个生态系统（40 万+ 包），包括数值计算、网络请求、数据处理等。
-
-**核心特性：**
-- ✅ 使用 `import` 语法导入 Python 模块
-- ✅ 自动类型转换（Helen ↔ Python）
-- ✅ 调用 Python 函数、访问属性和常量
-- ✅ 支持嵌套模块（如 `os.path`）
-- ✅ 复杂对象自动包装
+> Import Python libraries / Call Python functions / Automatic type conversion
 
 ---
 
-## 基本用法
+## Overview
 
-### 导入 Python 模块
+Helen supports directly importing and using Python libraries through the Python FFI (Foreign Function Interface). This gives Helen access to Python's entire ecosystem (400K+ packages), including numerical computation, network requests, data processing, and more.
+
+**Core features:**
+- ✅ Use `import` syntax to import Python modules
+- ✅ Automatic type conversion (Helen ↔ Python)
+- ✅ Call Python functions, access attributes and constants
+- ✅ Support for nested modules (e.g. `os.path`)
+- ✅ Complex objects are automatically wrapped
+
+---
+
+## Basic Usage
+
+### Importing Python Modules
 
 ```helen
 import "math" as math
@@ -27,13 +27,13 @@ import "json" as json
 import "os.path" as path
 ```
 
-**语法规则：**
-- 无文件扩展名 → Python 模块
-- `.py` 扩展名 → Python 模块
-- `.helen` → Helen 文件
-- `.json`/`.md`/`.yaml` → 数据文件
+**Syntax rules:**
+- No file extension → Python module
+- `.py` extension → Python module
+- `.helen` → Helen file
+- `.json`/`.md`/`.yaml` → data file
 
-### 调用 Python 函数
+### Calling Python Functions
 
 ```helen
 import "math" as math
@@ -47,7 +47,7 @@ main {
 }
 ```
 
-### 访问 Python 常量
+### Accessing Python Constants
 
 ```helen
 import "math" as math
@@ -63,35 +63,35 @@ main {
 
 ---
 
-## 类型转换
+## Type Conversion
 
-### Helen → Python（自动）
+### Helen → Python (automatic)
 
-| Helen 类型 | Python 类型 |
-|-----------|------------|
+| Helen Type | Python Type |
+|------------|-------------|
 | `int` | `int` |
 | `float` | `float` |
 | `str` | `str` |
 | `bool` | `bool` |
 | `null` | `None` |
-| `list` | `list`（递归转换） |
-| `map` | `dict`（递归转换） |
+| `list` | `list` (recursive conversion) |
+| `map` | `dict` (recursive conversion) |
 
-### Python → Helen（自动）
+### Python → Helen (automatic)
 
-| Python 类型 | Helen 类型 |
-|------------|-----------|
+| Python Type | Helen Type |
+|-------------|------------|
 | `int` | `int` |
 | `float` | `float` |
 | `str` | `str` |
 | `bool` | `bool` |
 | `None` | `null` |
-| `list` | `list`（递归转换） |
-| `dict` | `map`（递归转换） |
+| `list` | `list` (recursive conversion) |
+| `dict` | `map` (recursive conversion) |
 | `tuple` | `list` |
-| 复杂对象 | 包装为 `PythonObject` |
+| Complex object | Wrapped as `PythonObject` |
 
-### 示例：JSON 处理
+### Example: JSON Processing
 
 ```helen
 import "json" as json
@@ -111,9 +111,9 @@ main {
 
 ---
 
-## 嵌套模块
+## Nested Modules
 
-支持导入嵌套模块（如 `os.path`）：
+Supports importing nested modules (e.g. `os.path`):
 
 ```helen
 import "os.path" as path
@@ -129,25 +129,25 @@ main {
 
 ---
 
-## Python 类
+## Python Classes
 
-### 实例化 Python 类
+### Instantiating Python Classes
 
-通过访问模块中的类名并调用 `()` 来创建实例：
+Create instances by accessing the class name in a module and calling `()`:
 
 ```helen
 import "json" as json
 
 main {
-    // JSONEncoder 是 Python 类，() 创建实例
+    // JSONEncoder is a Python class, () creates an instance
     let encoder = json.JSONEncoder()
     print(encoder)    // <json.encoder.JSONEncoder object at ...>
 }
 ```
 
-### 调用实例方法
+### Calling Instance Methods
 
-两种方式，效果相同：
+Two approaches, same effect:
 
 ```helen
 import "json" as json
@@ -155,10 +155,10 @@ import "json" as json
 main {
     let encoder = json.JSONEncoder()
     
-    // 方式 1：自然方法调用（推荐）
+    // Approach 1: Natural method call (recommended)
     let result1 = encoder.encode({"name": "Alice"})
     
-    // 方式 2：.call() 按方法名调用
+    // Approach 2: .call() by method name
     let result2 = encoder.call("encode", {"name": "Alice"})
     
     print(result1)    // {"name": "Alice"}
@@ -166,13 +166,13 @@ main {
 }
 ```
 
-**选择建议：**
-- 方法名已知（绝大多数场景）→ 用 `obj.method()`，更简洁直观
-- 方法名动态决定（运行时才知道调用哪个方法）→ 用 `obj.call("method_name")`
+**Selection guide:**
+- Method name is known (vast majority of cases) → use `obj.method()`, more concise and intuitive
+- Method name determined dynamically (only known at runtime) → use `obj.call("method_name")`
 
-### 示例：使用自定义 Python 类
+### Example: Using a Custom Python Class
 
-假设有一个 Python 模块 `mylib/greeter.py`：
+Suppose there is a Python module `mylib/greeter.py`:
 
 ```python
 class Greeter:
@@ -186,33 +186,33 @@ class Greeter:
         self.name = name
 ```
 
-在 Helen 中使用：
+Using it in Helen:
 
 ```helen
 import "mylib.greeter" as PyGreeter
 
 main {
-    // 1. 实例化：类名()
+    // 1. Instantiate: ClassName()
     let greeter = PyGreeter.Greeter("Alice")
     
-    // 2. 调用方法（自然语法）
+    // 2. Call methods (natural syntax)
     let msg = greeter.greet("Hello")
     print(msg)    // Hello, Alice!
     
-    // 3. 修改属性
+    // 3. Modify attributes
     greeter.set_name("Bob")
     print(greeter.greet("Hi"))    // Hi, Bob!
     
-    // 4. 动态方法名
+    // 4. Dynamic method name
     let method = "greet"
     let msg2 = greeter.call(method, "Hey")
     print(msg2)    // Hey, Bob!
 }
 ```
 
-### 在模块中使用 Python 类
+### Using Python Classes in Modules
 
-Python 类可以在被导入的 `.helen` 模块中实例化，跨模块正常工作：
+Python classes can be instantiated in imported `.helen` modules, working correctly across modules:
 
 ```helen
 // bridge.helen
@@ -241,32 +241,32 @@ main {
 
 ---
 
-## 实际示例
+## Practical Examples
 
-### 示例 1：数学计算
+### Example 1: Math Computation
 
 ```helen
 import "math" as math
 
 main {
-    // 三角函数
+    // Trigonometric functions
     let angle = math.pi / 4
     let sin_val = math.sin(angle)
     let cos_val = math.cos(angle)
     print("sin(π/4) = " + str(sin_val))
     print("cos(π/4) = " + str(cos_val))
     
-    // 对数
+    // Logarithms
     let log_val = math.log(100, 10)
     print("log₁₀(100) = " + str(log_val))
     
-    // 取整
+    // Rounding
     print(math.floor(3.7))    // 3
     print(math.ceil(3.2))     // 4
 }
 ```
 
-### 示例 2：文件路径操作
+### Example 2: File Path Operations
 
 ```helen
 import "os.path" as path
@@ -274,39 +274,39 @@ import "os.path" as path
 main {
     let filepath = "/home/user/documents/report.txt"
     
-    // 提取文件名
+    // Extract filename
     let basename = path.basename(filepath)
     print(basename)    // report.txt
     
-    // 提取目录
+    // Extract directory
     let dirname = path.dirname(filepath)
     print(dirname)     // /home/user/documents
     
-    // 分离扩展名
+    // Split extension
     let parts = path.splitext(filepath)
     print(parts[0])    // /home/user/documents/report
     print(parts[1])    // .txt
 }
 ```
 
-### 示例 3：数据处理
+### Example 3: Data Processing
 
 ```helen
 import "json" as json
 
 main {
-    // 创建数据
+    // Create data
     let users = [
         {"name": "Alice", "age": 30},
         {"name": "Bob", "age": 25},
         {"name": "Charlie", "age": 35}
     ]
     
-    // 序列化为 JSON
+    // Serialize to JSON
     let json_data = json.dumps(users)
     print(json_data)
     
-    // 解析 JSON
+    // Parse JSON
     let parsed = json.loads(json_data)
     for user in parsed {
         print(user["name"] + " is " + str(user["age"]) + " years old")
@@ -314,7 +314,7 @@ main {
 }
 ```
 
-### 示例 4：在 Agent 中使用 Python 库
+### Example 4: Using Python Libraries in Agents
 
 ```helen
 import "math" as math
@@ -334,7 +334,7 @@ agent DataAnalyzer(data: list) {
             }
             let mean = sum / n
             
-            // 使用 Python 的 math.sqrt
+            // Use Python's math.sqrt
             let variance = 0
             for value in data {
                 let diff = value - mean
@@ -369,30 +369,30 @@ main {
 
 ---
 
-## 错误处理
+## Error Handling
 
-### 导入不存在的模块
+### Importing a Nonexistent Module
 
 ```helen
 import "nonexistent_module" as bad
 
 main {
-    // 运行时错误：Cannot import Python module 'nonexistent_module'
+    // Runtime error: Cannot import Python module 'nonexistent_module'
 }
 ```
 
-### 访问不存在的属性
+### Accessing a Nonexistent Attribute
 
 ```helen
 import "math" as math
 
 main {
     let value = math.nonexistent_function()
-    // 运行时错误：'math' has no property 'nonexistent_function'
+    // Runtime error: 'math' has no property 'nonexistent_function'
 }
 ```
 
-### 使用 try-catch 处理
+### Handling with try-catch
 
 ```helen
 import "math" as math
@@ -409,36 +409,36 @@ main {
 
 ---
 
-## 性能注意事项
+## Performance Considerations
 
-- **类型转换**：简单类型（int/float/str）转换开销极低
-- **复杂对象**：大型 list/dict 转换有一定开销，建议批量处理
-- **函数调用**：每次调用都有跨语言开销，避免在紧密循环中频繁调用
-
----
-
-## 与 Helen 原生功能的对比
-
-| 功能 | Helen 原生 | Python FFI |
-|------|-----------|-----------|
-| 字符串处理 | ✅ 36 个 string 函数 | ✅ 可用 Python re 等 |
-| 数学计算 | ✅ 15 个 math 函数 | ✅ 可用 numpy/scipy |
-| 文件操作 | ✅ 16 个 file 函数 | ✅ 可用 os/pathlib |
-| 网络请求 | ✅ 9 个 network 函数 | ✅ 可用 requests（高级场景） |
-| 数据处理 | ✅ 25 个 data 函数（JSON/CSV/HTML/XML） | ✅ 可用 pandas（大数据集） |
-| 机器学习 | ❌ 无 | ✅ 可用 torch/tensorflow |
-
-**建议**：优先使用 Helen 原生功能（285 个内置函数覆盖常见需求），需要高级功能（如大数据处理、机器学习）时使用 Python FFI。
+- **Type conversion**: Simple type (int/float/str) conversion has minimal overhead
+- **Complex objects**: Large list/dict conversion has some overhead; batch processing is recommended
+- **Function calls**: Each call incurs cross-language overhead; avoid frequent calls in tight loops
 
 ---
 
-## 练习
+## Comparison with Helen Native Features
 
-1. 导入 `math` 模块，计算圆的面积（半径 = 5）
-2. 导入 `json` 模块，将 map 转换为 JSON 字符串并解析回来
-3. 导入 `os.path` 模块，提取文件路径的目录和文件名
-4. 创建一个 Agent，使用 Python 的 `math` 模块进行复杂计算
+| Feature | Helen Native | Python FFI |
+|---------|-------------|------------|
+| String processing | ✅ 36 string functions | ✅ Can use Python re, etc. |
+| Math computation | ✅ 15 math functions | ✅ Can use numpy/scipy |
+| File operations | ✅ 16 file functions | ✅ Can use os/pathlib |
+| Network requests | ✅ 9 network functions | ✅ Can use requests (advanced scenarios) |
+| Data processing | ✅ 25 data functions (JSON/CSV/HTML/XML) | ✅ Can use pandas (large datasets) |
+| Machine learning | ❌ None | ✅ Can use torch/tensorflow |
+
+**Recommendation**: Prefer Helen native features (285 built-in functions cover common needs); use Python FFI when you need advanced capabilities (e.g. big data processing, machine learning).
 
 ---
 
-> **下一步**: 学习 [[tutorial/15-python-bridge|Python Bridge]] — 让 Python 直接使用 Helen Agent
+## Exercises
+
+1. Import the `math` module and calculate the area of a circle (radius = 5)
+2. Import the `json` module, convert a map to a JSON string and parse it back
+3. Import the `os.path` module, extract the directory and filename from a file path
+4. Create an Agent that uses Python's `math` module for complex calculations
+
+---
+
+> **Next**: Learn [[tutorial/15-python-bridge|Python Bridge]] — let Python directly use Helen Agents

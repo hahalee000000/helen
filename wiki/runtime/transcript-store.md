@@ -1,95 +1,96 @@
 # TranscriptStore SSOT
 
-> **v1.16 新特性** — 消息唯一真实来源（Single Source of Truth）
+> **v1.16 New Feature** — Single Source of Truth for messages
 
-TranscriptStore 是 Helen v1.16 引入的核心运行时组件，它将所有对话消息持久化存储，提供完整的审计追踪和会话恢复能力。
-
----
-
-## 📋 目录
-
-- [设计目标](#设计目标)
-- [架构概览](#架构概览)
-- [核心组件](#核心组件)
-- [使用指南](#使用指南)
-- [配置详解](#配置详解)
-- [性能优化](#性能优化)
-- [最佳实践](#最佳实践)
+TranscriptStore is a core runtime component introduced in Helen v1.16. It persists all conversation messages, providing complete audit trails and session recovery capabilities.
 
 ---
 
-## 设计目标
+## 📋 Table of Contents
 
-### 为什么需要 TranscriptStore？
+- [Design Goals](#design-goals)
+- [Architecture Overview](#architecture-overview)
+- [Core Components](#core-components)
+- [Usage Guide](#usage-guide)
+- [Configuration Details](#configuration-details)
+- [Performance Optimization](#performance-optimization)
+- [Best Practices](#best-practices)
 
-在 v1.16 之前，Helen 的对话历史管理存在以下问题：
+---
 
-1. **双写分叉**：`_history` 和 `TranscriptStore` 双写，语义不一致
-2. **破坏性压缩**：压缩就地替换，丢失完整对话历史
-3. **无持久化**：所有消息常驻内存，长会话内存压力大
-4. **调试困难**：无法回溯"LLM 看到了什么 vs 原始对话是什么"
+## Design Goals
 
-### TranscriptStore 的解决方案
+### Why TranscriptStore?
 
-| 问题 | 解决方案 |
+Before v1.16, Helen's conversation history management had the following problems:
+
+1. **Dual-write divergence**: `_history` and `TranscriptStore` were dual-written with inconsistent semantics
+2. **Destructive compression**: Compression replaced in-place, losing the complete conversation history
+3. **No persistence**: All messages stayed in memory, causing memory pressure in long sessions
+4. **Debugging difficulty**: Impossible to trace back "what the LLM saw vs what the original conversation was"
+
+### TranscriptStore's Solution
+
+| Problem | Solution |
 |------|---------|
-| 双写分叉 | **单一写入点**：所有消息只写入 TranscriptStore |
-| 破坏性压缩 | **非破坏性**：压缩只追加 BoundaryMarker，不修改消息 |
-| 无持久化 | **持久化优先**：JSONL/SQLite 后端，内存只保留活跃窗口 |
-| 调试困难 | **完整审计**：可回溯任意历史视图 |
+| Dual-write divergence | **Single write point**: All messages written only to TranscriptStore |
+| Destructive compression | **Non-destructive**: Compression only appends BoundaryMarker, messages are not modified |
+| No persistence | **Persistence-first**: JSONL/SQLite backends, memory retains only the active window |
+| Debugging difficulty | **Full audit**: Any historical view can be reconstructed |
 
 ---
 
-## 架构概览
+## Architecture Overview
 
-### 四层架构
+### Four-Layer Architecture
 
 ```
 ┌─────────────────────────────────────────┐
-│  Layer 4: 用户接口                       │
-│  • REPL 命令 (:transcript, :sessions)   │
-│  • Stdlib 函数 (get_session_id, etc.)   │
+│  Layer 4: User Interface                 │
+│  • REPL commands (:transcript, :sessions)│
+│  • Stdlib functions (get_session_id, etc)│
 └─────────────────────────────────────────┘
                     ↓
 ┌─────────────────────────────────────────┐
-│  Layer 3: 视图层                         │
-│  • read_view() 重建压缩后视图            │
-│  • View Cache (dirty flag + 缓存)       │
-│  • UUID 索引 (O(1) 查找)                │
+│  Layer 3: View Layer                     │
+│  • read_view() reconstructs compressed  │
+│    view                                 │
+│  • View Cache (dirty flag + cache)      │
+│  • UUID index (O(1) lookup)             │
 └─────────────────────────────────────────┘
                     ↓
 ┌─────────────────────────────────────────┐
-│  Layer 2: 存储层                         │
-│  • TranscriptStore (内存)               │
+│  Layer 2: Storage Layer                  │
+│  • TranscriptStore (in-memory)          │
 │  • LRU Cache (max_memory_items)         │
-│  • BoundaryMarker (压缩记录)            │
+│  • BoundaryMarker (compression records) │
 └─────────────────────────────────────────┘
                     ↓
 ┌─────────────────────────────────────────┐
-│  Layer 1: 持久化层                       │
+│  Layer 1: Persistence Layer              │
 │  • JSONLBackend (append-only)           │
 │  • SQLiteBackend (WAL mode, indexed)    │
 └─────────────────────────────────────────┘
 ```
 
-### 数据流
+### Data Flow
 
 ```
 User Input
     ↓
 _add_to_history()
     ↓
-TranscriptStore.append()  ← SSOT (唯一写入点)
+TranscriptStore.append()  ← SSOT (sole write point)
     ↓
-Backend.append()  ← 持久化
+Backend.append()  ← Persistence
     ↓
-LRU Eviction (if needed)  ← 内存优化
+LRU Eviction (if needed)  ← Memory optimization
 
 LLM Call
     ↓
 _prepare_history_for_llm()
     ↓
-TranscriptStore.read_view()  ← 应用 BoundaryMarker
+TranscriptStore.read_view()  ← Applies BoundaryMarker
     ↓
 View Cache (O(1) if no changes)
     ↓
@@ -98,84 +99,84 @@ LLM API Call
 
 ---
 
-## 核心组件
+## Core Components
 
 ### 1. TranscriptStore
 
-**位置**: `helen/runtime/transcript_store.py`
+**Location**: `helen/runtime/transcript_store.py`
 
-TranscriptStore 是消息的唯一真实来源（SSOT），负责：
+TranscriptStore is the Single Source of Truth (SSOT) for messages, responsible for:
 
-- **消息存储**: append-only 列表，永不修改/删除
-- **UUID 索引**: O(1) 查找 via `get(uuid)`
-- **视图重建**: `read_view()` 应用 BoundaryMarker
-- **压缩记录**: `record_compression()` 追加 BoundaryMarker
-- **LRU 缓存**: 自动驱逐旧消息到后端
+- **Message storage**: Append-only list, never modified/deleted
+- **UUID indexing**: O(1) lookup via `get(uuid)`
+- **View reconstruction**: `read_view()` applies BoundaryMarkers
+- **Compression recording**: `record_compression()` appends BoundaryMarker
+- **LRU caching**: Automatically evicts old messages to backend
 
-**关键属性**:
+**Key attributes**:
 
 ```python
 class TranscriptStore:
     transcript: list[Message | BoundaryMarker]  # append-only
     _uuid_index: dict[str, int]                 # UUID → index
-    _backend: TranscriptStoreBackend            # 持久化后端
-    _max_memory_items: int                      # LRU 缓存大小
-    _offloaded_count: int                       # 已驱逐到后端的数量
-    _dirty: bool                                # 视图缓存失效标志
-    _cached_view: list[Message] | None          # 缓存的视图
+    _backend: TranscriptStoreBackend            # Persistence backend
+    _max_memory_items: int                      # LRU cache size
+    _offloaded_count: int                       # Count of items evicted to backend
+    _dirty: bool                                # View cache invalidation flag
+    _cached_view: list[Message] | None          # Cached view
 ```
 
-**核心方法**:
+**Core methods**:
 
-| 方法 | 说明 | 时间复杂度 |
+| Method | Description | Time Complexity |
 |------|------|-----------|
-| `append(msg)` | 追加消息，分配 UUID | O(1) |
-| `get(uuid)` | UUID 查找 | O(1) |
-| `read_view()` | 重建压缩后视图 | O(n) 首次, O(1) 缓存 |
-| `record_compression(...)` | 记录压缩事件 | O(1) |
-| `get_compression_audit()` | 获取压缩审计 | O(b), b=边界数 |
+| `append(msg)` | Append message, assign UUID | O(1) |
+| `get(uuid)` | UUID lookup | O(1) |
+| `read_view()` | Reconstruct compressed view | O(n) first time, O(1) cached |
+| `record_compression(...)` | Record compression event | O(1) |
+| `get_compression_audit()` | Get compression audit | O(b), b=number of boundaries |
 
 ### 2. BoundaryMarker
 
-**位置**: `helen/runtime/transcript_store.py`
+**Location**: `helen/runtime/transcript_store.py`
 
-BoundaryMarker 记录压缩事件，不修改原始消息：
+BoundaryMarker records compression events without modifying original messages:
 
 ```python
 @dataclass
 class BoundaryMarker:
-    uuid: str                          # 边界标记 UUID
-    anchor_uuid: str                   # 锚点消息 UUID（压缩后第一条）
-    head_uuid: str                     # 压缩范围起始 UUID
-    tail_uuid: str                     # 压缩范围结束 UUID
-    summary: str                       # 压缩摘要
-    layer: str                         # 压缩层名称
-    timestamp: float                   # 压缩时间戳
-    original_token_count: int          # 压缩前 token 数
-    compressed_token_count: int        # 压缩后 token 数
+    uuid: str                          # Boundary marker UUID
+    anchor_uuid: str                   # Anchor message UUID (first message after compression)
+    head_uuid: str                     # Compression range start UUID
+    tail_uuid: str                     # Compression range end UUID
+    summary: str                       # Compression summary
+    layer: str                         # Compression layer name
+    timestamp: float                   # Compression timestamp
+    original_token_count: int          # Token count before compression
+    compressed_token_count: int        # Token count after compression
 ```
 
-**工作原理**:
+**How it works**:
 
 ```
-原始消息: [msg1] [msg2] [msg3] [msg4] [msg5]
-                ↓ 压缩 msg1-msg3
+Original messages: [msg1] [msg2] [msg3] [msg4] [msg5]
+                ↓ Compress msg1-msg3
 Transcript: [msg1] [msg2] [msg3] [msg4] [msg5] [BoundaryMarker]
                                                   ↓
 read_view(): [summary] [msg4] [msg5]
 ```
 
-### 3. Backend（持久化后端）
+### 3. Backend (Persistence Backend)
 
 #### JSONLBackend
 
-**特点**:
-- ✅ 简单、人类可读（每行一个 JSON）
-- ✅ 崩溃安全（append-only）
-- ✅ 易于 tail/grep 调试
-- ⚠️ 无索引，大量消息时查询较慢
+**Features**:
+- ✅ Simple, human-readable (one JSON per line)
+- ✅ Crash-safe (append-only)
+- ✅ Easy to debug with tail/grep
+- ⚠️ No index, slower queries with large message counts
 
-**格式**:
+**Format**:
 ```json
 {"type": "message", "role": "user", "content": "Hello", "uuid": "abc123", ...}
 {"type": "boundary_marker", "uuid": "marker1", "layer": "auto_compact", ...}
@@ -183,11 +184,11 @@ read_view(): [summary] [msg4] [msg5]
 
 #### SQLiteBackend
 
-**特点**:
-- ✅ WAL 模式，高性能写入（<1ms/消息）
-- ✅ UUID 索引，O(1) 查找
-- ✅ 事务安全，支持并发读
-- ⚠️ 二进制格式，不易直接查看
+**Features**:
+- ✅ WAL mode, high-performance writes (<1ms/message)
+- ✅ UUID indexed, O(1) lookup
+- ✅ Transaction-safe, supports concurrent reads
+- ⚠️ Binary format, not easy to inspect directly
 
 **Schema**:
 ```sql
@@ -204,63 +205,63 @@ CREATE INDEX idx_timestamp ON transcript(timestamp);
 
 ### 4. SessionManager
 
-**位置**: `helen/runtime/session_manager.py`
+**Location**: `helen/runtime/session_manager.py`
 
-SessionManager 管理会话生命周期：
+SessionManager manages session lifecycle:
 
 ```python
 class SessionManager:
     def create_session(self) -> str:
-        """创建新会话，返回 session_id"""
+        """Create new session, return session_id"""
         
     def get_session_path(self, session_id: str) -> Path:
-        """获取会话 transcript 文件路径"""
+        """Get session transcript file path"""
         
     def list_sessions(self) -> list[dict]:
-        """列出所有会话（按修改时间排序）"""
+        """List all sessions (sorted by modification time)"""
         
     def delete_session(self, session_id: str) -> bool:
-        """删除会话"""
+        """Delete session"""
         
     def cleanup_old_sessions(self, keep_count: int = 100) -> int:
-        """清理旧会话，保留最近 N 个"""
+        """Clean up old sessions, keep most recent N"""
 ```
 
-**会话目录结构**:
+**Session directory structure**:
 ```
 ~/.helen/sessions/
 ├── session_1783492628_d9d9c0aa/
-│   └── transcript.jsonl  (或 transcript.db)
+│   └── transcript.jsonl  (or transcript.db)
 ├── session_1783492600_abc12345/
 │   └── transcript.jsonl
 └── ...
 ```
 
-### 4.5 会话作用域 (Session Scope, v1.20)
+### 4.5 Session Scope (v1.20)
 
-v1.20 之前，所有 transcripts 都放在 `~/.helen/sessions/`（全局）。v1.20 引入**作用域**概念：transcripts 可以按应用隔离在各自的项目目录中。
+Before v1.20, all transcripts were stored in `~/.helen/sessions/` (global). v1.20 introduces the concept of **scope**: transcripts can be isolated per application in their respective project directories.
 
-#### 作用域模式
+#### Scope Modes
 
-| 模式 | 路径 | 适用场景 |
+| Mode | Path | Use Case |
 |------|------|----------|
-| `global` | `~/.helen/sessions/` | REPL 探索、跨项目共享、短脚本 |
-| `project` | `<project>/.helen/sessions/` | 长期应用、生产部署、容器化 |
-| `auto` (默认) | 检测项目目录，有则 project，无则 global | 推荐默认 |
+| `global` | `~/.helen/sessions/` | REPL exploration, cross-project sharing, short scripts |
+| `project` | `<project>/.helen/sessions/` | Long-lived applications, production deployments, containerized |
+| `auto` (default) | Detects project directory — project if found, global otherwise | Recommended default |
 
-#### 项目检测
+#### Project Detection
 
-通过向上查找以下标记之一检测项目根目录：
-- `.helen/`（目录）—— 但排除用户全局的 `~/.helen/`
+Project root is detected by walking upward looking for one of these markers:
+- `.helen/` (directory) — but excludes the user-global `~/.helen/`
 - `helen.yaml` / `helen.yml` / `helen.toml`
 
-#### 优先级
+#### Priority
 
-1. **`HELEN_SESSION_DIR` 环境变量**：绝对优先，强制指定路径
-2. **`session_scope` 配置**：`auto` (默认) / `global` / `project`
-3. **回退到 `~/.helen/sessions/`**
+1. **`HELEN_SESSION_DIR` environment variable**: Absolute priority, forces the specified path
+2. **`session_scope` config**: `auto` (default) / `global` / `project`
+3. **Fallback to `~/.helen/sessions/`**
 
-#### 配置
+#### Configuration
 
 ```yaml
 # ~/.helen/config.yaml
@@ -268,121 +269,121 @@ transcript:
   enabled: true
   backend: "sqlite"
   session_scope: "auto"          # "auto" | "global" | "project"
-  session_dir: "~/.helen/sessions"             # 仅 scope=global 时
-  project_session_dir: ".helen/sessions"       # 仅 scope=project 时
+  session_dir: "~/.helen/sessions"             # Only when scope=global
+  project_session_dir: ".helen/sessions"       # Only when scope=project
   max_memory_items: 1000
 ```
 
-#### 运行时查询与修改
+#### Runtime Query and Modification
 
 ```helen
-// 查看当前会话目录
+// View current session directory
 let info = get_session_dir()
-print("路径: " + info["session_dir"])
-print("作用域: " + info["scope"])
-print("项目根: " + str(info["project_dir"]))
+print("Path: " + info["session_dir"])
+print("Scope: " + info["scope"])
+print("Project root: " + str(info["project_dir"]))
 
-// 运行时切换（不修改 config.yaml，仅当前进程）
+// Switch at runtime (does not modify config.yaml, current process only)
 set_session_dir("./my_app_sessions")
 ```
 
-#### 设计原则
+#### Design Principle
 
-**Transcripts 是应用数据，不是语言基础设施**。让 transcripts 跟随应用而非语言安装：
-- 应用即目录，`rm -rf .helen/` 清理全部状态
-- 复制/mv 应用目录时 transcripts 随之移动
-- 容器化场景：`WORKDIR` 自带 transcripts，无需挂载 `~/.helen`
-- 多应用机器：每个应用 transcripts 自然隔离
+**Transcripts are application data, not language infrastructure**. Let transcripts follow the application rather than the language installation:
+- Application is directory — `rm -rf .helen/` cleans all state
+- When copying/moving application directory, transcripts move with it
+- Containerized scenarios: `WORKDIR` already contains transcripts, no need to mount `~/.helen`
+- Multi-application machines: each application's transcripts are naturally isolated
 
-REPL 等交互场景显式 `session_scope: "global"` 保持跨项目历史延续。
+Interactive scenarios like REPL explicitly use `session_scope: "global"` to maintain cross-project history continuity.
 
-### 4.6 会话删除 (Session Deletion, v1.21)
+### 4.6 Session Deletion (v1.21)
 
-v1.21 新增三个 stdlib 函数，用于永久删除 TranscriptStore 会话数据。
+v1.21 adds three stdlib functions for permanently deleting TranscriptStore session data.
 
-#### 设计原则
+#### Design Principle
 
-Helen 采用**审计追踪优先**的删除策略：
+Helen adopts an **audit-trail-first** deletion strategy:
 
-| 操作类型 | 函数 | 是否删除持久化数据 |
+| Operation Type | Function | Deletes Persisted Data |
 |---------|------|:----------------:|
-| 逻辑删除（消息级） | `delete_message(uuid)` | ❌ 保留 |
-| 逻辑清空（会话级） | `clear_context()` | ❌ 保留（添加 BoundaryMarker） |
-| 永久删除（会话级） | `delete_session(id)` | ✅ 删除 |
-| 永久删除（当前会话） | `delete_current_session()` | ✅ 删除 |
-| 批量清理 | `cleanup_sessions()` | ✅ 删除 |
+| Logical delete (message-level) | `delete_message(uuid)` | ❌ Preserved |
+| Logical clear (session-level) | `clear_context()` | ❌ Preserved (adds BoundaryMarker) |
+| Permanent delete (session-level) | `delete_session(id)` | ✅ Deleted |
+| Permanent delete (current session) | `delete_current_session()` | ✅ Deleted |
+| Batch cleanup | `cleanup_sessions()` | ✅ Deleted |
 
-逻辑删除保留持久化数据用于审计，永久删除才真正释放磁盘空间。
+Logical deletion preserves persisted data for audit; permanent deletion actually frees disk space.
 
 #### delete_session(session_id)
 
-永久删除指定会话的所有数据：
+Permanently deletes all data for the specified session:
 
 ```helen
 let r = delete_session("session_1720435200_a1b2c3d4")
 // {"status": "ok", "session_id": "...", "freed_bytes": 10240, "message": "..."}
 ```
 
-**安全限制**：不能删除当前会话，需使用 `delete_current_session()`。
+**Safety restriction**: Cannot delete the current session; use `delete_current_session()` instead.
 
 #### delete_current_session(confirm?)
 
-永久删除当前会话，需要显式确认：
+Permanently deletes the current session, requires explicit confirmation:
 
 ```helen
-// 第一步：查看确认提示
+// Step 1: See confirmation prompt
 let r = delete_current_session()
 // {"status": "error", "message": "Set confirm=true to delete current session"}
 
-// 第二步：确认删除
+// Step 2: Confirm deletion
 let r = delete_current_session(confirm=true)
 // {"status": "ok", "session_id": "...", "freed_bytes": 8192}
 ```
 
-删除后，解释器继续运行，但当前 TranscriptStore 被清空，后续消息会写入新会话。
+After deletion, the interpreter continues running, but the current TranscriptStore is cleared and subsequent messages are written to a new session.
 
 #### cleanup_sessions(keep_count?, older_than_days?)
 
-批量清理旧会话，支持两种策略：
+Batch cleanup of old sessions, supports two strategies:
 
 ```helen
-// 策略 1：保留最近 N 个会话
+// Strategy 1: Keep most recent N sessions
 let r = cleanup_sessions(keep_count=50)
 // {"status": "ok", "deleted_count": 15, "freed_bytes": 1536000}
 
-// 策略 2：删除 N 天前的会话
+// Strategy 2: Delete sessions older than N days
 let r = cleanup_sessions(older_than_days=30)
 
-// 策略 3：组合使用（同时满足两个条件才删除）
+// Strategy 3: Combined (deletes only when both conditions are met)
 let r = cleanup_sessions(keep_count=50, older_than_days=30)
 ```
 
-**安全限制**：当前会话永远不会被清理，即使它不在保留范围内。
+**Safety restriction**: The current session is never cleaned up, even if it falls outside the retention range.
 
-#### 使用场景
+#### Use Cases
 
-| 场景 | 推荐函数 |
+| Scenario | Recommended Function |
 |------|---------|
-| 长期运行 Agent 的定期清理 | `cleanup_sessions(keep_count=100)` |
-| 隐私合规（GDPR 被遗忘权） | `delete_session(user_session_id)` |
-| 测试环境清空 | `cleanup_sessions(keep_count=0)` |
-| 重置当前会话 | `delete_current_session(confirm=true)` |
+| Periodic cleanup in long-running Agents | `cleanup_sessions(keep_count=100)` |
+| Privacy compliance (GDPR right to be forgotten) | `delete_session(user_session_id)` |
+| Test environment cleanup | `cleanup_sessions(keep_count=0)` |
+| Reset current session | `delete_current_session(confirm=true)` |
 
-#### 中文别名
+#### Chinese Aliases
 
-| 英文 | 中文 |
+| English | Chinese |
 |------|------|
 | `delete_session` | `删除会话` |
 | `delete_current_session` | `删除当前会话` |
 | `cleanup_sessions` | `清理会话` |
 
-### 4.7 会话元数据 (Session Metadata, v1.23.3)
+### 4.7 Session Metadata (v1.23.3)
 
-每个新 transcript 文件的第一行自动写入 **`session_meta`** 记录，记录启动时的上下文信息。
+The first line of each new transcript file automatically writes a **`session_meta`** record, capturing startup context information.
 
-#### 记录格式
+#### Record Format
 
-JSONL 文件第一行：
+First line of JSONL file:
 
 ```json
 {
@@ -398,95 +399,95 @@ JSONL 文件第一行：
 }
 ```
 
-#### 字段说明
+#### Field Descriptions
 
-| 字段 | 说明 |
+| Field | Description |
 |------|------|
-| `argv` | 程序名 + 所有调用参数 |
-| `timestamp` | 启动时间（Unix epoch，精确到微秒） |
-| `helen_version` | Helen 版本号 |
-| `python_version` | Python 解释器版本 |
-| `platform` | 操作系统/架构（如 `linux-aarch64`） |
-| `cwd` | 启动时的工作目录 |
-| `session_id` | 会话 ID（与目录名一致） |
+| `argv` | Program name + all invocation arguments |
+| `timestamp` | Startup time (Unix epoch, microsecond precision) |
+| `helen_version` | Helen version |
+| `python_version` | Python interpreter version |
+| `platform` | OS/architecture (e.g., `linux-aarch64`) |
+| `cwd` | Working directory at startup |
+| `session_id` | Session ID (matches directory name) |
 | `session_scope` | `global` / `project` / `custom` |
 
-#### 设计目标
+#### Design Goals
 
-- **会话识别**：`cat transcript.jsonl | head -1` 立刻知道这是运行哪个程序产生的
-- **审计追踪**：完整记录启动参数，便于问题复现
-- **调试便利**：知道程序何时启动、用了什么参数、在什么环境下
-- **版本追踪**：记录 Helen 和 Python 版本，便于兼容性问题排查
+- **Session identification**: `cat transcript.jsonl | head -1` instantly tells which program produced this
+- **Audit trail**: Complete record of startup parameters for issue reproduction
+- **Debugging convenience**: Knows when the program started, with what parameters, in what environment
+- **Version tracking**: Records Helen and Python versions for compatibility issue investigation
 
-#### 运行时查询
+#### Runtime Query
 
 ```helen
 let meta = get_session_meta()
 if meta["status"] == "ok" {
     let data = meta["data"]
-    print("启动命令: " + str(data["argv"]))
-    print("Helen 版本: " + data["helen_version"])
-    print("工作目录: " + data["cwd"])
+    print("Startup command: " + str(data["argv"]))
+    print("Helen version: " + data["helen_version"])
+    print("Working directory: " + data["cwd"])
 }
 
-// 中文别名
+// Chinese alias
 let meta_zh = 获取会话元数据()
 ```
 
-#### 向后兼容
+#### Backward Compatibility
 
-- **旧 transcript 文件**（无 meta 行）：`get_session_meta()` 返回 `{"status": "error"}`
-- **新代码读旧 transcript**：`read_meta()` 返回 `None`，调用者优雅处理
-- **旧代码读新 transcript**：跳过 `type == "session_meta"` 行（不影响消息列表）
+- **Old transcript files** (without meta line): `get_session_meta()` returns `{"status": "error"}`
+- **New code reading old transcript**: `read_meta()` returns `None`, callers handle gracefully
+- **Old code reading new transcript**: Skips `type == "session_meta"` lines (does not affect message list)
 
 #### JSONL vs SQLite
 
-- **JSONL**：meta 作为文件第一行，`load_all()` 自动跳过
-- **SQLite**：`session_meta` 单行表，`load_all()` 从 `messages` 表查询（自动隔离）
+- **JSONL**: Meta as first line of file, `load_all()` skips automatically
+- **SQLite**: `session_meta` single-row table, `load_all()` queries from `messages` table (automatically isolated)
 
 ### 5. LRU Cache
 
-**工作原理**:
+**How it works**:
 
 ```python
-# 追加消息时检查
+# Check when appending messages
 if len(self.transcript) > self._max_memory_items:
     self._evict_old_items()
 
 def _evict_old_items(self):
-    # 保留 80% 以避免频繁驱逐
+    # Keep 80% to avoid frequent eviction
     target_size = int(self._max_memory_items * 0.8)
     items_to_evict = len(self.transcript) - target_size
     
-    # 驱逐最旧的消息（已在后端）
+    # Evict oldest messages (already in backend)
     evicted = self.transcript[:items_to_evict]
     self.transcript = self.transcript[items_to_evict:]
     self._offloaded_count += len(evicted)
     
-    # 更新 UUID 索引
+    # Update UUID index
     self._uuid_index.clear()
     for i, item in enumerate(self.transcript):
         self._uuid_index[item.uuid] = i
 ```
 
-**内存使用**:
+**Memory usage**:
 
-| 场景 | 内存使用 | 说明 |
+| Scenario | Memory Usage | Notes |
 |------|---------|------|
-| 100 消息 | ~1MB | 全部在内存 |
-| 1K 消息 | ~10MB | 全部在内存 |
-| 10K 消息 | ~10MB | LRU 缓存生效 |
-| 100K 消息 | ~50MB | LRU 缓存生效 |
+| 100 messages | ~1MB | All in memory |
+| 1K messages | ~10MB | All in memory |
+| 10K messages | ~10MB | LRU cache active |
+| 100K messages | ~50MB | LRU cache active |
 
 ---
 
-## 使用指南
+## Usage Guide
 
-### REPL 命令
+### REPL Commands
 
 #### :transcript
 
-显示当前会话的有效视图（应用压缩后）：
+Shows the current session's effective view (after compression applied):
 
 ```bash
 > :transcript
@@ -498,13 +499,13 @@ Current transcript view (15 messages):
 Stats: 20 total items, 15 messages, 5 compression boundaries
 ```
 
-**选项**:
-- `:transcript --full` — 显示完整 transcript（包括压缩的消息）
-- `:transcript --audit` — 显示压缩审计追踪
+**Options**:
+- `:transcript --full` — Show full transcript (including compressed messages)
+- `:transcript --audit` — Show compression audit trail
 
 #### :sessions
 
-列出所有会话：
+List all sessions:
 
 ```bash
 > :sessions
@@ -517,14 +518,14 @@ Transcript sessions (5 total):
 
 #### :session_id
 
-显示当前会话 ID：
+Show current session ID:
 
 ```bash
 > :session_id
 Current session: session_1783492628_d9d9c0aa
 ```
 
-### Stdlib 函数
+### Stdlib Functions
 
 #### get_session_id()
 
@@ -545,114 +546,114 @@ for s in sessions {
 #### replay_transcript()
 
 ```helen
-// 回放当前会话
+// Replay current session
 let messages = replay_transcript()
 for msg in messages {
     print("[{msg.role}] {msg.content}")
 }
 
-// 回放指定会话，包括压缩的消息
+// Replay specified session, including compressed messages
 let full = replay_transcript("session_1783492628_d9d9c0aa", true)
 ```
 
 #### export_transcript()
 
 ```helen
-// 导出为 JSON
+// Export as JSON
 export_transcript("my_chat.json", "json")
 
-// 导出为 Markdown
+// Export as Markdown
 export_transcript("my_chat.md", "markdown")
 
-// 导出为纯文本
+// Export as plain text
 export_transcript("my_chat.txt", "text")
 ```
 
 #### search_transcript() (v1.22+)
 
-按**内容**搜索持久化 transcript。与 `search_context()`（只搜当前 active context）不同，`search_transcript()` 能跨会话、跨 agent 搜索历史。
+Searches persistent transcript by **content**. Unlike `search_context()` (which only searches the current active context), `search_transcript()` can search across sessions and agents.
 
 ```helen
-// 当前 session 内搜
-let matches = search_transcript("认证 bug")
+// Search within current session
+let matches = search_transcript("authentication bug")
 
-// 跨所有 session 搜（跨会话发现）
-let matches = search_transcript("数据库 schema", scope="all")
+// Search across all sessions (cross-session discovery)
+let matches = search_transcript("database schema", scope="all")
 
-// 正则匹配
+// Regex matching
 let matches = search_transcript("fix.*bug", regex=true)
 
-// 只搜 user 消息
+// Search only user messages
 let matches = search_transcript("TODO", role="user")
 
-// 限定结果数
+// Limit results
 let matches = search_transcript("TODO", limit=20)
 
-// 中文别名
-let matches = 搜索会话("认证 bug")
+// Chinese alias
+let matches = 搜索会话("authentication bug")
 ```
 
-**返回格式**：
+**Return format**:
 
 ```helen
-// 每个匹配包含：
+// Each match contains:
 {
     session_id: "session_xxx",
     message_uuid: "uuid-...",
     role: "user",
-    content: "完整消息内容",
-    snippet: "...匹配位置周围的片段...",
+    content: "full message content",
+    snippet: "...fragment around the match...",
     match_position: 42,
 }
 ```
 
-**参数说明**：
+**Parameters**:
 
-| 参数 | 类型 | 默认值 | 说明 |
+| Parameter | Type | Default | Description |
 |---|---|---|---|
-| `query` | str | (必填) | 搜索内容，substring 或 regex |
-| `session_id` | str? | null | 指定 session（`scope="all"` 时忽略） |
+| `query` | str | (required) | Search content, substring or regex |
+| `session_id` | str? | null | Specify session (ignored when `scope="all"`) |
 | `scope` | str | `"current"` | `"current"` / `"all"` / `"global"` / `"project"` |
-| `role` | str | `""` | 按角色过滤：`"user"` / `"assistant"` / `"tool"` / `""` (全部) |
-| `regex` | bool | `false` | 是否按正则匹配 |
-| `limit` | int | `50` | 最大返回数 |
+| `role` | str | `""` | Filter by role: `"user"` / `"assistant"` / `"tool"` / `""` (all) |
+| `regex` | bool | `false` | Whether to use regex matching |
+| `limit` | int | `50` | Maximum results to return |
 
-**典型用法**：
+**Typical usage**:
 
 ```helen
-// 场景 1：跨会话找某次讨论
-let matches = search_transcript("数据库 schema", scope="all", limit=5)
+// Scenario 1: Find a discussion across sessions
+let matches = search_transcript("database schema", scope="all", limit=5)
 for m in matches {
     print("Session {m.session_id}: {m.snippet}")
 }
 
-// 场景 2：找完后恢复完整上下文
+// Scenario 2: Restore full context after finding it
 if len(matches) > 0 {
     restore_context(matches[0].session_id)
 }
 ```
 
-#### Invocation Tree（调用树）(v1.22+)
+#### Invocation Tree (v1.22+)
 
-每条消息带三个新字段，构成调用树：
-- `agent_name`：产生该消息的 agent 名（顶层为 `None`）
-- `invocation_id`：本次 `main {}` 执行的唯一 ID
-- `parent_invocation_id`：父调用的 invocation_id
+Each message carries three new fields forming the invocation tree:
+- `agent_name`: The agent name that produced this message (`None` for top-level)
+- `invocation_id`: Unique ID for this `main {}` execution
+- `parent_invocation_id`: The parent invocation's invocation_id
 
-**查询函数**：
+**Query functions**:
 
 ```helen
-// 列出所有 invocation（可按 agent 过滤、分页）
+// List all invocations (filterable by agent, paginated)
 let invs = list_invocations()
 // [{invocation_id, agent_name, parent_invocation_id, message_count, ...}, ...]
 
 let a_runs = list_invocations(agent="Researcher", limit=10)
 
-// 查单个 invocation 元数据
+// Get single invocation metadata
 let info = get_invocation("inv_1784272795_a61bcdaf")
 // {agent_name: "A", message_count: 4, parent_invocation_id: "inv_top", ...}
 
-// 获取完整调用树（嵌套结构）
+// Get complete invocation tree (nested structure)
 let tree = get_invocation_tree()
 // {
 //   invocation_id: "inv_top", agent_name: null, children: [
@@ -661,41 +662,41 @@ let tree = get_invocation_tree()
 //   ]
 // }
 
-// 调用路径字符串（调试用）
+// Invocation path string (for debugging)
 print(invocation_path("inv_3"))
 // "top -> A -> C"
 
-// 中文别名
+// Chinese aliases
 列出调用()
 获取调用("inv_xxx")
 获取调用树()
 调用路径("inv_xxx")
 ```
 
-**扩展的 `replay_transcript` 过滤**：
+**Extended `replay_transcript` filtering**:
 
 ```helen
-// 只看 agent A 的消息
+// Only see agent A's messages
 let a_msgs = replay_transcript(agent="A")
 
-// 只看 A 的最后一次运行
+// Only see A's last run
 let last_run = replay_transcript(agent="A", last_only=true)
 
-// 看某个 invocation 及其子调用
+// See a specific invocation and its sub-calls
 let subtree = replay_transcript(invocation_id="inv_1", include_subtree=true)
 ```
 
-**扩展的 `restore_context` 过滤**：
+**Extended `restore_context` filtering**:
 
 ```helen
-// 只恢复 agent A 的最近一次运行到 active context
+// Restore only agent A's most recent run to active context
 restore_context("session_xxx", agent="A", last_only=true)
 
-// 恢复某个 invocation 及其子树
+// Restore a specific invocation and its subtree
 restore_context("session_xxx", invocation_id="inv_1", include_subtree=true)
 ```
 
-**隔离语义**：active context 按 `invocation_id` 过滤，每个 agent `main {}` 调用都是 fresh。详见 [[runtime/context-management|上下文管理架构 §0.5]]。
+**Isolation semantics**: Active context is filtered by `invocation_id`, each agent `main {}` call is fresh. See [[runtime/context-management|Context Management Architecture §0.5]].
 
 #### get_compression_audit()
 
@@ -708,75 +709,75 @@ for event in audit {
 
 ---
 
-## 配置详解
+## Configuration Details
 
-### 基本配置
+### Basic Configuration
 
-编辑 `~/.helen/config.yaml`：
+Edit `~/.helen/config.yaml`:
 
 ```yaml
 transcript:
-  enabled: true              # 启用 TranscriptStore（默认：true）
-  backend: "sqlite"          # 后端类型："jsonl" 或 "sqlite"
-  session_dir: "~/.helen/sessions"  # 会话存储目录
-  max_memory_items: 1000     # LRU 缓存大小（默认：1000）
+  enabled: true              # Enable TranscriptStore (default: true)
+  backend: "sqlite"          # Backend type: "jsonl" or "sqlite"
+  session_dir: "~/.helen/sessions"  # Session storage directory
+  max_memory_items: 1000     # LRU cache size (default: 1000)
 ```
 
-### 后端选择指南
+### Backend Selection Guide
 
-| 场景 | 推荐后端 | 原因 |
+| Scenario | Recommended Backend | Reason |
 |------|---------|------|
-| 开发调试 | JSONL | 人类可读，易于 tail/grep |
-| 生产环境 | SQLite | 高性能，索引优化 |
-| 长会话 (>10K) | SQLite | WAL 模式，内存高效 |
-| 快速原型 | JSONL | 无需额外依赖 |
+| Development/debugging | JSONL | Human-readable, easy to tail/grep |
+| Production | SQLite | High performance, index-optimized |
+| Long sessions (>10K) | SQLite | WAL mode, memory-efficient |
+| Quick prototyping | JSONL | No extra dependencies |
 
-### 内存优化
+### Memory Optimization
 
-对于长会话，调整 LRU 缓存：
+For long sessions, adjust the LRU cache:
 
 ```yaml
 transcript:
-  max_memory_items: 500      # 减少内存占用
+  max_memory_items: 500      # Reduce memory footprint
 ```
 
-**内存使用公式**:
+**Memory usage formula**:
 ```
-内存 ≈ max_memory_items × 平均消息大小
-     ≈ 1000 × 10KB
-     ≈ 10MB
+Memory ≈ max_memory_items × average message size
+       ≈ 1000 × 10KB
+       ≈ 10MB
 ```
 
 ---
 
-## 性能优化
+## Performance Optimization
 
-### 写入性能
+### Write Performance
 
-| 后端 | 延迟 | 吞吐量 | 说明 |
+| Backend | Latency | Throughput | Notes |
 |------|------|--------|------|
-| JSONL | <1ms | 1000 msg/s | append-only，快速 |
-| SQLite WAL | <1ms | 2000 msg/s | 批量提交，并发读 |
+| JSONL | <1ms | 1000 msg/s | Append-only, fast |
+| SQLite WAL | <1ms | 2000 msg/s | Batch commits, concurrent reads |
 
-### 读取性能
+### Read Performance
 
-| 操作 | 时间复杂度 | 说明 |
+| Operation | Time Complexity | Notes |
 |------|-----------|------|
-| `get(uuid)` | O(1) | UUID 索引 |
-| `read_view()` | O(1) | 视图缓存 |
-| `read_view()` (首次) | O(n) | 重建视图 |
+| `get(uuid)` | O(1) | UUID index |
+| `read_view()` | O(1) | View cache |
+| `read_view()` (first time) | O(n) | Reconstruct view |
 
-### 内存优化
+### Memory Optimization
 
-- **LRU 驱逐**: 自动驱逐旧消息到后端
-- **视图缓存**: dirty flag + 缓存，避免重复计算
-- **按需加载**: 从后端加载时只加载最近的消息
+- **LRU eviction**: Automatically evicts old messages to backend
+- **View caching**: Dirty flag + cache, avoids redundant computation
+- **On-demand loading**: Only loads most recent messages when loading from backend
 
 ---
 
-## 最佳实践
+## Best Practices
 
-### 1. 生产环境使用 SQLite
+### 1. Use SQLite in Production
 
 ```yaml
 transcript:
@@ -784,30 +785,30 @@ transcript:
   max_memory_items: 1000
 ```
 
-**优势**:
-- 高性能写入（WAL 模式）
-- UUID 索引（O(1) 查找）
-- 事务安全
+**Advantages**:
+- High-performance writes (WAL mode)
+- UUID indexing (O(1) lookup)
+- Transaction-safe
 
-### 2. 定期清理旧会话
+### 2. Periodically Clean Up Old Sessions
 
 ```helen
-// 在长时间运行的应用中
+// In long-running applications
 let sessions = list_sessions()
 if len(sessions) > 100 {
-    // TODO: 添加 cleanup_sessions() stdlib 函数
-    // 或使用 SessionManager.cleanup_old_sessions()
+    // TODO: Add cleanup_sessions() stdlib function
+    // Or use SessionManager.cleanup_old_sessions()
 }
 ```
 
-### 3. 导出重要会话
+### 3. Export Important Sessions
 
 ```helen
-// 会话结束时导出
+// Export when session ends
 export_transcript("important_session.json", "json")
 ```
 
-### 4. 监控压缩效率
+### 4. Monitor Compression Efficiency
 
 ```helen
 let audit = get_compression_audit()
@@ -818,65 +819,65 @@ for event in audit {
 print("Total tokens saved: {total_saved}")
 ```
 
-### 5. 调试时使用 JSONL
+### 5. Use JSONL When Debugging
 
 ```yaml
 transcript:
-  backend: "jsonl"  # 易于 tail -f 和 grep
+  backend: "jsonl"  # Easy to tail -f and grep
 ```
 
 ```bash
-# 实时查看 transcript
+# Watch transcript in real-time
 tail -f ~/.helen/sessions/*/transcript.jsonl
 
-# 搜索特定消息
+# Search for specific messages
 grep "error" ~/.helen/sessions/*/transcript.jsonl
 ```
 
 ---
 
-## 故障排除
+## Troubleshooting
 
-### TranscriptStore 未启用
+### TranscriptStore Not Enabled
 
-**检查配置**:
+**Check configuration**:
 ```yaml
 # ~/.helen/config.yaml
 transcript:
-  enabled: true  # 确保为 true
+  enabled: true  # Ensure this is true
 ```
 
-### 会话文件未创建
+### Session File Not Created
 
-**检查权限**:
+**Check permissions**:
 ```bash
 ls -la ~/.helen/sessions/
 ```
 
-确保 Helen 有写入权限。
+Ensure Helen has write permissions.
 
-### 内存占用过高
+### Excessive Memory Usage
 
-**减少 LRU 缓存**:
+**Reduce LRU cache**:
 ```yaml
 transcript:
-  max_memory_items: 500  # 减少到 500
+  max_memory_items: 500  # Reduce to 500
 ```
 
-### 会话恢复失败
+### Session Recovery Failed
 
-**检查会话是否存在**:
+**Check if session exists**:
 ```bash
 ls ~/.helen/sessions/<session_id>/
 ```
 
-确保 transcript 文件完整。
+Ensure the transcript file is complete.
 
 ---
 
-## 技术细节
+## Technical Details
 
-### 压缩流程
+### Compression Flow
 
 ```
 Compression Trigger (usage > threshold)
@@ -900,11 +901,11 @@ Append BoundaryMarker to transcript
 Invalidate view cache (_dirty = True)
 ```
 
-### 视图重建算法
+### View Reconstruction Algorithm
 
 ```python
 def read_view(self) -> list[Message]:
-    # 1. 收集所有 BoundaryMarker
+    # 1. Collect all BoundaryMarkers
     compressed_ranges = []
     for item in self.transcript:
         if isinstance(item, BoundaryMarker):
@@ -913,13 +914,13 @@ def read_view(self) -> list[Message]:
                 item.anchor_uuid, item.summary
             ))
     
-    # 2. 构建压缩 UUID 集合
+    # 2. Build compressed UUID set
     compressed_uuids = set()
     for head, tail, anchor, summary in compressed_ranges:
         for i in range(head_idx, tail_idx + 1):
             compressed_uuids.add(self.transcript[i].uuid)
     
-    # 3. 重建视图（跳过压缩消息，插入摘要）
+    # 3. Reconstruct view (skip compressed messages, insert summaries)
     result = []
     for item in self.transcript:
         if isinstance(item, Message):
@@ -931,27 +932,27 @@ def read_view(self) -> list[Message]:
     return result
 ```
 
-### UUID 生成
+### UUID Generation
 
 ```python
 def _generate_uuid() -> str:
-    """生成 12 位 hex UUID (16^12 ≈ 2.8×10^14)"""
+    """Generate 12-character hex UUID (16^12 ≈ 2.8×10^14)"""
     return uuid4().hex[:12]
 ```
 
-**碰撞概率**:
-- 1M 消息: ~0.0000002% (极低)
-- 1B 消息: ~0.2% (仍可接受)
+**Collision probability**:
+- 1M messages: ~0.0000002% (very low)
+- 1B messages: ~0.2% (still acceptable)
 
 ---
 
-## 相关文档
+## Related Documentation
 
-- [[runtime/context-management|上下文管理架构]] — 统一压缩入口
-- [[runtime/history|历史管理]] — Token 预算、截断策略
-- [[toolchain/stdlib|标准库]] — transcript 函数
-- [[toolchain/cli|命令行工具]] — REPL 命令
+- [[runtime/context-management|Context Management Architecture]] — Unified compression entry point
+- [[runtime/history|History Management]] — Token budget, truncation strategies
+- [[toolchain/stdlib|Standard Library]] — Transcript functions
+- [[toolchain/cli|Command Line Tools]] — REPL commands
 
 ---
 
-**最后更新**: 2026-07-08 | **版本**: v1.16 | **状态**: ✅ 生产就绪
+**Last Updated**: 2026-07-08 | **Version**: v1.16 | **Status**: ✅ Production-ready

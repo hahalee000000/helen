@@ -1,8 +1,8 @@
-# 教程 04: 控制流
+# Tutorial 04: Control Flow
 
 > if / for / while / match / try-catch
 
-## 条件分支
+## Conditional Branching
 
 ### if / else
 
@@ -20,29 +20,29 @@ if (score >= 90) {
 }
 ```
 
-**注意**: `if` 条件必须用括号包裹：`if (cond) { ... }`。
+**Note**: `if` conditions must be wrapped in parentheses: `if (cond) { ... }`.
 
-### Truthy 规则
+### Truthy Rules
 
 ```helen
-if 0 { print("不会执行") }        // 0 → false
-if "" { print("不会执行") }       // 空字符串 → false
-if [] { print("不会执行") }       // 空列表 → false
-if null { print("不会执行") }     // null → false
-if 1 { print("会执行") }          // 非零 → true
-if "hello" { print("会执行") }    // 非空字符串 → true
-if [1] { print("会执行") }        // 非空列表 → true
+if 0 { print("will not execute") }        // 0 → false
+if "" { print("will not execute") }       // empty string → false
+if [] { print("will not execute") }       // empty list → false
+if null { print("will not execute") }     // null → false
+if 1 { print("will execute") }          // nonzero → true
+if "hello" { print("will execute") }    // non-empty string → true
+if [1] { print("will execute") }        // non-empty list → true
 ```
 
-### 短路求值 (v1.10)
+### Short-circuit Evaluation (v1.10)
 
-`&&` 和 `||` 运算符支持**短路求值**，避免不必要的计算：
+The `&&` and `||` operators support **short-circuit evaluation**, avoiding unnecessary computation:
 
-首先定义一些示例函数：
+First, let's define some example functions:
 
 ```helen
 fn expensiveFunction(): str {
-    // 模拟耗时操作
+    // Simulate an expensive operation
     return "result"
 }
 
@@ -71,58 +71,58 @@ fn createDefaultUser(): map {
 }
 ```
 
-#### && 短路
+#### && Short-circuit
 
 ```helen
-// 如果左侧为 false，右侧不会执行
-let result = false && expensiveFunction()  // expensiveFunction() 不会执行
+// If the left side is false, the right side is not evaluated
+let result = false && expensiveFunction()  // expensiveFunction() is not called
 
-// 实际应用：安全访问
+// Practical usage: safe access
 let user = getUser()
-let name = user != null && user.getName()  // 如果 user 为 null，不会调用 getName()
+let name = user != null && user.getName()  // If user is null, getName() is not called
 
-// 条件执行
-let valid = isValid() && processData()  // 只在 valid 时处理
+// Conditional execution
+let valid = isValid() && processData()  // Only process when valid
 ```
 
-#### || 短路
+#### || Short-circuit
 
 ```helen
-// 如果左侧为 true，右侧不会执行
-let result = true || expensiveFunction()  // expensiveFunction() 不会执行
+// If the left side is true, the right side is not evaluated
+let result = true || expensiveFunction()  // expensiveFunction() is not called
 
-// 实际应用：默认值
-let config = loadConfig() || defaultConfig()  // 只在加载失败时使用默认值
+// Practical usage: default values
+let config = loadConfig() || defaultConfig()  // Only use default when loading fails
 
-let user = getUser() || createDefaultUser()  // 如果获取失败，创建默认用户
+let user = getUser() || createDefaultUser()  // If fetching fails, create a default user
 ```
 
-#### 优先级
+#### Precedence
 
 ```helen
-// && 优先级高于 ||
-let result = a || b && c  // 等价于 a || (b && c)
+// && has higher precedence than ||
+let result = a || b && c  // Equivalent to a || (b && c)
 
-// 使用括号明确意图
-let result = (a || b) && c  // 明确分组
+// Use parentheses for clarity
+let result = (a || b) && c  // Explicit grouping
 ```
 
-#### 实际示例
+#### Practical Examples
 
 ```helen
-// 安全的列表访问
+// Safe list access
 let items = [1, 2, 3]
-let first = len(items) > 0 && items[0]  // 避免空列表错误
+let first = len(items) > 0 && items[0]  // Avoid empty list errors
 
-// 缓存检查
+// Cache check
 let cached = cache.get(key)
 let result = cached != null || computeExpensive()
 
-// 权限检查
+// Permission check
 let canAccess = isLoggedIn() && hasPermission("admin")
 ```
 
-## 循环
+## Loops
 
 ### for ... in
 
@@ -135,7 +135,7 @@ for item in ["apple", "banana", "cherry"] {
 // cherry
 ```
 
-### 带索引遍历
+### Iteration with Index
 
 ```helen
 let fruits = ["apple", "banana", "cherry"]
@@ -144,7 +144,7 @@ for fruit in fruits {
 }
 ```
 
-### range 遍历
+### range Iteration
 
 ```helen
 for i in range(5) {
@@ -170,24 +170,24 @@ while (count < 5) {
 }
 ```
 
-**注意**: `while` 条件必须用括号包裹：`while (cond) { ... }`。使用 `count = count + 1`（赋值）而非 `let count = count + 1`（新声明），后者会创建局部变量导致死循环。
+**Note**: `while` conditions must be wrapped in parentheses: `while (cond) { ... }`. Use `count = count + 1` (assignment) rather than `let count = count + 1` (new declaration), as the latter creates a local variable and causes an infinite loop.
 
 ### break / continue
 
 ```helen
 for i in range(10) {
     if i == 3 {
-        continue    // 跳过 3
+        continue    // Skip 3
     }
     if i == 7 {
-        break       // 在 7 退出
+        break       // Exit at 7
     }
     print(i)
 }
 // 0, 1, 2, 4, 5, 6
 ```
 
-## 模式匹配
+## Pattern Matching
 
 ```helen
 let status = "success"
@@ -199,9 +199,9 @@ match status {
 }
 ```
 
-**注意**: `case` 和 `default` 后面使用 `{ }` 包裹代码块，不是 `:`。
+**Note**: `case` and `default` are followed by `{ }` blocks, not `:`.
 
-### 数字匹配
+### Number Matching
 
 ```helen
 let code = 404
@@ -214,9 +214,9 @@ match code {
 }
 ```
 
-### 范围匹配
+### Range Matching
 
-使用 `..` 运算符匹配数值范围（包含边界）：
+Use the `..` operator to match numeric ranges (inclusive):
 
 ```helen
 let score = 85
@@ -228,14 +228,14 @@ match score {
     case 60..69 { print("D") }
     default { print("F") }
 }
-// 输出: B
+// Output: B
 ```
 
-**注意**：范围运算符 `..` 不会与浮点数混淆。`1..10` 被解析为范围，`1.5` 被解析为浮点数。
+**Note**: The range operator `..` does not conflict with floating-point numbers. `1..10` is parsed as a range; `1.5` is parsed as a float.
 
-### 守卫条件
+### Guard Conditions
 
-使用 `if` 添加额外条件判断：
+Use `if` to add additional conditional checks:
 
 ```helen
 let x = 25
@@ -245,26 +245,26 @@ match x {
     case 21..30 { print("other in range") }
     default { print("out of range") }
 }
-// 输出: exactly 25
+// Output: exactly 25
 ```
 
-守卫条件在范围匹配之后求值，只有两者都满足才会执行对应的 case 块。
+Guard conditions are evaluated after the range match; both must be satisfied for the corresponding case block to execute.
 
-## 异常处理
+## Exception Handling
 
-### throw 抛出异常
+### throw — Raising Exceptions
 
-使用 `throw` 语句主动抛出预定义类型的异常：
+Use the `throw` statement to actively raise exceptions of predefined types:
 
 ```helen
-// 带消息 - 用 try-catch 捕获
+// With a message — caught by try-catch
 try {
     throw RuntimeError("something went wrong")
 } catch RuntimeError err {
     print("Caught: " + err.message)
 }
 
-// 无消息（使用默认消息）
+// Without a message (uses default message)
 try {
     throw LLMError
 } catch LLMError err {
@@ -272,7 +272,7 @@ try {
 }
 ```
 
-在函数中使用 throw 进行参数验证：
+Using throw in functions for parameter validation:
 
 ```helen
 fn validate_age(age: int) {
@@ -292,18 +292,18 @@ try {
 }
 ```
 
-**预定义异常类型**：
+**Predefined exception types**:
 
-| 类型 | 说明 |
-|------|------|
-| `RuntimeError` | 运行时错误 |
-| `LLMError` | LLM 相关错误（基类） |
-| `TimeoutError` | LLM 调用超时（继承 LLMError） |
-| `ModelError` | 模型不可用或配额耗尽（继承 LLMError） |
-| `ToolError` | 工具调用失败 |
-| `AggregateError` | 多个并发 Agent 任务失败（spawn 场景） |
+| Type | Description |
+|------|-------------|
+| `RuntimeError` | Runtime error |
+| `LLMError` | LLM-related error (base class) |
+| `TimeoutError` | LLM call timeout (inherits LLMError) |
+| `ModelError` | Model unavailable or quota exceeded (inherits LLMError) |
+| `ToolError` | Tool call failure |
+| `AggregateError` | Multiple concurrent agent tasks failed (spawn scenarios) |
 
-**异常继承**：`catch LLMError` 也会捕获 `TimeoutError` 和 `ModelError`。
+**Exception inheritance**: `catch LLMError` also catches `TimeoutError` and `ModelError`.
 
 ### try / catch
 
@@ -318,7 +318,7 @@ try {
 }
 ```
 
-**语法**: `catch Type varname { ... }`，类型名后直接跟变量名，不需要 `as` 关键字。
+**Syntax**: `catch Type varname { ... }` — the variable name directly follows the type name; no `as` keyword needed.
 
 ### catch-all
 
@@ -326,7 +326,7 @@ try {
 try {
     risky_operation()
 } catch {
-    // 捕获任何未匹配的错误
+    // Catches any unmatched error
     print("Something went wrong")
 }
 ```
@@ -340,14 +340,14 @@ try {
 } catch RuntimeError err {
     print("Error: " + err.message)
 } finally {
-    close_file()    // 始终执行
+    close_file()    // Always executes
 }
 ```
 
-### catch 顺序
+### catch Ordering
 
 ```helen
-// ✅ 具体类型在前，catch-all 在后
+// ✅ Specific types first, catch-all last
 try {
     ...
 } catch TimeoutError err {
@@ -360,7 +360,7 @@ try {
     ...
 }
 
-// ❌ catch-all 必须在最后
+// ❌ catch-all must be last
 try {
     ...
 } catch {
@@ -370,7 +370,7 @@ try {
 }
 ```
 
-### 完整示例：自定义验证
+### Complete Example: Custom Validation
 
 ```helen
 fn divide(a: int, b: int): int {
@@ -386,12 +386,12 @@ try {
 } catch RuntimeError err {
     print("Cannot divide: " + err.message)
 }
-// 输出: Cannot divide: division by zero
+// Output: Cannot divide: division by zero
 ```
 
-### 捕获标准库异常 (v1.9+)
+### Catching Standard Library Exceptions (v1.9+)
 
-标准库函数抛出的 Python 异常（`TypeError`、`ValueError`、`FileNotFoundError` 等）会被自动包装为 `RuntimeError`，可用 try-catch 捕获：
+Python exceptions thrown by stdlib functions (`TypeError`, `ValueError`, `FileNotFoundError`, etc.) are automatically wrapped as `RuntimeError` and can be caught with try-catch:
 
 ```helen
 try {
@@ -403,14 +403,14 @@ try {
 try {
     let data = read_file("/nonexistent/path")  // Python FileNotFoundError
 } catch RuntimeError err {
-    // 通过 err.message 前缀区分类型
+    // Distinguish types via the err.message prefix
     if (startswith(err.message, "Python FileNotFoundError")) {
         print("File not found")
     }
 }
 ```
 
-## 综合示例：FizzBuzz
+## Comprehensive Example: FizzBuzz
 
 ```helen
 main {
@@ -428,14 +428,13 @@ main {
 }
 ```
 
-**注意**: 上面的 `main { }` 需要在 `agent` 内部使用。顶层程序直接写 `for`/`if` 等语句即可。
+**Note**: The `main { }` above needs to be used inside an `agent`. For top-level programs, just write `for`/`if` statements directly.
 
-## 练习
+## Exercises
 
-1. 使用 for 循环计算 1 到 100 的和
-2. 使用 while 循环实现二分查找
-3. 编写一个函数，使用 match 判断星期几 (1-7)
-4. 编写 try-catch 处理除零错误
+1. Use a for loop to calculate the sum of 1 to 100
+2. Use a while loop to implement binary search
+3. Write a function that uses match to determine the day of the week (1-7)
+4. Write try-catch to handle a division-by-zero error
 
 ---
-

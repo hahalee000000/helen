@@ -1,10 +1,10 @@
-# 运行时系统
+# Runtime System
 
-> 模块 M7 (`helen/runtime/`) | HLD 3.8
+> Module M7 (`helen/runtime/`) | HLD 3.8
 
 ---
 
-## Runtime ABC (12 方法)
+## Runtime ABC (12 Methods)
 
 ```python
 class Runtime(ABC):
@@ -33,13 +33,13 @@ class Runtime(ABC):
     def register_memory_provider(protocol, provider)
 ```
 
-**Core 代码从不直接 import Hermes**，只通过这个接口交互。
+**Core code never directly imports Hermes** — it only interacts through this interface.
 
 ---
 
 ## HelenHermesRuntime
 
-默认实现，继承 `Runtime` ABC：
+Default implementation, inherits from `Runtime` ABC:
 
 ```python
 class HelenHermesRuntime(Runtime):
@@ -55,16 +55,16 @@ class HelenHermesRuntime(Runtime):
 
 ---
 
-## 可取消 LLM 调用
+## Cancellable LLM Calls
 
 ### _CallHandle
 
 ```python
 class _CallHandle:
-    cancelled: threading.Event   # 取消信号
-    result: Any                  # 调用结果
-    exception: Exception | None  # 异常
-    done: threading.Event        # 完成信号
+    cancelled: threading.Event   # Cancellation signal
+    result: Any                  # Call result
+    exception: Exception | None  # Exception
+    done: threading.Event        # Completion signal
 ```
 
 ### cancel_llm_call()
@@ -74,9 +74,9 @@ def cancel_llm_call(self, call_id: str) -> bool:
     with self._lock:
         handle = self._active_calls.get(call_id)
     if handle is None:
-        return False          # 未找到或已完成
+        return False          # Not found or already completed
     handle.cancelled.set()
-    return True               # 已发送取消信号
+    return True               # Cancellation signal sent
 ```
 
 ### CancelledError
@@ -90,75 +90,75 @@ class CancelledError(Exception):
 
 ---
 
-## MockLLMRuntime (测试用)
+## MockLLMRuntime (for Testing)
 
 ```python
 @dataclass
 class MockLLMRuntime(LLMRuntime):
-    route_return: str | None = None       # 预设 route() 返回值
-    act_return: LLMResponse | str | None  # 预设 act() 返回值
-    route_fail: Exception | None = None   # 预设 route() 异常
-    act_fail: Exception | None = None     # 预设 act() 异常
-    route_history: list[dict]             # 调用记录
-    act_history: list[dict]               # 调用记录
+    route_return: str | None = None       # Preset route() return value
+    act_return: LLMResponse | str | None  # Preset act() return value
+    route_fail: Exception | None = None   # Preset route() exception
+    act_fail: Exception | None = None     # Preset act() exception
+    route_history: list[dict]             # Call history
+    act_history: list[dict]               # Call history
 ```
 
-支持确定性测试，无需真实 LLM。
+Supports deterministic testing without a real LLM.
 
 ---
 
-## HermesCLILLMRuntime（CLI 模式，慢速）
+## HermesCLILLMRuntime (CLI Mode, Slow)
 
-通过 Hermes CLI 调用 LLM（备用方案）：
+Calls LLM through Hermes CLI (fallback approach):
 
 ```python
 @dataclass
 class HermesCLILLMRuntime(LLMRuntime):
-    hermes_path: str = "hermes"      # Hermes CLI 路径
-    default_model: str | None = None # 默认模型
-    timeout: int = 120               # 超时秒数
+    hermes_path: str = "hermes"      # Hermes CLI path
+    default_model: str | None = None # Default model
+    timeout: int = 120               # Timeout in seconds
 ```
 
-**性能：** 15-17秒/次（包含进程启动开销）
+**Performance:** 15-17 seconds/call (includes process startup overhead)
 
-**使用场景：**
-- HTTP API 不可用时的备用方案
-- 需要 hermes 特殊功能（skills、tools）时
+**Use cases:**
+- Fallback when HTTP API is unavailable
+- When Hermes-specific features (skills, tools) are needed
 
 ---
 
-## HttpLLMRuntime（HTTP 模式，快速）
+## HttpLLMRuntime (HTTP Mode, Fast)
 
-直接调用 OpenAI 兼容 API（推荐）：
+Directly calls OpenAI-compatible API (recommended):
 
 ```python
 @dataclass
 class HttpLLMRuntime(LLMRuntime):
-    base_url: str = ""      # API 端点
-    api_key: str = ""       # API 密钥
-    default_model: str = "qwen3.7-plus"  # 默认模型
+    base_url: str = ""      # API endpoint
+    api_key: str = ""       # API key
+    default_model: str = "qwen3.7-plus"  # Default model
     timeout: int = 120
 ```
 
-**配置加载：** 通过 `helen.runtime.config` 模块，按优先级从多个源加载：
+**Configuration loading:** Via `helen.runtime.config` module, loads from multiple sources by priority:
 
-| 优先级 | 文件 | 说明 |
+| Priority | File | Description |
 |--------|------|------|
-| 1（最低） | `~/.hermes/.env` | Hermes 兼容回退 |
-| 2 | `~/.helen/.env` | Helen .env 格式 |
+| 1 (lowest) | `~/.hermes/.env` | Hermes compatibility fallback |
+| 2 | `~/.helen/.env` | Helen .env format |
 | 3 | `~/.helen/config.yml` | Helen YAML |
-| 4（最高） | `~/.helen/config.yaml` | Helen YAML |
+| 4 (highest) | `~/.helen/config.yaml` | Helen YAML |
 
-支持的环境变量名：
+Supported environment variable names:
 - `HELEN_BASE_URL` / `DASHSCOPE_BASE_URL` / `OPENAI_BASE_URL`
 - `HELEN_API_KEY` / `DASHSCOPE_API_KEY` / `OPENAI_API_KEY`
 - `HELEN_MODEL` / `DEFAULT_MODEL`
 - `HELEN_TEMPERATURE` / `TEMPERATURE`
 - `HELEN_TIMEOUT` / `TIMEOUT`
 
-**性能：** 7-11秒/次（无进程启动开销）
+**Performance:** 7-11 seconds/call (no process startup overhead)
 
-**实现原理：**
+**Implementation:**
 ```python
 def _chat(self, prompt: str, model: str = None, temperature: float = 1.0):
     url = f"{self.base_url}/chat/completions"
@@ -170,45 +170,45 @@ def _chat(self, prompt: str, model: str = None, temperature: float = 1.0):
     # HTTP POST request...
 ```
 
-**使用场景：**
-- REPL 交互（默认）
-- 脚本模式（`helen <file>`）
-- 需要快速响应的场景
-- 生产环境部署
+**Use cases:**
+- REPL interaction (default)
+- Script mode (`helen <file>`)
+- Scenarios requiring fast response
+- Production deployment
 
 ---
 
-## 内置工具系统
+## Built-in Tool System
 
-Helen 提供 7 个内置工具，LLM 可在 `llm act` 执行期间通过 function calling 调用：
+Helen provides 7 built-in tools that the LLM can call via function calling during `llm act` execution:
 
-| 工具 | 功能 | 参数 |
+| Tool | Function | Parameters |
 |------|------|------|
-| `web_search` | 搜索 Wikipedia | `query: str` |
-| `web_fetch` | 获取网页内容 | `url: str` |
-| `read_file` | 读取文件 | `path: str` |
-| `write_file` | 写入文件（覆盖） | `path: str, content: str` |
-| `patch_file` | 精确修改文件（模糊匹配） | `path, old_string, new_string` |
-| `shell_exec` | 执行 shell 命令 | `command: str` |
-| `calculate` | 数学计算 | `expression: str` |
+| `web_search` | Search Wikipedia | `query: str` |
+| `web_fetch` | Fetch web content | `url: str` |
+| `read_file` | Read file | `path: str` |
+| `write_file` | Write file (overwrite) | `path: str, content: str` |
+| `patch_file` | Precise file modification (fuzzy matching) | `path, old_string, new_string` |
+| `shell_exec` | Execute shell command | `command: str` |
+| `calculate` | Math calculation | `expression: str` |
 
-### patch_file 模糊匹配
+### patch_file Fuzzy Matching
 
-`patch_file` 使用 9 种匹配策略，处理 LLM 生成代码的常见差异：
+`patch_file` uses 9 matching strategies to handle common discrepancies in LLM-generated code:
 
-| # | 策略 | 处理场景 |
+| # | Strategy | Handles |
 |---|------|---------|
-| 1 | Exact | 精确匹配 |
-| 2 | Line-trimmed | 行首尾空格差异 |
-| 3 | Whitespace-normalized | 多个空格/tab 归一化 |
-| 4 | Indentation-flexible | 缩进完全忽略 |
-| 5 | Escape-normalized | `\n` `\t` 转义差异 |
-| 6 | Trimmed-boundary | 首尾行空白修剪 |
-| 7 | Unicode-normalized | 智能引号、破折号等 |
-| 8 | Block-anchor | SequenceMatcher 相似度 |
-| 9 | Context-aware | 逐行相似度 |
+| 1 | Exact | Exact match |
+| 2 | Line-trimmed | Leading/trailing whitespace differences |
+| 3 | Whitespace-normalized | Multiple spaces/tabs normalized |
+| 4 | Indentation-flexible | Indentation completely ignored |
+| 5 | Escape-normalized | `\n` `\t` escape differences |
+| 6 | Trimmed-boundary | First/last line whitespace trimmed |
+| 7 | Unicode-normalized | Smart quotes, dashes, etc. |
+| 8 | Block-anchor | SequenceMatcher similarity |
+| 9 | Context-aware | Line-by-line similarity |
 
-工具注册表位于 `helen/runtime/tools.py`，模糊匹配引擎位于 `helen/runtime/fuzzy_match.py`（从 Hermes 集成，独立运行）。
+Tool registry is located in `helen/runtime/tools.py`; the fuzzy matching engine is in `helen/runtime/fuzzy_match.py` (integrated from Hermes, runs independently).
 
 ```python
 @dataclass
@@ -219,7 +219,7 @@ class HelenTool:
     handler: Callable[..., str]
 ```
 
-Agent 通过 `tools` 配置声明可用工具：
+Agents declare available tools through `tools` configuration:
 
 ```helen
 agent Researcher(topic) {
@@ -233,21 +233,21 @@ agent Researcher(topic) {
 
 ---
 
-## Skill 系统
+## Skill System
 
-Skill 目录扫描优先级：
+Skill directory scan priority:
 
-1. `~/.helen/skills/` — Helen 原生 skill
-2. `~/.hermes/skills/` — Hermes 回退
-3. `~/.hermes/hermes-agent/skills/` — Hermes agent skill
+1. `~/.helen/skills/` — Helen native skills
+2. `~/.hermes/skills/` — Hermes fallback
+3. `~/.hermes/hermes-agent/skills/` — Hermes agent skills
 
-### 两阶段披露 (Two-Phase Disclosure)
+### Two-Phase Disclosure
 
-Helen 实现了 HLD §3.7.1 的两阶段 skill 披露机制：
+Helen implements the two-phase skill disclosure mechanism from HLD §3.7.1:
 
-**Tier 1: Skill Index（轻量级索引）**
+**Tier 1: Skill Index (lightweight)**
 
-`PromptBuilder.build_skill_index()` 扫描 skill 目录，读取 SKILL.md 的 YAML frontmatter（name, description, category），格式化为 `<available_skills>` XML 块注入 System Prompt：
+`PromptBuilder.build_skill_index()` scans the skill directory, reads SKILL.md YAML frontmatter (name, description, category), and formats it as an `<available_skills>` XML block injected into the System Prompt:
 
 ```xml
 <available_skills>
@@ -261,39 +261,39 @@ use load_skill tool to load full content.
 </available_skills>
 ```
 
-**Tier 2: load_skill 工具（按需加载）**
+**Tier 2: load_skill Tool (on-demand loading)**
 
-`load_skill` 工具注册在 `helen/runtime/tools.py`，LLM 可通过 function calling 按需加载完整 SKILL.md 内容：
+The `load_skill` tool is registered in `helen/runtime/tools.py`; the LLM can load full SKILL.md content on demand via function calling:
 
 ```python
-# LLM 调用 load_skill 工具
+# LLM calls load_skill tool
 dispatch_tool('load_skill', {'name': 'helen-language'})
-# 返回完整的 SKILL.md 内容（67KB+）
+# Returns full SKILL.md content (67KB+)
 ```
 
-**优势**：
-- Tier 1 只占用 ~16KB token（所有 skill 的名称+描述）
-- Tier 2 按需加载，只在 LLM 需要时才加载完整内容
-- 避免每次都发送大量 skill 内容浪费 token
+**Advantages**:
+- Tier 1 only consumes ~16KB tokens (all skill names + descriptions)
+- Tier 2 loads on demand — full content is loaded only when the LLM needs it
+- Avoids wasting tokens by sending large skill content every time
 
 ---
 
-## 性能对比
+## Performance Comparison
 
-| Runtime | 调用时间 | 开销来源 |
+| Runtime | Call Time | Overhead Source |
 |---------|---------|---------|
-| HttpLLMRuntime | 7-11s | 网络延迟 + LLM 推理 |
-| HermesCLILLMRuntime | 15-17s | 进程启动 + 配置加载 + 网络 + 推理 |
+| HttpLLMRuntime | 7-11s | Network latency + LLM inference |
+| HermesCLILLMRuntime | 15-17s | Process startup + config loading + network + inference |
 
-**REPL 默认使用 HttpLLMRuntime**，性能提升约 2 倍。
+**REPL uses HttpLLMRuntime by default**, approximately 2× performance improvement.
 
 ---
 
-## llm act 表达式
+## llm act Expression
 
-`llm act` 支持两种使用形式：
+`llm act` supports two usage forms:
 
-### 1. 语句形式（在 agent 上下文中）
+### 1. Statement Form (within agent context)
 
 ```helen
 agent Translator(text) {
@@ -305,23 +305,23 @@ agent Translator(text) {
 }
 ```
 
-语法：`llm act target(arg=value, ...) "description"`
+Syntax: `llm act target(arg=value, ...) "description"`
 
-### 2. 表达式形式（直接调用 LLM）
+### 2. Expression Form (direct LLM call)
 
 ```helen
-// 顶层直接调用
+// Top-level direct call
 llm act "translate hello to chinese."
 
-// 在函数中使用
+// Used in a function
 fn translate(text, target) {
     return llm act "translate " + text + " to " + target
 }
 
-// 赋值给变量
+// Assigned to a variable
 let result = llm act "summarize this article"
 
-// 在 agent 中使用
+// Used in an agent
 agent Smart(text) {
     main {
         return llm act "analyze: " + text
@@ -329,22 +329,22 @@ agent Smart(text) {
 }
 ```
 
-语法：`llm act <expression>`
+Syntax: `llm act <expression>`
 
-表达式形式会：
-- 计算表达式的值作为 prompt
-- 调用 LLM runtime
-- 返回 LLM 响应文本（字符串）
+The expression form will:
+- Evaluate the expression as the prompt
+- Call the LLM runtime
+- Return the LLM response text (string)
 
-### Parser 消歧义
+### Parser Disambiguation
 
-Parser 通过前瞻判断形式：
-- 如果 `llm act` 后是 IDENTIFIER，且后面跟着 `(` 或 STRING → 语句形式
-- 否则 → 表达式形式
+The parser determines the form via lookahead:
+- If `llm act` is followed by an IDENTIFIER with `(` or STRING after it → statement form
+- Otherwise → expression form
 
 ---
 
-## Memory 系统
+## Memory System
 
 ### MemoryProvider ABC
 
@@ -362,7 +362,7 @@ class MemoryProvider(ABC):
 
 ### FileMemoryProvider
 
-JSON 文件持久化：
+JSON file persistence:
 
 ```python
 class FileMemoryProvider(MemoryProvider):
@@ -381,29 +381,29 @@ class FileMemoryProvider(MemoryProvider):
 
 ### InMemoryProvider
 
-纯内存实现，用于测试。
+Pure in-memory implementation, used for testing.
 
 ---
 
-## v1.10 异步 HTTP 支持
+## v1.10 Async HTTP Support
 
-### 概述
+### Overview
 
-v1.10 添加了异步 HTTP 方法，基于 `httpx.AsyncClient` 实现，支持并发 LLM 调用。
+v1.10 added async HTTP methods based on `httpx.AsyncClient`, supporting concurrent LLM calls.
 
-### 异步方法
+### Async Methods
 
 ```python
 class LLMRuntime:
-    # 同步方法
+    # Synchronous methods
     def act(self, target: str, description: str, **kwargs) -> Any
     def act_stream(self, target: str, description: str, **kwargs) -> Iterator[str]
 ```
 
-**v1.18 变更**: `act_async()` / `act_stream_async()` 已删除，由 `spawn` + Channel 替代。并发 LLM 调用现在通过 spawn 实现：
+**v1.18 change**: `act_async()` / `act_stream_async()` have been removed, replaced by `spawn` + Channel. Concurrent LLM calls are now achieved through spawn:
 
 ```helen
-// v1.18 并发 LLM 调用
+// v1.18 concurrent LLM calls
 let m1 = spawn AgentA("task1")
 let m2 = spawn AgentB("task2")
 let [r1, r2] = [m1.receive(), m2.receive()]
@@ -411,7 +411,7 @@ let [r1, r2] = [m1.receive(), m2.receive()]
 
 ### httpx.Client
 
-同步方法使用 `httpx.Client`：
+Synchronous methods use `httpx.Client`:
 
 ```python
 class HttpLLMRuntime(LLMRuntime):
@@ -423,17 +423,17 @@ class HttpLLMRuntime(LLMRuntime):
         )
 ```
 
-**v1.18 变更**: `httpx.AsyncClient` 已删除，并发通过 `spawn`（threading.Thread）实现。
+**v1.18 change**: `httpx.AsyncClient` has been removed; concurrency is now implemented via `spawn` (threading.Thread).
 
-### 使用示例
+### Usage Example
 
 ```helen
 agent MyAgent {
   main {
-    // 同步调用
+    // Synchronous call
     let result = llm act Translate "Hello"
     
-    // 并发调用（v1.18 spawn）
+    // Concurrent call (v1.18 spawn)
     let m1 = spawn Translate("Hello")
     let m2 = spawn Translate("World")
     let r1 = m1.receive()
@@ -442,28 +442,28 @@ agent MyAgent {
 }
 ```
 
-### 连接池管理
+### Connection Pool Management
 
-`httpx.Client` 自动管理连接池：
+`httpx.Client` automatically manages connection pooling:
 
-- **连接复用**: 多个请求复用同一 TCP 连接
-- **并发控制**: 通过 `spawn`（threading.Thread）实现并发
-- **超时管理**: 统一的超时配置
-- **资源清理**: 程序退出时自动关闭连接
+- **Connection reuse**: Multiple requests reuse the same TCP connection
+- **Concurrency control**: Concurrency via `spawn` (threading.Thread)
+- **Timeout management**: Unified timeout configuration
+- **Resource cleanup**: Connections automatically closed on program exit
 
-### 性能优势
+### Performance Advantages
 
-| 场景 | 串行 | spawn 并发 | 提升 |
+| Scenario | Serial | Spawn Concurrency | Improvement |
 |------|------|----------------|------|
-| 单次调用 | 1.5s | 1.5s | 0% |
-| 3 次并发 | 4.5s | ~1.6s | 65% |
-| 10 次并发 | 15s | ~2.1s | 86% |
+| Single call | 1.5s | 1.5s | 0% |
+| 3 concurrent | 4.5s | ~1.6s | 65% |
+| 10 concurrent | 15s | ~2.1s | 86% |
 
-**注意**: v1.18 起并发通过 `spawn` 实现，每个 spawned agent 在独立 daemon 线程中运行。
+**Note**: Since v1.18, concurrency is implemented via `spawn`, with each spawned agent running in an independent daemon thread.
 
-### 错误处理
+### Error Handling
 
-异步方法使用相同的错误处理机制：
+Async methods use the same error handling mechanism:
 
 ```helen
 try {
@@ -477,33 +477,33 @@ try {
 
 ---
 
-**最后更新**: 2026-07-04  
-**版本**: v1.11
+**Last Updated**: 2026-07-04  
+**Version**: v1.11
 
 ---
 
-## P4 历史管理增强（v1.11 新增）
+## P4 History Management Enhancement (v1.11 Addition)
 
-> v1.11 引入了完整的历史持久化、检索和上下文可视化功能。
+> v1.11 introduced complete history persistence, retrieval, and context visualization features.
 
-### 历史持久化
+### History Persistence
 
-跨会话保留对话连续性：
+Retain conversation continuity across sessions:
 
 ```helen
 agent PersistentAgent {
     main {
-        // 保存当前历史到 JSON 文件
+        // Save current history to JSON file
         save_history("./session.json")
         
-        // 从文件加载历史（下次启动时）
+        // Load history from file (on next startup)
         let loaded = load_history("./session.json")
         print("Loaded " + str(loaded) + " messages")
     }
 }
 ```
 
-**JSON 格式**：
+**JSON format**:
 ```json
 {
   "version": 1,
@@ -516,24 +516,24 @@ agent PersistentAgent {
 }
 ```
 
-### 历史检索
+### History Retrieval
 
-Agent 可以查询历史中的特定信息：
+Agents can query specific information in history:
 
 ```helen
 agent SmartResearcher {
     tools ["web_search", "load_skill"]
     main {
-        // 搜索之前的工具调用
+        // Search previous tool calls
         let past_searches = search_history(tool_name="web_search")
         
-        // 按角色过滤
+        // Filter by role
         let user_questions = search_history(role="user")
         
-        // 文本搜索（大小写不敏感）
+        // Text search (case-insensitive)
         let mentions = search_history(query="Python")
         
-        // 获取工具调用历史
+        // Get tool call history
         let tool_log = get_tool_history("web_search")
         
         return llm act "Continue research..."
@@ -541,9 +541,9 @@ agent SmartResearcher {
 }
 ```
 
-### 上下文使用可视化
+### Context Usage Visualization
 
-REPL 中用 `:stats` 命令查看上下文使用统计：
+Use the `:stats` command in REPL to view context usage statistics:
 
 ```
 > :stats
@@ -562,26 +562,26 @@ REPL 中用 `:stats` 命令查看上下文使用统计：
 ╚══════════════════════════════════════╝
 ```
 
-### Token 估算增强
+### Token Estimation Enhancement
 
-v1.11 支持可选的 tiktoken 精确计数（安装 `helen[accurate-tokens]`），否则使用字符级启发式（~15% 精度）：
+v1.11 supports optional tiktoken exact counting (install `helen[accurate-tokens]`), otherwise uses character-level heuristics (~15% accuracy):
 
 ```bash
-# 安装精确 token 计数
+# Install exact token counting
 pip install "helen[accurate-tokens]"
 ```
 
-### History 压缩策略
+### History Compression Strategies
 
-v1.11 提供三种压缩模式：
+v1.11 provides three compression modes:
 
-| 模式 | 说明 | 使用场景 |
+| Mode | Description | Use Case |
 |------|------|---------|
-| `summarize`（默认） | 三层压缩：recent → middle → oldest | 长对话保持上下文 |
-| `truncate` | 直接丢弃旧消息 | 简洁场景 |
-| `none` | 不压缩（可能超出上下文限制） | 短对话/测试 |
+| `summarize` (default) | Three-layer compression: recent → middle → oldest | Long conversations maintaining context |
+| `truncate` | Directly drops old messages | Simple scenarios |
+| `none` | No compression (may exceed context limits) | Short conversations/testing |
 
 ```python
-# 动态切换压缩模式
+# Dynamically switch compression mode
 interpreter._history_manager.set_compression_mode("truncate")
 ```

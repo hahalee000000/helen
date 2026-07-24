@@ -1,8 +1,8 @@
-# 教程 03: 函数
+# Tutorial 03: Functions
 
-> fn 声明 / 参数 / 返回值 / 函数调用
+> fn declarations / parameters / return values / function calls
 
-## 基本函数
+## Basic Functions
 
 ```helen
 fn greet(name) {
@@ -14,7 +14,7 @@ main {
 }
 ```
 
-## 返回值
+## Return Values
 
 ```helen
 fn add(a, b) {
@@ -27,16 +27,16 @@ main {
 }
 ```
 
-### 无返回值
+### No Return Value
 
 ```helen
 fn say_hello() {
     print("Hello!")
-    // 隐式返回 null
+    // Implicitly returns null
 }
 ```
 
-## 参数类型注解
+## Parameter Type Annotations
 
 ```helen
 fn add(a: int, b: int): int {
@@ -48,26 +48,26 @@ fn greet(name: str): str {
 }
 ```
 
-## 参数类型检查
+## Parameter Type Checking
 
-当函数参数有类型注解时，Helen 会在调用时进行类型检查：
+When function parameters have type annotations, Helen performs type checking at call time:
 
-### 编译时检查（字面量）
+### Compile-time Checking (Literals)
 
-如果调用时传递的是字面量，类型错误会在编译时被捕获：
+If literal values are passed at the call site, type errors are caught at compile time:
 
 ```helen
 fn add(a: int, b: int): int {
     return a + b
 }
 
-add(1.5, 2.7)    // ❌ 编译错误：argument 1 type 'FloatType' is not compatible with parameter type 'IntType'
-add(1, 2)        // ✅ 正确
+add(1.5, 2.7)    // ❌ Compile error: argument 1 type 'FloatType' is not compatible with parameter type 'IntType'
+add(1, 2)        // ✅ Correct
 ```
 
-### 运行时检查（变量）
+### Runtime Checking (Variables)
 
-如果调用时传递的是变量，类型检查会在运行时进行：
+If variables are passed at the call site, type checking is performed at runtime:
 
 ```helen
 fn add(a: int, b: int): int {
@@ -75,35 +75,35 @@ fn add(a: int, b: int): int {
 }
 
 let x = 1.5
-add(x, 2)        // ❌ 运行时错误：argument 1 type 'FloatType' is not compatible with parameter type 'IntType'
+add(x, 2)        // ❌ Runtime error: argument 1 type 'FloatType' is not compatible with parameter type 'IntType'
 
 let y = 10
-add(y, 2)        // ✅ 正确
+add(y, 2)        // ✅ Correct
 ```
 
-### 类型兼容性规则
+### Type Compatibility Rules
 
-- `int` 可以传递给 `float` 参数（int 是 float 的子类型）
-- `float` **不能**传递给 `int` 参数
-- 任何类型可以传递给 `any` 参数
+- `int` can be passed to `float` parameters (int is a subtype of float)
+- `float` **cannot** be passed to `int` parameters
+- Any type can be passed to `any` parameters
 
 ```helen
 fn processFloat(x: float): float {
     return x * 2
 }
 
-processFloat(10)     // ✅ int 可以转换为 float
-processFloat(10.5)   // ✅ float 直接匹配
+processFloat(10)     // ✅ int can be converted to float
+processFloat(10.5)   // ✅ float matches directly
 
 fn processInt(x: int): int {
     return x + 1
 }
 
-processInt(10)       // ✅ int 直接匹配
-processInt(10.5)     // ❌ float 不能转换为 int
+processInt(10)       // ✅ int matches directly
+processInt(10.5)     // ❌ float cannot be converted to int
 ```
 
-## 递归
+## Recursion
 
 ```helen
 fn factorial(n: int): int {
@@ -118,7 +118,7 @@ main {
 }
 ```
 
-## 函数作为值
+## Functions as Values
 
 ```helen
 fn double(x) {
@@ -126,15 +126,15 @@ fn double(x) {
 }
 
 fn apply(op, value) {
-    // 在 v1 中，函数通过名称引用
-    // 注意：不能用 'fn' 作为参数名（它是关键字）
+    // In v1, functions are referenced by name
+    // Note: cannot use 'fn' as a parameter name (it is a keyword)
     print(double(value))
 }
 ```
 
-## Agent 内部函数
+## Agent Internal Functions
 
-Agent 可以在 `functions` 块中定义内部函数:
+Agents can define internal functions in a `functions` block:
 
 ```helen
 agent DataProcessor {
@@ -149,7 +149,7 @@ agent DataProcessor {
         }
 
         fn transform(data) {
-            // 数据转换逻辑
+            // Data transformation logic
             return data
         }
     }
@@ -160,15 +160,15 @@ agent DataProcessor {
 }
 ```
 
-## 作用域
+## Scope
 
 ```helen
 let global_x = 100
 
 fn test() {
     let local_x = 200
-    print(global_x)    // ✅ 可以访问全局变量
-    print(local_x)     // ✅ 可以访问局部变量
+    print(global_x)    // ✅ Can access global variable
+    print(local_x)     // ✅ Can access local variable
 }
 
 main {
@@ -177,22 +177,22 @@ main {
 }
 ```
 
-**注意**: `local_x` 只在 `test()` 函数内部可见，在 `main` 中无法访问。
+**Note**: `local_x` is only visible inside the `test()` function and cannot be accessed in `main`.
 
-## 闭包与匿名函数（v1.7+）
+## Closures and Anonymous Functions (v1.7+)
 
-Helen 支持闭包（closures）和匿名函数（anonymous functions），允许你创建内联函数并捕获外部作用域的变量。
+Helen supports closures and anonymous functions, allowing you to create inline functions and capture variables from outer scopes.
 
-### 匿名函数
+### Anonymous Functions
 
-使用 `fn(params) { body }` 语法创建匿名函数：
+Use `fn(params) { body }` syntax to create anonymous functions:
 
 ```helen
-// 匿名函数赋值给变量
+// Assign an anonymous function to a variable
 let add = fn(a, b) { return a + b }
 print(add(2, 3))  // 5
 
-// 直接作为参数传递
+// Pass directly as an argument
 let doubled = map([1, 2, 3], fn(x) { return x * 2 })
 print(doubled)  // [2, 4, 6]
 
@@ -200,12 +200,12 @@ let evens = filter([1, 2, 3, 4, 5], fn(x) { return x % 2 == 0 })
 print(evens)  // [2, 4]
 ```
 
-### 闭包
+### Closures
 
-闭包可以捕获定义时的环境，在后续调用中访问外部变量：
+Closures can capture the environment at the point of definition, accessing outer variables in subsequent calls:
 
 ```helen
-// 闭包捕获外部变量
+// Closure captures outer variable
 fn make_adder(x) {
     return fn(y) { return x + y }
 }
@@ -214,7 +214,7 @@ let add5 = make_adder(5)
 print(add5(10))  // 15
 print(add5(20))  // 25
 
-// 闭包在实际应用中
+// Closures in practical applications
 fn make_multiplier(factor) {
     return fn(x) { return x * factor }
 }
@@ -226,51 +226,51 @@ print(double(5))   // 10
 print(triple(5))   // 15
 ```
 
-### 与高阶函数配合
+### Working with Higher-order Functions
 
-闭包与 `map`、`filter`、`reduce` 等高阶函数配合使用：
+Closures work well with higher-order functions like `map`, `filter`, and `reduce`:
 
 ```helen
 let nums = [1, 2, 3, 4, 5]
 
-// 使用闭包进行数据转换
+// Use closures for data transformation
 let squared = map(nums, fn(n) { return n * n })
 print(squared)  // [1, 4, 9, 16, 25]
 
-// 使用闭包进行过滤
+// Use closures for filtering
 let large = filter(nums, fn(n) { return n > 3 })
 print(large)  // [4, 5]
 
-// 使用闭包进行聚合
+// Use closures for aggregation
 let sum = reduce(nums, fn(acc, n) { return acc + n }, 0)
 print(sum)  // 15
 
-// 链式调用
+// Chained calls
 let result = nums
     |> filter(fn(n) { return n % 2 == 0 })
     |> map(fn(n) { return n * 10 })
 print(result)  // [20, 40]
 ```
 
-### 注意事项
+### Caveats
 
-- 闭包捕获的是变量的**引用**，不是值
-- 匿名函数可以访问定义时的所有外部变量
-- 闭包可以用于创建工厂函数、回调函数等模式
+- Closures capture variable **references**, not values
+- Anonymous functions can access all outer variables at the point of definition
+- Closures can be used to create factory functions, callback functions, and other patterns
 
-## 函数别名 (v1.10)
+## Function Aliases (v1.10)
 
-`alias` 语句可以给现有的函数（stdlib 或用户定义）创建额外的名字。
+The `alias` statement can create additional names for existing functions (stdlib or user-defined).
 
-### 基本语法
+### Basic Syntax
 
 ```helen
 alias <canonical> as <alias_name>
 ```
 
-### 给 stdlib 起别名
+### Aliasing stdlib Functions
 
-Helen 的 stdlib 已经内置 255 个中文别名（`长度`、`打印`、`排序` 等），可以直接使用。也可以用 `alias` 添加自定义别名：
+Helen's stdlib already includes 255 Chinese aliases (`长度`, `打印`, `排序`, etc.) that can be used directly. You can also use `alias` to add custom aliases:
 
 ```helen
 alias len as 我的长度
@@ -282,7 +282,7 @@ alias print as 输出
 }
 ```
 
-### 给用户函数起别名
+### Aliasing User Functions
 
 ```helen
 函数 greet(name: str): str {
@@ -298,48 +298,47 @@ alias greet as say_hello
 }
 ```
 
-### 中文关键字 `别名`
+### Chinese Keyword `别名`
 
-`alias` 的中文等价形式：
+The Chinese equivalent of `alias`:
 
 ```helen
 别名 len as 长度
 别名 greet as 打招呼
 ```
 
-### 作用域
+### Scope
 
-别名遵守正常的变量作用域规则：
-- 顶层 alias 在整个模块可见
-- 块内的 alias 只在该块及其嵌套作用域可见
-- 别名是快照绑定：`alias f as g` 时 g 指向当时的 f，后续重新定义 f 不影响 g
+Aliases follow normal variable scoping rules:
+- Top-level aliases are visible throughout the module
+- Aliases inside a block are only visible within that block and its nested scopes
+- Aliases are snapshot bindings: `alias f as g` makes g point to f at that moment; subsequent redefinitions of f do not affect g
 
 ```helen
 函数 foo() { 返回 1 }
 alias foo as bar
-函数 foo() { 返回 2 }   // 重新定义 foo
+函数 foo() { 返回 2 }   // Redefine foo
 
 主函 {
-    foo()   // 2 - 使用新的 foo
-    bar()   // 1 - bar 仍指向旧的 foo
+    foo()   // 2 - uses the new foo
+    bar()   // 1 - bar still points to the old foo
 }
 ```
 
-### 错误处理
+### Error Handling
 
-给不存在的名字起别名会在语义分析阶段报错：
+Aliasing a nonexistent name produces an error during semantic analysis:
 
 ```helen
 alias nonexistent as foo   // ❌ Error: cannot alias 'nonexistent': name not found
 ```
 
-## 练习
+## Exercises
 
-1. 编写一个计算斐波那契数列的递归函数
-2. 编写一个函数，接受列表并返回最大值
-3. 编写一个函数，判断一个字符串是否为回文
-4. 使用闭包实现一个计数器函数 `make_counter()`，每次调用返回递增的值
-5. 使用 `map` 和匿名函数将列表中的所有字符串转换为大写
+1. Write a recursive function to compute Fibonacci numbers
+2. Write a function that accepts a list and returns the maximum value
+3. Write a function that determines whether a string is a palindrome
+4. Use closures to implement a counter function `make_counter()` that returns an incrementing value on each call
+5. Use `map` and anonymous functions to convert all strings in a list to uppercase
 
 ---
-

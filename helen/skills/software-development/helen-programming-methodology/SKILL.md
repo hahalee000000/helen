@@ -1,6 +1,6 @@
 ---
 name: helen-programming-methodology
-description: "Helen 编程方法论 — 契约驱动、TDD、质量评估、技能自进化的完整工作流"
+description: "Helen Programming Methodology — complete workflow for contract-first development, TDD, quality assessment, and skill self-evolution"
 version: 1.0.0
 author: Helen Team
 license: MIT
@@ -9,15 +9,15 @@ metadata:
     tags: [helen, methodology, contract-first, tdd, quality, skill-evolution, workflow]
 ---
 
-# Helen 编程方法论
+# Helen Programming Methodology
 
-本技能描述 Helen 语言的编程方法论，采用四阶段闭环：契约设计 → TDD 开发 → 质量评估 → 技能评估。
+This skill describes the programming methodology for the Helen language, using a four-stage closed loop: Contract Design → TDD Development → Quality Assessment → Skill Evaluation.
 
-## 核心原则
+## Core Principles
 
-### 1. 契约先行（Contract-First）
+### 1. Contract-First
 
-在编写任何实现代码之前，先设计接口契约：
+Before writing any implementation code, design the interface contract first:
 
 ```helen
 // contracts/my_module.helen
@@ -27,28 +27,28 @@ protocol MyModule {
     fn validate_config(config: map): bool
 }
 
-// 错误码定义
+// Error code definitions
 const ERROR_INVALID_INPUT = 1001
 const ERROR_CONFIG_MISSING = 1002
 const ERROR_PROCESSING_FAILED = 1003
 
-// 辅助函数
+// Helper functions
 fn is_valid_input(input: str): bool {
     return len(input) > 0 && len(input) < 1000
 }
 ```
 
-**契约包含**：
-- Protocol 定义（接口签名）
-- 错误码常量
-- 辅助函数（纯函数，无副作用）
-- 每个函数的输入/输出类型
+**A contract includes**:
+- Protocol definitions (interface signatures)
+- Error code constants
+- Helper functions (pure functions, no side effects)
+- Input/output types for each function
 
-### 2. TDD 开发（RED-GREEN-REFACTOR）
+### 2. TDD Development (RED-GREEN-REFACTOR)
 
-严格按三阶段循环：
+Strictly follow the three-stage cycle:
 
-**RED 阶段**：生成失败的测试
+**RED Phase**: Write failing tests
 
 ```helen
 // tests/test_my_module.helen
@@ -66,15 +66,15 @@ fn test_process_data_empty_input() {
 }
 
 fn test_validate_config_missing_field() {
-    let config = {"name": "test"}  // 缺少 required_field
+    let config = {"name": "test"}  // missing required_field
     let result = validate_config(config)
     assert_equal(result, false)
 }
 ```
 
-运行测试，确认全部 FAIL。
+Run the tests and confirm they all FAIL.
 
-**GREEN 阶段**：编写最小实现
+**GREEN Phase**: Write the minimal implementation
 
 ```helen
 // src/my_module.helen
@@ -89,8 +89,8 @@ fn process_data(input: str): map {
             "message": "Invalid input length"
         }
     }
-    
-    // 最小实现：只让测试通过
+
+    // Minimal implementation: just make the tests pass
     return {
         "status": "success",
         "data": input
@@ -105,21 +105,21 @@ fn validate_config(config: map): bool {
 }
 ```
 
-运行测试，确认逐步 PASS。
+Run the tests and confirm they progressively PASS.
 
-**REFACTOR 阶段**：重构代码
+**REFACTOR Phase**: Refactor the code
 
 ```helen
-// 提取重复逻辑
+// Extract duplicated logic
 fn process_data(input: str): map {
     if !is_valid_input(input) {
         return create_error(ERROR_INVALID_INPUT, "Invalid input length")
     }
-    
+
     return create_success(input)
 }
 
-// 辅助函数
+// Helper functions
 fn create_error(code: int, message: str): map {
     return {
         "status": "error",
@@ -136,231 +136,231 @@ fn create_success(data: any): map {
 }
 ```
 
-运行测试，确认全部 PASS。
+Run the tests and confirm they all PASS.
 
-### 3. 质量评估（7 维评分）
+### 3. Quality Assessment (7-Dimension Scoring)
 
-每次开发完成后，进行 7 维质量评估：
+After each development cycle, perform a 7-dimension quality assessment:
 
 ```helen
-// 调用质量评估
+// Invoke quality assessment
 let file_path = "src/my_module.helen"
 let quality = get_quality_scores(file_path)
 
-// 检查结果
+// Check results
 if quality["scores"]["overall"] < 7.5 {
-    print("⚠️ 质量分数低于阈值，需要改进")
-    print("安全性: " + str(quality["scores"]["security"]))
-    print("正确性: " + str(quality["scores"]["correctness"]))
-    print("可维护性: " + str(quality["scores"]["maintainability"]))
-    // ... 其他维度
+    print("⚠️ Quality score below threshold, improvement needed")
+    print("Security: " + str(quality["scores"]["security"]))
+    print("Correctness: " + str(quality["scores"]["correctness"]))
+    print("Maintainability: " + str(quality["scores"]["maintainability"]))
+    // ... other dimensions
 }
 ```
 
-**7 个维度**：
-1. **安全性** - 输入验证、错误处理、无硬编码密钥
-2. **正确性** - 逻辑正确、边界处理、错误码覆盖
-3. **可维护性** - 代码清晰、命名规范、无重复
-4. **性能** - 无不必要的循环、合理的算法复杂度
-5. **可测试性** - 易于单元测试、无副作用
-6. **文档完整性** - 注释充分、接口说明清晰
-7. **Helen 规范** - 遵循 Helen 语法和最佳实践
+**7 Dimensions**:
+1. **Security** - Input validation, error handling, no hardcoded secrets
+2. **Correctness** - Logic correctness, boundary handling, error code coverage
+3. **Maintainability** - Code clarity, naming conventions, no duplication
+4. **Performance** - No unnecessary loops, reasonable algorithmic complexity
+5. **Testability** - Easy to unit test, no side effects
+6. **Documentation Completeness** - Sufficient comments, clear interface descriptions
+7. **Helen Conformance** - Follows Helen syntax and best practices
 
-**阈值**：
-- 总分 < 7.5 → 需要改进
-- 单项 < 6.0 → 必须改进
+**Thresholds**:
+- Overall score < 7.5 → Improvement needed
+- Any single dimension < 6.0 → Mandatory improvement
 
-### 4. 技能评估（Skill Evolution）
+### 4. Skill Evaluation (Skill Evolution)
 
-每次任务完成后，评估是否产生新技能或需要更新现有技能：
+After each task, evaluate whether new skills have been discovered or existing skills need updating:
 
 ```helen
-// 任务摘要
-let task_summary = "实现了字符串反转函数，使用 TDD 开发，发现递归实现会导致栈溢出"
+// Task summary
+let task_summary = "Implemented string reversal function using TDD; discovered recursive implementation causes stack overflow"
 let files_changed = "src/string_utils.helen, tests/test_string_utils.helen"
 
-// 调用技能评估
+// Invoke skill evaluation
 let evaluation = call_skill_evaluator(task_summary, files_changed)
 
-// 处理评估结果
+// Process evaluation results
 if evaluation["new_skills"] != null {
     for skill in evaluation["new_skills"] {
-        print("💡 建议创建新技能: " + skill["name"])
+        print("💡 Suggested new skill: " + skill["name"])
         save_new_skill(skill["name"], skill["category"], skill["tags"], skill["content"])
     }
 }
 
 if evaluation["updates"] != null {
     for update in evaluation["updates"] {
-        print("🔄 建议更新技能: " + update["name"])
+        print("🔄 Suggested skill update: " + update["name"])
         update_existing_skill(update["path"], update["addition"])
     }
 }
 ```
 
-### 5. 上下文接力（Context Handoff）
+### 5. Context Handoff
 
-Helen 的 transcript 按 **Interpreter 实例隔离**（spawn 创建新 Interpreter → 新 session_id），任何跨 agent / 跨进程的上下文传递都必须**显式编程**——这是 Helen "显式优于隐式"哲学的核心体现。
+Helen transcripts are **isolated by Interpreter instance** (spawn creates a new Interpreter → new session_id), so any cross-agent or cross-process context passing must be **explicitly programmed** — this is a core manifestation of Helen's "explicit over implicit" philosophy.
 
-核心口诀：**"spawn 即隔离，接力靠显式，调试用追踪，恢复用 --session"**
+Core mantra: **"spawn means isolation, handoff must be explicit, debug with tracing, recover with --session"**
 
-> 💡 完整的上下文接力模式（spawn 传参、SharedStore、--session 恢复、自动追踪）详见 **helen-agent-collaboration** skill。
+> 💡 For the complete context handoff pattern (spawn parameter passing, SharedStore, --session recovery, automatic tracing), see the **helen-agent-collaboration** skill.
 
-## 完整工作流示例
+## Complete Workflow Example
 
-四阶段闭环示例（以 JWT 认证模块为例）：
+Four-stage closed-loop example (using a JWT authentication module):
 
 ```helen
-// Phase 1: 契约设计
-let contract = call_contractor("实现用户认证模块", "需要 JWT 支持")
+// Phase 1: Contract Design
+let contract = call_contractor("Implement user authentication module", "JWT support required")
 
-// Phase 2 RED-GREEN: TDD 开发
+// Phase 2 RED-GREEN: TDD Development
 let tests = call_test_builder("", contract)
 write_file("tests/test_auth.helen", tests)
 let impl = call_implementer("", tests, contract)
 write_file("src/auth.helen", impl)
 
-// Phase 3: 质量评估
+// Phase 3: Quality Assessment
 let quality = call_quality_gate("src/auth.helen")
 if quality["verdict"] == "NEEDS_IMPROVEMENT" {
-    // 回到 Phase 2 改进
+    // Go back to Phase 2 for improvement
 }
 
-// Phase 4: 技能评估
-let skills = call_skill_evaluator("实现了 JWT 认证", "src/auth.helen, tests/test_auth.helen")
+// Phase 4: Skill Evaluation
+let skills = call_skill_evaluator("Implemented JWT authentication", "src/auth.helen, tests/test_auth.helen")
 ```
 
-## Helen 语法注意事项
+## Helen Syntax Notes
 
-### 1. 逻辑运算符
+### 1. Logical Operators
 
 ```helen
-// ✅ 正确
+// ✅ Correct
 if a && b { }
 if a || b { }
 if !a { }
 
-// ❌ 错误
+// ❌ Wrong
 if a and b { }
 if a or b { }
 if not a { }
 ```
 
-### 2. 字符串截取
+### 2. String Slicing
 
 ```helen
-// ✅ 正确
+// ✅ Correct
 let sub = substring(str, 0, 10)
 
-// ❌ 错误
+// ❌ Wrong
 let sub = str[0:10]
 ```
 
-### 3. Agent 调用
+### 3. Agent Invocation
 
 ```helen
-// ✅ 正确（函数式调用）
+// ✅ Correct (function-style call)
 fn call_my_agent(param: str): str {
     return MyAgent(param)
 }
 
-// ❌ 错误（使用 call 关键字）
+// ❌ Wrong (using call keyword)
 fn call_my_agent(param: str): str {
-    return call MyAgent(param)  // 解析错误：Expected expression, got CALL
+    return call MyAgent(param)  // Parse error: Expected expression, got CALL
 }
 
-// ❌ 错误（不能在 prompt 中直接调用）
-// prompt 中写 "MyAgent()" 会报错
+// ❌ Wrong (cannot call directly in prompt)
+// Writing "MyAgent()" in a prompt will cause an error
 ```
 
-**重要**：Helen 中 Agent 是一等公民，应该像函数一样调用。`call` 关键字在表达式位置（赋值、参数、返回值）会导致解析错误，仅用于语句位置（不接收返回值时）。
+**Important**: In Helen, agents are first-class citizens and should be called like functions. The `call` keyword causes a parse error in expression position (assignment, argument, return value) and is only valid in statement position (when the return value is not captured).
 
-### 4. 函数返回值
+### 4. Function Return Values
 
 ```helen
-// ✅ 正确
+// ✅ Correct
 fn process(): map {
     return {"status": "success", "data": result}
 }
 
-// ❌ 错误（Helen 不支持隐式返回）
+// ❌ Wrong (Helen does not support implicit return)
 fn process(): map {
     {"status": "success", "data": result}
 }
 ```
 
-### 5. 测试框架
+### 5. Testing Framework
 
 ```helen
-// ✅ 正确
+// ✅ Correct
 test_suite("MyModule", fn() {
     test_case("valid input", fn() {
         assert_equal(result, expected)
     })
 })
 
-// ❌ 错误（不能用字符串作为函数名）
+// ❌ Wrong (cannot use string as function name)
 test_case("valid input", "test_function")
 ```
 
-## 质量改进建议
+## Quality Improvement Suggestions
 
-**安全性**：输入验证 + 参数化查询（避免 SQL 注入），禁止硬编码密钥。
+**Security**: Input validation + parameterized queries (avoid SQL injection), prohibit hardcoded secrets.
 
-**可维护性**：提取重复逻辑为公共函数，避免多处重复的错误处理代码。
+**Maintainability**: Extract duplicated logic into shared functions, avoid repeating error handling code in multiple places.
 
 ```helen
-// ❌ 重复逻辑散布多处
+// ❌ Duplicated logic scattered across multiple places
 fn process_a(input: str): map {
     if len(input) == 0 { return {"status": "error", "code": 1001} }
     // ...
 }
 
-// ✅ 提取公共验证函数
+// ✅ Extract shared validation function
 fn validate_input(input: str): map {
     if len(input) == 0 { return create_error(1001, "Empty input") }
     return create_success(input)
 }
 ```
 
-## 技能自进化示例
+## Skill Self-Evolution Examples
 
-每次任务完成后，评估是否产生新技能或需要更新现有技能：
+After each task, evaluate whether new skills have been discovered or existing skills need updating:
 
-**场景 1：发现新陷阱** → 创建新技能
+**Scenario 1: New pitfall discovered** → Create a new skill
 ```helen
-let task_summary = "递归斐波那契 n>30 栈溢出，改用迭代实现"
+let task_summary = "Recursive fibonacci n>30 causes stack overflow, switched to iterative implementation"
 let evaluation = call_skill_evaluator(task_summary, "src/math.helen")
-// 建议创建 "recursion-stack-overflow" 技能
+// Suggest creating "recursion-stack-overflow" skill
 ```
 
-**场景 2：更新现有技能** → 补充文档
+**Scenario 2: Update existing skill** → Supplement documentation
 ```helen
-let task_summary = "发现 helen-testing 未说明 mock 对象必须在 test_suite 外部定义"
+let task_summary = "Discovered helen-testing does not explain that mock objects must be defined outside test_suite"
 let evaluation = call_skill_evaluator(task_summary, "tests/test_api.helen")
-// 建议更新 helen-testing 技能文档
+// Suggest updating helen-testing skill documentation
 ```
 
 ---
 
-## 开发工作流中的缓存管理
+## Cache Management in the Development Workflow
 
-开发时需注意 ImportResolver 缓存行为：CLI 每次新进程自动重新加载，REPL 和 Web 服务的长进程会缓存已加载模块。开发时优先用 CLI，REPL 中修改文件后用 `:reset` 重置。
+When developing, be aware of ImportResolver caching behavior: the CLI automatically reloads on each new process, while long-running processes like the REPL and web services cache loaded modules. Prefer the CLI during development; in the REPL, use `:reset` to reset after modifying files.
 
-> 💡 开发时的缓存管理（REPL/Web 服务陷阱、Python 集成、调试工具）详见 **helen-language-development** skill § ImportResolver 缓存机制。
+> 💡 For cache management during development (REPL/web service pitfalls, Python integration, debugging tools), see the **helen-language-development** skill § ImportResolver Caching Mechanism.
 
 ---
 
-## 参考资源
+## Reference Resources
 
-- [Helen 语法参考](./helen-syntax/SKILL.md)
-- [Helen 标准库](./helen-stdlib/SKILL.md)
-- [TDD 工作流](./test-driven-development/SKILL.md)
-- [代码质量评估](./code-quality/SKILL.md)
+- [Helen Syntax Reference](./helen-syntax/SKILL.md)
+- [Helen Standard Library](./helen-stdlib/SKILL.md)
+- [TDD Workflow](./test-driven-development/SKILL.md)
+- [Code Quality Assessment](./code-quality/SKILL.md)
 
-## 相关技能
+## Related Skills
 
-- **helen-agent-patterns** — Agent 设计模式
-- **helen-agent-collaboration** — 多 Agent 协作模式
-- **helen-testing** — 测试框架使用指南
-- **helen-quality** — 代码质量评估
+- **helen-agent-patterns** — Agent design patterns
+- **helen-agent-collaboration** — Multi-agent collaboration patterns
+- **helen-testing** — Testing framework usage guide
+- **helen-quality** — Code quality assessment

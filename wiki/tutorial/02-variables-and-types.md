@@ -1,27 +1,27 @@
-# 教程 02: 变量与类型
+# Tutorial 02: Variables and Types
 
-> let / const / 类型注解 / 基本运算
+> let / const / type annotations / basic operations
 
-## 变量声明
+## Variable Declarations
 
-### `let` — 可变变量
+### `let` — Mutable Variables
 
 ```helen
 let x = 42
-x = 100       // ✅ 可以修改
+x = 100       // ✅ Can be modified
 print(x)      // 100
 ```
 
-### `const` — 不可变常量
+### `const` — Immutable Constants
 
 ```helen
 const PI = 3.14159
 PI = 3        // ❌ E0346 CONST_ASSIGNMENT
 ```
 
-## 数据类型
+## Data Types
 
-### 基本类型
+### Primitive Types
 
 ```helen
 let number = 42         // int
@@ -31,7 +31,7 @@ let flag = true         // bool
 let nothing = null      // null
 ```
 
-### 集合类型
+### Collection Types
 
 ```helen
 let numbers = [1, 2, 3]                     // list<int>
@@ -39,9 +39,9 @@ let mixed = [1, "two", true]                // list<any>
 let person = {"name": "Alice", "age": 30}   // map<str, any>
 ```
 
-### 中文类型名 (v1.10)
+### Chinese Type Names (v1.10)
 
-`list` 和 `map` 支持中文别名：`列表`、`映射`。
+`list` and `map` support Chinese aliases: `列表` (list), `映射` (map).
 
 ```helen
 函数 获取列表(): 列表 {
@@ -53,7 +53,7 @@ let person = {"name": "Alice", "age": 30}   // map<str, any>
 }
 ```
 
-## 类型注解
+## Type Annotations
 
 ```helen
 let name: str = "Alice"
@@ -62,27 +62,27 @@ let score: float = 95.5
 let active: bool = true
 ```
 
-### 可选类型
+### Optional Types
 
 ```helen
-let email: str? = null      // 可以为空
+let email: str? = null      // Can be null
 email = "alice@example.com" // ✅
 email = null                // ✅
 
-let name: str = null        // ❌ str 不接受 null
+let name: str = null        // ❌ str does not accept null
 ```
 
-### 联合类型
+### Union Types
 
 ```helen
-let id: int | str = 42      // 可以是 int 或 str
+let id: int | str = 42      // Can be int or str
 id = "ABC-123"              // ✅
 id = true                   // ❌
 ```
 
-## 运算
+## Operations
 
-### 算术运算
+### Arithmetic Operations
 
 ```helen
 let a = 10 + 3      // 13
@@ -92,7 +92,7 @@ let d = 10 / 3      // 3.333...
 let e = 10 % 3      // 1
 ```
 
-### 比较运算
+### Comparison Operations
 
 ```helen
 let eq = 5 == 5     // true
@@ -103,38 +103,38 @@ let lt = 3 < 5      // true
 let le = 5 <= 5     // true
 ```
 
-### 逻辑运算
+### Logical Operations
 
-Helen 使用 `&&`（与）、`||`（或）、`!`（非）作为逻辑操作符：
+Helen uses `&&` (and), `||` (or), `!` (not) as logical operators:
 
 ```helen
 let and = true && false   // false
 let or = true || false    // true
 let not = !true           // false
 
-// 实际使用示例
+// Practical usage example
 let x = 5
 if x > 0 && x < 10 {
     print("x is between 0 and 10")
 }
 
-// 文件存在性检查示例
+// File existence check example
 let file = "config.txt"
 if !path_exists(file) {
     print("File not found")
 }
 ```
 
-**注意**：Helen 不使用 `and`、`or`、`not` 关键字，而是使用符号 `&&`、`||`、`!`。
+**Note**: Helen does not use the `and`, `or`, `not` keywords; instead, it uses the symbols `&&`, `||`, `!`.
 
-### 字符串连接
+### String Concatenation
 
 ```helen
 let greeting = "Hello, " + "World!"    // "Hello, World!"
 let message = "Score: " + 42           // "Score: 42"
 ```
 
-## 列表操作
+## List Operations
 
 ```helen
 let nums = [1, 2, 3]
@@ -143,132 +143,132 @@ let len = len(nums)        // 3
 let range_nums = range(5)  // [0, 1, 2, 3, 4]
 ```
 
-### 列表方法
+### List Methods
 
-Helen 的列表基于 Python list，自动支持所有常用方法：
+Helen lists are based on Python lists and automatically support all common methods:
 
 ```helen
 let items = [1, 2, 3]
 
-// 添加元素
+// Add elements
 items.append(4)           // [1, 2, 3, 4]
 items.insert(0, 0)        // [0, 1, 2, 3, 4]
 items.extend([5, 6])      // [0, 1, 2, 3, 4, 5, 6]
 
-// 移除元素
-items.pop()               // 移除并返回最后一个: 6
-items.remove(0)           // 移除第一个值为 0 的元素
-items.clear()             // 清空列表
+// Remove elements
+items.pop()               // Remove and return the last element: 6
+items.remove(0)           // Remove the first element with value 0
+items.clear()             // Clear the list
 
-// 查询
-let idx = items.index(2)  // 返回元素 2 的索引
-let cnt = items.count(3)  // 返回元素 3 出现的次数
+// Query
+let idx = items.index(2)  // Return the index of element 2
+let cnt = items.count(3)  // Return the count of element 3
 
-// 排序与反转
+// Sort and reverse
 let unsorted = [3, 1, 4, 1, 5]
 unsorted.sort()           // [1, 1, 3, 4, 5]
 unsorted.reverse()        // [5, 4, 3, 1, 1]
 
-// 复制
-let copy = items.copy()   // 浅拷贝
+// Copy
+let copy = items.copy()   // Shallow copy
 ```
 
-### 列表拼接
+### List Concatenation
 
-使用 `+` 操作符可以拼接两个列表，返回一个新列表（原列表不变）：
+Use the `+` operator to concatenate two lists, returning a new list (original lists unchanged):
 
 ```helen
 let a = [1, 2]
 let b = [3, 4]
 let c = a + b             // [1, 2, 3, 4]
 
-// 常用于增量构建
+// Commonly used for incremental building
 let items = []
 items = items + ["a"]     // ["a"]
 items = items + ["b", "c"]  // ["a", "b", "c"]
 ```
 
-> 注意：`+` 返回新列表，不修改原列表。如需原地修改，使用 `append()` 或 `extend()`。
+> Note: `+` returns a new list and does not modify the original. For in-place modification, use `append()` or `extend()`.
 
-**可用方法列表**：
-| 方法 | 说明 |
-|------|------|
-| `append(x)` | 在末尾添加元素 |
-| `extend(iterable)` | 扩展列表 |
-| `insert(i, x)` | 在位置 i 插入元素 |
-| `remove(x)` | 移除第一个值为 x 的元素 |
-| `pop([i])` | 移除并返回位置 i 的元素（默认末尾） |
-| `clear()` | 清空列表 |
-| `index(x)` | 返回第一个值为 x 的索引 |
-| `count(x)` | 返回 x 出现的次数 |
-| `sort()` | 原地排序 |
-| `reverse()` | 原地反转 |
-| `copy()` | 浅拷贝 |
+**Available methods**:
+| Method | Description |
+|--------|-------------|
+| `append(x)` | Add an element at the end |
+| `extend(iterable)` | Extend the list |
+| `insert(i, x)` | Insert an element at position i |
+| `remove(x)` | Remove the first element with value x |
+| `pop([i])` | Remove and return the element at position i (default: last) |
+| `clear()` | Clear the list |
+| `index(x)` | Return the index of the first element with value x |
+| `count(x)` | Return the number of occurrences of x |
+| `sort()` | Sort in place |
+| `reverse()` | Reverse in place |
+| `copy()` | Shallow copy |
 
-## 映射操作
+## Map Operations
 
 ```helen
 let person = {"name": "Alice", "age": 30}
 let name = person["name"]  // "Alice"
 ```
 
-### 子脚本/字段赋值 (v1.10)
+### Subscript/Field Assignment (v1.10)
 
-v1.10 添加了**子脚本赋值**和**字段赋值**支持，可以直接修改数组元素和对象字段：
+v1.10 added **subscript assignment** and **field assignment** support, allowing direct modification of array elements and object fields:
 
-#### 数组索引赋值
+#### Array Index Assignment
 
 ```helen
 let arr = [1, 2, 3]
-arr[0] = 10  // ✅ arr 变为 [10, 2, 3]
-arr[1] = 20  // ✅ arr 变为 [10, 20, 3]
+arr[0] = 10  // ✅ arr becomes [10, 2, 3]
+arr[1] = 20  // ✅ arr becomes [10, 20, 3]
 
-// 动态索引
+// Dynamic index
 let i = 2
-arr[i] = 30  // ✅ arr 变为 [10, 20, 30]
+arr[i] = 30  // ✅ arr becomes [10, 20, 30]
 ```
 
-#### 对象字段赋值
+#### Object Field Assignment
 
 ```helen
 let person = {"name": "Alice", "age": 30}
-person["age"] = 31  // ✅ person 变为 {"name": "Alice", "age": 31}
-person.name = "Bob"  // ✅ person 变为 {"name": "Bob", "age": 31}
+person["age"] = 31  // ✅ person becomes {"name": "Alice", "age": 31}
+person.name = "Bob"  // ✅ person becomes {"name": "Bob", "age": 31}
 ```
 
-#### 嵌套访问
+#### Nested Access
 
 ```helen
 let matrix = [[1, 2], [3, 4]]
-matrix[0][1] = 99  // ✅ matrix 变为 [[1, 99], [3, 4]]
+matrix[0][1] = 99  // ✅ matrix becomes [[1, 99], [3, 4]]
 
 let data = {"users": [{"name": "Alice"}, {"name": "Bob"}]}
-data["users"][0]["name"] = "Charlie"  // ✅ 嵌套修改
+data["users"][0]["name"] = "Charlie"  // ✅ Nested modification
 ```
 
-#### 错误示例
+#### Error Examples
 
 ```helen
 const arr = [1, 2, 3]
-arr[0] = 10  // ❌ E0346 CONST_ASSIGNMENT: const 不可修改
+arr[0] = 10  // ❌ E0346 CONST_ASSIGNMENT: const cannot be modified
 
 const obj = {"name": "Alice"}
-obj.name = "Bob"  // ❌ E0346 CONST_ASSIGNMENT: const 不可修改
+obj.name = "Bob"  // ❌ E0346 CONST_ASSIGNMENT: const cannot be modified
 ```
 
-#### 实际示例
+#### Practical Example
 
 ```helen
-// 更新数组中的记录
+// Update a record in an array
 let users = [
   {"name": "Alice", "score": 85},
   {"name": "Bob", "score": 90}
 ]
 
-// 更新第一个用户的分数
+// Update the first user's score
 users[0]["score"] = 95
 
-// 添加新字段
+// Add a new field
 users[1]["grade"] = "A"
 
 print(users)
@@ -278,7 +278,7 @@ print(users)
 // ]
 ```
 
-## 类型检查
+## Type Checking
 
 ```helen
 let x = 42
@@ -287,12 +287,11 @@ let is_int = isinstance(x, "int")    // true
 let is_str = isinstance(x, "str")    // false
 ```
 
-## 练习
+## Exercises
 
-1. 声明一个 `const` 常量保存你的出生年份
-2. 创建一个包含你信息的 map (name, age, city)
-3. 计算圆的面积 (PI * r * r)，r = 5
-4. 使用类型注解声明一个可选字符串变量
+1. Declare a `const` constant holding your birth year
+2. Create a map containing your info (name, age, city)
+3. Calculate the area of a circle (PI * r * r), r = 5
+4. Use a type annotation to declare an optional string variable
 
 ---
-

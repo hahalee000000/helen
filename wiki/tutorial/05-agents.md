@@ -1,12 +1,12 @@
-# 教程 05: Agent 编程
+# Tutorial 05: Agent Programming
 
-> agent 声明 / description / prompt / 配置
+> agent declarations / description / prompt / configuration
 
-## 什么是 Agent？
+## What Is an Agent?
 
-在 Helen 中，Agent 是**一等公民**——不是库对象，而是语言级别的结构。
+In Helen, agents are **first-class citizens** — not library objects, but language-level constructs.
 
-传统方式（Python):
+Traditional approach (Python):
 
 ```python
 class Translator:
@@ -15,7 +15,7 @@ class Translator:
         self.prompt = "You are a translator..."
 ```
 
-Helen 方式:
+Helen approach:
 
 ```helen
 agent Translator {
@@ -24,53 +24,53 @@ agent Translator {
 }
 ```
 
-编译器理解 Agent 的语义，可以在 LSP 中补全、在文档中自动提取。
+The compiler understands agent semantics and can provide completion in LSP and auto-extract them in documentation.
 
-## 核心设计原则：调用者决定上下文
+## Core Design Principle: Caller Decides Context
 
-> **"调用 agent 前先问：它需要知道什么？"**
+> **"Before calling an agent, ask: what does it need to know?"**
 
-Helen 的 agent 是**严格隔离**的——每次 agent 调用（无论是同步 `call Agent(...)` 还是 `spawn Agent(...)`）都会创建一个全新的、独立的执行环境。**Agent 不会自动继承调用者的任何变量、历史、或上下文**。
+Helen agents are **strictly isolated** — each agent call (whether synchronous `call Agent(...)` or `spawn Agent(...)`) creates a brand-new, independent execution environment. **Agents do not automatically inherit any variables, history, or context from the caller.**
 
-这是 Helen "显式优于隐式" 哲学的核心体现，与 Python/JS 等语言中"函数自然看到外层作用域"的行为完全不同。
+This is the core expression of Helen's "explicit over implicit" philosophy, fundamentally different from the "functions naturally see outer scope" behavior in languages like Python/JS.
 
-### 为什么这样设计？
+### Why Design It This Way?
 
-1. **可预测性**：agent 看到什么完全由参数决定，不会被外层状态污染
-2. **可复用性**：同一个 agent 在不同调用点可以用不同上下文工作
-3. **可测试性**：测试 agent 不需要构造完整的外层环境
-4. **安全性**：敏感数据不会被意外泄漏给不需要的 agent
+1. **Predictability**: What an agent sees is entirely determined by parameters; it cannot be polluted by outer state
+2. **Reusability**: The same agent can work with different contexts at different call sites
+3. **Testability**: Testing an agent does not require constructing a complete outer environment
+4. **Security**: Sensitive data is not accidentally leaked to agents that don't need it
 
-### 调用 agent 前的思考清单
+### Pre-call Checklist
 
-每次调用 agent 之前，请明确回答：
+Before each agent call, explicitly answer:
 
-- [ ] **这个 agent 完成任务需要哪些信息？**（输入参数）
-- [ ] **这些信息是否都通过参数显式传入了？**
-- [ ] **agent 是否需要访问跨 agent 共享的状态？**（如果是，用 `shared store` 或 `shared let`）
-- [ ] **agent 的输出如何被调用者或其他 agent 使用？**（返回值 / Channel / SharedStore）
+- [ ] **What information does this agent need to complete its task?** (input parameters)
+- [ ] **Is all this information passed explicitly via parameters?**
+- [ ] **Does the agent need access to cross-agent shared state?** (If so, use `shared store` or `shared let`)
+- [ ] **How will the agent's output be used by the caller or other agents?** (return value / Channel / SharedStore)
 
-### ❌ 错误示例：假设上下文自动继承
+### ❌ Wrong Example: Assuming Context Is Automatically Inherited
 
 ```helen
-let user_name = "Alice"       // 模块级变量
-let user_id = 42              // 模块级变量
+let user_name = "Alice"       // Module-level variable
+let user_id = 42              // Module-level variable
 
 agent Greeter {
     main {
-        // ❌ 错误：user_name 和 user_id 在 agent 内不可见
-        // 编译会报错 "undefined variable"
+        // ❌ Wrong: user_name and user_id are not visible inside the agent
+        // The compiler will report "undefined variable"
         print("Hello " + user_name + ", your id is " + str(user_id))
     }
 }
 ```
 
-### ✅ 正确示例：通过参数显式传递
+### ✅ Correct Example: Explicitly Passing via Parameters
 
 ```helen
 agent Greeter(user_name: str, user_id: int) {
     main {
-        // ✅ 所有信息都通过参数进入 agent
+        // ✅ All information enters the agent via parameters
         print("Hello " + user_name + ", your id is " + str(user_id))
     }
 }
@@ -78,25 +78,25 @@ agent Greeter(user_name: str, user_id: int) {
 main {
     let user_name = "Alice"
     let user_id = 42
-    // ✅ 调用时显式传入所需上下文
+    // ✅ Explicitly pass the required context at call time
     Greeter(user_name, user_id)
 }
 ```
 
-### 不同场景的上下文传递方式
+### Context Passing Methods for Different Scenarios
 
-| 场景 | 推荐方式 | 示例 |
-|------|---------|------|
-| 一次性输入 | 参数传递 | `Agent(data, config)` |
-| 只读配置 | `const` 模块常量 | 自动可见 |
-| 跨 agent 共享可变状态 | `shared store` | `Store.field = value` |
-| spawn 子 agent 的输出 | Channel 消息 | `ch.send(result)` |
-| 跨进程恢复对话 | `resume_session(sid)` | 显式继承 transcript |
-| LLM 看到的上下文 | agent 的 `prompt` 模板 | `{{var}}` 占位符 |
+| Scenario | Recommended Method | Example |
+|----------|-------------------|---------|
+| One-time input | Parameter passing | `Agent(data, config)` |
+| Read-only configuration | `const` module constants | Automatically visible |
+| Cross-agent mutable shared state | `shared store` | `Store.field = value` |
+| Output from a spawned agent | Channel messages | `ch.send(result)` |
+| Resuming a conversation across processes | `resume_session(sid)` | Explicitly inherit transcript |
+| Context seen by the LLM | Agent's `prompt` template | `{{var}}` placeholders |
 
-> 💡 详细示例见 `helen-programming-methodology` §5 "上下文接力模式"
+> 💡 For detailed examples, see `helen-programming-methodology` §5 "Context Relay Pattern"
 
-## 基本 Agent
+## Basic Agent
 
 ```helen
 agent Translator {
@@ -108,11 +108,11 @@ agent Translator {
 }
 ```
 
-**注意**：三引号字符串（`"""..."""`）会自动去除公共前导空白（auto-dedent），使得在代码中缩进的多行字符串在运行时保持整洁。例如上面的 prompt 在运行时不会包含前导空格。
+**Note**: Triple-quoted strings (`"""..."""`) automatically strip common leading whitespace (auto-dedent), so that multi-line strings indented in code remain clean at runtime. For example, the prompt above will not contain leading spaces at runtime.
 
-## Agent 配置
+## Agent Configuration
 
-### model — 指定模型
+### model — Specify Model
 
 ```helen
 agent SmartTranslator {
@@ -122,79 +122,79 @@ agent SmartTranslator {
 }
 ```
 
-### temperature — 控制随机性
+### temperature — Control Randomness
 
 ```helen
 agent CreativeWriter {
     description "Write creative stories"
-    temperature 0.9    // 高创造性
+    temperature 0.9    // High creativity
     prompt "Write a story..."
 }
 
 agent DataExtractor {
     description "Extract structured data"
-    temperature 0.1    // 低随机性，精确输出
+    temperature 0.1    // Low randomness, precise output
     prompt "Extract data..."
 }
 ```
 
-### max-turns — 多轮对话
+### max-turns — Multi-turn Conversation
 
 ```helen
 agent Interviewer {
     description "Conduct an interview"
-    max-turns 5    // 最多 5 轮对话
+    max-turns 5    // Maximum 5 turns of conversation
     prompt "Ask follow-up questions..."
 }
 ```
 
-### tools — LLM 可见的工具白名单
+### tools — LLM-Visible Tool Whitelist
 
-`tools = [...]` 是 **LLM 可见性的唯一白名单**（两层授权模型）。
+`tools = [...]` is the **sole whitelist for LLM visibility** (two-layer authorization model).
 
-**两层授权：**
+**Two-layer authorization:**
 
-- `functions {}` 块声明 agent 的**全部能力**——`main {}` 的 Helen 代码可以调用其中任意函数，但 LLM 默认看不到它们。
-- `tools = [...]` 从中挑选**允许 LLM 自主决定调用**的部分。
-- **不写 `tools`** 时，LLM 没有任何工具可用（除内置的 `load_skill`）。
+- The `functions {}` block declares the agent's **full capabilities** — Helen code in `main {}` can call any of these functions, but the LLM cannot see them by default.
+- `tools = [...]` selects the subset **allowed for the LLM to call autonomously**.
+- **Omitting `tools`** means the LLM has no tools available (except the built-in `load_skill`).
 
 ```helen
 agent Assistant {
     description "Helpful assistant"
-    tools = ["web_search", "read_file"]   // LLM 可以自主调用这两个
+    tools = ["web_search", "read_file"]   // LLM can autonomously call these two
     functions {
-        fn fetch_summary(url: str): str {  // 在 functions 里声明
+        fn fetch_summary(url: str): str {  // Declared in functions
             let content = read_file(url)
             return summarize(content)
         }
-        fn dangerous_op() { ... }          // LLM 看不到
+        fn dangerous_op() { ... }          // LLM cannot see this
     }
     main {
-        // main 可以调用 functions 里任意函数（不受 tools 限制）
+        // main can call any function in functions (not limited by tools)
         let summary = fetch_summary("http://example.com")
-        dangerous_op()                      // ✅ main 可以调
-        return llm act "..."                // LLM 只能调 web_search/read_file/fetch_summary
+        dangerous_op()                      // ✅ main can call it
+        return llm act "..."                // LLM can only call web_search/read_file/fetch_summary
     }
 }
 ```
 
-`tools` 里的名字先查 `functions {}` 块（Helen 函数），再查 Python 工具注册表（`web_search`、`read_file` 等）。同名时 Helen 函数优先。
+Names in `tools` are first looked up in the `functions {}` block (Helen functions), then in the Python tool registry (`web_search`, `read_file`, etc.). Helen functions take precedence on name conflicts.
 
-### context {} — 上下文管理配置（v1.15+）
+### context {} — Context Management Configuration (v1.15+)
 
-`context {}` 块允许为每个 agent 自定义上下文管理策略，包括压缩算法、工作记忆等。
+The `context {}` block allows customizing context management strategies per agent, including compression algorithms, working memory, etc.
 
-#### 基本语法
+#### Basic Syntax
 
 ```helen
 agent SmartAssistant {
     description "Smart assistant with custom context config"
     
     context {
-        compression "graduated"      // 压缩策略
-        cache-aware true             // 缓存感知
-        working-memory true          // 工作记忆
-        working-memory-tokens 5000   // 工作记忆词元预算
+        compression "graduated"      // Compression strategy
+        cache-aware true             // Cache-aware
+        working-memory true          // Working memory
+        working-memory-tokens 5000   // Working memory token budget
     }
     
     tools ["read_file", "web_search"]
@@ -206,20 +206,20 @@ agent SmartAssistant {
 }
 ```
 
-#### 配置选项
+#### Configuration Options
 
-| 选项 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `compression` | str | `"graduated"` | 压缩策略：`"none"` / `"graduated"` / `"traditional"` |
-| `cache-aware` | bool | `true` | 启用缓存感知压缩（提高缓存命中率） |
-| `working-memory` | bool | `true` | 启用工作记忆（跟踪活跃文件、决策、错误） |
-| `working-memory-tokens` | int | `5000` | 工作记忆词元预算 |
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `compression` | str | `"graduated"` | Compression strategy: `"none"` / `"graduated"` / `"traditional"` |
+| `cache-aware` | bool | `true` | Enable cache-aware compression (improves cache hit rate) |
+| `working-memory` | bool | `true` | Enable working memory (tracks active files, decisions, errors) |
+| `working-memory-tokens` | int | `5000` | Working memory token budget |
 
-#### 压缩策略详解
+#### Compression Strategies Explained
 
-**1. `"none"` — 不压缩**
+**1. `"none"` — No compression**
 
-适合短对话或需要完整历史的场景。
+Suitable for short conversations or scenarios requiring complete history.
 
 ```helen
 context {
@@ -227,19 +227,19 @@ context {
 }
 ```
 
-**2. `"graduated"` — 渐进压缩（默认）**
+**2. `"graduated"` — Graduated compression (default)**
 
-多层渐进策略，随上下文使用率自动升级压缩强度。大多数场景用默认值即可。
+Multi-layer progressive strategy that automatically escalates compression intensity as context usage increases. The defaults work well for most scenarios.
 
 ```helen
 context {
-    compression "graduated"  // 推荐用于长对话
+    compression "graduated"  // Recommended for long conversations
 }
 ```
 
-**3. `"traditional"` — 传统压缩**
+**3. `"traditional"` — Traditional compression**
 
-简单的截断策略，适合快速场景。
+Simple truncation strategy, suitable for quick scenarios.
 
 ```helen
 context {
@@ -247,36 +247,36 @@ context {
 }
 ```
 
-#### 缓存感知压缩
+#### Cache-Aware Compression
 
-启用 `cache-aware` 后，压缩算法会配合 LLM 提供方的 prompt cache，减少重复 token 的成本和延迟：
+When `cache-aware` is enabled, the compression algorithm works with the LLM provider's prompt cache to reduce the cost and latency of repeated tokens:
 
 ```helen
 context {
     compression "graduated"
-    cache-aware true  // 配合 provider 缓存，降低成本
+    cache-aware true  // Works with provider caching to reduce costs
 }
 ```
 
-#### 工作记忆
+#### Working Memory
 
-启用 `working-memory` 后，agent 会自动跟踪：
+When `working-memory` is enabled, the agent automatically tracks:
 
-- **活跃文件**：最近读写的文件路径
-- **最近决策**：assistant 的关键决策
-- **待办事项**：从注释中提取的 TODO
-- **错误历史**：工具调用的错误记录
+- **Active files**: Recently read/written file paths
+- **Recent decisions**: Key decisions from the assistant
+- **TODO items**: TODOs extracted from comments
+- **Error history**: Error records from tool calls
 
 ```helen
 context {
     working-memory true
-    working-memory-tokens 5000  // 工作记忆预算
+    working-memory-tokens 5000  // Working memory budget
 }
 ```
 
-#### 中文关键字
+#### Chinese Keywords
 
-支持中文关键字配置：
+Chinese keyword configuration is supported:
 
 ```helen
 agent 智能助手 {
@@ -295,42 +295,42 @@ agent 智能助手 {
 }
 ```
 
-#### 完整示例：高性能研究 Agent
+#### Complete Example: High-Performance Research Agent
 
 ```helen
 agent Researcher(topic: str) {
     description "Research assistant with optimized context"
     
-    // 优化上下文管理
+    // Optimize context management
     context {
-        compression "graduated"      // 渐进压缩
-        cache-aware true             // 缓存感知
-        working-memory true          // 跟踪研究文件
-        working-memory-tokens 8000   // 更大的工作记忆
+        compression "graduated"      // Graduated compression
+        cache-aware true             // Cache-aware
+        working-memory true          // Track research files
+        working-memory-tokens 8000   // Larger working memory
     }
     
     tools ["web_search", "web_fetch", "read_file", "write_file"]
     
     prompt """
-    你是研究助手。
-    研究主题：{{topic}}
+    You are a research assistant.
+    Research topic: {{topic}}
     
-    使用工具搜索和整理信息。
+    Use tools to search and organize information.
     """
     
     main {
-        let result = llm act "开始研究"
+        let result = llm act "Start research"
         return result
     }
 }
 ```
 
-#### 默认行为
+#### Default Behavior
 
-如果不指定 `context {}`，agent 使用默认配置：
+If `context {}` is not specified, the agent uses default configuration:
 
 ```helen
-// 等同于：
+// Equivalent to:
 agent DefaultAgent {
     context {
         compression "graduated"
@@ -341,9 +341,9 @@ agent DefaultAgent {
 }
 ```
 
-#### Transcript 会话记录（v1.16+）
+#### Transcript Session Recording (v1.16+)
 
-Helen 自动保存所有对话历史。可以在 agent 中通过 stdlib 函数访问和管理会话：
+Helen automatically saves all conversation history. You can access and manage sessions via stdlib functions in an agent:
 
 ```helen
 agent ChatBot {
@@ -351,35 +351,35 @@ agent ChatBot {
     prompt "You are a helpful chat assistant."
     
     main {
-        // 获取当前会话 ID
+        // Get current session ID
         let session_id = get_session_id()
-        print("当前会话: " + session_id)
+        print("Current session: " + session_id)
         
-        // 列出所有会话
+        // List all sessions
         let sessions = list_sessions()
         for s in sessions {
-            print("{s.session_id}: {s.message_count} 条消息")
+            print("{s.session_id}: {s.message_count} messages")
         }
         
-        // 回放当前会话
+        // Replay the current session
         let messages = replay_transcript()
         for msg in messages {
             print("{msg.role}: {msg.content}")
         }
         
-        // 导出会话到文件
+        // Export session to file
         export_transcript("chat_log.json", "json")
         
-        // 获取压缩审计（分析压缩效率）
+        // Get compression audit (analyze compression efficiency)
         let audit = get_compression_audit()
         for event in audit {
             print("{event.layer}: {event.original_token_count} -> {event.compressed_token_count}")
         }
         
-        // 恢复到之前的会话
+        // Resume a previous session
         let success = resume_session("session_1783492628_d9d9c0aa")
         if success {
-            print("会话已恢复")
+            print("Session resumed")
         }
         
         return llm act "Hello!"
@@ -387,92 +387,92 @@ agent ChatBot {
 }
 ```
 
-**使用场景**：
-- **会话恢复**: 使用 `resume_session(session_id)` 恢复之前的对话
-- **审计追踪**: 使用 `get_compression_audit()` 分析压缩效率
-- **会话导出**: 使用 `export_transcript()` 保存对话记录
-- **多会话管理**: 使用 `list_sessions()` 管理多个会话
+**Use cases**:
+- **Session resumption**: Use `resume_session(session_id)` to resume a previous conversation
+- **Audit trail**: Use `get_compression_audit()` to analyze compression efficiency
+- **Session export**: Use `export_transcript()` to save conversation records
+- **Multi-session management**: Use `list_sessions()` to manage multiple sessions
 
-**配置**：在 `~/.helen/config.yaml` 中配置 transcript：
+**Configuration**: Configure transcript in `~/.helen/config.yaml`:
 
 ```yaml
 transcript:
-  enabled: true              # 默认启用
-  backend: "jsonl"           # 或 "sqlite"
+  enabled: true              # Enabled by default
+  backend: "jsonl"           // or "sqlite"
   session_dir: "~/.helen/sessions"
 ```
 
-**CLI 参数**：使用 `--transcript-log` 自定义输出路径：
+**CLI arguments**: Use `--transcript-log` to customize the output path:
 
 ```bash
 $ helen chat.helen --transcript-log=/tmp/my_chat.jsonl
 ```
 
-**REPL 命令**：在 REPL 中使用 transcript 命令：
+**REPL commands**: Use transcript commands in the REPL:
 
 ```
->>> :sessions              # 列出所有会话
->>> :session_id            # 显示当前会话 ID
->>> :transcript            # 显示当前 transcript
->>> :resume <session_id>   # 恢复到指定会话
+>>> :sessions              # List all sessions
+>>> :session_id            # Show current session ID
+>>> :transcript            # Show current transcript
+>>> :resume <session_id>   # Resume a specific session
 ```
 
-详见 [TranscriptStore 文档](../runtime/transcript-store.md) 和 [标准库参考](10-stdlib.md#transcript-函数-6-v116)。
+See [TranscriptStore documentation](../runtime/transcript-store.md) and [stdlib reference](10-stdlib.md#transcript-functions-6-v116).
 
-#### tools = CONST_NAME（复用工具集）
+#### tools = CONST_NAME (Reusing Tool Sets)
 
-`tools` 可以引用**模块级 const**，减少重复声明，并保持工具集**静态可审计**（安全边界清晰）：
+`tools` can reference **module-level const** values to reduce repetitive declarations and keep tool sets **statically auditable** (clear security boundaries):
 
 ```helen
-// 项目顶部定义一次
+// Define once at the top of the project
 const FILE_TOOLS = ["read_file", "write_file", "path_exists"]
 const RESEARCH_TOOLS = ["web_search", "web_fetch", "read_file"]
 
 agent Contractor {
-    tools = FILE_TOOLS                // ✅ 复用 const
+    tools = FILE_TOOLS                // ✅ Reuse const
     ...
 }
 
 agent Researcher {
-    tools = RESEARCH_TOOLS            // ✅ 复用 const
+    tools = RESEARCH_TOOLS            // ✅ Reuse const
     ...
 }
 ```
 
-**严格校验**（编译期）：
+**Strict validation** (compile-time):
 
-| 写法 | 是否允许 | 原因 |
-|------|---------|------|
-| `tools = CONST_NAME` | ✅ | 模块级 const，静态可追踪 |
-| `tools = ["...", ...]` | ✅ | 字面量列表，静态 |
-| `tools = my_var` | ❌ | 可变变量，动态 |
-| `tools = my_fn` | ❌ | 函数，不是列表 |
-| `tools = OtherAgent` | ❌ | agent，不是列表 |
-| `tools = UNKNOWN` | ❌ | 未定义 |
-| 两次 `tools = ...` | ❌ | 重复声明，语义不明 |
+| Syntax | Allowed? | Reason |
+|--------|----------|--------|
+| `tools = CONST_NAME` | ✅ | Module-level const, statically traceable |
+| `tools = ["...", ...]` | ✅ | Literal list, static |
+| `tools = my_var` | ❌ | Mutable variable, dynamic |
+| `tools = my_fn` | ❌ | Function, not a list |
+| `tools = OtherAgent` | ❌ | Agent, not a list |
+| `tools = UNKNOWN` | ❌ | Undefined |
+| Two `tools = ...` | ❌ | Duplicate declaration, ambiguous |
 
-> ⚠️ 不支持 agent 内部 const、不支持表达式拼接（如 `A + B`）——这是**安全设计**，不是缺陷。工具是 LLM 的能力边界，必须静态可审计。
+> ⚠️ Agent-internal const and expression concatenation (e.g., `A + B`) are not supported — this is a **security design choice**, not a limitation. Tools define the LLM's capability boundary and must be statically auditable.
 
-**可用内建工具（10 个）：**
+**Available Built-in Tools (10):**
 
-| 工具 | 功能 | 参数 |
-|------|------|------|
-| `web_search` | 搜索网页（Bing） | `query: str` |
-| `web_fetch` | 获取网页内容 | `url: str` |
-| `read_file` | 读取文件 | `path: str` |
-| `write_file` | 写入文件 | `path: str, content: str` |
-| `patch_file` | 精确修改文件（9 种模糊匹配策略） | `path: str, old_string: str, new_string: str` |
-| `shell_exec` | 执行 shell 命令 | `command: str` |
-| `calculate` | 数学计算 | `expression: str` |
-| `find_files` | 按 glob 模式查找文件（`**` 递归） | `path: str, pattern: str = "**/*", max_results: int = 200` |
-| `search_files` | 按内容搜索文件（文本/正则） | `path: str, pattern: str, regex: bool = false, case_sensitive: bool = true, max_results: int = 100` |
-| `load_skill` | 加载技能文档 | `name: str` |
+| Tool | Function | Parameters |
+|------|----------|------------|
+| `web_search` | Search the web (Bing) | `query: str` |
+| `web_fetch` | Fetch web page content | `url: str` |
+| `read_file` | Read a file | `path: str` |
+| `write_file` | Write to a file | `path: str, content: str` |
+| `patch_file` | Precisely modify files (9 fuzzy matching strategies) | `path: str, old_string: str, new_string: str` |
+| `shell_exec` | Execute shell commands | `command: str` |
+| `calculate` | Math calculations | `expression: str` |
+| `find_files` | Find files by glob pattern (`**` for recursion) | `path: str, pattern: str = "**/*", max_results: int = 200` |
+| `search_files` | Search files by content (text/regex) | `path: str, pattern: str, regex: bool = false, case_sensitive: bool = true, max_results: int = 100` |
+| `load_skill` | Load skill documentation | `name: str` |
 
-> **注意**：`load_skill` 总是可用（即使不在 `tools` 列表中），用于加载技能文档。
+> **Note**: `load_skill` is always available (even when not listed in `tools`), used for loading skill documentation.
 
-### 文件搜索工具使用示例（v1.15+）
+### File Search Tool Usage Examples (v1.15+)
 
-`find_files` 和 `search_files` 让 LLM 能够探索代码库结构：
+`find_files` and `search_files` enable the LLM to explore codebase structure:
 
 ```helen
 agent CodeExplorer {
@@ -481,47 +481,47 @@ agent CodeExplorer {
     prompt "Explore the codebase to answer the user's question."
 }
 
-// LLM 可以自主决定：
-// 1. find_files("src/", "**/*.py")  → 列出所有 Python 文件
-// 2. search_files("src/", "def process", regex=false)  → 搜索函数定义
-// 3. read_file("src/processor.py")  → 读取相关文件
+// The LLM can autonomously decide to:
+// 1. find_files("src/", "**/*.py")  → List all Python files
+// 2. search_files("src/", "def process", regex=false)  → Search for function definitions
+// 3. read_file("src/processor.py")  → Read relevant files
 ```
 
-**`find_files` — 按模式查找文件**
+**`find_files` — Find files by pattern**
 
 ```helen
-// 查找所有 Python 文件
+// Find all Python files
 find_files("src/", "**/*.py")
 
-// 查找所有测试文件
+// Find all test files
 find_files("tests/", "**/test_*.py")
 
-// 查找配置文件
+// Find configuration files
 find_files(".", "**/*.{json,yaml,toml}")
 ```
 
-**`search_files` — 按内容搜索**
+**`search_files` — Search by content**
 
 ```helen
-// 文本搜索（默认）
+// Text search (default)
 search_files("src/", "TODO")
 
-// 正则搜索
+// Regex search
 search_files("src/", "def \\w+Handler", regex=true)
 
-// 大小写不敏感
+// Case-insensitive
 search_files("docs/", "warning", case_sensitive=false)
 ```
 
-**中文别名**：stdlib 中对应函数为 `查找文件()` 和 `搜索内容()`。
+**Chinese aliases**: The corresponding stdlib functions are `查找文件()` and `搜索内容()`.
 
-## Agent 提示词结构（v1.15+）
+## Agent Prompt Structure (v1.15+)
 
-Helen 自动把 agent 的 `description` 和 `prompt` 放到 LLM 消息的正确位置：
+Helen automatically places the agent's `description` and `prompt` in the correct positions in LLM messages:
 
-- **`description`** → 系统级行为规则（角色、能力边界）
-- **`prompt`** → 任务级上下文（具体指示、`{{}}` 渲染后的内容）
-- **`llm act "..."`** → 实际查询（用户当前的问题）
+- **`description`** → System-level behavioral rules (role, capability boundaries)
+- **`prompt`** → Task-level context (specific instructions, rendered `{{}}` content)
+- **`llm act "..."`** → Actual query (the user's current question)
 
 ```helen
 agent CodingAgent {
@@ -535,24 +535,24 @@ agent CodingAgent {
 }
 ```
 
-LLM 收到的消息大致是：
+The messages received by the LLM are roughly:
 
 ```
-System: <自动注入的框架指令> + description ("A coding assistant")
-User:   prompt ("You are a Python expert...") + llm act 查询
+System: <auto-injected framework instructions> + description ("A coding assistant")
+User:   prompt ("You are a Python expert...") + llm act query
 ```
 
-你不需要关心框架指令的具体内容——它们对所有 agent 自动生效，保证工具使用、技能加载等基础行为正确。你只需要写好 `description` 和 `prompt`。
+You don't need to worry about the specifics of the framework instructions — they are automatically applied to all agents, ensuring correct behavior for tool usage, skill loading, etc. You just need to write good `description` and `prompt`.
 
-### 深入阅读
+### Further Reading
 
-关于如何**写好** `prompt` 和 `description`——结构布局、写作原则、反模式、Token 预算分配、缓存友好设计、中途注入机制——请参阅 [[../reference/agent-system-prompt-guide|Agent 提示词工程完全指南]]。那份指南来自对 Claude Code 系统提示词的逆向工程，是把 agent 质量从"能跑"提升到"可靠"的关键知识。
+For how to **write well-crafted** `prompt` and `description` — structure layout, writing principles, anti-patterns, token budget allocation, cache-friendly design, mid-conversation injection mechanisms — see [[../reference/agent-system-prompt-guide|Agent Prompt Engineering Complete Guide]]. That guide was reverse-engineered from Claude Code's system prompt and is the key knowledge for elevating agent quality from "it runs" to "it's reliable."
 
 ---
 
-## Agent main 块
+## Agent main Block
 
-Agent 可以包含 `main` 块作为执行入口，使用 `call` 调用：
+Agents can include a `main` block as the execution entry point, invoked with `call`:
 
 ```helen
 agent Translator(text: str, target: str) {
@@ -582,21 +582,21 @@ agent Translator(text: str, target: str) {
     
     main {
         if validate_input(text) {
-            let result = llm act    // bare form：自动使用渲染后的 prompt
+            let result = llm act    // bare form: automatically uses the rendered prompt
             return format_output(result)
         }
-        return "输入为空"
+        return "Input is empty"
     }
 }
 
-// 调用方式（推荐函数式调用）：
+// Invocation (recommended function-style call):
 let translated = Translator(text="Hello", target="French")
-// 函数式调用：let translated = Translator(text="Hello", target="French")
+// Function-style call: let translated = Translator(text="Hello", target="French")
 ```
 
-**functions 块中的变量定义**：
+**Variable definitions in the functions block**:
 
-`functions {}` 块现在支持 `let` 和 `const` 声明，这些变量在 agent 的所有函数中可见：
+The `functions {}` block now supports `let` and `const` declarations; these variables are visible to all functions in the agent:
 
 ```helen
 agent MyAgent {
@@ -608,7 +608,7 @@ agent MyAgent {
         const MAX_RETRIES = 3
         
         fn get_config(): str {
-            return config  // ✅ 可以访问
+            return config  // ✅ Can access
         }
         
         fn retry() {
@@ -620,15 +620,15 @@ agent MyAgent {
 }
 ```
 
-## Agent 参数
+## Agent Parameters
 
 ```helen
 agent Translator {
     description "Translate text"
 
-    // 参数声明 (未来版本支持类型检查)
-    // text: str — 要翻译的文本
-    // target_lang: str — 目标语言
+    // Parameter declarations (type checking supported in future versions)
+    // text: str — Text to translate
+    // target_lang: str — Target language
 
     prompt """
     Translate: {{text}}
@@ -641,7 +641,7 @@ main {
 }
 ```
 
-## 调用 Agent
+## Calling Agents
 
 ```helen
 agent Summarizer {
@@ -656,7 +656,7 @@ main {
 }
 ```
 
-## 完整示例：邮件分类系统
+## Complete Example: Email Classification System
 
 ```helen
 agent EmailClassifier {
@@ -705,21 +705,21 @@ agent EmailClassifier {
 }
 ```
 
-## 练习
+## Exercises
 
-1. 创建一个 Agent，描述为"判断文本情感"，测试不同输入
-2. 创建一个 Agent 配置 temperature 为 0，观察输出稳定性
-3. 创建一个多 Agent 系统：分类器 + 响应器 + 总结器
+1. Create an agent with the description "Determine text sentiment" and test with different inputs
+2. Create an agent with temperature set to 0 and observe output stability
+3. Create a multi-agent system: classifier + responder + summarizer
 
 ---
 
-## 共享状态与通信（v1.12 / v1.13）
+## Shared State and Communication (v1.12 / v1.13)
 
-多 Agent 系统经常需要共享状态或相互通信。Helen 提供两种机制：**shared store**（共享仓库）和 **channel**（通道）。
+Multi-agent systems often need to share state or communicate with each other. Helen provides two mechanisms: **shared store** and **channel**.
 
-### Shared Store：结构化共享状态
+### Shared Store: Structured Shared State
 
-`shared store` 用于跨 Agent 共享**可变状态**，特别是引用类型（list、dict）。
+`shared store` is used to share **mutable state** across agents, especially reference types (list, dict).
 
 ```helen
 shared store TaskRegistry {
@@ -733,10 +733,10 @@ shared store TaskRegistry {
     
     fn count(): int { return counter }
     
-    fn getTask(index: int): str { return tasks[index] }
+    fn get_task(index: int): str { return tasks[index] }
 }
 
-// 所有 Agent 都能访问
+// All agents can access it
 agent Worker() {
     main {
         TaskRegistry.register("my-task")
@@ -745,18 +745,18 @@ agent Worker() {
 }
 ```
 
-**关键特性**：
-- ✅ 线程安全：所有方法调用自动加锁（RLock）
-- ✅ 所有 Agent 默认可见
-- ✅ 支持 list、dict 等引用类型
-- ❌ 不能直接访问 `_` 前缀的私有字段
+**Key features**:
+- ✅ Thread-safe: All method calls are automatically locked (RLock)
+- ✅ Visible to all agents by default
+- ✅ Supports reference types like list, dict
+- ❌ Cannot directly access fields with `_` prefix (private fields)
 
-**私有字段**（`_` 前缀）：
+**Private fields** (`_` prefix):
 
 ```helen
 shared store BankAccount {
     let balance: int = 1000
-    _transactionLog: list = []  // 私有：外部不可见
+    _transactionLog: list = []  // Private: not visible externally
     
     fn withdraw(amount: int) {
         balance -= amount
@@ -764,51 +764,51 @@ shared store BankAccount {
     }
     
     fn getHistory(): list {
-        return _transactionLog  // 方法内可访问
+        return _transactionLog  // Accessible within methods
     }
 }
 
-// ✅ 公开接口
+// ✅ Public interface
 BankAccount.withdraw(100)
-print(BankAccount.balance)  // 输出: 900
+print(BankAccount.balance)  // Output: 900
 
-// ❌ 私有字段
-print(BankAccount._transactionLog)  // 错误！
+// ❌ Private field
+print(BankAccount._transactionLog)  // Error!
 ```
 
-### Channel：Agent 间消息通信（v1.18+）
+### Channel: Inter-Agent Message Communication (v1.18+)
 
-`spawn` 返回一个 **Channel**（邮箱），用于与分生的 Agent 进行双向通信。Channel 提供 `send`/`receive`/`try_receive`/`cancel`/`close` 方法。
+`spawn` returns a **Channel** (mailbox) for bidirectional communication with the spawned agent. Channel provides `send`/`receive`/`try_receive`/`cancel`/`close` methods.
 
 ```helen
-// Worker Agent 接收一个 Channel 参数用于回复结果
+// Worker agent receives a Channel parameter to reply with results
 agent Worker(task: str, reply: Channel) {
     main {
-        let result = "完成: " + task
+        let result = "Done: " + task
         reply.send(result)
     }
 }
 
-// spawn 返回 Channel，自动注入为 Agent 的最后一个参数
-let mailbox = spawn Worker("任务A")
-print(mailbox.receive())  // "完成: 任务A"
+// spawn returns a Channel, automatically injected as the agent's last parameter
+let mailbox = spawn Worker("Task A")
+print(mailbox.receive())  // "Done: Task A"
 ```
 
-**Channel API：**
+**Channel API:**
 
-| 方法 | 说明 |
-|------|------|
-| `channel.send(value)` | 发送消息到 Channel |
-| `channel.receive()` | 阻塞接收消息 |
-| `channel.try_receive()` | 非阻塞接收，无消息返回 null |
-| `channel.cancel()` | 取消 Channel 对应的 Agent |
-| `channel.close()` | 关闭 Channel |
+| Method | Description |
+|--------|-------------|
+| `channel.send(value)` | Send a message to the Channel |
+| `channel.receive()` | Blocking receive |
+| `channel.try_receive()` | Non-blocking receive; returns null if no message |
+| `channel.cancel()` | Cancel the agent associated with the Channel |
+| `channel.close()` | Close the Channel |
 
-**中文别名**：`发送()`、`接收()`、`尝试接收()`、`取消()`、`关闭()`。
+**Chinese aliases**: `发送()`, `接收()`, `尝试接收()`, `取消()`, `关闭()`.
 
-#### 多通道选择：mailbox_select
+#### Multi-Channel Selection: mailbox_select
 
-当同时监听多个 Channel 时，使用 `mailbox_select` 进行多路复用：
+When listening on multiple Channels simultaneously, use `mailbox_select` for multiplexing:
 
 ```helen
 agent Fetcher(url: str, reply: Channel) {
@@ -821,28 +821,28 @@ agent Fetcher(url: str, reply: Channel) {
 let mb1 = spawn Fetcher("https://api.example.com/a")
 let mb2 = spawn Fetcher("https://api.example.com/b")
 
-// 等待任意一个 Channel 返回结果
+// Wait for any Channel to return a result
 let result = mailbox_select([mb1, mb2])
-print("最先返回: " + result)
+print("First to return: " + result)
 ```
 
-**中文别名**：`邮箱选择([mb1, mb2])`。
+**Chinese alias**: `邮箱选择([mb1, mb2])`.
 
-#### 并发模式示例
+#### Concurrency Pattern Example
 
 ```helen
-// 生产者 Agent：向 Channel 发送多条消息
+// Producer agent: sends multiple messages to a Channel
 agent Producer(items: list, reply: Channel) {
     main {
         for item in items {
-            reply.send("处理: " + item)
+            reply.send("Processing: " + item)
         }
-        reply.send("done")  // 完成信号
+        reply.send("done")  // Completion signal
     }
 }
 
-// 消费者：从 Channel 接收消息
-let mailbox = spawn Producer(["苹果", "香蕉", "樱桃"])
+// Consumer: receives messages from the Channel
+let mailbox = spawn Producer(["apple", "banana", "cherry"])
 let msg = mailbox.receive()
 while (msg != "done") {
     print(msg)
@@ -851,9 +851,9 @@ while (msg != "done") {
 mailbox.close()
 ```
 
-### spawn 与共享状态（v1.18+）
+### spawn and Shared State (v1.18+)
 
-`spawn` 可以在后台启动 Agent，通过 Channel 进行通信。多个 spawn 可以同时访问 shared store：
+`spawn` can start agents in the background and communicate via Channels. Multiple spawned agents can concurrently access a shared store:
 
 ```helen
 shared store Counter {
@@ -868,65 +868,65 @@ agent Worker(reply: Channel) {
     }
 }
 
-// 启动 3 个并发 Agent，共享同一个 Counter
+// Start 3 concurrent agents sharing the same Counter
 let mb1 = spawn Worker()
 let mb2 = spawn Worker()
 let mb3 = spawn Worker()
 
-// 等待所有 Agent 完成
+// Wait for all agents to finish
 print(mb1.receive())  // "done"
 print(mb2.receive())  // "done"
 print(mb3.receive())  // "done"
 
-print(Counter.count)  // 输出: 3
+print(Counter.count)  // Output: 3
 ```
 
-**线程安全保证**：
-- SharedStore 内部使用 RLock 保护所有字段访问
-- 多个 spawn 并发调用方法时，自动序列化执行
-- 主线程和 spawn 可以同时访问同一个 SharedStore
-- Channel 的 `send`/`receive` 操作也是线程安全的
+**Thread safety guarantees**:
+- SharedStore uses RLock internally to protect all field access
+- When multiple spawns call methods concurrently, execution is automatically serialized
+- The main thread and spawned agents can access the same SharedStore simultaneously
+- Channel `send`/`receive` operations are also thread-safe
 
 ---
 
-## 📦 内置模板库
+## 📦 Built-in Template Library
 
-Helen 提供一组**内置模板**，涵盖常见 agent 模式。每个模板都是完整可运行的示例，并附有详细注释。
+Helen provides a set of **built-in templates** covering common agent patterns. Each template is a complete, runnable example with detailed comments.
 
-### 查看模板
+### Viewing Templates
 
 ```bash
-# 列出所有模板
+# List all templates
 helen template --list
 
-# 查看模板内容
+# View template content
 helen template simple_agent
 helen template spawn_channel
 
-# 复制模板到当前目录
+# Copy a template to the current directory
 helen template spawn_channel --copy my_worker.helen
 ```
 
-### 可用模板
+### Available Templates
 
-| 模板 | 用途 |
-|------|------|
-| `simple_agent` | 简单 agent 调用 |
-| `spawn_channel` | spawn + Channel 并发 |
-| `spawn_with_transcript` | spawn + transcript 继承 |
-| `shared_store` | SharedStore 数据交换 |
-| `context_object` | Context 对象聚合参数 |
-| `pipeline` | Agent 管道（顺序处理） |
+| Template | Purpose |
+|----------|---------|
+| `simple_agent` | Simple agent invocation |
+| `spawn_channel` | spawn + Channel concurrency |
+| `spawn_with_transcript` | spawn + transcript inheritance |
+| `shared_store` | SharedStore data exchange |
+| `context_object` | Context object for aggregating parameters |
+| `pipeline` | Agent pipeline (sequential processing) |
 
-### 💡 使用建议
+### 💡 Usage Recommendations
 
-1. **初学**：从 `simple_agent` 开始，理解基本调用模式
-2. **并发**：看 `spawn_channel`，理解隔离与通信
-3. **多 agent 协作**：看 `shared_store` 和 `context_object`
-4. **复杂工作流**：看 `pipeline`，组合多个 agent
+1. **Beginners**: Start with `simple_agent` to understand basic call patterns
+2. **Concurrency**: Look at `spawn_channel` to understand isolation and communication
+3. **Multi-agent collaboration**: Look at `shared_store` and `context_object`
+4. **Complex workflows**: Look at `pipeline` to compose multiple agents
 
-所有模板都遵循 **"调用者决定上下文"** 原则——agent 的所有信息都通过参数显式传递。
+All templates follow the **"caller decides context"** principle — all information for agents is passed explicitly via parameters.
 
 ---
 
-> **下一步**: [[tutorial/06-llm-statements|LLM 语句实战]]
+> **Next**: [[tutorial/06-llm-statements|LLM Statements in Practice]]

@@ -1,11 +1,12 @@
-"""Channel — agent 通信的通用消息队列。
+"""Channel — General-purpose message queue for agent communication.
 
-在 spawn 跨线程场景和普通 agent 隔离场景中设计一致。
-内部两个队列，支持双向通信。
+Designed for consistency across both spawn (cross-thread) and standard agent
+isolation scenarios. Internally uses two queues to support bidirectional
+communication.
 
-提供：
-- Channel: 底层双向消息通道
-- ChannelEndpoint: Channel 的一个端点（主线程端或 spawned agent 端）
+Provides:
+- Channel: Low-level bidirectional message channel
+- ChannelEndpoint: An endpoint of a Channel (main thread side or spawned agent side)
 """
 
 from __future__ import annotations
@@ -16,20 +17,21 @@ from typing import Any
 
 
 class Channel:
-    """双向消息通道。agent 通信的通用工具。
+    """Bidirectional message channel. General-purpose tool for agent communication.
 
-    在 spawn 跨线程场景和普通 agent 隔离场景中设计一致。
-    内部两个队列，支持双向通信。
+    Designed for consistency across both spawn (cross-thread) and standard agent
+    isolation scenarios. Internally uses two queues to support bidirectional
+    communication.
 
-    不要直接使用 Channel 的 send/receive —— 应通过 ChannelEndpoint 操作。
-    Channel 本身只是两个队列和状态标志的容器。
+    Do not use Channel's send/receive directly — operate through ChannelEndpoint.
+    Channel itself is merely a container for two queues and state flags.
     """
 
     def __init__(self, name: str = ""):
         self._name = name
-        # 主线程 → spawned agent 方向
+        # Main thread → spawned agent direction
         self._to_spawned: queue.Queue = queue.Queue()
-        # spawned agent → 主线程方向
+        # Spawned agent → main thread direction
         self._from_spawned: queue.Queue = queue.Queue()
         self._cancel_event = threading.Event()
         self._closed = threading.Event()
@@ -44,7 +46,7 @@ class Channel:
 
     @property
     def cancel_event(self) -> threading.Event:
-        """取消信号。spawned agent 内部可检查此 Event 以响应取消请求。"""
+        """Cancellation signal. Spawned agents can check this Event to respond to cancel requests."""
         return self._cancel_event
 
     @property
@@ -52,19 +54,19 @@ class Channel:
         return self._closed.is_set()
 
     def mark_closed(self) -> None:
-        """标记通道已关闭。"""
+        """Mark the channel as closed."""
         self._closed.set()
 
     def mark_cancelled(self) -> None:
-        """标记通道已取消。"""
+        """Mark the channel as cancelled."""
         self._cancel_event.set()
         self._closed.set()
 
     def __deepcopy__(self, memo):
-        """深复制创建独立的空 Channel。
+        """Deep copy creates an independent empty Channel.
 
-        队列内容不复制——新 Channel 是空的、未关闭的独立实例。
-        锁对象无法 pickle，必须重建。
+        Queue contents are not copied — the new Channel is an empty, unclosed
+        independent instance. Lock objects cannot be pickled and must be rebuilt.
         """
         new_ch = Channel(self._name)
         memo[id(self)] = new_ch
@@ -72,13 +74,13 @@ class Channel:
 
 
 class ChannelEndpoint:
-    """Channel 的一个端点。
+    """An endpoint of a Channel.
 
-    每个 Channel 有两个端点：
-    - 主线程端（is_main_thread=True）：outbox → _to_spawned, inbox ← _from_spawned
-    - spawned agent 端（is_main_thread=False）：outbox → _from_spawned, inbox ← _to_spawned
+    Each Channel has two endpoints:
+    - Main thread endpoint (is_main_thread=True): outbox → _to_spawned, inbox ← _from_spawned
+    - Spawned agent endpoint (is_main_thread=False): outbox → _from_spawned, inbox ← _to_spawned
 
-    send() 放入自己的 outbox，receive() 从自己的 inbox 取出。
+    send() puts into its own outbox, receive() takes from its own inbox.
     """
 
     def __init__(self, channel: Channel, is_main_thread: bool):
@@ -93,7 +95,7 @@ class ChannelEndpoint:
 
     @property
     def channel(self) -> Channel:
-        """底层 Channel 实例。"""
+        """The underlying Channel instance."""
         return self._channel
 
     @property
@@ -102,29 +104,29 @@ class ChannelEndpoint:
 
     @property
     def cancel_event(self) -> threading.Event:
-        """取消信号（仅对 spawned agent 端有意义）。"""
+        """Cancellation signal (only meaningful for the spawned agent endpoint)."""
         return self._channel.cancel_event
 
-    # ── 消息操作 ──
+    # ── Message operations ──
 
     def send(self, msg: Any = None) -> None:
-        """发送消息到对端。
+        """Send a message to the other endpoint.
 
-        可传递任意 Python 对象，包括 SharedStore 引用。
-        通道关闭后 send 静默忽略。
+        Can pass any Python object, including SharedStore references.
+        send() is silently ignored after the channel is closed.
         """
         if self._channel.is_closed:
             return
         self._outbox.put(msg)
 
     def receive(self, timeout: float | None = None) -> Any:
-        """阻塞接收消息。
+        """Blocking message receive.
 
         Args:
-            timeout: 超时秒数。None 表示无限等待。
+            timeout: Timeout in seconds. None means wait indefinitely.
 
         Returns:
-            收到的消息。通道关闭或超时时返回 None。
+            The received message. Returns None if the channel is closed or times out.
         """
         try:
             return self._inbox.get(timeout=timeout)
@@ -132,62 +134,62 @@ class ChannelEndpoint:
             return None
 
     def try_receive(self) -> Any:
-        """非阻塞接收。
+        """Non-blocking receive.
 
         Returns:
-            收到的消息。无消息时返回 None。
+            The received message. Returns None if no message is available.
         """
         try:
             return self._inbox.get_nowait()
         except queue.Empty:
             return None
 
-    # ── 生命周期控制 ──
+    # ── Lifecycle control ──
 
     def cancel(self) -> None:
-        """取消对端 agent 并关闭通道。
+        """Cancel the other endpoint's agent and close the channel.
 
-        设置 cancel_event（spawned agent 可检查此信号中断流式操作），
-        然后关闭通道。
+        Sets cancel_event (spawned agents can check this signal to interrupt
+        streaming operations), then closes the channel.
 
-        通常仅主线程端调用。
+        Typically only called from the main thread endpoint.
         """
         self._channel.mark_cancelled()
-        # 唤醒阻塞的 receive()
+        # Wake up blocked receive()
         self._send_sentinel()
 
     def close(self) -> None:
-        """关闭通道。
+        """Close the channel.
 
-        对端的 receive() 将收到 None（表示通道已关闭）。
+        The other endpoint's receive() will get None (indicating the channel is closed).
         """
         self._channel.mark_closed()
         self._send_sentinel()
 
     def is_channel_closed(self) -> bool:
-        """检查通道是否已关闭。"""
+        """Check if the channel is closed."""
         return self._channel.is_closed
 
     def _send_sentinel(self) -> None:
-        """向 outbox 放入 None 哨兵，唤醒对端阻塞的 receive()。"""
+        """Put a None sentinel into the outbox to wake up the other endpoint's blocked receive()."""
         try:
             self._outbox.put_nowait(None)
         except Exception:
             pass
 
-    # ── Helen 方法调用支持 ──
+    # ── Helen method call support ──
 
     def call_method(self, name: str, args: list) -> Any:
-        """支持 channel.send(...) 等 Helen 语法。"""
+        """Supports channel.send(...) and similar Helen syntax."""
         methods = {
-            # 英文
+            # English
             "send": self.send,
             "receive": self.receive,
             "try_receive": self.try_receive,
             "cancel": self.cancel,
             "close": self.close,
             "is_closed": self.is_channel_closed,
-            # 中文别名
+            # Chinese aliases
             "发送": self.send,
             "接收": self.receive,
             "尝试接收": self.try_receive,
@@ -205,9 +207,10 @@ class ChannelEndpoint:
         return f"ChannelEndpoint({self._channel.name!r}, {side})"
 
     def __deepcopy__(self, memo):
-        """深复制创建独立的端点。
+        """Deep copy creates an independent endpoint.
 
-        底层 Channel 深复制为空独立实例，此端点指向新的 Channel。
+        The underlying Channel is deep-copied to an empty independent instance,
+        and this endpoint points to the new Channel.
         """
         import copy
         new_ch = copy.deepcopy(self._channel, memo)

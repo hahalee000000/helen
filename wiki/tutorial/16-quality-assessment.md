@@ -1,74 +1,74 @@
-# 教程 16: 质量评估（7 维框架）
+# Tutorial 16: Quality Assessment (7-Dimension Framework)
 
-> Helen 内置 7 维质量评估框架，自动化质量分析
+> Helen has a built-in 7-dimension quality assessment framework for automated quality analysis
 
 ---
 
-## 快速开始
+## Quick Start
 
-### CLI 命令
+### CLI Commands
 
 ```bash
-# 基本评估
+# Basic assessment
 helen quality my_program.helen
 
-# JSON 输出
+# JSON output
 helen quality my_program.helen --json
 
-# 设置阈值（CI 集成）
+# Set threshold (CI integration)
 helen quality my_program.helen --threshold 7.5
 
-# 单维度评估
+# Single dimension assessment
 helen quality my_program.helen --dimension security
 ```
 
-### 在 Helen 代码中使用
+### Using in Helen Code
 
 ```helen
 let source = read_file("my_program.helen")
 
-// 获取代码指标
+// Get code metrics
 let metrics = analyze_code(source, "my_program.helen")
 print("Functions: " + str(metrics["function_count"]))
 print("Complexity: " + str(metrics["avg_complexity"]))
 
-// 安全检查
+// Security check
 let issues = check_security(source)
 print("Security issues: " + str(len(issues)))
 
-// 质量评分
+// Quality scoring
 let scores = quality_score(source, "my_program.helen")
 print("Total score: " + str(scores["total"]))
 print("Grade: " + scores["grade"])
 
-// 完整报告
+// Full report
 let report = quality_report(source, "my_program.helen")
 print(report)
 ```
 
-## 7 个维度
+## 7 Dimensions
 
-| 维度 | 权重 | 评估内容 |
-|------|:----:|---------|
-| **架构设计** | 20% | 函数长度、复杂度、嵌套深度、参数数量 |
-| **代码质量** | 15% | 注释率、函数平均长度、平均复杂度 |
-| **安全性** | 20% | 危险模式检测（eval、shell=True、未验证输入等） |
-| **测试覆盖** | 15% | 测试文件存在性、测试/代码比 |
-| **文档** | 10% | 函数 docstring 覆盖率 |
-| **可维护性** | 10% | 长函数数量、高复杂度函数数量 |
-| **工程规范** | 10% | 命名规范、文件大小 |
+| Dimension | Weight | What It Evaluates |
+|-----------|:------:|-------------------|
+| **Architecture** | 20% | Function length, complexity, nesting depth, parameter count |
+| **Code Quality** | 15% | Comment ratio, average function length, average complexity |
+| **Security** | 20% | Dangerous pattern detection (eval, shell=True, unvalidated input, etc.) |
+| **Test Coverage** | 15% | Test file existence, test-to-code ratio |
+| **Documentation** | 10% | Function docstring coverage |
+| **Maintainability** | 10% | Count of long functions, count of high-complexity functions |
+| **Engineering** | 10% | Naming conventions, file size |
 
-## 评分等级
+## Grading Scale
 
-| 等级 | 分数范围 | 含义 |
-|:----:|:--------:|------|
-| S | 9.0-10.0 | 生产就绪，exemplary |
-| A | 7.5-8.9 | 良好，少量改进 |
-| B | 6.0-7.4 | 可接受，需要改进 |
-| C | 4.0-5.9 | 低于标准 |
-| D | 0.0-3.9 | 不可接受 |
+| Grade | Score Range | Meaning |
+|:-----:|:-----------:|---------|
+| S | 9.0-10.0 | Production-ready, exemplary |
+| A | 7.5-8.9 | Good, minor improvements needed |
+| B | 6.0-7.4 | Acceptable, improvements needed |
+| C | 4.0-5.9 | Below standard |
+| D | 0.0-3.9 | Unacceptable |
 
-## 输出示例
+## Example Output
 
 ```
 ============================================================
@@ -106,72 +106,72 @@ print(report)
 ============================================================
 ```
 
-## 安全检查
+## Security Checks
 
-自动检测以下危险模式：
+The following dangerous patterns are automatically detected:
 
-| 模式 | 严重度 | 说明 |
-|------|:------:|------|
-| `eval()` | HIGH | 可执行任意代码 |
-| `exec()` | HIGH | 可执行任意代码 |
-| `shell=true` | HIGH | 命令注入风险 |
-| `import os` | MEDIUM | 系统资源访问 |
-| `import subprocess` | MEDIUM | 命令执行 |
-| `open(..., "w")` | MEDIUM | 无验证的文件写入 |
-| `input()` | LOW | 用户输入需验证 |
+| Pattern | Severity | Description |
+|---------|:--------:|-------------|
+| `eval()` | HIGH | Can execute arbitrary code |
+| `exec()` | HIGH | Can execute arbitrary code |
+| `shell=true` | HIGH | Command injection risk |
+| `import os` | MEDIUM | System resource access |
+| `import subprocess` | MEDIUM | Command execution |
+| `open(..., "w")` | MEDIUM | File writing without validation |
+| `input()` | LOW | User input needs validation |
 
-## CI 集成
+## CI Integration
 
 ```bash
-# 在 CI 中使用阈值
+# Use threshold in CI
 helen quality src/*.helen --threshold 7.0 --json > quality.json
 
-# 检查是否达标
+# Check if threshold is met
 if [ $? -ne 0 ]; then
     echo "Quality threshold not met!"
     exit 1
 fi
 ```
 
-## API 参考
+## API Reference
 
 ### `analyze_code(source, filename?)`
 
-分析代码指标，返回：
+Analyzes code metrics, returns:
 - `total_lines`, `code_lines`, `comment_lines`, `blank_lines`
 - `comment_ratio`, `function_count`, `agent_count`
 - `avg_function_length`, `max_function_length`
 - `avg_complexity`, `max_complexity`
-- `functions[]` — 每个函数的详细信息
+- `functions[]` — detailed information for each function
 
 ### `check_security(source)`
 
-检查安全问题，返回问题列表：
-- `line` — 行号
+Checks for security issues, returns a list of issues:
+- `line` — line number
 - `severity` — "high" / "medium" / "low"
-- `pattern` — 匹配的模式
-- `message` — 问题描述
+- `pattern` — matched pattern
+- `message` — issue description
 
 ### `quality_score(source, file_path?)`
 
-计算 7 维评分，返回：
+Computes 7-dimension scores, returns:
 - `architecture`, `code_quality`, `security`
 - `test_coverage`, `documentation`, `maintainability`, `engineering`
-- `total` — 加权总分
-- `grade` — 字母等级
+- `total` — weighted total score
+- `grade` — letter grade
 
 ### `quality_report(source, filename?)`
 
-生成格式化的完整报告字符串。
+Generates a formatted full report string.
 
-## 练习
+## Exercises
 
-1. 对你写的 Helen 程序运行质量评估
-2. 根据建议改进代码，提高评分
-3. 在 CI 中设置质量阈值
-4. 使用 `--dimension security` 专注安全改进
-5. 对比改进前后的评分变化
+1. Run quality assessment on your Helen program
+2. Improve code based on recommendations to raise the score
+3. Set a quality threshold in CI
+4. Use `--dimension security` to focus on security improvements
+5. Compare scores before and after improvements
 
 ---
 
-> **相关文档**: [[toolchain/quality|质量评估工具参考]] | [[tutorial/12-testing|测试框架与 TDD]]
+> **Related Documentation**: [[toolchain/quality|Quality Assessment Tool Reference]] | [[tutorial/12-testing|Testing Framework and TDD]]

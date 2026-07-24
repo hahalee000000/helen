@@ -1,38 +1,38 @@
-# 教程 10: 标准库参考
+# Tutorial 10: Standard Library Reference
 
-> 285 个内置函数，覆盖 AI 应用开发的所有核心需求
+> 285 built-in functions covering all core needs for AI application development
 
-## 概览
+## Overview
 
-Helen 标准库提供 285 个内置函数，分为 17 大类别：
+The Helen standard library provides 285 built-in functions organized into 17 categories:
 
-| 类别 | 函数数 | 功能 |
-|------|--------|------|
-| **Core** | 11 | 类型转换、通用操作 |
-| **String** | 37 | 字符串处理、正则、文本分析、模板插值 |
-| **Data** | 25 | JSON、HTML、CSV、Markdown、YAML、TOML、XML |
-| **Collection** | 22 | 列表、字典、集合操作 |
-| **Network** | 9 | HTTP 请求、URL 处理 |
-| **Time** | 13 | 日期时间、格式化、运算 |
-| **Math** | 15 | 数学运算、统计分析 |
-| **File** | 18 | 文件读写、目录操作、临时文件、文件搜索 |
-| **System** | 18 | 环境变量、CLI 参数、进程管理、日志 |
-| **Crypto** | 11 | 哈希、随机数 |
-| **IO** | 5 | 流式输出控制 |
-| **Context** | 2 | 上下文管理（v1.15 新增） |
-| **Transcript** | 11 | 会话记录管理（v1.16 新增；v1.22 新增 `search_transcript` + invocation tree） |
-| **Media** | 12 | 多模态媒体处理（v1.17 新增） |
+| Category | Count | Description |
+|----------|-------|-------------|
+| **Core** | 11 | Type conversion, general operations |
+| **String** | 37 | String processing, regex, text analysis, template interpolation |
+| **Data** | 25 | JSON, HTML, CSV, Markdown, YAML, TOML, XML |
+| **Collection** | 22 | List, dict, set operations |
+| **Network** | 9 | HTTP requests, URL handling |
+| **Time** | 13 | Date/time, formatting, arithmetic |
+| **Math** | 15 | Math operations, statistical analysis |
+| **File** | 18 | File read/write, directory operations, temp files, file search |
+| **System** | 18 | Environment variables, CLI args, process management, logging |
+| **Crypto** | 11 | Hashing, random numbers |
+| **IO** | 5 | Streaming output control |
+| **Context** | 2 | Context management (added in v1.15) |
+| **Transcript** | 11 | Session recording management (added in v1.16; v1.22 added `search_transcript` + invocation tree) |
+| **Media** | 12 | Multimodal media processing (added in v1.17) |
 
-## 多语言 stdlib (v1.10)
+## Multilingual stdlib (v1.10)
 
-Helen 的 stdlib 支持多语言函数名。每个 stdlib 函数都有英文 canonical 名和本地化别名，启动时全量加载，可按需使用。
+Helen's stdlib supports multilingual function names. Every stdlib function has an English canonical name and localized aliases, all loaded at startup and available on demand.
 
-### 中文 stdlib 别名
+### Chinese stdlib Aliases
 
-Helen 内置 230+ 个中文别名，覆盖全部 stdlib 分类。例如：
+Helen includes 230+ built-in Chinese aliases covering all stdlib categories. For example:
 
-| 英文 | 中文 | 类别 |
-|------|------|------|
+| English | Chinese | Category |
+|---------|---------|----------|
 | `len` | `长度` | Core |
 | `print` | `打印` | Core |
 | `sort` | `排序` | Collection |
@@ -43,12 +43,12 @@ Helen 内置 230+ 个中文别名，覆盖全部 stdlib 分类。例如：
 | `sha256` | `sha256` | Crypto |
 | `date_format` | `日期格式化` | Time |
 
-完整列表见 `helen/stdlib/locales/zh.py`。
+Full list: see `helen/stdlib/locales/zh.py`.
 
-### 使用示例
+### Usage Examples
 
 ```helen
-// 直接用中文 stdlib 函数名（不需要任何 import 或 alias）
+// Directly use Chinese stdlib function names (no import or alias needed)
 函数 数据处理() {
     设 原始数据 = [3, 1, 4, 1, 5, 9, 2, 6]
     设 排序后 = 排序(原始数据)
@@ -56,14 +56,14 @@ Helen 内置 230+ 个中文别名，覆盖全部 stdlib 分类。例如：
     返回 长度(去重后)
 }
 
-// 中英混用也完全合法
+// Mixing Chinese and English is perfectly valid
 函数 混合使用() {
     let data = [1, 2, 3]
-    let sorted = 排序(data)     // 英文变量 + 中文函数
-    return len(sorted)          // 切回英文
+    let sorted = 排序(data)     // English variable + Chinese function
+    return len(sorted)          // Switch back to English
 }
 
-// 处理网络数据
+// Handle network data
 函数 获取数据() {
     设 响应 = http获取("https://api.example.com/data")
     设 解析后 = json解析(响应)
@@ -71,38 +71,38 @@ Helen 内置 230+ 个中文别名，覆盖全部 stdlib 分类。例如：
 }
 ```
 
-### 自定义别名
+### Custom Aliases
 
-如果需要给自己的函数或 stdlib 函数起额外的别名，使用 `alias` 语句：
+If you need to give your own functions or stdlib functions additional aliases, use the `alias` statement:
 
 ```helen
-// 给 stdlib 函数起自定义别名
+// Give stdlib functions custom aliases
 alias len as 我的长度
 alias print as 输出
 
-// 给用户函数起别名
+// Give user functions aliases
 函数 greet(name: str): str {
     返回 "Hello, " + name
 }
 alias greet as 打招呼
 ```
 
-中文关键字 `别名` 等价：
+The Chinese keyword `别名` is equivalent:
 
 ```helen
 别名 len as 长度
 ```
 
-### 设计原则
+### Design Principles
 
-- **一套机制**：stdlib 别名和用户 `alias` 使用相同的 Environment binding，行为完全一致
-- **全量加载**：所有 locale 的别名表启动时全部注册，不按 locale 过滤
-- **locale 只影响展示**：`~/.helen/config.yaml` 中的 `locale: zh` 只影响 docs/LSP/错误消息的语言，不影响运行时可用的名字
-- **向后兼容**：英文 canonical 名永远可用
+- **One mechanism**: stdlib aliases and user `alias` use the same Environment binding, behavior is completely identical
+- **Full loading**: All locale alias tables are registered at startup, not filtered by locale
+- **Locale only affects display**: `locale: zh` in `~/.helen/config.yaml` only affects the language of docs/LSP/error messages, not the names available at runtime
+- **Backward compatible**: English canonical names are always available
 
-### 扩展新语言
+### Extending to New Languages
 
-添加新语言的 stdlib 别名只需创建一个新文件，不需要改语法/解析器/解释器：
+Adding stdlib aliases for a new language only requires creating a new file — no changes to syntax/parser/interpreter:
 
 ```python
 # helen/stdlib/locales/ja.py
@@ -114,11 +114,11 @@ ALIASES = {
 }
 ```
 
-启动时自动加载所有 `helen/stdlib/locales/*.py` 文件中的别名。
+All alias files matching `helen/stdlib/locales/*.py` are automatically loaded at startup.
 
-## Core 函数 (11)
+## Core Functions (11)
 
-### 类型转换
+### Type Conversion
 
 ```helen
 str(42)                       // "42"
@@ -126,7 +126,7 @@ int("42")                     // 42
 float("3.14")                 // 3.14
 ```
 
-### 通用操作
+### General Operations
 
 ```helen
 len("hello")                  // 5
@@ -140,121 +140,121 @@ range(5)                      // [0, 1, 2, 3, 4]
 range(1, 6)                   // [1, 2, 3, 4, 5]
 ```
 
-### 类型检查
+### Type Checking
 
 ```helen
 type(42)                      // "int"
 isinstance(42, "int")         // true
 ```
 
-## String 函数 (37)
+## String Functions (37)
 
-### 基础操作 (12)
+### Basic Operations (12)
 
 ```helen
-// 大小写
+// Case
 upper("hello")                // "HELLO"
 lower("HELLO")                // "hello"
 
-// 修剪
+// Trimming
 strip("  hello  ")            // "hello"
 trim_prefix("hello", "he")    // "llo"
 trim_suffix("hello", "lo")    // "hel"
 
-// 分割与连接
+// Splitting and joining
 split("a,b,c", ",")           // ["a", "b", "c"]
 join("-", ["a", "b", "c"])    // "a-b-c"
 
-// 检查
+// Checking
 startswith("hello", "hel")    // true
 endswith("hello", "lo")       // true
 
-// 查找与替换
+// Finding and replacing
 find("hello", "ell")          // 1
 replace("hello", "l", "L")    // "heLLo"
 substring("hello", 1, 3)      // "el"
 
-// 字符串插值（v1.8.1+）
+// String interpolation (v1.8.1+)
 let template = "Hello, {{name}}! You are {{age}} years old."
 let vars = {"name": "Alice", "age": 30}
 interpolate(template, vars)
 // "Hello, Alice! You are 30 years old."
 
-// 支持嵌套属性访问
+// Supports nested attribute access
 let template2 = "User: {{user.name}}, Email: {{user.email}}"
 let vars2 = {"user": {"name": "Bob", "email": "bob@example.com"}}
 interpolate(template2, vars2)
 // "User: Bob, Email: bob@example.com"
 ```
 
-### 正则表达式 (5)
+### Regular Expressions (5)
 
 ```helen
-// 匹配
+// Match
 let m = regex_match(r"\d+", "123abc")
 print(m.match)                // "123"
 
-// 搜索
+// Search
 let s = regex_search(r"\d+", "abc123def")
 print(s.match)                // "123"
 
-// 替换
+// Replace
 regex_replace(r"\d+", "abc123def", "NUM")
 // "abcNUMdef"
 
-// 分割
+// Split
 regex_split(r"\s+", "a  b  c")
 // ["a", "b", "c"]
 
-// 查找所有
+// Find all
 regex_findall(r"\d+", "a1b2c3")
 // ["1", "2", "3"]
 ```
 
-### 文本分析 (8)
+### Text Analysis (8)
 
 ```helen
-// 分词
+// Tokenization
 tokenize("Hello, world!")     // ["Hello", "world"]
 
-// 词频统计
+// Word frequency count
 word_count("hello world hello")
 // {"hello": 2, "world": 1}
 
-// 编辑距离
+// Edit distance
 levenshtein("hello", "hallo") // 1
 
-// 相似度
+// Similarity
 similarity("hello", "hallo")  // 0.8
 
-// 去除标点
+// Remove punctuation
 remove_punctuation("Hello!")  // "Hello"
 
-// 标准化空白
+// Normalize whitespace
 normalize_whitespace("a  b  c")  // "a b c"
 
-// 提取 URL
+// Extract URLs
 extract_urls("Visit https://example.com")
 // ["https://example.com"]
 
-// 提取邮箱
+// Extract emails
 extract_emails("Contact user@example.com")
 // ["user@example.com"]
 ```
 
-### 编码转换 (4)
+### Encoding Conversion (4)
 
 ```helen
 // Base64
 base64_encode("Hello")        // "SGVsbG8="
 base64_decode("SGVsbG8=")     // "Hello"
 
-// HTML 转义
+// HTML escaping
 html_escape("<script>")       // "&lt;script&gt;"
 html_unescape("&lt;")         // "<"
 ```
 
-### 字符串操作 (7)
+### String Operations (7)
 
 ```helen
 repeat("ab", 3)               // "ababab"
@@ -268,20 +268,20 @@ count("hello", "l")           // 2
 index("hello", "ll")          // 2
 ```
 
-## Data 函数 (25)
+## Data Functions (25)
 
 ### JSON (4)
 
 ```helen
-// 解析
+// Parse
 let data = json_parse('{"name": "Alice", "age": 30}')
 print(data.name)              // "Alice"
 
-// 生成
+// Generate
 let json_str = json_stringify({"name": "Alice"})
 // '{"name": "Alice"}'
 
-// 文件操作
+// File operations
 json_save("data.json", data)
 let loaded = json_load("data.json")
 ```
@@ -289,26 +289,26 @@ let loaded = json_load("data.json")
 ### HTML (3)
 
 ```helen
-// 提取文本
+// Extract text
 html_text("<p>Hello <b>World</b></p>")
 // "Hello World"
 
-// 提取链接
+// Extract links
 html_links('<a href="http://example.com">Link</a>')
 // ["http://example.com"]
 
-// 解析
+// Parse
 let dom = html_parse("<div>content</div>")
 ```
 
 ### Markdown (2)
 
 ```helen
-// 转 HTML
+// Convert to HTML
 markdown_to_html("# Title\n\nParagraph")
 // "<h1>Title</h1><p>Paragraph</p>"
 
-// 提取标题
+// Extract headings
 markdown_extract_headings("# H1\n## H2")
 // [{"level": 1, "text": "H1"}, {"level": 2, "text": "H2"}]
 ```
@@ -316,15 +316,15 @@ markdown_extract_headings("# H1\n## H2")
 ### CSV (4)
 
 ```helen
-// 解析
+// Parse
 let rows = csv_parse("name,age\nAlice,30")
 // [["name", "age"], ["Alice", "30"]]
 
-// 生成
+// Generate
 csv_stringify([["a", "b"], ["1", "2"]])
 // "a,b\n1,2\n"
 
-// 文件操作
+// File operations
 csv_save("data.csv", rows)
 let loaded = csv_load("data.csv")
 ```
@@ -332,15 +332,15 @@ let loaded = csv_load("data.csv")
 ### YAML (4)
 
 ```helen
-// 解析
+// Parse
 let data = yaml_parse("name: Alice\nage: 30")
 // {"name": "Alice", "age": 30}
 
-// 生成
+// Generate
 yaml_stringify({"name": "Alice"})
 // "name: Alice\n"
 
-// 文件操作
+// File operations
 yaml_save("config.yaml", data)
 let loaded = yaml_load("config.yaml")
 ```
@@ -348,65 +348,65 @@ let loaded = yaml_load("config.yaml")
 ### TOML (4)
 
 ```helen
-// 解析
+// Parse
 let data = toml_parse("name = \"Alice\"\nage = 30")
 // {"name": "Alice", "age": 30}
 
-// 生成
+// Generate
 toml_stringify({"name": "Alice"})
 // "name = \"Alice\"\n"
 
-// 文件操作
+// File operations
 toml_save("config.toml", data)
 let loaded = toml_load("config.toml")
 ```
 
-## CLI 参数（System 模块）
+## CLI Arguments (System Module)
 
-Helen 程序可以直接访问命令行参数。文件名之后的所有参数会传递给程序：
+Helen programs can directly access command-line arguments. All arguments after the filename are passed to the program:
 
 ```bash
 $ helen my_tool.helen --verbose --output=json --port=8080 input.txt
 ```
 
-### argv 预定义常量
+### argv Predefined Constant
 
-`argv` 是预定义的 `const list<str>`，包含所有命令行参数：
+`argv` is a predefined `const list<str>` containing all command-line arguments:
 
 ```helen
-// 直接访问
+// Direct access
 print(argv)  // ["--verbose", "--output=json", "--port=8080", "input.txt"]
 print(len(argv))  // 4
 
-// 检查特定参数
+// Check for specific arguments
 if contains(argv, "--verbose") {
-    print("详细模式已开启")
+    print("Verbose mode enabled")
 }
 
-// 遍历所有参数
+// Iterate over all arguments
 for arg in argv {
-    print("参数: " + arg)
+    print("Argument: " + arg)
 }
 ```
 
-`argv` 是 `const`，不可重新赋值。它在 agent 作用域中自动可见（通过 const 只读共享机制）。
+`argv` is `const` and cannot be reassigned. It is automatically visible in agent scope (through the const read-only sharing mechanism).
 
-### get_cli_args() 函数
+### get_cli_args() Function
 
-与 `argv` 等价的标准库函数形式：
+Standard library function form equivalent to `argv`:
 
 ```helen
-let args = get_cli_args()  // 与 argv 相同
+let args = get_cli_args()  // Same as argv
 ```
 
-### parse_cli_args() 结构化解析
+### parse_cli_args() Structured Parsing
 
-**自动模式**（无需参数）—— 自动识别各类参数：
+**Auto mode** (no arguments) — automatically recognizes various argument types:
 
 ```helen
 let parsed = parse_cli_args()
-// 输入: --verbose --output=json --port 8080 input.txt
-// 结果: {
+// Input: --verbose --output=json --port 8080 input.txt
+// Result: {
 //   verbose: true,
 //   output: "json",
 //   port: "8080",
@@ -414,14 +414,14 @@ let parsed = parse_cli_args()
 // }
 ```
 
-支持的参数格式：
-- `--flag` → 布尔值 `true`
-- `--key=value` → 字符串值（在第一个 `=` 处分割）
-- `--key value` → 字符串值（空格分隔）
-- `-v` → 短标志，布尔值 `true`
-- 其他 → 位置参数（收集到 `_positional`）
+Supported argument formats:
+- `--flag` → boolean `true`
+- `--key=value` → string value (split at the first `=`)
+- `--key value` → string value (space-separated)
+- `-v` → short flag, boolean `true`
+- Anything else → positional argument (collected into `_positional`)
 
-**Spec 模式**（传入规格 map）—— 带类型转换和默认值：
+**Spec mode** (pass a spec map) — with type conversion and defaults:
 
 ```helen
 let spec = {
@@ -430,55 +430,55 @@ let spec = {
     "port": {"type": "int", "default": 3000}
 }
 let config = parse_cli_args(spec)
-// port 自动转为 int 类型
+// port is automatically converted to int type
 print(type(config["port"]))  // "int"
 ```
 
-支持的 spec 类型：`flag`、`string`、`int`、`float`。
+Supported spec types: `flag`, `string`, `int`, `float`.
 
-> **注意**：嵌套 map 字面量中 `}}` 会被词法分析器识别为模板引用关闭符。需要在两个 `}` 之间加空格：`} }`。
+> **Note**: In nested map literals, `}}` is recognized by the lexer as a template reference closing tag. You need to add a space between the two `}`: `} }`.
 
-## Context 函数 (2) (v1.15)
+## Context Functions (2) (v1.15)
 
-上下文管理函数，用于控制 LLM 对话上下文的生命周期。
+Context management functions for controlling the lifecycle of LLM conversation context.
 
-### 清空上下文
+### Clearing Context
 
 ```helen
-// 清空当前对话历史
+// Clear the current conversation history
 let result = clear_context()
-print("已清空 " + str(result["cleared_messages"]) + " 条消息")
-print("释放约 " + str(result["cleared_tokens"]) + " tokens")
-// 返回: {"status": "ok", "cleared_messages": 5, "cleared_tokens": 1200, "warning": "..."}
+print("Cleared " + str(result["cleared_messages"]) + " messages")
+print("Freed approximately " + str(result["cleared_tokens"]) + " tokens")
+// Returns: {"status": "ok", "cleared_messages": 5, "cleared_tokens": 1200, "warning": "..."}
 ```
 
-**使用场景**：
-- 用户要求"重新开始"对话
-- 错误恢复时重置上下文
-- 长对话 agent 定期清理
+**Use cases**:
+- User requests to "start over" the conversation
+- Reset context during error recovery
+- Periodic cleanup in long-conversation agents
 
-### 压缩上下文
+### Compressing Context
 
 ```helen
-// 自动压缩（基于 token 阈值）
+// Auto compression (based on token thresholds)
 let result = compress_context("auto")
-print("从 " + str(result["original_tokens"]) + " 压缩到 " + str(result["compressed_tokens"]))
-// 返回: {"status": "ok", "original_messages": 10, "compressed_messages": 5, ...}
+print("Compressed from " + str(result["original_tokens"]) + " to " + str(result["compressed_tokens"]))
+// Returns: {"status": "ok", "original_messages": 10, "compressed_messages": 5, ...}
 
-// 强制使用 LLM 摘要压缩
+// Force LLM summary compression
 compress_context("summarize")
 
-// 截断保留最近 10 条消息
+// Truncate to keep the most recent 10 messages
 compress_context("truncate")
 ```
 
-**压缩策略**：
-- `"auto"`：自动选择（默认，仅在 token 超过阈值时压缩）
-- `"summarize"`：使用 LLM 生成摘要（慢但保留上下文）
-- `"truncate"`：截断旧消息（快但丢失上下文）
-- `"none"`：不压缩（no-op）
+**Compression strategies**:
+- `"auto"`: automatic selection (default, only compresses when tokens exceed threshold)
+- `"summarize"`: uses LLM to generate a summary (slow but preserves context)
+- `"truncate"`: truncates old messages (fast but loses context)
+- `"none"`: no compression (no-op)
 
-**长对话 agent 示例**：
+**Long-conversation agent example**:
 
 ```helen
 agent ChatBot {
@@ -490,330 +490,330 @@ agent ChatBot {
             
             message_count += 1
             
-            // 每 10 轮对话自动压缩
+            // Auto-compress every 10 conversation turns
             if message_count % 10 == 0 {
                 let result = compress_context("auto")
                 if result["status"] == "ok" {
-                    print("已压缩上下文，节省 " + 
+                    print("Compressed context, saved " + 
                           str(result["original_tokens"] - result["compressed_tokens"]) + 
                           " tokens")
                 }
             }
             
-            // 用户命令：/clear 清空上下文
+            // User command: /clear to clear context
             if input == "/clear" {
                 clear_context()
-                print("上下文已清空")
+                print("Context cleared")
             }
         }
     }
 }
 ```
 
-### 恢复上下文 (v1.21)
+### Restoring Context (v1.21)
 
-接续旧的 transcript session 到当前 active context——LLM 在下一次 `llm act` 调用时能看到恢复的所有消息。
+Resumes an old transcript session into the current active context — the LLM can see all restored messages at the next `llm act` call.
 
 ```helen
-// 1. 列出所有旧会话
+// 1. List all old sessions
 let sessions = list_sessions()
 for s in sessions {
-    print("{s.session_id}: {s.message_count} 条消息, scope={s.scope}")
+    print("{s.session_id}: {s.message_count} messages, scope={s.scope}")
 }
 
-// 2. 恢复指定会话到当前 active context
+// 2. Restore a specific session to the current active context
 let r = restore_context("session_1783492628_d9d9c0aa")
 if r["status"] == "ok" {
-    print("恢复了 " + str(r["restored_messages"]) + " 条消息")
-    print("跳过 " + str(r["boundary_markers"]) + " 个压缩边界")
+    print("Restored " + str(r["restored_messages"]) + " messages")
+    print("Skipped " + str(r["boundary_markers"]) + " compression boundaries")
 } else {
-    print("恢复失败: " + r["error"])
+    print("Restore failed: " + r["error"])
 }
 
-// 中文别名
+// Chinese alias
 恢复上下文("session_1783492628_d9d9c0aa")
 ```
 
-**与 `resume_session` 的区别**：
+**Difference from `resume_session`**:
 
-- `restore_context(session_id)`：恢复 **active context**，支持按 agent/invocation 精准过滤，适合接续旧会话的特定部分
-- `resume_session(session_id)`：恢复 **active context**，导入旧会话的所有消息，适合恢复整个旧会话（v1.23 修复后 LLM 能看到恢复的消息）
+- `restore_context(session_id)`: restores **active context**, supports precise filtering by agent/invocation, suitable for resuming specific parts of an old session
+- `resume_session(session_id)`: restores **active context**, imports all messages from the old session, suitable for recovering an entire old session (after v1.23 fix, LLM can see restored messages)
 
-**注意**：v1.23 之前 `resume_session` 只替换 transcript store 引用（LLM 看不到），现在改为导入消息到当前 store（LLM 能看到）。
+**Note**: Before v1.23, `resume_session` only replaced the transcript store reference (LLM couldn't see it). Now it imports messages into the current store (LLLM can see them).
 
-**注意事项**：
+**Important notes**:
 
-- `restore_context` 只恢复 messages（完整字段：`role`、`content`、`tool_calls`、`tool_call_id`、`uuid`、`compressed`、`pinned`）
-- **不**恢复 working_memory 和 context config（transcript 不持久化这些）
-- 需要恢复 working_memory 时，用 `working_memory_set()` 手动设置
+- `restore_context` only restores messages (full fields: `role`, `content`, `tool_calls`, `tool_call_id`, `uuid`, `compressed`, `pinned`)
+- Does **not** restore working_memory and context config (transcript doesn't persist these)
+- To restore working_memory, use `working_memory_set()` manually
 
-**跨会话保存/恢复完整上下文（含 working_memory）**：
+**Saving/restoring full context across sessions (including working_memory)**:
 
 ```helen
-// 会话结束前：导出完整快照到文件
+// Before session ends: export full snapshot to file
 let snapshot = export_context()
 write_file("context_snapshot.json", to_json(snapshot.context))
 
-// 新会话启动时：读入并导入
+// When new session starts: read and import
 let saved = parse_json(read_file("context_snapshot.json"))
 import_context(saved)
 ```
 
-## Transcript 函数 (11) (v1.16)
+## Transcript Functions (11) (v1.16)
 
-会话记录管理函数，用于访问和操作 Helen 的对话历史（v1.16+）。提供持久化、会话恢复和压缩审计功能。
+Session recording management functions for accessing and manipulating Helen's conversation history (v1.16+). Provides persistence, session recovery, and compression auditing.
 
-### 获取会话 ID
+### Getting Session ID
 
 ```helen
-// 获取当前会话 ID
+// Get current session ID
 let session_id = get_session_id()
-print("当前会话: " + session_id)
-// 返回: "session_1783492628_d9d9c0aa"
+print("Current session: " + session_id)
+// Returns: "session_1783492628_d9d9c0aa"
 ```
 
-**使用场景**：
-- 记录会话标识符用于调试
-- 在日志中标记会话
-- 会话恢复时验证 ID
+**Use cases**:
+- Log session identifiers for debugging
+- Tag sessions in logs
+- Verify ID during session recovery
 
-### 列出所有会话
+### Listing All Sessions
 
 ```helen
-// 列出所有 transcript 会话
+// List all transcript sessions
 let sessions = list_sessions()
 for session in sessions {
-    print(session["session_id"] + ": " + str(session["message_count"]) + " 条消息")
+    print(session["session_id"] + ": " + str(session["message_count"]) + " messages")
 }
-// 返回: [{"session_id": "...", "message_count": 50, "size_bytes": 2500, ...}]
+// Returns: [{"session_id": "...", "message_count": 50, "size_bytes": 2500, ...}]
 ```
 
-**返回字段**：
-- `session_id`：会话 ID
-- `message_count`：消息数量
-- `size_bytes`：文件大小（字节）
-- `created_at`：创建时间
-- `modified_at`：最后修改时间
+**Return fields**:
+- `session_id`: Session ID
+- `message_count`: Number of messages
+- `size_bytes`: File size (bytes)
+- `created_at`: Creation time
+- `modified_at`: Last modification time
 
-### 回放会话
+### Replaying Sessions
 
 ```helen
-// 回放当前会话（仅有效视图）
+// Replay current session (valid view only)
 let messages = replay_transcript()
 for msg in messages {
     print(msg["role"] + ": " + msg["content"])
 }
 
-// 回放指定会话，包括压缩的消息
+// Replay a specified session, including compressed messages
 let full = replay_transcript("session_1783492628_d9d9c0aa", true)
 ```
 
-**参数**：
-- `session_id`（可选）：要回放的会话 ID，默认当前会话
-- `include_compressed`（可选）：是否包括被压缩的消息，默认 false
+**Parameters**:
+- `session_id` (optional): Session ID to replay, defaults to current session
+- `include_compressed` (optional): Whether to include compressed messages, defaults to false
 
-**返回**：消息列表，每条消息包含 `role`、`content`、`uuid`、`timestamp`
+**Returns**: Message list, each message contains `role`, `content`, `uuid`, `timestamp`
 
-### 回放完整会话（v1.23.7+）
+### Replaying Full Session (v1.23.7+)
 
-使用 `replay_full_session()` 查看主会话及其所有 spawn 子会话的完整执行流程：
+Use `replay_full_session()` to view the complete execution flow of the main session and all its spawned child sessions:
 
 ```helen
-// 聚合查看主 session + 所有 spawn
+// Aggregate view of main session + all spawns
 let messages = replay_full_session()
 for msg in messages {
-    // 每条消息包含 session_id 字段，标识来源
+    // Each message includes a session_id field identifying the source
     print("[" + msg["session_id"] + "] " + msg["role"] + ": " + msg["content"][:50])
 }
 
-// 指定根 session
+// Specify root session
 let messages = replay_full_session("session_abc123")
 ```
 
-**参数**：
-- `session_id`（可选）：根会话 ID，默认当前会话
+**Parameters**:
+- `session_id` (optional): Root session ID, defaults to current session
 
-**返回**：所有相关会话的消息列表，按时间戳排序，每条消息包含 `session_id` 字段
+**Returns**: Message list from all related sessions, sorted by timestamp, each message includes a `session_id` field
 
-**使用场景**：
-- 查看完整的执行流程（包括所有 spawn 的子任务）
-- 调试多 agent 协作
-- 分析 spawn 树的消息分布
+**Use cases**:
+- View the complete execution flow (including all spawned subtasks)
+- Debug multi-agent collaboration
+- Analyze message distribution across the spawn tree
 
-### 导出会话
+### Exporting Sessions
 
 ```helen
-// 导出为 JSON
+// Export as JSON
 export_transcript("my_chat.json", "json")
 
-// 导出为 Markdown
+// Export as Markdown
 export_transcript("my_chat.md", "markdown")
 
-// 导出为纯文本
+// Export as plain text
 export_transcript("my_chat.txt", "text")
 
-// 导出指定会话
+// Export a specific session
 export_transcript("old_chat.json", "json", "session_1783492600_abc12345")
 
-// v1.23.7+：导出完整 spawn 树
+// v1.23.7+: Export full spawn tree
 export_transcript("full_chat.json", "json", include_spawned=true)
 ```
 
-**参数**：
-- `output_path`：输出文件路径
-- `format`：导出格式（"json"、"markdown"、"text"）
-- `session_id`（可选）：要导出的会话 ID
-- `include_spawned`（可选，v1.23.7+）：是否导出所有 spawn 子会话，默认 false
+**Parameters**:
+- `output_path`: Output file path
+- `format`: Export format ("json", "markdown", "text")
+- `session_id` (optional): Session ID to export
+- `include_spawned` (optional, v1.23.7+): Whether to export all spawned child sessions, defaults to false
 
-**返回**：输出文件路径（成功）或空字符串（失败）
+**Returns**: Output file path (success) or empty string (failure)
 
-### 搜索会话 (v1.22)
+### Searching Sessions (v1.22)
 
-按**内容**搜索持久化 transcript。一般场景下你记不住 session_id，但记得讨论过的内容——用 `search_transcript` 找到相关会话。
+Search persisted transcripts by **content**. In general situations you can't remember session IDs, but you remember what was discussed — use `search_transcript` to find relevant sessions.
 
 ```helen
-// 在当前 session 内搜
-let matches = search_transcript("认证 bug")
+// Search within the current session
+let matches = search_transcript("authentication bug")
 for m in matches {
-    print("匹配: {m.snippet}")
-    print("位置: {m.match_position}")
+    print("Match: {m.snippet}")
+    print("Position: {m.match_position}")
 }
 
-// 跨所有 session 搜（跨会话发现）
-let matches = search_transcript("数据库 schema", scope="all", limit=10)
+// Search across all sessions (cross-session discovery)
+let matches = search_transcript("database schema", scope="all", limit=10)
 
-// 正则匹配
+// Regex matching
 let matches = search_transcript("fix.*bug", regex=true)
 
-// 只搜 user 消息
+// Search only user messages
 let matches = search_transcript("TODO", role="user")
 
-// v1.23.7+：跨 spawn 搜索（搜索当前 session 及其所有 spawn 子 session）
+// v1.23.7+: Cross-spawn search (search current session and all its spawned child sessions)
 let matches = search_transcript("error", include_spawned=true)
 for m in matches {
     print("[" + m["session_id"] + "] " + m["snippet"])
 }
 
-// 中文别名
-let matches = 搜索会话("认证 bug", scope="all")
+// Chinese alias
+let matches = 搜索会话("authentication bug", scope="all")
 ```
 
-**参数**：
-- `query`（必填）：搜索内容（substring 默认，`regex=true` 时为正则）
-- `scope`：`"current"`（默认）/ `"all"`（跨所有 session）/ `"global"` / `"project"`
-- `session_id`：指定 session（`scope="all"` 时忽略）
-- `role`：按角色过滤（`"user"` / `"assistant"` / `"tool"` / `""` 全部）
-- `regex`：是否按正则匹配
-- `limit`：最大返回数（默认 50）
-- `include_spawned`（可选，v1.23.7+）：是否搜索所有 spawn 子会话，默认 false
+**Parameters**:
+- `query` (required): Search content (substring by default, regex when `regex=true`)
+- `scope`: `"current"` (default) / `"all"` (across all sessions) / `"global"` / `"project"`
+- `session_id`: Specify session (ignored when `scope="all"`)
+- `role`: Filter by role (`"user"` / `"assistant"` / `"tool"` / `""` for all)
+- `regex`: Whether to match by regex
+- `limit`: Maximum number of results (default 50)
+- `include_spawned` (optional, v1.23.7+): Whether to search all spawned child sessions, defaults to false
 
-**典型用法**：搜索后恢复完整上下文
+**Typical usage**: Search then restore full context
 
 ```helen
-// 找相关的历史讨论
-let matches = search_transcript("认证 bug", scope="all", limit=5)
+// Find relevant historical discussions
+let matches = search_transcript("authentication bug", scope="all", limit=5)
 if len(matches) > 0 {
-    // 找到最近的匹配所在 session
+    // Find the session of the most recent match
     let target_session = matches[0]["session_id"]
-    // 恢复那个 session 的完整 context
+    // Restore the full context of that session
     restore_context(target_session)
-    print("已恢复到 session: " + target_session)
+    print("Restored to session: " + target_session)
 }
 
-// v1.23.7+：在当前 session 及其 spawn 中搜索
+// v1.23.7+: Search within current session and its spawns
 let errors = search_transcript("error", include_spawned=true)
 if len(errors) > 0 {
-    print("找到 " + str(len(errors)) + " 个错误（包括 spawn 子任务）")
+    print("Found " + str(len(errors)) + " errors (including spawned subtasks)")
 }
 ```
 
-### 调用树查询 (v1.22)
+### Invocation Tree Query (v1.22)
 
-每个 agent `main {}` 的执行都是一个 **invocation**，带唯一的 `invocation_id`。transcript 完整记录所有 invocation，可以用查询函数回溯调用结构。
+Each agent `main {}` execution is an **invocation** with a unique `invocation_id`. The transcript records all invocations completely, and you can use query functions to trace the call structure.
 
 ```helen
-// 列出所有 invocation
+// List all invocations
 let invs = list_invocations()
 for inv in invs {
-    print("{inv.agent_name}: {inv.message_count} 条消息")
+    print("{inv.agent_name}: {inv.message_count} messages")
 }
 
-// 按 agent 过滤
+// Filter by agent
 let a_runs = list_invocations(agent="Researcher")
 
-// 查单个 invocation
+// Query a single invocation
 let info = get_invocation("inv_1784272795_a61bcdaf")
 print("Agent: " + str(info["agent_name"]))
-print("消息数: " + str(info["message_count"]))
+print("Message count: " + str(info["message_count"]))
 
-// 获取完整调用树
+// Get the full call tree
 let tree = get_invocation_tree()
-// tree.children 是嵌套的 invocation 列表
+// tree.children is a nested list of invocations
 
-// 调用路径字符串
+// Invocation path string
 print(invocation_path("inv_3"))
 // "top -> A -> C"
 
-// 中文别名
+// Chinese aliases
 列出调用()
 获取调用树()
 调用路径("inv_3")
 ```
 
-**配合 replay_transcript 过滤**：
+**Combined with replay_transcript filtering**:
 
 ```helen
-// 只看 agent A 的消息
+// See only agent A's messages
 let a_msgs = replay_transcript(agent="A")
 
-// 只看 A 的最后一次运行
+// See only A's last run
 let last = replay_transcript(agent="A", last_only=true)
 
-// 看某个 invocation 及其子调用
+// See a specific invocation and its sub-calls
 let subtree = replay_transcript(invocation_id="inv_1", include_subtree=true)
 ```
 
-**配合 restore_context 精准恢复**：
+**Combined with restore_context for precise recovery**:
 
 ```helen
-// 只恢复 agent A 的最近一次运行
+// Restore only agent A's most recent run
 restore_context("session_xxx", agent="A", last_only=true)
 
-// 恢复某个 invocation 及其子树
+// Restore a specific invocation and its subtree
 restore_context("session_xxx", invocation_id="inv_1", include_subtree=true)
 ```
 
-### 获取压缩审计
+### Getting Compression Audit
 
 ```helen
-// 获取所有压缩事件的审计追踪
+// Get audit trail of all compression events
 let audit = get_compression_audit()
 for event in audit {
-    print("层级: " + event["layer"])
-    print("压缩前: " + str(event["original_token_count"]) + " tokens")
-    print("压缩后: " + str(event["compressed_token_count"]) + " tokens")
-    print("摘要: " + event["summary"])
+    print("Layer: " + event["layer"])
+    print("Before compression: " + str(event["original_token_count"]) + " tokens")
+    print("After compression: " + str(event["compressed_token_count"]) + " tokens")
+    print("Summary: " + event["summary"])
 }
 ```
 
-**返回字段**：
-- `layer`：压缩策略（"graduated"、"traditional" 等）
-- `summary`：压缩摘要
-- `original_token_count`：压缩前 token 数
-- `compressed_token_count`：压缩后 token 数
-- `timestamp`：压缩时间戳
+**Return fields**:
+- `layer`: Compression strategy ("graduated", "traditional", etc.)
+- `summary`: Compression summary
+- `original_token_count`: Token count before compression
+- `compressed_token_count`: Token count after compression
+- `timestamp`: Compression timestamp
 
-**使用场景**：
-- 分析压缩效率
-- 调试压缩问题
-- 审计对话历史
+**Use cases**:
+- Analyze compression efficiency
+- Debug compression issues
+- Audit conversation history
 
-### Spawn 关系追踪 (v1.23.7+)
+### Spawn Relationship Tracking (v1.23.7+)
 
-v1.23.7 引入 spawn 关系追踪功能，可以查询和管理 spawn 子会话：
+v1.23.7 introduces spawn relationship tracking, allowing you to query and manage spawned child sessions:
 
 ```helen
-// 获取当前 session 的直接子 session
+// Get direct child sessions of the current session
 let children = get_spawned_sessions()
 for child in children {
     print("Spawned: " + child["session_id"])
@@ -821,119 +821,119 @@ for child in children {
     print("  Time: " + str(child["timestamp"]))
 }
 
-// 获取完整 spawn 树（包括嵌套 spawn）
+// Get the full spawn tree (including nested spawns)
 let tree = get_spawn_tree()
 print("Root: " + tree["session_id"])
 for child in tree["children"] {
     print("  Child: " + child["session_id"])
-    // 递归访问 child["children"]
+    // Recursively access child["children"]
 }
 
-// 指定根 session
+// Specify root session
 let tree = get_spawn_tree("session_abc123")
 ```
 
-**函数**：
-- `get_spawned_sessions(session_id?)`：获取直接子 session 列表
-- `get_spawn_tree(session_id?)`：获取完整 spawn 树（递归）
+**Functions**:
+- `get_spawned_sessions(session_id?)`: Get direct child session list
+- `get_spawn_tree(session_id?)`: Get full spawn tree (recursive)
 
-**返回**：
-- `get_spawned_sessions`：session 元数据列表，包含 `session_id`、`agent_name`、`timestamp`
-- `get_spawn_tree`：树形结构，包含 `session_id` 和 `children` 数组
+**Returns**:
+- `get_spawned_sessions`: List of session metadata containing `session_id`, `agent_name`, `timestamp`
+- `get_spawn_tree`: Tree structure containing `session_id` and `children` array
 
-**使用场景**：
-- 分析多 agent 协作的 spawn 结构
-- 调试 spawn 关系
-- 可视化执行流程
+**Use cases**:
+- Analyze spawn structure in multi-agent collaboration
+- Debug spawn relationships
+- Visualize execution flow
 
-### 级联删除 (v1.23.7+)
+### Cascading Deletion (v1.23.7+)
 
-删除 session 时，默认级联删除所有 spawn 子会话，避免孤儿 transcript：
+When deleting a session, all spawned child sessions are cascade-deleted by default to avoid orphan transcripts:
 
 ```helen
-// 删除 session 及其所有 spawn（默认）
+// Delete session and all its spawns (default)
 delete_session("session_abc123")
 
-// 只删除指定 session，保留 spawn
+// Delete only the specified session, keep spawns
 delete_session("session_abc123", cascade=false)
 
-// 删除当前 session 及其 spawn
-delete_current_session(confirm=true)  // cascade=true 是默认值
-delete_current_session(confirm=true, cascade=false)  // 保留 spawn
+// Delete current session and its spawns
+delete_current_session(confirm=true)  // cascade=true is the default
+delete_current_session(confirm=true, cascade=false)  // Keep spawns
 
-// 清理旧 session（级联删除 spawn）
-cleanup_sessions(keep_count=10)  // 保留最近 10 个，级联删除 spawn
-cleanup_sessions(older_than_days=30, cascade=true)  // 删除 30 天前的
-cleanup_sessions(keep_count=5, cascade=false)  // 不级联，保留 spawn
+// Clean up old sessions (cascade-deletes spawns)
+cleanup_sessions(keep_count=10)  // Keep the most recent 10, cascade-delete spawns
+cleanup_sessions(older_than_days=30, cascade=true)  // Delete those older than 30 days
+cleanup_sessions(keep_count=5, cascade=false)  // No cascade, keep spawns
 ```
 
-**参数**：
-- `delete_session(session_id, cascade?)`：`cascade` 默认 true
-- `delete_current_session(confirm?, cascade?)`：`cascade` 默认 true
-- `cleanup_sessions(keep_count?, older_than_days?, cascade?)`：`cascade` 默认 true
+**Parameters**:
+- `delete_session(session_id, cascade?)`: `cascade` defaults to true
+- `delete_current_session(confirm?, cascade?)`: `cascade` defaults to true
+- `cleanup_sessions(keep_count?, older_than_days?, cascade?)`: `cascade` defaults to true
 
-**返回值**：包含 `deleted_sessions` 列表，显示实际删除的所有 session ID
+**Return value**: Contains a `deleted_sessions` list showing all actually deleted session IDs
 
-**设计原理**：
-- Spawn 是子任务，生命周期应绑定到主 session
-- 避免孤儿 transcript（主 session 删除后，spawn 失去上下文）
-- 简化清理流程，无需手动查找和删除所有 spawn
+**Design rationale**:
+- Spawns are child tasks; their lifecycle should be bound to the main session
+- Avoids orphan transcripts (spawns lose context after the main session is deleted)
+- Simplifies cleanup — no need to manually find and delete all spawns
 
-### 恢复会话
+### Session Recovery
 
 ```helen
-// 恢复到指定会话
+// Resume a specific session
 let success = resume_session("session_1783492628_d9d9c0aa")
 if success {
-    print("会话已恢复")
-    // v1.23: 恢复的消息现在对 LLM 可见
+    print("Session resumed")
+    // v1.23: Restored messages are now visible to the LLM
     let messages = replay_transcript()
-    print("已加载 " + str(len(messages)) + " 条消息")
+    print("Loaded " + str(len(messages)) + " messages")
 } else {
-    print("恢复失败，会话可能不存在")
+    print("Resume failed, session may not exist")
 }
 ```
 
-**参数**：
-- `session_id`：要恢复的会话 ID
+**Parameters**:
+- `session_id`: Session ID to resume
 
-**返回**：true（成功）或 false（失败）
+**Returns**: true (success) or false (failure)
 
-**使用场景**：
-- 恢复之前的对话（v1.23 后 LLM 能看到历史消息）
-- 在 REPL 中继续之前的工作
-- 加载历史会话进行分析
+**Use cases**:
+- Resume a previous conversation (after v1.23, LLM can see historical messages)
+- Continue previous work in the REPL
+- Load historical sessions for analysis
 
-**v1.23 变更**：
-- 之前：替换 transcript store 引用，LLM 看不到恢复的消息
-- 现在：导入消息到当前 store，LLM 能看到恢复的消息（标记当前 invocation_id）
-- 如果需要按 agent/invocation 精准恢复，使用 `restore_context`
+**v1.23 changes**:
+- Before: Replaced transcript store reference; LLM couldn't see restored messages
+- Now: Imports messages into the current store; LLM can see restored messages (marked with current invocation_id)
+- For precise restoration by agent/invocation, use `restore_context`
 
-### 启动时恢复会话 (v1.24+)
+### Session Recovery at Startup (v1.24+)
 
-v1.24 新增 CLI 参数，支持在启动时指定恢复历史 session，而不是每次创建新 session：
+v1.24 adds CLI arguments to specify a historical session to recover at startup, rather than creating a new session each time:
 
 ```bash
-# 1. 指定 session_id 启动
+# 1. Start with a specific session_id
 helen --session=session_xxx file.helen
 helen repl --session=session_xxx
 
-# 2. 自动恢复最近的 session
+# 2. Automatically recover the most recent session
 helen --resume-latest file.helen
 helen repl --resume-latest
-helen repl -r  # 简写
+helen repl -r  # Shorthand
 ```
 
-**Python API**：
+**Python API**:
 
 ```python
 from helen.interpreter import Interpreter
 
-# 恢复指定 session
+# Recover a specific session
 interp = Interpreter(session_id="session_xxx")
 interp.execute_file("file.helen")
 
-# 恢复最近的 session
+# Recover the most recent session
 from helen.runtime.session_manager import SessionManager
 manager = SessionManager()
 sessions = manager.list_sessions()
@@ -942,128 +942,128 @@ if sessions:
     interp = Interpreter(session_id=latest_sid)
 ```
 
-**与 `resume_session()` 的区别**：
+**Difference from `resume_session()`**:
 
-| 特性 | `--session` (启动时) | `resume_session()` (运行时) |
-|------|---------------------|---------------------------|
-| 时机 | 解释器启动前 | 程序运行中 |
-| 行为 | 直接复用指定 session | 导入历史消息到当前新 session |
-| transcript | 一个文件 | 两个文件 |
-| 适用场景 | REPL 继续工作、调试 | 代码中切换上下文 |
+| Feature | `--session` (at startup) | `resume_session()` (at runtime) |
+|---------|--------------------------|----------------------------------|
+| Timing | Before interpreter starts | During program execution |
+| Behavior | Directly reuses the specified session | Imports historical messages into the current new session |
+| Transcript | One file | Two files |
+| Use case | REPL continuation, debugging | Context switching in code |
 
-**设计原理**：
-- 连续性：在中断的地方继续工作
-- 调试友好：重复调试同一个 session
-- 资源节约：避免创建大量短命的 transcript 文件
-- 显式优于隐式：必须明确指定要恢复哪个 session
+**Design rationale**:
+- Continuity: Continue work where you left off
+- Debug-friendly: Repeatedly debug the same session
+- Resource efficiency: Avoid creating many short-lived transcript files
+- Explicit over implicit: Must explicitly specify which session to recover
 
-### 中文别名
+### Chinese Aliases
 
-Transcript 函数支持中文别名，可以直接使用中文函数名：
+Transcript functions support Chinese aliases — you can directly use Chinese function names:
 
-| 英文 | 中文 | 说明 |
-|------|------|------|
-| `get_session_id` | `获取会话id` | 获取当前会话 ID |
-| `list_sessions` | `列出会话` | 列出所有会话 |
-| `replay_transcript` | `回放会话` | 回放会话消息 |
-| `replay_full_session` | `回放完整会话` | 回放会话及其 spawn (v1.23.7) |
-| `export_transcript` | `导出会话` | 导出会话到文件 |
-| `get_compression_audit` | `压缩审计` | 获取压缩历史 |
-| `resume_session` | `恢复会话` | 恢复到指定会话 |
-| `get_spawned_sessions` | `获取子会话` | 获取 spawn 子会话 (v1.23.7) |
-| `get_spawn_tree` | `获取会话树` | 获取完整 spawn 树 (v1.23.7) |
+| English | Chinese | Description |
+|---------|---------|-------------|
+| `get_session_id` | `获取会话id` | Get current session ID |
+| `list_sessions` | `列出会话` | List all sessions |
+| `replay_transcript` | `回放会话` | Replay session messages |
+| `replay_full_session` | `回放完整会话` | Replay session and its spawns (v1.23.7) |
+| `export_transcript` | `导出会话` | Export session to file |
+| `get_compression_audit` | `压缩审计` | Get compression history |
+| `resume_session` | `恢复会话` | Resume a specific session |
+| `get_spawned_sessions` | `获取子会话` | Get spawned child sessions (v1.23.7) |
+| `get_spawn_tree` | `获取会话树` | Get full spawn tree (v1.23.7) |
 
-**使用示例**：
+**Usage examples**:
 
 ```helen
-// 使用中文函数名
+// Use Chinese function names
 let 会话id = 获取会话id()
 print("当前会话: " + 会话id)
 
-// 列出所有会话
+// List all sessions
 let 会话列表 = 列出会话()
 for 会话 in 会话列表 {
     print(会话["session_id"] + ": " + str(会话["message_count"]) + " 条消息")
 }
 
-// 回放当前会话
+// Replay current session
 let 消息 = 回放会话()
 for 消息 in 消息 {
     print(消息["role"] + ": " + 消息["content"])
 }
 
-// 导出会话
+// Export session
 导出会话("我的对话.json", "json")
 
-// 恢复会话
+// Resume session
 let 成功 = 恢复会话("session_1783492628_d9d9c0aa")
 ```
 
-> **提示**：中文别名和英文函数名可以混合使用，Helen 会在启动时全量加载所有别名。完整别名列表见 `helen/stdlib/locales/zh.py`。
+> **Tip**: Chinese aliases and English function names can be mixed freely; Helen loads all aliases at startup. Full alias list: see `helen/stdlib/locales/zh.py`.
 
-### REPL 命令
+### REPL Commands
 
-除了 stdlib 函数，还可以在 REPL 中使用以下命令：
+In addition to stdlib functions, you can use these commands in the REPL:
 
 ```
-:transcript           # 显示当前 transcript 视图
-:transcript --full    # 显示完整 transcript（包括压缩的消息）
-:transcript --audit   # 显示压缩审计追踪
-:sessions             # 列出所有会话
-:session_id           # 显示当前会话 ID
-:resume <session_id>  # 恢复到指定会话
+:transcript           # Show current transcript view
+:transcript --full    # Show full transcript (including compressed messages)
+:transcript --audit   # Show compression audit trail
+:sessions             # List all sessions
+:session_id           # Show current session ID
+:resume <session_id>  # Resume a specific session
 ```
 
-### 配置
+### Configuration
 
-在 `~/.helen/config.yaml` 中配置 transcript：
+Configure transcript in `~/.helen/config.yaml`:
 
 ```yaml
 transcript:
-  enabled: true              # 启用会话记录（默认 true）
-  backend: "sqlite"          # 后端类型："jsonl" 或 "sqlite"
+  enabled: true              # Enable session recording (default true)
+  backend: "sqlite"          # Backend type: "jsonl" or "sqlite"
   session_dir: "~/.helen/sessions"
 ```
 
-**后端选择**：
-- `jsonl`：简单、人类可读、崩溃安全（默认）
-- `sqlite`：高性能、索引优化（适合大型会话）
+**Backend selection**:
+- `jsonl`: Simple, human-readable, crash-safe (default)
+- `sqlite`: High-performance, index-optimized (suitable for large sessions)
 
-**详细文档**：见 [[runtime/transcript-store]]
+**Detailed docs**: see [[runtime/transcript-store]]
 
-## File 函数 (18)
+## File Functions (18)
 
-文件操作函数分为三组：基础 I/O、目录操作、文件搜索。
+File operation functions are organized into three groups: basic I/O, directory operations, and file search.
 
-### 文件搜索 (2) (v1.15 新增)
+### File Search (2) (added in v1.15)
 
-#### glob_files — 递归查找文件
+#### glob_files — Recursively find files
 
 ```helen
-// 查找所有 Python 文件（递归）
+// Find all Python files (recursive)
 let py_files = glob_files("src", "*.py")
-// 返回: ["main.py", "utils/helper.py", "tests/test_main.py"]
+// Returns: ["main.py", "utils/helper.py", "tests/test_main.py"]
 
-// 查找特定模式的文件
+// Find files matching a specific pattern
 let test_files = glob_files(".", "*test*.py")
-// 返回: ["test_main.py", "tests/test_utils.py"]
+// Returns: ["test_main.py", "tests/test_utils.py"]
 
-// 使用 ** 显式递归
+// Use ** for explicit recursion
 let md_files = glob_files("docs", "**/*.md")
-// 返回: ["readme.md", "guide/intro.md", "api/reference.md"]
+// Returns: ["readme.md", "guide/intro.md", "api/reference.md"]
 
-// 复杂模式
+// Complex patterns
 let config_files = glob_files("config", "**/*.{json,yaml,yml}")
-// 返回配置文件列表
+// Returns list of config files
 ```
 
-**参数**：
-- `path` (str): 搜索根目录
-- `pattern` (str, 可选): glob 模式，默认 `"**/*"`（所有文件）
+**Parameters**:
+- `path` (str): Search root directory
+- `pattern` (str, optional): Glob pattern, defaults to `"**/*"` (all files)
 
-**返回**：`list<str>` — 匹配文件的相对路径列表
+**Returns**: `list<str>` — list of relative paths of matching files
 
-**示例**：统计项目中所有 Python 文件的行数
+**Example**: Count lines of all Python files in a project
 
 ```helen
 fn 统计代码行数(目录: str) {
@@ -1077,46 +1077,46 @@ fn 统计代码行数(目录: str) {
 }
 
 let stats = 统计代码行数("src")
-print("找到 " + str(stats["files"]) + " 个文件，共 " + str(stats["lines"]) + " 行")
+print("Found " + str(stats["files"]) + " files, " + str(stats["lines"]) + " lines total")
 ```
 
-#### grep_files — 搜索文件内容
+#### grep_files — Search file contents
 
 ```helen
-// 字面量搜索
+// Literal search
 let matches = grep_files("src/", "TODO")
-// 返回: [{"file": "main.py", "line": 42, "text": "    # TODO: fix this"}]
+// Returns: [{"file": "main.py", "line": 42, "text": "    # TODO: fix this"}]
 
-// 正则搜索
+// Regex search
 let functions = grep_files("src/", "def \\w+\\(", regex=true)
-// 返回所有函数定义
+// Returns all function definitions
 
-// 大小写不敏感搜索
+// Case-insensitive search
 let errors = grep_files("logs/", "error", case_sensitive=false)
-// 返回所有包含 "error"（不区分大小写）的行
+// Returns all lines containing "error" (case-insensitive)
 
-// 限制结果数量
+// Limit number of results
 let first_10 = grep_files(".", "pattern", max_results=10)
 ```
 
-**参数**：
-- `path` (str): 文件路径或目录
-- `pattern` (str): 搜索模式（字面量或正则）
-- `regex` (bool, 可选): 是否使用正则，默认 `false`
-- `case_sensitive` (bool, 可选): 大小写敏感，默认 `true`
-- `max_results` (int, 可选): 最大返回数，默认 `100`
+**Parameters**:
+- `path` (str): File path or directory
+- `pattern` (str): Search pattern (literal or regex)
+- `regex` (bool, optional): Whether to use regex, defaults to `false`
+- `case_sensitive` (bool, optional): Case-sensitive search, defaults to `true`
+- `max_results` (int, optional): Maximum results to return, defaults to `100`
 
-**返回**：`list<map>` — 匹配结果列表，每个匹配包含 `file`、`line`、`text` 字段
+**Returns**: `list<map>` — list of match results, each match contains `file`, `line`, `text` fields
 
-**示例**：查找所有未处理的异常
+**Example**: Find all unhandled exceptions
 
 ```helen
 agent 异常检查助手 {
-    description "检查代码中未处理的异常"
+    description "Check for unhandled exceptions in code"
     main {
         let todos = grep_files("src/", "TODO.*exception", regex=true)
         if len(todos) > 0 {
-            print("发现 " + str(len(todos)) + " 处待处理的异常:")
+            print("Found " + str(len(todos)) + " pending exception(s):")
             for match in todos {
                 print("  " + match["file"] + ":" + str(match["line"]))
                 print("    " + match["text"])
@@ -1126,42 +1126,42 @@ agent 异常检查助手 {
 }
 ```
 
-### 基础文件 I/O (2)
+### Basic File I/O (2)
 
 ```helen
-// 读取文件
+// Read file
 let content = read_file("config.json")
 
-// 写入文件（自动创建父目录）
+// Write file (auto-creates parent directories)
 write_file("output/result.txt", "Hello World")
 ```
 
-### 文件信息 (2)
+### File Information (2)
 
 ```helen
-// 文件大小（字节）
+// File size (bytes)
 let size = file_size("document.pdf")
-print("文件大小: " + str(size) + " bytes")
+print("File size: " + str(size) + " bytes")
 
-// 修改时间（ISO 8601 格式）
+// Modification time (ISO 8601 format)
 let mtime = file_modified("data.csv")
-print("最后修改: " + mtime)
+print("Last modified: " + mtime)
 ```
 
-### 目录操作 (6)
+### Directory Operations (6)
 
 ```helen
-// 列出目录内容
+// List directory contents
 let files = list_dir("src")
-// 返回: ["main.py", "utils.py", "tests/"]
+// Returns: ["main.py", "utils.py", "tests/"]
 
-// 带模式过滤
+// With pattern filter
 let py_files = list_dir("src", "*.py")
-// 返回: ["main.py", "utils.py"]
+// Returns: ["main.py", "utils.py"]
 
-// 递归遍历目录树
+// Recursively walk directory tree
 let tree = walk_dir("project")
-// 返回: [(dirpath, dirnames, filenames), ...]
+// Returns: [(dirpath, dirnames, filenames), ...]
 for entry in tree {
     let dir = entry[0]
     let subdirs = entry[1]
@@ -1169,60 +1169,60 @@ for entry in tree {
     print(dir + ": " + str(len(files)) + " files")
 }
 
-// 创建目录
+// Create directories
 mkdir("new_dir")
-mkdir_p("deep/nested/dir")  // 递归创建
+mkdir_p("deep/nested/dir")  // Recursive creation
 
-// 删除
+// Delete
 delete_file("temp.txt")
 delete_dir("old_dir", recursive=true)
 ```
 
-### 文件操作 (2)
+### File Operations (2)
 
 ```helen
-// 复制文件
+// Copy file
 copy_file("source.txt", "backup.txt")
 
-// 移动/重命名文件
+// Move/rename file
 move_file("old_name.txt", "new_name.txt")
 ```
 
-### 临时文件 (2)
+### Temporary Files (2)
 
 ```helen
-// 创建临时文件
+// Create temporary file
 let tmp = temp_file(suffix=".txt", prefix="data_")
 write_file(tmp, "temporary data")
-// 使用完毕后需手动删除
+// Must manually delete after use
 delete_file(tmp)
 
-// 创建临时目录
+// Create temporary directory
 let tmp_dir = temp_dir(prefix="build_")
-// 使用完毕后需手动删除
+// Must manually delete after use
 delete_dir(tmp_dir, recursive=true)
 ```
 
-### 路径操作 (6)
+### Path Operations (6)
 
 ```helen
-// 路径拼接
+// Path joining
 let full_path = path_join("src", "utils", "helper.py")
-// 返回: "src/utils/helper.py"
+// Returns: "src/utils/helper.py"
 
-// 提取路径组件
+// Extract path components
 let base = path_basename("/path/to/file.txt")  // "file.txt"
 let dir = path_dirname("/path/to/file.txt")    // "/path/to"
 
-// 路径检查
+// Path checks
 let exists = path_exists("config.json")
 let is_dir = path_is_dir("src")
 let is_file = path_is_file("main.py")
 ```
 
-## 异常处理 (v1.9+)
+## Exception Handling (v1.9+)
 
-标准库函数调用时抛出的 Python 异常会自动包装为 `RuntimeError`，可通过 try-catch 捕获：
+Python exceptions thrown during standard library function calls are automatically wrapped as `RuntimeError` and can be caught with try-catch:
 
 ```helen
 try {
@@ -1238,4 +1238,4 @@ try {
 }
 ```
 
-异常消息格式为 `"Python <类型名>: <原始消息>"`，可在 catch 块中通过消息前缀区分具体的 Python 异常类型。
+Exception messages follow the format `"Python <type name>: <original message>"`, and you can distinguish specific Python exception types by the message prefix in catch blocks.

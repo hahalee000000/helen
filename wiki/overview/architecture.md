@@ -1,21 +1,21 @@
-# Helen 整体架构
+# Helen Overall Architecture
 
-> 三层架构：Core (核心编译器) → Runtime (运行时) → Toolchain (工具链)
+> Three-layer architecture: Core (core compiler) → Runtime (runtime) → Toolchain (toolchain)
 
 ---
 
-## 架构分层
+## Architecture Layers
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│                    Toolchain 工具链层                        │
+│                    Toolchain Layer                          │
 │  ┌─────────┐ ┌──────────┐ ┌──────────┐ ┌───────┐ ┌──────┐ │
 │  │ CLI M11 │ │ LSP M12  │ │ VSCode   │ │Stdlib  │ │DocGen│ │
 │  │run/check│ │diagnose  │ │ M13      │ │ M15    │ │      │ │
 │  │/repl/doc│ │/complete │ │highlight │ │287 fn  │ │      │ │
 │  └────┬────┘ └────┬─────┘ └────┬─────┘ └───┬───┘ └──┬───┘ │
 ├───────┼───────────┼────────────┼───────────┼─────────┼────┤
-│                    Runtime 运行时层                         │
+│                    Runtime Layer                            │
 │  ┌──────────┐ ┌───────────┐ ┌───────┐ ┌──────┐ ┌──────┐  │
 │  │LLM RT M7 │ │Prompt M6  │ │Memory │ │History│ │Import│  │
 │  │ABC×12    │ │Tier 1/2   │ │M7/M16 │ │M16   │ │ M8   │  │
@@ -23,14 +23,17 @@
 │  └────┬─────┘ └─────┬─────┘ └───┬───┘ └──┬───┘ └──┬───┘  │
 │  ┌──────────────────────────────────────────────────┐    │
 │  │  Interpreter Mixin Architecture                   │    │
-│  │  LlmMixin      — LLM act/if, 工具构建, 历史管理  │    │
-│  │  PatternMixin  — match/case 模式匹配              │    │
+│  │  LlmMixin      — LLM act/if, tool building,     │    │
+│  │                    history management             │    │
+│  │  PatternMixin  — match/case pattern matching      │    │
 │  │  ExceptionMixin — try/catch/throw/assert          │    │
-│  │  ImportMixin   — 多格式导入 (.helen/.py/.json等)  │    │
-│  │  StreamingMixin — 流式调用管理与取消               │    │
+│  │  ImportMixin   — Multi-format imports             │    │
+│  │                    (.helen/.py/.json etc.)        │    │
+│  │  StreamingMixin — Streaming call management       │    │
+│  │                    and cancellation               │    │
 │  └──────────────────────────────────────────────────┘    │
 ├───────┼─────────────┼───────────┼─────────┼────────┼──────┤
-│                    Core 核心编译层                          │
+│                    Core Compilation Layer                 │
 │  ┌──────┐ ┌────────┐ ┌─────┐ ┌─────────┐ ┌────┐ ┌─────┐  │
 │  │Lexer │ │Parser  │ │ AST │ │Semantic │ │Type│ │Error│  │
 │  │ M1   │ │ M2     │ │ M3  │ │Analyzer │ │ M9 │ │ M10 │  │
@@ -39,118 +42,118 @@
 └─────┼─────────┼─────────┼─────────┼────────┼───────┼──────┘
       │         │         │         │        │       │
       ▼         ▼         ▼         ▼        ▼       ▼
-   源码 → Token流 → AST树 → 符号表/类型 → 执行结果
+   Source → Token Stream → AST Tree → Symbol Table/Types → Execution Results
 ```
 
 ---
 
-## Core 层：核心编译器
+## Core Layer: Core Compiler
 
-### 数据流
+### Data Flow
 
 ```
 source.helen
     │
     ▼ ┌─────────────────┐
-    │ │   Lexer (M1)    │  扫描源码 → Token 流
-    │ │ Maximal Munch   │  39 关键字 / 77 Token 类型
-    │ │ 39 keywords     │  SourceSpan 全链路
+    │ │   Lexer (M1)    │  Scans source → Token stream
+    │ │ Maximal Munch   │  39 keywords / 77 token types
+    │ │ 39 keywords     │  SourceSpan throughout the pipeline
     │ └────────┬────────┘
     │          ▼ Token[type, lexeme, line, col, span]
     │ ┌─────────────────┐
-    │ │  Parser (M2)    │  Token 流 → AST 树
-    │ │ Pratt × 10级    │  panic mode 错误恢复
-    │ │ EBNF 392行      │  49 种 AST 节点
+    │ │  Parser (M2)    │  Token stream → AST tree
+    │ │ Pratt × 10 prec │  Panic mode error recovery
+    │ │ EBNF 392 lines  │  49 AST node types
     │ └────────┬────────┘
     │          ▼ ProgramNode[statements...]
     │ ┌─────────────────┐
-    │ │SemanticAnalyzer │  AST → 类型检查 + 符号表
-    │ │   (M4)          │  6 种作用域: global/agent/fn/block/catch/loop
-    │ │ 46 Visitor方法  │  42 ErrorCode 精确定位
+    │ │SemanticAnalyzer │  AST → Type checking + symbol table
+    │ │   (M4)          │  6 scope types: global/agent/fn/block/catch/loop
+    │ │ 46 Visitor meth.│  42 ErrorCodes for precise localization
     │ └────────┬────────┘
     │          ▼ (errors or clean AST)
     │  ┌─────────────────┐
-    │  │ Interpreter(M5) │  AST → 执行结果
-    │  │ Visitor[object] │  Environment 作用域链
-    │  │ + 5 Mixins      │  Agent 隔离调用
-    │  │ + LLM Runtime   │  Mixin: Llm/Pattern/Exception/Import/Streaming
+    │  │ Interpreter(M5) │  AST → Execution results
+    │  │ Visitor[object] │  Environment scope chain
+    │  │ + 5 Mixins      │  Agent isolated invocation
+    │  │ + LLM Runtime   │  Mixins: Llm/Pattern/Exception/Import/Streaming
     │  └─────────────────┘
 ```
 
-### 关键设计决策
+### Key Design Decisions
 
-| 决策 | 选择 | 原因 |
-|---|---|---|
-| 手写扫描器 | 非正则 | 最大灵活性，支持三引号/连字符消歧 |
-| Pratt Parsing | 非传统递归下降 | 10 级表达式优先级，`spawn` 前缀处理 |
-| Visitor 模式 | 44 抽象方法 | 三个编译阶段共享同一 AST 遍历接口 |
-| SourceSpan | 全链路 | 每个 Token/AST 节点携带源码位置，用于精准错误定位 |
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Hand-written scanner | Not regex | Maximum flexibility; supports triple-quote / hyphen disambiguation |
+| Pratt Parsing | Not traditional recursive descent | 10 expression precedence levels; `spawn` prefix handling |
+| Visitor pattern | 44 abstract methods | Three compilation stages share the same AST traversal interface |
+| SourceSpan | Throughout the pipeline | Every Token/AST node carries source code location for precise error localization |
 
 ---
 
-## Runtime 层：运行时系统
+## Runtime Layer: Runtime System
 
-### 抽象接口
+### Abstract Interface
 
 ```python
-class Runtime(ABC):                          # HLD 3.8.1, 12个抽象方法
-    def load_tool() -> Any                   # 加载工具
-    def list_skills() -> list[SkillMeta]     # 技能索引 (Tier 1)
-    def load_skill(name) -> str              # 加载技能内容 (Tier 2)
-    def call_llm(messages, tools, ...)       # 调用 LLM
-    def cancel_llm_call(call_id) -> bool     # 取消 LLM 调用
-    def get_memory(key) -> str | None        # 获取记忆
-    def set_memory(key, value)               # 设置记忆
-    def resolve_import(path, from_file)      # 解析导入
-    def get_token_count(text) -> int         # Token 估算
-    def get_conversation_history()           # 获取对话历史
-    def set_conversation_history(history)    # 设置对话历史
-    def register_memory_provider(proto, p)   # 注册记忆提供者
+class Runtime(ABC):                          # HLD 3.8.1, 12 abstract methods
+    def load_tool() -> Any                   # Load a tool
+    def list_skills() -> list[SkillMeta]     # Skill index (Tier 1)
+    def load_skill(name) -> str              # Load skill content (Tier 2)
+    def call_llm(messages, tools, ...)       # Call LLM
+    def cancel_llm_call(call_id) -> bool     # Cancel an LLM call
+    def get_memory(key) -> str | None        # Get memory
+    def set_memory(key, value)               # Set memory
+    def resolve_import(path, from_file)      # Resolve import
+    def get_token_count(text) -> int         # Token estimation
+    def get_conversation_history()           # Get conversation history
+    def set_conversation_history(history)    # Set conversation history
+    def register_memory_provider(proto, p)   # Register memory provider
 ```
 
-### HelenHermesRuntime (具体实现)
+### HelenHermesRuntime (Concrete Implementation)
 
-- 继承 `Runtime` ABC
-- `threading.Event` 实现可取消 LLM 调用
-- `_active_calls` 字典跟踪进行中的调用
-- `_memory` 字典实现键值存储
-- `_conversation_history` 管理对话历史
+- Inherits `Runtime` ABC
+- `threading.Event` implements cancellable LLM calls
+- `_active_calls` dict tracks in-progress calls
+- `_memory` dict implements key-value storage
+- `_conversation_history` manages conversation history
 
-### 配置系统 (config.py)
+### Configuration System (config.py)
 
 ```
 ~/.helen/
-├── config.yaml    # LLM API 配置 (YAML)
-├── .env           # LLM API 配置 (.env 格式)
-└── skills/        # Helen 原生 skill 目录
+├── config.yaml    # LLM API configuration (YAML)
+├── .env           # LLM API configuration (.env format)
+└── skills/        # Helen native skill directory
 ```
 
-配置加载优先级：`~/.hermes/.env` → `~/.helen/.env` → `config.yml` → `config.yaml`
+Configuration loading priority: `~/.hermes/.env` → `~/.helen/.env` → `config.yml` → `config.yaml`
 
-### 内置工具 (tools.py)
+### Built-in Tools (tools.py)
 
-| 工具 | 功能 |
-|------|------|
-| `web_search` | Wikipedia 搜索 |
-| `web_fetch` | 网页内容获取 |
-| `read_file` | 文件读取 |
-| `write_file` | 文件写入（覆盖） |
-| `patch_file` | 文件精确修改（模糊匹配） |
-| `shell_exec` | Shell 命令执行 |
-| `calculate` | 数学计算 |
+| Tool | Function |
+|------|----------|
+| `web_search` | Wikipedia search |
+| `web_fetch` | Web content retrieval |
+| `read_file` | File reading |
+| `write_file` | File writing (overwrite) |
+| `patch_file` | Precise file modification (fuzzy matching) |
+| `shell_exec` | Shell command execution |
+| `calculate` | Mathematical computation |
 
-LLM 通过 OpenAI function calling 协议调用工具，支持多轮循环 + nudge 机制。
+The LLM calls tools via the OpenAI function calling protocol, with multi-turn loops + nudge mechanism.
 
-### 模糊匹配引擎 (fuzzy_match.py)
+### Fuzzy Match Engine (fuzzy_match.py)
 
-从 Hermes 集成的 860 行模糊匹配引擎，支持 9 种策略：
-- 精确匹配、行修剪、空白归一化、缩进灵活
-- 转义归一化、边界修剪、Unicode 归一化
-- 块锚点（SequenceMatcher）、上下文感知（逐行相似度）
+An 860-line fuzzy matching engine integrated from Hermes, supporting 9 strategies:
+- Exact match, line trimming, whitespace normalization, indentation flexibility
+- Escape normalization, boundary trimming, Unicode normalization
+- Chunk anchors (SequenceMatcher), context-aware (line-by-line similarity)
 
-还包括：转义漂移检测、缩进重锚、"Did you mean?" 提示。
+Also includes: escape drift detection, indentation re-anchoring, "Did you mean?" hints.
 
-### 组件关系
+### Component Relationships
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -175,44 +178,44 @@ LLM 通过 OpenAI function calling 协议调用工具，支持多轮循环 + nud
 
 ---
 
-## Toolchain 层：工具链
+## Toolchain Layer: Toolchain
 
 ### CLI (helen)
 
 ```
-$ helen main.helen      # 编译 + 执行
-$ helen check main.helen  # 仅验证 (Lex + Parse + Analyze)
-$ helen repl               # 交互式解释器
-$ helen doc main.helen    # 生成文档 (markdown/json)
-$ helen init               # 初始化 ~/.helen/ 配置目录
+$ helen main.helen      # Compile + execute
+$ helen check main.helen  # Validate only (Lex + Parse + Analyze)
+$ helen repl               # Interactive interpreter
+$ helen doc main.helen    # Generate documentation (markdown/json)
+$ helen init               # Initialize ~/.helen/ configuration directory
 ```
 
-退出码：`0`=成功 `1`=词法错误 `2`=语法错误 `3`=语义/运行时错误
+Exit codes: `0`=success `1`=lex error `2`=syntax error `3`=semantic/runtime error
 
 ### LSP Server (JSON-RPC 2.0 over stdio)
 
 ```json
-// 客户端 → 服务器
+// Client → Server
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{...}}
 {"jsonrpc":"2.0","method":"textDocument/didOpen","params":{...}}
 
-// 服务器 → 客户端
+// Server → Client
 {"jsonrpc":"2.0","id":1,"result":{"capabilities":{...}}}
 {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{...}}
 ```
 
-支持方法：`initialize` `textDocument/didOpen` `textDocument/didChange` `textDocument/didClose` `textDocument/diagnostics` `textDocument/completion` `textDocument/definition`
+Supported methods: `initialize` `textDocument/didOpen` `textDocument/didChange` `textDocument/didClose` `textDocument/diagnostics` `textDocument/completion` `textDocument/definition`
 
 ### VS Code Extension
 
-- `syntaxes/helen.tmLanguage.json` — TextMate 语法（覆盖 42 关键字）
-- `language-configuration.json` — 括号配对、自动闭合、缩进规则
-- `package.json` — 扩展清单
+- `syntaxes/helen.tmLanguage.json` — TextMate grammar (covers 42 keywords)
+- `language-configuration.json` — Bracket pairing, auto-closing, indentation rules
+- `package.json` — Extension manifest
 
-### 标准库 (287 builtins)
+### Standard Library (287 builtins)
 
-| 类别 | 数量 | 代表函数 |
-|---|---|---|
+| Category | Count | Representative Functions |
+|----------|-------|-------------------------|
 | **Core** | 11 | `print`, `len`, `str`, `int`, `float`, `abs`, `min`, `max`, `range`, `type`, `isinstance` |
 | **String** | 37 | `upper`, `lower`, `strip`, `split`, `join`, `replace`, `find`, `reverse`, `repeat`, `regex_match`, `regex_replace` |
 | **Data** | 25 | `json_parse`, `json_stringify`, `yaml_parse`, `toml_parse`, `csv_parse`, `xml_parse`, `html_escape`, `url_encode`, `base64_encode` |
@@ -232,47 +235,47 @@ $ helen init               # 初始化 ~/.helen/ 配置目录
 | **Quality** | 4 | `analyze_code`, `check_security`, `quality_score`, `quality_report` |
 | **Tools** | 24 | `web_search`, `web_fetch`, `read_file`, `write_file`, `shell_exec` |
 
-详见 [stdlib.md](../toolchain/stdlib.md)。
+See [stdlib.md](../toolchain/stdlib.md) for details.
 
-### AI 原生可观测性 (observability.py)
+### AI-Native Observability (observability.py)
 
-为 AI Agent 提供结构化的调试上下文，替代传统交互式 Debugger：
+Provides structured debugging context for AI Agents, replacing traditional interactive debuggers:
 
-| 组件 | 功能 | 默认状态 |
-|------|------|----------|
-| `CallStackTracker` | 函数/Agent 调用栈追踪 | 关闭 |
-| `ExecutionTracer` | 语句执行追踪（环形缓冲区 10000 条） | 关闭 |
-| `ErrorSnapshot` | 结构化错误上下文（JSON） | 自动捕获 |
-| `LLMAuditLog` | LLM 调用审计日志（环形缓冲区 1000 条） | 开启 |
-| `ObservabilityManager` | 统一管理入口 | — |
+| Component | Function | Default State |
+|-----------|----------|---------------|
+| `CallStackTracker` | Function/Agent call stack tracing | Off |
+| `ExecutionTracer` | Statement execution tracing (ring buffer, 10000 entries) | Off |
+| `ErrorSnapshot` | Structured error context (JSON) | Auto-capture |
+| `LLMAuditLog` | LLM call audit log (ring buffer, 1000 entries) | On |
+| `ObservabilityManager` | Unified management entry point | — |
 
-REPL 命令：`:trace on|off|show`、`:last_error`、`:llm_log`
-内置函数：`debug()`、`trace_on()`、`trace_off()`、`get_trace()`
-语言特性：`assert` 语句（失败自动捕获上下文）
-
----
-
-## 编译阶段与 ErrorCode 映射
-
-| 阶段 | 模块 | ErrorCode 范围 | 典型错误 |
-|---|---|---|---|
-| 词法分析 | M1 | E0300-E0309 | 未终止字符串、无效转义 |
-| 语法分析 | M2 | E0301-E0320 | 意外 Token、缺少 Token |
-| 语义分析 | M4 | E0330-E0350 | 未声明变量、类型不匹配 |
-| 执行阶段 | M5 | E0334-E0350 | Agent 运行时错误、常量赋值 |
+REPL commands: `:trace on|off|show`, `:last_error`, `:llm_log`
+Built-in functions: `debug()`, `trace_on()`, `trace_off()`, `get_trace()`
+Language feature: `assert` statement (automatically captures context on failure)
 
 ---
 
-## 质量指标
+## Compilation Stages and ErrorCode Mapping
 
-| 指标 | 值 |
-|---|---|
-| Python 源代码行数 | 19,500+ |
-| 测试代码行数 | 17,000+ |
-| 测试/源码比 | 0.87 |
-| 测试用例数 | 1,830+ |
-| 测试通过率 | 100% |
-| flake8 警告 | 0 |
-| Visitor 方法实现 | 47/47 |
+| Stage | Module | ErrorCode Range | Typical Errors |
+|-------|--------|-----------------|----------------|
+| Lexical Analysis | M1 | E0300-E0309 | Unterminated string, invalid escape |
+| Syntax Analysis | M2 | E0301-E0320 | Unexpected token, missing token |
+| Semantic Analysis | M4 | E0330-E0350 | Undeclared variable, type mismatch |
+| Execution Stage | M5 | E0334-E0350 | Agent runtime error, constant assignment |
+
+---
+
+## Quality Metrics
+
+| Metric | Value |
+|--------|-------|
+| Python source lines | 19,500+ |
+| Test code lines | 17,000+ |
+| Test-to-source ratio | 0.87 |
+| Test case count | 1,830+ |
+| Test pass rate | 100% |
+| flake8 warnings | 0 |
+| Visitor methods implemented | 47/47 |
 | CI/CD | GitHub Actions (pytest + flake8 + coverage) |
-| 综合质量评分 | 7.93/10 (7 维评估法) |
+| Overall quality score | 7.93/10 (7-dimension assessment) |
