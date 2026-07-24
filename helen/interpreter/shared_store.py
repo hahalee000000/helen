@@ -107,20 +107,33 @@ class SharedStore:
             fields[name] = value
 
     def __deepcopy__(self, memo: dict) -> "SharedStore":
-        """Deep copy creates an independent SharedStore with copied fields.
+        """Deep copy creates an independent SharedStore with copied fields and methods.
 
-        Methods are NOT copied — they reference closures bound to the original
-        interpreter environment. The copy has empty methods and shares no state
-        with the original (except through explicitly passed references).
-
+        Methods are copied and rebound to the new store — they reference the same
+        AST nodes and interpreter, but operate on the new store's fields.
         The lock is recreated (locks cannot be pickled/deep-copied).
+
+        v1.25 fix for issue #20: Previously methods were not copied, causing all
+        method calls to fail after spawn. Design intent (from spawnagent-proposal.md)
+        was always to copy and rebind methods.
         """
         import copy
         name = object.__getattribute__(self, '_name')
         fields = object.__getattribute__(self, '_fields')
+        methods = object.__getattribute__(self, '_methods')
+
+        # Create new store with copied fields and empty methods
         new_fields = copy.deepcopy(fields, memo)
         new_store = SharedStore(name, new_fields, {})
         memo[id(self)] = new_store
+
+        # Copy methods and rebind to new store
+        for method_name, method in methods.items():
+            method_node = object.__getattribute__(method, '_method_node')
+            interpreter = object.__getattribute__(method, '_interpreter')
+            new_method = SharedStoreMethod(method_node, new_store, interpreter)
+            object.__getattribute__(new_store, '_methods')[method_name] = new_method
+
         return new_store
 
 

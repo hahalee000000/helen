@@ -1319,6 +1319,11 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
                 spawned_interp._agents = dict(self._agents)
                 spawned_interp._functions = dict(self._functions)
 
+                # v1.25 fix for issue #21: Transfer _shared_vars registry to spawned interpreter
+                # so that shared let variables are properly recognized and can be injected
+                # when the spawned agent calls other agents or functions.
+                spawned_interp._shared_vars = set(getattr(self, '_shared_vars', set()))
+
                 # Phase 6: Inject Channel cancel_event so spawned interpreter's
                 # streaming path can check it and abort on endpoint.cancel()
                 spawned_interp._agent_cancel_event = spawned_endpoint.cancel_event

@@ -56,3 +56,16 @@ class WrappedPythonModule:
     def __repr__(self) -> str:
         """Developer representation."""
         return f"WrappedPythonModule({self.name!r})"
+
+    def __deepcopy__(self, memo: dict) -> "WrappedPythonModule":
+        """Deep copy returns self (modules are process-level singletons).
+
+        Python modules cannot be pickled/deep-copied and are process-wide
+        singletons anyway. When spawn snapshots the environment, return the
+        same reference rather than attempting to copy the module.
+
+        v1.25 fix for issue #22: Previously spawn would crash with
+        'cannot pickle module object' when any Python FFI module was imported.
+        """
+        memo[id(self)] = self
+        return self

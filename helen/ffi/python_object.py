@@ -125,3 +125,16 @@ class WrappedPythonObject:
             raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
         return self.get_attribute(name)
+
+    def __deepcopy__(self, memo: dict) -> "WrappedPythonObject":
+        """Deep copy returns self (wrapped objects may not be copyable).
+
+        The wrapped Python object might be a singleton, process-wide resource,
+        or otherwise not safely copyable. When spawn snapshots the environment,
+        return the same reference rather than attempting to copy the object.
+
+        v1.25 fix for issue #22: Similar to WrappedPythonModule, prevents
+        spawn from crashing when Python FFI objects are in the environment.
+        """
+        memo[id(self)] = self
+        return self
