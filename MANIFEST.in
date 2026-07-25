@@ -26,3 +26,9 @@ prune reports
 prune wiki
 prune vscode-extension
 prune extensions
+
+# Exclude frontend build artifacts (users install via npm)
+prune helen/agent/webui/frontend/node_modules
+prune helen/agent/webui/frontend/dist
+global-exclude package-lock.json
+global-exclude yarn.lock

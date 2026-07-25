@@ -74,6 +74,7 @@ helen = "helen.cli.__main__:main"
 
 [tool.setuptools.packages.find]
 include = ["helen*"]
+exclude = ["helen.agent.webui.frontend.node_modules*", "helen.agent.webui.frontend.dist*"]
 
 # Include non-Python files in the wheel (skills, agent programs, config samples)
 [tool.setuptools.package-data]
