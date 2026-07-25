@@ -36,6 +36,107 @@ from helen.runtime.observability import LLMAuditEntry
 _PROMPT_VAR_RE = __import__('re').compile(r'\{\{(.+?)\}\}')
 
 
+class _WorkingMemoryStreamFilter:
+    """Filter for stripping <working_memory> blocks from streaming content.
+
+    v1.25.3: Buffers content during streaming to detect and discard
+    <working_memory>...</working_memory> blocks before they reach the user.
+
+    Usage:
+        filter = _WorkingMemoryStreamFilter()
+        for chunk in stream:
+            filtered = filter.process(chunk)
+            if filtered:
+                send_to_user(filtered)
+    """
+
+    def __init__(self):
+        self.buffer = ""
+        self.in_wm_block = False
+        self.just_closed_block = False  # Track if we just closed a block
+
+    def process(self, content: str) -> str:
+        """Process a chunk and return filtered content (may be empty)."""
+        import re
+
+        # v1.25.3: Skip leading whitespace if we just closed a block
+        if self.just_closed_block:
+            content = content.lstrip('\n\r \t')
+            self.just_closed_block = False
+
+        self.buffer += content
+        result = []
+
+        while self.buffer:
+            if not self.in_wm_block:
+                # Look for start of <working_memory> block
+                match = re.search(r'<working_memory', self.buffer, re.IGNORECASE)
+                if match:
+                    # Output everything before the match
+                    result.append(self.buffer[:match.start()])
+                    # Keep the potential tag start in buffer
+                    self.buffer = self.buffer[match.start():]
+
+                    # Check if we have the complete opening tag
+                    tag_match = re.match(r'<working_memory[^>]*>', self.buffer, re.IGNORECASE)
+                    if tag_match:
+                        self.in_wm_block = True
+                        self.buffer = self.buffer[tag_match.end():]
+                    elif len(self.buffer) < 50:
+                        # Not enough chars to confirm tag, wait for more
+                        break
+                    else:
+                        # Too many chars without closing '>', probably not a tag
+                        result.append(self.buffer[0])
+                        self.buffer = self.buffer[1:]
+                else:
+                    # No working memory block start found
+                    # Check if buffer ends with potential tag prefix
+                    if self.buffer.endswith(('<', '<w', '<wo', '<wor', '<work', '<worki',
+                                            '<workin', '<working', '<working_', '<working_m',
+                                            '<working_me', '<working_mem', '<working_memo',
+                                            '<working_memor', '<working_memory')):
+                        # Might be incomplete tag, keep last part in buffer
+                        safe_len = len(self.buffer) - 20
+                        if safe_len > 0:
+                            result.append(self.buffer[:safe_len])
+                            self.buffer = self.buffer[safe_len:]
+                        break
+                    else:
+                        # Safe to output everything
+                        result.append(self.buffer)
+                        self.buffer = ""
+                        break
+            else:
+                # Inside <working_memory> block, look for closing tag
+                match = re.search(r'</working_memory\s*>', self.buffer, re.IGNORECASE)
+                if match:
+                    # Discard everything up to and including closing tag
+                    self.buffer = self.buffer[match.end():]
+                    self.in_wm_block = False
+                    self.just_closed_block = True  # Mark that we just closed
+                    # Also skip any trailing whitespace in current buffer
+                    ws_match = re.match(r'\s*', self.buffer)
+                    if ws_match:
+                        self.buffer = self.buffer[ws_match.end():]
+                else:
+                    # Still inside block, discard all buffered content
+                    self.buffer = ""
+                    break
+
+        return ''.join(result)
+
+    def flush(self) -> str:
+        """Flush any remaining buffered content (call at end of stream)."""
+        if self.in_wm_block:
+            # Still inside unclosed block, discard everything
+            self.buffer = ""
+            self.in_wm_block = False
+        result = self.buffer
+        self.buffer = ""
+        return result
+
+
 class LlmMixin:
     """Mixin providing LLM-related visitor methods and helpers.
 
@@ -557,6 +658,9 @@ class LlmMixin:
             external_cancel = getattr(self, '_agent_cancel_event', None)
 
             # Phase 2: Pass cancel_event to act_stream
+            # v1.25.3: Add working memory block filter for streaming
+            wm_filter = _WorkingMemoryStreamFilter() if on_chunk_fn is not None else None
+
             try:
                 try:
                     stream_iter = self.llm_runtime.act_stream(
@@ -598,11 +702,14 @@ class LlmMixin:
                         if content:
                             full_response.append(content)
                             if on_chunk_fn is not None:
-                                # Phase 1: Check on_chunk return value
-                                chunk_result = on_chunk_fn(content)
-                                if chunk_result is False:
-                                    interrupted = True
-                                    break
+                                # v1.25.3: Filter out <working_memory> blocks during streaming
+                                filtered_content = wm_filter.process(content)
+                                if filtered_content:
+                                    # Phase 1: Check on_chunk return value
+                                    chunk_result = on_chunk_fn(filtered_content)
+                                    if chunk_result is False:
+                                        interrupted = True
+                                        break
 
                     elif event_type == "tool_call":
                         fn_name = event.get("name", "")
@@ -649,6 +756,11 @@ class LlmMixin:
                 stream_handle.cancelled.set()
 
             finally:
+                # v1.25.3: Flush working memory filter
+                if wm_filter is not None:
+                    remaining = wm_filter.flush()
+                    if remaining and on_chunk_fn is not None:
+                        on_chunk_fn(remaining)
                 stream_handle.done.set()
                 self._unregister_streaming_call(stream_handle.call_id)
 
@@ -1164,13 +1276,14 @@ class LlmMixin:
 At the end of each task, include a working memory update in your response using this format:
 
 <working_memory>
-active_files: [list of files you modified or referenced]
+active_files: [list of FILE PATHS you modified or referenced]
 decisions: [key decisions you made and why]
 todos: [remaining tasks or follow-up items]
 errors: [errors encountered and how you resolved them]
 </working_memory>
 
 Guidelines:
+- `active_files` must contain ONLY file paths (e.g. "src/auth.py", "lib/utils.js"), NOT descriptions or analysis text
 - Only include fields that have meaningful updates
 - Keep each item concise (one line per item)
 - Focus on information that would help you continue the work in the next invocation
