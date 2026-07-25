@@ -157,8 +157,18 @@ def launch_agent():
     print("✅ Starting Helen programming assistant...")
     print()
 
+    # Pass user's current directory to start-web.sh
+    # This ensures the Web UI uses the user's project directory, not the agent directory
+    import os
+    env = os.environ.copy()
+    env["HELEN_WEBUI_CWD"] = str(Path.cwd())
+
     try:
-        result = subprocess.run(["bash", str(start_script)], cwd=agent_dir)
+        result = subprocess.run(
+            ["bash", str(start_script)],
+            cwd=agent_dir,  # Run from agent directory (for relative paths)
+            env=env  # But pass user's cwd via environment variable
+        )
         return result.returncode
     except KeyboardInterrupt:
         # Ctrl+C pressed - the start-web.sh script handles cleanup
