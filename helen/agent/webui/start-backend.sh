@@ -49,8 +49,13 @@ fi
 echo "🔧 Using shared venv: $HELEN_VENV"
 PYTHON="$HELEN_VENV/bin/python"
 
-# 把 backend 目录加入 PYTHONPATH（这样 import app.xxx 能解析到）
-export PYTHONPATH="$BACKEND_DIR:${PYTHONPATH:-}"
+# 把 backend 目录和 agent 根目录加入 PYTHONPATH
+# backend 目录：import app.xxx
+# agent 根目录：import ui.xxx (后端代码依赖 ui 模块)
+AGENT_DIR="$(cd "$BACKEND_DIR/.." && pwd)"
+export PYTHONPATH="$BACKEND_DIR:$AGENT_DIR:${PYTHONPATH:-}"
+
+echo "📚 PYTHONPATH: $PYTHONPATH"
 
 # 防御层：把用户 cwd 通过环境变量传给 Python 进程
 # 即使 os.chdir 失败，directory_manager.py 仍可读到 HELEN_WEBUI_CWD
