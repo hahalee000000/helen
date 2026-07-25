@@ -40,8 +40,8 @@ class Channel:
     def name(self) -> str:
         return self._name
 
-    @property
     def is_closed(self) -> bool:
+        """Check if the channel is closed."""
         return self._closed.is_set()
 
     @property
@@ -111,7 +111,7 @@ class ChannelEndpoint:
         Can pass any Python object, including SharedStore references.
         send() is silently ignored after the channel is closed.
         """
-        if self._channel.is_closed:
+        if self._channel.is_closed():
             return
         self._outbox.put(msg)
 
@@ -164,12 +164,11 @@ class ChannelEndpoint:
 
     def is_channel_closed(self) -> bool:
         """Check if the channel is closed."""
-        return self._channel.is_closed
+        return self._channel.is_closed()
 
-    @property
     def is_closed(self) -> bool:
-        """Property accessor for channel closed state (consistent with Channel API)."""
-        return self._channel.is_closed
+        """Check if the channel is closed. Method version for Helen compatibility."""
+        return self._channel.is_closed()
 
     def _send_sentinel(self) -> None:
         """Put a None sentinel into the outbox to wake up the other endpoint's blocked receive()."""
@@ -189,7 +188,7 @@ class ChannelEndpoint:
             "try_receive": self.try_receive,
             "cancel": self.cancel,
             "close": self.close,
-            "is_closed": self.is_channel_closed,
+            "is_closed": self.is_closed,
             # Chinese aliases
             "发送": self.send,
             "接收": self.receive,

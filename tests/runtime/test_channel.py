@@ -12,7 +12,7 @@ class TestChannel:
     def test_channel_creation(self):
         ch = Channel("test")
         assert ch.name == "test"
-        assert not ch.is_closed
+        assert not ch.is_closed()
         assert not ch.cancel_event.is_set()
 
     def test_channel_default_name(self):
@@ -21,14 +21,14 @@ class TestChannel:
 
     def test_channel_mark_closed(self):
         ch = Channel()
-        assert not ch.is_closed
+        assert not ch.is_closed()
         ch.mark_closed()
-        assert ch.is_closed
+        assert ch.is_closed()
 
     def test_channel_mark_cancelled(self):
         ch = Channel()
         ch.mark_cancelled()
-        assert ch.is_closed
+        assert ch.is_closed()
         assert ch.cancel_event.is_set()
 
 
@@ -245,7 +245,7 @@ class TestChannelIsolation:
         # 副本是独立的
         assert ch_copy is not ch
         assert ch_copy.name == "original"
-        assert not ch_copy.is_closed
+        assert not ch_copy.is_closed()
 
     def test_deepcopy_endpoint(self):
         """深复制端点也应独立。"""
