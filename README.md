@@ -86,6 +86,30 @@ helen repl
 > :help
 ```
 
+### Programming Assistant
+
+Helen includes a built-in AI programming assistant:
+
+```bash
+# Install with assistant support
+pip install helen-lang[agent]
+
+# Launch the assistant
+helen agent
+```
+
+Features:
+- Web-based chat interface
+- Smart context management (working memory, session recovery)
+- Skill-based knowledge system (TDD, quality assessment, etc.)
+- Direct tool access (file operations, shell commands, web search)
+
+Requirements:
+- Node.js 18+ (for web frontend)
+- LLM API configured in `~/.helen/config.yaml`
+
+See `helen/agent/README.md` for details.
+
 ### Python Bridge Usage
 
 Helen Agents can be used directly in Python via the Python Bridge, just like ordinary Python classes:

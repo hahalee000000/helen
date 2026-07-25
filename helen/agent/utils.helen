@@ -1,0 +1,98 @@
+// ═══════════════════════════════════════════════════════════════════
+// Helen Programming Agent - 共享工具函数
+// ═══════════════════════════════════════════════════════════════════
+//
+// 跨模块复用的基础工具函数，避免在多个文件中重复定义。
+//
+// ── 职责边界 ──
+// ✅ 适合放这里：
+//    - 纯函数（无副作用，不依赖 shared let）
+//    - 通用工具（路径验证、环境检测、格式转换）
+//    - 被 2+ 个模块调用的函数
+//
+// ❌ 不要放这里（反模式）：
+//    - 需要状态的函数（→ 放到对应的状态管理模块，如 context_manager.helen）
+//    - Helen 特定的版本检测逻辑（→ 应该用 `helen --version` 命令，不是读文件）
+//    - 只被 1 个模块调用的函数（→ 直接放在调用方文件里）
+//    - 业务逻辑（→ 放到对应的 agent 或编排模块）
+//
+// 当前内容：
+//    - validate_path: 路径安全性验证（防 shell 注入）
+//    - ensure_python_path: Python FFI 环境设置
+//    - detect_helen_version / safe_git_branch / check_git_dirty: 环境事实检测
+//
+
+/** 验证文件路径安全性，防止 shell 注入。
+ *  只允许字母数字、点、下划线、短横线、斜杠。
+ *  返回: 原路径（合法）或空字符串（非法字符） */
+fn validate_path(path: str): str {
+    let allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
+    let i = 0
+    while i < len(path) {
+        let ch = substring(path, i, i + 1)
+        if find(allowed, ch) < 0 {
+            return ""
+        }
+        i = i + 1
+    }
+    return path
+}
+
+/** 确保 PYTHONPATH 包含当前目录（用于 Python FFI 导入 ui 模块）。
+ *  幂等：多次调用安全。 */
+fn ensure_python_path() {
+    let cwd = strip(shell_exec("pwd"))
+    let python_path = strip(shell_exec("echo $PYTHONPATH"))
+    if !contains(python_path, cwd) {
+        let new_path = cwd
+        if len(python_path) > 0 {
+            new_path = cwd + ":" + python_path
+        }
+        shell_exec("export PYTHONPATH=" + new_path)
+    }
+}
+
+// ── 环境事实检测（共享，避免 context.helen / context_manager.helen 各自重复）──
+
+/** 检测当前 Helen 语言版本（从 ~/helen/wiki/appendix/changelog.md 读取）。
+ *  检测失败返回 "1.20"（历史回退默认值）。 */
+fn detect_helen_version(): str {
+    try {
+        let home = strip(shell_exec("echo $HOME"))
+        let changelog = path_join(home, "helen", "wiki", "appendix", "changelog.md")
+        if path_exists(changelog) {
+            let content = read_file(changelog)
+            let marker = "Helen v"
+            let start = find(content, marker)
+            if start >= 0 {
+                let after = substring(content, start + len(marker), start + len(marker) + 10)
+                let end = find(after, " ")
+                if end < 0 { end = find(after, "|") }
+                if end < 0 { end = len(after) }
+                let ver = substring(after, 0, end)
+                if ver != "" { return ver }
+            }
+        }
+    } catch { }
+    return "1.20"
+}
+
+/** 安全获取当前 git 分支名，失败返回 "unknown"。 */
+fn safe_git_branch(): str {
+    try {
+        let b = strip(shell_exec("git rev-parse --abbrev-ref HEAD 2>/dev/null"))
+        if b != "" { return b }
+    } catch { }
+    return "unknown"
+}
+
+/** 检测 git 工作树是否 dirty。返回 "true" / "false" / "unknown"。 */
+fn check_git_dirty(): str {
+    try {
+        let s = strip(shell_exec("git status --porcelain 2>/dev/null"))
+        if s == "" { return "false" }
+        return "true"
+    } catch {
+        return "unknown"
+    }
+}

@@ -55,8 +55,19 @@ Issues = "https://github.com/hahalee000000/helen/issues"
 dev = ["pytest>=7.0", "pytest-cov>=4.0", "pytest-asyncio>=0.21.0", "flake8>=6.0"]
 # P3: Accurate token counting via tiktoken (optional, falls back to heuristic)
 accurate-tokens = ["tiktoken>=0.5.0"]
+# Programming assistant (helenagent) dependencies
+agent = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "websockets>=12.0",
+    "sqlalchemy>=2.0.25",
+    "pydantic>=2.5.3",
+    "pydantic-settings>=2.1.0",
+    "python-dotenv>=1.0.0",
+    "python-multipart>=0.0.32",
+]
 # All optional features
-all = ["tiktoken>=0.5.0"]
+all = ["tiktoken>=0.5.0", "fastapi>=0.109.0", "uvicorn[standard]>=0.27.0", "websockets>=12.0", "sqlalchemy>=2.0.25", "pydantic>=2.5.3", "pydantic-settings>=2.1.0", "python-dotenv>=1.0.0", "python-multipart>=0.0.32"]
 
 [project.scripts]
 helen = "helen.cli.__main__:main"
@@ -68,9 +79,24 @@ include = ["helen*"]
 [tool.setuptools.package-data]
 "helen" = [
     "py.typed",
+    # Agent files (helenagent)
     "agent/*.helen",
+    "agent/*.md",
+    "agent/*.sh",
+    "agent/**/*.helen",
+    "agent/**/*.md",
+    "agent/**/*.sh",
+    "agent/**/*.py",
+    "agent/**/*.json",
+    "agent/**/*.txt",
+    "agent/**/*.yaml",
+    "agent/**/*.yml",
+    "agent/**/*.toml",
+    # Skills (built-in + agent project skills)
     "skills/*/SKILL.md",
     "skills/*/references/*.md",
+    "agent/.helen/skills/*/SKILL.md",
+    "agent/.helen/skills/*/references/*.md",
 ]
 
 [tool.pytest.ini_options]

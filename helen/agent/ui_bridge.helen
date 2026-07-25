@@ -1,0 +1,196 @@
+// ═══════════════════════════════════════════════════════════════════
+// Helen Programming Agent - Python UI Bridge
+// ═══════════════════════════════════════════════════════════════════
+//
+// 通过 Python FFI 调用 Rich UI 库
+//
+// 使用示例：
+//   import "ui_bridge.helen"
+//   ui_init()
+//   ui_render_events(events)
+//   ui_shutdown()
+//
+
+// 导入 Python UI 模块（函数内 lazy import）
+//
+// 注：Helen v1.25.1 之前（#22），模块顶层 `import "ui.x" as Y` 的 Python FFI
+// 引用会导致 spawn deepcopy 崩溃。v1.25.1+ 已修复，可安全使用模块顶层 import。
+//
+// 但仍选择函数内 lazy import，因为：
+// - 让本模块在 ui.renderer / ui.input_handler 不可用时仍能加载
+//   （如 rich 未安装时，import 阶段不报错，仅调用相关函数时报错）
+// - 延迟加载成本（首次调用时才 import，而非启动时）
+//
+// 历史：原写法 `import "ui.renderer" as PyUIRenderer` 在模块顶层，
+// spawn ChatSessionActor 时 environment.snapshot() deepcopy 全局环境，
+// Python 模块对象无法 pickle -> "cannot pickle 'module' object"。
+// 修复后改为 lazy import 保留防御性加载的好处。
+
+// 导入事件队列（ESC 中止时设置标志）
+import "ui_event_queue.helen"
+
+// ── 全局状态 ──────────────────────────────────────────────────────
+
+// Python UIRenderer 实例（WrappedPythonObject）
+shared let _ui_renderer = null
+
+// 是否已初始化
+shared let _ui_initialized = false
+
+// ── 初始化与关闭 ──────────────────────────────────────────────────
+
+/** 初始化 Rich UI */
+fn ui_init() {
+    if _ui_initialized {
+        return
+    }
+
+    try {
+        // 创建 UIRenderer 实例（lazy import）
+        import "ui.renderer" as PyUIRenderer
+        _ui_renderer = PyUIRenderer.UIRenderer()
+        // 启动 Live 显示（使用自然方法调用）
+        _ui_renderer.start()
+        _ui_initialized = true
+    } catch RuntimeError err {
+        print("⚠️  Rich UI 初始化失败: " + err.message + "\n")
+        print("降级到 MINIMAL 模式\n")
+        _ui_renderer = null
+        _ui_initialized = false
+    }
+}
+
+/** 关闭 Rich UI */
+fn ui_shutdown() {
+    if !_ui_initialized || _ui_renderer == null {
+        return
+    }
+
+    try {
+        _ui_renderer.stop()
+        _ui_renderer = null
+        _ui_initialized = false
+    } catch RuntimeError err {
+        print("⚠️  Rich UI 关闭失败: " + err.message + "\n")
+    }
+}
+
+/** 暂停 Rich UI（用于用户输入时） */
+fn ui_pause() {
+    if !_ui_initialized || _ui_renderer == null {
+        return
+    }
+
+    try {
+        _ui_renderer.pause()
+    } catch RuntimeError err {
+        // 静默失败
+    }
+}
+
+/** 恢复 Rich UI（用户输入完成后） */
+fn ui_resume() {
+    if !_ui_initialized || _ui_renderer == null {
+        return
+    }
+
+    try {
+        _ui_renderer.resume()
+    } catch RuntimeError err {
+        // 静默失败
+    }
+}
+
+/** 检查 UI 是否已初始化 */
+fn ui_is_initialized(): bool {
+    return _ui_initialized
+}
+
+// ── 事件渲染 ──────────────────────────────────────────────────────
+
+/** 渲染一批 UI 事件 */
+fn ui_render_events(events: list) {
+    if !_ui_initialized || _ui_renderer == null {
+        return
+    }
+
+    if len(events) == 0 {
+        return
+    }
+
+    try {
+        _ui_renderer.render_events(events)
+    } catch RuntimeError err {
+        print("⚠️  UI 事件渲染失败: " + err.message + "\n")
+    }
+}
+
+/** 直接打印消息（不经过 Live） */
+fn ui_print_message(message: str) {
+    if !_ui_initialized || _ui_renderer == null {
+        // 降级到普通 print
+        print(message)
+        return
+    }
+
+    try {
+        _ui_renderer.print_message(message)
+    } catch RuntimeError err {
+        print(message)
+    }
+}
+
+/** 清空 UI 显示 */
+fn ui_clear() {
+    if !_ui_initialized || _ui_renderer == null {
+        return
+    }
+
+    try {
+        _ui_renderer.clear()
+    } catch RuntimeError err {
+        print("⚠️  UI 清空失败: " + err.message + "\n")
+    }
+}
+
+// ── 交互式输入（支持 ESC 中止） ───────────────────────────────────
+
+/** 获取用户输入（支持 ESC 键中止）
+ *
+ *  使用 Python prompt_toolkit 检测 ESC 按键：
+ *  - 正常输入：返回用户输入的文本
+ *  - 按 ESC：设置 UIEventQueue 的 abort_flag，返回空字符串
+ *  - 若 prompt_toolkit 不可用，回退到标准 input()
+ *
+ *  使用示例:
+ *    let user_input = ui_get_input("❯ ")
+ *    if ui_check_aborted() {
+ *        // ESC 被按下，处理中止逻辑
+ *    }
+ */
+fn ui_get_input(prompt_text: str): str {
+    // 清除之前的 abort 标志
+    ui_clear_abort()
+
+    // 暂停 Rich UI（避免 Live 刷新覆盖输入）
+    ui_pause()
+
+    // 调用 Python 输入处理函数（lazy import）
+    import "ui.input_handler" as PyInputHandler
+    let result = PyInputHandler.helen_get_input(prompt_text)
+
+    // 恢复 Rich UI
+    ui_resume()
+
+    // 提取结果
+    let text = result["text"]
+    let aborted = result["aborted"]
+
+    // 如果 ESC 被按下，设置 UIEventQueue 的 abort 标志
+    if aborted {
+        ui_set_abort()
+        return ""
+    }
+
+    return text
+}

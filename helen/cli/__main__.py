@@ -285,7 +285,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return repl_command(session_id=session_id)
 
     # Check for known subcommands
-    subcommands = {"check", "repl", "doc", "init", "test", "quality", "lsp", "watch", "template"}
+    subcommands = {"check", "repl", "doc", "init", "test", "quality", "lsp", "watch", "template", "agent"}
     first = argv[0]
 
     if first in subcommands:
@@ -314,6 +314,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             return watch_command(argv[1], program_args=argv[2:], session_id=session_id)
         elif first == "template":
             return template_command(argv[1:])
+        elif first == "agent":
+            from helen.cli.agent_launcher import launch_agent
+            return launch_agent()
     elif first in ("-h", "--help", "help"):
         _print_help()
         return 0
@@ -820,6 +823,7 @@ Usage:
   helen doc [files]              Generate API documentation
   helen init                     Initialize Helen configuration
   helen lsp                      Start Language Server (LSP) for IDE support
+  helen agent                    Launch Helen programming assistant (Web UI)
   helen --version                Show version number
 
 Program Arguments:
