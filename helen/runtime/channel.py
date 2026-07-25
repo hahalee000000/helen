@@ -49,10 +49,6 @@ class Channel:
         """Cancellation signal. Spawned agents can check this Event to respond to cancel requests."""
         return self._cancel_event
 
-    @property
-    def is_closed(self) -> bool:
-        return self._closed.is_set()
-
     def mark_closed(self) -> None:
         """Mark the channel as closed."""
         self._closed.set()
@@ -168,6 +164,11 @@ class ChannelEndpoint:
 
     def is_channel_closed(self) -> bool:
         """Check if the channel is closed."""
+        return self._channel.is_closed
+
+    @property
+    def is_closed(self) -> bool:
+        """Property accessor for channel closed state (consistent with Channel API)."""
         return self._channel.is_closed
 
     def _send_sentinel(self) -> None:
