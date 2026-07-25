@@ -87,6 +87,91 @@ Skills can also include:
 - `scripts/` — Helper scripts
 - `assets/` — Static resources
 
+## Creating Skills
+
+Agents can create new skills to capture reusable patterns, best practices, or domain knowledge.
+
+### Where to Create Skills
+
+| Location | Scope | Priority | Use Case |
+|----------|-------|----------|----------|
+| `<project>/.helen/skills/` | Project | 1 (highest) | Project-specific patterns, APIs, conventions |
+| `~/.helen/skills/` | User | 2 | Personal workflows, cross-project utilities |
+| `<helen-install>/skills/` | System | 3 | **Built-in only** — never write here |
+
+**Never create skills in the Helen installation directory** — they will be lost on updates and require write permissions.
+
+### Step-by-Step Creation
+
+1. **Create the skill directory:**
+   ```bash
+   mkdir -p .helen/skills/my-skill
+   ```
+
+2. **Create SKILL.md with YAML frontmatter:**
+   ```markdown
+   ---
+   name: my-skill
+   description: "What this skill does in one sentence"
+   version: 1.0.0
+   author: Your Name
+   license: MIT
+   tags: [tag1, tag2, tag3]
+   ---
+   
+   # My Skill Title
+   
+   ## Problem
+   What problem does this skill solve?
+   
+   ## Solution
+   How does this skill solve it?
+   
+   ## Examples
+   Code examples and usage patterns.
+   ```
+
+### Programmatic Creation (Helen Code)
+
+```helen
+fn create_skill(name: str, description: str, content: str) {
+    let skill_dir = ".helen/skills/" + name
+    
+    // Create directory
+    shell_exec("mkdir -p " + skill_dir)
+    
+    // Build SKILL.md with frontmatter
+    let skill_file = """---
+name: """ + name + """
+description: \"""" + description + """\"
+version: 1.0.0
+author: HelenAgent
+tags: [auto-generated]
+---
+
+""" + content
+    
+    // Write file
+    write_file(skill_dir + "/SKILL.md", skill_file)
+    print("✅ Created skill: " + name)
+}
+
+// Usage
+create_skill(
+    "jwt-refresh",
+    "JWT token refresh pattern for long sessions",
+    "# JWT Refresh\n\nProactive token refresh 5 minutes before expiration..."
+)
+```
+
+### Skill Creation Checklist
+
+- ✅ Directory name: kebab-case, descriptive (e.g., `jwt-refresh-pattern`)
+- ✅ SKILL.md: YAML frontmatter with required fields (`name`, `description`, `version`, `author`, `tags`)
+- ✅ Content: Clear problem statement, solution, code examples
+- ✅ Location: `.helen/skills/` (project) or `~/.helen/skills/` (user)
+- ❌ **Never** in Helen installation directory
+
 ## Built-in Skills List
 
 | Skill | Category | Description |

@@ -172,31 +172,103 @@ if quality["scores"]["overall"] < 7.5 {
 
 ### 4. Skill Evaluation (Skill Evolution)
 
-After each task, evaluate whether new skills have been discovered or existing skills need updating:
+After each task, evaluate whether new skills have been discovered or existing skills need updating.
+
+**When to create a new skill:**
+- Discovered a reusable pattern (appears 3+ times)
+- Found a common pitfall worth documenting
+- Developed a best practice for a specific domain
+
+**Where to save skills:**
+- **Project-specific**: `.helen/skills/<skill-name>/SKILL.md` (highest priority, project-scoped)
+- **User-global**: `~/.helen/skills/<skill-name>/SKILL.md` (user-scoped, available to all projects)
+- **Never** in Helen installation directory (will be lost on update, requires write permissions)
+
+**Creating a new skill:**
 
 ```helen
-// Task summary
-let task_summary = "Implemented string reversal function using TDD; discovered recursive implementation causes stack overflow"
-let files_changed = "src/string_utils.helen, tests/test_string_utils.helen"
+// Evaluate task for reusable patterns
+let task_summary = "Implemented JWT auth; discovered token refresh pattern for long sessions"
 
-// Invoke skill evaluation
-let evaluation = call_skill_evaluator(task_summary, files_changed)
+// Check if this warrants a new skill
+if is_reusable_pattern(task_summary) {
+    let skill_name = "jwt-refresh-pattern"
+    let skill_dir = ".helen/skills/" + skill_name
+    
+    // Create skill directory
+    shell_exec("mkdir -p " + skill_dir)
+    
+    // Create SKILL.md with proper YAML frontmatter
+    let skill_content = """---
+name: """ + skill_name + """
+description: "JWT token refresh pattern for long-running agent sessions"
+version: 1.0.0
+author: HelenAgent
+tags: [jwt, authentication, session-management]
+---
 
-// Process evaluation results
-if evaluation["new_skills"] != null {
-    for skill in evaluation["new_skills"] {
-        print("💡 Suggested new skill: " + skill["name"])
-        save_new_skill(skill["name"], skill["category"], skill["tags"], skill["content"])
+# JWT Refresh Pattern
+
+## Problem
+Access tokens expire during long-running agent sessions, causing API failures.
+
+## Solution
+Implement proactive token refresh 5 minutes before expiration.
+
+## Code Example
+```helen
+fn refresh_token_if_needed(token: str): str {
+    if is_expiring_soon(token) {
+        return call_refresh_api(token)
     }
-}
-
-if evaluation["updates"] != null {
-    for update in evaluation["updates"] {
-        print("🔄 Suggested skill update: " + update["name"])
-        update_existing_skill(update["path"], update["addition"])
-    }
+    return token
 }
 ```
+"""
+    
+    write_file(skill_dir + "/SKILL.md", skill_content)
+    print("✅ Created skill: " + skill_name)
+}
+```
+
+**Updating an existing skill:**
+
+```helen
+// Read existing skill
+let skill_path = ".helen/skills/jwt-refresh-pattern/SKILL.md"
+let existing = read_file(skill_path)
+
+// Append new information
+let addition = """
+
+## Update (2026-07-25)
+Discovered edge case: refresh fails when network is down.
+Solution: Implement retry with exponential backoff.
+
+```helen
+fn refresh_with_retry(token: str, max_retries: int = 3): str {
+    for i in range(max_retries) {
+        try {
+            return call_refresh_api(token)
+        } catch NetworkError {
+            sleep(2 ** i)  // Exponential backoff
+        }
+    }
+    throw RuntimeError("Token refresh failed after " + str(max_retries) + " retries")
+}
+```
+"""
+
+write_file(skill_path, existing + addition)
+print("✅ Updated skill: jwt-refresh-pattern")
+```
+
+**Skill creation checklist:**
+- ✅ Directory name: kebab-case, descriptive (e.g., `jwt-refresh-pattern`)
+- ✅ SKILL.md: YAML frontmatter with `name`, `description`, `version`, `author`, `tags`
+- ✅ Content: Clear problem statement, solution, code examples
+- ✅ Location: `.helen/skills/` (project) or `~/.helen/skills/` (user)
+- ❌ **Never** in Helen installation directory
 
 ### 5. Context Handoff
 
