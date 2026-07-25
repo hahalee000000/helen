@@ -156,5 +156,12 @@ def launch_agent():
 
     print("✅ Starting Helen programming assistant...")
     print()
-    result = subprocess.run(["bash", str(start_script)], cwd=agent_dir)
-    return result.returncode
+
+    try:
+        result = subprocess.run(["bash", str(start_script)], cwd=agent_dir)
+        return result.returncode
+    except KeyboardInterrupt:
+        # Ctrl+C pressed - the start-web.sh script handles cleanup
+        # Just exit cleanly without showing traceback
+        print("\n👋 Helen agent stopped")
+        return 0
