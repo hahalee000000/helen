@@ -278,7 +278,13 @@ def ask_single(
 
 def _run_streaming(runtime: Any, prompt: str, system_prompt: str,
                    tools: list[dict[str, Any]], dispatch_fn: Callable) -> str:
-    """Stream the assistant response to stdout; return the full text."""
+    """Stream the assistant response to stdout; return the full text.
+
+    ``act_stream`` yields typed dicts (``{"type": "content", "content": ...}``
+    for text, plus tool_call/tool_result/usage/error/compaction events). We
+    only print ``content`` events to stdout; the rest are transparently
+    handled by the runtime's agentic loop.
+    """
     chunks: list[str] = []
     try:
         stream_iter = runtime.act_stream(
@@ -288,11 +294,26 @@ def _run_streaming(runtime: Any, prompt: str, system_prompt: str,
             max_turns=5,
             dispatch_fn=dispatch_fn,
         )
-        for chunk in stream_iter:
-            if chunk:
-                sys.stdout.write(chunk)
-                sys.stdout.flush()
-                chunks.append(chunk)
+        for event in stream_iter:
+            if not isinstance(event, dict):
+                # Legacy plain-string chunk (defensive fallback)
+                text = str(event)
+                if text:
+                    sys.stdout.write(text)
+                    sys.stdout.flush()
+                    chunks.append(text)
+                continue
+            etype = event.get("type")
+            if etype == "content":
+                text = event.get("content", "")
+                if text:
+                    sys.stdout.write(text)
+                    sys.stdout.flush()
+                    chunks.append(text)
+            # Other event types (tool_call / tool_result / usage /
+            # compaction / error) are handled by the runtime's agentic
+            # loop internally; we don't print them directly. Tool
+            # results flow back into the LLM on the next turn.
     except KeyboardInterrupt:
         # Graceful interrupt
         if hasattr(runtime, "cancel_streaming"):

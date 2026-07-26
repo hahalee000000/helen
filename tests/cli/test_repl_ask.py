@@ -316,6 +316,58 @@ class TestREPLAskCommandWiring:
 
 
 # ---------------------------------------------------------------------------
+# Streaming event handling (regression for dict event bug)
+# ---------------------------------------------------------------------------
+
+class TestRunStreaming:
+    """_run_streaming must extract 'content' from typed dict events and
+    ignore tool_call / tool_result / usage events."""
+
+    def test_streaming_extracts_content_only(self, capsys):
+        from helen.cli.ask_assistant import _run_streaming
+
+        # Fake runtime that yields the same dict sequence act_stream does
+        events = [
+            {"type": "content", "content": "Hello "},
+            {"type": "tool_call", "name": "repl_definitions", "args": {}},
+            {"type": "tool_result", "name": "repl_definitions", "result": "[]"},
+            {"type": "content", "content": "world"},
+            {"type": "usage", "usage": {"prompt_tokens": 10}},
+        ]
+
+        class FakeRuntime:
+            def act_stream(self, **kwargs):
+                return iter(events)
+
+        text = _run_streaming(
+            FakeRuntime(), "prompt", "system", [], lambda n, a: "",
+        )
+        captured = capsys.readouterr()
+        # Only content events should reach stdout
+        assert captured.out.startswith("Hello world")
+        # No tool_call/tool_result/usage in output
+        assert "repl_definitions" not in captured.out
+        assert "usage" not in captured.out
+        # Returned text is concatenation of content only
+        assert text == "Hello world"
+
+    def test_streaming_handles_plain_string_chunk(self, capsys):
+        """Legacy plain-string chunk (defensive) should also work."""
+        from helen.cli.ask_assistant import _run_streaming
+
+        class FakeRuntime:
+            def act_stream(self, **kwargs):
+                return iter(["plain ", "text"])
+
+        text = _run_streaming(
+            FakeRuntime(), "prompt", "system", [], lambda n, a: "",
+        )
+        captured = capsys.readouterr()
+        assert "plain text" in captured.out
+        assert text == "plain text"
+
+
+# ---------------------------------------------------------------------------
 # REPL stdout capture
 # ---------------------------------------------------------------------------
 
