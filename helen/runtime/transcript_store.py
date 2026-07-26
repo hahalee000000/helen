@@ -728,6 +728,15 @@ class TranscriptStore:
         self._max_memory_items = max_memory_items
         self._offloaded_count = 0  # Number of items offloaded to backend only
 
+        # v1.27: UUIDs of messages loaded from a previous session via
+        # load_from_backend (session resume). These are the "resumed history" -
+        # at _enter_invocation time the new invocation_id is added to each
+        # such message's visible_to_invocation_ids so the LLM in a new agent
+        # invocation can actually see the prior session's conversation.
+        # Without this, per-invocation isolation (v1.22) would filter them out.
+        # Runtime-only marker; never persisted to the backend.
+        self._resumed_message_uuids: set[str] = set()
+
         # v1.17 Phase 3: Media storage for large content
         self._media_storage: MediaStorage | None = None
         if session_dir is not None:
@@ -1184,8 +1193,50 @@ class TranscriptStore:
                 if item.uuid:
                     store._uuid_index[item.uuid] = index
 
+        # v1.27: Record UUIDs of all loaded Message items as "resumed history".
+        # These are the prior session's messages; expose_resumed_messages_to()
+        # is called at invocation entry to make them visible to the new run's
+        # agent invocations (bypassing per-invocation isolation for resumed
+        # context only - new messages created during this run stay isolated).
+        store._resumed_message_uuids = {
+            item.uuid for item in store.transcript
+            if isinstance(item, Message) and item.uuid
+        }
+
         store._dirty = True  # View needs to be computed on first access
         return store
+
+    def expose_resumed_messages_to(self, invocation_id: str) -> int:
+        """Add ``invocation_id`` to ``visible_to_invocation_ids`` of all resumed
+        (previously-loaded) messages.
+
+        v1.27: Called at ``_enter_invocation`` so a resumed session's prior
+        conversation is visible to the LLM inside the new agent invocation.
+        Without this, ``_history``'s per-invocation filter (v1.22) would
+        exclude the loaded messages and ``llm act`` would start blind.
+
+        Only messages loaded via ``load_from_backend`` (tracked in
+        ``_resumed_message_uuids``) are touched - new messages created during
+        this run keep their original visibility and remain isolated per
+        invocation. This method is idempotent and safe to call on every
+        invocation entry.
+
+        Returns the number of messages newly exposed (0 if none or if
+        ``invocation_id`` is empty or there is no resumed history).
+        """
+        if not invocation_id or not self._resumed_message_uuids:
+            return 0
+        count = 0
+        for item in self.transcript:
+            if (isinstance(item, Message)
+                    and item.uuid in self._resumed_message_uuids
+                    and invocation_id not in item.visible_to_invocation_ids):
+                item.visible_to_invocation_ids.append(invocation_id)
+                count += 1
+        if count:
+            # Invalidate cached view so the filter sees the updated visibility.
+            self._dirty = True
+        return count
 
 
 # ---------------------------------------------------------------------------

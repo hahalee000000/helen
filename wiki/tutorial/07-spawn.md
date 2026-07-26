@@ -533,6 +533,7 @@ Chinese alias: `恢复会话("<session_id>")`.
 | Non-existent session | A fresh session is created with that id (graceful fallback, no crash) |
 | Argument type | Must evaluate to a `str`; any other type raises a runtime error |
 | Locking | A cross-process lock is acquired on resume to prevent two processes from corrupting the same transcript (see below) |
+| LLM-visible context | Resumed messages are auto-exposed to each new agent invocation, so `llm act` inside agent `main {}` sees the prior conversation (not just the transcript file). New messages created during the run still respect per-invocation isolation. |
 
 ### Resume vs. `resume_session()` vs. startup `--session`
 
@@ -546,9 +547,11 @@ Helen offers three distinct mechanisms - pick by intent:
 
 Use `resume(...)` (spawn) or `--session` (startup) when you want to **continue** a session. Use `resume_session()` when you want to **reference** another session's history from a new one.
 
+> **v1.27 context restore**: both `spawn ... resume("sid")` and `Interpreter(session_id="sid")` not only continue the transcript file but also make the prior conversation visible to `llm act` inside agent `main {}`. At each invocation entry, the new invocation_id is added to every resumed message's `visible_to_invocation_ids`, bypassing the per-invocation isolation (v1.22) for resumed history only. Messages created during the new run are **not** tagged, so they stay scoped to their own invocation - agent B does not see agent A's new messages, but both see the resumed history.
+
 ### Important: transcript ≠ program state
 
-Resuming a transcript restores the **LLM's conversation memory** (what was said and done). It does **not** restore runtime variable state - task lists, SharedStore contents, and in-memory caches reset to their initial values. In practice the LLM can re-derive state by reading the transcript, but for true stateful continuation, persist critical state separately (e.g. to `.helen/agent_state.json`) and reload it on startup.
+Resuming a transcript restores the **LLM's conversation memory** (what was said and done) - the LLM sees the prior exchange in `llm act`. It does **not** restore runtime variable state - task lists, SharedStore contents, and in-memory caches reset to their initial values. In practice the LLM can re-derive state by reading the transcript, but for true stateful continuation, persist critical state separately (e.g. to `.helen/agent_state.json`) and reload it on startup.
 
 ### Cross-process locking
 

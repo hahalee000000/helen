@@ -13,6 +13,7 @@ These tests cover:
 - Cross-process locking: SessionManager.acquire_session_lock
 """
 
+import json
 import os
 from typing import Tuple, List, Any
 
@@ -71,6 +72,34 @@ def run_helen(source: str) -> Tuple[List[str], List[str], Any]:
         sys.stdout = old_stdout
 
     return output, [], result
+
+
+def run_helen_with_session(source: str, session_id: str | None = None,
+                           mock: MockLLMRuntime | None = None):
+    """Run Helen source with an optional resumed session_id and mock runtime.
+
+    Returns (stdout_lines, mock) so the caller can inspect ``mock.act_history``
+    to verify what history ``llm act`` actually received.
+    """
+    import io
+    import sys
+
+    errors = ErrorReporter()
+    tokens = Scanner(source=source, file='<test>').scan_all()
+    program = Parser(tokens, errors).parse()
+    if errors.has_errors:
+        return [], mock or MockLLMRuntime()
+
+    runtime = mock or MockLLMRuntime(act_return="ok")
+    old_stdout = sys.stdout
+    sys.stdout = io.StringIO()
+    try:
+        interp = Interpreter(errors=errors, llm_runtime=runtime, session_id=session_id)
+        interp.interpret(program)
+        output = sys.stdout.getvalue().strip().split('\n') if sys.stdout.getvalue().strip() else []
+    finally:
+        sys.stdout = old_stdout
+    return output, runtime
 
 
 def _force_jsonl_config(monkeypatch, tmp_path):
@@ -266,6 +295,146 @@ class TestResumeHistoryLoading:
             contents.append(str(c))
         assert any(marker in c for c in contents), \
             f"marker not loaded; transcript contents: {contents}"
+
+
+# ---------------------------------------------------------------------------
+# LLM-visible context after resume (v1.27: expose_resumed_messages_to)
+# ---------------------------------------------------------------------------
+
+class TestResumeContextVisibleToLLM:
+    """Resuming a session must restore what ``llm act`` sees, not just the
+    transcript file. v1.27 hooks ``_enter_invocation`` to add the new
+    invocation_id to each resumed message's ``visible_to_invocation_ids``,
+    so per-invocation isolation (v1.22) no longer hides the prior history."""
+
+    @staticmethod
+    def _seed_session(tmp_path, sid, marker="The secret code is BANANA_42"):
+        """Create a session with a prior user/assistant exchange."""
+        manager = SessionManager(base_dir=tmp_path)
+        manager.create_session(sid)
+        backend = JSONLBackend(manager.get_session_path(sid))
+        store = TranscriptStore(backend=backend, max_memory_items=100)
+        store.append(Message(role="user", content=marker, invocation_id="inv_prev_run"))
+        store.append(Message(role="assistant", content="Noted: " + marker,
+                             invocation_id="inv_prev_run"))
+
+    def test_llm_act_sees_resumed_history_via_spawn_resume(self, monkeypatch, tmp_path):
+        """spawn ... resume('sid'): the spawned agent's llm act receives the
+        resumed history (not an empty context)."""
+        _force_jsonl_config(monkeypatch, tmp_path)
+        self._seed_session(tmp_path, "session_child_resume")
+
+        source = '''
+agent Worker(reply: Channel) {
+    main {
+        let r = llm act "what was the secret code?"
+        reply.send(r)
+        reply.close()
+    }
+}
+main {
+    let mb = spawn Worker() resume("session_child_resume")
+    print(mb.receive())
+}
+'''
+        mock = MockLLMRuntime(act_return="the code is BANANA_42")
+        _, mock = run_helen_with_session(source, session_id=None, mock=mock)
+
+        # The spawned Worker's llm act call must have received the resumed history.
+        assert len(mock.act_history) >= 1, "llm act was not invoked"
+        history = mock.act_history[-1]["history"] or []
+        history_text = json.dumps(history)
+        assert "BANANA_42" in history_text, \
+            f"spawn resume: llm act did not see resumed history: {history_text}"
+
+    def test_llm_act_sees_resumed_history_via_interpreter_session_id(self, monkeypatch, tmp_path):
+        """Interpreter(session_id=X): an agent called DIRECTLY in main (same
+        interpreter, so the resumed store is in effect) sees the resumed
+        history via llm act. This is the main-session startup-resume path
+        (``helen --session=X``)."""
+        _force_jsonl_config(monkeypatch, tmp_path)
+        self._seed_session(tmp_path, "session_main_resume")
+
+        source = '''
+agent Worker() {
+    main {
+        return llm act "what was the secret code?"
+    }
+}
+main {
+    print(Worker())
+}
+'''
+        mock = MockLLMRuntime(act_return="the code is BANANA_42")
+        _, mock = run_helen_with_session(source, session_id="session_main_resume", mock=mock)
+
+        assert len(mock.act_history) >= 1, "llm act was not invoked"
+        history = mock.act_history[-1]["history"] or []
+        history_text = json.dumps(history)
+        assert "BANANA_42" in history_text, \
+            f"Interpreter(session_id=): llm act did not see resumed history: {history_text[:200]}"
+
+    def test_resumed_history_visible_to_new_invocation(self, monkeypatch, tmp_path):
+        """Directly verify _history visibility after _enter_invocation on a
+        resumed interpreter (the mechanism behind the llm act visibility)."""
+        _force_jsonl_config(monkeypatch, tmp_path)
+        manager = SessionManager(base_dir=tmp_path)
+        sid = "session_visibility"
+        manager.create_session(sid)
+        backend = JSONLBackend(manager.get_session_path(sid))
+        store = TranscriptStore(backend=backend, max_memory_items=100)
+        store.append(Message(role="user", content="REMEMBER_BANANA_42",
+                             invocation_id="inv_old", visible_to_invocation_ids=[]))
+
+        interp = Interpreter(session_id=sid)
+        # Before entering an invocation: top-level sees all (no filter).
+        interp._current_invocation_id = ""
+        assert any("REMEMBER_BANANA_42" in str(m.content) for m in interp._history)
+
+        # Enter an agent invocation -> resumed messages get exposed to it.
+        new_inv = interp._enter_invocation("Worker")
+        assert new_inv, "expected a non-empty invocation_id"
+        seen = any("REMEMBER_BANANA_42" in str(m.content) for m in interp._history)
+        assert seen, "resumed history not visible to new agent invocation"
+
+        # The resumed message's visible_to_invocation_ids now includes new_inv.
+        for m in interp._agent_context.transcript_store.transcript:
+            if "REMEMBER_BANANA_42" in str(getattr(m, "content", "")):
+                assert new_inv in m.visible_to_invocation_ids
+        interp._exit_invocation()
+
+    def test_new_messages_stay_isolated_after_resume(self, monkeypatch, tmp_path):
+        """Resumed history is shared, but NEW messages created during the run
+        still respect per-invocation isolation: agent B does not see agent A's
+        new messages (only the resumed history)."""
+        _force_jsonl_config(monkeypatch, tmp_path)
+        manager = SessionManager(base_dir=tmp_path)
+        sid = "session_isolation"
+        manager.create_session(sid)
+        backend = JSONLBackend(manager.get_session_path(sid))
+        store = TranscriptStore(backend=backend, max_memory_items=100)
+        store.append(Message(role="user", content="RESUMED_MARKER",
+                             invocation_id="inv_old"))
+
+        interp = Interpreter(session_id=sid)
+
+        # Agent A invocation: writes a new message, sees resumed history.
+        inv_a = interp._enter_invocation("AgentA")
+        # Simulate Agent A producing a message.
+        interp._add_to_history("user", "FROM_AGENT_A_ONLY")
+        hist_a = interp._history
+        assert any("RESUMED_MARKER" in str(m.content) for m in hist_a), "A should see resumed"
+        assert any("FROM_AGENT_A_ONLY" in str(m.content) for m in hist_a), "A sees its own msg"
+        interp._exit_invocation()
+
+        # Agent B invocation: should see resumed history but NOT Agent A's message.
+        inv_b = interp._enter_invocation("AgentB")
+        hist_b = interp._history
+        assert any("RESUMED_MARKER" in str(m.content) for m in hist_b), \
+            "B should see resumed history (shared session context)"
+        assert not any("FROM_AGENT_A_ONLY" in str(m.content) for m in hist_b), \
+            "B must NOT see Agent A's new message (per-invocation isolation)"
+        interp._exit_invocation()
 
 
 # ---------------------------------------------------------------------------

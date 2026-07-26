@@ -4,6 +4,35 @@
 
 ---
 
+## [2026-07-26] bugfix | v1.27.1 - 恢复 session 时让 llm act 真正看到历史上下文
+
+**操作**: 修复 `Interpreter(session_id=)` / `spawn ... resume("sid")` 恢复 session 后，agent `main {}` 内的 `llm act` 看不到历史的问题
+**状态**: ✅ 完成
+
+### 问题
+
+v1.27 的 spawn resume 只续了 transcript 文件，但 `llm act` 在 agent `main {}` 内**看不到**恢复的历史--因为 `_history`（`llm act` 实际用的）按 `_current_invocation_id` 过滤（v1.22 per-invocation 隔离），而 `load_from_backend` 恢复的旧消息保留原 invocation_id、不把新 invocation_id 加进 `visible_to_invocation_ids`，被过滤掉。结果是：transcript 在续跑，但 LLM 空白启动。
+
+只有 `search_context` 等 stdlib（用不过滤的 `_get_effective_history`）能看到历史，v1.27 的端到端测试用 `search_context` 验证，掩盖了 `llm act` 看不到这个事实。
+
+### 修复
+
+1. **TranscriptStore**: `load_from_backend` 记录所有已加载消息的 UUID 到 `_resumed_message_uuids`（运行时标记，不持久化）。新增 `expose_resumed_messages_to(invocation_id)` 方法：把 invocation_id 加到这些消息的 `visible_to_invocation_ids`，并置 `_dirty` 失效视图缓存。
+2. **Interpreter._enter_invocation**: 分配新 invocation_id 后调 `store.expose_resumed_messages_to(new_id)`。每次进入 agent `main {}`（或顶层 main）都把已恢复历史暴露给当前 invocation。
+3. **MockLLMRuntime.act**: 修复接口签名缺失--补 `on_tool_end_fn` / `hint_collector_fn` 参数（v1.21 引入，HttpLLMRuntime 有但 base/Mock 没有），否则任何 `llm act` 调用 Mock 都报 `unexpected keyword argument`。
+
+### 语义
+
+- 已恢复（loaded）消息：对所有 agent invocation 可见（session 级上下文）
+- 本次运行新建的消息：仍按 invocation 隔离（agent B 看不到 agent A 的新消息，但都看到恢复的历史）
+- 顶层代码（无 invocation）：本来就不过滤，看到全部
+
+### 测试
+
+`tests/interpreter/test_spawn_resume.py` 新增 `TestResumeContextVisibleToLLM`（4 个测试）：用 `MockLLMRuntime.act_history` 验证 `llm act` 在 spawn resume 和 `Interpreter(session_id=)` 两条路径都看到恢复的历史；Python 级验证 `_enter_invocation` 后 `_history` 可见 + resumed 消息 visible_to 含新 invocation_id；验证新消息仍隔离。全套 2654 passed（1 个预存失败 `test_helen_assistant_program_exists` 与本特性无关）。
+
+---
+
 ## [2026-07-26] feature | v1.27 - spawn resume("<session_id>") 子句 + 跨进程会话锁
 
 **操作**: 为 spawn 增加可选 `resume("<session_id>")` 子句，使 spawned agent 可恢复历史子会话 transcript

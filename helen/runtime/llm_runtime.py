@@ -57,13 +57,21 @@ class LLMRuntime(ABC):
             model: str | None = None, temperature: float = 1.0,
             max_turns: int = 1, history: list[dict[str, Any]] | None = None,
             system_prompt: str | None = None,
-            dispatch_fn: Any = None) -> LLMResponse:
+            dispatch_fn: Any = None,
+            on_tool_end_fn: Any = None,
+            hint_collector_fn: Any = None) -> LLMResponse:
         """Execute an autonomous LLM action (sync version).
 
         Args:
             dispatch_fn: Optional custom tool dispatch function.
                 Signature: (name: str, args: dict) -> str
                 If not provided, uses the default dispatch_tool from helen.runtime.tools.
+            on_tool_end_fn: Optional callback invoked after each tool execution
+                (v1.21). Signature: (name: str, result: Any) -> str | dict | None.
+                A non-None return is injected as a hint into the next LLM call.
+            hint_collector_fn: Optional sink for hint messages produced during
+                the agentic loop (v1.21.1), so they get persisted to the
+                TranscriptStore.
         """
         ...
 
@@ -137,12 +145,16 @@ class MockLLMRuntime(LLMRuntime):
             model: str | None = None, temperature: float = 1.0,
             max_turns: int = 1, history: list[dict[str, Any]] | None = None,
             system_prompt: str | None = None,
-            dispatch_fn: Any = None) -> LLMResponse:
+            dispatch_fn: Any = None,
+            on_tool_end_fn: Any = None,
+            hint_collector_fn: Any = None) -> LLMResponse:
         """Return the preset act_return value.
 
         Args:
             dispatch_fn: Accepted for interface compatibility with HttpLLMRuntime,
                 but ignored (mock does not dispatch tool calls).
+            on_tool_end_fn: Accepted for interface compatibility (v1.21), ignored.
+            hint_collector_fn: Accepted for interface compatibility (v1.21.1), ignored.
         """
         self.act_history.append({
             "prompt": prompt,

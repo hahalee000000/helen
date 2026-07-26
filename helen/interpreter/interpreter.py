@@ -1650,6 +1650,15 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         self._invocation_stack.append(self._current_invocation_id)
         self._current_invocation_id = new_id
 
+        # v1.27: If this interpreter resumed a prior session, make the loaded
+        # (resumed) messages visible to this new invocation. Without this,
+        # per-invocation isolation (v1.22) would filter them out and llm act
+        # inside agent main {} would not see the prior conversation - only the
+        # transcript file would be continued. This gives true context restore.
+        store = getattr(self._agent_context, 'transcript_store', None)
+        if store is not None and hasattr(store, 'expose_resumed_messages_to'):
+            store.expose_resumed_messages_to(new_id)
+
         # Record metadata (used by list_invocations / get_invocation_tree)
         self._invocation_index[new_id] = {
             "invocation_id": new_id,
