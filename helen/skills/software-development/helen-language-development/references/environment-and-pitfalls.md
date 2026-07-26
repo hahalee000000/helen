@@ -870,7 +870,7 @@ print(llm act "Summarize: " + content)
 llm act   // Error: Expected expression
 ```
 
-**Agent fields are optional context**: When `llm act` runs inside an agent's `main` block, it reads `model`, `temperature`, `max-turns` from the agent declaration via `_get_agent_setting()`. When run outside an agent, these default to `None`/`1.0`/`1` and the LLM runtime uses its own defaults.
+**Agent fields are optional context**: When `llm act` runs inside an agent's `main` block, it reads `description`, `model`, `temperature`, `max-turns` from the agent declaration via `_get_agent_setting()`. The `description` is injected as a section of the LLM system prompt (role definition); `model`/`temperature`/`max-turns` configure the runtime call. When run outside an agent, these default to `None`/`None`/`1.0`/`1` and the LLM runtime uses its own defaults. (v1.27.2 fix: `description` was previously dropped because `_get_agent_setting`'s field map omitted it.)
 
 ### REPL: Readline + Unicode Input (Final Approach)
 

@@ -4,6 +4,27 @@
 
 ---
 
+## [2026-07-26] bugfix | v1.27.2 - 修复 agent description 未注入 LLM system prompt
+
+**操作**: 修复 agent 声明的 `description "..."` 字段从未进入 `llm act` 的 system prompt
+**状态**: ✅ 完成
+
+### 问题
+
+`llm_mixin.py:_get_agent_setting()` 的 `field_map` 只含 `model` / `temperature` / `max-turns`，**漏了 `description`**。于是 `visit_llm_act_expr` 第 3 段（agent 角色定义）`description = self._get_agent_setting("description")` 恒返回 `None`，`if description:` 恒为假，description 段从不拼进 system prompt。同样影响 `interpreter.py:_call_llm_streaming` 的 `system_prompt`。
+
+agent 写了 `description "你是一个翻译助手"` 但 LLM 实际收到的 system prompt 里完全没有这句--角色定义丢失。
+
+### 修复
+
+`llm_mixin.py:822` 的 `field_map` 加 `"description": "description"`。一行修复。parser 早就把 description 存成 `LiteralNode`（和 model/temperature 一样），现有的 `isinstance(value, LiteralNode)` 解包逻辑直接适用。
+
+### 测试
+
+新增 `tests/interpreter/test_agent_description_injection.py`（5 个测试）：用 `MockLLMRuntime.act_history[-1]["system_prompt"]` 验证 description 字符串出现在 system prompt 里；含中文 description、无 description 回归、`_get_agent_setting` 直查、module 作用域 `llm act` 不崩溃。已用 `git stash` 反证：无修复时 2 个测试失败（返回 `None`），有修复时通过。全套 3214 passed，零回归（2 个预存失败 `test_hellen_assistant_program_exists` / `test_lexer_speed_baseline` flake 与本修复无关）。
+
+---
+
 ## [2026-07-26] bugfix | v1.27.1 - 恢复 session 时让 llm act 真正看到历史上下文
 
 **操作**: 修复 `Interpreter(session_id=)` / `spawn ... resume("sid")` 恢复 session 后，agent `main {}` 内的 `llm act` 看不到历史的问题

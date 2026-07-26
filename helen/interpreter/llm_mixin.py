@@ -818,8 +818,11 @@ class LlmMixin:
         if self._current_agent is None:
             return default
         for decl in self._current_agent.declarations:
-            # Map HLD setting names to DeclarationNode fields
+            # Map HLD setting names to DeclarationNode fields.
+            # NOTE: the parser stores each of these as a LiteralNode (not the
+            # plain type declared on the dataclass), so we unwrap .value below.
             field_map = {
+                "description": "description",
                 "model": "model",
                 "temperature": "temperature",
                 "max-turns": "max_turns",
