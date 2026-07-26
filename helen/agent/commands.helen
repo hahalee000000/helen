@@ -244,11 +244,19 @@ fn _cmd_clear_session(args: list): str {
 
 /** /compress - 压缩上下文（LLM 语义摘要，保留上下文）
  *  使用 compress_context("summarize") 强制 LLM 生成语义摘要。
- *  曾被 hahalee000000/helen#13 阻塞（TranscriptStore 路径忽略 strategy），已在上游修复。 */
+ *  曾被 hahalee000000/helen#13 阻塞（TranscriptStore 路径忽略 strategy），已在上游修复。
+ *  WORKAROUND: hahalee000000/helen#23 — compressed_tokens 返回值错误，改用 context_stats() */
 fn _cmd_compress(): str {
+    let before_stats = context_stats()
+    let original_tokens = before_stats["total_tokens"]
+
     let result = compress_context("summarize")
-    let original_tokens = result["original_tokens"]
-    let compressed_tokens = result["compressed_tokens"]
+
+    // WORKAROUND for helen#23: compress_context 返回的 compressed_tokens 错误
+    // 改用 context_stats() 获取压缩后的实际 tokens
+    let after_stats = context_stats()
+    let compressed_tokens = after_stats["total_tokens"]
+
     if original_tokens != null && compressed_tokens != null {
         return "✅ 上下文已压缩: " + str(original_tokens) + " → " + str(compressed_tokens) + " tokens"
     }
