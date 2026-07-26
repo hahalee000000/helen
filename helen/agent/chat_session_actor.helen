@@ -44,7 +44,7 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
     description "Helen AI 编程助手 — 长驻 Actor 编排器 (v1.0)"
     temperature 0.3
     max-turns 100
-    tools CHAT_TOOLS
+    tools = CHAT_TOOLS
 
     context {
         compression "graduated"
@@ -328,6 +328,21 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
             _emit_actor_stream_event("processing_start", user_content)
 
             let media_parts = _build_actor_media_parts(file_paths)
+
+            // ── 周期性上下文压缩（防止长对话溢出）──
+            // 每轮 LLM 调用前检查，占用率 > 70% 时自动压缩
+            try {
+                let usage = context_usage()
+                if usage > 0.7 {
+                    debug("ChatSessionActor: context usage " + str(int(usage * 100)) + "% > 70%, auto-compressing...")
+                    let result = compress_context("auto")
+                    debug("ChatSessionActor: auto-compressed: " + json_stringify(result))
+                }
+            } catch RuntimeError err {
+                debug("ChatSessionActor: pre-LLM compression failed: " + err.message)
+            } catch {
+                debug("ChatSessionActor: pre-LLM compression failed (unknown)")
+            }
 
             let full_response = ""
             try {
@@ -617,6 +632,22 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
             try {
                 resume_session(session_id)
                 debug("ChatSessionActor: resumed session " + session_id)
+
+                // ── 上下文压缩（防止历史 boilerplate 导致溢出）──
+                // resume 后会加载所有历史消息，包括重复的 prompt boilerplate
+                // 如果占用率 > 60%，强制压缩（summarize 策略，LLM 生成语义摘要）
+                try {
+                    let usage = context_usage()
+                    if usage > 0.6 {
+                        debug("ChatSessionActor: context usage " + str(int(usage * 100)) + "% > 60%, compressing...")
+                        let result = compress_context("summarize")
+                        debug("ChatSessionActor: compressed context: " + json_stringify(result))
+                    }
+                } catch RuntimeError err {
+                    debug("ChatSessionActor: compression check failed: " + err.message)
+                } catch {
+                    debug("ChatSessionActor: compression check failed (unknown)")
+                }
             } catch RuntimeError err {
                 debug("ChatSessionActor: resume failed: " + err.message)
             } catch {
