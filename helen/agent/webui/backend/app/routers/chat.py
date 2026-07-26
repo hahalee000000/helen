@@ -248,6 +248,30 @@ async def get_transcript(session_id: str):
         "entries": entries,
     }
 
+
+@router.get("/sessions/{session_id}/media/{filename}")
+async def get_session_media(session_id: str, filename: str):
+    """获取 session 的 media 文件(图片/音频等)
+
+    Helen runtime 把用户上传的文件复制到 <sid>/media/<filename>,
+    transcript 里的 media_ref 用绝对路径引用。本端点通过 HTTP URL
+    暴露 media 文件给前端(AttachmentView 通过 url 渲染)。
+    """
+    # 防路径遍历
+    if "/" in filename or "\\" in filename or ".." in filename or not filename:
+        raise HTTPException(400, "Invalid filename")
+    from app.services.session_index import get_transcript_path
+    transcript_path = get_transcript_path(session_id)
+    if not transcript_path:
+        raise HTTPException(404, "Session not found")
+    media_path = transcript_path.parent / "media" / filename
+    if not media_path.exists() or not media_path.is_file():
+        raise HTTPException(404, "Media file not found")
+    import mimetypes
+    mime = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    return FileResponse(media_path, media_type=mime)
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket 聊天接口(广播模式,无 session_id)

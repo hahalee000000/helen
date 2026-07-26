@@ -88,17 +88,32 @@ class TestParseUserContent:
         assert text == ""
 
     def test_multimodal_with_image(self, session_index):
-        """多模态:image_url part 提取为 media"""
+        """多模态:image_url part 提取为 Attachment"""
         content = [
             {"type": "text", "text": "这是什么?"},
             {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
         ]
-        text, _, media, has_cmd = session_index._parse_user_content(content)
+        text, _, attachments, has_cmd = session_index._parse_user_content(content)
         assert text == "这是什么?"
-        assert len(media) == 1
-        assert media[0][0] == "image"
-        assert media[0][1] == "data:image/png;base64,abc"
+        assert len(attachments) == 1
+        assert attachments[0]["mime_type"] == "image/png"
+        assert attachments[0]["url"].startswith("data:image/png;base64,")
         assert has_cmd is False
+
+    def test_media_ref_attachment(self, session_index):
+        """media_ref:Helen 的 session media 引用转 HTTP URL"""
+        content = [
+            {"type": "text", "text": "描述图片"},
+            {"type": "media_ref", "path": "/home/x/p/.helen/sessions/sid-1/media/img.png",
+             "mime": "image/png", "size": 1234},
+        ]
+        text, _, attachments, _ = session_index._parse_user_content(content)
+        assert text == "描述图片"
+        assert len(attachments) == 1
+        assert attachments[0]["filename"] == "img.png"
+        assert attachments[0]["mime_type"] == "image/png"
+        assert attachments[0]["size"] == 1234
+        assert attachments[0]["url"] == "/api/chat/sessions/sid-1/media/img.png"
 
     def test_system_hint_filtered(self, session_index):
         """[System Hint] 行被过滤到 hints"""

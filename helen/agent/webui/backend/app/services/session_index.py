@@ -194,13 +194,12 @@ def _filter_system_hints(text: str) -> tuple[str, list[str]]:
     return "\n".join(text_lines), hints
 
 
-def _parse_user_content(content) -> tuple[str, list[str], list[tuple[str, str]], bool]:
+def _parse_user_content(content) -> tuple[str, list[str], list[dict], bool]:
     """解析 user message content,分离用户输入 / system hint / 多模态附件 / 内部协议命令。
 
-    移植自前端 TranscriptPage.parseUserContent。
-
-    返回 (main_text, system_hints, media_parts, has_internal_command)。
-    media_parts 是 [(kind, url), ...],kind 为 'image' / 'audio'。
+    返回 (main_text, system_hints, attachments, has_internal_command)。
+    attachments 是完整 Attachment dict 列表(id/filename/mime_type/size/url),
+    直接对应前端 Attachment 接口,无需二次转换。
     """
     if content is None:
         return "", [], [], False
@@ -208,7 +207,7 @@ def _parse_user_content(content) -> tuple[str, list[str], list[tuple[str, str]],
     # 多模态 array
     if isinstance(content, list):
         text_lines = []
-        media_parts = []
+        attachments = []
         for part in content:
             if isinstance(part, str):
                 text_lines.append(part)
@@ -220,21 +219,38 @@ def _parse_user_content(content) -> tuple[str, list[str], list[tuple[str, str]],
                 elif ptype == "image_url":
                     url = (part.get("image_url") or {}).get("url", "") or part.get("url", "")
                     if url:
-                        media_parts.append(("image", url))
+                        attachments.append(_attachment_from_data_url(url, len(attachments) + 1))
                 elif ptype == "input_audio":
                     data = (part.get("input_audio") or {}).get("data", "")
                     if data:
-                        media_parts.append(("audio", data))
+                        attachments.append(_attachment_from_data_url(data, len(attachments) + 1))
+                elif ptype == "media_ref":
+                    # media_ref:引用 session/media/ 目录的文件(path 是绝对路径)
+                    # path 格式:<cwd>/.helen/sessions/<sid>/media/<filename>
+                    path = part.get("path", "")
+                    if path:
+                        from pathlib import Path as _Path
+                        p = _Path(path)
+                        filename = p.name
+                        sid = p.parent.parent.name if p.parent.parent else ""
+                        mime = part.get("mime", "application/octet-stream")
+                        if filename and sid:
+                            attachments.append({
+                                "id": f"media-{len(attachments) + 1}",
+                                "filename": filename,
+                                "mime_type": mime,
+                                "size": part.get("size", 0),
+                                "url": f"/api/chat/sessions/{sid}/media/{filename}",
+                            })
         joined = "\n".join(text_lines)
         user_text, _ = _extract_from_boilerplate(joined)
         user_text, hints = _filter_system_hints(user_text)
-        return user_text, hints, media_parts, False
+        return user_text, hints, attachments, False
 
     # 纯字符串
     s = str(content)
     import re
     if re.match(r"^__helen_\w+__", s.strip()):
-        # 内部协议命令(__helen_resume__ 等):不显示
         return "", [], [], True
 
     user_text, _ = _extract_from_boilerplate(s)
@@ -273,7 +289,6 @@ def transcript_to_messages(helen_session_id: str = "") -> list[dict]:
             break
 
     messages = []
-    att_idx = 0
     for e in entries:
         if e.get("type") != "message":
             continue
@@ -285,17 +300,12 @@ def transcript_to_messages(helen_session_id: str = "") -> list[dict]:
         content = e.get("content", "")
 
         if role == "user":
-            main_text, _hints, media_parts, has_internal_cmd = _parse_user_content(content)
+            main_text, _hints, attachments, has_internal_cmd = _parse_user_content(content)
             if has_internal_cmd:
                 continue
             # 斜杠命令:不显示历史(防御性,通常 transcript 无此条目)
             if main_text.strip().startswith("/"):
                 continue
-            # 多模态附件 -> Attachment 对象
-            attachments = []
-            for kind, url in media_parts:
-                att_idx += 1
-                attachments.append(_attachment_from_data_url(url, att_idx))
             # 纯 boilerplate(无用户输入且无附件):跳过
             if not main_text and not attachments:
                 continue
