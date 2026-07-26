@@ -1284,6 +1284,22 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
             val = arg.accept(self)
             arg_values.append(val)
 
+        # v1.27: Evaluate optional resume("<session_id>") clause. The spawned
+        # interpreter will be constructed with this session_id so it loads the
+        # child session's historical transcript instead of starting fresh.
+        resume_session_id: str | None = None
+        if node.resume_session is not None:
+            resume_val = node.resume_session.accept(self)
+            if not isinstance(resume_val, str):
+                self.errors.error(
+                    ErrorCode.RUNTIME_ERROR,
+                    f"spawn resume() requires a string session_id, "
+                    f"got {type(resume_val).__name__}",
+                    node.span,
+                )
+                return None
+            resume_session_id = resume_val
+
         # Create the bidirectional Channel
         channel = Channel(name=f"spawn_{agent_name}")
         main_endpoint = ChannelEndpoint(channel, is_main_thread=True)
@@ -1313,6 +1329,7 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
                     program_args=program_args,
                     transcript_store_enabled=transcript_enabled,
                     parent_session_id=parent_session_id,  # v1.23.7
+                    session_id=resume_session_id,  # v1.27: resume child session
                 )
                 spawned_interp.environment = env_snapshot
                 # Copy agent/function registries from parent

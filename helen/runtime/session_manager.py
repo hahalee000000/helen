@@ -12,6 +12,7 @@ Sessions are stored in ~/.helen/sessions/<session_id>/transcript.jsonl
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 import time
 from pathlib import Path
@@ -103,6 +104,100 @@ class SessionManager:
         session_dir = self.base_dir / session_id
         transcript_path = session_dir / "transcript.jsonl"
         return session_dir.exists() and transcript_path.exists()
+
+    # ------------------------------------------------------------------
+    # v1.27: Cross-process session locking
+    # ------------------------------------------------------------------
+    # When resuming a session (Interpreter(session_id=...) or
+    # spawn Agent(...) resume("...")), two processes writing to the same
+    # transcript would corrupt it. The lock below guards against that by
+    # refusing to resume a session held by another *live* process.
+    #
+    # Scope: CROSS-PROCESS only. Within a single process, multiple
+    # Interpreters resuming the same id are allowed (same PID reclaims the
+    # lock) -- this preserves existing in-process test behavior and the
+    # common spawn pattern. Stale locks (dead PID) are auto-reclaimed.
+    #
+    # There is a small TOCTOU window between the liveness check and the
+    # overwrite; this is acceptable for human-initiated resume cadence and
+    # keeps the implementation cross-platform without fcntl/flock.
+
+    @staticmethod
+    def _is_pid_alive(pid: int) -> bool:
+        """Return True if a process with ``pid`` is currently running."""
+        if pid <= 0:
+            return False
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            # Process exists but is owned by another user -> treat as alive.
+            return True
+        except OSError:
+            return False
+        return True
+
+    def _lock_path(self, session_id: str) -> Path:
+        return self.base_dir / session_id / "session.lock"
+
+    def acquire_session_lock(self, session_id: str) -> tuple[bool, int | None]:
+        """Try to acquire a cross-process lock for resuming ``session_id``.
+
+        Writes ``<session_dir>/session.lock`` containing the current PID.
+        The lock is acquired when:
+        - no lock file exists, or
+        - the lock file is stale (holder PID is dead), or
+        - the lock is already held by the current process (in-process reuse).
+
+        Returns ``(acquired, holder_pid)`` where ``holder_pid`` is the live
+        PID still holding the lock when ``acquired`` is False (None otherwise).
+        """
+        lock_path = self._lock_path(session_id)
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        current_pid = os.getpid()
+
+        if lock_path.exists():
+            holder_pid: int | None = None
+            try:
+                holder_pid = int(lock_path.read_text(encoding="utf-8").strip())
+            except (ValueError, OSError):
+                holder_pid = None
+            if (holder_pid is not None
+                    and holder_pid != current_pid
+                    and self._is_pid_alive(holder_pid)):
+                # Held by another live process -> refuse.
+                return False, holder_pid
+            # Stale or self-held -> fall through and reclaim.
+        try:
+            lock_path.write_text(str(current_pid), encoding="utf-8")
+        except OSError as exc:
+            logger.warning("Failed to write session lock for %s: %s", session_id, exc)
+            # Non-fatal: proceed without a lock rather than blocking resume.
+            return True, None
+        logger.debug("Acquired session lock for %s (pid=%s)", session_id, current_pid)
+        return True, None
+
+    def release_session_lock(self, session_id: str) -> None:
+        """Release the session lock if it is held by the current process.
+
+        Safe to call when no lock exists or when the lock is held by another
+        process (no-op in both cases). Stale locks left behind by crashed
+        processes are reclaimed automatically on the next ``acquire``.
+        """
+        lock_path = self._lock_path(session_id)
+        if not lock_path.exists():
+            return
+        try:
+            holder_pid = int(lock_path.read_text(encoding="utf-8").strip())
+        except (ValueError, OSError):
+            holder_pid = None
+        if holder_pid == os.getpid():
+            try:
+                lock_path.unlink()
+                logger.debug("Released session lock for %s", session_id)
+            except OSError:
+                pass
 
     def list_sessions(self) -> list[dict[str, Any]]:
         """List all sessions with metadata.

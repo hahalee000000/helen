@@ -492,6 +492,104 @@ main {
 
 ---
 
+## Resuming a Spawned Session (v1.27+)
+
+By default, `spawn` starts the child agent in a **fresh** transcript session. v1.27 adds an optional `resume("<session_id>")` clause so a spawned agent **continues a previously saved child-session conversation** instead of starting from scratch:
+
+```helen
+agent Worker(task: str, reply: Channel) {
+    main {
+        // The resumed transcript is already loaded; the LLM "remembers"
+        // the previous conversation. Only program-state variables reset.
+        let history = search_context(task)
+        reply.send({"matches": history["total_matches"]})
+        reply.close()
+    }
+}
+
+main {
+    // Save the child session_id your application got from a prior run:
+    let saved_child_sid = "session_1783492628_d9d9c0aa"
+
+    // Resume it: the spawned agent loads that transcript's history.
+    let mb = spawn Worker("deploy") resume(saved_child_sid)
+    let r = mb.receive()
+    print(r["matches"])
+}
+```
+
+Chinese alias: `恢复会话("<session_id>")`.
+
+```helen
+设 邮箱 = 分生 工作者("部署") 恢复会话(已存子会话id)
+```
+
+### How it works
+
+| Aspect | Behavior |
+|--------|----------|
+| `resume("<sid>")` clause | Optional; parsed as an identifier clause (not a keyword), so the bilingual keyword count stays at 89 |
+| Existing session | The spawned `Interpreter` is constructed with `session_id=<sid>` and **loads** that transcript's messages (true resumption, continues appending to the same file) |
+| Non-existent session | A fresh session is created with that id (graceful fallback, no crash) |
+| Argument type | Must evaluate to a `str`; any other type raises a runtime error |
+| Locking | A cross-process lock is acquired on resume to prevent two processes from corrupting the same transcript (see below) |
+
+### Resume vs. `resume_session()` vs. startup `--session`
+
+Helen offers three distinct mechanisms - pick by intent:
+
+| Mechanism | Where | What it does |
+|-----------|-------|--------------|
+| `spawn A(...) resume("sid")` | spawn site (v1.27) | The spawned agent **is** session `sid`; continues appending to its transcript |
+| `Interpreter(session_id="sid")` / `helen --session=sid` | startup | The main interpreter **is** session `sid`; continues its transcript |
+| `resume_session("sid")` | runtime stdlib | Imports `sid`'s messages **into the current new** session (copy-on-resume, not true continuation) |
+
+Use `resume(...)` (spawn) or `--session` (startup) when you want to **continue** a session. Use `resume_session()` when you want to **reference** another session's history from a new one.
+
+### Important: transcript ≠ program state
+
+Resuming a transcript restores the **LLM's conversation memory** (what was said and done). It does **not** restore runtime variable state - task lists, SharedStore contents, and in-memory caches reset to their initial values. In practice the LLM can re-derive state by reading the transcript, but for true stateful continuation, persist critical state separately (e.g. to `.helen/agent_state.json`) and reload it on startup.
+
+### Cross-process locking
+
+When a session is resumed, Helen writes `<session_dir>/<session_id>/session.lock` containing the current PID. If another **live** process already holds that session, resume is refused with a clear error rather than corrupting the transcript:
+
+```
+E0351 at <unknown>: Cannot resume session 'session_xxx': it is locked by
+another running process (PID 12345). Stop that process first, or start a
+fresh session.
+```
+
+Stale locks (holder PID no longer alive) and same-process reuse (e.g. spawning a sibling that resumes an earlier child session) are reclaimed automatically. The lock guards **cross-process** conflicts only.
+
+### End-to-end example: pause and resume a long-running agent
+
+```helen
+// Run 1: do work, then persist the child session_id for next time.
+agent Worker(reply: Channel) {
+    main {
+        insert_message("user", "checkpoint: phase 1 done, secret=BANANA_42")
+        reply.send(get_session_id())   // report child session_id
+        reply.close()
+    }
+}
+
+main {
+    let mb = spawn Worker()
+    let child_sid = mb.receive()
+    write_file(".helen/last_child_session", child_sid)   // persist for next run
+}
+
+// Run 2 (later): resume the child session and continue.
+main {
+    let child_sid = read_file(".helen/last_child_session")
+    let mb = spawn Worker() resume(child_sid)
+    // The spawned agent's transcript already contains the checkpoint message.
+}
+```
+
+---
+
 ## Exercises
 
 1. Create two concurrent agents handling different tasks, use `mailbox.receive()` to get results
@@ -501,5 +599,5 @@ main {
 
 ---
 
-**Last updated**: 2026-07-22  
-**Version**: v1.24
+**Last updated**: 2026-07-26  
+**Version**: v1.27

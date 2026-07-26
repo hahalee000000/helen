@@ -837,12 +837,21 @@ class SpawnExprNode(ExpressionNode):
     v1.18: Spawns an agent and returns a Channel (mailbox) for
     bidirectional communication. Replaces old spawnagent keyword.
 
+    v1.27: Optional ``resume("<session_id>")`` clause resumes a previously
+    saved child-session transcript, so the spawned agent continues a past
+    conversation instead of starting fresh. Chinese alias: 恢复会话(...).
+
     Example:
         let mailbox = spawn Worker("input")
         let msg = mailbox.receive()
+
+        # Resume a saved child session:
+        let mailbox = spawn Worker("input") resume("session_1783492628_d9d9c0aa")
     """
     call: CallNode
     span: SourceSpan
+    # v1.27: Optional expression evaluating to a session_id string to resume.
+    resume_session: ExpressionNode | None = None
 
     def accept(self, visitor: Visitor[R]) -> R:
         """Dispatch to the visitor."""
@@ -1308,7 +1317,10 @@ class ASTPrinter(Visitor[str]):
 
     def visit_spawn_expr(self, node: SpawnExprNode) -> str:
         """Visit a SpawnExprNode."""
-        return self._parenthesize("spawn", node.call)
+        s = self._parenthesize("spawn", node.call)
+        if node.resume_session is not None:
+            s += " " + self._parenthesize("resume", node.resume_session)
+        return s
 
     def visit_case(self, node: CaseNode) -> str:
         """Visit a CaseNode."""

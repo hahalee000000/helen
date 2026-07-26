@@ -294,9 +294,15 @@ class Parser:
         v1.18: Spawns an agent and returns a Channel (mailbox) for
         bidirectional communication. Replaces old spawnagent keyword.
 
+        v1.27: Optional ``resume("<session_id>")`` clause (Chinese alias:
+        恢复会话(...)) resumes a previously saved child-session transcript.
+
         Example:
             let mailbox = spawn Worker("input")
             let msg = mailbox.receive()
+
+            # Resume a saved child session:
+            let mailbox = spawn Worker("input") resume("session_1783492628_d9d9c0aa")
         """
         start = self._previous()  # SPAWN token already consumed by Pratt framework
         call_expr = self._expression(Precedence.NONE)
@@ -306,7 +312,21 @@ class Parser:
                 call=CallNode(callee=VariableNode(name="", span=start.span), arguments=[], span=start.span),
                 span=self._make_span(start, self._previous())
             )
-        return SpawnExprNode(call=call_expr, span=self._make_span(start, self._previous()))
+
+        # v1.27: Optional resume("<session_id>") clause, parsed as an identifier
+        # (NOT a keyword token) so the bilingual keyword count stays at 89.
+        # Singular: a spawn can resume at most one session.
+        resume_expr: ExpressionNode | None = None
+        if (self._check(TokenType.IDENTIFIER)
+                and self._current().lexeme in ("resume", "恢复会话")):
+            self._advance()  # consume 'resume' / '恢复会话'
+            resume_expr = self._expression()
+
+        return SpawnExprNode(
+            call=call_expr,
+            span=self._make_span(start, self._previous()),
+            resume_session=resume_expr,
+        )
 
     def _llm_act_expr(self) -> ExpressionNode:
         """Parse an llm act expression with multimodal support.

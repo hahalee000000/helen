@@ -346,6 +346,21 @@ class AgentContextManager:
                 # v1.17 Phase 3: Pass session_dir for media storage
                 session_dir_for_media = transcript_path.parent
                 if manager.session_exists(session_id):
+                    # v1.27: Acquire a cross-process lock before resuming, so
+                    # two processes cannot write to the same transcript and
+                    # corrupt it. Same-PID (in-process reuse, e.g. spawn) and
+                    # stale locks (dead holder) are auto-reclaimed.
+                    acquired, holder_pid = manager.acquire_session_lock(session_id)
+                    if not acquired:
+                        from helen.core.errors import HelenError, ErrorCode
+                        raise HelenError(
+                            code=ErrorCode.RUNTIME_ERROR,
+                            message=(
+                                f"Cannot resume session '{session_id}': it is locked by "
+                                f"another running process (PID {holder_pid}). Stop that "
+                                f"process first, or start a fresh session."
+                            ),
+                        )
                     self._transcript_store = TranscriptStore.load_from_backend(
                         backend, max_memory_items=max_memory_items,
                         session_dir=session_dir_for_media,

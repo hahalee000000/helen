@@ -386,6 +386,25 @@ Spawned agents run in an isolated environment with a deep-copied snapshot of all
 
 > **Note**: The `channel Name { ... }` declaration syntax (equivalent to shared store) was removed in v1.18. In v1.18, Channel specifically refers to the message channel returned by spawn.
 
+#### Resuming a Spawned Session (v1.27)
+
+By default `spawn` starts the child agent in a fresh transcript. The optional `resume("<session_id>")` clause (Chinese alias `恢复会话(...)`) makes the spawned agent **continue a previously saved child-session transcript** instead:
+
+```helen
+// Fresh spawn (default)
+let mb = spawn Worker("task")
+
+// Resume a saved child session - history is loaded, LLM remembers the prior run
+let mb = spawn Worker("task") resume(saved_child_sid)
+// Chinese: 设 mb = 分生 工作者("task") 恢复会话(已存子会话id)
+```
+
+- `resume` is an identifier clause (not a keyword token) - the bilingual keyword count stays at 89.
+- The argument must evaluate to a `str` session_id. A non-existent id creates a fresh session with that id (graceful fallback, no crash).
+- This is **true resumption** (the spawned interpreter continues appending to that session's transcript), distinct from `resume_session(sid)` which imports another session's messages into a new one.
+- Resuming restores LLM conversation memory, **not** runtime variable state - persist critical state separately if you need true stateful continuation.
+- A cross-process lock guards the resumed session against concurrent writers; stale locks and same-process reuse are auto-reclaimed.
+
 ### LLM Statements
 ```helen
 # llm act — autonomous execution (usable as expression since v1.10)

@@ -4,6 +4,40 @@
 
 ---
 
+## [2026-07-26] feature | v1.27 - spawn resume("<session_id>") 子句 + 跨进程会话锁
+
+**操作**: 为 spawn 增加可选 `resume("<session_id>")` 子句，使 spawned agent 可恢复历史子会话 transcript
+**状态**: ✅ 完成
+
+### 背景
+
+helenagent 采用主 session spawn 子 session 运行的架构。若能保存上次运行的主/子 session_id，下次启动时直接装载历史 transcript 续跑，即可实现真正的会话延续。主 session 的启动恢复（`Interpreter(session_id=...)` / `helen --session=...`）v1.24 已支持，但 spawn 路径缺少恢复入口——子 session 永远从全新 transcript 开始。
+
+### 实现
+
+1. **语法**：`spawn Agent(...) resume("<session_id>")`（中文别名 `恢复会话(...)`）。`resume` 作为标识符子句解析（非关键字 token），双语关键字数保持 89 不变。
+2. **AST**：`SpawnExprNode` 新增 `resume_session: ExpressionNode | None` 字段。
+3. **Interpreter**：`visit_spawn_expr` 求值 resume 表达式得到 session_id 字符串，透传给子 `Interpreter(session_id=...)` 构造器。session 存在则装载历史 transcript（真恢复，继续往同一文件追加）；不存在则以该 id 创建新会话（优雅降级）。
+4. **跨进程锁**：`SessionManager.acquire_session_lock(session_id)` 在 `<session_dir>/<session_id>/session.lock` 写入 PID。resume 时若被另一个**活跃**进程持有则拒绝（避免两个进程同时写同一 transcript 导致损坏）。陈旧锁（holder PID 已死）与同进程复用（如 spawn 兄弟 agent 恢复先前子会话）自动回收。锁仅守卫跨进程冲突。
+
+### 三种恢复机制对比
+
+| 机制 | 位置 | 行为 |
+|------|------|------|
+| `spawn A(...) resume("sid")` | spawn 处（v1.27） | spawned agent **就是** session sid，继续追加 |
+| `Interpreter(session_id="sid")` / `helen --session=sid` | 启动 | 主 interpreter **就是** session sid，继续追加 |
+| `resume_session("sid")` | 运行时 stdlib | 把 sid 的消息**导入**当前新会话（复制式） |
+
+### 重要限制
+
+恢复 transcript 还原的是 **LLM 对话记忆**，**不**还原运行时变量状态（任务列表、SharedStore 内容、内存缓存）。LLM 通常可读 transcript 重新推导状态，但若需真正有状态续跑，需单独持久化关键状态。
+
+### 测试
+
+新增 `tests/interpreter/test_spawn_resume.py`（17 个测试）：解析器、端到端 session_id 透传、端到端历史装载（`insert_message` 写标记 + `search_context` 验证）、Interpreter 级历史装载、不存在 session 优雅降级、6 个锁单元测试。全套 3206 passed（1 个预存失败 `test_helen_assistant_program_exists` 与本特性无关）。
+
+---
+
 ## [2026-07-22] feature | v1.24.1 - Python Bridge Import Hook Session 复用 (Issue #16)
 
 **操作**: 实现 Python Bridge import hook 的 session_id 检测链

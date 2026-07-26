@@ -1540,6 +1540,9 @@ class SemanticAnalyzer(Visitor[None]):
     def visit_spawn_expr(self, node) -> None:
         """Validate spawn expression."""
         node.call.accept(self)
+        # v1.27: validate optional resume("<session_id>") clause
+        if node.resume_session is not None:
+            node.resume_session.accept(self)
 
     # ------------------------------------------------------------------
     # Try / catch / finally

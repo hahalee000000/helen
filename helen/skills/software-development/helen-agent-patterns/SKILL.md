@@ -472,11 +472,14 @@ agent Worker(task: str, parent_sid: str, ch: Channel) {
 
 | Scenario | Recommended Approach |
 |----------|---------------------|
-| Spawned child agent needs parent transcript | Pass parent_sid + `resume_session` |
+| Spawned child agent needs parent transcript | Pass parent_sid + `resume_session` (import parent messages into child's new session) |
 | Agent output needs to be visible to other agents | `working_memory_set` + pass via Channel |
-| Resume conversation across processes (program restart) | Persist session_id + `resume_session` |
+| Continue a saved **child** session across restarts (v1.27) | Persist child_sid + `spawn A(...) resume(child_sid)` (true resumption) |
+| Continue the **main** session across restarts | `helen --session=sid` / `Interpreter(session_id=sid)` |
 
 > 🔑 **Mnemonic**: "spawn means isolation, relay requires explicit passing"
+>
+> **v1.27 distinction**: `spawn A(...) resume("sid")` is **true resumption** - the spawned interpreter continues appending to session `sid`'s transcript. `resume_session(sid)` is an **import** - it copies another session's messages into the current new session. Use `resume(...)` to continue a saved child session; use `resume_session()` to reference another session's history from a fresh one. Resuming restores LLM conversation memory, **not** runtime variable state.
 
 ### Pattern 5: Streaming Agent (llm act + on_chunk callback)
 
