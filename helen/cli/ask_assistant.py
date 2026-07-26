@@ -70,44 +70,50 @@ def _build_repl_tools(repl_state: ReplState, interp: Any, cwd: str) -> tuple[
 ]:
     """Build tool definitions + a dispatch_fn that handles the REPL tools.
 
-    Returns (tool_schemas, dispatch_fn). The dispatch_fn falls through to
-    the default ``dispatch_tool`` for non-REPL tools (stdlib / load_skill).
+    Returns (tool_schemas, dispatch_fn). The tool schemas are in
+    OpenAI-compatible format (``{"type": "function", "function": {...}}``)
+    so they can be passed directly to ``runtime.act(act_stream)``. The
+    REPL tools are added on top of stdlib tools + ``load_skill`` /
+    ``list_skill_references`` for Tier-2 skill disclosure.
+
+    The dispatch_fn falls through to the default ``dispatch_tool`` for
+    non-REPL tools (stdlib / skill tools).
     """
     from helen.runtime.tools import dispatch_tool as _default_dispatch
+    from helen.runtime.tools import get_tool_schemas as _get_stdlib_schemas
+
+    # Wrap a bare tool spec in OpenAI format.
+    def _wrap(name: str, description: str, parameters: dict) -> dict:
+        return {
+            "type": "function",
+            "function": {
+                "name": name,
+                "description": description,
+                "parameters": parameters,
+            },
+        }
 
     repl_tools: list[dict[str, Any]] = [
-        {
-            "name": "repl_definitions",
-            "description": (
-                "List all functions and agents currently defined in the "
-                "user's REPL session. Call this when the user refers to "
-                "'my function X' or 'the agent I defined' so you know what "
-                "actually exists."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {},
-            },
-        },
-        {
-            "name": "repl_last_error",
-            "description": (
-                "Return the last error the user hit in the REPL (type, "
-                "message, location). Use this when the user asks 'why did "
-                "this fail' or 'fix my error'."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {},
-            },
-        },
-        {
-            "name": "repl_history",
-            "description": (
-                "Return the last N lines of REPL output (default 10). "
-                "Use this to see what the user's code actually produced."
-            ),
-            "parameters": {
+        _wrap(
+            "repl_definitions",
+            "List all functions and agents currently defined in the "
+            "user's REPL session. Call this when the user refers to "
+            "'my function X' or 'the agent I defined' so you know what "
+            "actually exists.",
+            {"type": "object", "properties": {}},
+        ),
+        _wrap(
+            "repl_last_error",
+            "Return the last error the user hit in the REPL (type, "
+            "message, location). Use this when the user asks 'why did "
+            "this fail' or 'fix my error'.",
+            {"type": "object", "properties": {}},
+        ),
+        _wrap(
+            "repl_history",
+            "Return the last N lines of REPL output (default 10). "
+            "Use this to see what the user's code actually produced.",
+            {
                 "type": "object",
                 "properties": {
                     "n": {
@@ -116,16 +122,14 @@ def _build_repl_tools(repl_state: ReplState, interp: Any, cwd: str) -> tuple[
                     },
                 },
             },
-        },
-        {
-            "name": "repl_read_file",
-            "description": (
-                "Read a file from the user's current working directory. "
-                "Path is relative to the REPL's cwd. Use this to inspect "
-                "source code the user is working on. Restricted to cwd for "
-                "safety."
-            ),
-            "parameters": {
+        ),
+        _wrap(
+            "repl_read_file",
+            "Read a file from the user's current working directory. "
+            "Path is relative to the REPL's cwd. Use this to inspect "
+            "source code the user is working on. Restricted to cwd for "
+            "safety.",
+            {
                 "type": "object",
                 "properties": {
                     "path": {
@@ -135,8 +139,16 @@ def _build_repl_tools(repl_state: ReplState, interp: Any, cwd: str) -> tuple[
                 },
                 "required": ["path"],
             },
-        },
+        ),
     ]
+
+    # Add stdlib tools + load_skill / list_skill_references for Tier-2
+    # skill disclosure (matches what llm_mixin._build_tools_list does).
+    try:
+        stdlib_schemas = _get_stdlib_schemas()
+    except Exception:
+        stdlib_schemas = []
+    all_tools = stdlib_schemas + repl_tools
 
     def dispatch(name: str, args: dict[str, Any]) -> str:
         if name == "repl_definitions":
@@ -196,7 +208,7 @@ def _build_repl_tools(repl_state: ReplState, interp: Any, cwd: str) -> tuple[
         except Exception as e:
             return f"(tool '{name}' not found: {e})"
 
-    return repl_tools, dispatch
+    return all_tools, dispatch
 
 
 # ---------------------------------------------------------------------------
@@ -310,10 +322,15 @@ def _run_streaming(runtime: Any, prompt: str, system_prompt: str,
                     sys.stdout.write(text)
                     sys.stdout.flush()
                     chunks.append(text)
+            elif etype == "error":
+                # Surface errors so silent LLM failures are visible.
+                msg = event.get("message", "unknown error")
+                sys.stdout.write(f"\n(assistant error: {msg})")
+                sys.stdout.flush()
             # Other event types (tool_call / tool_result / usage /
-            # compaction / error) are handled by the runtime's agentic
-            # loop internally; we don't print them directly. Tool
-            # results flow back into the LLM on the next turn.
+            # compaction) are handled by the runtime's agentic loop
+            # internally; we don't print them directly. Tool results
+            # flow back into the LLM on the next turn.
     except KeyboardInterrupt:
         # Graceful interrupt
         if hasattr(runtime, "cancel_streaming"):
@@ -394,7 +411,13 @@ def new_assistant_session(
         import_resolver=import_resolver,
         session_id=session_id,  # None -> new session; else resume
     )
-    actual_sid = interp.get_session_id() if hasattr(interp, "get_session_id") else session_id or ""
+    # AgentContextManager auto-creates a session_id; read it from there.
+    agent_ctx = getattr(interp, "_agent_context", None)
+    actual_sid = (
+        getattr(agent_ctx, "session_id", None)
+        or session_id
+        or ""
+    )
     return AssistantSession(session_id=actual_sid, interp=interp)
 
 

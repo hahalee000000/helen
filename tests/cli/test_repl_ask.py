@@ -139,8 +139,8 @@ class TestReplTools:
         result = json.loads(dispatch("repl_definitions", {}))
         assert result["functions"] == ["alpha"]
         assert result["agents"] == ["Translator"]
-        # Tool schemas registered
-        names = {t["name"] for t in tools}
+        # Tool schemas registered (OpenAI format: type=function, function.name)
+        names = {t["function"]["name"] for t in tools if t.get("type") == "function"}
         assert "repl_definitions" in names
         assert "repl_last_error" in names
         assert "repl_history" in names
@@ -214,7 +214,9 @@ class TestAssistantSession:
         # lazy import picks up the mock.
         with patch("helen.interpreter.interpreter.Interpreter") as MockInterp:
             mock_interp = MagicMock()
-            mock_interp.get_session_id.return_value = "session_test_abc"
+            mock_agent_ctx = MagicMock()
+            mock_agent_ctx.session_id = "session_test_abc"
+            mock_interp._agent_context = mock_agent_ctx
             MockInterp.return_value = mock_interp
             from helen.cli.ask_assistant import new_assistant_session
             session = new_assistant_session("/tmp")
