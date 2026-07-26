@@ -7,7 +7,6 @@ const WS_BASE_URL = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//
  */
 export class WebSocketManager {
   private ws: WebSocket | null = null
-  private sessionId: string
   private onMessage: (data: any) => void
   private onOpen?: () => void
   private onClose?: () => void
@@ -19,7 +18,6 @@ export class WebSocketManager {
   private isManualClose = false
 
   constructor(
-    sessionId: string,
     onMessage: (data: any) => void,
     options?: {
       onOpen?: () => void
@@ -27,7 +25,6 @@ export class WebSocketManager {
       onError?: (error: Event) => void
     }
   ) {
-    this.sessionId = sessionId
     this.onMessage = onMessage
     this.onOpen = options?.onOpen
     this.onClose = options?.onClose
@@ -45,7 +42,7 @@ export class WebSocketManager {
   }
 
   private createConnection() {
-    this.ws = new WebSocket(`${WS_BASE_URL}/${encodeURIComponent(this.sessionId)}`)
+    this.ws = new WebSocket(WS_BASE_URL)
 
     this.ws.onopen = () => {
       console.log('WebSocket connected')

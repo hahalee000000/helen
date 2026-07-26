@@ -54,9 +54,21 @@ fn ensure_python_path() {
 
 // ── 环境事实检测（共享，避免 context.helen / context_manager.helen 各自重复）──
 
-/** 检测当前 Helen 语言版本（从 ~/helen/wiki/appendix/changelog.md 读取）。
- *  检测失败返回 "1.20"（历史回退默认值）。 */
+/** 检测当前 Helen 语言版本。
+ *  优先用 `helen --version` 命令(最准确);失败时从 changelog 读取;最后回退 "1.20"。 */
 fn detect_helen_version(): str {
+    // 优先:helen --version 命令(输出格式 "Helen 1.27.1")
+    try {
+        let out = strip(shell_exec("helen --version 2>/dev/null"))
+        let marker = "Helen "
+        let start = find(out, marker)
+        if start >= 0 {
+            let ver = strip(substring(out, start + len(marker), len(out)))
+            if ver != "" { return ver }
+        }
+        if out != "" { return out }
+    } catch { }
+    // 兜底 1:从 ~/helen/wiki/appendix/changelog.md 读取
     try {
         let home = strip(shell_exec("echo $HOME"))
         let changelog = path_join(home, "helen", "wiki", "appendix", "changelog.md")

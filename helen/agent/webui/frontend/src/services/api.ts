@@ -40,36 +40,13 @@ async function fetchWithRetry(
 }
 
 /**
- * API 客户端（带重试机制）
+ * API 客户端
+ * v6.1:transcript 是唯一数据源,移除了 DB 相关端点(sessions get/create/update/messages、
+ * transcript/all、transcript/unmapped、transcript/messages)。
  */
 export const api = {
-  // 聊天相关（transcript 等）
+  // 聊天相关
   chat: {
-    getTranscript: async (sessionId: string = 'current') => {
-      const response = await fetchWithRetry(`${API_BASE_URL}/chat/sessions/${encodeURIComponent(sessionId)}/transcript`)
-      if (!response.ok) throw new Error('Failed to fetch transcript')
-      return response.json()
-    },
-    /** 按 side-channel 索引过滤，返回属于指定 Web UI session 的 transcript 消息 */
-    getTranscriptBySession: async (webUISessionId: string) => {
-      const response = await fetchWithRetry(
-        `${API_BASE_URL}/chat/sessions/${encodeURIComponent(webUISessionId)}/transcript/messages`
-      )
-      if (!response.ok) throw new Error('Failed to fetch transcript by session')
-      return response.json()
-    },
-    /** 返回完整 transcript 的所有消息 */
-    getAllTranscript: async () => {
-      const response = await fetchWithRetry(`${API_BASE_URL}/chat/transcript/all`)
-      if (!response.ok) throw new Error('Failed to fetch all transcript')
-      return response.json()
-    },
-    /** 返回未映射到任何 Web UI session 的 transcript 消息 */
-    getUnmappedTranscript: async () => {
-      const response = await fetchWithRetry(`${API_BASE_URL}/chat/transcript/unmapped`)
-      if (!response.ok) throw new Error('Failed to fetch unmapped transcript')
-      return response.json()
-    },
     /** 获取当前工作目录信息 */
     getDirectory: async () => {
       const response = await fetchWithRetry(`${API_BASE_URL}/chat/dir`)
@@ -86,7 +63,7 @@ export const api = {
       if (!response.ok) throw new Error('Failed to change directory')
       return response.json()
     },
-    /** 获取当前目录的消息历史 */
+    /** 获取当前目录的消息历史(从 Helen transcript 读取) */
     getDirectoryMessages: async (limit: number = 100, offset: number = 0) => {
       const response = await fetchWithRetry(
         `${API_BASE_URL}/chat/dir/messages?limit=${limit}&offset=${offset}`
@@ -98,57 +75,21 @@ export const api = {
 
   // 会话相关
   sessions: {
+    /** 获取会话列表(从 Helen transcript 目录读取,供 TranscriptPage 下拉) */
     list: async () => {
       const response = await fetchWithRetry(`${API_BASE_URL}/chat/sessions`)
       if (!response.ok) throw new Error('Failed to fetch sessions')
       return response.json()
     },
 
-    get: async (sessionId: string) => {
-      const response = await fetchWithRetry(`${API_BASE_URL}/chat/sessions/${encodeURIComponent(sessionId)}`)
-      if (!response.ok) throw new Error('Failed to fetch session')
-      return response.json()
-    },
-
-    create: async (title: string = 'New Chat') => {
-      const response = await fetchWithRetry(`${API_BASE_URL}/chat/sessions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title })
-      })
-      if (!response.ok) throw new Error('Failed to create session')
-      return response.json()
-    },
-
-    update: async (sessionId: string, data: { name?: string; description?: string; title?: string }) => {
+    /** 删除指定 Helen session 的 transcript(sessionId 为 Helen session_id) */
+    delete: async (sessionId: string) => {
       const response = await fetchWithRetry(`${API_BASE_URL}/chat/sessions/${encodeURIComponent(sessionId)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      })
-      if (!response.ok) throw new Error('Failed to update session')
-      return response.json()
-    },
-
-    delete: async (sessionId: string, helenSessionId?: string) => {
-      // v2.1 架构（context-and-transcript-architecture.md §反馈 2）：
-      // 若传入 helenSessionId，后端会触发 /clear-session 级联删除 Helen transcripts
-      let url = `${API_BASE_URL}/chat/sessions/${encodeURIComponent(sessionId)}`
-      if (helenSessionId) {
-        url += `?helen_session_id=${encodeURIComponent(helenSessionId)}`
-      }
-      const response = await fetchWithRetry(url, {
         method: 'DELETE'
       })
       if (!response.ok) throw new Error('Failed to delete session')
       return response.json()
     },
-
-    messages: async (sessionId: string) => {
-      const response = await fetchWithRetry(`${API_BASE_URL}/chat/sessions/${encodeURIComponent(sessionId)}/messages`)
-      if (!response.ok) throw new Error('Failed to fetch messages')
-      return response.json()
-    }
   },
 
   // Agent 相关
@@ -172,7 +113,7 @@ export const api = {
     }
   },
 
-  // v6.2 多模态：文件上传
+  // 多模态:文件上传
   upload: {
     file: async (file: File): Promise<{
       upload_id: string

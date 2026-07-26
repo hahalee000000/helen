@@ -4,7 +4,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app.config import settings
-from app.database import init_db
 from app.routers import chat, agents
 from app.websocket.manager import WebSocketManager
 
@@ -23,9 +22,7 @@ async def lifespan(app: FastAPI):
         proc_cwd = "<cwd deleted>"
     print(f"📂 进程 cwd: {proc_cwd}")
     print(f"📂 会话目录: {get_current_cwd()}")
-    init_db()
     app.state.websocket_manager = WebSocketManager()
-    print(f"✅ Database initialized")
     print(f"🌐 Helen path: {settings.HELEN_PATH}")
     yield
     # 关闭时清理
@@ -77,7 +74,7 @@ async def api_status():
     return {
         "status": "ok",
         "version": settings.VERSION,
-        "active_sessions": len(manager.get_active_sessions()),
+        "active_connections": len(manager.active_connections),
         "config": {
             "helen_path": settings.HELEN_PATH,
         }

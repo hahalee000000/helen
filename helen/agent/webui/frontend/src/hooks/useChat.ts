@@ -25,7 +25,7 @@ export function useChat(sessionId: string | null) {
 
     const loadMessages = async () => {
       try {
-        const history = await api.sessions.messages(sessionId)
+        const history = await api.chat.getDirectoryMessages()
         setMessages(history)
       } catch (error) {
         console.error('Failed to load messages:', error)
@@ -47,7 +47,6 @@ export function useChat(sessionId: string | null) {
     }
 
     const wsManager = new WebSocketManager(
-      sessionId,
       async (data) => {
         const type = data.type
         const content = data.data?.content ?? ''
@@ -182,27 +181,12 @@ export function useChat(sessionId: string | null) {
             break
           }
 
-          case 'load_messages': {
-            // v6.0：后端切换目录后推送新目录的消息历史
-            const newMessages = data.data || []
-            setMessages(newMessages)
-            break
-          }
-
           case 'clear_messages':
           case 'reload_messages': {
-            // /clear 或斜杠命令持久化后 DB 已变更：
-            // 清空显示消息，然后从 DB 重新加载
+            // /clear:transcript 已插入 BoundaryMarker,清空显示
+            // v6.1:不再从 DB 重载(transcript 是唯一数据源,已空)
             setMessages([])
-            if (sessionId) {
-              try {
-                const history = await api.sessions.messages(sessionId)
-                setMessages(history)
-              } catch {
-                // 静默忽略
-              }
-            }
-            setIsLoading(false)  // /clear 完成后重置加载状态
+            setIsLoading(false)
             break
           }
 

@@ -9,8 +9,6 @@
 // - /clear             清空对话上下文（保留会话实体，插入 BoundaryMarker）
 // - /clear-session [<sid>]  删除整个会话（级联删除 spawn transcripts）
 // - /compress          压缩上下文
-// - /mode [name]       切换输出模式
-// - /quit, /exit       退出程序
 // - /stats             显示会话统计
 // - /memory            显示记忆系统状态
 // - /working-memory    显示工作记忆内容
@@ -94,15 +92,6 @@ fn execute_command(cmd: map): str {
         case "compress" {
             return _cmd_compress()
         }
-        case "mode" {
-            return _cmd_mode(args)
-        }
-        case "quit" {
-            return ""  // 由调用者处理退出逻辑
-        }
-        case "exit" {
-            return ""  // 由调用者处理退出逻辑
-        }
         case "stats" {
             return _cmd_stats()
         }
@@ -130,6 +119,9 @@ fn execute_command(cmd: map): str {
         case "working-memory" {
             return _cmd_working_memory(args)
         }
+        case "cleanup-sessions" {
+            return _cmd_cleanup_sessions()
+        }
         default {
             return build_unknown_command_text(command)
         }
@@ -137,13 +129,6 @@ fn execute_command(cmd: map): str {
 }
 
 /** 检查是否为退出命令 */
-fn is_quit_command(cmd: map): bool {
-    if !cmd["is_command"] {
-        return false
-    }
-    return cmd["command"] == "quit" || cmd["command"] == "exit"
-}
-
 // ── 命令实现 ──────────────────────────────────────────────────────
 //
 // 注：v5.2 之前每个命令有 _cmd_X()（CLI 直接打印）+ _cmd_X_response()（返回字符串）
@@ -167,8 +152,7 @@ fn build_help_text(): str {
     text = text + "| `/unpin <uuid>` | 取消钉住指定消息 |\n"
     text = text + "| `/search <query>` | 在当前上下文中全文搜索消息 |\n"
     text = text + "| `/working-memory` | 查看工作记忆内容（`get <key>` / `stats`） |\n"
-    text = text + "| `/mode [name]` | 切换输出模式（minimal/normal/verbose/rich） |\n"
-    text = text + "| `/quit`, `/exit` | 退出程序 |\n"
+    text = text + "| `/cleanup-sessions` | 清理空 session（只有 meta 无对话的 helen test 副产物） |\n"
     text = text + "\n> 提示：直接输入文本与 AI 对话，或使用上述斜杠命令执行操作\n"
     return text
 }
@@ -269,18 +253,6 @@ fn _cmd_compress(): str {
         return "✅ 上下文已压缩: " + str(original_tokens) + " → " + str(compressed_tokens) + " tokens"
     }
     return "✅ 上下文压缩完成。"
-}
-
-/** /mode [name] - 切换输出模式 */
-fn _cmd_mode(args: list): str {
-    if len(args) == 0 {
-        return "当前输出模式: " + get_output_mode() + "\n\n可用模式: minimal, normal, verbose, rich\n用法: /mode [name]"
-    }
-    let mode_name = args[0]
-    if !set_output_mode(mode_name) {
-        return "❌ 未知模式: " + mode_name + "\n可用模式: minimal, normal, verbose, rich"
-    }
-    return "✅ 输出模式已切换为: " + mode_name
 }
 
 /** /stats - 显示会话统计 */
@@ -563,4 +535,70 @@ fn _cmd_working_memory(args: list): str {
     }
 
     return "用法: /working-memory [get <key>|stats]"
+}
+
+/** /cleanup-sessions - 清理空 session（helen test 副产物）
+ *  删除条件：transcript 只有 1 行（session_meta）+ scope=env_override + 无 parent */
+fn _cmd_cleanup_sessions(): str {
+    let info = get_session_dir()
+    if info["status"] != "ok" {
+        return "❌ 无法获取 session 目录: " + info.get("error", "unknown")
+    }
+    let session_dir = info["session_dir"]
+
+    // 列出所有 session_* 子目录（session_dir 本身就是 .helen/sessions/）
+    let dir_list = list_dir(session_dir)
+
+    let deleted = 0
+    let kept = 0
+    let errors = 0
+
+    for name in dir_list {
+        if !startswith(name, "session_") {
+            continue
+        }
+        let full_path = path_join(session_dir, name, "transcript.jsonl")
+        if !path_exists(full_path) {
+            continue
+        }
+
+        try {
+            // 读第一行检查 session_meta
+            let content = read_file(full_path)
+            let lines = split(content, "\n")
+            // 过滤空行
+            let real_lines = []
+            for line in lines {
+                if strip(line) != "" {
+                    real_lines = real_lines + [line]
+                }
+            }
+
+            if len(real_lines) != 1 {
+                kept = kept + 1
+                continue
+            }
+
+            let meta = json_parse(real_lines[0])
+            // Helen map 不支持 .get()，用直接访问 + try-catch
+            let scope = ""
+            let parent = ""
+            try { scope = meta["session_scope"] } catch {}
+            try { parent = meta["parent_session_id"] } catch {}
+
+            // 只删除 env_override + 无 parent 的空 session
+            if scope != "env_override" || parent != "" {
+                kept = kept + 1
+                continue
+            }
+
+            // 删除目录
+            let rm_result = shell_exec("rm -rf " + path_join(session_dir, name))
+            deleted = deleted + 1
+        } catch {
+            errors = errors + 1
+        }
+    }
+
+    return "✅ 清理完成\n\n- 删除: " + str(deleted) + " 个空 session\n- 保留: " + str(kept) + " 个 session\n- 错误: " + str(errors)
 }

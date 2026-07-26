@@ -17,79 +17,18 @@ from typing import Optional
 
 # 项目根目录（从 webui/backend/app/services/ 向上 5 层到 helenagent 根）
 _AGENT_DIR = Path(__file__).resolve().parent.parent.parent.parent.parent
-_INDEX_DIR = _AGENT_DIR / ".helen" / "session_index"
-
-
-def _ensure_dir():
-    """确保索引目录存在"""
-    _INDEX_DIR.mkdir(parents=True, exist_ok=True)
-
-
-def read_index(web_ui_session_id: str) -> list[str]:
-    """读取指定 Web UI session 的 message UUID 列表"""
-    path = _INDEX_DIR / f"{web_ui_session_id}.json"
-    if not path.exists():
-        return []
-    try:
-        data = json.loads(path.read_text())
-        return data.get("message_uuids", [])
-    except (json.JSONDecodeError, KeyError):
-        return []
-
-
-def write_index(web_ui_session_id: str, uuids: list[str]):
-    """写入（覆盖）指定 Web UI session 的索引"""
-    _ensure_dir()
-    path = _INDEX_DIR / f"{web_ui_session_id}.json"
-    data = {
-        "web_ui_session_id": web_ui_session_id,
-        "message_uuids": uuids,
-    }
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
-
-
-def append_to_index(web_ui_session_id: str, new_uuids: list[str]):
-    """追加新 UUID 到索引（去重）"""
-    if not new_uuids:
-        return
-    existing = read_index(web_ui_session_id)
-    existing_set = set(existing)
-    for uuid in new_uuids:
-        if uuid and uuid not in existing_set:
-            existing.append(uuid)
-            existing_set.add(uuid)
-    if len(existing) > len(existing_set) - len(new_uuids):
-        # 有新元素加入才写入
-        write_index(web_ui_session_id, existing)
-
-
-def delete_session_index(web_ui_session_id: str):
-    """删除指定 Web UI session 的索引文件"""
-    path = _INDEX_DIR / f"{web_ui_session_id}.json"
-    if path.exists():
-        path.unlink()
-
-
-def list_indexes() -> dict[str, list[str]]:
-    """列出所有索引（web_ui_session_id → uuids）"""
-    if not _INDEX_DIR.exists():
-        return {}
-    result = {}
-    for f in sorted(_INDEX_DIR.glob("*.json")):
-        sid = f.stem
-        result[sid] = read_index(sid)
-    return result
 
 
 def get_transcript_path(helen_session_id: str) -> Optional[Path]:
-    """获取 transcript.jsonl 路径（优先项目目录，回退 ~/.helen/）"""
-    project_path = _AGENT_DIR / ".helen" / "sessions" / helen_session_id / "transcript.jsonl"
-    if project_path.exists():
-        return project_path
-    global_path = Path.home() / ".helen" / "sessions" / helen_session_id / "transcript.jsonl"
-    if global_path.exists():
-        return global_path
-    return None
+    """获取 transcript.jsonl 路径(当前工作目录的 .helen/sessions/)
+
+    v6.1:只查当前工作目录(directory_manager.get_current_cwd()),
+    不回退 ~/.helen/sessions/(避免读到全局历史 session)。
+    """
+    from app.services import directory_manager
+    cwd = directory_manager.get_current_cwd()
+    path = Path(cwd) / ".helen" / "sessions" / helen_session_id / "transcript.jsonl"
+    return path if path.exists() else None
 
 
 def read_transcript_entries(helen_session_id: str) -> list[dict]:
@@ -113,87 +52,31 @@ def read_transcript_entries(helen_session_id: str) -> list[dict]:
     return entries
 
 
-def count_transcript_lines(helen_session_id: str) -> int:
-    """计算 transcript 文件行数（用于增量追踪）"""
-    path = get_transcript_path(helen_session_id)
-    if not path:
-        return 0
-    try:
-        with open(path) as f:
-            return sum(1 for _ in f)
-    except Exception:
-        return 0
-
-
-def get_new_message_uuids(helen_session_id: str, from_line: int) -> list[str]:
-    """读取 transcript 从 from_line 行开始的新消息 UUID
-
-    from_line: 0-based 行号，只读取该行及之后的内容
-    """
-    path = get_transcript_path(helen_session_id)
-    if not path:
-        return []
-    uuids = []
-    try:
-        with open(path) as f:
-            for i, line in enumerate(f):
-                if i < from_line:
-                    continue
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    entry = json.loads(line)
-                    if entry.get("type") == "message" and entry.get("uuid"):
-                        uuids.append(entry["uuid"])
-                except json.JSONDecodeError:
-                    continue
-    except Exception:
-        pass
-    return uuids
-
-
 def get_current_helen_session_id() -> str:
-    """获取当前 Helen session ID
+    """获取当前 Helen session ID(读 memento)
 
-    v6.0 单会话架构：通过 helen_bridge 从 Helen runtime 获取当前 session ID。
-    不再读 .tui_session_id 文件（该文件已不再写入）。
-
-    如果 bridge 返回的 session 没有 transcript，回退到最新的有 transcript 的 session。
+    v6.1:只读 memento 文件(<cwd>/.helen/current_session_id,JSON {main, child}),
+    这是 actor 实际用的 child session。memento 不存在 -> 返回空(首次启动,
+    actor 会新建 session,无需回退找旧的——回退会读到非当前对话的 session)。
     """
-    # 通过 helen_bridge 获取（同步方式：直接调用 Python FFI）
+    from app.services import directory_manager
+    cwd = directory_manager.get_current_cwd()
+    memento_path = Path(cwd) / ".helen" / "current_session_id"
+    if not memento_path.exists():
+        return ""
     try:
-        from app.services.helen_bridge import helen_bridge
-        bridge_sid = helen_bridge.get_session_id_sync()
-        if bridge_sid:
-            # 验证该 session 的 transcript 存在
-            if get_transcript_path(bridge_sid) is not None:
-                return bridge_sid
-            # transcript 不存在，回退到最新 session
+        memento_content = memento_path.read_text().strip()
+        if memento_content.startswith("{"):
+            data = json.loads(memento_content)
+            child_sid = data.get("child", "")
+            if child_sid and get_transcript_path(child_sid) is not None:
+                return child_sid
+        elif memento_content and get_transcript_path(memento_content) is not None:
+            # 纯文本 session_id(兼容旧格式)
+            return memento_content
     except Exception:
         pass
-
-    # 回退：找最新的有 transcript.jsonl 的 session 目录
-    for sessions_dir in [
-        _AGENT_DIR / ".helen" / "sessions",
-        Path.home() / ".helen" / "sessions",
-    ]:
-        if not sessions_dir.exists():
-            continue
-        try:
-            # 只考虑有 transcript.jsonl 的目录
-            candidates = [
-                p for p in sessions_dir.iterdir()
-                if p.is_dir() and (p / "transcript.jsonl").exists()
-            ]
-            if candidates:
-                latest = max(candidates, key=lambda p: p.stat().st_mtime)
-                return latest.name
-        except Exception:
-            pass
-
     return ""
-
 
 # ── 测试消息过滤 ──────────────────────────────────────────────
 
@@ -214,3 +97,250 @@ def is_test_message(entry: dict) -> bool:
 def filter_test_messages(entries: list[dict]) -> list[dict]:
     """过滤掉测试消息，返回干净的消息列表"""
     return [e for e in entries if not is_test_message(e)]
+
+
+# ── transcript -> 前端消息 ─────────────────────────────────────
+# v6.1:transcript 是唯一数据源,替代 SQLite messages 表
+
+
+def _attachment_from_data_url(data_url: str, idx: int) -> dict:
+    """从 data URL 解析出 Attachment 对象(供历史消息附件显示)。
+
+    transcript 中多模态 user message 的 image_url/audio part 以
+    `data:<mime>;base64,<data>` 形式内嵌。前端 AttachmentView 通过 url
+    直接渲染,浏览器原生支持 data URL。
+
+    新消息附件的 url 是 HTTP 路径(`/api/chat/uploads/<id>/file`),
+    历史附件是 data URL,两者格式不同但前端统一通过 url 渲染。
+    """
+    import re
+    mime = "application/octet-stream"
+    ext = "bin"
+    m = re.match(r"data:([^;]+);base64,", data_url)
+    if m:
+        mime = m.group(1)
+        ext = mime.split("/")[-1] if "/" in mime else "bin"
+
+    b64_data = data_url.split(",", 1)[-1] if "," in data_url else ""
+    # base64 编码后体积约为原始的 4/3,故反向估算
+    size = int(len(b64_data) * 0.75) if b64_data else 0
+
+    if mime.startswith("image/"):
+        kind = "image"
+    elif mime.startswith("audio/"):
+        kind = "audio"
+    elif mime.startswith("video/"):
+        kind = "video"
+    else:
+        kind = "file"
+    return {
+        "id": f"att-{idx}",
+        "filename": f"{kind}-{idx}.{ext}",
+        "mime_type": mime,
+        "size": size,
+        "url": data_url,
+    }
+
+
+def _extract_from_boilerplate(content: str) -> tuple[str, str]:
+    """分离 prompt boilerplate 和用户实际输入。
+
+    移植自前端 TranscriptPage.extractFromPromptBoilerplate。
+
+    Helen actor 纯文本路径把 agent prompt(## Identity ... ## Reminders ...)
+    和用户输入拼成一条 user message。boilerplate 以 ## Identity 开头,
+    以最后一个 ## 段标题后的第一个空行与用户输入分隔。
+
+    返回 (user_text, boilerplate)。无 boilerplate 特征时 user_text = content。
+    """
+    trimmed = content.strip()
+    if not (trimmed.startswith("## ") and "## Identity" in trimmed):
+        return content, ""
+
+    lines = content.split("\n")
+    # 找最后一个 ## 标题行
+    last_heading_idx = -1
+    for i in range(len(lines) - 1, -1, -1):
+        if lines[i].startswith("## "):
+            last_heading_idx = i
+            break
+    if last_heading_idx < 0:
+        return content, ""
+
+    # 标题后第一个空行 = boilerplate 与用户输入的分隔符
+    blank_idx = -1
+    for i in range(last_heading_idx + 1, len(lines)):
+        if lines[i].strip() == "":
+            blank_idx = i
+            break
+    if blank_idx < 0:
+        # 无空行:整段是 boilerplate(纯 prompt,无用户输入)
+        return "", content
+
+    user_text = "\n".join(lines[blank_idx + 1:]).strip()
+    boilerplate = "\n".join(lines[:blank_idx]) + "\n"
+    return user_text, boilerplate
+
+
+def _filter_system_hints(text: str) -> tuple[str, list[str]]:
+    """过滤 [System Hint] 行,归入 hints 列表。"""
+    hints = []
+    text_lines = []
+    for line in text.split("\n"):
+        if line.startswith("[System Hint]"):
+            hints.append(line.replace("[System Hint]", "").strip())
+        else:
+            text_lines.append(line)
+    return "\n".join(text_lines), hints
+
+
+def _parse_user_content(content) -> tuple[str, list[str], list[tuple[str, str]], bool]:
+    """解析 user message content,分离用户输入 / system hint / 多模态附件 / 内部协议命令。
+
+    移植自前端 TranscriptPage.parseUserContent。
+
+    返回 (main_text, system_hints, media_parts, has_internal_command)。
+    media_parts 是 [(kind, url), ...],kind 为 'image' / 'audio'。
+    """
+    if content is None:
+        return "", [], [], False
+
+    # 多模态 array
+    if isinstance(content, list):
+        text_lines = []
+        media_parts = []
+        for part in content:
+            if isinstance(part, str):
+                text_lines.append(part)
+                continue
+            if isinstance(part, dict):
+                ptype = part.get("type")
+                if ptype == "text" and part.get("text"):
+                    text_lines.append(part["text"])
+                elif ptype == "image_url":
+                    url = (part.get("image_url") or {}).get("url", "") or part.get("url", "")
+                    if url:
+                        media_parts.append(("image", url))
+                elif ptype == "input_audio":
+                    data = (part.get("input_audio") or {}).get("data", "")
+                    if data:
+                        media_parts.append(("audio", data))
+        joined = "\n".join(text_lines)
+        user_text, _ = _extract_from_boilerplate(joined)
+        user_text, hints = _filter_system_hints(user_text)
+        return user_text, hints, media_parts, False
+
+    # 纯字符串
+    s = str(content)
+    import re
+    if re.match(r"^__helen_\w+__", s.strip()):
+        # 内部协议命令(__helen_resume__ 等):不显示
+        return "", [], [], True
+
+    user_text, _ = _extract_from_boilerplate(s)
+    user_text, hints = _filter_system_hints(user_text)
+    return user_text, hints, [], False
+
+
+def transcript_to_messages(helen_session_id: str = "") -> list[dict]:
+    """读取 transcript,转换成前端 Message 格式(用户输入已过滤 boilerplate)。
+
+    transcript 是唯一数据源(v6.1:替代 SQLite messages 表)。
+
+    - helen_session_id 为空时,使用当前 Helen session
+    - 过滤 type != "message"(跳过 session_meta / boundary_marker)
+    - 跳过 [TEST] 测试消息
+    - user message:过滤 prompt boilerplate / [System Hint] / 内部协议命令,
+      只保留用户实际输入 + 多模态附件(见 _parse_user_content)
+    - 纯 boilerplate 无用户输入且无附件的 user message:跳过
+    - assistant message:content 原样保留
+    - timestamp:消息级无 timestamp 字段,用 session_meta.timestamp
+
+    返回:[{id, role, content, attachments, timestamp}]
+    """
+    if not helen_session_id:
+        helen_session_id = get_current_helen_session_id()
+    if not helen_session_id:
+        return []
+
+    entries = read_transcript_entries(helen_session_id)
+
+    # session_meta 的 timestamp 作为消息时间戳(消息本身无 timestamp 字段)
+    session_timestamp = None
+    for e in entries:
+        if e.get("type") == "session_meta":
+            session_timestamp = e.get("timestamp")
+            break
+
+    messages = []
+    att_idx = 0
+    for e in entries:
+        if e.get("type") != "message":
+            continue
+        if is_test_message(e):
+            continue
+
+        role = e.get("role", "user")
+        uuid = e.get("uuid", "")
+        content = e.get("content", "")
+
+        if role == "user":
+            main_text, _hints, media_parts, has_internal_cmd = _parse_user_content(content)
+            if has_internal_cmd:
+                continue
+            # 斜杠命令:不显示历史(防御性,通常 transcript 无此条目)
+            if main_text.strip().startswith("/"):
+                continue
+            # 多模态附件 -> Attachment 对象
+            attachments = []
+            for kind, url in media_parts:
+                att_idx += 1
+                attachments.append(_attachment_from_data_url(url, att_idx))
+            # 纯 boilerplate(无用户输入且无附件):跳过
+            if not main_text and not attachments:
+                continue
+            text_content = main_text
+        else:
+            # assistant / 其他角色:content 原样
+            if isinstance(content, str):
+                text_content = content
+            elif isinstance(content, list):
+                texts = [
+                    p.get("text", "")
+                    for p in content
+                    if isinstance(p, dict) and p.get("type") == "text"
+                ]
+                text_content = "\n".join(texts)
+            else:
+                text_content = str(content)
+            attachments = []
+
+        messages.append({
+            "id": uuid,
+            "role": role,
+            "content": text_content,
+            "attachments": attachments,
+            "timestamp": session_timestamp,
+        })
+
+    return messages
+
+
+def read_session_preview(helen_session_id: str, max_chars: int = 50) -> str:
+    """读取 transcript 首条 user 消息的实际输入(过滤 boilerplate),截断作预览。"""
+    entries = read_transcript_entries(helen_session_id)
+    for e in entries:
+        if e.get("type") != "message":
+            continue
+        if e.get("role") != "user":
+            continue
+        main_text, _hints, media_parts, has_internal_cmd = _parse_user_content(e.get("content", ""))
+        if has_internal_cmd:
+            continue
+        if main_text.strip().startswith("/"):
+            continue
+        if not main_text and not media_parts:
+            continue
+        preview = main_text.strip() if main_text else "[附件]"
+        return preview[:max_chars]
+    return ""

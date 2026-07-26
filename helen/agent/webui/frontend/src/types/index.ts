@@ -27,16 +27,15 @@ export interface Message {
 }
 
 /**
- * 会话类型
+ * 会话类型(v6.1:从 Helen transcript 目录读取)
  */
 export interface Session {
-  id: string;
-  title: string;
-  name?: string;
-  description?: string;
-  created_at: string;
-  updated_at: string;
-  metadata?: Record<string, any>;
+  session_id: string;
+  created_at: number;   // Unix epoch
+  modified_at: number;  // Unix epoch
+  size_bytes: number;
+  message_count: number;
+  preview: string;      // 首条 user 消息截断
 }
 
 /**

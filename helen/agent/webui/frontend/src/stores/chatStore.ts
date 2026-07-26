@@ -16,7 +16,6 @@ interface ChatStore {
   // Actions
   fetchSessions: () => Promise<void>
   setCurrentSession: (sessionId: string | null) => void
-  createSession: (title?: string) => Promise<void>
   deleteSession: (sessionId: string) => Promise<void>
   clearError: () => void
 }
@@ -39,17 +38,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   setCurrentSession: (sessionId) => {
     set({ currentSessionId: sessionId })
-  },
-
-  createSession: async (title = 'New Chat') => {
-    set({ isLoading: true, error: null })
-    try {
-      const { session_id } = await api.sessions.create(title)
-      await get().fetchSessions()
-      set({ currentSessionId: session_id, isLoading: false })
-    } catch (error) {
-      set({ error: (error as Error).message, isLoading: false })
-    }
   },
 
   deleteSession: async (sessionId) => {

@@ -1,97 +1,96 @@
-# Helen Programming Assistant
+# Helen Programming Agent
 
-AI-powered programming assistant built with Helen language.
+> 用纯 Helen 语言实现的自进化编程系统（v1.0 架构）。
+> 父项目 Helen 语言 v1.25 — Prompt-first Agent Programming Language。
 
-## Architecture
+## 架构（v1.0）
 
-**Single Long-lived Actor** (v8.0)
-- ChatSessionActor handles all conversations
-- Direct tool access (no specialist agent delegation)
-- Knowledge loaded on-demand via `load_skill`
-- Channel communication with Web UI
-- Context accumulates in session (no resume bottleneck)
+v1.0 合并所有 specialist agents 到 ChatSessionActor，LLM 直接调用所有工具：
 
-## Installation
+```
+Web UI (webui/) — 浏览器界面 + WebSocket
+  ↓
+chat_tui.helen — Actor 生命周期管理
+  ↓ Channel mailbox
+ChatSessionActor — 唯一 agent，长驻 while 循环
+  ├── 文件操作：read_file / write_file / patch_file
+  ├── 质量检查：run_helen_check / get_scores / get_metrics
+  ├── 测试工具：run_helen_tests / verify_after_change
+  ├── 技能管理：save_new_skill / list_existing_skills / load_skill
+  └── Hooks：save_code_file / patch_code_file / pre_exit_check
+```
 
-### Step 1: Install Helen with agent support
+**关键设计**：
+- **ChatSessionActor 是唯一 agent** — 长驻 while 循环，上下文在 store 自然累积
+- **LLM 直接调用所有工具** — 复杂任务从 5 次串行 LLM 推理降到 1 次
+- **按需 load_skill** — 领域知识保留在 skills 中，LLM 按需加载
+- **三层完整性防御** — LLM 自检 → 测试覆盖率 → 代码完整性 skill
+- **Hooks 机制** — 代码文件写入后自动 `helen check`
+
+## 文件结构
+
+```
+.
+├── chat_session_actor.helen  # 唯一 agent：长驻 ChatSessionActor
+├── chat_tui.helen            # Actor 生命周期管理
+├── chat_tui_web.py           # Web UI Python 入口
+├── commands.helen            # 斜杠命令系统
+├── context.helen             # 环境事实收集 + 上下文注入
+├── context_manager.helen     # 上下文管理
+├── memory_utils.helen        # 记忆工具
+├── output.helen              # 输出核心
+├── task_manager.helen        # 任务追踪
+├── session_stats.helen       # 会话统计
+├── contracts/
+│   └── contracts.helen       # 工具集 const (CHAT_TOOLS)
+├── ui/                       # 流式输出 Python 模块
+├── webui/                    # Web UI（独立服务）
+├── tests/                    # 测试文件
+├── .helen/
+│   └── skills/               # 技能目录（6 个项目级技能）
+│       ├── architecture/helen-contractor-design/SKILL.md
+│       ├── testing/helen-test-patterns/SKILL.md
+│       ├── testing/helen-tdd-methodology/SKILL.md
+│       ├── code-quality/helen-quality-rubrics/SKILL.md
+│       └── code-quality/helen-code-integrity/SKILL.md
+└── CLAUDE.md                 # Claude Code harness 项目指令
+```
+
+## 使用方式
 
 ```bash
-# Option A: Install with agent dependencies
-pip install helen-lang[agent]
+# 启动 Web UI
+cd webui && ./start-all.sh
 
-# Option B: Install base + agent separately
-pip install helen-lang
-pip install fastapi uvicorn[standard] websockets sqlalchemy \
-            pydantic pydantic-settings python-dotenv python-multipart
+# 语法检查
+helen check chat_session_actor.helen
+helen check chat_tui.helen
+helen check commands.helen
+
+# 运行架构完整性验证
+bash tests/verify_v1.0_integrity.sh
 ```
 
-### Step 2: Install Node.js (for frontend)
+## 斜杠命令
 
-Download from https://nodejs.org/ (version 18+)
+| 命令 | 功能 |
+|------|------|
+| `/help` | 显示帮助 |
+| `/clear` | 清空对话上下文 |
+| `/compress` | LLM 语义压缩上下文 |
+| `/stats` | 显示会话统计 |
+| `/mode` | 切换输出模式 |
 
-### Step 3: Configure LLM API
+## 设计原则
 
-Edit `~/.helen/config.yaml`:
+1. **纯 Helen 语言**：Agent 和所有业务逻辑用 Helen 编写
+2. **单 Agent 全工具**：ChatSessionActor 直接使用所有工具，无中间编排层
+3. **知识按需加载**：领域方法论以 skill 形式存在，LLM 通过 load_skill 获取
+4. **三层完整性防御**：LLM 自检 → 测试覆盖率 → 代码完整性
+5. **上下文自然累积**：Actor 长驻，无需每请求 resume_session
 
-```yaml
-llm:
-  base_url: "https://api.openai.com/v1"
-  api_key: "your-api-key"
-  model: "gpt-4"
-```
+## 文档
 
-### Step 4: Launch
-
-```bash
-helen agent
-```
-
-The first launch will automatically install frontend dependencies (npm install).
-
-## Key Features
-
-- 💬 **Web-based interface** - Modern chat UI
-- 🧠 **Smart context** - Working memory, graduated compression
-- 📚 **Skill system** - Domain knowledge as loadable skills
-- 🔄 **Session management** - Resume conversations, persistent history
-- ⚡ **Low latency** - Streaming chunks via FFI (not Channel)
-- 🎯 **Direct tools** - LLM calls tools directly (no delegation)
-
-## How It Works
-
-```
-User Input → Web UI → Channel → ChatSessionActor
-                                      ↓
-                              LLM (llm act)
-                                      ↓
-                          Direct tool calls (read_file, write_file, etc.)
-                                      ↓
-                              Response → Channel → Web UI
-```
-
-The actor maintains a long-lived session. Context accumulates naturally.
-No need to resume sessions repeatedly.
-
-## Included Skills
-
-- `helen-contractor-design` - 契约设计方法论
-- `helen-test-patterns` - 测试生成方法论
-- `helen-tdd-methodology` - TDD 方法论
-- `helen-quality-rubrics` - 7 维质量评分规则
-- `helen-code-integrity` - 代码完整性检查
-- `multi-agent-orchestration` - 多 Agent 编排模式
-
-## Requirements
-
-- Python 3.12+
-- Node.js 18+ (for frontend)
-- LLM API configured in `~/.helen/config.yaml`
-
-## Development
-
-This is a snapshot of helenagent included in the Helen language package.
-The independent project continues active development.
-
-## License
-
-MIT
+- `CLAUDE.md` — Claude Code harness 项目指令（架构/约定/语言参考）
+- `wiki/` — 项目 wiki（架构、特性、设计决策）
+- GitHub Issues — Helen 语言层面的不足与建议（https://github.com/hahalee000000/helen/issues）

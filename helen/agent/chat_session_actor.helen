@@ -631,6 +631,21 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
         try { ContextManager.init() } catch {}
         try { SessionStats.init() } catch {}
 
+        // ── 保存主、子 session id 到 memento（供下次启动恢复）──
+        // 主 session_id 是参数 session_id；子 session_id 是 Actor 自己的 get_session_id()
+        // memento 文件：<cwd>/.helen/current_session_id，JSON: {"main":"...", "child":"..."}
+        try {
+            let my_sid = get_session_id()
+            let memento_content = json_stringify({"main": session_id, "child": my_sid})
+            let memento_path = cwd + "/.helen/current_session_id"
+            write_file(memento_path, memento_content)
+            debug("ChatSessionActor: saved memento main=" + session_id + " child=" + my_sid)
+        } catch RuntimeError err {
+            debug("ChatSessionActor: memento save failed: " + err.message)
+        } catch {
+            debug("ChatSessionActor: memento save failed (unknown)")
+        }
+
         debug("ChatSessionActor: initialization complete for cwd=" + cwd)
 
         // 请求计数器

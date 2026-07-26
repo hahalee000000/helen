@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MessageList } from './MessageList'
 import { MessageInput } from './MessageInput'
 import { StatusLine } from './StatusLine'
@@ -15,10 +15,8 @@ const BOTTOM_THRESHOLD = 50
 export function ChatWindow({ sessionId }: ChatWindowProps) {
   const { messages, sendMessage, stopGeneration, isLoading, isConnected, statusline } = useChat(sessionId)
   const containerRef = useRef<HTMLDivElement>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const prevCountRef = useRef(0)
-  const wasAtBottomRef = useRef(true)
-  const isInitialMountRef = useRef(true)
+  // isAtBottomRef:用户是否在底部(由 scroll 事件维护,不受 DOM 内容增长影响)
+  const isAtBottomRef = useRef(true)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
 
   // 判断是否接近底部
@@ -28,57 +26,47 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
     return el.scrollHeight - el.scrollTop - el.clientHeight < BOTTOM_THRESHOLD
   }
 
-  // 滚动到最底部
-  const scrollToBottom = (smooth: boolean = true) => {
-    messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' })
+  // 滚动到最底部(瞬间,避免 smooth 动画期间 isAtBottom 误判)
+  const scrollToBottom = () => {
+    const el = containerRef.current
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+    isAtBottomRef.current = true
+    setShowScrollBtn(false)
   }
 
-  // 同步捕获每次渲染前的滚动位置（useLayoutEffect 在 DOM 变更后、paint 前运行）
-  // 这是判断"用户滚动前是否在底部"的最可靠时机
-  useLayoutEffect(() => {
-    wasAtBottomRef.current = isNearBottom()
-  })
-
-  // 监听滚动事件，更新"回到底部"按钮的可见性
+  // scroll 事件:维护 isAtBottom(基于用户实际滚动位置)
+  // scroll 事件只在 scrollTop 变化时触发,流式 chunk 增大 scrollHeight 不触发,
+  // 所以 isAtBottomRef 不受内容增长影响(保留用户滚动前的状态)
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
     const handleScroll = () => {
-      setShowScrollBtn(!isNearBottom())
+      const near = isNearBottom()
+      isAtBottomRef.current = near
+      setShowScrollBtn(!near)
     }
     el.addEventListener('scroll', handleScroll, { passive: true })
     return () => el.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // 新消息到达时的自动滚动策略
+  // messages 变化:如果在底部,自动滚动跟随(缺省行为)
+  // 用户上滚后 isAtBottomRef=false -> 不滚动,保留阅读位置
+  // 用户回到底部 isAtBottomRef=true -> 恢复自动滚动
   useEffect(() => {
-    // 首次挂载不滚动（历史消息保持原位）
-    if (isInitialMountRef.current) {
-      isInitialMountRef.current = false
-      prevCountRef.current = messages.length
-      return
-    }
-
-    const prevCount = prevCountRef.current
-    prevCountRef.current = messages.length
-
-    if (messages.length > prevCount) {
-      // 新消息（用户发的 或 助手新一轮回复）：强制滚动，保证新对话可见
-      scrollToBottom()
-      setShowScrollBtn(false)
-    } else if (messages.length > 0 && wasAtBottomRef.current) {
-      // 同一条消息内容更新（流式输出）：仅当用户在底部时跟随滚动
+    if (isAtBottomRef.current) {
       scrollToBottom()
     }
-    // 用户已上滚 → 什么都不做，保留其阅读位置
   }, [messages])
 
-  // 切换会话时重置所有状态
+  // 切换会话:重置 + 历史加载后滚到底
   useEffect(() => {
-    isInitialMountRef.current = true
-    prevCountRef.current = 0
-    wasAtBottomRef.current = true
+    isAtBottomRef.current = true
     setShowScrollBtn(false)
+    requestAnimationFrame(() => {
+      const el = containerRef.current
+      if (el) el.scrollTop = el.scrollHeight
+    })
   }, [sessionId])
 
   if (!sessionId) {
@@ -112,7 +100,6 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
       {/* 消息列表（relative 容器用于定位浮动按钮） */}
       <div ref={containerRef} className="relative flex-1 overflow-y-auto p-4">
         <MessageList messages={messages} />
-        <div ref={messagesEndRef} />
 
         {/* "回到底部" 浮动按钮：仅在用户上滚离开底部后出现 */}
         {showScrollBtn && (

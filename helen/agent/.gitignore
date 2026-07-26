@@ -1,0 +1,42 @@
+# Helen agent 运行时数据
+chat_sessions/
+project/
+test_chat_history.json
+chat_history.json
+
+# 临时报告
+test_failures_report.md
+
+# Claude Code 本地配置
+.claude/settings.local.json
+
+# Helen 诊断格式误生成的空文件 (file:line:col)
+chat.helen:*:*
+
+# IDE 工具元数据
+.marscode/
+
+# 差分测试生成的输出
+differential_tests/*.json
+differential_tests/*.jsonl
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+# Python 虚拟环境
+.venv/
+
+# Web UI 项目数据库（per-project 自动生成）
+.helen/webui.db
+
+# Helen 会话运行时数据（自动生成，不纳入版本控制）
+.helen/current_session_id
+.helen/sessions/
+
+# Web UI 后端 Helen 运行时数据
+webui/backend/.helen/
+
+# Web UI 后端测试运行时数据
+webui/backend/tests/test.db
+.helen/session_index/

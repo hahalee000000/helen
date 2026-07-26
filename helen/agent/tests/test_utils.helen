@@ -1,0 +1,78 @@
+// ═══════════════════════════════════════════════════════════════════
+// 测试: utils.helen — validate_path 安全性 + ensure_python_path
+// ═══════════════════════════════════════════════════════════════════
+//
+// 运行: helen tests/test_utils.helen
+//
+
+import "../utils.helen"
+
+fn _assert(condition: bool, test_name: str) {
+    if condition {
+        print("✓ " + test_name)
+    } else {
+        print("✗ FAIL: " + test_name)
+    }
+}
+
+fn _assert_equal(actual: str, expected: str, test_name: str) {
+    if actual == expected {
+        print("✓ " + test_name)
+    } else {
+        print("✗ FAIL: " + test_name + " (expected '" + expected + "', got '" + actual + "')")
+    }
+}
+
+// ── validate_path 测试 ────────────────────────────────────────
+
+fn test_validate_path_normal() {
+    print("\n=== validate_path: 正常路径 ===")
+    _assert_equal(validate_path("hello.helen"), "hello.helen", "普通文件名")
+    _assert_equal(validate_path("src/main.helen"), "src/main.helen", "带目录")
+    _assert_equal(validate_path("src/sub/file.helen"), "src/sub/file.helen", "多级目录")
+    _assert_equal(validate_path(".helen/skills/SKILL.md"), ".helen/skills/SKILL.md", "隐藏目录")
+    _assert_equal(validate_path("my-file_v2.helen"), "my-file_v2.helen", "含 - 和 _")
+    _assert_equal(validate_path("test123.helen"), "test123.helen", "含数字")
+}
+
+fn test_validate_path_injection() {
+    print("\n=== validate_path: 注入防御 ===")
+    _assert_equal(validate_path("file; rm -rf /"), "", "分号注入")
+    _assert_equal(validate_path("file | cat /etc/passwd"), "", "管道注入")
+    _assert_equal(validate_path("file && echo pwned"), "", "&& 注入")
+    _assert_equal(validate_path("$(whoami)"), "", "命令替换 $()")
+    _assert_equal(validate_path("file`whoami`"), "", "反引号注入")
+    _assert_equal(validate_path("file > /dev/null"), "", "重定向 >")
+    _assert_equal(validate_path("file < /etc/passwd"), "", "重定向 <")
+    _assert_equal(validate_path("file\nrm -rf /"), "", "换行注入")
+    _assert_equal(validate_path("file\\nrm"), "", "反斜杠")
+    _assert_equal(validate_path(""), "", "空字符串")
+    _assert_equal(validate_path("file with spaces"), "", "空格")
+    _assert_equal(validate_path("file'quote"), "", "单引号")
+    _assert_equal(validate_path("file\"quote"), "", "双引号")
+}
+
+fn test_validate_path_edge_cases() {
+    print("\n=== validate_path: 边界用例 ===")
+    _assert_equal(validate_path("/"), "/", "根目录")
+    _assert_equal(validate_path("."), ".", "当前目录")
+    _assert_equal(validate_path(".."), "..", "上级目录")
+    _assert_equal(validate_path("a"), "a", "单字符")
+    _assert_equal(validate_path("./src/../main.helen"), "./src/../main.helen", "含 .. 的路径")
+}
+
+// ── 主测试 ──────────────────────────────────────────────────
+
+main {
+    print("╔═══════════════════════════════════════════════════════════╗")
+    print("║      utils.helen 测试                                    ║")
+    print("╚═══════════════════════════════════════════════════════════╝")
+
+    test_validate_path_normal()
+    test_validate_path_injection()
+    test_validate_path_edge_cases()
+
+    print("\n╔═══════════════════════════════════════════════════════════╗")
+    print("║      utils.helen 测试完成                                ║")
+    print("╚═══════════════════════════════════════════════════════════╝")
+}

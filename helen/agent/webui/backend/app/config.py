@@ -44,9 +44,6 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
 
-    # 数据库配置
-    DATABASE_URL: str = "sqlite:///./helen.db"
-
     # Helen 配置（默认自动推断，可通过环境变量或 .env 覆盖）
     HELEN_PATH: str = _default_helen_path()
     HELEN_TIMEOUT: int = 300

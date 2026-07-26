@@ -242,42 +242,60 @@ class HelenBridge:
         self._on_helen_files_changed([])
 
     def get_session_id_sync(self) -> str:
-        """同步获取当前 Helen session ID"""
+        """同步获取当前 Helen session ID(读 memento)
+
+        v6.1:委托给 session_index.get_current_helen_session_id(),读 memento
+        找 actor 实际用的 child session。不再 walk 最新 mtime(会读到非当前
+        对话的 session)。memento 不存在 -> 返回空(actor 会新建)。
+        """
+        from app.services.session_index import get_current_helen_session_id
+        return get_current_helen_session_id()
+
+    def list_sessions_sync(self) -> list[dict]:
+        """列出当前工作目录的 Helen sessions,按 modified_at desc 排序。
+
+        v6.1:只扫描 directory_manager.get_current_cwd() 下的 .helen/sessions/,
+        不扫描 ~/.helen/sessions/(避免列出全局历史 session)。
+        每项:{session_id, created_at, modified_at, size_bytes, message_count, preview}
+        """
         from pathlib import Path
-        import os
+        from app.services import directory_manager
+        from app.services.session_index import read_session_preview
 
-        cwd = os.getcwd()
-        sessions_dir = Path(cwd) / ".helen" / "sessions"
+        sessions_dir = Path(directory_manager.get_current_cwd()) / ".helen" / "sessions"
+        result = []
+        if not sessions_dir.exists():
+            return result
 
-        if sessions_dir.exists():
-            latest_mtime = 0
-            latest_sid = ""
+        try:
             for d in sessions_dir.iterdir():
-                if d.is_dir():
-                    transcript = d / "transcript.jsonl"
-                    if transcript.exists():
-                        mtime = transcript.stat().st_mtime
-                        if mtime > latest_mtime:
-                            latest_mtime = mtime
-                            latest_sid = d.name
-            if latest_sid:
-                return latest_sid
+                if not d.is_dir():
+                    continue
+                transcript = d / "transcript.jsonl"
+                if not transcript.exists():
+                    continue
+                try:
+                    stat = transcript.stat()
+                    msg_count = 0
+                    with open(transcript) as f:
+                        for line in f:
+                            if '"type": "message"' in line:
+                                msg_count += 1
+                    result.append({
+                        "session_id": d.name,
+                        "created_at": stat.st_ctime,
+                        "modified_at": stat.st_mtime,
+                        "size_bytes": stat.st_size,
+                        "message_count": msg_count,
+                        "preview": read_session_preview(d.name),
+                    })
+                except Exception:
+                    continue
+        except Exception:
+            pass
 
-        global_sessions = Path.home() / ".helen" / "sessions"
-        if global_sessions.exists():
-            latest_mtime = 0
-            latest_sid = ""
-            for d in global_sessions.iterdir():
-                if d.is_dir():
-                    transcript = d / "transcript.jsonl"
-                    if transcript.exists():
-                        mtime = transcript.stat().st_mtime
-                        if mtime > latest_mtime:
-                            latest_mtime = mtime
-                            latest_sid = d.name
-            return latest_sid
-
-        return ""
+        result.sort(key=lambda x: x["modified_at"], reverse=True)
+        return result
 
     async def get_session_id(self) -> str:
         loop = asyncio.get_event_loop()

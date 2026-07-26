@@ -1,6 +1,6 @@
 import { ReactNode, useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { MessageSquare, FileText, Settings } from 'lucide-react'
+import { MessageSquare, Settings } from 'lucide-react'
 import { cn } from '@/utils/cn'
 
 interface LayoutProps {
@@ -20,7 +20,6 @@ export function Layout({ children }: LayoutProps) {
 
   const navItems = [
     { path: '/', label: '聊天', icon: MessageSquare },
-    { path: '/transcript', label: 'Transcript', icon: FileText },
     { path: '/settings', label: '设置', icon: Settings },
   ]
 
