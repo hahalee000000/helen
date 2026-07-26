@@ -341,3 +341,97 @@ agent MyAgent(input: str) {
                 except Exception:
                     pass
         return max_mtime
+
+    def build_assistant_system_prompt(self, repl_context: str = "") -> str:
+        """Build a combined system prompt for the REPL assistant (:ask).
+
+        Combines framework instructions, Helen conventions, and skill index
+        into a single system prompt string. Optionally appends a REPL context
+        block describing the user's current environment (definitions, last
+        error, recent output).
+
+        This is the single entry point used by ``helen.cli.ask_assistant``
+        so the REPL doesn't need to poke at private ``_build_*`` helpers.
+
+        Args:
+            repl_context: Pre-formatted REPL context block (XML-tagged). If
+                empty, the ``<repl_context>`` section is omitted.
+
+        Returns:
+            The full system prompt string, sections joined by ``\\n\\n``.
+        """
+        parts: list[str] = []
+        framework = self._build_framework_instructions()
+        if framework:
+            parts.append(framework)
+        conventions = self._build_helen_conventions()
+        if conventions:
+            parts.append(conventions)
+        skill_index = self.build_skill_index()
+        if skill_index:
+            parts.append(skill_index)
+        if repl_context:
+            parts.append(repl_context)
+        return "\n\n".join(parts)
+
+    @staticmethod
+    def format_repl_context_block(
+        definitions: dict[str, list[str]],
+        last_error_text: str | None,
+        recent_output: list[str],
+        cwd: str,
+    ) -> str:
+        """Format REPL state into an XML-tagged context block for the
+        assistant system prompt.
+
+        Empty sections are omitted to keep the block compact. The block is
+        rebuilt on each :ask invocation so the assistant always sees fresh
+        REPL state.
+
+        Args:
+            definitions: ``{kind: [name, ...]}`` from
+                ``Interpreter.list_definitions()``.
+            last_error_text: Pre-formatted last error text (or None).
+            recent_output: Last N lines of REPL output (most-recent-last).
+            cwd: Current working directory.
+
+        Returns:
+            ``<repl_context>`` XML block, or empty string if nothing to report.
+        """
+        sections: list[str] = []
+
+        # Definitions
+        fns = definitions.get("functions") or []
+        ags = definitions.get("agents") or []
+        if fns or ags:
+            lines = []
+            if fns:
+                lines.append(f"Functions: {', '.join(fns[:30])}" +
+                             ("..." if len(fns) > 30 else ""))
+            if ags:
+                lines.append(f"Agents:    {', '.join(ags[:30])}" +
+                             ("..." if len(ags) > 30 else ""))
+            sections.append("## Current Definitions\n" + "\n".join(lines))
+
+        # Last error
+        if last_error_text:
+            # Cap at 1500 chars to avoid blowing up the system prompt
+            truncated = last_error_text[:1500]
+            if len(last_error_text) > 1500:
+                truncated += "\n... (truncated)"
+            sections.append("## Last Error\n```\n" + truncated + "\n```")
+
+        # Recent output
+        if recent_output:
+            joined = "\n".join(recent_output[-15:])
+            if len(joined) > 2000:
+                joined = joined[-2000:] + "\n... (truncated)"
+            sections.append("## Recent REPL Output\n```\n" + joined + "\n```")
+
+        # CWD
+        if cwd:
+            sections.append(f"## Working Directory\n`{cwd}`")
+
+        if not sections:
+            return ""
+        return "<repl_context>\n" + "\n\n".join(sections) + "\n</repl_context>"

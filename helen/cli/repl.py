@@ -6,6 +6,8 @@ Supports multi-line input with bracket/brace matching.
 
 from __future__ import annotations
 
+import io
+import os
 import sys
 from typing import Any
 
@@ -16,6 +18,7 @@ from helen.interpreter.interpreter import Interpreter
 from helen.runtime.http_llm import HttpLLMRuntime
 from helen.semantic.analyzer import SemanticAnalyzer
 from helen.cli.formatter import format_error
+from helen.cli.ask_assistant import ReplState
 
 
 def _create_llm_runtime():
@@ -62,8 +65,18 @@ def _needs_continuation(buffer: str) -> bool:
     return brace_count > 0 or paren_count > 0 or bracket_count > 0
 
 
-def _execute_input(source: str, interp: Interpreter, analyzer: SemanticAnalyzer) -> tuple[bool, Any]:
+def _execute_input(
+    source: str,
+    interp: Interpreter,
+    analyzer: SemanticAnalyzer,
+    repl_state: ReplState | None = None,
+) -> tuple[bool, Any]:
     """Lex, parse, analyze, and interpret a single input.
+
+    If ``repl_state`` is provided, captures all stdout output during
+    interpretation (so the assistant's ``repl_history`` tool sees it) and
+    records any error persistently (so ``repl_last_error`` survives the
+    per-turn ``errors.reset()``).
 
     Returns:
         (success, result_or_error)
@@ -77,33 +90,54 @@ def _execute_input(source: str, interp: Interpreter, analyzer: SemanticAnalyzer)
         scanner = Scanner(source=source, file="<repl>")
         tokens = scanner.scan_all()
     except Exception as e:
-        return False, str(e)
+        err_text = str(e)
+        if repl_state is not None:
+            repl_state.record_error(err_text)
+        return False, err_text
 
     # Parse
     try:
         parser = Parser(tokens, errors=errors)
         program = parser.parse()
     except Exception as e:
-        return False, str(e)
+        err_text = str(e)
+        if repl_state is not None:
+            repl_state.record_error(err_text)
+        return False, err_text
 
     if errors.has_errors:
         msgs = [format_error(err) for err in errors.errors]
-        return False, "\n".join(msgs)
+        err_text = "\n".join(msgs)
+        if repl_state is not None:
+            repl_state.record_error(err_text)
+        return False, err_text
 
     # Analyze (semantic checks: types, scope, etc.)
     try:
         analyzer.analyze(program)
     except Exception as e:
-        return False, str(e)
+        err_text = str(e)
+        if repl_state is not None:
+            repl_state.record_error(err_text)
+        return False, err_text
 
     if errors.has_errors:
         msgs = [format_error(err) for err in errors.errors]
-        return False, "\n".join(msgs)
+        err_text = "\n".join(msgs)
+        if repl_state is not None:
+            repl_state.record_error(err_text)
+        return False, err_text
 
-    # Interpret
+    # Interpret - capture stdout so assistant's repl_history sees it
+    real_stdout = sys.stdout
+    capturing = _CapturingStdout(real_stdout, repl_state) if repl_state else None
+    if capturing is not None:
+        sys.stdout = capturing
     try:
         result = interp.interpret(program)
     except Exception as e:
+        if capturing is not None:
+            sys.stdout = real_stdout
         # Capture structured error context for :last_error
         # Only capture if not already captured by the interpreter (e.g., in function/agent calls)
         if interp.observability.last_error is None:
@@ -111,107 +145,84 @@ def _execute_input(source: str, interp: Interpreter, analyzer: SemanticAnalyzer)
             interp.observability.capture_error(
                 type(e).__name__, str(e), span, scope={}
             )
-        return False, f"RuntimeError: {e}"
+        err_text = f"RuntimeError: {e}"
+        if repl_state is not None:
+            repl_state.record_error(err_text)
+        return False, err_text
+    finally:
+        if capturing is not None:
+            sys.stdout = real_stdout
 
     if errors.has_errors:
         msgs = [format_error(err) for err in errors.errors]
-        return False, "\n".join(msgs)
+        err_text = "\n".join(msgs)
+        if repl_state is not None:
+            repl_state.record_error(err_text)
+        return False, err_text
 
     return True, result
 
 
-def _run_helen_assistant(question: str) -> bool:
-    """Run the Helen assistant program to answer a question.
+class _CapturingStdout:
+    """Tee stdout: writes go to the real stream AND are recorded into a
+    ReplState output buffer. Used during _execute_input so the assistant
+    sees what the user's code printed.
+    """
 
-    Args:
-        question: User's question about Helen.
+    def __init__(self, real_stream: Any, repl_state: ReplState | None):
+        self._real = real_stream
+        self._repl_state = repl_state
+        self._buffer = io.StringIO()
 
-    Returns:
-        True if execution succeeded, False on error.
-        Output is streamed directly to stdout.
+    def write(self, text: str) -> int:
+        # Record to our own buffer for later retrieval
+        self._buffer.write(text)
+        if self._repl_state is not None and text:
+            self._repl_state.record_output(text)
+        return self._real.write(text)
+
+    def flush(self) -> None:
+        self._real.flush()
+
+    def get_captured(self) -> str:
+        return self._buffer.getvalue()
+
+    # Pass through all other attributes to the real stream
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._real, name)
+
+
+def _skill_dirs() -> list[str]:
+    """Return the skill directories the assistant should load.
+
+    Matches the three-tier lookup used by the runtime: project-level,
+    user-level, and built-in.
     """
     from pathlib import Path
-    from helen.core.lexer import Scanner
-    from helen.core.parser import Parser
-    from helen.core.errors import ErrorReporter
-    from helen.interpreter.interpreter import Interpreter
-    from helen.runtime.http_llm import HttpLLMRuntime
-
-    # Load the Helen assistant program (use absolute path based on module location)
-    import helen.cli.repl as repl_module
-    module_dir = Path(repl_module.__file__).parent.parent  # helen/cli -> helen/
-    assistant_path = module_dir / "agent" / "helen_assistant.helen"
-    docs_path = module_dir.parent / "docs" / "tutorial.md"  # helen/ -> repo root -> docs/
-    source_dir = module_dir  # helen/ directory containing source code
-
-    if not assistant_path.exists():
-        print(f"Error: Helen assistant program not found at {assistant_path}", file=sys.stderr)
-        return False
-
-    if not docs_path.exists():
-        print(f"Error: Helen documentation not found at {docs_path}", file=sys.stderr)
-        return False
-
-    if not source_dir.exists():
-        print(f"Error: Helen source directory not found at {source_dir}", file=sys.stderr)
-        return False
-
-    source = assistant_path.read_text(encoding="utf-8")
-
-    # Parse and execute
-    errors = ErrorReporter()
-    scanner = Scanner(source=source, file=str(assistant_path))
-    tokens = scanner.scan_all()
-    parser = Parser(tokens, errors=errors)
-    program = parser.parse()
-
-    if errors.has_errors:
-        msgs = [format_error(err) for err in errors.errors]
-        print(f"Parse error:\n{chr(10).join(msgs)}", file=sys.stderr)
-        return False
-
-    # Create interpreter with modified main block that uses the question
-    llm_runtime = HttpLLMRuntime()
-    interp = Interpreter(errors=errors, llm_runtime=llm_runtime)
-
-    # Modify the program to pass the question, docs path, and source dir to HelenAssistant
-    # We'll create a wrapper that injects the parameters
-    modified_source = source.replace(
-        'let question = "How do I define an agent in Helen?"',
-        f'let question = "{question}"'
-    ).replace(
-        'let docs_path = "docs/tutorial.md"  // Relative path for development',
-        f'let docs_path = "{docs_path}"  // Absolute path from REPL'
-    ).replace(
-        'let source_dir = "helen/"  // Relative path for development',
-        f'let source_dir = "{source_dir}/"  // Absolute path from REPL'
-    )
-
-    # Re-parse with modified source
-    scanner = Scanner(source=modified_source, file=str(assistant_path))
-    tokens = scanner.scan_all()
-    parser = Parser(tokens, errors=errors)
-    program = parser.parse()
-
-    if errors.has_errors:
-        msgs = [format_error(err) for err in errors.errors]
-        print(f"Parse error:\n{chr(10).join(msgs)}", file=sys.stderr)
-        return False
-
-    try:
-        interp.interpret(program)
-        # With llm act on_chunk, output is already printed to stdout.
-        # If there were errors during execution, report them.
-        if errors.has_errors:
-            msgs = [format_error(err) for err in errors.errors]
-            print(f"\nError:\n{chr(10).join(msgs)}", file=sys.stderr)
-        return True
-    except Exception as e:
-        print(f"Runtime error: {e}", file=sys.stderr)
-        return False
+    import helen.cli.repl as _self
+    pkg_dir = Path(_self.__file__).parent.parent  # helen/
+    dirs: list[str] = []
+    # Project-level (.helen/skills in cwd)
+    proj = Path.cwd() / ".helen" / "skills"
+    if proj.is_dir():
+        dirs.append(str(proj))
+    # User-level (~/.helen/skills)
+    user = Path.home() / ".helen" / "skills"
+    if user.is_dir():
+        dirs.append(str(user))
+    # Built-in (helen/skills)
+    builtin = pkg_dir / "skills"
+    if builtin.is_dir():
+        dirs.append(str(builtin))
+    return dirs
 
 
-def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnalyzer) -> bool:
+def _handle_repl_command(
+    line: str,
+    interp: Interpreter,
+    analyzer: SemanticAnalyzer,
+    repl_state: ReplState | None = None,
+) -> bool:
     """Handle REPL colon-commands. Returns True if the line was a command."""
     stripped = line.strip()
     if not stripped.startswith(":"):
@@ -227,7 +238,10 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
         print("  :reset            Clear all definitions (functions, agents)")
         print("  :list             List all defined functions and agents")
         print("  :undefine <name>  Remove a function or agent definition")
-        print("  :ask <question>   Ask the Helen language assistant (single question)")
+        print("  :ask <question>   Ask the Helen assistant (single question)")
+        print("  :ask              Enter multi-turn :ask chat mode")
+        print("  :ask --resume <sid>  Resume a previous :ask chat session")
+        print("  :ask --list       List recent :ask chat sessions")
         print("  :trace on|off     Enable/disable execution tracing")
         print("  :trace show [n]   Show last n trace entries (default 50)")
         print("  :last_error [-v]  Show structured context of last error (-v for trace)")
@@ -274,14 +288,49 @@ def _handle_repl_command(line: str, interp: Interpreter, analyzer: SemanticAnaly
         return True
 
     if cmd == ":ask":
-        if not arg:
-            print("Usage: :ask <question>")
+        from helen.cli.ask_assistant import (
+            ask_single, new_assistant_session, run_chat_mode,
+            list_assistant_sessions,
+        )
+        cwd = os.getcwd()
+        skill_dirs = _skill_dirs()
+
+        # :ask --list — show recent :ask chat sessions
+        if arg == "--list":
+            sessions = list_assistant_sessions()
+            if not sessions:
+                print("(no sessions found)")
+            else:
+                print(f"{'session_id':<40} {'created':<22} {'messages':>8}")
+                for s in sessions:
+                    sid = s.get("session_id", "")
+                    created = s.get("created_at", "")[:19]
+                    count = s.get("message_count", "?")
+                    print(f"{sid:<40} {created:<22} {count:>8}")
             return True
 
+        # :ask --resume <sid> — enter chat mode resuming a session
+        if arg.startswith("--resume"):
+            resume_parts = arg.split(maxsplit=1)
+            if len(resume_parts) < 2 or not resume_parts[1].strip():
+                print("Usage: :ask --resume <session_id>")
+                return True
+            sid = resume_parts[1].strip()
+            session = new_assistant_session(cwd, skill_dirs, session_id=sid)
+            run_chat_mode(session, cwd, skill_dirs)
+            return True
+
+        # :ask (no question) — enter multi-turn chat mode with new session
+        if not arg:
+            session = new_assistant_session(cwd, skill_dirs)
+            run_chat_mode(session, cwd, skill_dirs)
+            return True
+
+        # :ask <question> — single-turn question
+        if repl_state is None:
+            repl_state = ReplState()
         print("\n🤔 Thinking...\n")
-        _run_helen_assistant(arg)
-        # Output is streamed directly to stdout by llm act on_chunk
-        print()  # Final newline after streaming completes
+        ask_single(arg, interp, repl_state, cwd, skill_dirs)
         return True
 
     if cmd == ":trace":
@@ -545,6 +594,10 @@ def repl_command(session_id: str | None = None) -> int:
     interp.observability.tracer.enabled = True
     analyzer = SemanticAnalyzer(errors, base_dir=cwd)
 
+    # REPL state tracked for the assistant's repl_context block (L1/L2).
+    # Bounded output buffer + persistent last error.
+    repl_state = ReplState()
+
     buffer_lines: list[str] = []
     empty_line_count = 0  # Track consecutive empty lines
 
@@ -580,8 +633,8 @@ def repl_command(session_id: str | None = None) -> int:
             if line.strip() == "exit":
                 break
 
-            # Handle REPL commands (:help, :reset, :list, :undefine)
-            if not buffer_lines and _handle_repl_command(line, interp, analyzer):
+            # Handle REPL commands (:help, :reset, :list, :undefine, :ask)
+            if not buffer_lines and _handle_repl_command(line, interp, analyzer, repl_state):
                 continue
 
             # Track empty lines
@@ -597,7 +650,7 @@ def repl_command(session_id: str | None = None) -> int:
                 # Force execution even if braces are unbalanced
                 if buffer.strip():
                     try:
-                        success, result = _execute_input(buffer, interp, analyzer)
+                        success, result = _execute_input(buffer, interp, analyzer, repl_state)
                         if success:
                             if result is not None:
                                 print(repr(result))
@@ -624,7 +677,7 @@ def repl_command(session_id: str | None = None) -> int:
             # Try to execute
             if buffer.strip():
                 try:
-                    success, result = _execute_input(buffer, interp, analyzer)
+                    success, result = _execute_input(buffer, interp, analyzer, repl_state)
                     if success:
                         if result is not None:
                             print(repr(result))

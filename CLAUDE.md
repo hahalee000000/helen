@@ -60,6 +60,9 @@ Layer 2: Runtime (LLM integration)
 Layer 3: Toolchain
   CLI (run/check/repl/test/quality/doc/init/lsp) — supports --session/--resume-latest for session recovery (v1.24)
   REPL (multi-line, :help/:reset/:ask/:agent/:trace/:stats/:llm_log/:last_error/:transcript/:sessions/:session_id)
+  - `:ask <question>` — single-turn question; system prompt auto-includes current definitions, last error, recent REPL output (L1).
+  - `:ask` (no arg) — multi-turn chat mode with its own transcript session (L3). `:ask --resume <sid>` resumes a prior chat; `:ask --list` lists chat sessions.
+  - Assistant exposes 4 REPL-state tools to the LLM: `repl_definitions`, `repl_last_error`, `repl_history`, `repl_read_file` (L2).
   LSP (diagnostics, completion, go-to-definition, alias-aware)
   VS Code Extension (syntax highlighting + LSP)
 ```

@@ -4,6 +4,46 @@
 
 ---
 
+## [2026-07-26] feature | v1.28 - :ask 三层增强(L1/L2/L3)
+
+**操作**: 重写 REPL `:ask` 命令,从依赖 `helen_assistant.helen`(已不存在)改为直接调 LLM + 注入 REPL 上下文,新增 REPL 状态工具和对话模式
+**状态**: ✅ 完成
+
+### 背景
+旧 `:ask` 硬依赖 `helen/agent/helen_assistant.helen`(helenagent v1.0 重构时移除),且用字符串替换注入参数、每次冷启动解析整个 assistant 程序、无 REPL 上下文感知、单轮无记忆、不进 transcript。已实质 broken(test_hellen_assistant_program_exists 失败根源之一)。
+
+### 三层增强
+
+**L1 - 修好 + REPL 上下文注入**:
+- 移除 `_run_helen_assistant`,改为直接调 `HttpLLMRuntime.act_stream`
+- 每次 `:ask` 组装 system prompt = `framework_instructions + helen_conventions + skill_index + <repl_context>XML 块`
+- `<repl_context>` 块包含当前定义、最近一次错误、最近 50 行 REPL 输出、cwd
+- REPL 每次执行用 `_CapturingStdout` 捕获 stdout 到 `ReplState.output_buffer`;错误写入 `ReplState.last_error_text`(持久化,跨 `errors.reset()` 不丢)
+- `PromptBuilder.build_assistant_system_prompt()` + `format_repl_context_block()` 两个新方法
+
+**L2 - REPL 状态工具化**:
+- 4 个 REPL 工具:`repl_definitions` / `repl_last_error` / `repl_history` / `repl_read_file`
+- 通过 `dispatch_fn` 注入 `runtime.act`,与 stdlib / load_skill 共享 dispatch(fallback 到默认 `dispatch_tool`)
+- `repl_read_file` 限制在 cwd 内(路径逃逸拒绝),结果截断到 8000 字符
+- LLM 可主动查询 REPL 状态,而不是靠用户口头描述
+
+**L3 - 多轮对话模式**:
+- `:ask`(无参数)进入对话子 REPL,独立 `AssistantSession`(独立 `Interpreter` + 独立 `TranscriptStore`,session_id 独立于主 REPL)
+- 支持 `:ask --resume <sid>` 恢复历史对话;`:ask --list` 列出会话
+- 对话子 REPL 提示符 `[:ask] >>>`;`:exit` / Ctrl+C 退回主 REPL
+- 每轮调 `chat_turn()`,用户消息 + 助手消息都记录到 session 的 transcript
+
+### 关键文件
+- `helen/cli/ask_assistant.py`(新):`ReplState`、`AssistantSession`、`ask_single`、`run_chat_mode`、4 个 REPL 工具 + dispatch
+- `helen/cli/repl.py`:移除 `_run_helen_assistant`;加 `_CapturingStdout`、`_skill_dirs`;`_execute_input` 接受 repl_state 捕获 stdout + 记录错误;`:ask` 分发到新助手
+- `helen/runtime/prompt_builder.py`:公开 `build_assistant_system_prompt()` + 静态 `format_repl_context_block()`
+- `tests/cli/test_repl_ask.py`:25 个测试覆盖 L1/L2/L3 + REPL 命令分发 + stdout 捕获
+
+### 测试
+全套 3235 passed,1 个预存失败 `test_helen_assistant_program_exists`(helen_assistant.helen 不存在,与本特性无关;旧 :ask 测试已重写)。
+
+---
+
 ## [2026-07-26] bugfix | v1.27.2 - 修复 agent description 未注入 LLM system prompt
 
 **操作**: 修复 agent 声明的 `description "..."` 字段从未进入 `llm act` 的 system prompt
