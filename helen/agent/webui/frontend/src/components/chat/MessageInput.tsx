@@ -86,7 +86,7 @@ export function MessageInput({ onSend, onStop, disabled, isLoading }: MessageInp
   }
 
   return (
-    <form onSubmit={handleSubmit} className="border-t p-4 bg-card">
+    <form onSubmit={handleSubmit} className="border-t p-4 bg-card" style={{ backgroundColor: '#EAE9E5' }}>
       {/* 附件预览区 */}
       {pendingFiles.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2 p-2 border rounded-lg bg-muted/30">
@@ -152,7 +152,7 @@ export function MessageInput({ onSend, onStop, disabled, isLoading }: MessageInp
               ? "上传中..."
               : "输入消息... (Shift+Enter 换行)"}
           disabled={disabled || uploading}
-          rows={1}
+          rows={3}
           className="flex-1 resize-none rounded-lg border border-input bg-background px-4 py-2 focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
           style={{ minHeight: '40px', maxHeight: '200px' }}
         />

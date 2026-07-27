@@ -26,7 +26,7 @@ export function Layout({ children }: LayoutProps) {
   return (
     <div className="flex h-screen bg-background">
       {/* 侧边栏 */}
-      <aside className="w-64 border-r bg-card">
+      <aside className="w-64 border-r bg-card" style={{ backgroundColor: '#EAE9E5' }}>
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="p-6 border-b flex items-center gap-3">
