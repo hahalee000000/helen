@@ -148,10 +148,10 @@ class TestSpawnResumeParser:
         assert sp is not None
         assert sp.resume_session is not None
 
-    def test_keyword_count_unchanged_at_89(self):
-        """resume is an identifier clause, not a keyword token."""
+    def test_keyword_count_unchanged_at_91(self):
+        """resume is an identifier clause, not a keyword token. v1.29: transcript/记录 added."""
         from helen.core.tokens import keywords
-        assert len(keywords()) == 89
+        assert len(keywords()) == 91
 
 
 # ---------------------------------------------------------------------------
