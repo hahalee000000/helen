@@ -63,5 +63,8 @@ class Settings(BaseSettings):
     class Config:
         env_file = _backend_env_file()
         case_sensitive = True
+        # v6.1 移除了 SQLite（transcript 作为 SSOT），保留 extra="ignore" 防止未来
+        # .env 中的陈旧字段（如 DATABASE_URL）打断启动。
+        extra = "ignore"
 
 settings = Settings()

@@ -29,9 +29,12 @@ export function Layout({ children }: LayoutProps) {
       <aside className="w-64 border-r bg-card">
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="p-6 border-b">
-            <h1 className="text-2xl font-bold text-primary">Helen</h1>
-            <p className="text-sm text-muted-foreground mt-1">Web UI</p>
+          <div className="p-6 border-b flex items-center gap-3">
+            <img src="/helen-logo-64.png" alt="Helen" className="w-10 h-10 rounded-lg" />
+            <div>
+              <h1 className="text-2xl font-bold text-primary">Helen</h1>
+              <p className="text-sm text-muted-foreground mt-1">Web UI</p>
+            </div>
           </div>
 
           {/* 导航 */}

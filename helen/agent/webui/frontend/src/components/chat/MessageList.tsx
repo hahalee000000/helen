@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Message } from '@/types'
 import { formatTime } from '@/utils/format'
-import { User, Bot, Wrench, CheckCircle2 } from 'lucide-react'
+import { User, Wrench, CheckCircle2 } from 'lucide-react'
 import { AttachmentView } from './AttachmentView'
 
 interface MessageListProps {
@@ -11,7 +11,8 @@ interface MessageListProps {
 export function MessageList({ messages }: MessageListProps) {
   if (messages.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-muted-foreground">
+      <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-4">
+        <img src="/helen-logo-128.png" alt="Helen" className="w-24 h-24 rounded-2xl opacity-50" />
         <p>开始对话吧！</p>
       </div>
     )
@@ -40,7 +41,7 @@ function MessageItem({ message }: { message: Message }) {
 
   // 头像样式（user=深色，assistant=浅色）
   const avatarCls = `flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-    isUser ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'
+    isUser ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground overflow-hidden'
   }`
   // 气泡样式（user=深色+inline-block 收缩贴文字；assistant=浅色占满宽度）
   const bubbleCls = `rounded-lg px-4 py-2 ${
@@ -88,9 +89,9 @@ function MessageItem({ message }: { message: Message }) {
     </div>
   ) : (
     <div className="flex gap-3">
-      {/* 头像：屏幕左边 */}
+      {/* 头像：屏幕左边，使用 Helen logo */}
       <div className={avatarCls}>
-        <Bot className="w-4 h-4" />
+        <img src="/helen-logo-64.png" alt="Helen" className="w-full h-full object-cover" />
       </div>
       {/* 消息内容：flex-1 占满剩余空间，气泡 inline-block 贴左 */}
       <div className="flex-1 max-w-[80%]">

@@ -92,7 +92,10 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
             </span>
           </div>
           {isLoading && (
-            <span className="text-sm text-muted-foreground">Helen 思考中...</span>
+            <span className="flex items-center gap-2 text-sm text-muted-foreground">
+              <img src="/helen-logo-64.png" alt="" className="w-4 h-4 rounded-full animate-pulse" />
+              Helen 思考中...
+            </span>
           )}
         </div>
       </div>
