@@ -1500,11 +1500,29 @@ errors: [Fixed token expiration handling - was missing refresh logic]
 
         # Phase 2 SSOT: Write to TranscriptStore when enabled (NO dual-write)
         if agent_ctx is not None and agent_ctx.transcript_store is not None:
-            # Write ONLY to TranscriptStore (SSOT)
-            agent_ctx.transcript_store.append(msg)
-        else:
-            # Fallback: write to _interpreter_history when TranscriptStore disabled
-            self._interpreter_history.append(msg)
+            # v1.29: Check transcript level for current invocation
+            transcript_level = "persistent"  # default
+            inv_id = getattr(self, '_current_invocation_id', '')
+            if inv_id and hasattr(self, '_invocation_index'):
+                inv_meta = self._invocation_index.get(inv_id, {})
+                transcript_level = inv_meta.get("transcript_level", "persistent")
+
+            # v1.29: Respect transcript level
+            if transcript_level == "none":
+                # Don't write to transcript store at all
+                # Fall through to fallback storage
+                pass
+            else:
+                # Write to TranscriptStore
+                # v1.29: "memory" mode = don't persist to disk
+                persist = (transcript_level == "persistent")
+                agent_ctx.transcript_store.append(msg, persist=persist)
+                # Skip the fallback storage when using transcript store
+                # (except for "none" level which is handled above)
+                return
+
+        # Fallback: write to _interpreter_history when TranscriptStore disabled or transcript_level="none"
+        self._interpreter_history.append(msg)
 
         # Phase 7: Update working memory from message
         # For multimodal content, extract text portion for working memory

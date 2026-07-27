@@ -1138,10 +1138,12 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         v1.22: Top-level main (when _current_agent is None) is an invocation.
         Agent main blocks are invocations created by _call_agent; we skip
         creating a nested invocation here.
+
+        v1.29: Top-level main defaults to transcript "none" to avoid directory pollution.
         """
         if self._current_agent is None:
-            # Top-level main: create an invocation
-            self._enter_invocation(None)
+            # Top-level main: create an invocation with transcript "none" by default
+            self._enter_invocation(None, "none")
             try:
                 with self._push_scope():
                     return self._execute_stmts(node.body)
@@ -1631,11 +1633,12 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
     #                from active context, but preserved in transcript SSOT)
     # ------------------------------------------------------------------
 
-    def _enter_invocation(self, agent_name: str | None) -> str:
+    def _enter_invocation(self, agent_name: str | None, transcript_level: str = "persistent") -> str:
         """Enter a new invocation. Returns the new invocation_id.
 
         Args:
             agent_name: Name of the agent (None for top-level main).
+            transcript_level: v1.29 transcript control - "none", "memory", or "persistent".
 
         Saves caller's invocation_id on the stack, allocates a fresh
         invocation_id, and records metadata in _invocation_index.
@@ -1668,6 +1671,7 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
             "end_time": None,
             "children": [],
             "message_count": 0,
+            "transcript_level": transcript_level,  # v1.29: transcript control
         }
         if parent_id and parent_id in self._invocation_index:
             self._invocation_index[parent_id]["children"].append(new_id)
@@ -1722,6 +1726,9 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         # v1.12: Determine isolation level
         isolation_level = getattr(agent, 'isolation_level', 'standard')
 
+        # v1.29: Get transcript level from agent declaration
+        transcript_level = getattr(agent, 'transcript', 'persistent')
+
         # Check if agent is streaming mode
         is_streaming = self._is_agent_streaming(agent)
 
@@ -1730,7 +1737,7 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         # (via _add_to_history in llm_mixin.py). The _history property filters
         # by invocation_id, so the agent's LLM calls see ONLY this invocation's
         # messages — achieving per-agent context isolation.
-        inv_id = self._enter_invocation(agent.name)
+        inv_id = self._enter_invocation(agent.name, transcript_level)
 
         # Push call stack frame (AI observability)
         self.observability.call_stack.push(agent.name, agent.span, args)

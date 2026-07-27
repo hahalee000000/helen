@@ -744,16 +744,19 @@ class TranscriptStore:
             threshold_mb = multimodal_config.get("media_external_threshold_mb", 1.0)
             self._media_storage = MediaStorage(session_dir, threshold_mb)
 
-    def append(self, message: Message) -> Message:
+    def append(self, message: Message, persist: bool = True) -> Message:
         """Append a message to the transcript.
 
         Assigns a UUID if the message doesn't have one.
-        If a backend is configured, also persists the message.
+        If a backend is configured and persist=True, also persists the message.
         Phase 4: Implements LRU cache eviction for memory efficiency.
         v1.17 Phase 3: Extracts large media to external storage.
+        v1.29: Added persist parameter for per-invocation transcript control.
 
         Args:
             message: Message to append
+            persist: If True and backend is configured, persist to disk.
+                     If False, only store in memory (v1.29).
 
         Returns:
             The same message (with UUID assigned if needed)
@@ -770,8 +773,8 @@ class TranscriptStore:
         self._uuid_index[message.uuid] = index
         self._dirty = True  # Invalidate view cache
 
-        # Persist to backend
-        if self._backend is not None:
+        # Persist to backend (v1.29: respect persist flag)
+        if persist and self._backend is not None:
             self._backend.append(message)
 
         # Phase 4: LRU cache eviction - offload old items when over limit
