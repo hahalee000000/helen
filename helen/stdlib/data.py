@@ -33,6 +33,37 @@ def _json_parse(text: str) -> Any:
         raise ValueError(f"Invalid JSON: {e}") from e
 
 
+def _json_parse_lenient(text: str) -> Any:
+    """Parse JSON string, automatically stripping markdown code fences.
+
+    Handles common LLM output formats like:
+    - ```json\n{...}\n```
+    - ```\n{...}\n```
+    - Plain JSON
+
+    Args:
+        text: JSON string, possibly wrapped in markdown fences
+
+    Returns:
+        Parsed Python object (dict, list, str, int, float, bool, None)
+
+    Raises:
+        ValueError: If JSON is invalid after stripping fences
+    """
+    import re
+    # Strip markdown code fences (```json ... ``` or ``` ... ```)
+    cleaned = text.strip()
+    # Match ```json or ``` at the start, and ``` at the end
+    cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned)
+    cleaned = re.sub(r'\s*```$', '', cleaned)
+    cleaned = cleaned.strip()
+
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON: {e}") from e
+
+
 def _json_stringify(value: Any, indent: int | None = None) -> str:
     """Convert Python object to JSON string.
 

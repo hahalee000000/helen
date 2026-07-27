@@ -43,6 +43,24 @@ class TestRegexMatch:
         with pytest.raises(ValueError):
             _regex_match(r"[invalid", "test")
 
+    def test_chinese_characters(self):
+        """Test regex with Chinese characters (Unicode support)."""
+        # Test basic Chinese matching
+        result = _regex_match("图片标题：(.+)", "图片标题：工伤保险智能化")
+        assert result is not None
+        assert result["match"] == "图片标题：工伤保险智能化"
+        assert result["groups"] == ("工伤保险智能化",)
+
+        # Test Chinese with word boundaries
+        result2 = _regex_match(r"[一-鿿]+", "中文测试")
+        assert result2 is not None
+        assert result2["match"] == "中文测试"
+
+        # Test mixed Chinese and English
+        result3 = _regex_match(r"Hello\s+([一-鿿]+)", "Hello 世界")
+        assert result3 is not None
+        assert result3["groups"] == ("世界",)
+
 
 class TestRegexSearch:
     """Tests for regex_search."""

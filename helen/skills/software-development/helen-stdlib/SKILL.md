@@ -18,8 +18,8 @@ Helen's standard library provides **203 built-in functions**, covering all core 
 | Category | Count | Representative Functions |
 |----------|--------|--------------------------|
 | **Core** | 17 | `print`, `len`, `str`, `int`, `float`, `bool`, `list`, `dict`, `abs`, `min`, `max`, `range`, `type`, `isinstance`, `input`, `multiline_input`, `exit` |
-| **String** | 40 | `upper`, `lower`, `strip`, `split`, `join`, `replace`, `find`, `reverse`, `repeat`, `regex_match`, `regex_replace`, `format_float`, `tokenize`, `levenshtein`, `base64_encode` |
-| **Data** | 27 | `json_parse`, `json_stringify`, `yaml_parse`, `toml_parse`, `csv_parse`, `xml_parse`, `html_escape`, `html_parse`, `markdown_parse`, `markdown_to_html` |
+| **String** | 41 | `upper`, `lower`, `strip`, `split`, `join`, `replace`, `find`, `find_from`, `reverse`, `repeat`, `regex_match`, `regex_replace`, `regex_split`, `format_float`, `tokenize`, `levenshtein`, `base64_encode` |
+| **Data** | 28 | `json_parse`, `json_parse_lenient`, `json_stringify`, `yaml_parse`, `toml_parse`, `csv_parse`, `xml_parse`, `html_escape`, `html_parse`, `markdown_parse`, `markdown_to_html` |
 | **Collection** | 22 | `sort`, `reverse`, `unique`, `flatten`, `zip`, `map`, `filter`, `reduce`, `chunk`, `set_union`, `set_intersection`, `set_difference` |
 | **Network** | 9 | `http_get`, `http_post`, `http_put`, `http_delete`, `http_download`, `url_parse`, `url_build`, `url_encode`, `url_decode` |
 | **Time** | 16 | `now`, `time`, `date`, `datetime`, `date_format`, `date_parse`, `date_add`, `date_diff`, `sleep`, `stopwatch_start`, `stopwatch_elapsed`, `stopwatch_lap` |
@@ -55,10 +55,13 @@ Helen has 230+ built-in Chinese aliases covering all stdlib categories. Common e
 | `filter` | `过滤` | Collection |
 | `map` | `映射` | Collection |
 | `json_parse` | `json解析` | Data |
+| `json_parse_lenient` | `json宽松解析` | Data |
 | `json_stringify` | `json序列化` | Data |
 | `http_get` | `http获取` | Network |
 | `regex_match` | `正则匹配` | String |
 | `regex_replace` | `正则替换` | String |
+| `regex_split` | `正则分割` | String |
+| `find_from` | `从位置查找` | String |
 | `format_float` | `格式化浮点` | String |
 | `date_format` | `日期格式化` | Time |
 | `read_file` | `读文件` | File |
@@ -146,6 +149,14 @@ if regex_match("hello123", r"\d+") {
 }
 let cleaned = regex_replace("a1b2c3", r"\d", "")  # "abc"
 
+# Split by regex pattern (multiple delimiters)
+let tokens = regex_split("a, b; c  d", r"[,;\s]+")  # ["a", "b", "c", "d"]
+
+# Find from position
+let text = "hello world hello"
+let pos1 = find(text, "hello")              # 0 (first occurrence)
+let pos2 = find_from(text, "hello", 6)      # 12 (second occurrence)
+
 # Whitespace handling
 let trimmed = strip("  hello  ")  # "hello"
 let padded = pad_start("42", 5, "0")  # "00042"
@@ -165,6 +176,10 @@ let formatted = 格式化浮点(8.5, 1)  # "8.5"
 # JSON
 let data = json_parse('{"name": "Helen", "version": 1}')
 let json = json_stringify(data, indent=2)
+
+# Lenient JSON parsing (handles markdown fences from LLM output)
+let llm_output = "```json\n{\"key\": \"value\"}\n```"
+let data2 = json_parse_lenient(llm_output)  # Automatically strips fences
 
 # YAML
 let config = yaml_parse("key: value\nlist:\n  - item1\n  - item2")

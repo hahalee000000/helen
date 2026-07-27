@@ -124,6 +124,7 @@ ALIASES: dict[str, str] = {
     "过滤": "filter",
     "归约": "reduce",
     "查找": "find",
+    "从位置查找": "find_from",
     "条件查找": "find_if",
     "全部满足": "every",
     "部分满足": "some",

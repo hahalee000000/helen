@@ -34,7 +34,7 @@ from helen.stdlib.string import (
 
 # Import data functions
 from helen.stdlib.data import (
-    _json_parse, _json_stringify, _json_load, _json_save,
+    _json_parse, _json_parse_lenient, _json_stringify, _json_load, _json_save,
     _html_parse, _html_text, _html_links, _html_select,
     _markdown_to_html, _markdown_extract_headings, _markdown_parse,
     _csv_parse, _csv_stringify, _csv_load, _csv_save,
@@ -552,6 +552,24 @@ def _find(s: str, sub: str) -> int:
     return s.find(sub)
 
 
+def _find_from(s: str, sub: str, start: int) -> int:
+    """Find the index of a substring starting from a given position. Returns -1 if not found.
+
+    Args:
+        s: The string to search in
+        sub: The substring to find
+        start: The position to start searching from
+
+    Returns:
+        The index of the first occurrence, or -1 if not found
+
+    Example:
+        let text = "hello world hello"
+        let pos = find_from(text, "hello", 6)  // Returns 12
+    """
+    return s.find(sub, start)
+
+
 def _interpolate(template: str, vars: dict) -> str:
     """Interpolate a template string with variables.
     
@@ -846,6 +864,7 @@ def _register_string() -> list[BuiltinFunction]:
         BuiltinFunction("endswith", "Check suffix", "endswith(s, suffix)", _endswith, "string"),
         BuiltinFunction("replace", "Replace substring", "replace(s, old, new)", _replace, "string"),
         BuiltinFunction("find", "Find substring index", "find(s, sub)", _find, "string"),
+        BuiltinFunction("find_from", "Find substring from position", "find_from(s, sub, start)", _find_from, "string"),
         BuiltinFunction("contains", "Check if contains substring", "contains(s, sub)", _contains, "string"),
         BuiltinFunction("substring", "Extract substring", "substring(s, start, end?)", _substring, "string"),
         BuiltinFunction("trim_prefix", "Remove prefix", "trim_prefix(s, prefix)", _trim_prefix, "string"),
@@ -972,6 +991,7 @@ def _register_data() -> list[BuiltinFunction]:
     return [
         # Data JSON operations
         BuiltinFunction("json_parse", "Parse JSON", "json_parse(text)", _json_parse, "data"),
+        BuiltinFunction("json_parse_lenient", "Parse JSON with markdown fence stripping", "json_parse_lenient(text)", _json_parse_lenient, "data"),
         BuiltinFunction("json_stringify", "Stringify to JSON", "json_stringify(value, indent?)", _json_stringify, "data"),
         BuiltinFunction("json_load", "Load JSON from file", "json_load(path)", _json_load, "data"),
         BuiltinFunction("json_save", "Save JSON to file", "json_save(path, value, indent?)", _json_save, "data"),

@@ -725,6 +725,17 @@ class Parser:
         if self._match(TokenType.LEFT_PAREN):
             condition = self._expression()
             self._consume(TokenType.RIGHT_PAREN, "Expected ')' after if condition.")
+            # Detect the common trap: if (a || b) && c { }
+            # The parser sees the first ) as closing the if-condition, leaving && c unparsed.
+            # User needs double parentheses: if ((a || b) && c) { }
+            if self._check(TokenType.AND, TokenType.OR):
+                op_lexeme = self._current().lexeme
+                self._error(
+                    f"Unexpected '{op_lexeme}' after if condition. "
+                    f"The parentheses after 'if' are consumed as the condition delimiters. "
+                    f"Wrap the entire condition in double parentheses: "
+                    f"'if ((...){op_lexeme} ...) {{ }}'."
+                )
         else:
             condition = self._expression()
         self._consume(TokenType.LEFT_BRACE, "Expected '{' before if body.")
@@ -762,6 +773,15 @@ class Parser:
         if self._match(TokenType.LEFT_PAREN):
             condition = self._expression()
             self._consume(TokenType.RIGHT_PAREN, "Expected ')' after while condition.")
+            # Detect the common trap: while (a || b) && c { }
+            if self._check(TokenType.AND, TokenType.OR):
+                op_lexeme = self._current().lexeme
+                self._error(
+                    f"Unexpected '{op_lexeme}' after while condition. "
+                    f"The parentheses after 'while' are consumed as the condition delimiters. "
+                    f"Wrap the entire condition in double parentheses: "
+                    f"'while ((...){op_lexeme} ...) {{ }}'."
+                )
         else:
             condition = self._expression()
         self._consume(TokenType.LEFT_BRACE, "Expected '{' before while body.")

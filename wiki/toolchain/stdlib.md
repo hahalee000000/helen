@@ -39,8 +39,8 @@ class BuiltinFunction:
 | Category | Count | Module File |
 |----------|-------|-------------|
 | **Core** | 11 | `__init__.py` |
-| **String** | 37 | `string.py` |
-| **Data** | 25 | `data.py`, `data_formats.py` |
+| **String** | 38 | `string.py` |
+| **Data** | 26 | `data.py`, `data_formats.py` |
 | **Collection** | 22 | `collection.py` |
 | **Network** | 9 | `network.py` |
 | **Time** | 13 | `time.py` |
@@ -56,7 +56,7 @@ class BuiltinFunction:
 | **Transcript** | 11 | `transcript.py` |
 | **Media** | 12 | `media.py` |
 | **Tools** | 24 | `tools.py` |
-| **Total** | **290** | - |
+| **Total** | **292** | - |
 
 ---
 
@@ -78,9 +78,9 @@ class BuiltinFunction:
 
 ---
 
-## String (37)
+## String (38)
 
-### Basic Operations (12)
+### Basic Operations (13)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -95,6 +95,7 @@ class BuiltinFunction:
 | `endswith` | `endswith(s, suffix)` → bool | Suffix check |
 | `replace` | `replace(s, old, new)` → str | Replace substring |
 | `find` | `find(s, sub)` → int | Find substring position |
+| `find_from` | `find_from(s, sub, start)` → int | Find substring from position (**v1.26 new**) |
 | `substring` | `substring(s, start, end?)` → str | Extract substring |
 
 ### Regular Expressions (5)
@@ -143,13 +144,14 @@ class BuiltinFunction:
 
 ---
 
-## Data (25)
+## Data (26)
 
-### JSON (4)
+### JSON (5)
 
 | Function | Signature | Description |
 |---|---|---|
 | `json_parse` | `json_parse(text)` → Any | Parse JSON |
+| `json_parse_lenient` | `json_parse_lenient(text)` → Any | Parse JSON, auto-strip markdown fences (**v1.26 new**) |
 | `json_stringify` | `json_stringify(value, indent?)` → str | Generate JSON |
 | `json_load` | `json_load(path)` → Any | Load from file |
 | `json_save` | `json_save(path, value, indent?)` → str | Save to file |

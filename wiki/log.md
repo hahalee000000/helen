@@ -4,6 +4,25 @@
 
 ---
 
+## [2026-07-27] stdlib | 新增 find_from 和 json_parse_lenient 函数
+
+**操作**: 标准库扩展 + 解析器改进  
+**变更**:
+1. **新增 `find_from(s, sub, start)`** - 从指定位置查找子串，解决多次查找需要 substring+find 的繁琐问题
+2. **新增 `json_parse_lenient(text)`** - 宽松 JSON 解析，自动去除 LLM 返回的 markdown 围栏（```json ... ```）
+3. **解析器改进** - if/while 语句检测复杂布尔表达式陷阱，提供清晰的错误提示
+4. **文档更新** - 在 helen-stdlib 技能中补充 regex_split 示例和中文别名
+5. **测试覆盖** - 添加中文正则表达式测试用例，验证 Unicode 支持
+
+**影响**:
+- 标准库函数总数：324 → 326（String 40→41, Data 27→28）
+- 新增中文别名：`从位置查找`, `json宽松解析`
+- 完全向后兼容
+
+**触发**: Helen agent 在开发 docx-converter 时提出的改进建议
+
+---
+
 ## [2026-07-26] feature | v1.28 - :ask 三层增强(L1/L2/L3)
 
 **操作**: 重写 REPL `:ask` 命令,从依赖 `helen_assistant.helen`(已不存在)改为直接调 LLM + 注入 REPL 上下文,新增 REPL 状态工具和对话模式
