@@ -838,6 +838,7 @@ class Parser:
         agent_functions: list = []
         agent_function_vars: list = []
         context_config: "ContextConfigNode | None" = None  # Phase 7
+        transcript_level: str = "none"  # v1.29: default is "none"
         while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF):
             if self._match(TokenType.PROMPT):
                 if self._match(TokenType.STRING, TokenType.TRIPLE_QUOTE_STRING):
@@ -848,6 +849,15 @@ class Parser:
                 prompt = PromptDefNode(content=content, span=self._previous().span)
             elif self._match(TokenType.MAIN):
                 logic = self._main_block()
+            elif self._match(TokenType.TRANSCRIPT):
+                # v1.29: Parse transcript "none|memory|persistent"
+                if self._match(TokenType.STRING):
+                    level = self._previous().literal or "none"
+                    if level not in ("none", "memory", "persistent"):
+                        self._error(f"Invalid transcript level: {level}. Must be 'none', 'memory', or 'persistent'.")
+                    transcript_level = level
+                else:
+                    self._error("Expected string after 'transcript'.")
             elif self._match(TokenType.FN):
                 self._function_decl()
             elif self._match(TokenType.FUNCTIONS):
@@ -921,7 +931,8 @@ class Parser:
                              functions=agent_functions,
                              function_vars=agent_function_vars,
                              has_streaming=has_streaming,
-                             context_config=context_config)
+                             context_config=context_config,
+                             transcript=transcript_level)
 
     def _shared_container_decl(self, kind: str) -> object:
         """Parse a shared store declaration.

@@ -692,6 +692,7 @@ class AgentDeclNode(StatementNode):
         has_streaming: Pre-computed flag indicating if any declaration has streaming=true (P2 optimization).
         isolation_level: v1.12 isolation level - "standard" (L1), "open" (L0), "strict" (L2), "sandbox" (L3).
         context_config: Phase 7 context configuration (compression, cache-aware, working memory).
+        transcript: v1.29 transcript control - "none" (default), "memory", or "persistent".
     """
     name: str
     params: list[AgentParamNode]
@@ -704,6 +705,7 @@ class AgentDeclNode(StatementNode):
     has_streaming: bool = False  # Pre-computed for _is_agent_streaming (P2)
     isolation_level: str = "standard"  # v1.12: "open", "standard", "strict", "sandbox"
     context_config: "ContextConfigNode | None" = None  # Phase 7: context configuration
+    transcript: str = "none"  # v1.29: "none", "memory", or "persistent"
 
     def accept(self, visitor: Visitor[R]) -> R:
         """Dispatch to the visitor."""

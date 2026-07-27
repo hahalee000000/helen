@@ -93,6 +93,37 @@ agent FileWorker {
 }
 ```
 
+### Transcript Control (v1.29+)
+
+Control whether agent conversations are persisted to disk. Default is `none` to avoid cluttering the working directory:
+
+```helen
+// No transcript (default, zero overhead)
+agent SimpleTask {
+    transcript "none"
+    main { llm act "Quick task" }
+}
+
+// In-memory only (debugging, no disk files)
+agent DebugAgent {
+    transcript "memory"
+    main { llm act "Debug issue" }
+}
+
+// Persistent (audit trails, session resumption)
+agent AuditAgent {
+    transcript "persistent"
+    main { llm act "Perform audit" }
+}
+```
+
+**When to use each level**:
+- `none`: Most scripts, batch processing, performance-critical tasks
+- `memory`: Development, debugging, when you need `get_session_id()` but don't want disk files
+- `persistent`: Long-running services, audit requirements, when you need to resume sessions
+
+**Chinese**: `记录 "无"` / `记录 "内存"` / `记录 "持久"`
+
 ### Agent vs Skill
 
 | Dimension | Agent | Skill |

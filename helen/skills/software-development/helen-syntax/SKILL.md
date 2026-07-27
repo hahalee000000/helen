@@ -51,6 +51,7 @@ Bilingual keywords map to the same TokenType and can be freely mixed. The parser
 | `protocol` / `impl` | `协议` / `实现` | 协议声明 |
 | `branch` | `分支` | 分支 |
 | `alias` | `别名` | 函数/变量别名 (v1.10) |
+| `transcript` | `记录` | Agent transcript 控制 (v1.29: none/memory/persistent) |
 
 ### Chinese Identifiers
 
@@ -255,6 +256,32 @@ agent Streamer(topic: str) {
     description "Stream a long response"
     streaming true
     prompt "Write a detailed essay about: {{topic}}"
+}
+
+// Transcript control (v1.29)
+agent SimpleTask {
+    description "Simple task with no transcript"
+    transcript "none"  // Default: no transcript recording
+    main { ... }
+}
+
+agent DebugAgent {
+    description "Debug with memory transcript"
+    transcript "memory"  // In-memory only, no disk persistence
+    main { ... }
+}
+
+agent AuditAgent {
+    description "Audit with persistent transcript"
+    transcript "persistent"  // Full persistence to disk
+    main { ... }
+}
+
+// Chinese aliases
+agent 工作Agent {
+    描述 "简单任务"
+    记录 "无"  // 或 "内存", "持久"
+    主函 { ... }
 }
 ```
 

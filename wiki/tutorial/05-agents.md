@@ -419,6 +419,55 @@ $ helen chat.helen --transcript-log=/tmp/my_chat.jsonl
 
 See [TranscriptStore documentation](../runtime/transcript-store.md) and [stdlib reference](10-stdlib.md#transcript-functions-6-v116).
 
+#### Transcript Control (v1.29+)
+
+By default, agent transcripts are **not persisted** to avoid cluttering the working directory with session files. You can explicitly control transcript behavior per agent:
+
+```helen
+agent 工作Agent {
+    description "Simple task agent"
+    model "qwen3.7-plus"
+    transcript "none"  // Default: no transcript recording
+    
+    main {
+        llm act "Process data"
+        print("Done")
+    }
+}
+
+agent 调试Agent {
+    description "Debug agent with memory transcript"
+    model "qwen3.7-plus"
+    transcript "memory"  // In-memory only, no disk persistence
+    
+    main {
+        llm act "Debug issue"
+    }
+}
+
+agent 审计Agent {
+    description "Audit agent with persistent transcript"
+    model "qwen3.7-plus"
+    transcript "persistent"  // Full persistence to disk
+    
+    main {
+        llm act "Perform audit"
+    }
+}
+```
+
+**Three transcript levels**:
+
+| Level | Behavior | Use Case |
+|-------|----------|----------|
+| `none` | No transcript recording (default) | Simple scripts, batch processing, performance-critical |
+| `memory` | In-memory transcript, no disk persistence | Debugging, temporary analysis, session tracking |
+| `persistent` | Full persistence to `.helen/sessions/` | Long-running agents, audit trails, session resumption |
+
+**Chinese aliases**: `transcript "无"`, `transcript "内存"`, `transcript "持久"`
+
+**Design rationale**: Most Helen programs don't need transcript persistence. The default `none` level provides zero overhead and keeps the working directory clean. Only enable `memory` or `persistent` when you explicitly need conversation tracking or audit trails.
+
 #### tools = CONST_NAME (Reusing Tool Sets)
 
 `tools` can reference **module-level const** values to reduce repetitive declarations and keep tool sets **statically auditable** (clear security boundaries):

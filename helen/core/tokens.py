@@ -76,7 +76,7 @@ class TokenType(Enum):
     TEMPLATE_OPEN = auto()  # {{
     TEMPLATE_CLOSE = auto()  # }}
 
-    # === Keywords (46 total, including context-only: MEMORY, WILDCARD) ===
+    # === Keywords (47 total, including context-only: MEMORY, WILDCARD) ===
     AGENT = auto()
     DESCRIPTION = auto()
     MODEL = auto()
@@ -120,6 +120,7 @@ class TokenType(Enum):
     WILDCARD = auto()  # v1.8: wildcard pattern `_` in match
     SHARED = auto()    # v1.10: shared let — cross-agent visible variable
     ALIAS = auto()     # v1.10: function alias statement (alias X as Y)
+    TRANSCRIPT = auto()  # v1.29: agent transcript control (none/memory/persistent)
 
     # === Special ===
     EOF = auto()
@@ -128,7 +129,7 @@ class TokenType(Enum):
 # Type alias for literal values a token can carry
 LiteralValue = Union[str, int, float, bool, None]
 
-# Keyword → TokenType mapping (94 entries)
+# Keyword → TokenType mapping (95 entries)
 # Note: MEMORY and WILDCARD are context keywords — handled by lexer/parser directly,
 # not via this map, so they can also be used as variable names.
 _KEYWORD_MAP: dict[str, TokenType] = {
@@ -167,6 +168,13 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "in": TokenType.IN,
     "functions": TokenType.FUNCTIONS,
     "main": TokenType.MAIN,
+    "store": TokenType.STORE,  # v1.12: shared store
+    "protocol": TokenType.PROTOCOL,  # v1.7: protocol declaration
+    "impl": TokenType.IMPL,      # v1.7: protocol implementation
+    "is": TokenType.IS,        # v1.8: type pattern in match
+    "shared": TokenType.SHARED,    # v1.10: shared let
+    "alias": TokenType.ALIAS,     # v1.10: function alias
+    "transcript": TokenType.TRANSCRIPT,  # v1.29: agent transcript control
     "store": TokenType.STORE,  # v1.12: shared store
     "仓库": TokenType.STORE,   # v1.12: Chinese equivalent
     "alias": TokenType.ALIAS,
@@ -229,6 +237,8 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "共享": TokenType.SHARED,
     # v1.10: alias keyword (function name aliasing)
     "别名": TokenType.ALIAS,
+    # v1.29: transcript keyword (agent transcript control)
+    "记录": TokenType.TRANSCRIPT,
 }
 
 
