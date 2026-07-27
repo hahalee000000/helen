@@ -1,6 +1,6 @@
 ---
 name: helen-stdlib
-description: "Helen 标准库使用指南 — 200 个内置函数的分类参考与示例"
+description: "Helen Standard Library Guide — Categorized reference and examples for 200+ built-in functions"
 version: 1.16.0
 author: Helen Team
 license: MIT
@@ -9,17 +9,17 @@ metadata:
     tags: [helen, stdlib, builtins, reference]
 ---
 
-# Helen 标准库参考
+# Helen Standard Library Reference
 
-Helen 标准库提供 **203 个内置函数**，覆盖 AI 应用开发的所有核心需求。
+Helen's standard library provides **203 built-in functions**, covering all core needs for AI application development.
 
-## 分类概览
+## Category Overview
 
-| 类别 | 数量 | 代表函数 |
-|------|------|----------|
+| Category | Count | Representative Functions |
+|----------|--------|--------------------------|
 | **Core** | 17 | `print`, `len`, `str`, `int`, `float`, `bool`, `list`, `dict`, `abs`, `min`, `max`, `range`, `type`, `isinstance`, `input`, `multiline_input`, `exit` |
-| **String** | 40 | `upper`, `lower`, `strip`, `split`, `join`, `replace`, `find`, `reverse`, `repeat`, `regex_match`, `regex_replace`, `format_float`, `tokenize`, `levenshtein`, `base64_encode` |
-| **Data** | 27 | `json_parse`, `json_stringify`, `yaml_parse`, `toml_parse`, `csv_parse`, `xml_parse`, `html_escape`, `html_parse`, `markdown_parse`, `markdown_to_html` |
+| **String** | 41 | `upper`, `lower`, `strip`, `split`, `join`, `replace`, `find`, `find_from`, `reverse`, `repeat`, `regex_match`, `regex_replace`, `regex_split`, `format_float`, `tokenize`, `levenshtein`, `base64_encode` |
+| **Data** | 28 | `json_parse`, `json_parse_lenient`, `json_stringify`, `yaml_parse`, `toml_parse`, `csv_parse`, `xml_parse`, `html_escape`, `html_parse`, `markdown_parse`, `markdown_to_html` |
 | **Collection** | 22 | `sort`, `reverse`, `unique`, `flatten`, `zip`, `map`, `filter`, `reduce`, `chunk`, `set_union`, `set_intersection`, `set_difference` |
 | **Network** | 9 | `http_get`, `http_post`, `http_put`, `http_delete`, `http_download`, `url_parse`, `url_build`, `url_encode`, `url_decode` |
 | **Time** | 16 | `now`, `time`, `date`, `datetime`, `date_format`, `date_parse`, `date_add`, `date_diff`, `sleep`, `stopwatch_start`, `stopwatch_elapsed`, `stopwatch_lap` |
@@ -29,23 +29,23 @@ Helen 标准库提供 **203 个内置函数**，覆盖 AI 应用开发的所有�
 | **Crypto** | 20 | `md5`, `sha1`, `sha256`, `sha512`, `hmac_sha256`, `random`, `randint`, `choice`, `shuffle`, `sample`, `uuid_generate`, `uuid_from_string`, `uuid_nil`, `random_bytes`, `random_hex`, `random_base64` |
 | **IO** | 9 | `stream_print`, `stream_clear`, `progress_bar`, `mkdir`, `mkdir_p`, `append_file`, `stream_cursor_up`, `stream_cursor_down` |
 | **Path** | 6 | `path_basename`, `path_dirname`, `path_exists`, `path_is_dir`, `path_is_file`, `path_join` |
-| **Tools** | 6 | `shell_exec`, `calculate`, `patch_file`, `load_skill`, `web_search`, `web_fetch` |
+| **Tools** | 7 | `shell_exec`, `calculate`, `patch_file`, `load_skill`, `list_skill_references`, `web_search`, `web_fetch` |
 | **Observability** | 4 | `debug`, `trace_on`, `trace_off`, `get_trace` |
-| **Context** | 27 | `clear_context`, `compress_context`, `compress_context_target`, `context_stats`, `context_usage`, `get_message`, `delete_message`, `pin_message`, `unpin_message`, `insert_message`, `replace_message`, `working_memory_get`, `working_memory_set`, `working_memory_remove`, `working_memory_clear`, `set_compression_strategy`, `set_context_window`, `set_working_memory_enabled`, `set_cache_aware`, `get_context_config`, `search_context`, `context_slice`, `export_context`, `import_context`, `fork_context`, `on_compression`, `on_context_overflow` |
-| **Transcript** | 11 | `get_session_id`, `list_sessions`, `replay_transcript`, `export_transcript`, `get_compression_audit`, `resume_session`, `get_session_dir`, `set_session_dir`, `delete_session`, `delete_current_session`, `cleanup_sessions` |
+| **Context** | 28 | `clear_context`, `compress_context`, `compress_context_target`, `context_stats`, `context_usage`, `get_message`, `delete_message`, `pin_message`, `unpin_message`, `insert_message`, `replace_message`, `working_memory_get`, `working_memory_set`, `working_memory_remove`, `working_memory_clear`, `set_compression_strategy`, `set_context_window`, `set_working_memory_enabled`, `set_cache_aware`, `get_context_config`, `search_context`, `context_slice`, `export_context`, `import_context`, `fork_context`, `restore_context`, `on_compression`, `on_context_overflow` |
+| **Transcript** | 22 | `get_session_id`, `get_session_meta`, `list_sessions`, `replay_transcript`, `replay_full_session`, `export_transcript`, `search_transcript`, `list_invocations`, `get_invocation`, `get_invocation_tree`, `invocation_path`, `get_compression_audit`, `resume_session`, `get_session_dir`, `set_session_dir`, `delete_session`, `delete_current_session`, `cleanup_sessions`, `get_spawned_sessions`, `get_spawn_tree` |
 | **Media** | 12 | `media`, `media_base64`, `is_media`, `media_type`, `to_openai_parts`, `to_claude_parts`, `to_gemini_parts`, `media_to_base64`, `save_media`, `is_image`, `is_video`, `is_audio` |
 | **Test** | 23 | `test_suite`, `test_case`, `test_case_skip`, `test_end_suite`, `set_test_timeout`, `run_tests`, `run_tests_json`, `test_count`, `test_reset`, `before_all`, `after_all`, `before_each`, `after_each`, `assert_equal`, `assert_not_equal`, `assert_true`, `assert_contains`, `assert_throws`, `describe`, `expect`, `it`, `it_skip`, `fail` |
 | **Quality** | 4 | `analyze_code`, `check_security`, `quality_score`, `quality_report` |
 | **LLM** | 3 | `cancel_llm_call`, `current_llm_call_id`, `cancel_all_llm_calls` |
 | **Concurrency** | 1 | `mailbox_select` |
 
-## 多语言 stdlib (v1.10)
+## Multilingual stdlib (v1.10)
 
-Helen 的 stdlib 支持多语言函数名。每个 stdlib 函数都有英文 canonical 名和本地化别名，启动时全量加载。
+Helen's stdlib supports multilingual function names. Every stdlib function has an English canonical name and localized aliases, all loaded at startup.
 
-### 中文 stdlib 别名
+### Chinese stdlib Aliases
 
-Helen 内置 230+ 个中文别名，覆盖全部 stdlib 分类。常用示例：
+Helen has 230+ built-in Chinese aliases covering all stdlib categories. Common examples:
 
 | 英文 | 中文 | 类别 |
 |------|------|------|
@@ -55,22 +55,25 @@ Helen 内置 230+ 个中文别名，覆盖全部 stdlib 分类。常用示例：
 | `filter` | `过滤` | Collection |
 | `map` | `映射` | Collection |
 | `json_parse` | `json解析` | Data |
+| `json_parse_lenient` | `json宽松解析` | Data |
 | `json_stringify` | `json序列化` | Data |
 | `http_get` | `http获取` | Network |
 | `regex_match` | `正则匹配` | String |
 | `regex_replace` | `正则替换` | String |
+| `regex_split` | `正则分割` | String |
+| `find_from` | `从位置查找` | String |
 | `format_float` | `格式化浮点` | String |
 | `date_format` | `日期格式化` | Time |
 | `read_file` | `读文件` | File |
 | `write_file` | `写文件` | File |
 | `shell_exec` | `执行命令` | System |
 
-完整列表见 `helen/stdlib/locales/zh.py`。
+For the complete list, see `helen/stdlib/locales/zh.py`.
 
-### 使用示例
+### Usage Examples
 
 ```helen
-// 直接用中文 stdlib 函数名（不需要任何 import 或 alias）
+// Use Chinese stdlib function names directly (no import or alias needed)
 函数 数据处理() {
     定义 原始数据 = [3, 1, 4, 1, 5, 9, 2, 6]
     定义 排序后 = 排序(原始数据)
@@ -78,96 +81,105 @@ Helen 内置 230+ 个中文别名，覆盖全部 stdlib 分类。常用示例：
     返回 长度(去重后)
 }
 
-// 中英混用也完全合法
+// Mixing Chinese and English is also perfectly legal
 函数 混合使用() {
     let data = [1, 2, 3]
-    let sorted = 排序(data)     // 英文变量 + 中文函数
+    let sorted = 排序(data)     // English variables + Chinese function
     return len(sorted)
 }
 ```
 
-### 自定义别名
-
-如果需要给 stdlib 函数起额外的别名，使用 `alias`/`别名` 语句：
+### Custom Aliases
 
 ```helen
 alias len as 我的长度
 别名 print as 输出
 ```
 
-### 设计原则
+### Design Principles
 
-- **一套机制**：stdlib 别名和用户 `alias` 使用相同的 Environment binding
-- **全量加载**：所有 locale 的别名表启动时全部注册，不按 locale 过滤
-- **locale 只影响展示**：`~/.helen/config.yaml` 中的 `locale: zh` 只影响 docs/LSP/错误消息的语言
-- **扩展新语言**：添加新语言只需创建 `helen/stdlib/locales/<code>.py`
+- **Single mechanism**: stdlib aliases and user `alias` use the same Environment binding
+- **Full loading**: All locale alias tables are registered at startup, not filtered by locale
+- **locale only affects display**: `locale: zh` in `~/.helen/config.yaml` only affects the language of docs/LSP/error messages
+- **Extending to new languages**: Adding a new language only requires creating `helen/stdlib/locales/<code>.py`
 
-## 常用函数示例
+## Common Function Examples
 
-### Core（核心）
+### Core
 
 ```helen
-# 类型转换
-let num = int("42")           # 字符串 → 整数
-let text = str(3.14)          # 浮点数 → 字符串
-let flt = float("2.5")        # 字符串 → 浮点数
+# Type conversion
+let num = int("42")           # string → integer
+let text = str(3.14)          # float → string
+let flt = float("2.5")        # string → float
 
-# 长度与范围
+# Length and range
 let length = len([1, 2, 3])   # 3
 let items = range(0, 10, 2)   # [0, 2, 4, 6, 8]
 
-# 数学基础
+# Math basics
 let maximum = max(1, 2, 3)    # 3
 let minimum = min(1, 2, 3)    # 1
 let absolute = abs(-42)       # 42
 
-# 类型检查
+# Type checking
 if isinstance(value, str) {
-    print("是字符串")
+    print("It's a string")
 }
 ```
 
-### String（字符串）
+### String
 
 ```helen
-# 大小写转换
+# Case conversion
 let upper = upper("hello")    # "HELLO"
 let lower = lower("WORLD")    # "world"
 
-# 分割与连接
+# Split and join
 let parts = split("a,b,c", ",")  # ["a", "b", "c"]
 let joined = join(["a", "b"], "-")  # "a-b"
 
-# 查找与替换
+# Find and replace
 let found = find("hello world", "world")  # 6
 let replaced = replace("foo bar", "foo", "baz")  # "baz bar"
 
-# 正则表达式
+# Regular expressions
 if regex_match("hello123", r"\d+") {
-    print("包含数字")
+    print("Contains digits")
 }
 let cleaned = regex_replace("a1b2c3", r"\d", "")  # "abc"
 
-# 空白处理
+# Split by regex pattern (multiple delimiters)
+let tokens = regex_split("a, b; c  d", r"[,;\s]+")  # ["a", "b", "c", "d"]
+
+# Find from position
+let text = "hello world hello"
+let pos1 = find(text, "hello")              # 0 (first occurrence)
+let pos2 = find_from(text, "hello", 6)      # 12 (second occurrence)
+
+# Whitespace handling
 let trimmed = strip("  hello  ")  # "hello"
 let padded = pad_start("42", 5, "0")  # "00042"
 
-# 浮点数格式化
+# Float formatting
 let formatted1 = format_float(8.5, 1)      # "8.5"
-let formatted2 = format_float(7.857, 2)    # "7.86" (四舍五入)
+let formatted2 = format_float(7.857, 2)    # "7.86" (rounded)
 let formatted3 = format_float(3.14159, 3)  # "3.142"
-let formatted4 = format_float(100, 0)      # "100"
 
-# 中文别名
+# Chinese aliases
 let formatted = 格式化浮点(8.5, 1)  # "8.5"
 ```
 
-### Data（数据格式）
+### Data
 
 ```helen
 # JSON
 let data = json_parse('{"name": "Helen", "version": 1}')
 let json = json_stringify(data, indent=2)
+
+# Lenient JSON parsing (handles markdown fences from LLM output)
+let llm_output = "```json\n{\"key\": \"value\"}\n```"
+let data2 = json_parse_lenient(llm_output)  # Automatically strips fences
 
 # YAML
 let config = yaml_parse("key: value\nlist:\n  - item1\n  - item2")
@@ -176,7 +188,7 @@ let config = yaml_parse("key: value\nlist:\n  - item1\n  - item2")
 let rows = csv_parse("name,age\nAlice,30\nBob,25")
 # [["name", "age"], ["Alice", "30"], ["Bob", "25"]]
 
-# URL 编码
+# URL encoding
 let encoded = url_encode("hello world&foo=bar")
 let decoded = url_decode(encoded)
 
@@ -185,33 +197,33 @@ let encoded = base64_encode("secret data")
 let decoded = base64_decode(encoded)
 ```
 
-### Collection（集合操作）
+### Collection
 
 ```helen
-# 排序与去重
+# Sort and deduplicate
 let sorted = sort([3, 1, 4, 1, 5])  # [1, 1, 3, 4, 5]
 let unique_items = unique([1, 2, 2, 3])  # [1, 2, 3]
 
-# 映射与过滤
+# Map and filter
 let doubled = map([1, 2, 3], x => x * 2)  # [2, 4, 6]
 let evens = filter([1, 2, 3, 4], x => x % 2 == 0)  # [2, 4]
 
-# 归约
+# Reduce
 let sum = reduce([1, 2, 3, 4], (acc, x) => acc + x, 0)  # 10
 
-# 分组
+# Group by
 let grouped = group_by(users, u => u["role"])
 # {"admin": [...], "user": [...]}
 
-# 分块
+# Chunk
 let chunks = chunk([1, 2, 3, 4, 5], 2)
 # [[1, 2], [3, 4], [5]]
 
-# 集合运算
+# Set operations
 let common = intersection([1, 2, 3], [2, 3, 4])  # [2, 3]
 ```
 
-### Network（网络请求）
+### Network
 
 ```helen
 # HTTP GET
@@ -225,55 +237,54 @@ let result = http_post(
     body=json_stringify({"name": "Helen"})
 )
 
-# 下载文件
+# Download file
 http_download("https://example.com/file.pdf", "/tmp/file.pdf")
 ```
 
-### Time（时间日期）
+### Time
 
 ```helen
-# 当前时间
-let now_ts = now()                    # Unix 时间戳（秒）
-let current = time()                  # 当前时间（datetime 对象）
+# Current time
+let now_ts = now()                    # Unix timestamp (seconds)
+let current = time()                  # Current time (datetime object)
 
-# 格式化
+# Formatting
 let formatted = date_format(now(), "%Y-%m-%d %H:%M:%S")
 # "2026-06-19 17:30:00"
 
-# 解析
+# Parsing
 let parsed = date_parse("2026-06-19", "%Y-%m-%d")
 
-# 日期运算
+# Date arithmetic
 let tomorrow = date_add(now(), days=1)
 let diff = date_diff(date1, date2, "days")
 
-# 休眠
-sleep(1.5)  # 休眠 1.5 秒
+# Sleep
+sleep(1.5)  # Sleep for 1.5 seconds
 
-# 计时（高精度）
+# Stopwatch (high precision)
 let sw = stopwatch_start()
-# ... 执行操作 ...
-let elapsed = stopwatch_elapsed(sw)   # 秒（浮点数，高精度）
-print("耗时: " + str(elapsed) + " 秒")
+let elapsed = stopwatch_elapsed(sw)   # Seconds (float, high precision)
+print("Elapsed: " + str(elapsed) + " seconds")
 ```
 
-### Math（数学运算）
+### Math
 
 ```helen
-# 基础数学
+# Basic math
 let rounded = round(3.14159, 2)   # 3.14
 let root = sqrt(16)               # 4.0
 let ceiling = ceil(3.2)           # 4
 let flooring = floor(3.8)         # 3
 let power = pow(2, 10)            # 1024
 
-# 对数
-let natural = log(2.718)          # 自然对数 (ln)
+# Logarithms
+let natural = log(2.718)          # Natural log (ln)
 let base2 = log2(8)               # 3 (2^3 = 8)
 let base10 = log10(100)           # 2 (10^2 = 100)
 let exponential = exp(1)          # 2.718... (e^1)
 
-# 三角函数（弧度制）
+# Trigonometric functions (radians)
 let cosine = cos(0)               # 1
 let sine = sin(3.14159 / 2)       # 1
 let tangent = tan(0)              # 0
@@ -282,112 +293,103 @@ let angle2 = asin(0.5)            # 0.523... (30°)
 let angle3 = atan(1)              # 0.785... (45°)
 let angle4 = atan2(1, 1)          # 0.785... (45°, y/x)
 
-# 统计
+# Statistics
 let avg = mean([1, 2, 3, 4, 5])   # 3.0
 let mid = median([1, 2, 3, 4, 5]) # 3
 let std = stddev([1, 2, 3, 4, 5]) # 1.414...
 let total = sum([1, 2, 3, 4, 5])  # 15
 let prod = product([1, 2, 3, 4])  # 24
 
-# 随机数
-let rand = random()               # 0-1 的随机浮点数
-let rand_int = randint(1, 100)    # 1-100 的随机整数
-let item = choice([1, 2, 3, 4])   # 随机选择
-let shuffled = shuffle([1, 2, 3]) # 随机打乱
+# Random numbers
+let rand = random()               # Random float between 0 and 1
+let rand_int = randint(1, 100)    # Random integer between 1 and 100
+let item = choice([1, 2, 3, 4])   # Random selection
+let shuffled = shuffle([1, 2, 3]) # Random shuffle
 ```
 
-### File（文件操作）
+### File
 
 ```helen
-# 读写文件
+# Read/write files
 let content = read_file("/path/to/file.txt")
 write_file("/path/to/output.txt", "Hello, World!")
 append_file("/path/to/log.txt", "New log entry\n")
 
-# 文件信息
+# File info
 if path_exists("/path/to/file.txt") {
     let size = file_size("/path/to/file.txt")
-    print("文件大小: " + str(size) + " bytes")
+    print("File size: " + str(size) + " bytes")
 }
 
-# 目录操作
+# Directory operations
 let files = list_dir("/path/to/dir")
 mkdir("/path/to/new/dir")
-mkdir_p("/path/to/deep/nested/dir")  # 递归创建
+mkdir_p("/path/to/deep/nested/dir")  # Recursive creation
 copy_file("/src/file.txt", "/dst/file.txt")
 delete_file("/path/to/file.txt")
 
-# 文件搜索（v1.15 新增）
-# 递归查找所有 Python 文件
-let py_files = glob_files("src", "*.py")
-# 返回: ["main.py", "utils/helper.py", "tests/test_main.py"]
+# File search
+let py_files = glob_files("src", "*.py")       # Recursively find all Python files
+let md_files = glob_files("docs", "**/*.md")   # Use ** for explicit recursion
 
-# 使用 ** 显式递归
-let md_files = glob_files("docs", "**/*.md")
-
-# 搜索文件内容（字面量）
+# Search file content (literal)
 let matches = grep_files("src/", "TODO")
-# 返回: [{"file": "main.py", "line": 42, "text": "    # TODO: fix this"}]
+# [{"file": "main.py", "line": 42, "text": "    # TODO: fix this"}]
 
-# 搜索文件内容（正则）
+# Search file content (regex)
 let functions = grep_files("src/", "def \\w+\\(", regex=true)
 
-# 大小写不敏感搜索
+# Case-insensitive search
 let errors = grep_files("logs/", "error", case_sensitive=false)
 ```
 
-### System（系统操作）
+### System
 
 ```helen
-# 环境变量
+# Environment variables
 let home = env_get("HOME")
 env_set("MY_VAR", "value")
-let all_env = env_list()  # 敏感值自动掩码
+let all_env = env_list()  # Sensitive values are auto-masked
 
-# CLI 参数（预定义常量 argv + 解析函数）
-# 命令行: helen tool.helen --verbose --output=json input.txt
+# CLI arguments (predefined constant argv + parsing functions)
+# Command line: helen tool.helen --verbose --output=json input.txt
 print(argv)  # ["--verbose", "--output=json", "input.txt"]
 
-let parsed = parse_cli_args()           # 自动解析
+let parsed = parse_cli_args()           # Auto-parse
 # {verbose: true, output: "json", _positional: ["input.txt"]}
 
 let spec = {
     "verbose": {"type": "flag", "default": false},
     "output": {"type": "string", "default": "text"}
 }
-let config = parse_cli_args(spec)       # 结构化解析（带类型+默认值）
+let config = parse_cli_args(spec)       # Structured parsing (with types + defaults)
 
-# Shell 命令（默认 shell=True，支持完整 shell 语法）
-# 使用 /bin/bash 执行，支持 brace expansion 等 bash 特性
-# 所有 shell 语法都支持：&&、||、|、>、<、;、$()、{} 等
+# Shell commands (default shell=true, uses /bin/bash, supports full shell syntax)
 let result = shell_exec("ls -la")
-let result = shell_exec("mkdir -p ~/project/{src,tests,contracts}")  # 创建三个目录
+let result = shell_exec("mkdir -p ~/project/{src,tests,contracts}")
 let result = shell_exec("cat file.txt | grep pattern | wc -l")
-let result = shell_exec("echo 'hello' > output.txt")
 print(result["output"])
 
-# 安全模式：shell=False 用于处理不可信输入
-# 当命令包含用户输入时，使用 shell=False 防止 shell 注入
-let user_input = "some_input"
+# Safe mode: use shell=false when handling untrusted input to prevent shell injection
 let result = shell_exec("echo " + user_input, shell=false)
 
-# 系统信息
-let pid = pid()                   # 进程 ID
+# System info
+let pid = pid()                   # Process ID
 let os = platform()               # "linux", "darwin", "windows"
-let host = hostname()             # 主机名
-let py_ver = python_version()     # Python 版本
-let cpus = cpu_count()            # CPU 核心数
-let mem = memory_info()           # {total: ..., available: ..., used: ..., percent: ...}
+let host = hostname()             # Hostname
+let py_ver = python_version()     # Python version
+let cpus = cpu_count()            # CPU core count
+let mem = memory_info()           # {total, available, used, percent}
 
-# 日志
+# Logging
 log_info("Application started")
 log_error("Something went wrong", category="app")
 ```
 
-### Crypto（加密哈希）
+### Crypto
 
 ```helen
-# 哈希
+# Hashing
 let md5_hash = md5("data")
 let sha256_hash = sha256("data")
 let sha512_hash = sha512("data")
@@ -395,226 +397,120 @@ let sha512_hash = sha512("data")
 # HMAC
 let sig = hmac_sha256("message", "secret_key")
 
-# 随机数
-let rand = random()               # 0-1 随机浮点
-let rand_int = randint(1, 100)    # 随机整数
-let item = choice([1, 2, 3])      # 随机选择
+# Random numbers
+let rand = random()               # Random float between 0 and 1
+let rand_int = randint(1, 100)    # Random integer
+let item = choice([1, 2, 3])      # Random selection
 
 # UUID
 let id = uuid_generate()          # "550e8400-e29b-41d4-a716-446655440000"
 let nil_id = uuid_nil()           # "00000000-0000-0000-0000-000000000000"
-let parsed = uuid_from_string("550E8400-E29B-41D4-A716-446655440000")  # 规范化
+let parsed = uuid_from_string("550E8400-E29B-41D4-A716-446655440000")
 
-# 随机字节
-let bytes = random_bytes(16)      # 32 字符的十六进制字符串
-let hex_str = random_hex(32)      # 32 字符的十六进制字符串
-let b64 = random_base64(16)       # base64 编码的随机数据
+# Random bytes
+let bytes = random_bytes(16)      # 32-character hex string
+let hex_str = random_hex(32)
+let b64 = random_base64(16)       # Base64-encoded random data
 ```
 
-## Observability（可观测性）
+## Observability
 
-AI 原生可观测性函数，为 AI Agent 提供结构化调试上下文。
+AI-native observability functions providing structured debugging context for AI agents.
 
 ```helen
-# debug() — 结构化调试输出到 stderr
-let x = 42
+# debug() — Structured debug output to stderr
 debug("variable value", x)
-# 输出: [DEBUG] variable value {"value": 42}
-
+# Output: [DEBUG] variable value {"value": 42}
 debug("checkpoint reached")
-# 输出: [DEBUG] checkpoint reached
 
-# trace_on() / trace_off() — 开启/关闭执行追踪
+# trace_on() / trace_off() — Enable/disable execution tracing
 trace_on()
 let result = compute_something()
 trace_off()
 
-# get_trace() — 获取最近执行追踪记录
+# get_trace() — Get recent execution trace records
 let trace = get_trace(10)
-print(trace)
 ```
 
-## Context（上下文管理）
+**Design features**: Zero overhead by default (no impact when tracing is off), JSON structured output (AI-consumable), automatic call stack + scope variable capture on errors/assertions, `llm act` automatically records call details.
 
-管理 LLM 对话上下文的函数，用于长对话 agent 的上下文控制。
+## Context (Context Management)
 
-```helen
-# clear_context() — 清空当前对话上下文
-# 用于重新开始对话或重置上下文
-let result = clear_context()
-print("已清空 " + str(result["cleared_messages"]) + " 条消息")
-print("释放约 " + str(result["cleared_tokens"]) + " tokens")
-# 返回: {"status": "ok", "cleared_messages": 5, "cleared_tokens": 1200, "warning": "..."}
-
-# compress_context() — 压缩当前对话上下文
-# 用于减少 token 消耗，保留重要上下文
-let result = compress_context("auto")
-# 策略: "auto" (自动), "summarize" (LLM 摘要), "truncate" (截断), "none" (不压缩)
-print("从 " + str(result["original_tokens"]) + " 压缩到 " + str(result["compressed_tokens"]) + " tokens")
-# 返回: {"status": "ok", "original_messages": 10, "compressed_messages": 5, ...}
-```
-
-**使用场景**：
-- 长对话 agent 定期压缩上下文（避免 token 超限）
-- 用户要求"重新开始"时清空上下文
-- 错误恢复时重置上下文
-
-**注意事项**：
-- `clear_context()` 会清空所有对话历史，LLM 将失去之前的上下文
-- `compress_context("auto")` 只在 token 超过阈值时才压缩
-- `compress_context("summarize")` 会调用 LLM，较慢但保留上下文
-- `compress_context("truncate")` 快速但会丢失旧消息
-
-### Context 高级函数
+Functions for managing LLM conversation context, used for context control in long-running agent conversations.
 
 ```helen
-// ═══════════════════════════════════════════════════════════════
-// 上下文检查 (Inspection)
-// ═══════════════════════════════════════════════════════════════
+# Basic operations
+clear_context()                       # Clear context, returns {cleared_messages, cleared_tokens}
+compress_context("auto")              # Compress context
+# Strategies: "auto" | "summarize" (LLM summary) | "truncate" | "none" | "graduated"
 
-// context_stats() — 上下文统计
-let stats = context_stats()
-// {message_count: 10, total_tokens: 2500, system_tokens: 500, ...}
-
-// context_usage() — 上下文占用率 (0.0-1.0)
+# Inspection
+context_stats()                       # {message_count, total_tokens, system_tokens, ...}
+context_usage()                       # 0.0-1.0 usage ratio
 let usage = context_usage()
-if usage > 0.8 {
-    compress_context("auto")
-}
+if usage > 0.8 { compress_context("auto") }
+get_message(uuid)                     # Get a single message
 
-// get_message(uuid) — 获取单条消息
-let msg = get_message("550e8400-e29b-41d4")
-print(msg["role"] + ": " + msg["content"])
+# Fine-grained Mutation
+insert_message("system", "Important note", 0)  # Insert message (position optional)
+replace_message(uuid, "New content")            # Replace message content
+delete_message(uuid)                            # Delete message
+pin_message(uuid) / unpin_message(uuid)         # Pin message (immune to compression)
 
-// ═══════════════════════════════════════════════════════════════
-// 细粒度变更 (Fine-grained Mutation)
-// ═══════════════════════════════════════════════════════════════
-
-// insert_message(role, content, index?) — 插入消息
-insert_message("system", "重要提示", 0)  // 插入到开头
-
-// replace_message(uuid, content) — 替换消息内容
-replace_message("msg-uuid", "新内容")
-
-// delete_message(uuid) — 删除消息
-delete_message("msg-uuid")
-
-// pin_message(uuid) / unpin_message(uuid) — 钉住消息（不受压缩影响）
-pin_message("important-msg")   // 钉住，压缩时保留
-unpin_message("important-msg") // 取消钉住
-
-// ═══════════════════════════════════════════════════════════════
-// 工作记忆 (Working Memory)
-// ═══════════════════════════════════════════════════════════════
-
-// 工作记忆自动跟踪活跃文件、最近决策、待办事项、错误历史
+# Working Memory — Auto-tracks active files, decisions, TODOs, error history
 working_memory_set("current_file", "main.py")
-working_memory_set("decision", "使用 JWT 认证")
-working_memory_set("todo", "修复登录 bug")
-
-let file = working_memory_get("current_file")  // "main.py"
+working_memory_set("decision", "Use JWT authentication")
+working_memory_get("current_file")       # "main.py"
 working_memory_remove("todo")
-working_memory_clear()  // 清空所有工作记忆
+working_memory_clear()
 
-// ═══════════════════════════════════════════════════════════════
-// 运行时配置 (Runtime Config)
-// ═══════════════════════════════════════════════════════════════
-
-// 动态调整压缩策略
-set_compression_strategy("graduated")  // "auto"|"summarize"|"truncate"|"none"|"graduated"
-
-// 设置上下文窗口大小
-set_context_window(128000)  // 128K tokens
-
-// 启用/禁用工作记忆
+# Runtime Config
+set_compression_strategy("graduated")    # Dynamically adjust compression strategy
+set_context_window(128000)               # Set context window size
 set_working_memory_enabled(true)
+set_cache_aware(true)                    # Enable cache-aware compression (improves cache hit rate)
+get_context_config()                     # {strategy, window, working_memory, cache_aware}
 
-// 启用缓存感知压缩（提高缓存命中率）
-set_cache_aware(true)
+# Query
+search_context("authentication")         # [{uuid, role, content}, ...]
+context_slice(-5)                        # Last 5 messages
+context_slice(0, 10)                     # First 10 messages
 
-// 获取当前配置
-let config = get_context_config()
-// {strategy: "graduated", window: 128000, working_memory: true, cache_aware: true}
+# Multi-Agent Transfer
+export_context()                         # Export [{role, content}, ...]
+import_context(messages)                 # Import into current session
+fork_context()                           # Create independent copy
 
-// ═══════════════════════════════════════════════════════════════
-// 查询 (Query)
-// ═══════════════════════════════════════════════════════════════
+# Cross-session restore (v1.21+)
+restore_context("session_xxx")           # Restore active context from old transcript
+# After restore, LLM can see old session messages on the next llm act call
+# ⚠️ Only restores messages, not working_memory or config (those need manual restore)
 
-// search_context(query) — 搜索上下文
-let matches = search_context("认证")
-// [{uuid: "...", role: "user", content: "..."}, ...]
+# vs resume_session:
+# - restore_context: Restores active context, supports filtering by agent/invocation
+# - resume_session:  Imports all messages into current new session
 
-// context_slice(start, end?) — 上下文切片
-let recent = context_slice(-5)  // 最近 5 条消息
-let range = context_slice(0, 10)  // 前 10 条消息
-
-// ═══════════════════════════════════════════════════════════════
-// 多 Agent 转移 (Multi-Agent Transfer)
-// ═══════════════════════════════════════════════════════════════
-
-// export_context() — 导出当前上下文
-let exported = export_context()
-// [{role: "user", content: "..."}, {role: "assistant", content: "..."}, ...]
-
-// import_context(messages) — 导入上下文到当前会话
-import_context(exported)
-
-// fork_context() — 分叉上下文（创建独立副本）
-let forked = fork_context()
-// 可以在另一个 agent 中使用，不影响原始上下文
-
-// ═══════════════════════════════════════════════════════════════
-// 生命周期钩子 (Lifecycle Hooks)
-// ═══════════════════════════════════════════════════════════════
-
-// on_compression(fn) — 压缩前回调
+# Lifecycle Hooks
 on_compression(fn(stats) {
-    print("即将压缩: " + str(stats["token_count"]) + " tokens")
+    print("About to compress: " + str(stats["token_count"]) + " tokens")
 })
-
-// on_context_overflow(fn) — 上下文溢出回调
 on_context_overflow(fn(stats) {
-    print("上下文溢出！当前: " + str(stats["usage_ratio"]))
     compress_context("truncate")
 })
 ```
 
-### REPL 调试命令
+**REPL debug commands**: `:trace on/off/show [n]`, `:last_error` (structured JSON), `:llm_log [n]` (LLM call audit log)
 
-```
-:trace on          # 开启执行追踪
-:trace off         # 关闭执行追踪
-:trace show [n]    # 显示最近 n 条追踪记录
-:last_error        # 显示上次错误的结构化上下文（JSON）
-:llm_log [n]       # 显示最近 n 次 LLM 调用审计日志
-```
-
-### assert 语句
-
+**assert statement**:
 ```helen
-# 运行时断言
 assert x > 0
 assert x > 0, "x must be positive"
-
-# 断言失败抛出 AssertionError，可捕获
-try {
-    assert false, "test"
-} catch AssertionError as e {
-    print("Caught: " + e.message)
-}
+# Assertion failure throws AssertionError, which can be caught with try-catch
 ```
 
-### 设计特点
-
-- **零开销默认**：追踪关闭时无性能影响
-- **JSON 结构化**：所有输出都是 AI 可消费的格式
-- **自动上下文**：错误/断言失败自动捕获调用栈 + 作用域变量
-- **LLM 审计**：`llm act` 自动记录调用详情
-
-## Test（测试框架）
+## Test (Testing Framework)
 
 ```helen
-// 定义测试函数
 fn test_add() {
     assert_equal(2 + 3, 5)
 }
@@ -623,21 +519,19 @@ fn test_subtract() {
     assert_equal(10 - 4, 6)
 }
 
-// 注册测试
 test_suite("Calculator")
 test_case("adds numbers", test_add)
 test_case("subtracts numbers", test_subtract)
 test_end_suite()
-
-// 运行测试
 run_tests()
 
-// 运行: helen test calculator_test.helen
-// 监听: helen test calculator_test.helen --watch
-// 过滤: helen test calculator_test.helen --filter "add"
+# CLI:
+# helen test calc.helen              # Run tests
+# helen test calc.helen --watch      # Watch mode
+# helen test calc.helen --filter "add"  # Filter
 ```
 
-### Expect 链式 API
+### Expect Chain API
 
 ```helen
 fn test_expect() {
@@ -650,375 +544,324 @@ fn test_expect() {
 }
 ```
 
-## Quality（质量评估）
+`before_all`/`after_all`/`before_each`/`after_each` hooks are available.
+
+## Quality (Quality Assessment)
 
 ```helen
-// 读取源代码
 let source = read_file("my_program.helen")
 
-// 代码分析
 let metrics = analyze_code(source, "my_program.helen")
 print("Functions: " + str(metrics["function_count"]))
-print("Complexity: " + str(metrics["avg_complexity"]))
 
-// 安全检查
 let issues = check_security(source)
 print("Security issues: " + str(len(issues)))
 
-// 7 维评分
 let scores = quality_score(source, "my_program.helen")
-print("Total: " + str(scores["total"]))
-print("Grade: " + scores["grade"])
+print("Total: " + str(scores["total"]) + " Grade: " + scores["grade"])
 
-// 完整报告
 print(quality_report(source, "my_program.helen"))
-
-// CLI: helen quality my_program.helen --json
+# CLI: helen quality my_program.helen --json
 ```
 
-### 7 个评估维度
+### 7 Assessment Dimensions
 
-| 维度 | 权重 | 评估内容 |
-|------|:----:|---------|
-| 架构设计 | 20% | 函数长度、复杂度、嵌套深度 |
-| 代码质量 | 15% | 注释率、函数平均长度 |
-| 安全性 | 20% | 危险模式检测 |
-| 测试覆盖 | 15% | 测试文件存在性 |
-| 文档 | 10% | docstring 覆盖率 |
-| 可维护性 | 10% | 长函数、高复杂度函数 |
-| 工程规范 | 10% | 命名规范、文件大小 |
+| Dimension | Weight | Assesses |
+|-----------|:------:|----------|
+| Architecture | 20% | Function length, complexity, nesting depth |
+| Code Quality | 15% | Comment ratio, average function length |
+| Security | 20% | Dangerous pattern detection |
+| Test Coverage | 15% | Test file existence |
+| Documentation | 10% | Docstring coverage |
+| Maintainability | 10% | Long functions, high-complexity functions |
+| Engineering Standards | 10% | Naming conventions, file size |
 
-## Transcript（会话记录）
+## Transcript (Session Records)
 
-TranscriptStore 是 v1.16 引入的 SSOT（Single Source of Truth），所有对话消息都持久化存储。
+TranscriptStore (v1.16) — SSOT, persistent storage for all conversation messages.
+
+### Session Management
 
 ```helen
-// ═══════════════════════════════════════════════════════════════
-// 会话管理
-// ═══════════════════════════════════════════════════════════════
+# get_session_id() — Current session ID
+let session = get_session_id()  # "session_{timestamp}_{uuid8}"
 
-// get_session_id() — 获取当前会话 ID
-let session = get_session_id()
-print("当前会话: " + session)
+# get_session_meta() (v1.23.3) — Session metadata (recorded at startup)
+let meta = get_session_meta()
+# {argv, timestamp, helen_version, python_version, cwd, session_scope}
 
-// list_sessions(scope?) — 列出所有会话
+# list_sessions(scope?) — List all sessions
 let sessions = list_sessions()
-// [{session_id: "...", created_at: ..., modified_at: ..., size_bytes: ..., message_count: ..., scope: "global"|"project"}, ...]
+# [{session_id, created_at, modified_at, size_bytes, message_count, scope}, ...]
+let global_sessions = list_sessions("global")
+let project_sessions = list_sessions("project")
 
-let global_sessions = list_sessions("global")   // 全局会话
-let project_sessions = list_sessions("project") // 项目会话
-
-// get_session_dir() / set_session_dir(path) — 会话目录管理
-let info = get_session_dir()
-// {status: "ok", session_dir: "/path/to/sessions", scope: "global"|"project"|"env_override", project_dir: str | null}
-print("会话目录: " + info["session_dir"])
-print("作用域: " + info["scope"])
-
-let result = set_session_dir("/custom/path")
-// {status: "ok", session_dir: "/custom/path", previous: "/previous/path"}
-if result["status"] == "ok" {
-    print("已切换到: " + result["session_dir"])
-}
-
-// ═══════════════════════════════════════════════════════════════
-// 会话回放与导出
-// ═══════════════════════════════════════════════════════════════
-
-// replay_transcript(session_id?, include_compressed?) — 回放会话
-let messages = replay_transcript()
-// [{role: "user", content: "...", uuid: "...", timestamp: ...}, ...]
-
-let full = replay_transcript("session_123", true)  // 包含压缩消息
-
-// export_transcript(session_id?, format?) — 导出会话
-export_transcript(null, "json")   // 导出当前会话为 JSON
-export_transcript(null, "text")   // 导出为纯文本
-
-// ═══════════════════════════════════════════════════════════════
-// 压缩审计
-// ═══════════════════════════════════════════════════════════════
-
-// get_compression_audit() — 获取压缩事件历史
-let audit = get_compression_audit()
-// [{timestamp: ..., strategy: ..., before_tokens: ..., after_tokens: ..., boundary_uuid: ...}, ...]
-
-// ═══════════════════════════════════════════════════════════════
-// 会话恢复与清理
-// ═══════════════════════════════════════════════════════════════
-
-// resume_session(session_id) — 恢复历史会话
-resume_session("session_123")
-
-// delete_session(session_id) — 删除指定会话
-delete_session("session_123")
-
-// delete_current_session(confirm?) — 删除当前会话
-delete_current_session(true)  // 需要确认
-
-// cleanup_sessions(keep_count?, older_than_days?) — 清理旧会话
-cleanup_sessions(keep_count=10)                    // 保留最近 10 个
-cleanup_sessions(older_than_days=30)               // 删除 30 天前的
-cleanup_sessions(keep_count=5, older_than_days=7)  // 组合条件
+# Session directory management
+let info = get_session_dir()    # {session_dir, scope, project_dir}
+set_session_dir("/custom/path")
 ```
 
-**会话作用域 (v1.20)**：
-- `global`: 存储在 `~/.helen/sessions/`
-- `project`: 存储在项目的 `.helen/sessions/`（需要 `.helen/`、`helen.yaml` 或 `helen.toml`）
-- `auto`（默认）: 自动检测项目目录，否则使用全局
+**Runtime isolation principles**:
+- Multiple calls to `get_session_id()` within the same process → Same ID
+- Restart program → New Interpreter → New session_id
+- `spawn`-created agent → New Interpreter → New session_id (independent transcript)
+- Normal agent call (same process) → Shared session_id, distinguished by `invocation_id`
+- Cross-runtime inheritance must be explicit: `resume_session(parent_sid)` or `Channel.send(sid)`
 
-## Media（媒体/多模态）
-
-v1.17 引入多模态支持，`MediaPart` 是一等数据类型。
+### Replay, Export & Search
 
 ```helen
-// ═══════════════════════════════════════════════════════════════
-// 创建媒体
-// ═══════════════════════════════════════════════════════════════
+# Replay
+replay_transcript()                              # Current session
+replay_transcript("session_123", true)           # Include compressed messages
+replay_transcript(agent="A", last_only=true)     # Filter by agent
+replay_transcript(invocation_id="inv_1", include_subtree=true)
 
-// media(source, type?) — 从文件路径或 URL 创建
-let img = media("/path/to/image.png")
+# Export
+export_transcript(null, "json")                  # Export current as JSON
+export_transcript(null, "text")                  # Export as plain text
+export_transcript("full.json", "json", include_spawned=true)  # Include spawned
+
+# Search (v1.22+) — Search persisted transcript (unlike search_context which searches current context)
+search_transcript("auth bug")                    # Basic search
+search_transcript("database", scope="all", limit=10)  # Across all sessions
+search_transcript("fix.*bug", regex=true)        # Regex
+search_transcript("TODO", role="user")           # Filter by role
+search_transcript("error", include_spawned=true) # Cross-spawn search (v1.23.7)
+
+# Typical search → restore context workflow
+let matches = search_transcript("auth bug", scope="all")
+if len(matches) > 0 {
+    restore_context(matches[0]["session_id"])
+}
+```
+
+### Invocation Tree Query (v1.22+)
+
+```helen
+# Each agent main {} execution is an invocation with a unique invocation_id
+list_invocations()                               # List all invocations
+list_invocations(agent="Researcher", limit=10)   # Filter by agent
+
+get_invocation("inv_xxx")                        # Query single
+# {agent_name, message_count, parent_invocation_id, ...}
+
+get_invocation_tree()                            # Full call tree (nested structure)
+invocation_path("inv_3")                         # "top -> A -> C"
+
+# Chinese aliases
+列出调用()
+获取调用("inv_xxx")
+获取调用树()
+调用路径("inv_3")
+```
+
+**Context isolation (v1.22/v1.23)**: Each agent main {} execution is an independent invocation; the LLM can only see messages from the current invocation.
+
+### Session Restore & Cleanup
+
+```helen
+# Restore
+resume_session("session_123")                    # Import historical messages into current session
+
+# Delete
+delete_session("session_123")                    # Default: cascade delete spawned
+delete_session("session_123", cascade=false)     # Only delete main session
+delete_current_session(true)                     # Delete current session
+
+# Cleanup
+cleanup_sessions(keep_count=10)                  # Keep the most recent 10
+cleanup_sessions(older_than_days=30)             # Delete those older than 30 days
+cleanup_sessions(keep_count=5, older_than_days=7, cascade=false)
+
+# Compression audit
+get_compression_audit()
+# [{timestamp, strategy, before_tokens, after_tokens, boundary_uuid}, ...]
+```
+
+### Spawn Relationship Tracking (v1.23.7)
+
+```helen
+get_spawned_sessions()                           # Direct child sessions
+get_spawn_tree()                                 # Full spawn tree
+replay_full_session()                            # Aggregate main session + all spawned
+```
+
+### Session Scope (v1.20)
+
+- `global`: `~/.helen/sessions/`
+- `project`: `.helen/sessions/` (when `.helen/`, `helen.yaml`, or `helen.toml` is detected)
+- `auto` (default): Auto-detect project directory, otherwise global
+
+### Startup Session Recovery (v1.24+)
+
+```bash
+helen --session=session_xxx file.helen    # Start with specified session
+helen --resume-latest file.helen          # Auto-restore most recent session
+helen repl --resume-latest                # REPL shorthand: -r
+```
+
+```python
+# Python API
+from helen.interpreter import Interpreter
+interp = Interpreter(session_id="session_xxx")
+```
+
+| Feature | `--session` (startup) | `resume_session()` (runtime) |
+|---------|----------------------|------------------------------|
+| Timing | Before interpreter starts | During program execution |
+| Behavior | Directly reuses specified session | Imports historical messages into current new session |
+| transcript | One file | Two files |
+
+## Media (Media/Multimodal)
+
+v1.17 introduces multimodal support; `MediaPart` is a first-class data type.
+
+```helen
+# Creation
+let img = media("/path/to/image.png")          # File path or URL
 let video = media("https://example.com/video.mp4")
-let audio = media("/path/to/audio.mp3", "audio")  // 显式指定类型
-
-// media_base64(data, mime, type?) — 从 base64 创建
+let audio = media("/path/to/audio.mp3", "audio")  # Explicitly specify type
 let base64_img = media_base64("iVBORw0KGgo...", "image/png")
 
-// ═══════════════════════════════════════════════════════════════
-// 检查媒体
-// ═══════════════════════════════════════════════════════════════
+# Inspection
+is_media(value)                                # Whether it's a MediaPart
+media_type(img)                                # "image" | "video" | "audio"
+is_image(img) / is_video(video) / is_audio(audio)
 
-// is_media(value) — 检查是否为 MediaPart
-if is_media(value) {
-    print("是媒体对象")
-}
+# Format adapters
+to_openai_parts([img, video])                  # [{type: "image_url", ...}]
+to_claude_parts([img])                         # [{type: "image", source: {...}}]
+to_gemini_parts([img])
 
-// media_type(value) — 获取媒体类型
-let t = media_type(img)  // "image" | "video" | "audio"
+# Utilities
+media_to_base64(img)                           # Convert to base64 string
+save_media(img, "/path/to/save.png")           # Save to file
 
-// is_image(value) / is_video(value) / is_audio(value)
-if is_image(img) { print("是图片") }
-if is_video(video) { print("是视频") }
-if is_audio(audio) { print("是音频") }
-
-// ═══════════════════════════════════════════════════════════════
-// 格式适配器
-// ═══════════════════════════════════════════════════════════════
-
-// to_openai_parts(media_list) — 转换为 OpenAI 格式
-let openai_parts = to_openai_parts([img, video])
-// [{type: "image_url", image_url: {url: "..."}}, ...]
-
-// to_claude_parts(media_list) — 转换为 Claude 格式
-let claude_parts = to_claude_parts([img])
-// [{type: "image", source: {type: "base64", media_type: "...", data: "..."}}, ...]
-
-// to_gemini_parts(media_list) — 转换为 Gemini 格式
-let gemini_parts = to_gemini_parts([img])
-
-// ═══════════════════════════════════════════════════════════════
-// 媒体工具
-// ═══════════════════════════════════════════════════════════════
-
-// media_to_base64(media_part) — 转换为 base64 字符串
-let b64 = media_to_base64(img)
-
-// save_media(media_part, path) — 保存到文件
-save_media(img, "/path/to/save.png")
-
-// ═══════════════════════════════════════════════════════════════
-// 在 llm act 中使用
-// ═══════════════════════════════════════════════════════════════
-
-llm act "分析这张图片"
+# Usage in llm act (callbacks as adapters)
+llm act "Analyze this image"
     media("/path/to/image.png")
     on_media fn(parts, provider) {
-        // 自定义适配器：将 MediaPart 转换为 provider 特定格式
-        if provider == "claude" {
-            return to_claude_parts(parts)
-        }
+        if provider == "claude" { return to_claude_parts(parts) }
         return to_openai_parts(parts)
     }
 ```
 
-## LLM（大模型调用控制）
+## LLM (LLM Call Control)
 
-控制正在进行的 LLM 流式调用。
+Control ongoing LLM streaming calls.
 
 ```helen
-// cancel_llm_call(call_id) — 取消指定的 LLM 调用
-let call_id = current_llm_call_id()
-if call_id != null {
-    cancel_llm_call(call_id)
-}
+let call_id = current_llm_call_id()     # string | null
+cancel_llm_call(call_id)
+cancel_all_llm_calls()                  # Returns count of cancelled calls
 
-// current_llm_call_id() — 获取当前活跃的流式调用 ID
-let id = current_llm_call_id()
-// 返回 string | null
-
-// cancel_all_llm_calls() — 取消所有活跃的流式调用
-let cancelled_count = cancel_all_llm_calls()
-print("已取消 " + str(cancelled_count) + " 个调用")
-
-// 中文别名
+# Chinese aliases
 取消大模型调用(call_id)
-let id = 当前大模型调用id()
+当前大模型调用id()
 取消所有大模型调用()
 ```
 
-**使用场景**：
-- 在 `on_chunk` 回调中检测终止条件并中断流式输出
-- 用户按 Ctrl+C 时取消后台调用
-- 超时控制
+Used in `on_chunk` callbacks to detect termination conditions, Ctrl+C interruption, and timeout control.
 
-## Concurrency（并发）
+## Concurrency
 
-v1.18 引入基于 Channel 的消息传递并发模型。
+v1.18 Channel-based message-passing concurrency model.
 
 ```helen
-// ═══════════════════════════════════════════════════════════════
-// spawn — 启动并发 Agent
-// ═══════════════════════════════════════════════════════════════
-
 agent Worker(task: str) {
     main {
-        // 执行任务...
-        return "结果"
+        # Execute task...
+        return "Result"
     }
 }
 
-// spawn 返回 Channel（邮箱）
-let ch = spawn Worker("任务 1")
+# spawn returns a Channel (mailbox)
+let ch = spawn Worker("Task 1")
 
-// ═══════════════════════════════════════════════════════════════
-// Channel 方法
-// ═══════════════════════════════════════════════════════════════
+# Channel methods
+ch.send("message")              # Send message
+let msg = ch.receive()          # Blocking receive
+let maybe = ch.try_receive()    # Non-blocking receive (returns null if no message)
+ch.cancel()                     # Cancel (interrupts streaming LLM call)
+ch.close()                      # Close channel
+ch.is_closed()                  # Check if closed
 
-ch.send("消息")              // 发送消息
-let msg = ch.receive()       // 阻塞接收
-let maybe = ch.try_receive() // 非阻塞接收（返回 null 如果无消息）
-ch.cancel()                  // 取消（中断正在进行的流式调用）
-ch.close()                   // 关闭通道
-let closed = ch.is_closed()  // 检查是否已关闭
+# Chinese aliases: 发送(), 接收(), 尝试接收(), 取消(), 关闭(), 已关闭()
 
-// 中文别名
-发送("消息")
-接收()
-尝试接收()
-取消()
-关闭()
-已关闭()
-
-// ═══════════════════════════════════════════════════════════════
-// mailbox_select — 多通道选择
-// ═══════════════════════════════════════════════════════════════
-
-// 竞争模式：谁先完成用谁
+# mailbox_select — Multi-channel select (race mode: first to complete wins)
 let m1 = spawn StrategyA()
 let m2 = spawn StrategyB()
 let m3 = spawn StrategyC()
+let result = mailbox_select([m1, m2, m3])  # {endpoint: Channel, message: "..."}
 
-let result = mailbox_select([m1, m2, m3])
-// {endpoint: Channel, message: "..."}
+# With timeout
+let result = mailbox_select([m1, m2], timeout=5.0)  # Returns null on timeout
+if result == null { print("Timeout") }
 
-// 带超时
-let result = mailbox_select([m1, m2], timeout=5.0)  // 5 秒超时
-if result == null {
-    print("超时")
-}
-
-// 中文别名
+# Chinese aliases
 let result = 邮箱选择([m1, m2, m3])
 ```
 
-**关键特性**：
-- **快照语义**: spawn 时深拷贝所有变量（包括 SharedStore），Agent 间数据共享通过 Channel 消息显式传递
-- **隔离环境**: 每个 spawned agent 运行在独立环境中
-- **流式中断**: `ch.cancel()` 可以中断正在进行的流式 LLM 调用
+**Key features**: Snapshot semantics (spawn deep-copies all variables including SharedStore), isolated environment, streaming interrupt (`ch.cancel()`). Inter-agent data sharing is done explicitly through Channel messages.
 
-## 异常处理 (v1.9+)
+## Exception Handling (v.9+)
 
-标准库函数调用时抛出的 Python 异常会自动包装为 `RuntimeError`，可通过 try-catch 捕获：
+Python exceptions are automatically wrapped as `RuntimeError`, with format `"Python <Type Name>: <Original Message>"`:
 
 ```helen
 try {
-    let x = len(42)           // Python TypeError
+    let x = len(42)
 } catch RuntimeError err {
-    print(err.message)        // "Python TypeError: object of type 'int' has no len()"
+    print(err.message)    # "Python TypeError: object of type 'int' has no len()"
 }
 
 try {
     let data = read_file("/nonexistent")
 } catch RuntimeError err {
-    print(err.message)        // "Python FileNotFoundError: [Errno 2] ..."
+    print(err.message)    # "Python FileNotFoundError: [Errno 2] ..."
 }
 ```
 
-异常消息格式为 `"Python <类型名>: <原始消息>"`，可在 catch 块中通过消息前缀区分具体的 Python 异常类型。已存在的 Helen 异常（如 `TimeoutError`）保持原有类型不变。
+Python exception types can be distinguished by the message prefix. Existing Helen exceptions (such as `TimeoutError`) retain their original types unchanged.
 
----
+## Module Cache (Python REPL/Jupyter)
 
-## ⚠️ 使用 stdlib 时的注意事项：模块缓存
-
-### 问题场景
-
-在 Python REPL、Jupyter 或 Web 服务中使用 Helen stdlib 函数时，如果修改了导入的 `.helen` 模块文件，**修改不会自动生效**！
+`ImportResolver` uses an in-memory cache (`_cached_results`). After modifying `.helen` files, you need to manually clear it:
 
 ```python
-# Python REPL 中
-from helen.interpreter import Interpreter
-
+# Option 1: Create a new Interpreter each time (simple)
 interp = Interpreter()
-interp.execute_file("my_utils.helen")  # 加载 v1
-interp.execute("print(custom_function())")  # 使用 v1 的函数
 
-# 修改 my_utils.helen...
-
-interp.execute_file("my_utils.helen")  # ❌ 仍然是 v1！
-```
-
-### 根本原因
-
-`ImportResolver` 使用内存缓存（`_cached_results`）加速重复导入：
-
-```python
-class ImportResolver:
-    def __init__(self):
-        self._cached_results: dict[str, ImportResult] = {}
-```
-
-### 快速解决方案
-
-```python
-# 方案 1: 每次新建 Interpreter（简单）
-interp = Interpreter()
-interp.execute_file("my_utils.helen")
-
-# 方案 2: 手动清除缓存（高效）
+# Option 2: Manually clear cache (efficient)
 interp.import_resolver._cached_results.clear()
 interp.import_resolver._loaded.clear()
-interp.execute_file("my_utils.helen")  # ✅ 重新加载
 
-# 方案 3: 使用 CLI 开发（推荐）
-# bash: helen my_program.helen  # 每次新进程，自动重新加载
-```
-
-### 调试 stdlib 时的技巧
-
-```python
-# 检查哪些文件被缓存了
+# Debug: Check cache status
 print(f"Cached: {len(interp.import_resolver._cached_results)} files")
-
-# 列出所有已加载的文件
 for path in interp.import_resolver._loaded:
     print(f"  - {path}")
 ```
 
-### 相关文档
+Recommended approach: Use the CLI for development (`helen my_program.helen`); each new process automatically reloads.
 
-- `wiki/runtime/import.md` — 完整的缓存机制说明
-- `wiki/tutorial/08-modules.md` — 开发时的注意事项
+## Built-in Template Library
+
+```bash
+helen template --list                  # View all templates
+helen template simple_agent            # View template content
+helen template spawn_channel --copy my_worker.helen  # Copy to current directory
+```
+
+Templates: `simple_agent`, `spawn_channel`, `shared_store`, `context_object`, `pipeline`. All templates follow the "Caller Decides Context" principle — all agent information is passed explicitly through parameters.
 
 ---
 
-**最后更新**: 2026-07-16
+**Last updated**: 2026-07-24
 
+## Related Skills
+
+- **helen-syntax** — Helen syntax reference (keywords, types, expressions)
+- **helen-agent-patterns** — Agent design patterns
+- **helen-agent-collaboration** — Multi-agent collaboration patterns
+- **helen-testing** — Testing framework usage guide

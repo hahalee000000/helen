@@ -140,7 +140,7 @@ Example:
 |---|---|---|
 | Memory Providers | ❌ Incomplete vs HLD v1.2.1 | Current: `get/set/delete/list_keys` (no path param). HLD requires: `load/save/get/set/search` with `path` param. Missing `search`. |
 | HelenHermesRuntime skills | ⚠️ Partial | `list_skills`/`load_skill` complete. `load_tool` returns stub ToolSchema. |
-| Hermes CLI LLM Runtime | ✅ Complete | route/choose/act via `hermes -z` (oneshot mode) |
+| Hermes CLI LLM Runtime | ✅ Complete | route/act via `hermes -z` (oneshot mode) |
 | **HttpLLMRuntime (direct API)** | ✅ **Complete** | Direct HTTP to OpenAI-compatible API, auto-loads from `~/.hermes/.env`, REPL default. 7-11s/call. |
 | LSP Smart Completion | ⚠️ Partial | Syntax highlight only |
 

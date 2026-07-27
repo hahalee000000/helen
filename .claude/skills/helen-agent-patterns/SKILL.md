@@ -1,36 +1,54 @@
 ---
 name: helen-agent-patterns
-description: "Helen Agent 设计模式 — 单 Agent、多 Agent 协作、作用域隔离、共享变量、路由、流式处理、历史管理、上下文管理、Transcript 会话记录"
-version: 1.19.0
+description: "Helen Agent Design Patterns — Single Agent core patterns, scope isolation, routing, streaming, tool callbacks, best practices"
+version: 1.22.0
 author: Helen Team
 license: MIT
-tags: [helen, agent, patterns, design, llm, scope-isolation, shared-let, v1.12, closure, concurrency, history, persistence, context-window, context-management, transcript, session, v1.16, ground-truth-injection, v1.17, spawn, channel, v1.18, pinned-messages, context-inspection, v1.19]
+tags: [helen, agent, patterns, design, llm, scope-isolation, shared-let, v1.12, closure, spawn, channel, v1.18, on-tool-end, v1.21, invocation, v1.22]
 ---
 
-# Helen Agent 设计模式
+# Helen Agent Design Patterns
 
-Helen 将 Agent 作为**一等语言构造**，提供声明式语法和强大的 LLM 集成。
+Helen treats Agent as a **first-class language construct**, providing declarative syntax and powerful LLM integration. This guide focuses on **single Agent core patterns**; for multi-Agent collaboration, see `helen-agent-collaboration`.
 
-## Agent 基础
+## 🎯 First Principle: Caller Decides Context
 
-### 最小 Agent
+> **"Before calling an agent, ask: what does it need to know?"**
+
+- Agents are **strictly isolated** — each invocation creates an independent execution environment
+- They do **not automatically inherit** the caller's variables, history, or LLM context
+- **All** context must be passed **explicitly** via arguments, `shared store`, `const`, or Channel
+
+Regardless of the collaboration pattern chosen, **the first step is always to draw the context flow diagram**:
+
+```
+Caller ──arguments──► Agent input
+       ──SharedStore──► Shared state
+       ◄──return value/Channel── Agent output
+```
+
+> 💡 Full explanation in `helen-agent-collaboration` § "Design Principle: Caller Decides Context"
+
+---
+
+## Agent Basics
+
+### Minimal Agent
 
 ```helen
 agent SimpleAgent {
     description "A simple agent"
     prompt "You are a helpful assistant."
-    
+
     main {
         return llm act "Hello, world!"
     }
 }
 
-// 调用
 let result = SimpleAgent()
-print(result)
 ```
 
-### 参数化 Agent
+### Parameterized Agent
 
 ```helen
 agent Translator(text: str, target_lang: str) {
@@ -38,452 +56,211 @@ agent Translator(text: str, target_lang: str) {
     prompt "You are a professional translator. Translate to {{target_lang}}."
     model "gpt-4"
     temperature 0.3
-    
+
     main {
         return llm act "Translate: " + text
     }
 }
 
-// 调用
 let result = Translator("Hello", "Chinese")
-print(result)  # "你好"
 ```
 
-### Agent 配置选项
+### Agent Configuration Options
 
 ```helen
 agent ConfiguredAgent {
     description "Agent with full configuration"
     prompt "You are an expert assistant."
-    model "gpt-4"              # LLM 模型
-    temperature 0.7            # 创造性 (0.0-1.0)
-    max-turns 10               # 最大工具调用轮次
-    streaming true             # 启用流式响应（返回 StreamingResponse）
-    tools = ["web_search", "read_file", "write_file"]  # 可用工具（字面量列表）
-    
+    model "gpt-4"              # LLM model
+    temperature 0.7            # Creativity (0.0-1.0)
+    max-turns 10               # Maximum tool call rounds
+    streaming true             # Enable streaming response
+    tools = ["web_search", "read_file", "write_file"]
+
     main {
         return llm act "Do something complex"
     }
 }
 ```
 
-#### tools = CONST_NAME（复用工具集）
-
-`tools` 可引用**模块级 const**，减少重复并保持工具集**静态可审计**（安全边界清晰）：
+`tools` can reference module-level const to reduce repetition and keep tool sets statically auditable:
 
 ```helen
 const FILE_TOOLS = ["read_file", "write_file", "path_exists"]
-const RESEARCH_TOOLS = ["web_search", "web_fetch", "read_file"]
-
-agent Contractor {
-    tools = FILE_TOOLS            # 复用 const
-    ...
+agent FileWorker {
+    tools = FILE_TOOLS
+    main { ... }
 }
 ```
 
-**严格校验**：
-- ✅ 模块级 const 引用 + 字面量列表
-- ❌ 可变变量、函数、agent、未定义标识符、重复声明
-- ❌ 表达式拼接（`A + B`）— 安全设计，工具边界必须静态可追踪
+### Transcript Control (v1.29+)
 
-#### 上下文配置 (v1.15+)
-
-Helen v1.15 引入了完整的上下文管理增强，可以为每个 agent 独立配置：
+Control whether agent conversations are persisted to disk. Default is `none` to avoid cluttering the working directory:
 
 ```helen
-agent SmartAssistant {
-    description "Smart assistant with optimized context"
-    
-    // 上下文配置
-    context {
-        compression "graduated"      // 压缩策略
-        cache-aware true             // 缓存感知
-        working-memory true          // 工作记忆
-        working-memory-tokens 5000   // 工作记忆预算
-    }
-    
-    tools = ["read_file", "web_search"]
-    
-    main {
-        return llm act "..."
-    }
+// No transcript (default, zero overhead)
+agent SimpleTask {
+    transcript "none"
+    main { llm act "Quick task" }
+}
+
+// In-memory only (debugging, no disk files)
+agent DebugAgent {
+    transcript "memory"
+    main { llm act "Debug issue" }
+}
+
+// Persistent (audit trails, session resumption)
+agent AuditAgent {
+    transcript "persistent"
+    main { llm act "Perform audit" }
 }
 ```
 
-**配置选项**：
+**When to use each level**:
+- `none`: Most scripts, batch processing, performance-critical tasks
+- `memory`: Development, debugging, when you need `get_session_id()` but don't want disk files
+- `persistent`: Long-running services, audit requirements, when you need to resume sessions
 
-| 选项 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `compression` | str | `"graduated"` | 压缩策略 |
-| `cache-aware` | bool | `true` | 启用缓存感知压缩 |
-| `working-memory` | bool | `true` | 启用工作记忆 |
-| `working-memory-tokens` | int | `5000` | 工作记忆预算 |
+**Chinese**: `记录 "无"` / `记录 "内存"` / `记录 "持久"`
 
-**压缩策略**：
+### Agent vs Skill
 
-| 策略 | 说明 | 使用场景 |
-|------|------|---------|
-| `"none"` | 不压缩 | 短对话 |
-| `"graduated"` | 五层渐进压缩（默认） | 长对话 |
-| `"traditional"` | 传统截断 | 快速场景 |
+| Dimension | Agent | Skill |
+|-----------|-------|-------|
+| Nature | Runtime entity | Static document |
+| Callable | ✅ `Agent()` | ❌ Not callable |
+| Stateful | ✅ Maintains conversation/tool state | ❌ Stateless |
+| Purpose | **Execute** tasks | **Guide** how to execute |
 
-#### Transcript 配置 (v1.16+)
+Agents can load Skills as knowledge sources: `load_skill("helen-testing")`.
 
-Helen v1.16 引入了 TranscriptStore，自动保存所有对话历史。可以在 agent 中通过 stdlib 函数访问：
+---
 
-```helen
-agent ChatBot {
-    description "Chat bot with transcript management"
-    
-    main {
-        // 获取当前会话 ID
-        let session_id = get_session_id()
-        print("会话 ID: " + session_id)
-        
-        // 列出所有会话
-        let sessions = list_sessions()
-        for s in sessions {
-            print("{s.session_id}: {s.message_count} 条消息")
-        }
-        
-        // 回放当前会话
-        let messages = replay_transcript()
-        for msg in messages {
-            print("{msg.role}: {msg.content}")
-        }
-        
-        // 导出会话
-        export_transcript("chat_log.json", "json")
-        
-        // 获取压缩审计
-        let audit = get_compression_audit()
-        for event in audit {
-            print("{event.layer}: {event.original_token_count} -> {event.compressed_token_count}")
-        }
-        
-        return llm act "Hello!"
-    }
-}
-```
+## Agent Scope Isolation (v1.10/v1.12)
 
-**使用场景**：
-- **会话恢复**: 使用 `resume_session(session_id)` 恢复之前的对话
-- **审计追踪**: 使用 `get_compression_audit()` 分析压缩效率
-- **会话导出**: 使用 `export_transcript()` 保存对话记录
-- **多会话管理**: 使用 `list_sessions()` 管理多个会话
-- **磁盘清理**: 使用 `cleanup_sessions()` 释放磁盘空间（v1.21）
-- **隐私合规**: 使用 `delete_session()` 永久删除用户数据（v1.21）
+### Core Rules
 
-#### Transcript 会话删除 (v1.21+)
+**Agent main runs in a fully isolated environment**:
 
-Helen 提供三种方式永久删除 TranscriptStore 会话数据：
+| Variable Type | Visible in agent main | Description |
+|--------------|----------------------|-------------|
+| Module-level `let` | ❌ Not visible | Compile-time error (except @open) |
+| Module-level `const` | ✅ Auto-visible | Read-only sharing |
+| `shared let` (value types) | ✅ Visible | Writable across agents |
+| `shared store` | ✅ Visible | Accessed via methods |
+| Local variables | ✅ Visible | Closure value capture |
 
-**1. 删除指定会话**
-```helen
-agent SessionManager {
-    main {
-        // 删除旧会话
-        let r = delete_session("session_1720435200_a1b2c3d4")
-        if r["status"] == "ok" {
-            print("删除成功，释放 " + str(r["freed_bytes"]) + " 字节")
-        }
-    }
-}
-```
+**v1.12 Enhancements**:
+- `@open` / `@strict` / `@sandbox` — three isolation decorators
+- `shared let` only allows value types (int/float/str/bool)
+- Reference-type arguments are automatically wrapped in a read-only view (ReadOnlyView)
+- Closures use value capture (deep-copy snapshot)
+- `arr[i] = x` and `obj.field = x` are also subject to isolation checks
 
-**2. 删除当前会话（需确认）**
-```helen
-agent ResetAgent {
-    main {
-        // 第一次调用：查看确认提示
-        let r = delete_current_session()
-        if r["status"] == "error" {
-            // 第二次调用：确认删除
-            let r = delete_current_session(confirm=true)
-        }
-    }
-}
-```
-
-**3. 批量清理旧会话**
-```helen
-agent LongRunningAgent {
-    description "Long-running agent with automatic cleanup"
-    
-    main {
-        // 保留最近 100 个会话
-        let r = cleanup_sessions(keep_count=100)
-        print("清理了 " + str(r["deleted_count"]) + " 个旧会话")
-        
-        // 或删除 30 天前的会话
-        let r = cleanup_sessions(older_than_days=30)
-        
-        return llm act "Continue working..."
-    }
-}
-```
-
-**设计原则**：
-- **审计追踪优先**：`delete_message` 和 `clear_context` 只进行逻辑删除，保留持久化数据
-- **显式永久删除**：只有 `delete_session` 系列函数才会真正删除持久化数据
-- **安全机制**：`delete_current_session` 需要 `confirm=true` 参数，防止误操作
-- **批量优先**：`cleanup_sessions` 比单个删除更实用，适合定期清理
-
-**最佳实践**：
-- 长期运行的 Agent 应定期调用 `cleanup_sessions()` 释放磁盘空间
-- 处理敏感数据时，使用 `delete_session()` 确保数据完全删除
-- 测试环境使用 `cleanup_sessions(keep_count=0)` 清空所有会话
-- 生产环境保留一定数量的会话用于审计和调试（如 `keep_count=100`）
-
-**配置**：在 `~/.helen/config.yaml` 中配置 transcript：
-
-```yaml
-transcript:
-  enabled: true              # 默认启用
-  backend: "jsonl"           # 或 "sqlite"
-  session_dir: "~/.helen/sessions"
-  max_memory_items: 1000
-```
-
-详见 [TranscriptStore 文档](../../docs/transcript_store_user_guide.md)。
-
-## Agent vs Skill：本质区别
-
-> **Agent 是"谁来做"，Skill 是"怎么做"的知识。**
-
-| 维度 | Agent（智能体） | Skill（技能） |
-|------|----------------|--------------|
-| **本质** | 运行时实体 | 静态文档 |
-| **语言级别** | 一等公民（语法支持） | 外部概念（纯 Markdown） |
-| **可调用** | ✅ `Agent()` 像函数调用 | ❌ 不可调用 |
-| **有状态** | ✅ 维护对话/工具状态 | ❌ 无状态 |
-| **执行逻辑** | ✅ `main { }` 块 | ❌ 无执行逻辑 |
-| **用途** | **执行**任务 | **指导**如何执行 |
-
-**Agent 是执行者**：有 model、temperature、tools，可被调用、组合，实际执行 LLM 调用和工具操作。像**员工**。
-
-**Skill 是知识库**：纯 Markdown 文档，提供模式、最佳实践、API 用法，被 Agent 读取作为上下文。像**手册**。
-
-**用 Agent** 当你需要实际执行操作、维护状态、被代码调用。
-**用 Skill** 当你需要提供知识、文档化工作流、让多个 Agent 共享知识。
-
-**实际关系**：Agent 可以加载 Skill 作为知识源：
+### Isolation Levels
 
 ```helen
-agent Developer {
-    tools = ["load_skill"]
-    main {
-        let guide = load_skill("helen-testing")
-        return llm act "Follow: " + guide
-    }
-}
-```
-
-## Agent 作用域隔离（v1.10/v1.12）
-
-### 核心规则
-
-**Agent main 在完全隔离的环境中运行**，这是 v1.10 的重要特性，v1.12 进一步增强：
-
-| 变量类型 | 在 agent main 中 | 说明 |
-|---------|-----------------|------|
-| 模块级 `let` | ❌ **不可见** | 编译时报错（@open 除外）|
-| 模块级 `const` | ✅ 自动可见 | 只读共享 |
-| `shared let`（值类型） | ✅ 可见 | 跨 agent 可写 |
-| `shared store` | ✅ 可见 | 通过方法访问 |
-| 局部变量 | ✅ 可见 | 闭包值捕获 |
-
-**v1.12 新增**：
-- `@open` 装饰器：允许访问模块级 let（调试用）
-- `@strict` 装饰器：参数和返回值深拷贝
-- `@sandbox` 装饰器：最严格隔离
-- `shared let` 只允许值类型（int/float/str/bool）
-- 引用类型（list/dict）通过**参数传递**，自动只读包装
-- 闭包采用值捕获，不持有整个环境引用
-- `arr[i] = x` 和 `obj.field = x` 也受隔离检查约束
-
-### 隔离级别
-
-```helen
-// L0: @open — 模块级 let 可见（调试用）
-@open agent DebugAgent() {
+@open agent DebugAgent() {         // L0: Module-level let visible (for debugging)
     main { return module_let }
 }
-
-// L1: 标准隔离（默认）
-agent NormalAgent() { ... }
-
-// L2: @strict — 深拷贝参数和返回值
-@strict agent StrictAgent(data: list) {
-    main {
-        data.append(4)  // 安全：data 是副本
-        return data     // 返回值也是副本
-    }
+agent NormalAgent() { ... }        // L1: Standard isolation (default)
+@strict agent StrictAgent(data: list) {  // L2: Deep-copies arguments and return values
+    main { data.append(4); return data }
 }
-
-// L3: @sandbox — 最严格
-@sandbox agent SafeAgent() { ... }
+@sandbox agent SafeAgent() { ... } // L3: Forces tools=[]
 ```
 
-### 示例：作用域隔离
+### Example: Scope Isolation
 
 ```helen
-// 模块级变量
-let module_counter = 0           // ❌ agent main 中不可见
-const MAX_RETRIES = 3            // ✅ agent main 中自动可见
-shared let shared_count = 0      // ✅ agent main 中可见可写（v1.12: 值类型）
+let module_counter = 0           // ❌ Not visible in agent main
+const MAX_RETRIES = 3            // ✅ Auto-visible in agent main
+shared let shared_count = 0      // ✅ Visible and writable in agent main
 
 agent Worker(task: str) {
-    description "Worker agent"
-    
     functions {
         fn process(): str {
-            // functions 块中可以访问模块级 let
-            module_counter = module_counter + 1
+            module_counter = module_counter + 1  // ✅ Visible in functions block
             return "processed: " + task
         }
     }
-    
+
     main {
-        // ❌ 编译错误：module_counter 在 agent main 中不可见
-        // print(module_counter)
-        
-        // ✅ const 自动可见
-        print("Max retries: " + MAX_RETRIES)
-        
-        // ✅ shared let 可见（v1.12: 只允许值类型）
-        shared_count = shared_count + 1
-        
-        // ✅ 局部变量
-        let local_data = "local"
-        
+        // ❌ Compile error: module_counter is not visible in agent main
+        print("Max retries: " + MAX_RETRIES)     // ✅ const auto-visible
+        shared_count = shared_count + 1           // ✅ shared let visible
         return llm act "Process: " + task
     }
 }
 ```
 
-**v1.12 参数只读**：引用类型参数自动包装为只读视图
+### Parameter Read-Only + Closure Capture
 
 ```helen
 agent ProcessItems(items: list<int>) {
     main {
-        // ✅ 可以读取
-        let first = items[0]
-        let count = len(items)
-        
-        // ❌ 不能修改（v1.12 起自动只读包装）
-        // items[0] = 999  // ScopeViolationError
-        
-        // 如需修改，创建副本
-        let my_items = list(items)
-        my_items.append(100)
+        let first = items[0]         // ✅ Readable
+        // items[0] = 999            // ❌ ScopeViolationError
+        let my_items = list(items)   // Create a copy to modify
         return my_items
     }
 }
-```
 
-### 闭包捕获局部变量
-
-```helen
 agent DataProcessor(data: list) {
-    description "Process data with closure"
-    
     main {
-        let threshold = 10  // 局部变量
-        
-        // 闭包可以捕获局部变量
-        fn filter_data(items: list): list {
+        let threshold = 10
+        fn filter(items: list): list {  // Closure captures local variable
             let result = []
             for item in items {
-                if item > threshold {  // ✅ 捕获外层局部变量
-                    result.append(item)
-                }
+                if item > threshold { result.append(item) }
             }
             return result
         }
-        
-        let filtered = filter_data(data)
-        return llm act "Filtered data: " + str(filtered)
+        return llm act "Filtered: " + str(filter(data))
     }
 }
 ```
 
-### shared let 跨 Agent 协作
-
-**v1.12 更新**：`shared let` 只能使用值类型。需要共享引用类型时，通过参数传递。
+### shared let Cross-Agent Collaboration
 
 ```helen
-// v1.12: shared let 只允许值类型
 shared let request_count = 0
 shared let last_request_time = ""
 
 agent RequestCounter() {
-    description "Count requests"
-    
     main {
         request_count = request_count + 1
-        last_request_time = "2024-01-01"  // str 是值类型
+        last_request_time = "2024-01-01"  // str is a value type
         return request_count
     }
 }
 
-// 引用类型通过参数传递
+// Reference types are passed as arguments, auto-wrapped as read-only
 agent CacheWriter(cache: map, key: str, value: any) {
-    description "Write to cache (passed as parameter)"
-    
     main {
-        // v1.12: cache 是只读视图，创建副本修改
-        let my_cache = dict(cache)
+        let my_cache = dict(cache)  // Create a copy
         my_cache[key] = value
         return my_cache
     }
 }
-
-// 使用
-let my_cache = {}
-let updated = CacheWriter(my_cache, "user:1", "Alice")
-RequestCounter()
-print("Requests: " + request_count)  // 1
 ```
 
-### Shared Store 协作模式（v1.12）
-
-对于需要共享复杂可变状态的场景，使用 `shared store`：
+### Shared Store Collaboration (v1.12)
 
 ```helen
-// v1.12: 使用 shared store 管理复杂共享状态
 shared store TaskManager {
     let pending = 0
     let completed = 0
-
-    fn submit() {
-        pending = pending + 1
-    }
-
-    fn finish() {
-        pending = pending - 1
-        completed = completed + 1
-    }
-
+    fn submit()  { pending = pending + 1 }
+    fn finish()  { pending = pending - 1; completed = completed + 1 }
     fn get_status(): str {
         return str(pending) + " pending, " + str(completed) + " completed"
     }
 }
 
-agent TaskProducer() {
-    main {
-        TaskManager.submit()
-        TaskManager.submit()
-        return "submitted"
-    }
-}
-
-agent TaskWorker() {
-    main {
-        TaskManager.finish()
-        return "done"
-    }
-}
+agent TaskProducer() { main { TaskManager.submit(); TaskManager.submit() } }
+agent TaskWorker()   { main { TaskManager.finish() } }
 
 main {
     TaskProducer()
@@ -492,24 +269,45 @@ main {
 }
 ```
 
-### v1.12 隔离修复总结
+### v1.12 Isolation Fix Summary
 
-v1.12 实施后的第二轮修复确保了隔离承诺的可靠性：
+| Fix Item | After Fix |
+|----------|-----------|
+| ReadOnlyView | Read operations work correctly; iterated items also wrapped |
+| Closure capture | Deep-copy snapshot, immune to subsequent modifications |
+| @sandbox | LLM tool list forced to empty |
+| SharedStore | RLock protection; `_`-prefixed properties inaccessible |
 
-| 修复项 | 问题 | 修复后 |
-|--------|------|--------|
-| ReadOnlyView | `param[0]` 报错、迭代泄露原始引用 | 读操作正常、迭代项也被包装 |
-| 闭包捕获 | 引用类型按引用捕获，后续修改可见 | 深拷贝快照，不受后续修改影响 |
-| @sandbox | 工具限制未实现 | LLM 工具列表强制为空 |
-| SharedStore | 无锁、内部属性可篡改 | RLock 保护、`_` 前缀属性不可访问 |
-| 闭包作用域 | `_in_closure` 跳过所有检查 | 闭包内同样检查作用域隔离 |
-| @open 写回 | 模块级 let 修改不写回 | @open agent 写回所有修改 |
+---
 
-## 设计模式
+## Agent Context Isolation (v1.22/v1.23)
 
-### 模式 1: 专家 Agent
+In addition to variable scope isolation, v1.22 introduces **invocation-level context isolation** — each entry into an agent `main {}` creates a new `invocation_id`, so the LLM only sees messages from the current invocation.
 
-**场景**：为特定领域创建专家 Agent
+```helen
+agent AgentA { main { return llm act "I am Alice" } }
+agent AgentB { main { return llm act "What is my name?" } }
+
+let a = AgentA()  // invocation_id: inv_abc123
+let b = AgentB()  // invocation_id: inv_def456
+// AgentB's LLM cannot see AgentA's conversation — each main {} is fresh context
+```
+
+| Isolation Dimension | Scope Isolation (v1.10/v1.12) | Context Isolation (v1.22/v1.23) |
+|--------------------|-------------------------------|---------------------------------|
+| What is isolated | Variables | LLM conversation history |
+| Mechanism | Compile-time checks | Runtime invocation_id filtering |
+| Purpose | Prevent variable pollution | Prevent context leakage |
+
+Nested calls form an invocation tree (`parent_invocation_id`), queryable via `list_invocations()` / `get_invocation_tree()`. `restore_context()` supports filtering by invocation. v1.23 fixed a bug where `_prepare_history_for_llm()` bypassed invocation filtering.
+
+---
+
+## Design Patterns
+
+### Pattern 1: Expert Agent
+
+**Scenario**: Create expert Agents for specific domains
 
 ```helen
 agent CodeExpert {
@@ -520,7 +318,7 @@ agent CodeExpert {
     Always explain your reasoning.
     """
     tools = ["read_file", "write_file", "shell_exec"]
-    
+
     main {
         return llm act "Review this code and suggest improvements"
     }
@@ -528,49 +326,41 @@ agent CodeExpert {
 
 agent MathExpert {
     description "Mathematics expert"
-    prompt "You are a mathematics professor. Provide rigorous proofs and explanations."
-    temperature 0.2  # 低温度，更确定
-    
+    prompt "You are a mathematics professor. Provide rigorous proofs."
+    temperature 0.2  // Low temperature, more deterministic
+
     main {
         return llm act "Solve this math problem step by step"
     }
 }
 ```
 
-### 模式 2: 路由 Agent（llm if）
+### Pattern 2: Routing Agent (llm if)
 
-**场景**：根据输入内容路由到不同的专家 Agent
+**Scenario**: Route to different expert Agents based on input content
 
 ```helen
-// 定义专家
 agent TechSupport(query: str) {
     description "Technical support specialist"
     prompt "You are a technical support expert."
-    main {
-        return llm act "Help with: " + query
-    }
+    main { return llm act "Help with: " + query }
 }
 
 agent BillingSupport(query: str) {
     description "Billing support specialist"
     prompt "You are a billing support expert."
-    main {
-        return llm act "Help with: " + query
-    }
+    main { return llm act "Help with: " + query }
 }
 
 agent GeneralSupport(query: str) {
     description "General support specialist"
-    prompt "You are a general support assistant."
-    main {
-        return llm act "Help with: " + query
-    }
+    main { return llm act "Help with: " + query }
 }
 
-// 路由 Agent
+// Routing Agent
 agent SupportRouter(query: str) {
     description "Route support queries to specialists"
-    
+
     main {
         llm if query {
             case "technical issue, bug, error, crash, not working" {
@@ -586,20 +376,19 @@ agent SupportRouter(query: str) {
     }
 }
 
-// 使用
 let response = SupportRouter("I can't login to my account")
-// 路由到 TechSupport
+// Routes to TechSupport
 ```
 
-### 模式 3: 管道 Agent
+### Pattern 3: Pipeline Agent
 
-**场景**：多个 Agent 顺序处理，每个阶段处理一个方面
+**Scenario**: Multiple Agents process sequentially, each stage handling one aspect
 
 ```helen
 agent Researcher(topic: str) {
     description "Research specialist"
     tools = ["web_search", "web_fetch"]
-    
+
     main {
         return llm act "Research this topic and provide key findings: " + topic
     }
@@ -608,54 +397,47 @@ agent Researcher(topic: str) {
 agent Writer(topic: str, research: str) {
     description "Content writer"
     prompt "You are a professional content writer."
-    
+
     main {
-        return llm act "Write an article about " + topic + 
+        return llm act "Write an article about " + topic +
                        " based on this research: " + research
     }
 }
 
 agent Editor(content: str) {
     description "Content editor"
-    prompt "You are a meticulous editor. Fix grammar, improve clarity, ensure consistency."
+    prompt "You are a meticulous editor. Fix grammar, improve clarity."
     temperature 0.3
-    
+
     main {
         return llm act "Edit and improve this content: " + content
     }
 }
 
-// 管道
+// Pipeline
 agent ContentPipeline(topic: str) {
     description "Research → Write → Edit pipeline"
-    
+
     main {
-        // 阶段 1: 研究
         let research = Researcher(topic)
-        
-        // 阶段 2: 写作
         let draft = Writer(topic, research)
-        
-        // 阶段 3: 编辑
         let final = Editor(draft)
-        
         return final
     }
 }
 
-// 使用
 let article = ContentPipeline("Helen programming language")
 ```
 
-### 模式 4: 并发 Agent（spawn + Channel）
+### Pattern 4: Concurrent Agent (spawn + Channel)
 
-**场景**：多个 Agent 并发执行，提高吞吐量
+**Scenario**: Multiple Agents execute concurrently to improve throughput
 
 ```helen
 agent DataFetcher(source: str) {
     description "Fetch data from a source"
     tools = ["http_get"]
-    
+
     main {
         return llm act "Fetch data from: " + source
     }
@@ -663,39 +445,78 @@ agent DataFetcher(source: str) {
 
 agent DataAggregator {
     description "Aggregate data from multiple sources"
-    
+
     main {
-        // v1.18: spawn 并发获取数据
         let m1 = spawn DataFetcher("https://api.source1.com/data")
         let m2 = spawn DataFetcher("https://api.source2.com/data")
         let m3 = spawn DataFetcher("https://api.source3.com/data")
-        
-        // 逐个接收结果
+
         let r1 = m1.receive()
         let r2 = m2.receive()
         let r3 = m3.receive()
         let results = [r1, r2, r3]
-        
-        // 聚合结果
+
         return llm act "Aggregate these results: " + str(results)
     }
 }
 ```
 
-**多路复用**：当需要从多个 Channel 中等待第一个就绪的：
+**Multiplexing**: `mailbox_select([m1, m2, m3])` returns the first-ready Channel result.
+
+**⚠️ Transcript Runtime Isolation** (key design principle):
+
+Each agent created by `spawn` runs in an **independent Interpreter instance** with its own `session_id` and transcript. This is **intentional**:
+
+- Same process, multiple `get_session_id()` calls → same ID
+- Restart program → new session_id (`session_{timestamp}_{uuid8}`)
+- `spawn` → new session_id + new transcript
+- Regular agent call (same process) → shared session_id, distinguished by `invocation_id`
+
+#### ❌ Anti-pattern: Assuming Automatic Inheritance
 
 ```helen
-// mailbox_select: 返回第一个就绪的 Channel 的结果
-let first_ready = mailbox_select([m1, m2, m3])
+agent Worker(task: str, ch: Channel) {
+    main {
+        let sid = get_session_id()     // ❌ This is the worker's own new session
+        ch.send("done in " + sid)
+    }
+}
 ```
 
-### 模式 5: 流式 Agent（llm act + on_chunk 回调）
+#### ✅ Relay Template: Explicitly Pass session_id
 
-**场景**：实时输出 LLM 响应，改善用户体验
+```helen
+main {
+    let parent_sid = get_session_id()
+    let m = spawn Worker("task", parent_sid)  // Pass explicitly
+}
 
-**v1.18 更新**：`llm stream` 已删除（v1.14），`for await` 已删除（v1.18）。流式输出统一使用 `llm act` + `on_chunk` 回调。
+agent Worker(task: str, parent_sid: str, ch: Channel) {
+    main {
+        resume_session(parent_sid)  // Explicitly inherit parent transcript
+        ch.send("done")
+    }
+}
+```
 
-#### 使用 `llm act` + `on_chunk` 回调
+#### 📋 Three Relay Methods
+
+| Scenario | Recommended Approach |
+|----------|---------------------|
+| Spawned child agent needs parent transcript | Pass parent_sid + `resume_session` (import parent messages into child's new session) |
+| Agent output needs to be visible to other agents | `working_memory_set` + pass via Channel |
+| Continue a saved **child** session across restarts (v1.27) | Persist child_sid + `spawn A(...) resume(child_sid)` (true resumption) |
+| Continue the **main** session across restarts | `helen --session=sid` / `Interpreter(session_id=sid)` |
+
+> 🔑 **Mnemonic**: "spawn means isolation, relay requires explicit passing"
+>
+> **v1.27 distinction**: `spawn A(...) resume("sid")` is **true resumption** - the spawned interpreter continues appending to session `sid`'s transcript. `resume_session(sid)` is an **import** - it copies another session's messages into the current new session. Use `resume(...)` to continue a saved child session; use `resume_session()` to reference another session's history from a fresh one. Resuming restores LLM conversation memory, **not** runtime variable state.
+
+### Pattern 5: Streaming Agent (llm act + on_chunk callback)
+
+**Scenario**: Real-time output of LLM responses
+
+**v1.18**: `llm stream` was removed (v1.14), `for await` was removed (v1.18). Streaming is unified under `llm act` + `on_chunk`.
 
 ```helen
 fn print_chunk(chunk: str) {
@@ -704,71 +525,55 @@ fn print_chunk(chunk: str) {
 
 agent StreamingWriter(topic: str) {
     description "Write content with streaming output"
-    
+
     main {
         llm act "Write a detailed article about " + topic on_chunk print_chunk
     }
 }
 
-// 使用 — 用户立即看到输出，无需等待完整响应
 StreamingWriter("The future of AI")
 ```
 
-带完整回调的流式输出：
+Streaming with full callbacks:
 
 ```helen
-fn on_chunk(chunk: str) {
-    stream_print(chunk)
-}
-
-fn on_complete() {
-    print("\n\n✅ 完成")
-}
+fn on_chunk(chunk: str) { stream_print(chunk) }
+fn on_complete() { print("\n\n✅ Done") }
 
 agent StreamingWriter(topic: str) {
-    description "Write content with streaming output"
-    
     main {
-        llm act "Write a detailed article about " + topic on_chunk on_chunk on_complete on_complete
+        llm act "Write article about " + topic on_chunk on_chunk on_complete on_complete
     }
 }
 ```
 
-#### 流式中断 (v1.18)
+#### Streaming Interrupt (v1.18)
 
-`on_chunk` 回调可以返回 `false` 来提前终止流式输出。结合 `spawn` + `Channel.cancel()`，可以中断后台 agent 正在进行的流式调用：
+`on_chunk` returning `false` terminates streaming early. `spawn` + `Channel.cancel()` interrupts background agent streaming:
 
 ```helen
-// on_chunk 返回 false 停止流式
 fn conditional_chunk(chunk: str) {
     stream_print(chunk)
-    if should_stop() {
-        return false  // 终止流式接收
-    }
+    if should_stop() { return false }  // Terminate streaming
 }
 
-// spawn + cancel 中断后台流式
 let mailbox = spawn StreamingAgent("long task")
-// ... 在需要时取消
-mailbox.cancel()  // 中断后台 agent 的流式调用
+mailbox.cancel()  // Interrupt background streaming
 
-// 也可通过 stdlib 函数取消指定调用
 cancel_llm_call(call_id)
-取消大模型调用(call_id)  // 中文别名
+取消大模型调用(call_id)  // Chinese alias
 ```
 
-### 模式 5B: 工具执行后注入提示（on_tool_end）
+### Pattern 5B: Injecting Hints After Tool Execution (on_tool_end, v1.21)
 
-**场景**：在 agentic loop 中间，工具执行完毕后引导 LLM 方向、注入外部信息或安全约束。
+**Scenario**: Guide LLM direction after tool execution in an agentic loop.
 
-**v1.21 新增**：`on_tool_end` 回调在每个工具执行后调用，返回值注入为 LLM 可见的消息。
+**Signature**: `fn(tool_name: str, tool_result: str): str | dict | null`
+- Returns str → injected as `user` message (with `[System Hint]` prefix)
+- Returns dict → `{"role": "user"|"system", "content": "..."}`
+- Returns null → no injection
 
-**回调签名**：`fn(tool_name: str, tool_result: str): str | dict | null`
-- 返回字符串 → 注入为 `user` 消息（带 `[System Hint]` 前缀）
-- 返回 dict → `{"role": "user"|"system", "content": "..."}`，完全控制
-- 返回 null → 不注入
-
-**持久化**：所有注入的 hint 自动保存到 TranscriptStore，可通过 `:transcript` 查看，支持会话重放和审计。
+Injected hints are automatically saved to TranscriptStore.
 
 ```helen
 agent Coder {
@@ -778,32 +583,11 @@ agent Coder {
         llm act "Create hello.py and run it"
             on_chunk fn(c) { stream_print(c) }
             on_tool_end fn(name, result) {
-                // 写入文件后建议下一步
                 if name == "write_file" {
-                    return "文件已写入，下一步可以运行测试验证"
+                    return "File written, next step: run tests to verify"
                 }
-                // shell_exec 后注入安全约束（使用 dict 控制角色）
                 if name == "shell_exec" {
-                    return {"role": "system", "content": "禁止执行 rm -rf 等危险命令"}
-                }
-                return null  // 其他工具不注入
-            }
-    }
-}
-```
-
-**外部队列集成**：从外部系统获取 hint 注入对话：
-
-```helen
-agent Worker {
-    tools ["read_file", "write_file"]
-
-    main {
-        llm act "完成分配的任务"
-            on_tool_end fn(name, result) {
-                let hint = get_hint_from_queue()  // 查询外部队列
-                if hint != null {
-                    return hint
+                    return {"role": "system", "content": "Dangerous commands like rm -rf are forbidden"}
                 }
                 return null
             }
@@ -811,17 +595,33 @@ agent Worker {
 }
 ```
 
-**与其他回调的组合**：`on_tool_end` 可与 `on_chunk`/`on_complete` 同时使用。
+**External queue integration**:
+
+```helen
+agent Worker {
+    tools ["read_file", "write_file"]
+    main {
+        llm act "Complete the assigned task"
+            on_tool_end fn(name, result) {
+                let hint = get_hint_from_queue()
+                return hint  // Not injected when null
+            }
+    }
+}
+```
+
+`on_tool_end` can be combined with `on_chunk` / `on_complete`:
+
 ```helen
 llm act "task"
     逐块处理 fn(c) { stream_print(c) }
-    完成 fn() { print("\n✅ 完成") }
-    工具结束 fn(name, result) { return "提示" }
+    完成 fn() { print("\n✅ Done") }
+    工具结束 fn(name, result) { return "hint" }
 ```
 
-### 模式 6: 工具使用 Agent
+### Pattern 6: Tool-Using Agent
 
-**场景**：Agent 使用工具完成复杂任务
+**Scenario**: Agent uses tools to accomplish complex tasks
 
 ```helen
 agent CodeAssistant {
@@ -831,55 +631,51 @@ agent CodeAssistant {
     - Read and write files
     - Execute shell commands
     - Search the web for documentation
-    
+
     Always explain your changes before making them.
     """
     tools = ["read_file", "write_file", "patch_file", "shell_exec", "web_search"]
-    max-turns 15  # 允许多轮工具调用
-    
+    max-turns 15  // Allow multiple tool call rounds
+
     main {
         return llm act "Help me implement a REST API in Python"
     }
 }
 ```
 
-### 模式 7: 对话 Agent（对话历史）
+### Pattern 7: Conversational Agent
 
-**场景**：保持对话上下文的多轮对话
+**Scenario**: Multi-turn conversation maintaining conversational context
 
 ```helen
 agent ConversationalAssistant {
     description "Multi-turn conversational assistant"
-    prompt "You are a helpful conversational assistant. Remember context from previous messages."
-    
+    prompt "You are a helpful assistant. Remember context from previous messages."
+
     main {
-        // 自动维护对话历史
-        // 每次调用 llm act 都会记录到历史
         let response = llm act "Remember this context"
-        
-        // 后续调用可以引用之前的内容
         let followup = llm act "Based on what I said before, what do you think?"
-        
         return followup
     }
 }
 
-// 在 REPL 中，对话历史自动维护
-// 每次 :ask 都会记住之前的对话
+// In the REPL, conversation history is maintained automatically;
+// each :ask remembers previous exchanges
 ```
 
-## 高级模式
+---
 
-### 动态 Agent 选择
+## Advanced Patterns
+
+### Dynamic Agent Selection
 
 ```helen
 agent DynamicRouter(input: str) {
     description "Dynamically select agent based on input"
-    
+
     main {
-        // 使用 LLM 决定路由
-        let decision = llm act "Classify this input into one of: tech, billing, general. Input: " + input
-        
+        let decision = llm act "Classify: tech, billing, or general. Input: " + input
+
         if decision == "tech" {
             return TechSupport(input)
         } else if decision == "billing" {
@@ -891,62 +687,43 @@ agent DynamicRouter(input: str) {
 }
 ```
 
-### Agent 组合与继承
+### Configuration-Driven Agent (avoid repetitive definitions)
 
 ```helen
-// 基础 Agent
-agent BaseAgent {
-    description "Base agent with common configuration"
-    model "gpt-4"
-    temperature 0.7
-    
-    main {
-        return llm act "Base behavior"
-    }
+agent RoleAgent(topic: str, config: map) {
+    description "Configurable role Agent"
+    prompt """
+    You are "{{config["name"]}}". Role: {{config["description"]}}, Style: {{config["style"]}}
+    Analyze: {{topic}}
+    """
+    main { return llm act }
 }
 
-// 组合多个 Agent 的能力
-agent MultiSkillAgent(task: str) {
-    description "Agent that can use multiple skills"
-    tools = ["web_search", "read_file", "write_file", "shell_exec"]
-    
-    main {
-        // 根据任务动态选择策略
-        llm if task {
-            case "research, search, find" {
-                return llm act "Research: " + task
-            }
-            case "code, implement, write" {
-                return llm act "Implement: " + task
-            }
-            default {
-                return llm act "Handle: " + task
-            }
-        }
-    }
+let configs = [
+    {"name": "Optimist", "description": "Sees the best in everything", "style": "Positive and upbeat"},
+    {"name": "Pessimist", "description": "Focuses on risks", "style": "Cautious and conservative"}
+]
+for config in configs {
+    let result = RoleAgent("AI trends", config)
 }
 ```
 
-### 错误处理与重试
+### Error Handling and Retry
 
 ```helen
 agent RobustAgent(task: str) {
-    description "Agent with error handling and retry"
-    
     main {
         let max_retries = 3
         let attempt = 0
-        
+
         while attempt < max_retries {
             try {
-                let result = llm act task
-                return result
+                return llm act task
             } catch LLMError as e {
                 attempt = attempt + 1
                 if attempt >= max_retries {
                     throw RuntimeError("Failed after " + str(max_retries) + " attempts: " + e.message)
                 }
-                // 等待后重试
                 sleep(2)
             }
         }
@@ -954,791 +731,118 @@ agent RobustAgent(task: str) {
 }
 ```
 
-#### Agent 调用失败 — AgentError
-
-Agent 调用失败时抛出 `AgentError`，携带结构化上下文（agent_name、agent_args、cause）：
+#### Agent Call Failure (AgentError)
 
 ```helen
 try {
     let result = Contractor(req, dir)
 } catch AgentError err {
-    // err.message    — "Agent 'Contractor' failed: ..."
     // err.agent_name — "Contractor"
     // err.agent_args — {req: "...", dir: "..."}
-    // err.cause      — 底层异常
-    error("失败: " + err.message)
+    // err.cause      — underlying exception
+    error("Failed: " + err.message)
 }
 ```
 
-`AgentError` 继承 `LLMError`，因此 `catch LLMError` 一并捕获 agent 失败。嵌套 agent 调用时，内层 AgentError 透传不双层包装。
+`AgentError` inherits from `LLMError` (`catch LLMError` captures both). During nested calls, inner AgentError propagates transparently without double-wrapping.
 
-## 最佳实践
+---
 
-### 1. 清晰的 description
+## Best Practices
 
-```helen
-// ✅ 好的 description
-agent CodeReviewer {
-    description "Review code for bugs, security issues, and best practices"
-    // ...
-}
+| # | Practice | ✅ Recommended | ❌ Avoid |
+|---|----------|----------------|----------|
+| 1 | **description** | `"Review code for bugs, security, and best practices"` | `"Helps with stuff"` |
+| 2 | **prompt** | Specific role + steps + output format | `"You analyze things."` |
+| 3 | **temperature** | Creative 0.9 / Precise 0.2 / Balanced 0.7 | Always 0.5 |
+| 4 | **max-turns** | Simple Q&A 3 / Complex tasks 15 | Unlimited |
+| 5 | **tools** | Least privilege: `["read_file"]` | `["read_file","write_file","shell_exec","web_search"]` |
+| 6 | **Scope** | `shared let` for cross-agent value sharing | Expecting module `let` to be visible in agent |
+| 7 | **ground truth** | Inject environment facts via `{{}}` | Letting the LLM guess cwd/time |
 
-// ❌ 模糊的 description
-agent Helper {
-    description "Helps with stuff"
-    // ...
-}
-```
+### Key Principle: Inject Ground Truth (`{{}}`)
 
-### 2. 具体的 prompt
+> **An Agent doesn't know what you haven't told it. Runtime facts must be injected — never let the LLM guess.**
 
-```helen
-// ✅ 具体的 prompt
-agent DataAnalyst {
-    prompt """
-    You are a data analyst with expertise in Python, SQL, and statistics.
-    When analyzing data:
-    1. First understand the data structure
-    2. Identify patterns and anomalies
-    3. Provide statistical summaries
-    4. Suggest actionable insights
-    Always show your work and explain your reasoning.
-    """
-}
+The LLM has no access to the current environment (clock, cwd, OS, git branch). When these facts are missing, the model will **confidently fabricate incorrect values**.
 
-// ❌ 模糊的 prompt
-agent Analyst {
-    prompt "You analyze things."
-}
-```
-
-### 3. 合理的 temperature
+Fix: **Resolve facts in Helen, inject them into the prompt via `{{}}`**.
 
 ```helen
-// 创造性任务：高 temperature
-agent CreativeWriter {
-    temperature 0.9
-}
-
-// 精确任务：低 temperature
-agent CodeGenerator {
-    temperature 0.2
-}
-
-// 平衡任务：中等 temperature
-agent GeneralAssistant {
-    temperature 0.7
-}
-```
-
-### 4. 适当的 max-turns
-
-```helen
-// 简单问答：少轮次
-agent QuickAnswer {
-    max-turns 3
-}
-
-// 复杂任务：多轮次
-agent ComplexSolver {
-    max-turns 15
-}
-```
-
-### 5. 最小权限工具
-
-```helen
-// ✅ 只授予需要的工具
-agent FileReader {
-    tools = ["read_file"]  # 只需要读取
-}
-
-// ❌ 授予过多工具
-agent SimpleAgent {
-    tools = ["read_file", "write_file", "shell_exec", "web_search"]  # 太多
-}
-```
-
-### 6. 正确使用作用域（v1.10/v1.12）
-
-```helen
-// ✅ 使用 shared let 进行跨 agent 共享（v1.12: 只允许值类型）
-shared let cache_hits = 0
-shared let cache_misses = 0
-
-agent CacheReader(key: str, cache: map) {
-    main {
-        if key in cache {
-            cache_hits = cache_hits + 1
-            return cache[key]
-        }
-        cache_misses = cache_misses + 1
-        return null
-    }
-}
-
-// ❌ 错误 v1：期望模块级 let 在 agent main 中可见
-let local_cache = {}  // 模块级 let
-
-agent BadCacheReader(key: str) {
-    main {
-        // 编译错误！local_cache 在 agent main 中不可见
-        return local_cache[key]
-    }
-}
-
-// ❌ 错误 v2：v1.12 起 shared let 不能使用引用类型
-// shared let bad_cache = {}  # 语义错误！
-```
-
-### 7. Inject task-relevant ground truth via `{{}}`
-
-**Principle: an agent cannot know what you do not tell it. If a runtime fact matters for correctness, inject it — never let the LLM guess.**
-
-LLMs have no access to the current environment: the clock, the working directory, the OS, the git branch, the file layout. When a task depends on such facts and they are absent from the prompt, the model will **confabulate plausible-sounding but wrong values** — silently, with high confidence. This is the single most common source of subtle agent bugs.
-
-The fix is mechanical: **resolve the fact in Helen, interpolate it into the prompt via `{{}}`.** The prompt is the agent's entire world — anything missing from it is effectively unknowable.
-
-```helen
-// ✅ Ground truth injected — LLM sees real values
+// ✅ Ground truth injection — LLM sees real values
 agent DevAgent(cwd: str) {
-    description "Programming assistant"
     prompt """
-    You are a senior engineer working in {{cwd}}.
-    Current time: {{now()}}
-    OS: {{os_name()}}
-    Working directory: {{cwd}}
-
-    Answer only based on these facts; if something is not provided, say so.
+    You are a senior engineer in {{cwd}}.
+    Time: {{now()}}  OS: {{os_name()}}
+    Answer only based on these facts; if not provided, say so.
     """
-    tools = ["read_file", "write_file", "shell_exec"]
-
-    main {
-        return llm act "Review the project layout"
-    }
+    main { return llm act "Review the project" }
 }
 
 // ❌ Ground truth missing — LLM will fabricate
-agent VagueDevAgent {
-    description "Programming assistant"
+agent VagueAgent {
     prompt "You are a senior engineer. Help with code."
-    // No cwd, no time, no OS → LLM invents them
 }
 ```
 
-**Rule of thumb — ask "what does this agent need to be true about the world?" then inject it:**
+**Inject by domain:**
 
-| Task domain | Inject via `{{}}` |
-|-------------|-------------------|
+| Domain | Inject via `{{}}` |
+|--------|-------------------|
 | Programming | `cwd`, `os_name()`, `shell_exec("git branch --show-current")` |
-| Scheduling / reminders | `now()`, `timezone()` |
-| File operations | directory listing, absolute paths |
-| Database agents | schema excerpt, connection target |
-| Data analysis | row counts, column names, sample rows |
-| Multi-agent pipelines | upstream agent outputs, shared state snapshot |
+| Scheduling | `now()`, `timezone()` |
+| File operations | Directory listings, absolute paths |
+| Database | Schema summary, connection target |
+| Data analysis | Row count, column names, sample rows |
+| Multi-agent pipeline | Upstream output, shared state snapshot |
 
-**Two anti-patterns to avoid:**
-
+**Anti-patterns:**
 ```helen
-// ❌ Anti-pattern 1: asking the LLM to "assume" environment facts
-prompt "Assume you are in /home/user/project on Linux at 2026-07-11."
-// Wrong the moment the assumption drifts from reality.
+// ❌ Letting the LLM "assume" environment facts — breaks on drift
+prompt "Assume you are in /home/user/project on Linux."
 
-// ❌ Anti-pattern 2: putting dynamic facts in `description`
-description "Agent for /home/rxx/helen"  // baked at parse time, not runtime
-// `description` is static — use `prompt` with `{{}}` for dynamic facts.
+// ❌ Putting dynamic facts in description — fixed at parse time, not runtime
+description "Agent for /home/rxx/helen"  // Static! Use prompt + {{}}
 ```
 
-**Why this matters more than it sounds:** LLMs are trained to be helpful, not to refuse. When asked "what file am I in?" without context, they will answer — and the answer will be wrong. Injecting ground truth turns a hallucination failure mode into a non-issue.
+---
 
-## 调试技巧
-
-### 查看 Agent 配置
-
-```helen
-agent DebuggableAgent {
-    description "Debug example"
-    prompt "You are helpful."
-    model "gpt-4"
-    temperature 0.7
-    max-turns 10
-    
-    main {
-        // 打印配置信息
-        print("Agent started")
-        return llm act "Do something"
-    }
-}
-```
-
-### 使用 trace 跟踪
+## Debugging Tips
 
 ```helen
 main {
-    trace_on()  // 启用跟踪
-    
+    trace_on()
     let result = MyAgent("test")
-    
     let trace = get_trace()
-    print("Execution trace: " + str(trace))
-    
+    print("Trace: " + str(trace))
     trace_off()
 }
 ```
 
-## 历史管理（v1.12 新增）
-
-### 设计模式：持久化 Agent
-
-跨会话保留对话连续性：
-
-```helen
-agent PersistentAssistant {
-    description "Assistant with persistent history"
-    
-    main {
-        // 启动时加载历史
-        let loaded = load_history("./session.json")
-        if loaded > 0 {
-            print("Resumed session with " + str(loaded) + " messages")
-        }
-        
-        // 执行任务
-        let result = llm act "Continue our previous conversation"
-        
-        // 退出时保存历史
-        save_history("./session.json")
-        return result
-    }
-}
-```
-
-### 设计模式：智能研究 Agent
-
-利用历史检索避免重复工具调用：
-
-```helen
-agent SmartResearcher {
-    tools ["web_search", "web_fetch"]
-    
-    main {
-        // 搜索之前的工具调用
-        let past_searches = search_history(tool_name="web_search")
-        
-        if len(past_searches) > 0 {
-            // 引用之前的搜索结果
-            return llm act "Based on my previous research: " + str(past_searches[0])
-        }
-        
-        // 首次搜索
-        let info = web_search("Helen programming language")
-        return llm act "Analyzed: " + info
-    }
-}
-```
+REPL commands: `:stats` (context statistics), `:transcript` (message log), `:last_error` (last error).
 
 ---
 
-## 上下文管理（v1.15 新增）
+## Related Skills
 
-Helen v1.15 引入了完整的上下文管理增强，让 agent 在长时间运行中保持高效和稳定。
+- **helen-agent-collaboration** — Multi-Agent collaboration patterns in detail
+- **helen-syntax** — Helen syntax reference (shared let, agent main, etc.)
+- **helen-stdlib** — Complete context management API reference (`context_stats`/`compress_context`/`pin_message`, etc.)
+- **helen-testing** — Agent testing strategies
 
-### 设计模式：高性能研究 Agent
+## Summary
 
-使用渐进压缩和工作记忆优化长对话：
+Core principles of Helen Agent design patterns:
 
-```helen
-agent Researcher(topic: str) {
-    description "Research assistant with optimized context"
-    
-    // 上下文配置
-    context {
-        compression "graduated"      // 渐进压缩（自动按上下文使用率升级强度）
-        cache-aware true             // 缓存感知（提高缓存命中率）
-        working-memory true          // 自动跟踪文件操作
-        working-memory-tokens 8000   // 更大的工作记忆
-    }
-    
-    tools ["web_search", "web_fetch", "read_file", "write_file"]
-    
-    main {
-        // 工作记忆自动跟踪文件操作
-        let data = read_file("research_data.json")
-        let analysis = analyze(data)
-        write_file("analysis_result.json", analysis)
-        
-        // LLM 可以看到哪些文件被读取和修改
-        return llm act "Analyze the research data and write report"
-        // 工作记忆包含：
-        // - 活跃文件: research_data.json, analysis_result.json
-        // - 最近决策: Modified analysis_result.json
-    }
-}
-```
+1. 🎯 **Caller Decides Context** — all information passed explicitly
+2. 🔒 **Scope Isolation** — agent main is isolated by default, adjustable via decorators
+3. 📦 **Invocation Isolation** — each agent execution gets an independent LLM context
+4. 🛠 **Pattern Selection** — Expert / Router / Pipeline / Concurrent / Streaming / Tool-Using / Conversational
+5. 📋 **Best Practices** — clear description, least-privilege tools, inject ground truth
 
-### 设计模式：快速响应 Agent
-
-禁用工作记忆以提高响应速度：
-
-```helen
-agent QuickResponder {
-    description "Fast response agent"
-    
-    context {
-        compression "none"           // 不压缩
-        working-memory false         // 禁用工作记忆
-    }
-    
-    main {
-        // 快速响应，无需上下文管理开销
-        return llm act "Quick answer"
-    }
-}
-```
-
-### 上下文组成
-
-启用工作记忆后，LLM 看到的上下文由三部分组成：
-
-- **系统指令**：框架指令、agent 描述、技能索引
-- **工作记忆**：活跃文件、最近决策、待办事项、错误历史
-- **对话历史**：压缩后的对话消息
-
-各部分比例由框架根据上下文窗口动态调整，用户无需手动分配。
-
-### 压缩策略
-
-`compression` 选项控制对话历史的压缩方式：
-
-- `"graduated"`（默认）：按"廉价动作优先"原则逐级压缩——从替换大工具输出开始，到 LLM 语义压缩结束。压缩层级和触发阈值由框架自动管理。
-- `"traditional"`：单层 summarize/truncate。
-- `"none"`：不压缩（短对话场景）。
-
-### 缓存感知压缩
-
-`cache-aware true`（默认开启）让压缩算法在修改上下文时尽量保留前缀稳定区，提高 LLM 提供方的 prompt cache 命中率，降低成本和延迟。用户无需额外配置。
-
-### 工作记忆
-
-自动跟踪 agent 执行过程中的关键信息：
-
-```helen
-agent CodeReviewer {
-    context {
-        working-memory true  // 启用工作记忆
-    }
-    
-    tools ["read_file", "write_file", "patch_file"]
-    
-    main {
-        // 自动跟踪：读取的文件
-        let code = read_file("src/main.py")
-        
-        // 自动跟踪：修改的文件
-        let fixed = fix_code(code)
-        write_file("src/main.py", fixed)
-        
-        // LLM 现在知道哪些文件被修改了
-        return llm act "Review the changes"
-    }
-}
-```
-
-### 上下文管理最佳实践
-
-| Agent 类型 | 推荐配置 | 说明 |
-|-----------|---------|------|
-| 研究型 Agent | `compression "graduated"` + `working-memory true` | 长对话，需要跟踪文件 |
-| 快速响应 Agent | `compression "none"` + `working-memory false` | 短对话，快速响应 |
-| 多轮对话 Agent | `cache-aware true` + `working-memory-tokens 8000` | 提高缓存命中率 |
-| 简单任务 Agent | 默认配置 | 无需特殊配置 |
-
-### 上下文监控
-
-在 REPL 中使用 `:stats` 查看上下文使用情况：
-
-```
-> :stats
-╔══════════════════════════════════════╗
-║       Context Usage Statistics        ║
-╠══════════════════════════════════════╣
-║ ✅ ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  12.3%            ║
-║ Tokens:   15,984 /  131,072              ║
-║ Model:  qwen3.7-plus                  ║
-║ Messages: 8                           ║
-║                                       ║
-║ Working Memory:                       ║
-║   Active Files: 3                     ║
-║   Recent Decisions: 5                 ║
-║   Pending TODOs: 2                    ║
-║   Error History: 1                    ║
-╚══════════════════════════════════════╝
-```
-
-### 程序化控制
-
-在 Helen 代码中可以手动控制上下文：
-
-```helen
-main {
-    // 手动触发压缩
-    compress_context("graduated")
-    
-    // 清除上下文
-    clear_context()
-}
-```
-
-### v1.19：Agent 自决上下文管理
-
-v1.19 补齐了上下文管理的 6 个维度（共 24 个新函数），让 agent 在运行时能**看见**并**操作**自己的上下文：
-
-- **Inspection**: `context_stats`/`context_usage` — 看见
-- **Working Memory**: `working_memory_get/set/remove/clear` — 主动参与工作记忆
-- **Fine-grained Mutation**: `insert/replace/delete/pin/unpin message` — 操作单条消息
-- **Runtime Config**: `set_compression_strategy`/`set_context_window`/`set_working_memory_enabled`/`set_cache_aware`/`get_context_config` — 运行时调整配置
-- **Query**: `search_context`/`context_slice` — 检索
-- **Multi-Agent Transfer**: `export_context`/`import_context`/`fork_context` — 跨 agent 共享
-- **Lifecycle Hooks**: `on_compression`/`on_context_overflow` — 事件回调
-
-**典型模式：Agent 自决压缩**
-
-```helen
-agent LongRunner {
-    main {
-        loop {
-            do_work()
-            
-            // 主动检查：占用率超过 70% 就压缩
-            if context_usage() > 0.7 {
-                compress_context("auto")
-            }
-            
-            // 查看详细统计
-            let stats = context_stats()
-            print("message_count=" + str(stats["message_count"]) +
-                  " total_tokens=" + str(stats["total_tokens"]) +
-                  " pinned=" + str(stats["pinned_count"]))
-        }
-    }
-}
-```
-
-**典型模式：保护关键上下文**
-
-```helen
-agent Coder {
-    main {
-        let r = insert_message("user", "Task: implement feature X")
-        pin_message(r["uuid"])  // 钉住，不会被压缩
-        
-        // 即使对话很长，任务描述始终在上下文中
-        do_many_things()
-    }
-}
-```
-
-**典型模式：跨 Agent 上下文传递**
-
-```helen
-agent Planner {
-    main {
-        do_planning()
-        let snapshot = export_context()
-        // 通过 Channel 传给 Executor
-        executor_channel.send(snapshot.context)
-    }
-}
-
-agent Executor(task) {
-    main {
-        let ctx = task_channel.receive()
-        import_context(ctx)  // 接管 Planner 的上下文
-        execute()
-    }
-}
-```
-
-**Pinned 消息的压缩免疫**：被 `pin_message` 标记的消息在所有 5 层渐进压缩（Layer 1–5）中都被保留。用于保护关键系统提示、Agent 做出的关键决策、few-shot 示例等。
+For the context management API (`compress_context`, `working_memory`, `pin_message`, and 24+ other functions), see `helen-stdlib`.
 
 ---
 
-## 总结
-
-Helen v1.15/v1.19 的上下文管理增强包括：
-
-1. ✅ **自动集成**：所有 agent 默认使用渐进压缩和工作记忆
-2. ✅ **可配置性**：每个 agent 可以独立配置上下文策略
-3. ✅ **Agent 自决**：v1.19 新增 `context_stats`/`context_usage`，agent 可主动管理上下文
-4. ✅ **细粒度控制**：v1.19 新增 `pin_message`/`delete_message`/`insert_message`/`replace_message`，精确操作上下文
-5. ✅ **工作记忆参与**：v1.19 新增 `working_memory_get/set/remove/clear`，agent 主动参与工作记忆
-6. ✅ **运行时调整**：v1.19 新增 4 个 `set_*` 函数，配置可在运行时修改
-7. ✅ **跨 Agent 共享**：v1.19 新增 `export/import/fork_context`，上下文可传递
-8. ✅ **向后兼容**：现有代码无需修改
-
-### REPL 调试
-
-在 REPL 中使用 `:stats` 命令查看上下文使用情况：
-
-```
-> :stats
-╔══════════════════════════════════════╗
-║       Context Usage Statistics        ║
-╠══════════════════════════════════════╣
-║ ✅ ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  12.3%            ║
-║ Tokens:   15,984 /  131,072              ║
-║ Model:  qwen3.7-plus                  ║
-║ Messages: 8                           ║
-╚══════════════════════════════════════╝
-```
-
-### History 压缩策略
-
-三种压缩模式：
-
-| 模式 | 行为 | 使用场景 |
-|------|------|---------|
-| `summarize`（默认） | 三层：recent→middle→oldest | 长对话保持上下文 |
-| `truncate` | 直接丢弃旧消息 | 简洁场景 |
-| `none` | 不压缩 | 短对话/测试 |
-
-在 Helen 代码中切换压缩模式：
-
-```helen
-compress_context("truncate")
-```
-
-### Token 精确计数
-
-安装 `tiktoken` 获得精确 token 计数：
-
-```bash
-pip install "helen[accurate-tokens]"
-```
-
-未安装时使用字符级启发式估算。
-
-## 相关技能
-
-- **helen-agent-collaboration** — 多 Agent 协作模式详解
-- **helen-syntax** — Helen 语法参考（包括 shared let、agent main 等）
-- **helen-testing** — Agent 测试策略
-- **helen-quality** — Agent 代码质量评估
-
-## 延伸阅读
-
-- **[[Agent 提示词工程完全指南]]**（`wiki/reference/agent-system-prompt-guide.md`）— 来自 Claude Code 系统提示词逆向工程的设计方法论：结构布局、写作原则、反模式、Token 预算、缓存设计、中途注入机制。本技能 § 最佳实践 7（注入环境事实）的原则即来源于此。
-
-
-
-### 模式：LLM 结构化输出 + JSON 降级
-
-**场景**：要求 LLM 返回结构化 JSON，但需要处理解析失败的情况。
-
-```helen
-agent StructuredAnalyzer(input: str) {
-    description "返回结构化分析结果"
-    prompt """
-    分析: {{input}}
-    
-    严格以 JSON 格式返回:
-    {"key_points": [...], "summary": "...", "score": 0-10}
-    """
-    
-    main {
-        let response = llm act
-        
-        // 模式: try JSON parse, fallback to default structure
-        try {
-            let parsed = json_parse(response)
-            // 验证必需字段
-            if !has_key(parsed, "key_points") {
-                parsed["key_points"] = []
-            }
-            return parsed
-        } catch RuntimeError err {
-            // LLM 输出不是合法 JSON 时降级
-            return {
-                "key_points": ["解析失败，原始输出已保存"],
-                "summary": response,
-                "score": 0,
-                "_raw": response  // 保留原始输出供调试
-            }
-        }
-    }
-}
-```
-
-**陷阱**:
-- LLM 可能在 JSON 前后添加 markdown 代码块标记，需要先清理
-- 始终提供降级结构，避免调用方收到 null
-- 验证必需字段存在，LLM 可能省略某些字段
-
-### 模式：配置驱动的参数化 Agent
-
-**场景**：多个相似 Agent 只有配置不同（角色、视角、风格等），避免重复定义。
-
-```helen
-// ❌ 冗余：为每个角色创建独立 Agent
-agent OptimistAgent(topic: str) { ... }
-agent PessimistAgent(topic: str) { ... }
-agent InnovatorAgent(topic: str) { ... }
-
-// ✅ 推荐：配置驱动，一个 Agent 处理所有角色
-agent RoleAgent(topic: str, config: map) {
-    description "可配置的角色 Agent"
-    prompt """
-    你是「{{config["name"]}}」。
-    角色描述: {{config["description"]}}
-    风格: {{config["style"]}}
-    
-    分析: {{topic}}
-    """
-    main {
-        return llm act
-    }
-}
-
-// 使用
-let configs = [
-    {"name": "乐观派", "description": "看到最好的一面", "style": "积极向上"},
-    {"name": "悲观派", "description": "关注风险", "style": "谨慎保守"}
-]
-
-for config in configs {
-    let result = RoleAgent("话题", config)
-}
-```
-
-**优势**: 新增角色只需添加配置，无需修改代码。
-
----
-
-## ⚠️ 开发 Agent 时的重要陷阱：模块缓存
-
-### 问题场景
-
-在开发 Agent 时，经常需要迭代修改 `.helen` 文件。但如果你在**同一个 Python 进程**内（REPL、Web 服务、Jupyter）测试 Agent，修改代码后**不会自动生效**！
-
-```python
-# 场景 1: Python REPL 中开发 Agent
-from helen.interpreter import Interpreter
-
-interp = Interpreter()
-result = interp.execute_file("my_agent.helen")  # 加载 v1
-
-# 修改 my_agent.helen（添加新功能）...
-
-result = interp.execute_file("my_agent.helen")  # ❌ 仍然是 v1！
-```
-
-```python
-# 场景 2: Web 服务中复用 Interpreter
-from helen.interpreter import Interpreter
-
-# 全局 Interpreter（错误模式）
-interp = Interpreter()
-
-@app.post("/chat")
-def chat():
-    return interp.execute_file("chat_agent.helen")  # ❌ 首次加载后永远用缓存
-```
-
-### 根本原因
-
-Helen 的 `ImportResolver` 使用**内存级缓存**（`_cached_results` 字典）来加速重复导入：
-
-```python
-class ImportResolver:
-    def __init__(self):
-        self._cached_results: dict[str, ImportResult] = {}
-```
-
-- ✅ **CLI 模式**（`helen my_agent.helen`）：每次都新进程，自动重新加载
-- ❌ **长时间进程**（REPL/Web 服务）：缓存不会自动失效
-
-### 解决方案
-
-#### 方案 1: 每次请求创建新的 Interpreter（推荐）
-
-```python
-from helen.interpreter import Interpreter
-
-@app.post("/chat")
-def chat():
-    # ✅ 每次请求新建 Interpreter，缓存自动清空
-    interp = Interpreter()
-    return interp.execute_file("chat_agent.helen")
-```
-
-#### 方案 2: 实现 mtime 检查（高性能场景）
-
-```python
-import os
-from helen.interpreter import Interpreter
-
-class HotReloadInterpreter:
-    def __init__(self):
-        self.interp = Interpreter()
-        self._mtimes = {}
-    
-    def execute_if_changed(self, file_path: str):
-        current_mtime = os.path.getmtime(file_path)
-        cached_mtime = self._mtimes.get(file_path)
-        
-        if cached_mtime is None or current_mtime > cached_mtime:
-            # 文件已修改，清除缓存
-            self.interp.import_resolver._cached_results.clear()
-            self.interp.import_resolver._loaded.clear()
-            self._mtimes[file_path] = current_mtime
-        
-        return self.interp.execute_file(file_path)
-
-# 使用
-smart_interp = HotReloadInterpreter()
-result = smart_interp.execute_if_changed("chat_agent.helen")
-```
-
-#### 方案 3: 提供热重载 API
-
-```python
-@app.post("/reload")
-def reload_agents():
-    """手动触发重新加载"""
-    interp.import_resolver._cached_results.clear()
-    interp.import_resolver._loaded.clear()
-    return {"status": "ok", "message": "Cache cleared"}
-```
-
-### 调试技巧
-
-```python
-# 检查缓存状态
-print(f"Cached files: {len(interp.import_resolver._cached_results)}")
-print(f"Loaded files: {interp.import_resolver._loaded}")
-
-# 强制清除
-interp.import_resolver._cached_results.clear()
-interp.import_resolver._loaded.clear()
-```
-
-### 最佳实践总结
-
-| 场景 | 推荐做法 | 原因 |
-|------|---------|------|
-| 本地开发 | 使用 `helen` CLI | 每次新进程，自动重新加载 |
-| Web 服务 | 每次请求新建 Interpreter | 简单可靠，避免缓存问题 |
-| 高性能服务 | 实现 mtime 检查 | 兼顾性能和热重载 |
-| 生产环境 | 预加载 + 禁用热重载 | 启动时加载一次，运行时无开销 |
-
-### 相关文档
-
-- `wiki/runtime/import.md` — 完整的缓存机制说明
-- `wiki/tutorial/08-modules.md` — 开发时的注意事项
-- GitHub Issue #15 — 问题诊断报告
-
----
-
-**最后更新**: 2026-07-16  
-**版本**: v1.21
-
+**Last Updated**: 2026-07-24
+**Version**: v1.22

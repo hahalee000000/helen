@@ -129,7 +129,7 @@ class TokenType(Enum):
 # Type alias for literal values a token can carry
 LiteralValue = Union[str, int, float, bool, None]
 
-# Keyword → TokenType mapping (95 entries)
+# Keyword → TokenType mapping (91 entries: 45 English + 46 Chinese)
 # Note: MEMORY and WILDCARD are context keywords — handled by lexer/parser directly,
 # not via this map, so they can also be used as variable names.
 _KEYWORD_MAP: dict[str, TokenType] = {
@@ -175,12 +175,7 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "shared": TokenType.SHARED,    # v1.10: shared let
     "alias": TokenType.ALIAS,     # v1.10: function alias
     "transcript": TokenType.TRANSCRIPT,  # v1.29: agent transcript control
-    "store": TokenType.STORE,  # v1.12: shared store
     "仓库": TokenType.STORE,   # v1.12: Chinese equivalent
-    "alias": TokenType.ALIAS,
-    "protocol": TokenType.PROTOCOL,  # v1.7
-    "impl": TokenType.IMPL,          # v1.7
-    "is": TokenType.IS,              # v1.8
     "true": TokenType.TRUE,
     "false": TokenType.FALSE,
     "null": TokenType.NULL_KW,
@@ -232,8 +227,7 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "协议": TokenType.PROTOCOL,
     "实现": TokenType.IMPL,
     "分支": TokenType.BRANCH,
-    # v1.10: shared keyword
-    "shared": TokenType.SHARED,
+    # v1.10: shared keyword (English "shared" already defined above)
     "共享": TokenType.SHARED,
     # v1.10: alias keyword (function name aliasing)
     "别名": TokenType.ALIAS,

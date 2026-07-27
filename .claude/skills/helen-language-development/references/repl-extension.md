@@ -77,14 +77,14 @@ source_dir = module_dir  # helen/ directory
 ```python
 # Helen program has placeholder values:
 # let question = "default question"
-# let docs_path = "docs/tutorial.md"
+# let docs_path = "reports/tutorial.md"
 
 # REPL replaces with actual values:
 modified_source = source.replace(
     'let question = "default question"',
     f'let question = "{user_question}"'
 ).replace(
-    'let docs_path = "docs/tutorial.md"',
+    'let docs_path = "reports/tutorial.md"',
     f'let docs_path = "{docs_path}"'
 )
 ```
@@ -105,7 +105,7 @@ agent HelenAssistant(question: str, docs_path: str, source_dir: str) {
 
 main {
     let question = "default"  // Placeholder
-    let docs_path = "docs/tutorial.md"  // Placeholder
+    let docs_path = "reports/tutorial.md"  // Placeholder
     let source_dir = "helen/"  // Placeholder
     let result = HelenAssistant(question, docs_path, source_dir)
 }
@@ -118,7 +118,7 @@ modified_source = source.replace(
     'let question = "default"',
     f'let question = "{question}"'
 ).replace(
-    'let docs_path = "docs/tutorial.md"  // Placeholder',
+    'let docs_path = "reports/tutorial.md"  // Placeholder',
     f'let docs_path = "{docs_path}"'
 ).replace(
     'let source_dir = "helen/"  // Placeholder',
@@ -182,7 +182,7 @@ agent MyFeature(param1: str, param2: str) {
     }
 }
 main {
-    return MyFeature("docs/tutorial.md", "helen/")
+    return MyFeature("reports/tutorial.md", "helen/")
 }
 """
     # Parse and execute
@@ -253,14 +253,14 @@ def _handle_repl_command(line: str, interp, analyzer) -> bool:
 ### Step 4: Update Documentation
 
 - Add command to `:help` output
-- Update `docs/tutorial.md` with usage examples
+- Update `reports/tutorial.md` with usage examples
 - Update `~/wiki/helen/tutorial/` with examples
 
 ## Pitfalls
 
 ### 1. Relative Path Failures
 
-**Symptom**: `FileNotFoundError: docs/tutorial.md` when running from different directory.
+**Symptom**: `FileNotFoundError: reports/tutorial.md` when running from different directory.
 
 **Cause**: Helen program uses relative paths; REPL runs from user's CWD.
 
@@ -349,6 +349,6 @@ Before declaring extension complete:
 - [ ] REPL injects ALL parameters via string replacement
 - [ ] Placeholder strings in Helen program are unique and commented
 - [ ] Tests cover: existence, resource loading, parameter injection, integration
-- [ ] Documentation updated: `docs/tutorial.md`, `~/wiki/helen/tutorial/`
+- [ ] Documentation updated: `reports/tutorial.md`, `~/wiki/helen/tutorial/`
 - [ ] `:help` command updated with new command
 - [ ] All tests pass (run `pytest tests/ -v`)
