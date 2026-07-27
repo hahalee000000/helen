@@ -1,3 +1,3 @@
 """helen package."""
 
-__version__ = "1.28.5"
+__version__ = "1.28.6"

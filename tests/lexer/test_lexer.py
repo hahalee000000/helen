@@ -332,6 +332,42 @@ class TestStrings:
         assert s.has_errors
         assert any(e.code == ErrorCode.INVALID_ESCAPE for e in s.errors)
 
+    # ── Unicode escapes ──────────────────────────────────────────────────
+
+    def test_escape_unicode(self) -> None:
+        """\\uNNNN Unicode escape should produce the corresponding character."""
+        tokens = _scan(r'"一"')
+        assert tokens[0].literal == "一"
+
+    def test_escape_unicode_multiple(self) -> None:
+        """Multiple \\uNNNN escapes in one string."""
+        tokens = _scan(r'"一二中"')
+        assert tokens[0].literal == "一二中"
+
+    def test_escape_unicode_ascii(self) -> None:
+        """\\uNNNN should work for ASCII characters."""
+        tokens = _scan(r'"ABC"')
+        assert tokens[0].literal == "ABC"
+
+    def test_escape_unicode_upper(self) -> None:
+        """\\uNNNN should accept uppercase hex digits."""
+        tokens = _scan(r'"一"')
+        assert tokens[0].literal == "一"
+
+    def test_escape_unicode_invalid(self) -> None:
+        """\\u with non-hex digits should report an error."""
+        s = Scanner(r'"\uGGGG"')
+        s.scan_all()
+        assert s.has_errors
+        assert any(e.code == ErrorCode.INVALID_ESCAPE for e in s.errors)
+
+    def test_escape_unicode_incomplete(self) -> None:
+        """\\u with less than 4 hex digits should report an error."""
+        s = Scanner(r'"\u4e0"')
+        s.scan_all()
+        assert s.has_errors
+        assert any(e.code == ErrorCode.INVALID_ESCAPE for e in s.errors)
+
     def test_unterminated_string(self) -> None:
         """Unterminated string should report an error."""
         s = Scanner('"hello')

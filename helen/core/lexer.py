@@ -799,7 +799,7 @@ class Scanner:
     def _parse_escape(self) -> str:
         """Consume and return the character for an escape sequence after ``\\``.
 
-        Supported escapes: \\n, \\t, \\r, \\\\, \\", \\', \\0, \\xNN (hex).
+        Supported escapes: \\n, \\t, \\r, \\\\, \\", \\', \\0, \\xNN (hex), \\uNNNN (Unicode).
         """
         if self._at_end():
             self._error(
@@ -836,6 +836,26 @@ class Scanner:
                     self._error(
                         ErrorCode.INVALID_ESCAPE,
                         f"Invalid hex digit in \\x escape: '{h}'",
+                    )
+                    return ""
+                hex_chars += h
+            return chr(int(hex_chars, 16))
+
+        # \uNNNN Unicode escape (e.g., 一 for 一)
+        if c == "u":
+            hex_chars = ""
+            for _ in range(4):
+                if self._at_end():
+                    self._error(
+                        ErrorCode.INVALID_ESCAPE,
+                        "Unterminated \\u escape sequence",
+                    )
+                    return ""
+                h = self._advance()
+                if h not in "0123456789abcdefABCDEF":
+                    self._error(
+                        ErrorCode.INVALID_ESCAPE,
+                        f"Invalid hex digit in \\u escape: '{h}'",
                     )
                     return ""
                 hex_chars += h
