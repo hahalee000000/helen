@@ -45,6 +45,12 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
     temperature 0.3
     max-turns 100
     tools = CHAT_TOOLS
+    // v1.29+ 必须显式声明 persistent，否则默认 none 会导致：
+    //   - Web UI 刷新丢消息（transcript_to_messages 读不到 transcript）
+    //   - /search 永远返回空（search_transcript 走磁盘）
+    //   - memento 恢复机制失效（resume_session 无历史可加载）
+    //   - /sessions 列表为空（list_sessions_sync walk .helen/sessions/）
+    transcript "persistent"
 
     context {
         compression "graduated"
@@ -359,6 +365,7 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
                 }
             } catch RuntimeError err {
                 debug("ChatSessionActor: LLM error: " + err.message)
+                _emit_actor_stream_event("error", "LLM 错误: " + err.message)
                 reply.send({
                     "type": "error",
                     "request_id": request_id,
@@ -369,6 +376,7 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
                 return new_count
             } catch {
                 debug("ChatSessionActor: LLM error (unknown)")
+                _emit_actor_stream_event("error", "LLM 错误: 未知错误")
                 reply.send({
                     "type": "error",
                     "request_id": request_id,
