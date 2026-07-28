@@ -318,8 +318,36 @@ class AgentContextManager:
                 # Use default session management
                 # v1.20: Resolve session_dir based on scope (global/project/auto)
                 #        + HELEN_SESSION_DIR env var override
-                from helen.runtime.config import resolve_session_dir
-                session_dir, detected_scope = resolve_session_dir()
+                #
+                # v1.29.15: When HELEN_SESSION_DIR is not explicitly set and
+                # scope is "auto" or "project", auto-detect project directory
+                # and use it directly. This ensures lazy initialization
+                # (triggered by resume_session, context_usage, get_session_id,
+                # etc.) resolves to the correct project-local path regardless
+                # of when it happens. Without this, a lazy init triggered
+                # before set_session_dir() would permanently bake the wrong
+                # (global) path into the TranscriptStore.
+                from helen.runtime.config import detect_project_dir, resolve_session_dir
+                session_dir = None
+                detected_scope = None
+                if not os.environ.get("HELEN_SESSION_DIR"):
+                    config_for_scope = get_transcript_config()
+                    scope = config_for_scope.get("session_scope", "auto")
+                    if scope in ("auto", "project"):
+                        project_dir = detect_project_dir(os.getcwd())
+                        if project_dir is not None:
+                            session_dir = os.path.join(
+                                project_dir,
+                                config_for_scope.get("project_session_dir", ".helen/sessions"),
+                            )
+                            detected_scope = "project"
+                            os.makedirs(session_dir, exist_ok=True)
+                            logger.debug(
+                                "Auto-detected project session dir: %s",
+                                session_dir,
+                            )
+                if session_dir is None:
+                    session_dir, detected_scope = resolve_session_dir()
                 logger.debug(
                     "Transcript session scope: %s (resolved to %s)",
                     detected_scope, session_dir,

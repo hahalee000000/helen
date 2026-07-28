@@ -672,7 +672,7 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
 
         // ── 初始化 ──
         _init_actor_output()
-        try { ContextManager.init() } catch {}
+        try { ContextManager.init(cwd) } catch {}
         try { SessionStats.init() } catch {}
 
         // ── 保存主、子 session id 到 memento（供下次启动恢复）──

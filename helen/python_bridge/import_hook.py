@@ -74,11 +74,23 @@ def _detect_session_id() -> str | None:
         return env_sid
 
     # 3. memento 文件（相对 cwd）
+    # v1.29.15: memento 可能是 JSON 对象 {"main": "...", "child": "..."}
+    # (helenagent v1.0+) 或纯 session_id 字符串 (旧格式)。需要兼容两种格式。
     memento = Path.cwd() / ".helen" / "current_session_id"
     if memento.exists():
-        sid = memento.read_text(encoding="utf-8").strip()
-        if sid:
-            return sid
+        raw = memento.read_text(encoding="utf-8").strip()
+        if raw:
+            if raw.startswith("{"):
+                try:
+                    import json
+                    data = json.loads(raw)
+                    sid = data.get("main", "")
+                    if sid:
+                        return sid
+                except (json.JSONDecodeError, AttributeError):
+                    pass
+            else:
+                return raw
 
     # 4. 默认：None（创建新 session）
     return None

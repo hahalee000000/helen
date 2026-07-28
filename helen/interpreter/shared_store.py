@@ -171,6 +171,12 @@ class SharedStoreMethod:
             for i, param in enumerate(m_node.params):
                 if i < len(args):
                     method_env.define(param.name, args[i])
+                # v1.29.15: Support default parameter values in shared store
+                # methods (previously unsupported — missing params were left
+                # undefined, causing "Undefined variable" errors).
+                elif getattr(param, 'default_value', None) is not None:
+                    default_val = param.default_value.accept(interp)
+                    method_env.define(param.name, default_val)
             interp.environment = method_env
             try:
                 result = interp._execute_stmts(m_node.body.body)

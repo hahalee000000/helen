@@ -1382,12 +1382,14 @@ def resume_session(session_id: str) -> dict:
         return {"status": "error", "error": "No interpreter agent context",
                 "imported_messages": 0, "skipped_duplicates": 0}
 
-    # v1.29.9: Check _transcript_store_initialized to avoid triggering lazy initialization
+    # v1.29.15: If TranscriptStore is not yet initialized, trigger lazy
+    # initialization now. The agent_context.transcript_store property handles
+    # this automatically. Thanks to the v1.29.15 fix in _init_transcript_store,
+    # lazy init now auto-detects the project directory and sets HELEN_SESSION_DIR,
+    # so the correct project-local path is used regardless of call order.
+    # This replaces the v1.29.9 guard that returned "TranscriptStore not initialized"
+    # — that guard was a workaround for the root cause that has now been fixed.
     agent_ctx = _get_agent_context()
-    if not getattr(agent_ctx, '_transcript_store_initialized', False):
-        return {"status": "error", "error": "TranscriptStore not initialized",
-                "imported_messages": 0, "skipped_duplicates": 0}
-
     store = getattr(agent_ctx, "transcript_store", None)
     if store is None:
         return {"status": "error", "error": "No transcript store",
