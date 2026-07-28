@@ -27,6 +27,7 @@ def agent_context_with_store():
 
         agent_ctx = AgentContextManager.__new__(AgentContextManager)
         agent_ctx._transcript_store = store
+        agent_ctx._transcript_store_initialized = True  # v1.29.10: Mark as initialized
         agent_ctx.working_memory_enabled = False
         agent_ctx._last_usage_ratio = 0.0
         agent_ctx._last_cache_stats = None
