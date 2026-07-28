@@ -1498,27 +1498,25 @@ errors: [Fixed token expiration handling - was missing refresh logic]
             parent_invocation_id=parent_invocation_id,
         )
 
-        # Phase 2 SSOT: Write to TranscriptStore when enabled (NO dual-write)
-        if agent_ctx is not None and agent_ctx.transcript_store is not None:
-            # v1.29: Check transcript level for current invocation
-            transcript_level = "persistent"  # default
-            inv_id = getattr(self, '_current_invocation_id', '')
-            if inv_id and hasattr(self, '_invocation_index'):
-                inv_meta = self._invocation_index.get(inv_id, {})
-                transcript_level = inv_meta.get("transcript_level", "persistent")
+        # v1.29: Check transcript level BEFORE accessing transcript store
+        # This prevents lazy initialization from creating session directories
+        # when transcript level is "none"
+        transcript_level = "persistent"  # default
+        inv_id = getattr(self, '_current_invocation_id', '')
+        if inv_id and hasattr(self, '_invocation_index'):
+            inv_meta = self._invocation_index.get(inv_id, {})
+            transcript_level = inv_meta.get("transcript_level", "persistent")
 
-            # v1.29: Respect transcript level
-            if transcript_level == "none":
-                # Don't write to transcript store at all
-                # Fall through to fallback storage
-                pass
-            else:
+        # Phase 2 SSOT: Write to TranscriptStore when enabled (NO dual-write)
+        # v1.29: Only access transcript_store if we're going to write to it
+        if agent_ctx is not None and transcript_level != "none":
+            # Access transcript store (triggers lazy initialization if needed)
+            if agent_ctx.transcript_store is not None:
                 # Write to TranscriptStore
                 # v1.29: "memory" mode = don't persist to disk
                 persist = (transcript_level == "persistent")
                 agent_ctx.transcript_store.append(msg, persist=persist)
                 # Skip the fallback storage when using transcript store
-                # (except for "none" level which is handled above)
                 return
 
         # Fallback: write to _interpreter_history when TranscriptStore disabled or transcript_level="none"

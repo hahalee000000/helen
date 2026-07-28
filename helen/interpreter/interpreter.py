@@ -243,8 +243,16 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
 
         This property is read-only — all writes go directly to TranscriptStore.
         """
-        if self._agent_context is not None and self._agent_context.transcript_store is not None:
-            all_messages = self._agent_context.transcript_store.read_view()
+        # v1.29: Don't trigger lazy initialization — only access transcript store
+        # if it's already initialized. This prevents session directory creation
+        # when just reading history (e.g., for LLM context).
+        if self._agent_context is not None:
+            # Check if transcript store is already initialized without triggering it
+            initialized = getattr(self._agent_context, '_transcript_store_initialized', False)
+            if initialized and self._agent_context.transcript_store is not None:
+                all_messages = self._agent_context.transcript_store.read_view()
+            else:
+                all_messages = self._interpreter_history
         else:
             all_messages = self._interpreter_history
 
@@ -1691,14 +1699,18 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
             entry = self._invocation_index[inv_id]
             entry["end_time"] = time.time()
             # Count messages belonging to this invocation in transcript
-            store = getattr(self._agent_context, "transcript_store", None)
-            if store is not None:
-                from helen.runtime.transcript_store import Message as _TranscriptMessage
-                entry["message_count"] = sum(
-                    1 for item in store.transcript
-                    if isinstance(item, _TranscriptMessage)
-                    and item.invocation_id == inv_id
-                )
+            # v1.29: Don't trigger lazy initialization — only count if already initialized
+            if self._agent_context is not None:
+                initialized = getattr(self._agent_context, '_transcript_store_initialized', False)
+                if initialized:
+                    store = getattr(self._agent_context, "transcript_store", None)
+                    if store is not None:
+                        from helen.runtime.transcript_store import Message as _TranscriptMessage
+                        entry["message_count"] = sum(
+                            1 for item in store.transcript
+                            if isinstance(item, _TranscriptMessage)
+                            and item.invocation_id == inv_id
+                        )
 
         # Pop stack
         if self._invocation_stack:
