@@ -1,5 +1,6 @@
 """Helen agent launcher."""
 import os
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -164,14 +165,38 @@ def launch_agent():
     env["HELEN_WEBUI_CWD"] = str(Path.cwd())
 
     try:
-        result = subprocess.run(
+        # Use Popen with process group to enable signal forwarding
+        # This prevents orphan processes when helen agent is killed
+        proc = subprocess.Popen(
             ["bash", str(start_script)],
-            cwd=agent_dir,  # Run from agent directory (for relative paths)
-            env=env  # But pass user's cwd via environment variable
+            cwd=agent_dir,
+            env=env,
+            preexec_fn=os.setsid,  # Create new process group
         )
-        return result.returncode
-    except KeyboardInterrupt:
-        # Ctrl+C pressed - the start-web.sh script handles cleanup
-        # Just exit cleanly without showing traceback
-        print("\n👋 Helen agent stopped")
-        return 0
+
+        # Signal forwarding: forward SIGTERM/SIGINT to the entire process group
+        def forward_signal(signum, frame):
+            try:
+                # Send signal to the entire process group
+                os.killpg(os.getpgid(proc.pid), signum)
+            except ProcessLookupError:
+                # Process already exited
+                pass
+
+        # Register signal handlers
+        signal.signal(signal.SIGTERM, forward_signal)
+        signal.signal(signal.SIGINT, forward_signal)
+
+        try:
+            # Wait for the process to complete
+            proc.wait()
+            return proc.returncode
+        except KeyboardInterrupt:
+            # Ctrl+C pressed - forward SIGINT to process group
+            forward_signal(signal.SIGINT, None)
+            proc.wait()
+            print("\n👋 Helen agent stopped")
+            return 0
+    except Exception as e:
+        print(f"❌ Error launching Helen agent: {e}")
+        return 1
