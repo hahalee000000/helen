@@ -161,8 +161,20 @@ def launch_agent():
     # Pass user's current directory to start-web.sh
     # This ensures the Web UI uses the user's project directory, not the agent directory
     import os
+    user_cwd = Path.cwd()
     env = os.environ.copy()
-    env["HELEN_WEBUI_CWD"] = str(Path.cwd())
+    env["HELEN_WEBUI_CWD"] = str(user_cwd)
+
+    # v1.29.15: Create .helen/ in user's project directory as project marker.
+    # detect_project_dir() uses .helen/ as the marker to identify Helen projects.
+    # Without this, sessions would go to the global ~/.helen/sessions/ on first run.
+    project_helen = user_cwd / ".helen"
+    helen_home = Path.home() / ".helen"
+    try:
+        if project_helen.resolve() != helen_home.resolve():
+            project_helen.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass  # Best-effort; if creation fails, falls back to global
 
     try:
         # Use Popen with process group to enable signal forwarding

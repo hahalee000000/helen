@@ -38,7 +38,11 @@ shared store ContextManager {
      *  避免 shell_exec("pwd") 在子线程/actor 上下文中返回错误路径。
      *  (v1.29.15 修复了 shared store 默认参数支持) */
     fn init(cwd: str = "") {
-        if initialized { return }
+        // v1.29.15: 关键修复 —— shared store 在 spawn 时可能被共享，
+        // `initialized` 标志可能已被另一个 interpreter 设为 true，
+        // 但 session_dir_path 可能为空（另一个 interpreter 的 _setup_session_scope 失败）。
+        // 当 session_dir_path 为空时，强制重新设置。
+        if initialized && session_dir_path != "" { return }
         initialized = true
         cached_version = detect_helen_version()
         session_dir_path = _setup_session_scope(cwd)
@@ -231,11 +235,6 @@ shared store ContextManager {
  *  v1.29.15: 接受可选 cwd 参数，避免 shell_exec("pwd") 在 actor/子线程上下文
  *  中返回不正确的路径。当 cwd 提供时直接使用，否则回退到 shell_exec("pwd")。*/
 fn _setup_session_scope(cwd_hint: str): str {
-    // Step 1: 确定项目目录（始终用绝对路径）
-    // 关键：即使 path_exists(".helen") 成功，也必须转绝对路径。
-    // 因为 uvicorn / Python 子进程 / Helen 解释器可能在不同于当前 CWD
-    // 的环境下解析相对路径（例如 chat_tui_web.py 的 os.chdir 时机、
-    // 热重载后 CWD 漂移）。绝对路径消除所有 CWD 不确定性。
     let project_helen = ""
     if cwd_hint != "" {
         project_helen = path_join(cwd_hint, ".helen")
@@ -244,12 +243,10 @@ fn _setup_session_scope(cwd_hint: str): str {
             let cwd = strip(shell_exec("pwd"))
             project_helen = path_join(cwd, ".helen")
         } catch {
-            // pwd 失败时降级到相对路径
             project_helen = ".helen"
         }
     }
     if !path_exists(project_helen) {
-        warning("会话作用域: 项目目录不存在: " + project_helen)
         return ""
     }
 
