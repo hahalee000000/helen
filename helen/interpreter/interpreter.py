@@ -244,12 +244,15 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         This property is read-only — all writes go directly to TranscriptStore.
         """
         # v1.29: Don't trigger lazy initialization — only access transcript store
-        # if it's already initialized. This prevents session directory creation
-        # when just reading history (e.g., for LLM context).
+        # if it's already initialized OR if we're resuming a session.
+        # This prevents session directory creation when just reading history
+        # (e.g., for LLM context), but allows resumed sessions to load their history.
         if self._agent_context is not None:
+            # Check if we're resuming a session (session_id was provided)
+            is_resuming = getattr(self, '_session_id', None) is not None
             # Check if transcript store is already initialized without triggering it
             initialized = getattr(self._agent_context, '_transcript_store_initialized', False)
-            if initialized and self._agent_context.transcript_store is not None:
+            if (initialized or is_resuming) and self._agent_context.transcript_store is not None:
                 all_messages = self._agent_context.transcript_store.read_view()
             else:
                 all_messages = self._interpreter_history
