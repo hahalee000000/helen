@@ -327,7 +327,14 @@ class AgentContextManager:
                 # of when it happens. Without this, a lazy init triggered
                 # before set_session_dir() would permanently bake the wrong
                 # (global) path into the TranscriptStore.
-                from helen.runtime.config import detect_project_dir, resolve_session_dir
+                #
+                # v1.29.16: When no project marker (.helen/) exists in cwd or
+                # ancestors, create .helen/ in cwd as the project marker. This
+                # is the interpreter's responsibility — running any Helen
+                # program (helen app.helen) with transcript enabled should
+                # establish the cwd as a Helen project.
+                from helen.runtime.config import detect_project_dir, resolve_session_dir, HELEN_HOME
+                from pathlib import Path
                 session_dir = None
                 detected_scope = None
                 if not os.environ.get("HELEN_SESSION_DIR"):
@@ -335,6 +342,19 @@ class AgentContextManager:
                     scope = config_for_scope.get("session_scope", "auto")
                     if scope in ("auto", "project"):
                         project_dir = detect_project_dir(os.getcwd())
+                        if project_dir is None:
+                            # v1.29.16: Create .helen/ in cwd as project marker.
+                            # Skip if cwd IS the Helen home (~/.helen itself),
+                            # which means we're already in the global location.
+                            cwd = os.getcwd()
+                            helen_home = str(Path(HELEN_HOME).resolve())
+                            if os.path.realpath(cwd) != helen_home:
+                                helen_marker = os.path.join(cwd, ".helen")
+                                try:
+                                    os.makedirs(helen_marker, exist_ok=True)
+                                    project_dir = cwd
+                                except OSError:
+                                    pass  # Can't create — fall back to global
                         if project_dir is not None:
                             session_dir = os.path.join(
                                 project_dir,
