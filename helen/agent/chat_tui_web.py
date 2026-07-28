@@ -56,6 +56,7 @@ from chat_tui import (
     TUIChatAgent,
     exit_chat_actor,
     is_chat_actor_running,
+    send_heartbeat,
 )
 
 
@@ -77,4 +78,5 @@ __all__ = [
     'is_chat_actor_running',
     'is_actor_mode_available',
     'get_saved_child_sid',
+    'send_heartbeat',
 ]

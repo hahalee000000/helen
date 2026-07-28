@@ -233,13 +233,13 @@ def _write_file(path: str, content: str) -> str:
         return json.dumps({"error": f"Write failed: {e}"}, ensure_ascii=False)
 
 
-def _shell_exec(command: str, timeout: int = 30, shell: bool = True) -> str:
+def _shell_exec(command: str, timeout: int = 120, shell: bool = True) -> str:
     """Execute a shell command and return raw stdout (Issue #25).
 
     Args:
         command: Command to execute. When shell=True (default), passed as string
                  to the shell. When shell=False, split into args for safety.
-        timeout: Timeout in seconds (default 30).
+        timeout: Timeout in seconds (default 120, v1.29.12: increased from 30).
         shell: Whether to use shell execution (default True).
 
     Returns:

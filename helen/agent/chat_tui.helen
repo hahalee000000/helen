@@ -187,6 +187,17 @@ fn exit_chat_actor() {
     }
 }
 
+/** 发送心跳到 actor（非阻塞，维持 actor 存活） */
+fn send_heartbeat() {
+    if _chat_actor_mailbox != null {
+        try {
+            _chat_actor_mailbox.send({"type": "heartbeat"})
+        } catch {
+            // 心跳失败说明 actor 可能已死，忽略错误
+        }
+    }
+}
+
 /** 检查 actor 是否正在运行 */
 fn is_chat_actor_running(): bool {
     return _chat_actor_mailbox != null

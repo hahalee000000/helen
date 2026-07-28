@@ -4,32 +4,25 @@
 1. Actor 生命周期（spawn / exit / restart）
 2. 通过 mailbox 发送 user_input，阻塞等待 response_complete
 3. 流式 chunk 不走本管理器（走 FFI stream_emitter，与 non-actor 路径相同）
-
-架构：
-  Python (helen_bridge)                      Helen (chat_tui.helen)
-  ┌───────────────────────┐                  ┌────────────────────────┐
-  │ run_chat_streaming_   │  FFI              │                        │
-  │   actor()             │◄────stream_event─ │ ChatSessionActor       │
-  │  ┌─────────────────┐  │  (llm_chunk 等)   │  (长驻 while 循环)      │
-  │  │ asyncio.Queue   │  │                  │                        │
-  │  └─────────────────┘  │  mailbox.send    │  reply.receive()        │
-  │  channel_actor_       │─────────────────►│  -> llm act             │
-  │   manager.send_message│  mailbox.receive │◄───────────────────────│
-  │  (executor 线程阻塞)  │◄─────────────────│  reply.send(resp)      │
-  └───────────────────────┘                  └────────────────────────┘
+4. 心跳保活（v1.29.12: 每 120s 发送心跳，防止 actor 300s 超时退出）
 
 线程模型：
 - spawn_chat_actor / tui_chat_handler_actor / exit_chat_actor 都是同步阻塞调用
 - helen_bridge 在 executor 线程中调用它们
 - 流式 chunk 通过 FFI 回调到达 asyncio.Queue（与 non-actor 路径一致）
+- 心跳在独立守护线程中发送，不影响主流程
 
 启用方式：环境变量 HELEN_USE_ACTOR=1
 """
 import os
 import threading
 import logging
+import time
 
 logger = logging.getLogger(__name__)
+
+# 心跳间隔（秒），必须小于 actor 的 receive 超时（300s）
+HEARTBEAT_INTERVAL = 120
 
 
 def actor_mode_enabled() -> bool:
@@ -44,6 +37,8 @@ class ChannelActorManager:
         self._lock = threading.Lock()
         self._actor_spawned = False
         self._session_id: str | None = None
+        self._heartbeat_thread: threading.Thread | None = None
+        self._heartbeat_stop = threading.Event()
 
     def is_available(self) -> bool:
         """actor 模式是否可用（环境变量启用 + 接口存在）"""
@@ -72,9 +67,40 @@ class ChannelActorManager:
                 self._actor_spawned = True
                 self._session_id = result.get("session_id")
                 logger.info("ChatSessionActor started (session=%s)", self._session_id)
+                self._start_heartbeat()
             else:
                 logger.warning("ChatSessionActor spawn failed: %s", result)
             return result if isinstance(result, dict) else {"status": "error", "error": str(result)}
+
+    def _start_heartbeat(self):
+        """启动心跳线程（v1.29.12: 每 120s 发送心跳，防止 actor 超时退出）"""
+        self._heartbeat_stop.clear()
+        self._heartbeat_thread = threading.Thread(
+            target=self._heartbeat_loop, daemon=True, name="actor-heartbeat"
+        )
+        self._heartbeat_thread.start()
+        logger.info("Heartbeat thread started (interval=%ds)", HEARTBEAT_INTERVAL)
+
+    def _stop_heartbeat(self):
+        """停止心跳线程"""
+        self._heartbeat_stop.set()
+        if self._heartbeat_thread and self._heartbeat_thread.is_alive():
+            self._heartbeat_thread.join(timeout=5)
+        self._heartbeat_thread = None
+
+    def _heartbeat_loop(self):
+        """心跳循环：每 HEARTBEAT_INTERVAL 秒发送一次心跳"""
+        while not self._heartbeat_stop.is_set():
+            # 使用 wait 代替 sleep，以便能快速响应停止信号
+            if self._heartbeat_stop.wait(HEARTBEAT_INTERVAL):
+                break  # 收到停止信号
+            try:
+                from chat_tui_web import send_heartbeat
+                send_heartbeat()
+                logger.debug("Heartbeat sent to actor")
+            except Exception as e:
+                logger.warning("Heartbeat failed: %s", e)
+                break  # 心跳失败说明 actor 可能已死，退出心跳线程
 
     def send_message(self, user_input: str, file_paths: list | None = None) -> str:
         """发送消息到 actor，阻塞等待响应。
@@ -93,6 +119,7 @@ class ChannelActorManager:
             # actor 可能已崩溃（while 循环异常退出），标记为未启动以便下次重启
             logger.warning("send_message failed (actor may have crashed): %s", e)
             with self._lock:
+                self._stop_heartbeat()
                 self._actor_spawned = False
                 self._session_id = None
             raise
@@ -102,6 +129,7 @@ class ChannelActorManager:
         with self._lock:
             if not self._actor_spawned:
                 return
+            self._stop_heartbeat()
             try:
                 from chat_tui_web import exit_chat_actor
                 exit_chat_actor()

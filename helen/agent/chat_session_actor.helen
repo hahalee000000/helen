@@ -697,11 +697,15 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
 
         // ── 主循环 ──
         while true {
-            // 300s 超时防止主循环永久挂起（正常情况下 Python 端会持续发送消息）
+            // 300s 超时作为安全网：正常情况下 Python 端每 120s 发送心跳
+            // 如果 Web 端崩溃，300s 无心跳后 actor 优雅退出（释放 session 锁等）
+            // v1.29.12: 心跳机制替代纯超时退出
             let request_msg = reply.receive(timeout=300)
 
             if request_msg == null {
-                debug("ChatSessionActor: channel closed or receive timeout (300s), exiting")
+                // 300s 无消息（无心跳、无 user_input），Web 端可能已崩溃
+                // 优雅退出：释放资源，避免僵尸 actor
+                debug("ChatSessionActor: no heartbeat for 300s, web client may have crashed, exiting gracefully")
                 break
             }
 
@@ -712,6 +716,12 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
                     msg_type = request_msg["type"]
                 } catch {
                     debug("ChatSessionActor: invalid message (no type field)")
+                    continue
+                }
+
+                // 心跳消息：仅维持 actor 存活，不做任何处理
+                if msg_type == "heartbeat" {
+                    debug("ChatSessionActor: heartbeat received")
                     continue
                 }
 
