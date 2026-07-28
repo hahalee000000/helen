@@ -1808,6 +1808,13 @@ def delete_current_session(confirm: bool = False, cascade: bool = True) -> dict:
                         store.transcript.clear()
                         store._uuid_index.clear()
                         store._dirty = True
+                # v1.29.12: Clear session_id from agent context so next spawn creates a new session
+                # Without this, get_session_id() returns the old (deleted) session_id,
+                # causing memento to save main="" and actor to restart with empty session
+                if session_id and getattr(agent_ctx, '_session_id', None) == session_id:
+                    agent_ctx._session_id = None
+                    agent_ctx._transcript_store_initialized = False
+                    logger.debug("Cleared session_id from agent context after deletion")
 
             return {
                 "status": "ok",
