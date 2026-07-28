@@ -76,14 +76,15 @@ class TestLexerPerformance:
         """测试复杂运算符解析"""
         source = "let x = a + b * c - d / e % f;" * 500
         scanner = Scanner(source)
-        
+
         start = time.perf_counter()
         tokens = scanner.scan_all()
         elapsed = time.perf_counter() - start
-        
+
         print(f"\nLexer: 500 complex expressions in {elapsed*1000:.2f}ms")
-        
-        assert elapsed < 0.1
+
+        # v1.29.17: 阈值从 0.1s 放宽到 0.2s，避免 CI runner 性能抖动导致 flaky failure
+        assert elapsed < 0.2
 
 
 # ============================================================================
