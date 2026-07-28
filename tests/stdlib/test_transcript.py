@@ -25,14 +25,18 @@ class TestTranscriptStdlib:
         """Reset global interpreter context before each test."""
         # Save original state (v1.23.4: use thread-local getter)
         original_context = transcript_module._get_agent_context()
+        # v1.29.14: Also save/restore _main_session_id
+        original_main_sid = getattr(transcript_module, '_main_session_id', None)
 
         # Reset to None for clean test state
         transcript_module._set_transcript_context(None)
+        transcript_module._main_session_id = None
 
         yield
 
         # Restore original state after test
         transcript_module._set_transcript_context(original_context)
+        transcript_module._main_session_id = original_main_sid
 
     def test_get_session_id_no_interpreter(self):
         """Test get_session_id with no active interpreter."""

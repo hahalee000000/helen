@@ -331,6 +331,15 @@ class AgentContextManager:
                     session_id = manager.create_session()
 
                 self._session_id = session_id
+                # v1.29.14: Update process-level main session ID so executor
+                # threads can see the new session. This is needed when a new
+                # session is created (session_id was None) or when resuming.
+                try:
+                    from helen.stdlib.transcript import _main_session_id
+                    import helen.stdlib.transcript as _transcript_mod
+                    _transcript_mod._main_session_id = session_id
+                except ImportError:
+                    pass
                 transcript_path = manager.get_session_path(session_id)
 
                 # Create backend based on config

@@ -35,6 +35,22 @@ logger = logging.getLogger(__name__)
 # The two never interfere, preserving Helen's runtime isolation design.
 _agent_context_local = threading.local()
 
+# Process-level session ID fallback (v1.29.14 fix).
+#
+# Problem: get_session_id() uses thread-local agent context, but in web UI
+# scenarios, spawn_chat_actor() runs in executor threads (via run_in_executor)
+# where the agent context is not visible. This causes get_session_id() to
+# return "" even though the main thread has a valid session ID.
+#
+# Solution: Store the main session ID at process level so any thread can
+# access it as a fallback. This is set by _set_transcript_context() when
+# the main Interpreter initializes, and cleared by delete_current_session().
+#
+# Thread safety: Simple assignment/read is atomic in CPython (GIL). This is
+# intentionally NOT a Lock-protected value — it's a best-effort fallback
+# for cross-thread visibility, not a synchronization primitive.
+_main_session_id: str | None = None
+
 
 def _set_transcript_context(agent_context: Any) -> None:
     """Set the interpreter's agent context for transcript management.
@@ -45,10 +61,20 @@ def _set_transcript_context(agent_context: Any) -> None:
     v1.23.4: Stores in thread-local storage so concurrent Interpreters
     (e.g. spawn) don't clobber each other's context.
 
+    v1.29.14: Also sets _main_session_id from the agent context's
+    _pending_session_id so executor threads can access the main session ID.
+
     Args:
         agent_context: The interpreter's AgentContextManager instance
     """
+    global _main_session_id
     _agent_context_local.ctx = agent_context
+    # v1.29.14: Set process-level fallback for cross-thread visibility
+    # Only set if it's a real string (not MagicMock from tests)
+    if agent_context is not None:
+        pending_sid = getattr(agent_context, '_pending_session_id', None)
+        if isinstance(pending_sid, str) and pending_sid:
+            _main_session_id = pending_sid
 
 
 def _get_agent_context() -> Any:
@@ -66,18 +92,26 @@ def get_session_id() -> str:
     Returns:
         Current session ID, or empty string if TranscriptStore is not enabled.
 
+    v1.29.14: Falls back to _main_session_id when agent context is not
+    available in the current thread (e.g., executor threads in web UI).
+
     Example:
         let session = get_session_id()
         print("Session: {session}")
     """
-    if _get_agent_context() is None:
-        return ""
+    ctx = _get_agent_context()
+    if ctx is not None:
+        session_id = getattr(ctx, "session_id", None)
+        if session_id:
+            return session_id
 
-    session_id = getattr(_get_agent_context(), "session_id", None)
-    if session_id is None:
-        return ""
+    # v1.29.14: Fall back to process-level main session ID for cross-thread
+    # visibility. This handles the case where spawn_chat_actor() runs in an
+    # executor thread that doesn't have the main thread's agent context.
+    if _main_session_id:
+        return _main_session_id
 
-    return session_id
+    return ""
 
 
 def get_session_meta(session_id: str = "") -> dict[str, Any]:
@@ -1814,7 +1848,29 @@ def delete_current_session(confirm: bool = False, cascade: bool = True) -> dict:
                 if session_id and getattr(agent_ctx, '_session_id', None) == session_id:
                     agent_ctx._session_id = None
                     agent_ctx._transcript_store_initialized = False
+                    # v1.29.14: Also clear _pending_session_id so lazy init doesn't
+                    # re-create the deleted session. Without this, accessing .session_id
+                    # triggers _init_transcript_store(_pending_session_id) which restores
+                    # the old session.
+                    agent_ctx._pending_session_id = None
                     logger.debug("Cleared session_id from agent context after deletion")
+
+            # v1.29.14: Clear process-level main session ID so executor threads
+            # also see the deletion. Without this, get_session_id() in executor
+            # threads returns the stale (deleted) session ID via _main_session_id.
+            global _main_session_id
+            if _main_session_id == session_id:
+                _main_session_id = None
+                logger.debug("Cleared _main_session_id after deletion")
+
+            # v1.29.14: Clear Python bridge override so next process restart
+            # creates a new session instead of resuming the deleted one.
+            try:
+                from helen.python_bridge.import_hook import set_session_id as _bridge_set_sid
+                _bridge_set_sid(None)
+                logger.debug("Cleared Python bridge session_id override after deletion")
+            except ImportError:
+                pass  # Python bridge not available
 
             return {
                 "status": "ok",
