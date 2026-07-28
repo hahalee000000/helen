@@ -430,7 +430,8 @@ def _handle_repl_command(
     # Phase 1 SSOT: Transcript commands
     if cmd == ":transcript":
         agent_ctx = getattr(interp, "_agent_context", None)
-        if agent_ctx is None or agent_ctx.transcript_store is None:
+        # v1.29.9: Check _transcript_store_initialized to avoid triggering lazy initialization
+        if agent_ctx is None or not getattr(agent_ctx, '_transcript_store_initialized', False):
             print("TranscriptStore is not enabled.")
             return True
 
@@ -530,7 +531,8 @@ def _handle_repl_command(
             return True
 
         agent_ctx = getattr(interp, "_agent_context", None)
-        if agent_ctx is None or agent_ctx.transcript_store is None:
+        # v1.29.9: Check _transcript_store_initialized to avoid triggering lazy initialization
+        if agent_ctx is None or not getattr(agent_ctx, '_transcript_store_initialized', False):
             print("TranscriptStore is not enabled.")
             return True
 

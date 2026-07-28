@@ -367,9 +367,13 @@ def _compress_context(strategy: str = "auto") -> dict:
 
     # Phase 2 SSOT: When TranscriptStore is enabled, delegate to AgentContextManager
     # which properly records BoundaryMarkers instead of doing destructive in-place replacement.
-    if _get_agent_context() is not None and _get_agent_context().transcript_store is not None:
-        # Get the current view from TranscriptStore (this is the real history)
-        current_history = _get_agent_context().transcript_store.read_view()
+    # v1.29.9: Check _transcript_store_initialized to avoid triggering lazy initialization
+    agent_ctx = _get_agent_context()
+    if agent_ctx is not None and getattr(agent_ctx, '_transcript_store_initialized', False):
+        transcript_store = getattr(agent_ctx, 'transcript_store', None)
+        if transcript_store is not None:
+            # Get the current view from TranscriptStore (this is the real history)
+            current_history = transcript_store.read_view()
 
         if len(current_history) <= 1:
             return {

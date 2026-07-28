@@ -116,7 +116,12 @@ def get_session_meta(session_id: str = "") -> dict[str, Any]:
     if _get_agent_context() is None:
         return {"status": "error", "error": "TranscriptStore not enabled"}
 
-    store = getattr(_get_agent_context(), "transcript_store", None)
+    # v1.29.9: Check _transcript_store_initialized to avoid triggering lazy initialization
+    agent_ctx = _get_agent_context()
+    if not getattr(agent_ctx, '_transcript_store_initialized', False):
+        return {"status": "error", "error": "TranscriptStore not available"}
+
+    store = getattr(agent_ctx, "transcript_store", None)
     if store is None:
         return {"status": "error", "error": "TranscriptStore not available"}
 
@@ -391,7 +396,12 @@ def replay_transcript(
     if _get_agent_context() is None:
         return []
 
-    store = getattr(_get_agent_context(), "transcript_store", None)
+    # v1.29.9: Check _transcript_store_initialized to avoid triggering lazy initialization
+    agent_ctx = _get_agent_context()
+    if not getattr(agent_ctx, '_transcript_store_initialized', False):
+        return []
+
+    store = getattr(agent_ctx, "transcript_store", None)
     if store is None:
         return []
 
@@ -776,7 +786,11 @@ def search_transcript(
     if scope == "current":
         if _get_agent_context() is None:
             return []
-        store = getattr(_get_agent_context(), "transcript_store", None)
+        # v1.29.9: Check _transcript_store_initialized to avoid triggering lazy initialization
+        agent_ctx = _get_agent_context()
+        if not getattr(agent_ctx, '_transcript_store_initialized', False):
+            return []
+        store = getattr(agent_ctx, "transcript_store", None)
         current_sid = get_session_id()
 
         # If session_id is specified and differs from current, fall through to disk
@@ -804,8 +818,13 @@ def search_transcript(
 
     elif scope in ("", "global", "project") and session_id is None and _get_agent_context() is not None:
         # Implicit "current": interpreter exists, no explicit scope/session_id
-        store = getattr(_get_agent_context(), "transcript_store", None)
-        current_sid = get_session_id()
+        # v1.29.9: Check _transcript_store_initialized to avoid triggering lazy initialization
+        agent_ctx = _get_agent_context()
+        if not getattr(agent_ctx, '_transcript_store_initialized', False):
+            pass  # Fall through to disk search
+        else:
+            store = getattr(agent_ctx, "transcript_store", None)
+            current_sid = get_session_id()
         if store is not None:
             from helen.runtime.transcript_store import BoundaryMarker, Message
             for item in store.transcript:
@@ -1277,7 +1296,12 @@ def get_compression_audit() -> list[dict[str, Any]]:
     if _get_agent_context() is None:
         return []
 
-    store = getattr(_get_agent_context(), "transcript_store", None)
+    # v1.29.9: Check _transcript_store_initialized to avoid triggering lazy initialization
+    agent_ctx = _get_agent_context()
+    if not getattr(agent_ctx, '_transcript_store_initialized', False):
+        return []
+
+    store = getattr(agent_ctx, "transcript_store", None)
     if store is None:
         return []
 
@@ -1324,7 +1348,13 @@ def resume_session(session_id: str) -> dict:
         return {"status": "error", "error": "No interpreter agent context",
                 "imported_messages": 0, "skipped_duplicates": 0}
 
-    store = getattr(_get_agent_context(), "transcript_store", None)
+    # v1.29.9: Check _transcript_store_initialized to avoid triggering lazy initialization
+    agent_ctx = _get_agent_context()
+    if not getattr(agent_ctx, '_transcript_store_initialized', False):
+        return {"status": "error", "error": "TranscriptStore not initialized",
+                "imported_messages": 0, "skipped_duplicates": 0}
+
+    store = getattr(agent_ctx, "transcript_store", None)
     if store is None:
         return {"status": "error", "error": "No transcript store",
                 "imported_messages": 0, "skipped_duplicates": 0}
@@ -1770,11 +1800,14 @@ def delete_current_session(confirm: bool = False, cascade: bool = True) -> dict:
         if deleted_sessions:
             # Clear the current transcript store
             if _get_agent_context() is not None:
-                store = getattr(_get_agent_context(), "transcript_store", None)
-                if store is not None:
-                    store.transcript.clear()
-                    store._uuid_index.clear()
-                    store._dirty = True
+                # v1.29.9: Check _transcript_store_initialized to avoid triggering lazy initialization
+                agent_ctx = _get_agent_context()
+                if getattr(agent_ctx, '_transcript_store_initialized', False):
+                    store = getattr(agent_ctx, "transcript_store", None)
+                    if store is not None:
+                        store.transcript.clear()
+                        store._uuid_index.clear()
+                        store._dirty = True
 
             return {
                 "status": "ok",
