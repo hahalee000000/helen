@@ -11,6 +11,7 @@ from datetime import datetime
 from app.services.helen_bridge import helen_bridge
 from app.services import hint_injector
 from app.services import directory_manager
+from app.services.stream_registry import stream_registry
 
 router = APIRouter()
 
@@ -24,6 +25,18 @@ ALLOWED_MIME_TYPES = {
     # 视频
     "video/mp4", "video/webm", "video/quicktime",
 }
+
+
+# === 流式状态查询（前端 re-sync 用）===
+
+@router.get("/status")
+async def get_chat_status():
+    """检查后端是否正在处理请求（前端 re-sync 用）
+
+    前端在初始挂载和 WS 重连时调用此端点，恢复 isLoading 状态，
+    让 stop/hint 按钮在页面刷新后能正确显示。
+    """
+    return {"is_processing": stream_registry.is_processing()}
 
 
 # === 目录管理 API（单会话模式） ===
@@ -295,6 +308,7 @@ async def websocket_endpoint(websocket: WebSocket):
         即使 WebSocket 断开,推理也继续,结果写入 transcript。
         v6.1:不再写 DB(transcript 是唯一数据源)。
         """
+        stream_registry.register(session_id)
         try:
             async for chunk in helen_bridge.run_chat_streaming(
                 user_message, session_id, file_paths=file_paths or []
@@ -353,6 +367,8 @@ async def websocket_endpoint(websocket: WebSocket):
         except asyncio.CancelledError:
             # 被 cancel 打断:partial response 已由 Helen 写入 transcript
             pass
+        finally:
+            stream_registry.unregister(session_id)
 
     try:
         while True:

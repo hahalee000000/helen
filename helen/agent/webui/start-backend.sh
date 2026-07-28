@@ -88,8 +88,23 @@ echo ""
 # 关键：用 Python 先 os.chdir 到用户目录，再启动 uvicorn
 # 这样 Helen TranscriptStore、directory_manager 的 os.getcwd() 都对
 # 关闭热重载（reload=False），防止 LLM 修改工作目录文件时触发重启
+#
+# 孤儿检测（Linux 特有）：
+#   prctl(PR_SET_PDEATHSIG, SIGTERM) 让内核在直接父进程（start-web.sh）
+#   死亡时自动发 SIGTERM 给 uvicorn。防止 helen agent 被杀后 uvicorn
+#   变孤儿继续占用端口和 session 锁。
 exec "$PYTHON" -c "
-import os, sys
+import os, sys, signal
+
+# ── 孤儿检测：父进程死亡时自动终止 ──
+try:
+    import ctypes
+    _libc = ctypes.CDLL('libc.so.6')
+    _PR_SET_PDEATHSIG = 1
+    _libc.prctl(_PR_SET_PDEATHSIG, signal.SIGTERM)
+except Exception:
+    pass  # 非 Linux 系统忽略
+
 os.chdir('$USER_CWD')
 # 让 uvicorn 能找到 app.main（PYTHONPATH 已包含 backend 目录）
 import uvicorn

@@ -27,6 +27,13 @@ export function useChat(sessionId: string | null) {
       try {
         const history = await api.chat.getDirectoryMessages()
         setMessages(history)
+        // Re-sync: 检查后端是否正在处理请求（恢复 stop/hint 按钮状态）
+        try {
+          const status = await api.chat.getStatus()
+          setIsLoading(status.is_processing)
+        } catch {
+          // 查询失败不阻塞正常消息加载
+        }
       } catch (error) {
         console.error('Failed to load messages:', error)
       }
@@ -197,10 +204,17 @@ export function useChat(sessionId: string | null) {
         }
       },
       {
-        onOpen: () => {
+        onOpen: async () => {
           setIsConnected(true)
           // v6.0 单会话架构：不再发送 __helen_resume__ / __helen_init__
           // 会话恢复由 ChatSession.main 内部使用 get_session_id() resume 处理
+          // Re-sync: WS 重连后恢复 isLoading 状态（页面刷新/网络中断恢复时按钮能正确显示）
+          try {
+            const status = await api.chat.getStatus()
+            setIsLoading(status.is_processing)
+          } catch {
+            // 查询失败保持当前状态
+          }
         },
         onClose: () => {
           setIsConnected(false)

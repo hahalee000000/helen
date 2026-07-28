@@ -71,6 +71,12 @@ export const api = {
       if (!response.ok) throw new Error('Failed to fetch directory messages')
       return response.json()
     },
+    /** 检查后端是否正在处理请求（前端 re-sync isLoading 用） */
+    getStatus: async () => {
+      const response = await fetchWithRetry(`${API_BASE_URL}/chat/status`)
+      if (!response.ok) throw new Error('Failed to fetch chat status')
+      return response.json() as Promise<{ is_processing: boolean }>
+    },
   },
 
   // 会话相关

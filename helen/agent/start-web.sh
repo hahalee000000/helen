@@ -81,6 +81,11 @@ cleanup() {
     echo ""
     echo "🛑 Stopping services..."
 
+    # 先停看门狗（避免它在 cleanup 期间触发额外信号）
+    if [ -n "$_WATCHDOG_PID" ]; then
+        kill $_WATCHDOG_PID 2>/dev/null || true
+    fi
+
     # 优雅关闭：先发 SIGTERM，给进程 2 秒清理时间
     if [ -n "$BACKEND_PID" ]; then
         kill -TERM $BACKEND_PID 2>/dev/null || true
@@ -134,6 +139,23 @@ cleanup() {
 
 # 捕获 Ctrl+C (INT)、终止 (TERM) 和退出 (EXIT) 信号
 trap cleanup INT TERM EXIT
+
+# ── 孤儿检测看门狗 ──
+# 当 start-web.sh 的父进程（通常是 helen agent）死亡时，
+# start-web.sh 会被 init 收养（PPID 变为 1）但继续运行，
+# 其子进程（uvicorn / node）也会变孤儿。
+#
+# 看门狗后台监控：如果检测到原始父进程不再存在，向 start-web.sh
+# 发 SIGTERM 触发 cleanup，让所有子进程正常退出。
+_ORIGINAL_PPID=$PPID
+(
+    while kill -0 "$_ORIGINAL_PPID" 2>/dev/null; do
+        sleep 5
+    done
+    # 原始父进程已死，通知 start-web.sh 退出（触发 trap cleanup）
+    kill -TERM "$PPID" 2>/dev/null
+) &
+_WATCHDOG_PID=$!
 
 # 等待，直到收到信号或子进程退出
 # 使用循环等待，避免 wait -n 的兼容性问题

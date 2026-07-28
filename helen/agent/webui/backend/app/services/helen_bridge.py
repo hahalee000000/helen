@@ -397,6 +397,19 @@ class HelenBridge:
                         yield {"type": event_type, "content": content}
                 except asyncio.TimeoutError:
                     if helen_task.done():
+                        # 防御性 drain：reply.send() 在 _emit_actor_stream_event("processing_complete")
+                        # 之前执行，helen_task.done() 变 True 时可能有事件正在 call_soon_threadsafe
+                        # 排队途中。非阻塞地把残留事件消费掉，避免 processing_complete 丢失。
+                        while True:
+                            try:
+                                evt = event_queue.get_nowait()
+                                evt_type = evt.get("type", "")
+                                if evt_type in ("processing_complete", "llm_complete",
+                                                "agent_end", "status_update", "hint_injected",
+                                                "processing_start", "agent_start"):
+                                    yield {"type": evt_type, "content": evt.get("content", "")}
+                            except asyncio.QueueEmpty:
+                                break
                         break
                     continue
 

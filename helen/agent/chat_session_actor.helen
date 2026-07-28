@@ -351,6 +351,7 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
             }
 
             let full_response = ""
+            debug("ChatSessionActor: LLM act start (request=" + request_id + ", media_parts=" + str(len(media_parts)) + ")")
             try {
                 if len(media_parts) > 0 {
                     full_response = llm act user_content media(media_parts)
@@ -363,29 +364,35 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
                         on_complete _actor_complete_cb
                         on_tool_end _actor_tool_end_cb
                 }
+                debug("ChatSessionActor: LLM act complete (request=" + request_id + ", response_len=" + str(len(full_response)) + ")")
             } catch RuntimeError err {
                 debug("ChatSessionActor: LLM error: " + err.message)
                 _emit_actor_stream_event("error", "LLM 错误: " + err.message)
+                // 先 emit processing_complete，再 reply.send（避免竞态：reply.send 会让 Python 端 helen_task.done()=True，
+                // 之后 polling loop 可能立即退出，若 emit 在 send 之后则事件被丢弃）
+                _emit_actor_stream_event("processing_complete", "")
                 reply.send({
                     "type": "error",
                     "request_id": request_id,
                     "error_msg": err.message,
                     "error_type": "runtime_error"
                 })
-                _emit_actor_stream_event("processing_complete", "")
                 return new_count
             } catch {
                 debug("ChatSessionActor: LLM error (unknown)")
                 _emit_actor_stream_event("error", "LLM 错误: 未知错误")
+                _emit_actor_stream_event("processing_complete", "")
                 reply.send({
                     "type": "error",
                     "request_id": request_id,
                     "error_msg": "Unknown LLM error",
                     "error_type": "unknown"
                 })
-                _emit_actor_stream_event("processing_complete", "")
                 return new_count
             }
+
+            // 成功路径：同样先 emit 再 send，避免竞态
+            _emit_actor_stream_event("processing_complete", "")
 
             reply.send({
                 "type": "response_complete",
@@ -393,8 +400,6 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
                 "content": full_response,
                 "status": "success"
             })
-
-            _emit_actor_stream_event("processing_complete", "")
             return new_count
         }
 
@@ -692,10 +697,11 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
 
         // ── 主循环 ──
         while true {
-            let request_msg = reply.receive()
+            // 300s 超时防止主循环永久挂起（正常情况下 Python 端会持续发送消息）
+            let request_msg = reply.receive(timeout=300)
 
             if request_msg == null {
-                debug("ChatSessionActor: channel closed, exiting")
+                debug("ChatSessionActor: channel closed or receive timeout (300s), exiting")
                 break
             }
 
@@ -708,6 +714,8 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
                     debug("ChatSessionActor: invalid message (no type field)")
                     continue
                 }
+
+                debug("ChatSessionActor: received message type=" + msg_type + " (request_count=" + str(request_count) + ")")
 
                 if msg_type == "exit" {
                     debug("ChatSessionActor: received exit signal")
