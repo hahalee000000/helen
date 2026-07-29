@@ -673,6 +673,13 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
         // ── 初始化 ──
         _init_actor_output()
         try { ContextManager.init(cwd) } catch {}
+        // v1.30.3: 显式重建 pinned UUIDs
+        // ContextManager 是 shared store，可能与主 interpreter 共享。
+        // 主 interpreter 的 init() 可能已经调用过 _rebuild_pinned_uuids()，
+        // 但那时 transcript 加载的是 MAIN session（没有 pinned 消息）。
+        // Actor 的 transcript 加载的是 CHILD session（有 pinned 消息），
+        // 需要显式重建。
+        try { _rebuild_pinned_uuids() } catch {}
         try { SessionStats.init() } catch {}
 
         // ── 保存主、子 session id 到 memento（供下次启动恢复）──
