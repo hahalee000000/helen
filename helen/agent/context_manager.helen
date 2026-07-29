@@ -309,9 +309,15 @@ fn _rebuild_pinned_uuids() {
                 }
             }
             ContextManager.set_pinned_uuids(new_list)
+            debug("_rebuild_pinned_uuids: restored " + str(len(new_list)) + " pinned messages")
+        } else {
+            debug("_rebuild_pinned_uuids: no pinned messages found in transcript")
         }
+    } catch RuntimeError err {
+        warning("_rebuild_pinned_uuids failed: " + err.message)
     } catch {
         // list_pinned_messages 不可用（旧版 Helen）或 transcript 为空，静默忽略
+        warning("_rebuild_pinned_uuids failed (unknown error)")
     }
 }
 
