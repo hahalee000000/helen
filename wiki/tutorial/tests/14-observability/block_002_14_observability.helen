@@ -1,4 +1,4 @@
-// Test: 14-observability.md:31
+// Test: 14-observability.md:33
 
 fn divide(a, b) {
     assert b != 0, "divisor must not be zero"
@@ -6,9 +6,11 @@ fn divide(a, b) {
 }
 
 main {
-    try {
-        divide(10, 0)
-    } catch AssertionError e {
-        print("Caught: " + e.message)
+    main {
+        try {
+            divide(10, 0)
+        } catch AssertionError e {
+            print("Caught: " + e.message)
+        }
     }
 }

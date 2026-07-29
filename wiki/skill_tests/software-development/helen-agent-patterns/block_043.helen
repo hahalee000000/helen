@@ -21,11 +21,14 @@ agent RoleAgent(topic: str, config: map) {
 }
 
 // 使用
-let configs = [
-    {"name": "乐观派", "description": "看到最好的一面", "style": "积极向上"},
-    {"name": "悲观派", "description": "关注风险", "style": "谨慎保守"}
-]
 
-for config in configs {
-    let result = RoleAgent("话题", config)
+main {
+    let configs = [
+        {"name": "乐观派", "description": "看到最好的一面", "style": "积极向上"},
+        {"name": "悲观派", "description": "关注风险", "style": "谨慎保守"}
+    ]
+
+    for config in configs {
+        let result = RoleAgent("话题", config)
+    }
 }

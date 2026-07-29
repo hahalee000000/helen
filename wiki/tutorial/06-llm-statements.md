@@ -73,20 +73,21 @@ main {
 `llm act` can also be used directly as an expression, without agent context:
 
 ```helen
-// Direct top-level call
-llm act "translate hello to chinese."
-
-// Use inside a function
 fn translate(text, target) {
     return llm act "translate " + text + " to " + target
 }
 
-// Assign to a variable
-let result = llm act "summarize this article"
+main {
+    // Direct call
+    llm act "translate hello to chinese."
 
-// String concatenation to build prompts
-let topic = "climate change"
-let analysis = llm act "analyze the impact of " + topic
+    // Assign to a variable
+    let result = llm act "summarize this article"
+
+    // String concatenation to build prompts
+    let topic = "climate change"
+    let analysis = llm act "analyze the impact of " + topic
+}
 ```
 
 **Syntax comparison:**
@@ -111,21 +112,23 @@ let analysis = llm act "analyze the impact of " + topic
 ### Basic Usage
 
 ```helen
-llm if "Classify email priority" {
-    branch "urgent" {
-        print("🚨 URGENT — notify on-call immediately")
-    }
-    branch "high" {
-        print("🔴 HIGH — address within 1 hour")
-    }
-    branch "normal" {
-        print("🟢 NORMAL — handle in next sprint")
-    }
-    branch "low" {
-        print("⚪ LOW — handle when convenient")
-    }
-    default {
-        print("❓ Unknown priority")
+main {
+    llm if "Classify email priority" {
+        branch "urgent" {
+            print("🚨 URGENT — notify on-call immediately")
+        }
+        branch "high" {
+            print("🔴 HIGH — address within 1 hour")
+        }
+        branch "normal" {
+            print("🟢 NORMAL — handle in next sprint")
+        }
+        branch "low" {
+            print("⚪ LOW — handle when convenient")
+        }
+        default {
+            print("❓ Unknown priority")
+        }
     }
 }
 ```
@@ -135,27 +138,29 @@ llm if "Classify email priority" {
 ### Nested Usage
 
 ```helen
-let query = "How do I reset my password?"
+main {
+    let query = "How do I reset my password?"
 
-llm if "Classify query type" {
-    branch "question" {
-        llm if "Identify question category" {
-            branch "technical" {
-                TechSupport(query)
-            }
-            branch "billing" {
-                BillingSupport(query)
-            }
-            default {
-                GeneralSupport(query)
+    llm if "Classify query type" {
+        branch "question" {
+            llm if "Identify question category" {
+                branch "technical" {
+                    TechSupport(query)
+                }
+                branch "billing" {
+                    BillingSupport(query)
+                }
+                default {
+                    GeneralSupport(query)
+                }
             }
         }
-    }
-    branch "command" {
-        execute_command(query)
-    }
-    default {
-        print("I don't understand")
+        branch "command" {
+            execute_command(query)
+        }
+        default {
+            print("I don't understand")
+        }
     }
 }
 ```
@@ -275,8 +280,10 @@ agent Coder {
 Using Chinese aliases:
 
 ```helen
-llm act "Create hello.py" 工具结束 fn(name, result) {
-    return "hint content"
+main {
+    llm act "Create hello.py" 工具结束 fn(name, result) {
+        return "hint content"
+    }
 }
 ```
 
@@ -409,8 +416,10 @@ agent Researcher(topic) {
 `patch_file` uses the `old_string` → `new_string` pattern to precisely modify files, with multiple built-in matching strategies to handle common differences in LLM-generated code (whitespace, indentation, escaping, Unicode, etc.):
 
 ```helen
-// Modify a specific function in a file
-llm act "Read /tmp/main.py and change the function name from 'foo' to 'bar'"
+main {
+    // Modify a specific function in a file
+    llm act "Read /tmp/main.py and change the function name from 'foo' to 'bar'"
+}
 ```
 
 Usually you don't need to worry about matching details — even if the LLM-generated code has subtle differences from the original, `patch_file` can handle it correctly.

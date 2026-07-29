@@ -1,0 +1,23 @@
+// Test: 05-agents.md:777
+
+shared store TaskRegistry {
+    let tasks: list = []
+    let counter: int = 0
+    
+    fn register(task_name: str) {
+        counter = counter + 1
+        tasks.append(task_name)
+    }
+    
+    fn count(): int { return counter }
+    
+    fn get_task(index: int): str { return tasks[index] }
+}
+
+// All agents can access it
+agent Worker() {
+    main {
+        TaskRegistry.register("my-task")
+        print("Total tasks: " + str(TaskRegistry.count()))
+    }
+}

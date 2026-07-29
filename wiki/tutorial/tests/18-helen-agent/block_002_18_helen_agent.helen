@@ -1,0 +1,10 @@
+// Test: 18-helen-agent.md:218
+
+// Create a new skill at .helen/skills/<category>/<name>/SKILL.md
+fn save_new_skill(name: str, category: str, tags: str, content: str): map
+
+// Append to an existing skill (path safety enforced — see below)
+fn update_existing_skill(skill_path: str, addition: str): map
+
+// Rebuild the SKILL_INDEX.md from all SKILL.md files
+fn refresh_skill_index(): str

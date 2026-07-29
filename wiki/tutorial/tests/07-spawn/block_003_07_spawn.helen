@@ -1,0 +1,10 @@
+// Test: 07-spawn.md:68
+
+main {
+    main {
+        let msg = mailbox.try_receive()
+        if msg == null {
+            print("No messages yet")
+        }
+    }
+}

@@ -327,7 +327,7 @@ main {
     def test_closure_recursive(self, temp_helen_file, helen_dir):
         """测试递归闭包"""
         test_file = temp_helen_file("""
-let factorial = fn(n) {
+const factorial = fn(n) {
     if n <= 1 {
         return 1
     }
@@ -351,7 +351,7 @@ main {
     def test_closure_recursive_fibonacci(self, temp_helen_file, helen_dir):
         """递归闭包 — 斐波那契（多次递归分支）"""
         test_file = temp_helen_file("""
-let fib = fn(n) {
+const fib = fn(n) {
     if n <= 1 {
         return n
     }

@@ -1,10 +1,11 @@
-// Test: 13-skills.md:124
+// Test: 13-skills.md:120
 
-agent Researcher(query) {
-    description: "Research topics using web search"
-    
+main {
     main {
-        // LLM 在这里可以看到所有可用技能
-        llm act "Research: " + query
+        // Basic loading
+        load_skill("helen-testing")
+
+        // Also list reference documents
+        load_skill("helen-language-development", include_references=true)
     }
 }

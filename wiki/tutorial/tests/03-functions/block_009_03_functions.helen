@@ -1,4 +1,4 @@
-// Test: 03-functions.md:124
+// Test: 03-functions.md:130
 
 // === Context from preceding blocks ===
 fn greet(name) {
@@ -22,7 +22,7 @@ fn double(x) {
 }
 
 fn apply(op, value) {
-    // 在 v1 中，函数通过名称引用
-    // 注意：不能用 'fn' 作为参数名（它是关键字）
+    // In v1, functions are referenced by name
+    // Note: cannot use 'fn' as a parameter name (it is a keyword)
     print(double(value))
 }

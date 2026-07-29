@@ -1,15 +1,17 @@
-// Test: 05-agents.md:275
+// Test: 05-agents.md:280
 
 // === Context from preceding blocks ===
+agent Greeter(user_name: str, user_id: int) {
+}
+
 agent Assistant {
     description "Helpful assistant"
-    tools = ["web_search", "read_file"]   // LLM 可以自主调用这两个
+    tools = ["web_search", "read_file"]   // LLM can autonomously call these two
     functions {
-        fn fetch_summary(url: str): str {  // 在 functions 里声明
-            let content = read_file(url)
+        fn fetch_summary(url: str): str {  // Declared in functions
             return summarize(content)
         }
-        fn dangerous_op() { ... }          // LLM 看不到
+        fn dangerous_op() { ... }          // LLM cannot see this
     }
 }
 
@@ -17,10 +19,10 @@ agent SmartAssistant {
     description "Smart assistant with custom context config"
     
     context {
-        compression "graduated"      // 压缩策略
-        cache-aware true             // 缓存感知
-        working-memory true          // 工作记忆
-        working-memory-tokens 5000   // 工作记忆词元预算
+        compression "graduated"      // Compression strategy
+        cache-aware true             // Cache-aware
+        working-memory true          // Working memory
+        working-memory-tokens 5000   // Working memory token budget
     }
     
     tools ["read_file", "web_search"]
@@ -28,35 +30,18 @@ agent SmartAssistant {
     
 }
 
-agent Researcher(topic: str) {
-    description "Research assistant with optimized context"
+// === Test code ===
+agent 智能助手 {
+    描述 "智能助手"
     
-    // 优化上下文管理
-    context {
-        compression "graduated"      // 渐进压缩
-        cache-aware true             // 缓存感知
-        working-memory true          // 跟踪研究文件
-        working-memory-tokens 8000   // 更大的工作记忆
+    上下文 {
+        压缩 "graduated"
+        缓存感知 true
+        工作记忆 true
+        工作记忆词元 5000
     }
     
-    tools ["web_search", "web_fetch", "read_file", "write_file"]
-    
-    prompt """
-    你是研究助手。
-    研究主题：{{topic}}
-    
-    使用工具搜索和整理信息。
-    """
-    
-}
-
-// === Test code ===
-// 等同于：
-agent DefaultAgent {
-    context {
-        compression "graduated"
-        cache-aware true
-        working-memory true
-        working-memory-tokens 5000
+    主逻辑 {
+        返回 llm act "..."
     }
 }

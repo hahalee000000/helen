@@ -1,18 +1,21 @@
 // 来源: skills/software-development/helen-stdlib/SKILL.md (代码块 14)
 
-# debug() — 结构化调试输出到 stderr
-let x = 42
-debug("variable value", x)
-# 输出: [DEBUG] variable value {"value": 42}
+// debug() — 结构化调试输出到 stderr
 
-debug("checkpoint reached")
-# 输出: [DEBUG] checkpoint reached
+main {
+    let x = 42
+    debug("variable value", x)
+    # 输出: [DEBUG] variable value {"value": 42}
 
-# trace_on() / trace_off() — 开启/关闭执行追踪
-trace_on()
-let result = compute_something()
-trace_off()
+    debug("checkpoint reached")
+    # 输出: [DEBUG] checkpoint reached
 
-# get_trace() — 获取最近执行追踪记录
-let trace = get_trace(10)
-print(trace)
+    # trace_on() / trace_off() — 开启/关闭执行追踪
+    trace_on()
+    let result = compute_something()
+    trace_off()
+
+    # get_trace() — 获取最近执行追踪记录
+    let trace = get_trace(10)
+    print(trace)
+}

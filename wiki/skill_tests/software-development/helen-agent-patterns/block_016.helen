@@ -29,7 +29,7 @@ agent Editor(content: str) {
     }
 }
 
-# 管道
+// 管道
 agent ContentPipeline(topic: str) {
     description "Research → Write → Edit pipeline"
     
@@ -47,5 +47,8 @@ agent ContentPipeline(topic: str) {
     }
 }
 
-# 使用
-let article = ContentPipeline("Helen programming language")
+// 使用
+
+main {
+    let article = ContentPipeline("Helen programming language")
+}

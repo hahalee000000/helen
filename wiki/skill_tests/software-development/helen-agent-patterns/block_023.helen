@@ -16,5 +16,5 @@ agent ConversationalAssistant {
     }
 }
 
-# 在 REPL 中，对话历史自动维护
-# 每次 :ask 都会记住之前的对话
+// 在 REPL 中，对话历史自动维护
+// 每次 :ask 都会记住之前的对话

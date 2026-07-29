@@ -1,17 +1,30 @@
-// Test: 10-stdlib.md:725
+// Test: 10-stdlib.md:731
 
-// 查找所有 Python 文件（递归）
-let py_files = glob_files("src", "*.py")
-// 返回: ["main.py", "utils/helper.py", "tests/test_main.py"]
+main {
+    main {
+        // Search within the current session
+        let matches = search_transcript("authentication bug")
+        for m in matches {
+            print("Match: {m.snippet}")
+            print("Position: {m.match_position}")
+        }
 
-// 查找特定模式的文件
-let test_files = glob_files(".", "*test*.py")
-// 返回: ["test_main.py", "tests/test_utils.py"]
+        // Search across all sessions (cross-session discovery)
+        let matches_all = search_transcript("database schema", scope="all", limit=10)
 
-// 使用 ** 显式递归
-let md_files = glob_files("docs", "**/*.md")
-// 返回: ["readme.md", "guide/intro.md", "api/reference.md"]
+        // Regex matching
+        let matches_re = search_transcript("fix.*bug", regex=true)
 
-// 复杂模式
-let config_files = glob_files("config", "**/*.{json,yaml,yml}")
-// 返回配置文件列表
+        // Search only user messages
+        let matches_user = search_transcript("TODO", role="user")
+
+        // v1.23.7+: Cross-spawn search (search current session and all its spawned child sessions)
+        let matches_sp = search_transcript("error", include_spawned=true)
+        for m in matches_sp {
+            print("[" + m["session_id"] + "] " + m["snippet"])
+        }
+
+        // Chinese alias
+        let matches_zh = 搜索会话("authentication bug", scope="all")
+    }
+}

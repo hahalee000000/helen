@@ -7,16 +7,21 @@
 ### `let` — Mutable Variables
 
 ```helen
-let x = 42
-x = 100       // ✅ Can be modified
-print(x)      // 100
+main {
+    let x = 42
+    x = 100       // ✅ Can be modified
+    print(x)      // 100
+}
 ```
 
 ### `const` — Immutable Constants
 
 ```helen
 const PI = 3.14159
-PI = 3        // ❌ E0346 CONST_ASSIGNMENT
+
+main {
+    PI = 3        // ❌ E0346 CONST_ASSIGNMENT
+}
 ```
 
 ## Data Types
@@ -24,19 +29,23 @@ PI = 3        // ❌ E0346 CONST_ASSIGNMENT
 ### Primitive Types
 
 ```helen
-let number = 42         // int
-let float_num = 3.14    // float
-let text = "hello"      // str
-let flag = true         // bool
-let nothing = null      // null
+main {
+    let number = 42         // int
+    let float_num = 3.14    // float
+    let text = "hello"      // str
+    let flag = true         // bool
+    let nothing = null      // null
+}
 ```
 
 ### Collection Types
 
 ```helen
-let numbers = [1, 2, 3]                     // list<int>
-let mixed = [1, "two", true]                // list<any>
-let person = {"name": "Alice", "age": 30}   // map<str, any>
+main {
+    let numbers = [1, 2, 3]                     // list<int>
+    let mixed = [1, "two", true]                // list<any>
+    let person = {"name": "Alice", "age": 30}   // map<str, any>
+}
 ```
 
 ### Chinese Type Names (v1.10)
@@ -56,28 +65,34 @@ let person = {"name": "Alice", "age": 30}   // map<str, any>
 ## Type Annotations
 
 ```helen
-let name: str = "Alice"
-let age: int = 30
-let score: float = 95.5
-let active: bool = true
+main {
+    let name: str = "Alice"
+    let age: int = 30
+    let score: float = 95.5
+    let active: bool = true
+}
 ```
 
 ### Optional Types
 
 ```helen
-let email: str? = null      // Can be null
-email = "alice@example.com" // ✅
-email = null                // ✅
+main {
+    let email: str? = null      // Can be null
+    email = "alice@example.com" // ✅
+    email = null                // ✅
 
-let name: str = null        // ❌ str does not accept null
+    let name: str = null        // ❌ str does not accept null
+}
 ```
 
 ### Union Types
 
 ```helen
-let id: int | str = 42      // Can be int or str
-id = "ABC-123"              // ✅
-id = true                   // ❌
+main {
+    let id: int | str = 42      // Can be int or str
+    id = "ABC-123"              // ✅
+    id = true                   // ❌
+}
 ```
 
 ## Operations
@@ -85,22 +100,26 @@ id = true                   // ❌
 ### Arithmetic Operations
 
 ```helen
-let a = 10 + 3      // 13
-let b = 10 - 3      // 7
-let c = 10 * 3      // 30
-let d = 10 / 3      // 3.333...
-let e = 10 % 3      // 1
+main {
+    let a = 10 + 3      // 13
+    let b = 10 - 3      // 7
+    let c = 10 * 3      // 30
+    let d = 10 / 3      // 3.333...
+    let e = 10 % 3      // 1
+}
 ```
 
 ### Comparison Operations
 
 ```helen
-let eq = 5 == 5     // true
-let ne = 5 != 3     // true
-let gt = 5 > 3      // true
-let ge = 5 >= 5     // true
-let lt = 3 < 5      // true
-let le = 5 <= 5     // true
+main {
+    let eq = 5 == 5     // true
+    let ne = 5 != 3     // true
+    let gt = 5 > 3      // true
+    let ge = 5 >= 5     // true
+    let lt = 3 < 5      // true
+    let le = 5 <= 5     // true
+}
 ```
 
 ### Logical Operations
@@ -108,20 +127,22 @@ let le = 5 <= 5     // true
 Helen uses `&&` (and), `||` (or), `!` (not) as logical operators:
 
 ```helen
-let and = true && false   // false
-let or = true || false    // true
-let not = !true           // false
+main {
+    let and_result = true && false   // false
+    let or_result = true || false    // true
+    let not_result = !true           // false
 
-// Practical usage example
-let x = 5
-if x > 0 && x < 10 {
-    print("x is between 0 and 10")
-}
+    // Practical usage example
+    let x = 5
+    if x > 0 && x < 10 {
+        print("x is between 0 and 10")
+    }
 
-// File existence check example
-let file = "config.txt"
-if !path_exists(file) {
-    print("File not found")
+    // File existence check example
+    let file = "config.txt"
+    if !path_exists(file) {
+        print("File not found")
+    }
 }
 ```
 
@@ -130,17 +151,21 @@ if !path_exists(file) {
 ### String Concatenation
 
 ```helen
-let greeting = "Hello, " + "World!"    // "Hello, World!"
-let message = "Score: " + 42           // "Score: 42"
+main {
+    let greeting = "Hello, " + "World!"    // "Hello, World!"
+    let message = "Score: " + 42           // "Score: 42"
+}
 ```
 
 ## List Operations
 
 ```helen
-let nums = [1, 2, 3]
-let first = nums[0]        // 1
-let len = len(nums)        // 3
-let range_nums = range(5)  // [0, 1, 2, 3, 4]
+main {
+    let nums = [1, 2, 3]
+    let first = nums[0]        // 1
+    let len = len(nums)        // 3
+    let range_nums = range(5)  // [0, 1, 2, 3, 4]
+}
 ```
 
 ### List Methods
@@ -148,29 +173,31 @@ let range_nums = range(5)  // [0, 1, 2, 3, 4]
 Helen lists are based on Python lists and automatically support all common methods:
 
 ```helen
-let items = [1, 2, 3]
+main {
+    let items = [1, 2, 3]
 
-// Add elements
-items.append(4)           // [1, 2, 3, 4]
-items.insert(0, 0)        // [0, 1, 2, 3, 4]
-items.extend([5, 6])      // [0, 1, 2, 3, 4, 5, 6]
+    // Add elements
+    items.append(4)           // [1, 2, 3, 4]
+    items.insert(0, 0)        // [0, 1, 2, 3, 4]
+    items.extend([5, 6])      // [0, 1, 2, 3, 4, 5, 6]
 
-// Remove elements
-items.pop()               // Remove and return the last element: 6
-items.remove(0)           // Remove the first element with value 0
-items.clear()             // Clear the list
+    // Remove elements
+    items.pop()               // Remove and return the last element: 6
+    items.remove(0)           // Remove the first element with value 0
+    items.clear()             // Clear the list
 
-// Query
-let idx = items.index(2)  // Return the index of element 2
-let cnt = items.count(3)  // Return the count of element 3
+    // Query
+    let idx = items.index(2)  // Return the index of element 2
+    let cnt = items.count(3)  // Return the count of element 3
 
-// Sort and reverse
-let unsorted = [3, 1, 4, 1, 5]
-unsorted.sort()           // [1, 1, 3, 4, 5]
-unsorted.reverse()        // [5, 4, 3, 1, 1]
+    // Sort and reverse
+    let unsorted = [3, 1, 4, 1, 5]
+    unsorted.sort()           // [1, 1, 3, 4, 5]
+    unsorted.reverse()        // [5, 4, 3, 1, 1]
 
-// Copy
-let copy = items.copy()   // Shallow copy
+    // Copy
+    let copy = items.copy()   // Shallow copy
+}
 ```
 
 ### List Concatenation
@@ -178,14 +205,16 @@ let copy = items.copy()   // Shallow copy
 Use the `+` operator to concatenate two lists, returning a new list (original lists unchanged):
 
 ```helen
-let a = [1, 2]
-let b = [3, 4]
-let c = a + b             // [1, 2, 3, 4]
+main {
+    let a = [1, 2]
+    let b = [3, 4]
+    let c = a + b             // [1, 2, 3, 4]
 
-// Commonly used for incremental building
-let items = []
-items = items + ["a"]     // ["a"]
-items = items + ["b", "c"]  // ["a", "b", "c"]
+    // Commonly used for incremental building
+    let items = []
+    items = items + ["a"]     // ["a"]
+    items = items + ["b", "c"]  // ["a", "b", "c"]
+}
 ```
 
 > Note: `+` returns a new list and does not modify the original. For in-place modification, use `append()` or `extend()`.
@@ -208,8 +237,10 @@ items = items + ["b", "c"]  // ["a", "b", "c"]
 ## Map Operations
 
 ```helen
-let person = {"name": "Alice", "age": 30}
-let name = person["name"]  // "Alice"
+main {
+    let person = {"name": "Alice", "age": 30}
+    let name = person["name"]  // "Alice"
+}
 ```
 
 ### Subscript/Field Assignment (v1.10)
@@ -219,72 +250,84 @@ v1.10 added **subscript assignment** and **field assignment** support, allowing 
 #### Array Index Assignment
 
 ```helen
-let arr = [1, 2, 3]
-arr[0] = 10  // ✅ arr becomes [10, 2, 3]
-arr[1] = 20  // ✅ arr becomes [10, 20, 3]
+main {
+    let arr = [1, 2, 3]
+    arr[0] = 10  // ✅ arr becomes [10, 2, 3]
+    arr[1] = 20  // ✅ arr becomes [10, 20, 3]
 
-// Dynamic index
-let i = 2
-arr[i] = 30  // ✅ arr becomes [10, 20, 30]
+    // Dynamic index
+    let i = 2
+    arr[i] = 30  // ✅ arr becomes [10, 20, 30]
+}
 ```
 
 #### Object Field Assignment
 
 ```helen
-let person = {"name": "Alice", "age": 30}
-person["age"] = 31  // ✅ person becomes {"name": "Alice", "age": 31}
-person.name = "Bob"  // ✅ person becomes {"name": "Bob", "age": 31}
+main {
+    let person = {"name": "Alice", "age": 30}
+    person["age"] = 31  // ✅ person becomes {"name": "Alice", "age": 31}
+    person.name = "Bob"  // ✅ person becomes {"name": "Bob", "age": 31}
+}
 ```
 
 #### Nested Access
 
 ```helen
-let matrix = [[1, 2], [3, 4]]
-matrix[0][1] = 99  // ✅ matrix becomes [[1, 99], [3, 4]]
+main {
+    let matrix = [[1, 2], [3, 4]]
+    matrix[0][1] = 99  // ✅ matrix becomes [[1, 99], [3, 4]]
 
-let data = {"users": [{"name": "Alice"}, {"name": "Bob"}]}
-data["users"][0]["name"] = "Charlie"  // ✅ Nested modification
+    let data = {"users": [{"name": "Alice"}, {"name": "Bob"}]}
+    data["users"][0]["name"] = "Charlie"  // ✅ Nested modification
+}
 ```
 
 #### Error Examples
 
 ```helen
 const arr = [1, 2, 3]
-arr[0] = 10  // ❌ E0346 CONST_ASSIGNMENT: const cannot be modified
-
 const obj = {"name": "Alice"}
-obj.name = "Bob"  // ❌ E0346 CONST_ASSIGNMENT: const cannot be modified
+
+main {
+    arr[0] = 10  // ❌ E0346 CONST_ASSIGNMENT: const cannot be modified
+    obj.name = "Bob"  // ❌ E0346 CONST_ASSIGNMENT: const cannot be modified
+}
 ```
 
 #### Practical Example
 
 ```helen
-// Update a record in an array
-let users = [
-  {"name": "Alice", "score": 85},
-  {"name": "Bob", "score": 90}
-]
+main {
+    // Update a record in an array
+    let users = [
+      {"name": "Alice", "score": 85},
+      {"name": "Bob", "score": 90}
+    ]
 
-// Update the first user's score
-users[0]["score"] = 95
+    // Update the first user's score
+    users[0]["score"] = 95
 
-// Add a new field
-users[1]["grade"] = "A"
+    // Add a new field
+    users[1]["grade"] = "A"
 
-print(users)
-// [
-//   {"name": "Alice", "score": 95},
-//   {"name": "Bob", "score": 90, "grade": "A"}
-// ]
+    print(users)
+    // [
+    //   {"name": "Alice", "score": 95},
+    //   {"name": "Bob", "score": 90, "grade": "A"}
+    // ]
+}
 ```
 
 ## Type Checking
 
 ```helen
-let x = 42
-let t = type(x)            // "int"
-let is_int = isinstance(x, "int")    // true
-let is_str = isinstance(x, "str")    // false
+main {
+    let x = 42
+    let t = type(x)            // "int"
+    let is_int = isinstance(x, "int")    // true
+    let is_str = isinstance(x, "str")    // false
+}
 ```
 
 ## Exercises

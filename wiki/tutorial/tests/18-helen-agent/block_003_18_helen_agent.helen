@@ -1,0 +1,13 @@
+// Test: 18-helen-agent.md:259
+
+main {
+    main {
+        save_new_skill(
+            "scope-pitfalls",
+            "debugging",
+            "scope,isolation,shared_let",
+            "# Scope Pitfalls\n\n## shared let Write-Back\n..."
+        )
+
+    }
+}

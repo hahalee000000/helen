@@ -1,0 +1,9 @@
+// Test: 09-python-ffi.md:377
+
+import "nonexistent_module" as bad
+
+main {
+    main {
+        // Runtime error: Cannot import Python module 'nonexistent_module'
+    }
+}

@@ -1,0 +1,33 @@
+// Test: 07-spawn.md:106
+
+agent StreamWorker(prompt: str, reply: Channel) {
+    main {
+        let result = llm act prompt on_chunk fn(chunk: str) {
+            // Check cancel signal: if main thread has cancelled, return false to stop streaming
+            if reply.cancel_event.is_set() {
+                return false  // Immediately stop LLM streaming
+            }
+            reply.send({type: "chunk", data: chunk})
+            return true  // Continue receiving next chunk
+        }
+        reply.send({type: "done", data: result})
+    }
+}
+
+main {
+    main {
+        let mailbox = spawn StreamWorker("Write a long essay")
+        // Cancel after reading the first 3 chunks
+        let count = 0
+        loop {
+            let msg = mailbox.receive()
+            if msg == null { break }
+            print(msg["data"])
+            count = count + 1
+            if count >= 3 {
+                mailbox.cancel()  // Send cancel signal
+                break
+            }
+        }
+    }
+}

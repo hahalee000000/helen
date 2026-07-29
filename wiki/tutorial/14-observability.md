@@ -21,9 +21,11 @@ Traditional debuggers (breakpoints, stepping, variable watching) are designed fo
 ### Basic Syntax
 
 ```helen
-assert x > 0
-assert x > 0, "x must be positive"
-```
+main {
+    assert x > 0
+    assert x > 0, "x must be positive"
+
+}```
 
 ### Assertion Failure
 

@@ -406,9 +406,67 @@ class SemanticAnalyzer(Visitor[None]):
                 case AgentDeclNode():
                     self._register_agent_signature(stmt)
 
+        # v1.30: Enforce top-level restrictions — only declarations allowed
+        self._check_top_level_statements(node)
+
         # Pass 2: Full analysis (including function bodies)
         for stmt in node.statements:
             stmt.accept(self)
+
+    def _check_top_level_statements(self, node: ProgramNode) -> None:
+        """Reject bare executable statements at module level.
+
+        Only declarations (fn, agent, const, import, alias, shared, protocol,
+        impl) and at most one main {} block are allowed at top level.
+        All executable code must be inside main {} or a function.
+        """
+        from helen.core.ast import SharedStoreDeclNode  # noqa: PLC0415
+
+        # Skip check for programmatic/test/REPL usage
+        _skip_files = ("<test>", "<unknown>", "<repl>")
+        if node.statements and node.statements[0].span and \
+                node.statements[0].span.file in _skip_files:
+            return
+
+        main_count = 0
+        for stmt in node.statements:
+            # --- check for disallowed statement types ---
+            match stmt:
+                # Allowed: pure declarations
+                case FunctionDeclNode() | AgentDeclNode() | ImportStmtNode() | \
+                     AliasStmtNode() | ProtocolDeclNode() | ImplDeclNode() | \
+                     SharedStoreDeclNode():
+                    pass
+                # Allowed: const (mutable=False) and shared let/const
+                case VarDeclNode() if not stmt.mutable:
+                    pass  # const — always allowed
+                case VarDeclNode() if stmt.shared:
+                    pass  # shared let / shared const — allowed
+                # Forbidden: bare let (mutable and not shared)
+                case VarDeclNode():
+                    self.errors.error(
+                        ErrorCode.TOP_LEVEL_STATEMENT,
+                        "module-level 'let' is not allowed; "
+                        "use 'const' for constants or wrap in 'main { ... }'",
+                        stmt.span,
+                    )
+                # Allowed: main block (at most one)
+                case MainBlockNode():
+                    main_count += 1
+                    if main_count > 1:
+                        self.errors.error(
+                            ErrorCode.DUPLICATE_DECLARATION,
+                            "duplicate 'main' block; only one is allowed per file",
+                            stmt.span,
+                        )
+                # Forbidden: all other executable statements
+                case _:
+                    self.errors.error(
+                        ErrorCode.TOP_LEVEL_STATEMENT,
+                        "top-level executable statements are not allowed; "
+                        "wrap in 'main { ... }' or move into a function",
+                        stmt.span,
+                    )
 
     def _register_function_signature(self, node: FunctionDeclNode) -> None:
         """Register function signature without analyzing body (for forward references)."""

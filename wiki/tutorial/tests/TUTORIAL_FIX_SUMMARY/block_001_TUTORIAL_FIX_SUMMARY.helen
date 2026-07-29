@@ -1,0 +1,7 @@
+// Test: TUTORIAL_FIX_SUMMARY.md:14
+
+// 修复前:
+fn greet(name: string) -> string { ... }
+
+// 修复后:
+fn greet(name: string): string { ... }

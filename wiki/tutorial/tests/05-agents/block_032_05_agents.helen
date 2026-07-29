@@ -1,0 +1,27 @@
+// Test: 05-agents.md:831
+// @should_fail
+
+shared store BankAccount {
+    let balance: int = 1000
+    _transactionLog: list = []  // Private: not visible externally
+    
+    fn withdraw(amount: int) {
+        balance -= amount
+        _transactionLog.append("withdraw: " + str(amount))
+    }
+    
+    fn getHistory(): list {
+        return _transactionLog  // Accessible within methods
+    }
+}
+
+main {
+    main {
+        // ✅ Public interface
+        BankAccount.withdraw(100)
+        print(BankAccount.balance)  // Output: 900
+
+        // ❌ Private field
+        print(BankAccount._transactionLog)  // Error!
+    }
+}

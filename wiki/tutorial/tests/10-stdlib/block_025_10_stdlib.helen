@@ -1,22 +1,25 @@
-// Test: 10-stdlib.md:520
+// Test: 10-stdlib.md:558
 
-// === Context from preceding blocks ===
-let args = get_cli_args()  // 与 argv 相同
+main {
+    main {
+        // 1. List all old sessions
+        let sessions = list_sessions()
+        for s in sessions {
+            print("{s.session_id}: {s.message_count} messages, scope={s.scope}")
+        }
 
-let parsed = parse_cli_args()
-// 输入: --verbose --output=json --port 8080 input.txt
-// 结果: {
-//   verbose: true,
-//   output: "json",
-//   port: "8080",
-//   _positional: ["input.txt"]
-// }
+        // 2. Restore a specific session to the current active context
+        let r = restore_context("session_1783492628_d9d9c0aa")
+        if r["status"] == "ok" {
+            print("Restored " + str(r["restored_messages"]) + " messages")
+            print("Skipped " + str(r["boundary_markers"]) + " compression boundaries")
+        } else {
+            print("Restore failed: " + r["error"])
+        }
+    }
 
-agent ChatBot {
+    // Chinese alias
+    main {
+        恢复上下文("session_1783492628_d9d9c0aa")
+    }
 }
-
-// === Test code ===
-// 获取当前会话 ID
-let session_id = get_session_id()
-print("当前会话: " + session_id)
-// 返回: "session_1783492628_d9d9c0aa"

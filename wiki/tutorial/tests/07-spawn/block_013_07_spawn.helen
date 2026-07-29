@@ -1,0 +1,18 @@
+// Test: 07-spawn.md:291
+
+agent RiskyTask(reply: Channel) {
+    main {
+        let result = 100 / 0  // Throws exception
+        reply.send(result)
+    }
+}
+
+main {
+    main {
+        let mailbox = spawn RiskyTask()
+        let msg = mailbox.receive()
+        if msg != null && msg["__error__"] == true {
+            print("Spawned agent error: " + msg["message"])
+        }
+    }
+}

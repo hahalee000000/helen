@@ -1,8 +1,12 @@
-// Test: 02-variables-and-types.md:68
+// Test: 02-variables-and-types.md:79
 // @should_fail
 
-let email: str? = null      // 可以为空
-email = "alice@example.com" // ✅
-email = null                // ✅
+main {
+    main {
+        let email: str? = null      // Can be null
+        email = "alice@example.com" // ✅
+        email = null                // ✅
 
-let name: str = null        // ❌ str 不接受 null
+        let name: str = null        // ❌ str does not accept null
+    }
+}

@@ -1,0 +1,7 @@
+// Test: 18-helen-agent.md:276
+
+// Append a fact to .helen/MEMORY.md under a category
+fn update_memory(category: str, key: str, value: str): map
+
+// Append a preference to .helen/USER.md under a category
+fn update_user_preference(category: str, preference: str): map

@@ -1,0 +1,20 @@
+// Test: 05-agents.md:678
+
+agent Translator {
+    description "Translate text"
+
+    // Parameter declarations (type checking supported in future versions)
+    // text: str — Text to translate
+    // target_lang: str — Target language
+
+    prompt """
+    Translate: {{text}}
+    Target language: {{target_lang}}
+    """
+}
+
+main {
+    main {
+        let result = Translator("Hello", "French")
+    }
+}

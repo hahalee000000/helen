@@ -10,4 +10,6 @@ fn test_subtract() {
     assert_equal(10 - 4, 6)
 }
 
-run_tests()
+main {
+    run_tests()
+}

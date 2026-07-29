@@ -1,7 +1,11 @@
-// Test: 02-variables-and-types.md:27
+// Test: 02-variables-and-types.md:32
 
-let number = 42         // int
-let float_num = 3.14    // float
-let text = "hello"      // str
-let flag = true         // bool
-let nothing = null      // null
+main {
+    main {
+        let number = 42         // int
+        let float_num = 3.14    // float
+        let text = "hello"      // str
+        let flag = true         // bool
+        let nothing = null      // null
+    }
+}

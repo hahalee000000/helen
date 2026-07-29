@@ -1,0 +1,19 @@
+// Test: 05-agents.md:892
+
+agent Fetcher(url: str, reply: Channel) {
+    main {
+        let data = web_fetch(url)
+        reply.send(data)
+    }
+}
+
+main {
+    main {
+        let mb1 = spawn Fetcher("https://api.example.com/a")
+        let mb2 = spawn Fetcher("https://api.example.com/b")
+
+        // Wait for any Channel to return a result
+        let result = mailbox_select([mb1, mb2])
+        print("First to return: " + result)
+    }
+}

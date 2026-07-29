@@ -1,0 +1,50 @@
+// Test: 07-spawn.md:335
+
+// === Context from preceding blocks ===
+agent Worker(task: str, reply: Channel) {
+    description "Background worker agent"
+}
+
+agent LongTask(reply: Channel) {
+}
+
+agent StreamWorker(prompt: str, reply: Channel) {
+}
+
+agent LongTask(prompt: str, reply: Channel) {
+}
+
+agent StrategyA(problem: str, reply: Channel) {
+}
+
+agent StrategyB(problem: str, reply: Channel) {
+}
+
+shared store Counter {
+    fn inc() { count = count + 1 }
+    fn get(): int { return count }
+}
+
+agent Worker(reply: Channel) {
+}
+
+agent Calculator(reply: Channel) {
+}
+
+agent RiskyTask(reply: Channel) {
+}
+
+// === Test code ===
+智能体 工作者(任务: str, 回复: 消息通道) {
+    主函 {
+        回复.发送("完成: " + 任务)
+    }
+}
+
+main {
+    主函 {
+        设 邮箱 = 分生 工作者("数据分析")
+        设 结果 = 邮箱.接收()
+        打印(结果)
+    }
+}

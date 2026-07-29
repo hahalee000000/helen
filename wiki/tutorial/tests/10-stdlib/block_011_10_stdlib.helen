@@ -1,11 +1,15 @@
-// Test: 10-stdlib.md:260
+// Test: 10-stdlib.md:274
 
-repeat("ab", 3)               // "ababab"
-reverse("hello")              // "olleh"
+main {
+    main {
+        repeat("ab", 3)               // "ababab"
+        reverse("hello")              // "olleh"
 
-pad_left("42", 5, "0")        // "00042"
-pad_right("hi", 5)            // "hi   "
-center("hi", 6)               // "  hi  "
+        pad_left("42", 5, "0")        // "00042"
+        pad_right("hi", 5)            // "hi   "
+        center("hi", 6)               // "  hi  "
 
-count("hello", "l")           // 2
-index("hello", "ll")          // 2
+        count("hello", "l")           // 2
+        index("hello", "ll")          // 2
+    }
+}

@@ -1,7 +1,11 @@
-// Test: 04-control-flow.md:103
+// Test: 04-control-flow.md:111
 
-// && 优先级高于 ||
-let result = a || b && c  // 等价于 a || (b && c)
+main {
+    main {
+        // && has higher precedence than ||
+        let result = a || b && c  // Equivalent to a || (b && c)
 
-// 使用括号明确意图
-let result = (a || b) && c  // 明确分组
+        // Use parentheses for clarity
+        let result2 = (a || b) && c  // Explicit grouping
+    }
+}

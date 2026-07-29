@@ -2,13 +2,15 @@
 
 // calculator_test.helen
 
-test_suite("Calculator", fn() {
-    test_case("adds numbers", fn() {
-        assert_equal(2 + 3, 5)
+main {
+    test_suite("Calculator", fn() {
+        test_case("adds numbers", fn() {
+            assert_equal(2 + 3, 5)
+        })
+        test_case("subtracts numbers", fn() {
+            assert_equal(10 - 4, 6)
+        })
     })
-    test_case("subtracts numbers", fn() {
-        assert_equal(10 - 4, 6)
-    })
-})
 
-run_tests()
+    run_tests()
+}

@@ -1,9 +1,9 @@
-// Test: 06-llm-statements.md:336
+// Test: 06-llm-statements.md:283
 
-agent Researcher(topic) {
-    description "Research assistant"
-    tools = ["web_search", "read_file"]
+main {
     main {
-        return llm act "Research about: " + topic
+        llm act "Create hello.py" 工具结束 fn(name, result) {
+            return "hint content"
+        }
     }
 }

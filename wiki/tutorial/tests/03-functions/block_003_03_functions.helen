@@ -12,5 +12,5 @@ fn add(a, b) {
 // === Test code ===
 fn say_hello() {
     print("Hello!")
-    // 隐式返回 null
+    // Implicitly returns null
 }

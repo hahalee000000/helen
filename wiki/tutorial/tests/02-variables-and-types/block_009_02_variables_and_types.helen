@@ -1,7 +1,11 @@
-// Test: 02-variables-and-types.md:88
+// Test: 02-variables-and-types.md:103
 
-let a = 10 + 3      // 13
-let b = 10 - 3      // 7
-let c = 10 * 3      // 30
-let d = 10 / 3      // 3.333...
-let e = 10 % 3      // 1
+main {
+    main {
+        let a = 10 + 3      // 13
+        let b = 10 - 3      // 7
+        let c = 10 * 3      // 30
+        let d = 10 / 3      // 3.333...
+        let e = 10 % 3      // 1
+    }
+}

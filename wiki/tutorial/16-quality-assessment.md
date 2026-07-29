@@ -25,25 +25,27 @@ helen quality my_program.helen --dimension security
 ### Using in Helen Code
 
 ```helen
-let source = read_file("my_program.helen")
+main {
+    let source = read_file("my_program.helen")
 
-// Get code metrics
-let metrics = analyze_code(source, "my_program.helen")
-print("Functions: " + str(metrics["function_count"]))
-print("Complexity: " + str(metrics["avg_complexity"]))
+    // Get code metrics
+    let metrics = analyze_code(source, "my_program.helen")
+    print("Functions: " + str(metrics["function_count"]))
+    print("Complexity: " + str(metrics["avg_complexity"]))
 
-// Security check
-let issues = check_security(source)
-print("Security issues: " + str(len(issues)))
+    // Security check
+    let issues = check_security(source)
+    print("Security issues: " + str(len(issues)))
 
-// Quality scoring
-let scores = quality_score(source, "my_program.helen")
-print("Total score: " + str(scores["total"]))
-print("Grade: " + scores["grade"])
+    // Quality scoring
+    let scores = quality_score(source, "my_program.helen")
+    print("Total score: " + str(scores["total"]))
+    print("Grade: " + scores["grade"])
 
-// Full report
-let report = quality_report(source, "my_program.helen")
-print(report)
+    // Full report
+    let report = quality_report(source, "my_program.helen")
+    print(report)
+}
 ```
 
 ## 7 Dimensions

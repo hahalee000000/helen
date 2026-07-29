@@ -1,6 +1,11 @@
-// Test: TUTORIAL_TEST_REPORT.md:101
+// Test: TUTORIAL_TEST_REPORT.md:103
 
-fn add(a: int, b: int): int { return a + b }
-let x = 1.5
-add(x, 2)  // Tutorial says: runtime error
-           // Reality: passes helen check
+main {
+    main {
+        fn add(a: int, b: int): int { return a + b }
+        let x = 1.5
+        add(x, 2)  // Tutorial says: runtime error
+                   // Reality: passes helen check
+
+    }
+}

@@ -1,4 +1,8 @@
-// Test: 02-variables-and-types.md:211
+// Test: 02-variables-and-types.md:240
 
-let person = {"name": "Alice", "age": 30}
-let name = person["name"]  // "Alice"
+main {
+    main {
+        let person = {"name": "Alice", "age": 30}
+        let name = person["name"]  // "Alice"
+    }
+}

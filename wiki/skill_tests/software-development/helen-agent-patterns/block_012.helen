@@ -27,7 +27,10 @@ agent CacheWriter(cache: map, key: str, value: any) {
 }
 
 // 使用
-let my_cache = {}
-let updated = CacheWriter(my_cache, "user:1", "Alice")
-RequestCounter()
-print("Requests: " + request_count)  // 1
+
+main {
+    let my_cache = {}
+    let updated = CacheWriter(my_cache, "user:1", "Alice")
+    RequestCounter()
+    print("Requests: " + request_count)  // 1
+}

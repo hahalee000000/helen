@@ -33,12 +33,14 @@ fn test_subtract() {
     assert_equal(subtract(0, 0), 0)
 }
 
-test_suite("Calculator")
-test_case("adds numbers", test_add)
-test_case("subtracts numbers", test_subtract)
-test_end_suite()
+main {
+    test_suite("Calculator")
+    test_case("adds numbers", test_add)
+    test_case("subtracts numbers", test_subtract)
+    test_end_suite()
 
-run_tests()
+    run_tests()
+}
 ```
 
 ### 2. 运行测试
@@ -128,17 +130,19 @@ fn test_expect_chain() {
 ### 多个测试套件
 
 ```helen
-test_suite("String Utils")
-test_case("uppercase", test_upper)
-test_case("lowercase", test_lower)
-test_end_suite()
+main {
+    test_suite("String Utils")
+    test_case("uppercase", test_upper)
+    test_case("lowercase", test_lower)
+    test_end_suite()
 
-test_suite("Math Utils")
-test_case("add", test_add)
-test_case("multiply", test_multiply)
-test_end_suite()
+    test_suite("Math Utils")
+    test_case("add", test_add)
+    test_case("multiply", test_multiply)
+    test_end_suite()
 
-run_tests()
+    run_tests()
+}
 ```
 
 ### CLI 过滤
@@ -169,12 +173,14 @@ fn teardown() {
     print("Tearing down...")
 }
 
-test_suite("With Hooks")
-before_each(setup)
-after_each(teardown)
-test_case("test1", test_something)
-test_case("test2", test_another)
-test_end_suite()
+main {
+    test_suite("With Hooks")
+    before_each(setup)
+    after_each(teardown)
+    test_case("test1", test_something)
+    test_case("test2", test_another)
+    test_end_suite()
+}
 ```
 
 ## 跳过测试
@@ -182,10 +188,12 @@ test_end_suite()
 还没写好的测试可以暂时跳过：
 
 ```helen
-test_suite("Feature")
-test_case("completed feature", test_done)
-test_case_skip("work in progress", test_wip)    // 跳过
-test_end_suite()
+main {
+    test_suite("Feature")
+    test_case("completed feature", test_done)
+    test_case_skip("work in progress", test_wip)    // 跳过
+    test_end_suite()
+}
 ```
 
 ## TDD 工作流
@@ -201,11 +209,13 @@ fn test_fizzbuzz() {
     expect(fizzbuzz(7)).toBe("7")
 }
 
-test_suite("FizzBuzz")
-test_case("returns correct string", test_fizzbuzz)
-test_end_suite()
+main {
+    test_suite("FizzBuzz")
+    test_case("returns correct string", test_fizzbuzz)
+    test_end_suite()
 
-run_tests()
+    run_tests()
+}
 ```
 
 ### 2. GREEN — 实现功能

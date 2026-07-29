@@ -1,12 +1,14 @@
-// Test: 05-agents.md:626
-
-agent Summarizer {
-    description "Summarize text"
-    prompt "Summarize the following:"
-}
+// Test: 05-agents.md:540
 
 main {
-    let text = "Long article content here..."
-    let summary = Summarizer(text)
-    print(summary)
+    main {
+        // Find all Python files
+        find_files("src/", "**/*.py")
+
+        // Find all test files
+        find_files("tests/", "**/test_*.py")
+
+        // Find configuration files
+        find_files(".", "**/*.{json,yaml,toml}")
+    }
 }

@@ -1,0 +1,18 @@
+// Test: 10-stdlib.md:1301
+
+main {
+    main {
+        // Path joining
+        let full_path = path_join("src", "utils", "helper.py")
+        // Returns: "src/utils/helper.py"
+
+        // Extract path components
+        let base = path_basename("/path/to/file.txt")  // "file.txt"
+        let dir = path_dirname("/path/to/file.txt")    // "/path/to"
+
+        // Path checks
+        let exists = path_exists("config.json")
+        let is_dir = path_is_dir("src")
+        let is_file = path_is_file("main.py")
+    }
+}

@@ -1,0 +1,7 @@
+// Test: 07-spawn.md:79
+
+main {
+    main {
+        mailbox.cancel()  // Send cancel signal + close channel
+    }
+}

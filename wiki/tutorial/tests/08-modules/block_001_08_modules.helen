@@ -16,5 +16,5 @@ import "./utils.helen"
 
 main {
     let result = double(21)    // 42
-    Helper()              // 使用导入的 Agent
+    Helper()              // Use the imported Agent
 }

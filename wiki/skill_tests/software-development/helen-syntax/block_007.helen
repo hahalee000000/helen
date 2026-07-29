@@ -1,6 +1,8 @@
 // 来源: skills/software-development/helen-syntax/SKILL.md (代码块 7)
 
-let eq = a == b
-let ne = a != b
-let lt = a < b
-let le = a <= b
+main {
+    let eq = a == b
+    let ne = a != b
+    let lt = a < b
+    let le = a <= b
+}

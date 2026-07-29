@@ -1,0 +1,24 @@
+// Test: 05-agents.md:914
+
+// Producer agent: sends multiple messages to a Channel
+agent Producer(items: list, reply: Channel) {
+    main {
+        for item in items {
+            reply.send("Processing: " + item)
+        }
+        reply.send("done")  // Completion signal
+    }
+}
+
+main {
+    main {
+        // Consumer: receives messages from the Channel
+        let mailbox = spawn Producer(["apple", "banana", "cherry"])
+        let msg = mailbox.receive()
+        while (msg != "done") {
+            print(msg)
+            msg = mailbox.receive()
+        }
+        mailbox.close()
+    }
+}

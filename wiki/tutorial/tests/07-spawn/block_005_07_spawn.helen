@@ -1,0 +1,11 @@
+// Test: 07-spawn.md:87
+
+agent LongTask(reply: Channel) {
+    main {
+        for i in range(100) {
+            if reply.cancel_event.is_set() { break }
+            // Do work...
+            reply.send("Progress: " + str(i))
+        }
+    }
+}

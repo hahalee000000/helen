@@ -194,8 +194,10 @@ $ helen greet.helen Alice Bob
 
 ```helen
 // greet.helen
-for name in argv {
-    print("Hello, " + name + "!")
+main {
+    for name in argv {
+        print("Hello, " + name + "!")
+    }
 }
 ```
 
@@ -208,13 +210,15 @@ You can also use `parse_cli_args()` for structured parsing:
 
 ```helen
 // tool.helen — Run: helen tool.helen --verbose --output=json file.txt
-let config = parse_cli_args({
-    "verbose": {"type": "flag", "default": false},
-    "output": {"type": "string", "default": "text"}
-})
+main {
+    let config = parse_cli_args({
+        "verbose": {"type": "flag", "default": false},
+        "output": {"type": "string", "default": "text"}
+    })
 
-if config["verbose"] {
-    print("Verbose mode on, output=" + config["output"])
+    if config["verbose"] {
+        print("Verbose mode on, output=" + config["output"])
+    }
 }
 ```
 
@@ -499,18 +503,23 @@ Helen supports both English and Chinese keywords. Chinese keywords map to the sa
 }
 
 // Chinese variables and functions
-设 姓名 = "张三"
 函数 打招呼(名字: str) {
     print("你好, " + 名字)
 }
-打招呼(姓名)
+
+main {
+    let 姓名 = "张三"
+    打招呼(姓名)
+}
 
 // Mixed Chinese and English
-let 年龄 = 30
-如果 年龄 >= 18 {
-    print("成年")
-} 否则 {
-    print("未成年")
+main {
+    let 年龄 = 30
+    如果 年龄 >= 18 {
+        print("成年")
+    } 否则 {
+        print("未成年")
+    }
 }
 ```
 

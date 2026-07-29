@@ -1,7 +1,7 @@
-// Test: 04-control-flow.md:44
+// Test: 04-control-flow.md:48
 
 fn expensiveFunction(): str {
-    // 模拟耗时操作
+    // Simulate an expensive operation
     return "result"
 }
 

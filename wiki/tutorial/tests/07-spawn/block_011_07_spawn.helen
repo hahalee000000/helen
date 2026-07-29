@@ -1,0 +1,9 @@
+// Test: 07-spawn.md:250
+
+main {
+    main {
+        spawn Logger("System startup log")
+        spawn Monitor("Health check")
+        print("System started")  // Executes immediately, doesn't wait for spawned agents
+    }
+}

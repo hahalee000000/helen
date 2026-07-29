@@ -1,0 +1,10 @@
+// Test: 13-skills.md:150
+
+agent Researcher(query) {
+    description: "Research topics using web search"
+    
+    main {
+        // The LLM can see all available skills here
+        llm act "Research: " + query
+    }
+}

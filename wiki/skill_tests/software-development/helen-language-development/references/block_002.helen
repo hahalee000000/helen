@@ -5,6 +5,8 @@ import "config.json"
 import "config.json" as cfg
 import "readme.md" as docs
 
-print(config.name)
-print(cfg.version)
-print(len(docs))
+main {
+    print(config.name)
+    print(cfg.version)
+    print(len(docs))
+}

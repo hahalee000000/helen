@@ -1,23 +1,9 @@
-// Test: 17-multimodal.md:168
+// Test: 17-multimodal.md:174
 
-// === Context from preceding blocks ===
-agent 图像分析 {
-    description "分析图像内容"
-    
+main {
+    main {
+        let result = llm act "Analyze this image"
+            media(img)
+            provider("claude")
+    }
 }
-
-let img1 = media("image1.png")
-let img2 = media("image2.png")
-
-agent Claude媒体处理 {
-}
-
-agent 图像生成器 {
-    description "根据描述生成图像"
-    
-}
-
-// === Test code ===
-let result = llm act "分析这张图片"
-    media(img)
-    provider("claude")

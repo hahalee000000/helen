@@ -5,6 +5,8 @@ fn add(a, b) {
 }
 
 main {
-    let result = add(3, 5)
-    print(result)    // 8
+    main {
+        let result = add(3, 5)
+        print(result)    // 8
+    }
 }

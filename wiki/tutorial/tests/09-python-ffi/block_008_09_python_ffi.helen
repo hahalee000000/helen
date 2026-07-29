@@ -1,23 +1,23 @@
-// Test: 09-python-ffi.md:183
-// @skip: needs Python module import
+// Test: 09-python-ffi.md:192
 
-import "json" as json
+import "mylib.greeter" as PyGreeter
 
 main {
-    // 创建数据
-    let users = [
-        {"name": "Alice", "age": 30},
-        {"name": "Bob", "age": 25},
-        {"name": "Charlie", "age": 35}
-    ]
-    
-    // 序列化为 JSON
-    let json_data = json.dumps(users)
-    print(json_data)
-    
-    // 解析 JSON
-    let parsed = json.loads(json_data)
-    for user in parsed {
-        print(user["name"] + " is " + str(user["age"]) + " years old")
+    main {
+        // 1. Instantiate: ClassName()
+        let greeter = PyGreeter.Greeter("Alice")
+
+        // 2. Call methods (natural syntax)
+        let msg = greeter.greet("Hello")
+        print(msg)    // Hello, Alice!
+
+        // 3. Modify attributes
+        greeter.set_name("Bob")
+        print(greeter.greet("Hi"))    // Hi, Bob!
+
+        // 4. Dynamic method name
+        let method = "greet"
+        let msg2 = greeter.call(method, "Hey")
+        print(msg2)    // Hey, Bob!
     }
 }

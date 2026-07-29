@@ -1,0 +1,23 @@
+// Test: 07-spawn.md:516
+
+agent Worker(task: str, reply: Channel) {
+    main {
+        // The resumed transcript is already loaded; the LLM "remembers"
+        // the previous conversation. Only program-state variables reset.
+        let history = search_context(task)
+        reply.send({"matches": history["total_matches"]})
+        reply.close()
+    }
+}
+
+main {
+    main {
+        // Save the child session_id your application got from a prior run:
+        let saved_child_sid = "session_1783492628_d9d9c0aa"
+
+        // Resume it: the spawned agent loads that transcript's history.
+        let mb = spawn Worker("deploy") resume(saved_child_sid)
+        let r = mb.receive()
+        print(r["matches"])
+    }
+}

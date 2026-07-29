@@ -73,12 +73,14 @@ fn greet(name: string): string {
 
 **Example:**
 ```helen
-// Context from previous block
-let a = [1, 2]
+main {
+    // Context from previous block
+    let a = [1, 2]
 
-// Current block
-let a = [3, 4]  // Error: duplicate declaration
-```
+    // Current block
+    let a = [3, 4]  // Error: duplicate declaration
+
+}```
 
 **Impact:** ~10 test failures
 
@@ -98,11 +100,13 @@ let a = [3, 4]  // Error: duplicate declaration
 
 **Example:**
 ```helen
-fn add(a: int, b: int): int { return a + b }
-let x = 1.5
-add(x, 2)  // Tutorial says: runtime error
-           // Reality: passes helen check
-```
+main {
+    fn add(a: int, b: int): int { return a + b }
+    let x = 1.5
+    add(x, 2)  // Tutorial says: runtime error
+               // Reality: passes helen check
+
+}```
 
 **Impact:** 1 unexpected pass
 

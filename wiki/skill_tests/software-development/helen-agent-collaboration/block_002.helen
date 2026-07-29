@@ -45,9 +45,12 @@ agent TaskWorker(worker_id: str, queue: list, completed: map) {
 }
 
 // 协作流程
-let initial_queue = []
-let queue = TaskProducer(["task1", "task2", "task3"], initial_queue)
-let w1 = async TaskWorker("W1", queue, {})
-let w2 = async TaskWorker("W2", queue, {})
-await [w1, w2]
-print("Completed: " + str(completed_count))
+
+main {
+    let initial_queue = []
+    let queue = TaskProducer(["task1", "task2", "task3"], initial_queue)
+    let w1 = async TaskWorker("W1", queue, {})
+    let w2 = async TaskWorker("W2", queue, {})
+    await [w1, w2]
+    print("Completed: " + str(completed_count))
+}

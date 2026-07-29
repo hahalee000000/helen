@@ -1,7 +1,17 @@
-// Test: 05-agents.md:48
+// Test: 05-agents.md:69
 
-agent SmartTranslator {
-    description "High-quality translation"
-    model "gpt-4"
-    prompt "Translate carefully..."
+agent Greeter(user_name: str, user_id: int) {
+    main {
+        // ✅ All information enters the agent via parameters
+        print("Hello " + user_name + ", your id is " + str(user_id))
+    }
+}
+
+main {
+    main {
+        let user_name = "Alice"
+        let user_id = 42
+        // ✅ Explicitly pass the required context at call time
+        Greeter(user_name, user_id)
+    }
 }

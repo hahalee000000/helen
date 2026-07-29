@@ -1,0 +1,14 @@
+// Test: 07-spawn.md:406
+
+main {
+    main {
+        // View the main session + all spawned complete execution flow
+        let all_messages = replay_full_session()
+        for msg in all_messages {
+            print("[" + msg["session_id"] + "] " + msg["role"] + ": " + msg["content"][:50])
+        }
+
+        // Cross-spawn search
+        let errors = search_transcript("error", include_spawned=true)
+    }
+}

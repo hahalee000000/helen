@@ -1,26 +1,29 @@
 // Comprehensive test for all 4 Helen language fixes
 
 // Fix #1: test_suite accepts callback
-test_suite("Fix Verification", fn() {
-    
-    // Fix #3: assert_contains function
-    test_case("assert_contains works with strings", fn() {
-        assert_contains("hello world", "world")
+
+main {
+    test_suite("Fix Verification", fn() {
+
+        // Fix #3: assert_contains function
+        test_case("assert_contains works with strings", fn() {
+            assert_contains("hello world", "world")
+        })
+
+        test_case("assert_contains works with arrays", fn() {
+            assert_contains([1, 2, 3], 2)
+        })
+
+        // Additional test: nested function calls
+        test_case("nested function calls work", fn() {
+            fn double(x) {
+                return x * 2
+            }
+            fn add_one(x) {
+                return x + 1
+            }
+            let result = add_one(double(5))
+            assert_equal(result, 11)
+        })
     })
-    
-    test_case("assert_contains works with arrays", fn() {
-        assert_contains([1, 2, 3], 2)
-    })
-    
-    // Additional test: nested function calls
-    test_case("nested function calls work", fn() {
-        fn double(x) {
-            return x * 2
-        }
-        fn add_one(x) {
-            return x + 1
-        }
-        let result = add_one(double(5))
-        assert_equal(result, 11)
-    })
-})
+}

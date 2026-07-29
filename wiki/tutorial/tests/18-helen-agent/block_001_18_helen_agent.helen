@@ -1,0 +1,23 @@
+// Test: 18-helen-agent.md:112
+
+agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Channel) {
+    description "Helen Programming Agent — self-evolving coding assistant"
+    model "qwen3.7-plus"
+    tools CHAT_TOOLS
+    transcript "persistent"        // full audit trail
+    
+    main {
+        _init_actor_output()
+        try { ContextManager.init(cwd) } catch {}
+        try { SessionStats.init() } catch {}
+        
+        // save main/child session IDs to memento
+        _save_memento()
+        
+        // long-lived loop: wait for requests, dispatch, reply
+        while true {
+            let req = reply.receive()
+            // ... LLM act with tool loop
+        }
+    }
+}

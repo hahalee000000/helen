@@ -1,8 +1,12 @@
-// Test: 02-variables-and-types.md:252
+// Test: 02-variables-and-types.md:289
 // @should_fail
 
 const arr = [1, 2, 3]
-arr[0] = 10  // ❌ E0346 CONST_ASSIGNMENT: const 不可修改
-
 const obj = {"name": "Alice"}
-obj.name = "Bob"  // ❌ E0346 CONST_ASSIGNMENT: const 不可修改
+
+main {
+    main {
+        arr[0] = 10  // ❌ E0346 CONST_ASSIGNMENT: const cannot be modified
+        obj.name = "Bob"  // ❌ E0346 CONST_ASSIGNMENT: const cannot be modified
+    }
+}

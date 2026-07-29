@@ -1,7 +1,12 @@
-// Test: 05-agents.md:74
+// Test: 05-agents.md:116
 
-agent Interviewer {
-    description "Conduct an interview"
-    max-turns 5    // 最多 5 轮对话
-    prompt "Ask follow-up questions..."
+// === Context from preceding blocks ===
+agent Greeter(user_name: str, user_id: int) {
+}
+
+// === Test code ===
+agent SmartTranslator {
+    description "High-quality translation"
+    model "gpt-4"
+    prompt "Translate carefully..."
 }

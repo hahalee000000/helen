@@ -116,7 +116,7 @@ Helen supports bilingual keywords. Chinese keywords map to the same TokenTypes a
 | `main` | Agent main block | `agent A { main { ... } }` |
 | `null` | Null value | `let x = null` |
 
-**Note**: The `main` block is only valid within an `agent` declaration body, not a top-level construct. Top-level programs consist of declaration sequences (`let`/`fn`/`agent`/`import`).
+**Note**: The `main` block is only valid within an `agent` declaration body, or as a single top-level entry point. Top-level programs consist of **declaration sequences** (`fn`/`agent`/`const`/`import`/`alias`/`shared let`/`shared store`/`protocol`/`impl`) plus at most one top-level `main {}` block. As of v1.30, module-level `let` is forbidden (E0355 TOP_LEVEL_STATEMENT) — all executable code must be inside `main {}` or inside a function/agent body.
 
 ---
 
@@ -259,8 +259,8 @@ agent Worker {
 
 **Keywords**: `shared` / `共享`
 
-**Rules**:
-- Module-level `let` is **not visible** in agent main (compile-time error)
+**Rules** (updated in v1.30):
+- Module-level `let` is **forbidden** (E0355 TOP_LEVEL_STATEMENT); use `const`, `shared let`, or `shared store` instead
 - Module-level `const` is automatically visible (read-only sharing)
 - `shared let` explicitly declares cross-agent visible mutable variables
 - Imported `shared let` is tracked correctly
@@ -268,7 +268,7 @@ agent Worker {
 ### 2. Agent Scope Isolation (v1.10)
 
 ```helen
-let moduleVar = "module-level"  // not visible in agent main
+// ❌ let moduleVar = "module-level"  // E0355: module-level let is forbidden (v1.30)
 
 agent MyAgent {
   let agentVar = "agent-level"  // agent scope
@@ -281,9 +281,9 @@ agent MyAgent {
 }
 ```
 
-**Rules**:
+**Rules** (updated in v1.30):
 - `agent main {}` runs in a fully isolated environment
-- Module-level `let` is not visible
+- Module-level `let` is forbidden entirely (E0355)
 - Module-level `const` is automatically visible (read-only)
 - Use `shared let` for cross-agent visibility
 - Closures in agent main can capture local variables
@@ -291,18 +291,22 @@ agent MyAgent {
 ### 3. Subscript/Field Assignment (v1.10)
 
 ```helen
-let arr = [1, 2, 3]
-arr[0] = 10  // ✅ Array index assignment
+main {
+    let arr = [1, 2, 3]
+    arr[0] = 10  // ✅ Array index assignment
 
-let obj = { name: "Alice", age: 30 }
-obj.age = 31  // ✅ Object field assignment
+    let obj = { name: "Alice", age: 30 }
+    obj.age = 31  // ✅ Object field assignment
+}
 ```
 
 ### 4. Short-Circuit Evaluation (v1.10)
 
 ```helen
-let x = false && expensiveCall()  // expensiveCall() is not executed
-let y = true || expensiveCall()   // expensiveCall() is not executed
+main {
+    let x = false && expensiveCall()  // expensiveCall() is not executed
+    let y = true || expensiveCall()   // expensiveCall() is not executed
+}
 ```
 
 **Operators**: `&&` and `||` short-circuit
@@ -322,11 +326,13 @@ fn add(a: int, b: int): int {
 ### 6. Enhanced Exception Handling (v1.10)
 
 ```helen
-try {
-  // Python stdlib exceptions are wrapped as RuntimeError
-  let result = int("not a number")
-} catch RuntimeError as e {
-  print(e.message)  // Includes original exception info
+main {
+    try {
+        // Python stdlib exceptions are wrapped as RuntimeError
+        let result = int("not a number")
+    } catch RuntimeError as e {
+        print(e.message)  // Includes original exception info
+    }
 }
 ```
 
@@ -336,10 +342,12 @@ As of v1.18, `act_async()` / `act_stream_async()` are removed, replaced by `spaw
 
 ```helen
 // v1.18 approach: concurrent agent calls
-let m1 = spawn AgentA("task1")
-let m2 = spawn AgentB("task2")
-let r1 = m1.receive()
-let r2 = m2.receive()
+main {
+    let m1 = spawn AgentA("task1")
+    let m2 = spawn AgentB("task2")
+    let r1 = m1.receive()
+    let r2 = m2.receive()
+}
 ```
 
 ---
@@ -394,11 +402,13 @@ As of v1.18, the `channel X { fields }` declaration syntax is removed. Channels 
 
 ```helen
 // v1.18 new syntax: create channel via spawn
-let mailbox = spawn Worker("task")
-let result = mailbox.receive()
+main {
+    let mailbox = spawn Worker("task")
+    let result = mailbox.receive()
 
-// Or create via constructor
-let pipe = Channel()
+    // Or create via constructor
+    let pipe = Channel()
+}
 ```
 
 - `Channel` type supports `send`/`receive`/`try_receive`/`cancel`/`close`/`is_closed` methods
@@ -409,11 +419,13 @@ let pipe = Channel()
 **Breaking change**: The `llm stream` keyword is removed.
 
 ```helen
-// Old syntax (v1.13 and earlier)
-llm stream "write a long essay" on_chunk handle_chunk
+// Old syntax (v1.13 and earlier) — would be inside main {}
+// llm stream "write a long essay" on_chunk handle_chunk
 
 // New syntax (v1.14+)
-llm act "write a long essay" on_chunk handle_chunk
+main {
+    llm act "write a long essay" on_chunk handle_chunk
+}
 ```
 
 - `llm act` supports optional `on_chunk`/`on_complete` callbacks
@@ -435,8 +447,10 @@ agent Worker(task: str, reply: Channel) {
     }
 }
 
-let mailbox = spawn Worker("data analysis")
-let result = mailbox.receive()
+main {
+    let mailbox = spawn Worker("data analysis")
+    let result = mailbox.receive()
+}
 ```
 
 #### 2. Channel Message Queue

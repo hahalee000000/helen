@@ -1,0 +1,16 @@
+// Test: 05-agents.md:812
+
+shared store Logger {
+    let logs: list = []
+    
+    fn log(message: str, level: str = "info") {
+        logs.append("[" + level + "] " + message)
+    }
+}
+
+main {
+    main {
+        Logger.log("starting up")             // level defaults to "info"
+        Logger.log("disk full", "error")      // explicit level
+    }
+}

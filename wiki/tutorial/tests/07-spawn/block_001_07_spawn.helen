@@ -1,0 +1,18 @@
+// Test: 07-spawn.md:24
+
+agent Worker(task: str, reply: Channel) {
+    description "Background worker agent"
+    main {
+        let result = "Processing complete: " + task
+        reply.send(result)
+        // Function ends → reply auto-closes → main thread receive() gets null
+    }
+}
+
+main {
+    main {
+        let mailbox = spawn Worker("data analysis")
+        let result = mailbox.receive()
+        print(result)  // "Processing complete: data analysis"
+    }
+}

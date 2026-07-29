@@ -16,10 +16,17 @@ The Helen Parser uses **Pratt Parsing** (10-level precedence table) + recursive 
 
 ```ebnf
 program       → declaration* main_block?
-declaration   → decorator? (agent_decl | fn_decl | import_stmt | shared_store_decl)
+declaration   → decorator? (agent_decl | fn_decl | import_stmt | shared_store_decl
+                | const_decl | shared_let_decl | alias_decl | protocol_decl | impl_decl)
 decorator     → "@" IDENTIFIER
 main_block    → "main" "{" statement* "}"
 ```
+
+> **v1.30 top-level restriction (E0355 TOP_LEVEL_STATEMENT)**: Only **declarations**
+> (`fn`, `agent`, `const`, `import`, `alias`, `shared let`, `shared store`, `protocol`,
+> `impl`) and at most one `main {}` block are allowed at the module level.
+> Module-level `let` is **forbidden** — all executable code (variable bindings,
+> function calls, control flow) MUST be inside `main {}` or inside a `fn`/`agent main {}`.
 
 ### Agent Declarations
 
@@ -39,9 +46,9 @@ functions_block → "functions" "{" (var_decl | fn_decl)* "}"
 var_decl      → ("let" | "const" | "shared" "let") IDENTIFIER ("=" expression)?
 ```
 
-**v1.10 shared let**:
+**v1.10 shared let** (updated in v1.30):
 - `shared let` declares cross-agent visible mutable variables
-- Module-level `let` is not visible inside agent main (compile-time error)
+- Module-level `let` is **forbidden** (E0355 TOP_LEVEL_STATEMENT); use `const`, `shared let`, or `shared store` instead
 - Module-level `const` is auto-visible (read-only sharing)
 
 **v1.12 isolation annotations**:
@@ -102,6 +109,7 @@ expr_stmt     → expression
 ```
 
 **v1.10 shared let**: Available in top-level declarations for sharing mutable state across agents.
+**v1.30 top-level restriction**: Module-level `var_decl` only allows `const` and `shared let` — bare `let` at the module level is now E0355.
 
 ### Control Flow
 
@@ -284,13 +292,15 @@ The left-hand side of assignment statements now supports index access and field 
 
 ```helen
 // Array index assignment
-let arr = [1, 2, 3]
-arr[0] = 10  // ✅ Legal
+main {
+    let arr = [1, 2, 3]
+    arr[0] = 10  // ✅ Legal
 
-// Object field assignment
-let obj = { name: "Alice", age: 30 }
-obj.name = "Bob"  // ✅ Legal
-obj["age"] = 31   // ✅ Also legal
+    // Object field assignment
+    let obj = { name: "Alice", age: 30 }
+    obj.name = "Bob"  // ✅ Legal
+    obj["age"] = 31   // ✅ Also legal
+}
 ```
 
 **EBNF update**:
@@ -305,13 +315,15 @@ Where `call` includes index access (`[i]`) and field access (`.field`).
 `&&` and `||` operators now support short-circuit evaluation:
 
 ```helen
-// && short-circuit
-let x = false && expensiveCall()  // expensiveCall() is not executed
-let y = true && expensiveCall()   // expensiveCall() is executed
+main {
+    // && short-circuit
+    let x = false && expensiveCall()  // expensiveCall() is not executed
+    let y = true && expensiveCall()   // expensiveCall() is executed
 
-// || short-circuit
-let a = true || expensiveCall()   // expensiveCall() is not executed
-let b = false || expensiveCall()  // expensiveCall() is executed
+    // || short-circuit
+    let a = true || expensiveCall()   // expensiveCall() is not executed
+    let b = false || expensiveCall()  // expensiveCall() is executed
+}
 ```
 
 **Precedence table**:

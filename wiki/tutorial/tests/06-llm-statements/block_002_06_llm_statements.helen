@@ -10,13 +10,15 @@ agent Translator(text: str, target: str) {
     """
 
     main {
-        // bare form：自动使用渲染后的 prompt
+        // bare form: automatically uses the rendered prompt
         let result = llm act
         return result
     }
 }
 
 main {
-    let translated = Translator(text="Hello", target="French")
-    print(translated)
+    main {
+        let translated = Translator(text="Hello", target="French")
+        print(translated)
+    }
 }

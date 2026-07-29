@@ -1,0 +1,8 @@
+// Test: 06-llm-statements.md:419
+
+main {
+    main {
+        // Modify a specific function in a file
+        llm act "Read /tmp/main.py and change the function name from 'foo' to 'bar'"
+    }
+}

@@ -12,5 +12,8 @@ agent StreamingWriter(topic: str) {
     }
 }
 
-# 使用 — 用户立即看到输出，无需等待完整响应
-StreamingWriter("The future of AI")
+// 使用 — 用户立即看到输出，无需等待完整响应
+
+main {
+    StreamingWriter("The future of AI")
+}

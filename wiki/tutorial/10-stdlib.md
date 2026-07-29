@@ -50,10 +50,10 @@ Full list: see `helen/stdlib/locales/zh.py`.
 ```helen
 // Directly use Chinese stdlib function names (no import or alias needed)
 函数 数据处理() {
-    设 原始数据 = [3, 1, 4, 1, 5, 9, 2, 6]
-    设 排序后 = 排序(原始数据)
-    设 去重后 = 去重(排序后)
-    返回 长度(去重后)
+    let 原始数据 = [3, 1, 4, 1, 5, 9, 2, 6]
+    let 排序后 = 排序(原始数据)
+    let 去重后 = 去重(排序后)
+    return 长度(去重后)
 }
 
 // Mixing Chinese and English is perfectly valid
@@ -65,9 +65,9 @@ Full list: see `helen/stdlib/locales/zh.py`.
 
 // Handle network data
 函数 获取数据() {
-    设 响应 = http获取("https://api.example.com/data")
-    设 解析后 = json解析(响应)
-    返回 解析后["name"]
+    let 响应 = http获取("https://api.example.com/data")
+    let 解析后 = json解析(响应)
+    return 解析后["name"]
 }
 ```
 
@@ -121,30 +121,36 @@ All alias files matching `helen/stdlib/locales/*.py` are automatically loaded at
 ### Type Conversion
 
 ```helen
-str(42)                       // "42"
-int("42")                     // 42
-float("3.14")                 // 3.14
+main {
+    str(42)                       // "42"
+    int("42")                     // 42
+    float("3.14")                 // 3.14
+}
 ```
 
 ### General Operations
 
 ```helen
-len("hello")                  // 5
-len([1, 2, 3])               // 3
+main {
+    len("hello")                  // 5
+    len([1, 2, 3])               // 3
 
-abs(-42)                      // 42
-min(3, 1, 4)                 // 1
-max(3, 1, 4)                 // 4
+    abs(-42)                      // 42
+    min(3, 1, 4)                 // 1
+    max(3, 1, 4)                 // 4
 
-range(5)                      // [0, 1, 2, 3, 4]
-range(1, 6)                   // [1, 2, 3, 4, 5]
+    range(5)                      // [0, 1, 2, 3, 4]
+    range(1, 6)                   // [1, 2, 3, 4, 5]
+}
 ```
 
 ### Type Checking
 
 ```helen
-type(42)                      // "int"
-isinstance(42, "int")         // true
+main {
+    type(42)                      // "int"
+    isinstance(42, "int")         // true
+}
 ```
 
 ## String Functions (37)
@@ -152,120 +158,130 @@ isinstance(42, "int")         // true
 ### Basic Operations (12)
 
 ```helen
-// Case
-upper("hello")                // "HELLO"
-lower("HELLO")                // "hello"
+main {
+    // Case
+    upper("hello")                // "HELLO"
+    lower("HELLO")                // "hello"
 
-// Trimming
-strip("  hello  ")            // "hello"
-trim_prefix("hello", "he")    // "llo"
-trim_suffix("hello", "lo")    // "hel"
+    // Trimming
+    strip("  hello  ")            // "hello"
+    trim_prefix("hello", "he")    // "llo"
+    trim_suffix("hello", "lo")    // "hel"
 
-// Splitting and joining
-split("a,b,c", ",")           // ["a", "b", "c"]
-join("-", ["a", "b", "c"])    // "a-b-c"
+    // Splitting and joining
+    split("a,b,c", ",")           // ["a", "b", "c"]
+    join("-", ["a", "b", "c"])    // "a-b-c"
 
-// Checking
-startswith("hello", "hel")    // true
-endswith("hello", "lo")       // true
+    // Checking
+    startswith("hello", "hel")    // true
+    endswith("hello", "lo")       // true
 
-// Finding and replacing
-find("hello", "ell")          // 1
-replace("hello", "l", "L")    // "heLLo"
-substring("hello", 1, 3)      // "el"
+    // Finding and replacing
+    find("hello", "ell")          // 1
+    replace("hello", "l", "L")    // "heLLo"
+    substring("hello", 1, 3)      // "el"
 
-// String interpolation (v1.8.1+)
-let template = "Hello, {{name}}! You are {{age}} years old."
-let vars = {"name": "Alice", "age": 30}
-interpolate(template, vars)
-// "Hello, Alice! You are 30 years old."
+    // String interpolation (v1.8.1+)
+    let template = "Hello, {{name}}! You are {{age}} years old."
+    let vars = {"name": "Alice", "age": 30}
+    interpolate(template, vars)
+    // "Hello, Alice! You are 30 years old."
 
-// Supports nested attribute access
-let template2 = "User: {{user.name}}, Email: {{user.email}}"
-let vars2 = {"user": {"name": "Bob", "email": "bob@example.com"}}
-interpolate(template2, vars2)
-// "User: Bob, Email: bob@example.com"
+    // Supports nested attribute access
+    let template2 = "User: {{user.name}}, Email: {{user.email}}"
+    let vars2 = {"user": {"name": "Bob", "email": "bob@example.com"}}
+    interpolate(template2, vars2)
+    // "User: Bob, Email: bob@example.com"
+}
 ```
 
 ### Regular Expressions (5)
 
 ```helen
-// Match
-let m = regex_match(r"\d+", "123abc")
-print(m.match)                // "123"
+main {
+    // Match
+    let m = regex_match(r"\d+", "123abc")
+    print(m.match)                // "123"
 
-// Search
-let s = regex_search(r"\d+", "abc123def")
-print(s.match)                // "123"
+    // Search
+    let s = regex_search(r"\d+", "abc123def")
+    print(s.match)                // "123"
 
-// Replace
-regex_replace(r"\d+", "abc123def", "NUM")
-// "abcNUMdef"
+    // Replace
+    regex_replace(r"\d+", "abc123def", "NUM")
+    // "abcNUMdef"
 
-// Split
-regex_split(r"\s+", "a  b  c")
-// ["a", "b", "c"]
+    // Split
+    regex_split(r"\s+", "a  b  c")
+    // ["a", "b", "c"]
 
-// Find all
-regex_findall(r"\d+", "a1b2c3")
-// ["1", "2", "3"]
+    // Find all
+    regex_findall(r"\d+", "a1b2c3")
+    // ["1", "2", "3"]
+}
 ```
 
 ### Text Analysis (8)
 
 ```helen
-// Tokenization
-tokenize("Hello, world!")     // ["Hello", "world"]
+main {
+    // Tokenization
+    tokenize("Hello, world!")     // ["Hello", "world"]
 
-// Word frequency count
-word_count("hello world hello")
-// {"hello": 2, "world": 1}
+    // Word frequency count
+    word_count("hello world hello")
+    // {"hello": 2, "world": 1}
 
-// Edit distance
-levenshtein("hello", "hallo") // 1
+    // Edit distance
+    levenshtein("hello", "hallo") // 1
 
-// Similarity
-similarity("hello", "hallo")  // 0.8
+    // Similarity
+    similarity("hello", "hallo")  // 0.8
 
-// Remove punctuation
-remove_punctuation("Hello!")  // "Hello"
+    // Remove punctuation
+    remove_punctuation("Hello!")  // "Hello"
 
-// Normalize whitespace
-normalize_whitespace("a  b  c")  // "a b c"
+    // Normalize whitespace
+    normalize_whitespace("a  b  c")  // "a b c"
 
-// Extract URLs
-extract_urls("Visit https://example.com")
-// ["https://example.com"]
+    // Extract URLs
+    extract_urls("Visit https://example.com")
+    // ["https://example.com"]
 
-// Extract emails
-extract_emails("Contact user@example.com")
-// ["user@example.com"]
+    // Extract emails
+    extract_emails("Contact user@example.com")
+    // ["user@example.com"]
+}
 ```
 
 ### Encoding Conversion (4)
 
 ```helen
-// Base64
-base64_encode("Hello")        // "SGVsbG8="
-base64_decode("SGVsbG8=")     // "Hello"
+main {
+    // Base64
+    base64_encode("Hello")        // "SGVsbG8="
+    base64_decode("SGVsbG8=")     // "Hello"
 
-// HTML escaping
-html_escape("<script>")       // "&lt;script&gt;"
-html_unescape("&lt;")         // "<"
+    // HTML escaping
+    html_escape("<script>")       // "&lt;script&gt;"
+    html_unescape("&lt;")         // "<"
+}
 ```
 
 ### String Operations (7)
 
 ```helen
-repeat("ab", 3)               // "ababab"
-reverse("hello")              // "olleh"
+main {
+    repeat("ab", 3)               // "ababab"
+    reverse("hello")              // "olleh"
 
-pad_left("42", 5, "0")        // "00042"
-pad_right("hi", 5)            // "hi   "
-center("hi", 6)               // "  hi  "
+    pad_left("42", 5, "0")        // "00042"
+    pad_right("hi", 5)            // "hi   "
+    center("hi", 6)               // "  hi  "
 
-count("hello", "l")           // 2
-index("hello", "ll")          // 2
+    count("hello", "l")           // 2
+    index("hello", "ll")          // 2
+}
 ```
 
 ## Data Functions (25)
@@ -273,92 +289,104 @@ index("hello", "ll")          // 2
 ### JSON (4)
 
 ```helen
-// Parse
-let data = json_parse('{"name": "Alice", "age": 30}')
-print(data.name)              // "Alice"
+main {
+    // Parse
+    let data = json_parse('{"name": "Alice", "age": 30}')
+    print(data.name)              // "Alice"
 
-// Generate
-let json_str = json_stringify({"name": "Alice"})
-// '{"name": "Alice"}'
+    // Generate
+    let json_str = json_stringify({"name": "Alice"})
+    // '{"name": "Alice"}'
 
-// File operations
-json_save("data.json", data)
-let loaded = json_load("data.json")
+    // File operations
+    json_save("data.json", data)
+    let loaded = json_load("data.json")
+}
 ```
 
 ### HTML (3)
 
 ```helen
-// Extract text
-html_text("<p>Hello <b>World</b></p>")
-// "Hello World"
+main {
+    // Extract text
+    html_text("<p>Hello <b>World</b></p>")
+    // "Hello World"
 
-// Extract links
-html_links('<a href="http://example.com">Link</a>')
-// ["http://example.com"]
+    // Extract links
+    html_links('<a href="http://example.com">Link</a>')
+    // ["http://example.com"]
 
-// Parse
-let dom = html_parse("<div>content</div>")
+    // Parse
+    let dom = html_parse("<div>content</div>")
+}
 ```
 
 ### Markdown (2)
 
 ```helen
-// Convert to HTML
-markdown_to_html("# Title\n\nParagraph")
-// "<h1>Title</h1><p>Paragraph</p>"
+main {
+    // Convert to HTML
+    markdown_to_html("# Title\n\nParagraph")
+    // "<h1>Title</h1><p>Paragraph</p>"
 
-// Extract headings
-markdown_extract_headings("# H1\n## H2")
-// [{"level": 1, "text": "H1"}, {"level": 2, "text": "H2"}]
+    // Extract headings
+    markdown_extract_headings("# H1\n## H2")
+    // [{"level": 1, "text": "H1"}, {"level": 2, "text": "H2"}]
+}
 ```
 
 ### CSV (4)
 
 ```helen
-// Parse
-let rows = csv_parse("name,age\nAlice,30")
-// [["name", "age"], ["Alice", "30"]]
+main {
+    // Parse
+    let rows = csv_parse("name,age\nAlice,30")
+    // [["name", "age"], ["Alice", "30"]]
 
-// Generate
-csv_stringify([["a", "b"], ["1", "2"]])
-// "a,b\n1,2\n"
+    // Generate
+    csv_stringify([["a", "b"], ["1", "2"]])
+    // "a,b\n1,2\n"
 
-// File operations
-csv_save("data.csv", rows)
-let loaded = csv_load("data.csv")
+    // File operations
+    csv_save("data.csv", rows)
+    let loaded = csv_load("data.csv")
+}
 ```
 
 ### YAML (4)
 
 ```helen
-// Parse
-let data = yaml_parse("name: Alice\nage: 30")
-// {"name": "Alice", "age": 30}
+main {
+    // Parse
+    let data = yaml_parse("name: Alice\nage: 30")
+    // {"name": "Alice", "age": 30}
 
-// Generate
-yaml_stringify({"name": "Alice"})
-// "name: Alice\n"
+    // Generate
+    yaml_stringify({"name": "Alice"})
+    // "name: Alice\n"
 
-// File operations
-yaml_save("config.yaml", data)
-let loaded = yaml_load("config.yaml")
+    // File operations
+    yaml_save("config.yaml", data)
+    let loaded = yaml_load("config.yaml")
+}
 ```
 
 ### TOML (4)
 
 ```helen
-// Parse
-let data = toml_parse("name = \"Alice\"\nage = 30")
-// {"name": "Alice", "age": 30}
+main {
+    // Parse
+    let data = toml_parse("name = \"Alice\"\nage = 30")
+    // {"name": "Alice", "age": 30}
 
-// Generate
-toml_stringify({"name": "Alice"})
-// "name = \"Alice\"\n"
+    // Generate
+    toml_stringify({"name": "Alice"})
+    // "name = \"Alice\"\n"
 
-// File operations
-toml_save("config.toml", data)
-let loaded = toml_load("config.toml")
+    // File operations
+    toml_save("config.toml", data)
+    let loaded = toml_load("config.toml")
+}
 ```
 
 ## CLI Arguments (System Module)
@@ -374,18 +402,20 @@ $ helen my_tool.helen --verbose --output=json --port=8080 input.txt
 `argv` is a predefined `const list<str>` containing all command-line arguments:
 
 ```helen
-// Direct access
-print(argv)  // ["--verbose", "--output=json", "--port=8080", "input.txt"]
-print(len(argv))  // 4
+main {
+    // Direct access
+    print(argv)  // ["--verbose", "--output=json", "--port=8080", "input.txt"]
+    print(len(argv))  // 4
 
-// Check for specific arguments
-if contains(argv, "--verbose") {
-    print("Verbose mode enabled")
-}
+    // Check for specific arguments
+    if contains(argv, "--verbose") {
+        print("Verbose mode enabled")
+    }
 
-// Iterate over all arguments
-for arg in argv {
-    print("Argument: " + arg)
+    // Iterate over all arguments
+    for arg in argv {
+        print("Argument: " + arg)
+    }
 }
 ```
 
@@ -396,7 +426,9 @@ for arg in argv {
 Standard library function form equivalent to `argv`:
 
 ```helen
-let args = get_cli_args()  // Same as argv
+main {
+    let args = get_cli_args()  // Same as argv
+}
 ```
 
 ### parse_cli_args() Structured Parsing
@@ -404,14 +436,16 @@ let args = get_cli_args()  // Same as argv
 **Auto mode** (no arguments) — automatically recognizes various argument types:
 
 ```helen
-let parsed = parse_cli_args()
-// Input: --verbose --output=json --port 8080 input.txt
-// Result: {
-//   verbose: true,
-//   output: "json",
-//   port: "8080",
-//   _positional: ["input.txt"]
-// }
+main {
+    let parsed = parse_cli_args()
+    // Input: --verbose --output=json --port 8080 input.txt
+    // Result: {
+    //   verbose: true,
+    //   output: "json",
+    //   port: "8080",
+    //   _positional: ["input.txt"]
+    // }
+}
 ```
 
 Supported argument formats:
@@ -424,14 +458,16 @@ Supported argument formats:
 **Spec mode** (pass a spec map) — with type conversion and defaults:
 
 ```helen
-let spec = {
-    "verbose": {"type": "flag", "default": false},
-    "output": {"type": "string", "default": "text"},
-    "port": {"type": "int", "default": 3000}
+main {
+    let spec = {
+        "verbose": {"type": "flag", "default": false},
+        "output": {"type": "string", "default": "text"},
+        "port": {"type": "int", "default": 3000}
+    }
+    let config = parse_cli_args(spec)
+    // port is automatically converted to int type
+    print(type(config["port"]))  // "int"
 }
-let config = parse_cli_args(spec)
-// port is automatically converted to int type
-print(type(config["port"]))  // "int"
 ```
 
 Supported spec types: `flag`, `string`, `int`, `float`.
@@ -445,11 +481,13 @@ Context management functions for controlling the lifecycle of LLM conversation c
 ### Clearing Context
 
 ```helen
-// Clear the current conversation history
-let result = clear_context()
-print("Cleared " + str(result["cleared_messages"]) + " messages")
-print("Freed approximately " + str(result["cleared_tokens"]) + " tokens")
-// Returns: {"status": "ok", "cleared_messages": 5, "cleared_tokens": 1200, "warning": "..."}
+main {
+    // Clear the current conversation history
+    let result = clear_context()
+    print("Cleared " + str(result["cleared_messages"]) + " messages")
+    print("Freed approximately " + str(result["cleared_tokens"]) + " tokens")
+    // Returns: {"status": "ok", "cleared_messages": 5, "cleared_tokens": 1200, "warning": "..."}
+}
 ```
 
 **Use cases**:
@@ -460,16 +498,18 @@ print("Freed approximately " + str(result["cleared_tokens"]) + " tokens")
 ### Compressing Context
 
 ```helen
-// Auto compression (based on token thresholds)
-let result = compress_context("auto")
-print("Compressed from " + str(result["original_tokens"]) + " to " + str(result["compressed_tokens"]))
-// Returns: {"status": "ok", "original_messages": 10, "compressed_messages": 5, ...}
+main {
+    // Auto compression (based on token thresholds)
+    let result = compress_context("auto")
+    print("Compressed from " + str(result["original_tokens"]) + " to " + str(result["compressed_tokens"]))
+    // Returns: {"status": "ok", "original_messages": 10, "compressed_messages": 5, ...}
 
-// Force LLM summary compression
-compress_context("summarize")
+    // Force LLM summary compression
+    compress_context("summarize")
 
-// Truncate to keep the most recent 10 messages
-compress_context("truncate")
+    // Truncate to keep the most recent 10 messages
+    compress_context("truncate")
+}
 ```
 
 **Compression strategies**:
@@ -515,23 +555,27 @@ agent ChatBot {
 Resumes an old transcript session into the current active context — the LLM can see all restored messages at the next `llm act` call.
 
 ```helen
-// 1. List all old sessions
-let sessions = list_sessions()
-for s in sessions {
-    print("{s.session_id}: {s.message_count} messages, scope={s.scope}")
-}
+main {
+    // 1. List all old sessions
+    let sessions = list_sessions()
+    for s in sessions {
+        print("{s.session_id}: {s.message_count} messages, scope={s.scope}")
+    }
 
-// 2. Restore a specific session to the current active context
-let r = restore_context("session_1783492628_d9d9c0aa")
-if r["status"] == "ok" {
-    print("Restored " + str(r["restored_messages"]) + " messages")
-    print("Skipped " + str(r["boundary_markers"]) + " compression boundaries")
-} else {
-    print("Restore failed: " + r["error"])
+    // 2. Restore a specific session to the current active context
+    let r = restore_context("session_1783492628_d9d9c0aa")
+    if r["status"] == "ok" {
+        print("Restored " + str(r["restored_messages"]) + " messages")
+        print("Skipped " + str(r["boundary_markers"]) + " compression boundaries")
+    } else {
+        print("Restore failed: " + r["error"])
+    }
 }
 
 // Chinese alias
-恢复上下文("session_1783492628_d9d9c0aa")
+main {
+    恢复上下文("session_1783492628_d9d9c0aa")
+}
 ```
 
 **Difference from `resume_session`**:
@@ -550,13 +594,15 @@ if r["status"] == "ok" {
 **Saving/restoring full context across sessions (including working_memory)**:
 
 ```helen
-// Before session ends: export full snapshot to file
-let snapshot = export_context()
-write_file("context_snapshot.json", to_json(snapshot.context))
+main {
+    // Before session ends: export full snapshot to file
+    let snapshot = export_context()
+    write_file("context_snapshot.json", to_json(snapshot.context))
 
-// When new session starts: read and import
-let saved = parse_json(read_file("context_snapshot.json"))
-import_context(saved)
+    // When new session starts: read and import
+    let saved = parse_json(read_file("context_snapshot.json"))
+    import_context(saved)
+}
 ```
 
 ## Transcript Functions (11) (v1.16)
@@ -566,10 +612,12 @@ Session recording management functions for accessing and manipulating Helen's co
 ### Getting Session ID
 
 ```helen
-// Get current session ID
-let session_id = get_session_id()
-print("Current session: " + session_id)
-// Returns: "session_1783492628_d9d9c0aa"
+main {
+    // Get current session ID
+    let session_id = get_session_id()
+    print("Current session: " + session_id)
+    // Returns: "session_1783492628_d9d9c0aa"
+}
 ```
 
 **Use cases**:
@@ -580,12 +628,14 @@ print("Current session: " + session_id)
 ### Listing All Sessions
 
 ```helen
-// List all transcript sessions
-let sessions = list_sessions()
-for session in sessions {
-    print(session["session_id"] + ": " + str(session["message_count"]) + " messages")
+main {
+    // List all transcript sessions
+    let sessions = list_sessions()
+    for session in sessions {
+        print(session["session_id"] + ": " + str(session["message_count"]) + " messages")
+    }
+    // Returns: [{"session_id": "...", "message_count": 50, "size_bytes": 2500, ...}]
 }
-// Returns: [{"session_id": "...", "message_count": 50, "size_bytes": 2500, ...}]
 ```
 
 **Return fields**:
@@ -598,14 +648,16 @@ for session in sessions {
 ### Replaying Sessions
 
 ```helen
-// Replay current session (valid view only)
-let messages = replay_transcript()
-for msg in messages {
-    print(msg["role"] + ": " + msg["content"])
-}
+main {
+    // Replay current session (valid view only)
+    let messages = replay_transcript()
+    for msg in messages {
+        print(msg["role"] + ": " + msg["content"])
+    }
 
-// Replay a specified session, including compressed messages
-let full = replay_transcript("session_1783492628_d9d9c0aa", true)
+    // Replay a specified session, including compressed messages
+    let full = replay_transcript("session_1783492628_d9d9c0aa", true)
+}
 ```
 
 **Parameters**:
@@ -619,15 +671,17 @@ let full = replay_transcript("session_1783492628_d9d9c0aa", true)
 Use `replay_full_session()` to view the complete execution flow of the main session and all its spawned child sessions:
 
 ```helen
-// Aggregate view of main session + all spawns
-let messages = replay_full_session()
-for msg in messages {
-    // Each message includes a session_id field identifying the source
-    print("[" + msg["session_id"] + "] " + msg["role"] + ": " + msg["content"][:50])
-}
+main {
+    // Aggregate view of main session + all spawns
+    let messages = replay_full_session()
+    for msg in messages {
+        // Each message includes a session_id field identifying the source
+        print("[" + msg["session_id"] + "] " + msg["role"] + ": " + msg["content"][:50])
+    }
 
-// Specify root session
-let messages = replay_full_session("session_abc123")
+    // Specify root session
+    let messages2 = replay_full_session("session_abc123")
+}
 ```
 
 **Parameters**:
@@ -643,20 +697,22 @@ let messages = replay_full_session("session_abc123")
 ### Exporting Sessions
 
 ```helen
-// Export as JSON
-export_transcript("my_chat.json", "json")
+main {
+    // Export as JSON
+    export_transcript("my_chat.json", "json")
 
-// Export as Markdown
-export_transcript("my_chat.md", "markdown")
+    // Export as Markdown
+    export_transcript("my_chat.md", "markdown")
 
-// Export as plain text
-export_transcript("my_chat.txt", "text")
+    // Export as plain text
+    export_transcript("my_chat.txt", "text")
 
-// Export a specific session
-export_transcript("old_chat.json", "json", "session_1783492600_abc12345")
+    // Export a specific session
+    export_transcript("old_chat.json", "json", "session_1783492600_abc12345")
 
-// v1.23.7+: Export full spawn tree
-export_transcript("full_chat.json", "json", include_spawned=true)
+    // v1.23.7+: Export full spawn tree
+    export_transcript("full_chat.json", "json", include_spawned=true)
+}
 ```
 
 **Parameters**:
@@ -672,30 +728,32 @@ export_transcript("full_chat.json", "json", include_spawned=true)
 Search persisted transcripts by **content**. In general situations you can't remember session IDs, but you remember what was discussed — use `search_transcript` to find relevant sessions.
 
 ```helen
-// Search within the current session
-let matches = search_transcript("authentication bug")
-for m in matches {
-    print("Match: {m.snippet}")
-    print("Position: {m.match_position}")
+main {
+    // Search within the current session
+    let matches = search_transcript("authentication bug")
+    for m in matches {
+        print("Match: {m.snippet}")
+        print("Position: {m.match_position}")
+    }
+
+    // Search across all sessions (cross-session discovery)
+    let matches_all = search_transcript("database schema", scope="all", limit=10)
+
+    // Regex matching
+    let matches_re = search_transcript("fix.*bug", regex=true)
+
+    // Search only user messages
+    let matches_user = search_transcript("TODO", role="user")
+
+    // v1.23.7+: Cross-spawn search (search current session and all its spawned child sessions)
+    let matches_sp = search_transcript("error", include_spawned=true)
+    for m in matches_sp {
+        print("[" + m["session_id"] + "] " + m["snippet"])
+    }
+
+    // Chinese alias
+    let matches_zh = 搜索会话("authentication bug", scope="all")
 }
-
-// Search across all sessions (cross-session discovery)
-let matches = search_transcript("database schema", scope="all", limit=10)
-
-// Regex matching
-let matches = search_transcript("fix.*bug", regex=true)
-
-// Search only user messages
-let matches = search_transcript("TODO", role="user")
-
-// v1.23.7+: Cross-spawn search (search current session and all its spawned child sessions)
-let matches = search_transcript("error", include_spawned=true)
-for m in matches {
-    print("[" + m["session_id"] + "] " + m["snippet"])
-}
-
-// Chinese alias
-let matches = 搜索会话("authentication bug", scope="all")
 ```
 
 **Parameters**:
@@ -710,20 +768,22 @@ let matches = 搜索会话("authentication bug", scope="all")
 **Typical usage**: Search then restore full context
 
 ```helen
-// Find relevant historical discussions
-let matches = search_transcript("authentication bug", scope="all", limit=5)
-if len(matches) > 0 {
-    // Find the session of the most recent match
-    let target_session = matches[0]["session_id"]
-    // Restore the full context of that session
-    restore_context(target_session)
-    print("Restored to session: " + target_session)
-}
+main {
+    // Find relevant historical discussions
+    let matches = search_transcript("authentication bug", scope="all", limit=5)
+    if len(matches) > 0 {
+        // Find the session of the most recent match
+        let target_session = matches[0]["session_id"]
+        // Restore the full context of that session
+        restore_context(target_session)
+        print("Restored to session: " + target_session)
+    }
 
-// v1.23.7+: Search within current session and its spawns
-let errors = search_transcript("error", include_spawned=true)
-if len(errors) > 0 {
-    print("Found " + str(len(errors)) + " errors (including spawned subtasks)")
+    // v1.23.7+: Search within current session and its spawns
+    let errors = search_transcript("error", include_spawned=true)
+    if len(errors) > 0 {
+        print("Found " + str(len(errors)) + " errors (including spawned subtasks)")
+    }
 }
 ```
 
@@ -732,67 +792,75 @@ if len(errors) > 0 {
 Each agent `main {}` execution is an **invocation** with a unique `invocation_id`. The transcript records all invocations completely, and you can use query functions to trace the call structure.
 
 ```helen
-// List all invocations
-let invs = list_invocations()
-for inv in invs {
-    print("{inv.agent_name}: {inv.message_count} messages")
+main {
+    // List all invocations
+    let invs = list_invocations()
+    for inv in invs {
+        print("{inv.agent_name}: {inv.message_count} messages")
+    }
+
+    // Filter by agent
+    let a_runs = list_invocations(agent="Researcher")
+
+    // Query a single invocation
+    let info = get_invocation("inv_1784272795_a61bcdaf")
+    print("Agent: " + str(info["agent_name"]))
+    print("Message count: " + str(info["message_count"]))
+
+    // Get the full call tree
+    let tree = get_invocation_tree()
+    // tree.children is a nested list of invocations
+
+    // Invocation path string
+    print(invocation_path("inv_3"))
+    // "top -> A -> C"
+
+    // Chinese aliases
+    列出调用()
+    获取调用树()
+    调用路径("inv_3")
 }
-
-// Filter by agent
-let a_runs = list_invocations(agent="Researcher")
-
-// Query a single invocation
-let info = get_invocation("inv_1784272795_a61bcdaf")
-print("Agent: " + str(info["agent_name"]))
-print("Message count: " + str(info["message_count"]))
-
-// Get the full call tree
-let tree = get_invocation_tree()
-// tree.children is a nested list of invocations
-
-// Invocation path string
-print(invocation_path("inv_3"))
-// "top -> A -> C"
-
-// Chinese aliases
-列出调用()
-获取调用树()
-调用路径("inv_3")
 ```
 
 **Combined with replay_transcript filtering**:
 
 ```helen
-// See only agent A's messages
-let a_msgs = replay_transcript(agent="A")
+main {
+    // See only agent A's messages
+    let a_msgs = replay_transcript(agent="A")
 
-// See only A's last run
-let last = replay_transcript(agent="A", last_only=true)
+    // See only A's last run
+    let last = replay_transcript(agent="A", last_only=true)
 
-// See a specific invocation and its sub-calls
-let subtree = replay_transcript(invocation_id="inv_1", include_subtree=true)
+    // See a specific invocation and its sub-calls
+    let subtree = replay_transcript(invocation_id="inv_1", include_subtree=true)
+}
 ```
 
 **Combined with restore_context for precise recovery**:
 
 ```helen
-// Restore only agent A's most recent run
-restore_context("session_xxx", agent="A", last_only=true)
+main {
+    // Restore only agent A's most recent run
+    restore_context("session_xxx", agent="A", last_only=true)
 
-// Restore a specific invocation and its subtree
-restore_context("session_xxx", invocation_id="inv_1", include_subtree=true)
+    // Restore a specific invocation and its subtree
+    restore_context("session_xxx", invocation_id="inv_1", include_subtree=true)
+}
 ```
 
 ### Getting Compression Audit
 
 ```helen
-// Get audit trail of all compression events
-let audit = get_compression_audit()
-for event in audit {
-    print("Layer: " + event["layer"])
-    print("Before compression: " + str(event["original_token_count"]) + " tokens")
-    print("After compression: " + str(event["compressed_token_count"]) + " tokens")
-    print("Summary: " + event["summary"])
+main {
+    // Get audit trail of all compression events
+    let audit = get_compression_audit()
+    for event in audit {
+        print("Layer: " + event["layer"])
+        print("Before compression: " + str(event["original_token_count"]) + " tokens")
+        print("After compression: " + str(event["compressed_token_count"]) + " tokens")
+        print("Summary: " + event["summary"])
+    }
 }
 ```
 
@@ -813,24 +881,26 @@ for event in audit {
 v1.23.7 introduces spawn relationship tracking, allowing you to query and manage spawned child sessions:
 
 ```helen
-// Get direct child sessions of the current session
-let children = get_spawned_sessions()
-for child in children {
-    print("Spawned: " + child["session_id"])
-    print("  Agent: " + child["agent_name"])
-    print("  Time: " + str(child["timestamp"]))
-}
+main {
+    // Get direct child sessions of the current session
+    let children = get_spawned_sessions()
+    for child in children {
+        print("Spawned: " + child["session_id"])
+        print("  Agent: " + child["agent_name"])
+        print("  Time: " + str(child["timestamp"]))
+    }
 
-// Get the full spawn tree (including nested spawns)
-let tree = get_spawn_tree()
-print("Root: " + tree["session_id"])
-for child in tree["children"] {
-    print("  Child: " + child["session_id"])
-    // Recursively access child["children"]
-}
+    // Get the full spawn tree (including nested spawns)
+    let tree = get_spawn_tree()
+    print("Root: " + tree["session_id"])
+    for child in tree["children"] {
+        print("  Child: " + child["session_id"])
+        // Recursively access child["children"]
+    }
 
-// Specify root session
-let tree = get_spawn_tree("session_abc123")
+    // Specify root session
+    let tree2 = get_spawn_tree("session_abc123")
+}
 ```
 
 **Functions**:
@@ -851,20 +921,22 @@ let tree = get_spawn_tree("session_abc123")
 When deleting a session, all spawned child sessions are cascade-deleted by default to avoid orphan transcripts:
 
 ```helen
-// Delete session and all its spawns (default)
-delete_session("session_abc123")
+main {
+    // Delete session and all its spawns (default)
+    delete_session("session_abc123")
 
-// Delete only the specified session, keep spawns
-delete_session("session_abc123", cascade=false)
+    // Delete only the specified session, keep spawns
+    delete_session("session_abc123", cascade=false)
 
-// Delete current session and its spawns
-delete_current_session(confirm=true)  // cascade=true is the default
-delete_current_session(confirm=true, cascade=false)  // Keep spawns
+    // Delete current session and its spawns
+    delete_current_session(confirm=true)  // cascade=true is the default
+    delete_current_session(confirm=true, cascade=false)  // Keep spawns
 
-// Clean up old sessions (cascade-deletes spawns)
-cleanup_sessions(keep_count=10)  // Keep the most recent 10, cascade-delete spawns
-cleanup_sessions(older_than_days=30, cascade=true)  // Delete those older than 30 days
-cleanup_sessions(keep_count=5, cascade=false)  // No cascade, keep spawns
+    // Clean up old sessions (cascade-deletes spawns)
+    cleanup_sessions(keep_count=10)  // Keep the most recent 10, cascade-delete spawns
+    cleanup_sessions(older_than_days=30, cascade=true)  // Delete those older than 30 days
+    cleanup_sessions(keep_count=5, cascade=false)  // No cascade, keep spawns
+}
 ```
 
 **Parameters**:
@@ -882,15 +954,17 @@ cleanup_sessions(keep_count=5, cascade=false)  // No cascade, keep spawns
 ### Session Recovery
 
 ```helen
-// Resume a specific session
-let success = resume_session("session_1783492628_d9d9c0aa")
-if success {
-    print("Session resumed")
-    // v1.23: Restored messages are now visible to the LLM
-    let messages = replay_transcript()
-    print("Loaded " + str(len(messages)) + " messages")
-} else {
-    print("Resume failed, session may not exist")
+main {
+    // Resume a specific session
+    let success = resume_session("session_1783492628_d9d9c0aa")
+    if success {
+        print("Session resumed")
+        // v1.23: Restored messages are now visible to the LLM
+        let messages = replay_transcript()
+        print("Loaded " + str(len(messages)) + " messages")
+    } else {
+        print("Resume failed, session may not exist")
+    }
 }
 ```
 
@@ -976,27 +1050,29 @@ Transcript functions support Chinese aliases — you can directly use Chinese fu
 **Usage examples**:
 
 ```helen
-// Use Chinese function names
-let 会话id = 获取会话id()
-print("当前会话: " + 会话id)
+main {
+    // Use Chinese function names
+    let 会话id = 获取会话id()
+    print("当前会话: " + 会话id)
 
-// List all sessions
-let 会话列表 = 列出会话()
-for 会话 in 会话列表 {
-    print(会话["session_id"] + ": " + str(会话["message_count"]) + " 条消息")
+    // List all sessions
+    let 会话列表 = 列出会话()
+    for 会话 in 会话列表 {
+        print(会话["session_id"] + ": " + str(会话["message_count"]) + " 条消息")
+    }
+
+    // Replay current session
+    let 消息列表 = 回放会话()
+    for 消息 in 消息列表 {
+        print(消息["role"] + ": " + 消息["content"])
+    }
+
+    // Export session
+    导出会话("我的对话.json", "json")
+
+    // Resume session
+    let 成功 = 恢复会话("session_1783492628_d9d9c0aa")
 }
-
-// Replay current session
-let 消息 = 回放会话()
-for 消息 in 消息 {
-    print(消息["role"] + ": " + 消息["content"])
-}
-
-// Export session
-导出会话("我的对话.json", "json")
-
-// Resume session
-let 成功 = 恢复会话("session_1783492628_d9d9c0aa")
 ```
 
 > **Tip**: Chinese aliases and English function names can be mixed freely; Helen loads all aliases at startup. Full alias list: see `helen/stdlib/locales/zh.py`.
@@ -1040,21 +1116,23 @@ File operation functions are organized into three groups: basic I/O, directory o
 #### glob_files — Recursively find files
 
 ```helen
-// Find all Python files (recursive)
-let py_files = glob_files("src", "*.py")
-// Returns: ["main.py", "utils/helper.py", "tests/test_main.py"]
+main {
+    // Find all Python files (recursive)
+    let py_files = glob_files("src", "*.py")
+    // Returns: ["main.py", "utils/helper.py", "tests/test_main.py"]
 
-// Find files matching a specific pattern
-let test_files = glob_files(".", "*test*.py")
-// Returns: ["test_main.py", "tests/test_utils.py"]
+    // Find files matching a specific pattern
+    let test_files = glob_files(".", "*test*.py")
+    // Returns: ["test_main.py", "tests/test_utils.py"]
 
-// Use ** for explicit recursion
-let md_files = glob_files("docs", "**/*.md")
-// Returns: ["readme.md", "guide/intro.md", "api/reference.md"]
+    // Use ** for explicit recursion
+    let md_files = glob_files("docs", "**/*.md")
+    // Returns: ["readme.md", "guide/intro.md", "api/reference.md"]
 
-// Complex patterns
-let config_files = glob_files("config", "**/*.{json,yaml,yml}")
-// Returns list of config files
+    // Complex patterns
+    let config_files = glob_files("config", "**/*.{json,yaml,yml}")
+    // Returns list of config files
+}
 ```
 
 **Parameters**:
@@ -1076,27 +1154,31 @@ fn 统计代码行数(目录: str) {
     return {"files": len(files), "lines": total_lines}
 }
 
-let stats = 统计代码行数("src")
-print("Found " + str(stats["files"]) + " files, " + str(stats["lines"]) + " lines total")
+main {
+    let stats = 统计代码行数("src")
+    print("Found " + str(stats["files"]) + " files, " + str(stats["lines"]) + " lines total")
+}
 ```
 
 #### grep_files — Search file contents
 
 ```helen
-// Literal search
-let matches = grep_files("src/", "TODO")
-// Returns: [{"file": "main.py", "line": 42, "text": "    # TODO: fix this"}]
+main {
+    // Literal search
+    let matches = grep_files("src/", "TODO")
+    // Returns: [{"file": "main.py", "line": 42, "text": "    # TODO: fix this"}]
 
-// Regex search
-let functions = grep_files("src/", "def \\w+\\(", regex=true)
-// Returns all function definitions
+    // Regex search
+    let functions = grep_files("src/", "def \\w+\\(", regex=true)
+    // Returns all function definitions
 
-// Case-insensitive search
-let errors = grep_files("logs/", "error", case_sensitive=false)
-// Returns all lines containing "error" (case-insensitive)
+    // Case-insensitive search
+    let errors = grep_files("logs/", "error", case_sensitive=false)
+    // Returns all lines containing "error" (case-insensitive)
 
-// Limit number of results
-let first_10 = grep_files(".", "pattern", max_results=10)
+    // Limit number of results
+    let first_10 = grep_files(".", "pattern", max_results=10)
+}
 ```
 
 **Parameters**:
@@ -1129,95 +1211,107 @@ agent 异常检查助手 {
 ### Basic File I/O (2)
 
 ```helen
-// Read file
-let content = read_file("config.json")
+main {
+    // Read file
+    let content = read_file("config.json")
 
-// Write file (auto-creates parent directories)
-write_file("output/result.txt", "Hello World")
+    // Write file (auto-creates parent directories)
+    write_file("output/result.txt", "Hello World")
+}
 ```
 
 ### File Information (2)
 
 ```helen
-// File size (bytes)
-let size = file_size("document.pdf")
-print("File size: " + str(size) + " bytes")
+main {
+    // File size (bytes)
+    let size = file_size("document.pdf")
+    print("File size: " + str(size) + " bytes")
 
-// Modification time (ISO 8601 format)
-let mtime = file_modified("data.csv")
-print("Last modified: " + mtime)
+    // Modification time (ISO 8601 format)
+    let mtime = file_modified("data.csv")
+    print("Last modified: " + mtime)
+}
 ```
 
 ### Directory Operations (6)
 
 ```helen
-// List directory contents
-let files = list_dir("src")
-// Returns: ["main.py", "utils.py", "tests/"]
+main {
+    // List directory contents
+    let files = list_dir("src")
+    // Returns: ["main.py", "utils.py", "tests/"]
 
-// With pattern filter
-let py_files = list_dir("src", "*.py")
-// Returns: ["main.py", "utils.py"]
+    // With pattern filter
+    let py_files = list_dir("src", "*.py")
+    // Returns: ["main.py", "utils.py"]
 
-// Recursively walk directory tree
-let tree = walk_dir("project")
-// Returns: [(dirpath, dirnames, filenames), ...]
-for entry in tree {
-    let dir = entry[0]
-    let subdirs = entry[1]
-    let files = entry[2]
-    print(dir + ": " + str(len(files)) + " files")
+    // Recursively walk directory tree
+    let tree = walk_dir("project")
+    // Returns: [(dirpath, dirnames, filenames), ...]
+    for entry in tree {
+        let dir = entry[0]
+        let subdirs = entry[1]
+        let files = entry[2]
+        print(dir + ": " + str(len(files)) + " files")
+    }
+
+    // Create directories
+    mkdir("new_dir")
+    mkdir_p("deep/nested/dir")  // Recursive creation
+
+    // Delete
+    delete_file("temp.txt")
+    delete_dir("old_dir", recursive=true)
 }
-
-// Create directories
-mkdir("new_dir")
-mkdir_p("deep/nested/dir")  // Recursive creation
-
-// Delete
-delete_file("temp.txt")
-delete_dir("old_dir", recursive=true)
 ```
 
 ### File Operations (2)
 
 ```helen
-// Copy file
-copy_file("source.txt", "backup.txt")
+main {
+    // Copy file
+    copy_file("source.txt", "backup.txt")
 
-// Move/rename file
-move_file("old_name.txt", "new_name.txt")
+    // Move/rename file
+    move_file("old_name.txt", "new_name.txt")
+}
 ```
 
 ### Temporary Files (2)
 
 ```helen
-// Create temporary file
-let tmp = temp_file(suffix=".txt", prefix="data_")
-write_file(tmp, "temporary data")
-// Must manually delete after use
-delete_file(tmp)
+main {
+    // Create temporary file
+    let tmp = temp_file(suffix=".txt", prefix="data_")
+    write_file(tmp, "temporary data")
+    // Must manually delete after use
+    delete_file(tmp)
 
-// Create temporary directory
-let tmp_dir = temp_dir(prefix="build_")
-// Must manually delete after use
-delete_dir(tmp_dir, recursive=true)
+    // Create temporary directory
+    let tmp_dir = temp_dir(prefix="build_")
+    // Must manually delete after use
+    delete_dir(tmp_dir, recursive=true)
+}
 ```
 
 ### Path Operations (6)
 
 ```helen
-// Path joining
-let full_path = path_join("src", "utils", "helper.py")
-// Returns: "src/utils/helper.py"
+main {
+    // Path joining
+    let full_path = path_join("src", "utils", "helper.py")
+    // Returns: "src/utils/helper.py"
 
-// Extract path components
-let base = path_basename("/path/to/file.txt")  // "file.txt"
-let dir = path_dirname("/path/to/file.txt")    // "/path/to"
+    // Extract path components
+    let base = path_basename("/path/to/file.txt")  // "file.txt"
+    let dir = path_dirname("/path/to/file.txt")    // "/path/to"
 
-// Path checks
-let exists = path_exists("config.json")
-let is_dir = path_is_dir("src")
-let is_file = path_is_file("main.py")
+    // Path checks
+    let exists = path_exists("config.json")
+    let is_dir = path_is_dir("src")
+    let is_file = path_is_file("main.py")
+}
 ```
 
 ## Exception Handling (v1.9+)
@@ -1225,16 +1319,18 @@ let is_file = path_is_file("main.py")
 Python exceptions thrown during standard library function calls are automatically wrapped as `RuntimeError` and can be caught with try-catch:
 
 ```helen
-try {
-    let x = len(42)           // Python TypeError
-} catch RuntimeError err {
-    print(err.message)        // "Python TypeError: object of type 'int' has no len()"
-}
+main {
+    try {
+        let x = len(42)           // Python TypeError
+    } catch RuntimeError err {
+        print(err.message)        // "Python TypeError: object of type 'int' has no len()"
+    }
 
-try {
-    let data = read_file("/nonexistent")
-} catch RuntimeError err {
-    print(err.message)        // "Python FileNotFoundError: [Errno 2] ..."
+    try {
+        let data = read_file("/nonexistent")
+    } catch RuntimeError err {
+        print(err.message)        // "Python FileNotFoundError: [Errno 2] ..."
+    }
 }
 ```
 

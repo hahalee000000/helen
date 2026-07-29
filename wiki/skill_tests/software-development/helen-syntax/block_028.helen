@@ -6,13 +6,16 @@ protocol Printable {
 }
 
 // 协议实现（鸭子类型）
-struct Point {
-    x: Int
-    y: Int
-}
 
-impl Printable for Point {
-    fn to_string(self): String {
-        return "Point(" + str(self.x) + ", " + str(self.y) + ")"
+main {
+    struct Point {
+        x: Int
+        y: Int
+    }
+
+    impl Printable for Point {
+        fn to_string(self): String {
+            return "Point(" + str(self.x) + ", " + str(self.y) + ")"
+        }
     }
 }

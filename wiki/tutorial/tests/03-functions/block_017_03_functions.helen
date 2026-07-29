@@ -1,4 +1,4 @@
-// Test: 03-functions.md:288
+// Test: 03-functions.md:300
 
 // === Context from preceding blocks ===
 fn greet(name) {
@@ -16,12 +16,20 @@ fn factorial(n: int): int {
     return n * factorial(n - 1)
 }
 
-let global_x = 100
+shared let global_x = 100
 
 fn test() {
-    let local_x = 200
-    print(global_x)    // ✅ 可以访问全局变量
-    print(local_x)     // ✅ 可以访问局部变量
+    print(global_x)    // ✅ Can access shared variable
+    print(local_x)     // ✅ Can access local variable
+}
+
+// Closure captures outer variable
+fn make_adder(x) {
+    return fn(y) { return x + y }
+}
+
+fn make_multiplier(factor) {
+    return fn(x) { return x * factor }
 }
 
 alias <canonical> as <alias_name>
@@ -34,7 +42,9 @@ alias <canonical> as <alias_name>
 alias greet as 打招呼
 alias greet as say_hello
 
-主函 {
-    打招呼("Helen")       // "Hello, Helen"
-    say_hello("World")    // "Hello, World"
+main {
+    主函 {
+        打招呼("Helen")       // "Hello, Helen"
+        say_hello("World")    // "Hello, World"
+    }
 }

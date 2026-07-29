@@ -1,6 +1,6 @@
-// Test: 11-building-agents.md:22
+// Test: 11-building-agents.md:51
 
-// 问题分类器
+// Question classifier
 agent QuestionClassifier {
     description "Classify customer questions into categories"
     model "gpt-4"
@@ -15,7 +15,7 @@ agent QuestionClassifier {
     """
 }
 
-// 产品专家
+// Product expert
 agent ProductExpert {
     description "Answer product-related questions"
     model "gpt-4"
@@ -26,7 +26,7 @@ agent ProductExpert {
     """
 }
 
-// 账单专家
+// Billing expert
 agent BillingExpert {
     description "Handle billing inquiries"
     model "gpt-4"
@@ -37,7 +37,7 @@ agent BillingExpert {
     """
 }
 
-// 技术支持
+// Technical support
 agent TechSupport {
     description "Provide technical support"
     model "gpt-4"
@@ -48,7 +48,7 @@ agent TechSupport {
     """
 }
 
-// 回复润色器
+// Response polisher
 agent ResponsePolisher {
     description "Polish responses to be friendly and professional"
     temperature 0.5

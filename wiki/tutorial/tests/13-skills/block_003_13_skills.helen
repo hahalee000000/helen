@@ -1,0 +1,11 @@
+// Test: 13-skills.md:134
+
+main {
+    main {
+        // List all reference documents (name, path, size, first 3 lines preview)
+        list_skill_references("helen-language-development")
+
+        // Use read_file to load a specific reference document
+        read_file(".../references/parser-disambiguation.md")
+    }
+}

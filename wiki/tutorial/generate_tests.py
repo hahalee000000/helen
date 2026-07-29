@@ -92,11 +92,12 @@ def classify_block(code: str, cleaned: str) -> tuple:
     if re.search(r'\bmain\s*\{', cleaned):
         return ('complete', '')
 
-    # Check if all non-empty lines are declarations
+    # Check if all non-empty lines are declarations (v1.30: let is NOT a declaration)
     decl_patterns = [
-        r'^(agent|fn|const|let|shared\s+let|enum|protocol|struct)\s+',
+        r'^(?:agent|fn|const|enum|protocol|struct|智能体|函数|常量|导入|别名)\s+',
         r'^import\s+',
         r'^alias\s+',
+        r'^(?:shared|共享)\s+(?:let|const|store|定义|常量|仓库)\s+',
     ]
     is_all_declarations = all(
         any(re.match(p, line) for p in decl_patterns)
@@ -198,6 +199,102 @@ def remove_main_block(code: str) -> str:
     return '\n'.join(result).strip()
 
 
+def remove_bare_let(code: str) -> str:
+    """Remove bare top-level let declarations (v1.30: let not allowed at module level).
+
+    Keeps const, shared let/const/store, fn, agent, import, etc.
+    Only removes lines that start with 'let ' (not 'shared let').
+    """
+    result = []
+    for line in code.split('\n'):
+        stripped = line.strip()
+        # Skip bare let (but keep shared let/const/store)
+        if re.match(r'^let\s+', stripped):
+            continue
+        # Also skip Chinese '设' (let alias) at top level
+        if re.match(r'^设\s+', stripped):
+            continue
+        result.append(line)
+    return '\n'.join(result).strip()
+
+
+def _wrap_in_main(code: str) -> str:
+    """Wrap executable code in main {}, keeping declarations and shared outside.
+
+    Handles multi-line declarations (fn, agent, etc.) by tracking brace depth.
+    """
+    lines = code.split('\n')
+    decl_lines = []     # Top-level declarations (stay outside main)
+    exec_lines = []     # Executable statements (go inside main)
+    brace_depth = 0
+    in_decl = False     # Currently inside a multi-line declaration
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Track multi-line declarations
+        if brace_depth > 0:
+            # Inside a multi-line block — keep with whatever group started it
+            if in_decl:
+                decl_lines.append(line)
+            else:
+                exec_lines.append(line)
+            brace_depth += line.count('{') - line.count('}')
+            if brace_depth <= 0:
+                brace_depth = 0
+                in_decl = False
+            continue
+
+        # Skip empty lines and comments (add to decl if no exec yet, else exec)
+        if not stripped or stripped.startswith('//'):
+            if exec_lines:
+                exec_lines.append(line)
+            else:
+                decl_lines.append(line)
+            continue
+
+        # Check if this line starts a multi-line declaration
+        is_decl = False
+        if re.match(r'^(?:agent|fn|protocol|impl|shared\s+store|智能体|函数|协议|实现|共享\s+仓库)\b', stripped):
+            is_decl = True
+        elif re.match(r'^(?:const|shared\s+(?:let|const)|常量|共享\s+(?:定义|常量))\s+', stripped):
+            is_decl = True
+        elif re.match(r'^(?:import|alias|导入|别名)\s+', stripped):
+            is_decl = True
+
+        if is_decl:
+            decl_lines.append(line)
+            brace_depth = line.count('{') - line.count('}')
+            if brace_depth > 0:
+                in_decl = True
+        else:
+            exec_lines.append(line)
+            brace_depth = line.count('{') - line.count('}')
+            if brace_depth > 0:
+                in_decl = False
+
+    # No executable code — nothing to wrap
+    if not any(l.strip() for l in exec_lines):
+        return code
+
+    # Build result: declarations, then main { executable code }
+    parts = []
+    # Trim trailing empty lines from decl
+    while decl_lines and not decl_lines[-1].strip():
+        decl_lines.pop()
+    if decl_lines:
+        parts.extend(decl_lines)
+        parts.append('')
+    parts.append('main {')
+    for line in exec_lines:
+        if line.strip():
+            parts.append('    ' + line)
+        else:
+            parts.append('')
+    parts.append('}')
+    return '\n'.join(parts)
+
+
 def generate_test_file(block: CodeBlock, context: str, output_dir: Path, block_num: int) -> Path:
     """Generate a .helen test file."""
 
@@ -226,8 +323,13 @@ def generate_test_file(block: CodeBlock, context: str, output_dir: Path, block_n
         lines.append('')
         lines.append('// === Test code ===')
 
-    # Add the code
-    lines.append(block.cleaned_code)
+    # Add the code — v1.30: wrap executable code in main {} to prevent E0355
+    code = block.cleaned_code
+    if block.block_type != 'skip' and code.strip():
+        # Wrap unless it's an error block with '...' (unparseable placeholders)
+        if block.block_type != 'error' or '...' not in code:
+            code = _wrap_in_main(code)
+    lines.append(code)
 
     # Write file
     filepath.write_text('\n'.join(lines), encoding='utf-8')
@@ -273,9 +375,10 @@ def process_tutorial_file(md_file: Path) -> dict:
             stats['generated'] += 1
             continue
 
-        # Extract context from complete blocks (everything except main)
+        # Extract context from complete blocks (everything except main and bare let)
         if block_type == 'complete':
             ctx = remove_main_block(block.cleaned_code)
+            ctx = remove_bare_let(ctx)  # v1.30: let not allowed at module level
             if ctx:
                 context += ('\n\n' if context else '') + ctx
 

@@ -1,16 +1,32 @@
-// Test: 10-stdlib.md:768
+// Test: 10-stdlib.md:795
 
-// 字面量搜索
-let matches = grep_files("src/", "TODO")
-// 返回: [{"file": "main.py", "line": 42, "text": "    # TODO: fix this"}]
+main {
+    main {
+        // List all invocations
+        let invs = list_invocations()
+        for inv in invs {
+            print("{inv.agent_name}: {inv.message_count} messages")
+        }
 
-// 正则搜索
-let functions = grep_files("src/", "def \\w+\\(", regex=true)
-// 返回所有函数定义
+        // Filter by agent
+        let a_runs = list_invocations(agent="Researcher")
 
-// 大小写不敏感搜索
-let errors = grep_files("logs/", "error", case_sensitive=false)
-// 返回所有包含 "error"（不区分大小写）的行
+        // Query a single invocation
+        let info = get_invocation("inv_1784272795_a61bcdaf")
+        print("Agent: " + str(info["agent_name"]))
+        print("Message count: " + str(info["message_count"]))
 
-// 限制结果数量
-let first_10 = grep_files(".", "pattern", max_results=10)
+        // Get the full call tree
+        let tree = get_invocation_tree()
+        // tree.children is a nested list of invocations
+
+        // Invocation path string
+        print(invocation_path("inv_3"))
+        // "top -> A -> C"
+
+        // Chinese aliases
+        列出调用()
+        获取调用树()
+        调用路径("inv_3")
+    }
+}

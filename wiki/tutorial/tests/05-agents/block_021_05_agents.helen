@@ -1,18 +1,92 @@
-// Test: 05-agents.md:605
+// Test: 05-agents.md:525
 
-agent Translator {
-    description "Translate text"
+// === Context from preceding blocks ===
+agent Greeter(user_name: str, user_id: int) {
+}
 
-    // 参数声明 (未来版本支持类型检查)
-    // text: str — 要翻译的文本
-    // target_lang: str — 目标语言
+agent Assistant {
+    description "Helpful assistant"
+    tools = ["web_search", "read_file"]   // LLM can autonomously call these two
+    functions {
+        fn fetch_summary(url: str): str {  // Declared in functions
+            return summarize(content)
+        }
+        fn dangerous_op() { ... }          // LLM cannot see this
+    }
+}
 
+agent SmartAssistant {
+    description "Smart assistant with custom context config"
+    
+    context {
+        compression "graduated"      // Compression strategy
+        cache-aware true             // Cache-aware
+        working-memory true          // Working memory
+        working-memory-tokens 5000   // Working memory token budget
+    }
+    
+    tools ["read_file", "web_search"]
+    prompt "You are a helpful assistant."
+    
+}
+
+agent Researcher(topic: str) {
+    description "Research assistant with optimized context"
+    
+    // Optimize context management
+    context {
+        compression "graduated"      // Graduated compression
+        cache-aware true             // Cache-aware
+        working-memory true          // Track research files
+        working-memory-tokens 8000   // Larger working memory
+    }
+    
+    tools ["web_search", "web_fetch", "read_file", "write_file"]
+    
     prompt """
-    Translate: {{text}}
-    Target language: {{target_lang}}
+    You are a research assistant.
+    Research topic: {{topic}}
+    
+    Use tools to search and organize information.
     """
+    
 }
 
-main {
-    let result = Translator("Hello", "French")
+agent ChatBot {
+    description "Chat bot with transcript management"
+    prompt "You are a helpful chat assistant."
+    
 }
+
+agent 工作Agent {
+    description "Simple task agent"
+    model "qwen3.7-plus"
+    transcript "none"  // Default: no transcript recording
+    
+}
+
+agent 调试Agent {
+    description "Debug agent with memory transcript"
+    model "qwen3.7-plus"
+    transcript "memory"  // In-memory only, no disk persistence
+    
+}
+
+agent 审计Agent {
+    description "Audit agent with persistent transcript"
+    model "qwen3.7-plus"
+    transcript "persistent"  // Full persistence to disk
+    
+}
+
+// === Test code ===
+agent CodeExplorer {
+    description "Explore and understand codebases"
+    tools = ["find_files", "search_files", "read_file"]
+    prompt "Explore the codebase to answer the user's question."
+}
+
+// The LLM can autonomously decide to:
+// 1. find_files("src/", "**/*.py")  → List all Python files
+// 2. search_files("src/", "def process", regex=false)  → Search for function definitions
+// 3. read_file("src/processor.py")  → Read relevant files

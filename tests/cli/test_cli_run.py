@@ -12,7 +12,7 @@ class TestRunCommandSuccess:
     def test_run_simple_program(self):
         """helen run with a valid program returns 0."""
         # Simple valid Helen program
-        code = "let x = 1 + 2"
+        code = "main {\n    let x = 1 + 2\n}"
         with tempfile.NamedTemporaryFile(mode="w", suffix=".helen", delete=False) as f:
             f.write(code)
             f.flush()

@@ -31,6 +31,9 @@ agent Normal() {
 }
 
 // 中文
-@开放 agent 调试() { main { ... } }
-@严格 agent 安全() { main { ... } }
-@沙箱 agent 隔离() { main { ... } }
+
+main {
+    @开放 agent 调试() { main { ... } }
+    @严格 agent 安全() { main { ... } }
+    @沙箱 agent 隔离() { main { ... } }
+}

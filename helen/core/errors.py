@@ -74,6 +74,7 @@ class ErrorCode(Enum):
     IMPORT_ERROR = 352
     INVALID_TOOLS_DECLARATION = 353
     BUILTIN_SHADOWED = 354
+    TOP_LEVEL_STATEMENT = 355
 
 
 @dataclass

@@ -147,7 +147,7 @@ class TestArgvSemanticAnalysis:
     def test_argv_recognized_by_analyzer(self):
         """argv does not trigger UNDECLARED_VARIABLE error."""
         errors = ErrorReporter()
-        source = "let x = argv"
+        source = "main {\n    let x = argv\n}"
         analyzer = SemanticAnalyzer(errors, base_dir=".")
         scanner = Scanner(source=source, file="<test>")
         tokens = scanner.scan_all()
@@ -385,7 +385,7 @@ class TestCLIIntegration:
 
     def test_run_command_passes_args(self):
         """run_command() passes program_args to the interpreter."""
-        code = "let x = argv"
+        code = "main {\n    let x = argv\n}"
         path = self._write_temp_helen(code)
         try:
             result = run_command(path, program_args=["--test", "value"])
@@ -395,7 +395,7 @@ class TestCLIIntegration:
 
     def test_run_command_empty_args(self):
         """run_command() with no program_args works (argv is empty)."""
-        code = "let x = argv"
+        code = "main {\n    let x = argv\n}"
         path = self._write_temp_helen(code)
         try:
             result = run_command(path)
@@ -405,7 +405,7 @@ class TestCLIIntegration:
 
     def test_main_passes_extra_args(self):
         """main() passes arguments after the filename to the program."""
-        code = 'let x = argv'
+        code = 'main {\n    let x = argv\n}'
         path = self._write_temp_helen(code)
         try:
             result = main([path, "--verbose", "--output=json"])
@@ -415,7 +415,7 @@ class TestCLIIntegration:
 
     def test_main_no_extra_args(self):
         """main() with no extra args after filename still runs."""
-        code = 'let x = argv'
+        code = 'main {\n    let x = argv\n}'
         path = self._write_temp_helen(code)
         try:
             result = main([path])

@@ -1,0 +1,32 @@
+// Test: 07-spawn.md:178
+
+agent StrategyA(problem: str, reply: Channel) {
+    main {
+        let result = llm act "Strategy A solves: " + problem
+        reply.send(result)
+    }
+}
+
+agent StrategyB(problem: str, reply: Channel) {
+    main {
+        let result = llm act "Strategy B solves: " + problem
+        reply.send(result)
+    }
+}
+
+main {
+    main {
+        let m1 = spawn StrategyA("complex problem")
+        let m2 = spawn StrategyB("complex problem")
+
+        let result = mailbox_select([m1, m2])
+        print("Fastest result: " + result["message"])
+
+        // Cancel the other one
+        if result["endpoint"] == m1 {
+            m2.cancel()
+        } else {
+            m1.cancel()
+        }
+    }
+}

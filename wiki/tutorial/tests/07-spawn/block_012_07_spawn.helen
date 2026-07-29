@@ -1,0 +1,22 @@
+// Test: 07-spawn.md:264
+
+agent Calculator(reply: Channel) {
+    main {
+        loop {
+            let cmd = reply.receive()
+            if cmd == null || cmd == "quit" { break }
+            reply.send(calculate(cmd))
+        }
+    }
+}
+
+main {
+    main {
+        let calc = spawn Calculator()
+        calc.send("2 + 3")
+        print(calc.receive())     // 5
+        calc.send("10 * 20")
+        print(calc.receive())     // 200
+        calc.send("quit")
+    }
+}

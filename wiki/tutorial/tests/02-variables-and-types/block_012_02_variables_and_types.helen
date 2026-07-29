@@ -1,4 +1,8 @@
-// Test: 02-variables-and-types.md:133
+// Test: 02-variables-and-types.md:154
 
-let greeting = "Hello, " + "World!"    // "Hello, World!"
-let message = "Score: " + 42           // "Score: 42"
+main {
+    main {
+        let greeting = "Hello, " + "World!"    // "Hello, World!"
+        let message = "Score: " + 42           // "Score: 42"
+    }
+}

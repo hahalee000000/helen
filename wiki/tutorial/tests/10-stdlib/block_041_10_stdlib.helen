@@ -1,14 +1,27 @@
-// Test: 10-stdlib.md:891
+// Test: 10-stdlib.md:1053
 
-// 路径拼接
-let full_path = path_join("src", "utils", "helper.py")
-// 返回: "src/utils/helper.py"
+main {
+    main {
+        // Use Chinese function names
+        let 会话id = 获取会话id()
+        print("当前会话: " + 会话id)
 
-// 提取路径组件
-let base = path_basename("/path/to/file.txt")  // "file.txt"
-let dir = path_dirname("/path/to/file.txt")    // "/path/to"
+        // List all sessions
+        let 会话列表 = 列出会话()
+        for 会话 in 会话列表 {
+            print(会话["session_id"] + ": " + str(会话["message_count"]) + " 条消息")
+        }
 
-// 路径检查
-let exists = path_exists("config.json")
-let is_dir = path_is_dir("src")
-let is_file = path_is_file("main.py")
+        // Replay current session
+        let 消息列表 = 回放会话()
+        for 消息 in 消息列表 {
+            print(消息["role"] + ": " + 消息["content"])
+        }
+
+        // Export session
+        导出会话("我的对话.json", "json")
+
+        // Resume session
+        let 成功 = 恢复会话("session_1783492628_d9d9c0aa")
+    }
+}

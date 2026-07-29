@@ -15,9 +15,13 @@ fn test_subtract() {
     assert_equal(subtract(0, 0), 0)
 }
 
-test_suite("Calculator")
-test_case("adds numbers", test_add)
-test_case("subtracts numbers", test_subtract)
-test_end_suite()
+main {
+    main {
+        test_suite("Calculator")
+        test_case("adds numbers", test_add)
+        test_case("subtracts numbers", test_subtract)
+        test_end_suite()
 
-run_tests()
+        run_tests()
+    }
+}

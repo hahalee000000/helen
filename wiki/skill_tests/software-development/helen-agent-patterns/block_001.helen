@@ -9,6 +9,9 @@ agent SimpleAgent {
     }
 }
 
-# 调用
-let result = SimpleAgent()
-print(result)
+// 调用
+
+main {
+    let result = SimpleAgent()
+    print(result)
+}

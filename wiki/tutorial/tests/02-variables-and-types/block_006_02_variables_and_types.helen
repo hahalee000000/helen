@@ -1,6 +1,10 @@
-// Test: 02-variables-and-types.md:59
+// Test: 02-variables-and-types.md:68
 
-let name: str = "Alice"
-let age: int = 30
-let score: float = 95.5
-let active: bool = true
+main {
+    main {
+        let name: str = "Alice"
+        let age: int = 30
+        let score: float = 95.5
+        let active: bool = true
+    }
+}

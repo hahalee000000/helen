@@ -5,5 +5,7 @@ fn greet(name) {
 }
 
 main {
-    greet("Alice")    // Hello, Alice!
+    main {
+        greet("Alice")    // Hello, Alice!
+    }
 }

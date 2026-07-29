@@ -1,0 +1,19 @@
+// Test: 07-spawn.md:386
+
+main {
+    main {
+        // Get all direct child sessions of the current session
+        let children = get_spawned_sessions()
+        for child in children {
+            print("Spawned: " + child["session_id"])
+            print("  Agent: " + child["agent_name"])
+        }
+
+        // Get the full spawn tree (including nested spawns)
+        let tree = get_spawn_tree()
+        print("Root: " + tree["session_id"])
+        for child in tree["children"] {
+            print("  Child: " + child["session_id"])
+        }
+    }
+}

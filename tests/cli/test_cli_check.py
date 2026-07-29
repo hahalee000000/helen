@@ -11,7 +11,7 @@ class TestCheckCommand:
 
     def test_check_valid_program(self):
         """helen check with valid program prints OK and returns 0."""
-        code = "let x = 1"
+        code = "const X = 1\nmain {\n    let x = X\n}"
         with tempfile.NamedTemporaryFile(mode="w", suffix=".helen", delete=False) as f:
             f.write(code)
             f.flush()

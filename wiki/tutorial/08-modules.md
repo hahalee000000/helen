@@ -45,12 +45,12 @@ main {
 ### Importing .json
 
 ```helen
-// config.json
-{
-    "model": "gpt-4",
-    "temperature": 0.7,
-    "max_turns": 3
-}
+// config.json (separate file - shown for reference)
+// {
+//     "model": "gpt-4",
+//     "temperature": 0.7,
+//     "max_turns": 3
+// }
 
 // main.helen
 import "./config.json" as cfg

@@ -1,23 +1,23 @@
 // Test: 10-stdlib.md:51
 
-// 直接用中文 stdlib 函数名（不需要任何 import 或 alias）
+// Directly use Chinese stdlib function names (no import or alias needed)
 函数 数据处理() {
-    设 原始数据 = [3, 1, 4, 1, 5, 9, 2, 6]
-    设 排序后 = 排序(原始数据)
-    设 去重后 = 去重(排序后)
-    返回 长度(去重后)
+    let 原始数据 = [3, 1, 4, 1, 5, 9, 2, 6]
+    let 排序后 = 排序(原始数据)
+    let 去重后 = 去重(排序后)
+    return 长度(去重后)
 }
 
-// 中英混用也完全合法
+// Mixing Chinese and English is perfectly valid
 函数 混合使用() {
     let data = [1, 2, 3]
-    let sorted = 排序(data)     // 英文变量 + 中文函数
-    return len(sorted)          // 切回英文
+    let sorted = 排序(data)     // English variable + Chinese function
+    return len(sorted)          // Switch back to English
 }
 
-// 处理网络数据
+// Handle network data
 函数 获取数据() {
-    设 响应 = http获取("https://api.example.com/data")
-    设 解析后 = json解析(响应)
-    返回 解析后["name"]
+    let 响应 = http获取("https://api.example.com/data")
+    let 解析后 = json解析(响应)
+    return 解析后["name"]
 }

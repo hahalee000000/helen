@@ -1,39 +1,32 @@
-// Test: 05-agents.md:528
+// Test: 05-agents.md:425
 
-agent Translator(text: str, target: str) {
-    description "Translate text"
-    model "gpt-4"
-    temperature 0.3
-    prompt """
-    Translate to {{target}}:
-    {{text}}
-    """
-    
-    functions {
-        let default_format = "formal"
-        const MAX_LENGTH = 1000
-        
-        fn validate_input(s: str): bool {
-            return len(s) > 0
-        }
-        
-        fn format_output(text: str): str {
-            if default_format == "formal" {
-                return text.upper()
-            }
-            return text
-        }
-    }
+agent 工作Agent {
+    description "Simple task agent"
+    model "qwen3.7-plus"
+    transcript "none"  // Default: no transcript recording
     
     main {
-        if validate_input(text) {
-            let result = llm act    // bare form：自动使用渲染后的 prompt
-            return format_output(result)
-        }
-        return "输入为空"
+        llm act "Process data"
+        print("Done")
     }
 }
 
-// 调用方式（推荐函数式调用）：
-let translated = Translator(text="Hello", target="French")
-// 函数式调用：let translated = Translator(text="Hello", target="French")
+agent 调试Agent {
+    description "Debug agent with memory transcript"
+    model "qwen3.7-plus"
+    transcript "memory"  // In-memory only, no disk persistence
+    
+    main {
+        llm act "Debug issue"
+    }
+}
+
+agent 审计Agent {
+    description "Audit agent with persistent transcript"
+    model "qwen3.7-plus"
+    transcript "persistent"  // Full persistence to disk
+    
+    main {
+        llm act "Perform audit"
+    }
+}

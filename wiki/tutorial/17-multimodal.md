@@ -20,21 +20,23 @@ This design provides the following advantages:
 `MediaPart` is a first-class citizen data type representing media content:
 
 ```helen
-# Create from file
-let img = media("file:///path/to/image.png")
+main {
+    // Create from file
+    let img = media("file:///path/to/image.png")
 
-# Create from URL
-let remote_img = media("https://example.com/image.jpg")
+    // Create from URL
+    let remote_img = media("https://example.com/image.jpg")
 
-# Create from base64
-let b64_data = read_file_base64("image.png")
-let inline_img = media_base64(b64_data, "image/png")
+    // Create from base64
+    let b64_data = read_file_base64("image.png")
+    let inline_img = media_base64(b64_data, "image/png")
 
-# Check if it is a MediaPart
-是媒体(img)  # Returns: 真
+    // Check if it is a MediaPart
+    is_media(img)  // Returns: true
 
-# Get media type
-媒体类型(img)  # Returns: "image"
+    // Get media type
+    media_type(img)  // Returns: "image"
+}
 ```
 
 ### MediaPart Fields
@@ -70,9 +72,11 @@ agent 图像分析 {
 You can pass multiple media objects:
 
 ```helen
-let img1 = media("image1.png")
-let img2 = media("image2.png")
-let result = llm act "Compare these two images" media(img1, img2)
+main {
+    let img1 = media("image1.png")
+    let img2 = media("image2.png")
+    let result = llm act "Compare these two images" media(img1, img2)
+}
 ```
 
 ### on_media Callback (Media Adapter)
@@ -84,10 +88,10 @@ agent Claude媒体处理 {
     main {
         let img = media("diagram.png")
         
-        # Recommended: use built-in format adapter (one line)
+        // Recommended: use built-in format adapter (one line)
         let result = llm act "Explain this diagram" 
             media(img)
-            on_media fn(parts, provider) { 转Claude格式(parts) }
+            on_media fn(parts, provider) { return 转Claude格式(parts) }
     }
 }
 ```
@@ -103,16 +107,18 @@ agent Claude媒体处理 {
 **Custom adapters**: Only needed when using a non-standard provider or requiring special handling:
 
 ```helen
-on_media fn(parts, provider) {
-    # Only hand-write for non-standard providers
-    返回 parts.map(fn(part) {
-        返回 {
-            "type": "media",
-            "mime_type": part.mime,
-            "data": 媒体转base64(part),
-            "encoding": "base64"
-        }
-    })
+main {
+    on_media fn(parts, provider) {
+        // Only hand-write for non-standard providers
+        return parts.map(fn(part) {
+            return {
+                "type": "media",
+                "mime_type": part.mime,
+                "data": 媒体转base64(part),
+                "encoding": "base64"
+            }
+        })
+    }
 }
 ```
 
@@ -134,14 +140,14 @@ agent 图像生成器 {
     main {
         let result = llm act "Create a sunset landscape image"
             on_generate fn(params) {
-                # params contains: prompt, size, model, etc.
+                // params contains: prompt, size, model, etc.
                 let prompt = params["prompt"]
                 
-                # Call image generation API
+                // Call image generation API
                 let image_url = call_image_generation_api(prompt)
                 
-                # Return the generated media
-                返回 media("url://" + image_url)
+                // Return the generated media
+                return media("url://" + image_url)
             }
         
         print("Generated image: " + result)
@@ -165,9 +171,11 @@ agent 图像生成器 {
 Specifies the provider to use (affects default adapter behavior):
 
 ```helen
-let result = llm act "Analyze this image"
-    media(img)
-    provider("claude")
+main {
+    let result = llm act "Analyze this image"
+        media(img)
+        provider("claude")
+}
 ```
 
 ### Streaming Callbacks
@@ -175,14 +183,16 @@ let result = llm act "Analyze this image"
 Multimodal also supports streaming output callbacks:
 
 ```helen
-let result = llm act "Describe this image in detail"
-    media(img)
-    on_chunk fn(chunk) {
-        print(chunk, flush=false)
-    }
-    on_complete fn(full_text) {
-        print("\nDone!")
-    }
+main {
+    let result = llm act "Describe this image in detail"
+        media(img)
+        on_chunk fn(chunk) {
+            print(chunk, flush=false)
+        }
+        on_complete fn(full_text) {
+            print("\nDone!")
+        }
+}
 ```
 
 ## Chinese Aliases
@@ -213,37 +223,43 @@ All multimodal-related functions support Chinese aliases:
 Convert a list of `MediaPart` objects into a specific provider's content format:
 
 ```helen
-# OpenAI-compatible format (default, usually no need to specify manually)
-let parts = to_openai_parts(media_list)
+main {
+    // OpenAI-compatible format (default, usually no need to specify manually)
+    let parts = to_openai_parts(media_list)
 
-# Anthropic Claude Messages API format
-let parts = to_claude_parts(media_list)
-# Note: Claude does not support video and audio input; ValueError will be raised
+    // Anthropic Claude Messages API format
+    let parts_claude = to_claude_parts(media_list)
+    // Note: Claude does not support video and audio input; ValueError will be raised
 
-# Google Gemini inline_data format
-let parts = to_gemini_parts(media_list)
+    // Google Gemini inline_data format
+    let parts_gemini = to_gemini_parts(media_list)
+}
 ```
 
 ### Media Utilities
 
 ```helen
-# Convert any MediaPart to a pure base64 string (regardless of source: file/url/base64)
-let b64 = media_to_base64(img)
+main {
+    // Convert any MediaPart to a pure base64 string (regardless of source: file/url/base64)
+    let b64 = media_to_base64(img)
 
-# Save MediaPart to a file (path is optional; defaults to ~/.helen/generated_media/)
-let path = save_media(img, "/tmp/output.png")
-let path2 = save_media(img)  # Auto-named
+    // Save MediaPart to a file (path is optional; defaults to ~/.helen/generated_media/)
+    let path = save_media(img, "/tmp/output.png")
+    let path2 = save_media(img)  // Auto-named
+}
 ```
 
 ### Type Predicates
 
 ```helen
-如果 是图片(part) { 打印("This is an image") }
-如果 是视频(part) { 打印("This is a video") }
-如果 是音频(part) { 打印("This is audio") }
+main {
+    if 是图片(part) { print("This is an image") }
+    if 是视频(part) { print("This is a video") }
+    if 是音频(part) { print("This is audio") }
 
-# Non-MediaPart safe: returns 假, does not throw
-是图片("not media")  # Returns: 假
+    // Non-MediaPart safe: returns false, does not throw
+    is_image("not media")  // Returns: false
+}
 ```
 
 ## Complete Examples
@@ -256,13 +272,13 @@ agent 图像分析助手 {
     model "qwen-vl-max"
     
     main {
-        # Get image path from user
+        // Get image path from user
         let image_path = input("Please enter the image path: ")
         
-        # Create MediaPart
+        // Create MediaPart
         let img = media(image_path)
         
-        # Analyze the image
+        // Analyze the image
         let analysis = llm act "Please describe the content, style, and possible uses of this image in detail"
             media(img)
         
@@ -300,13 +316,13 @@ agent 创意图像生成器 {
         
         let result = llm act description
             on_generate fn(params) {
-                # Here you should call the actual image generation API
-                # This example uses a placeholder
+                // Here you should call the actual image generation API
+                // This example uses a placeholder
                 let prompt = params["prompt"]
                 let api_response = call_dalle_api(prompt, size="1024x1024")
                 
-                # Return the generated image
-                返回 media(api_response["url"])
+                // Return the generated image
+                return media(api_response["url"])
             }
         
         print("Generated image: " + result)
@@ -323,10 +339,10 @@ agent Claude分析 {
     main {
         let img = media("chart.png")
         
-        # Use the built-in Claude adapter — one line
+        // Use the built-in Claude adapter — one line
         let result = llm act "Analyze this chart"
             media(img)
-            on_media fn(parts, provider) { 转Claude格式(parts) }
+            on_media fn(parts, provider) { return 转Claude格式(parts) }
         
         print(result)
     }
@@ -344,9 +360,9 @@ agent 自定义媒体处理 {
             media(img)
             provider("custom_provider")
             on_media fn(parts, provider) {
-                # Use 媒体转base64 helper, hand-write provider-specific format
-                返回 parts.map(fn(part) {
-                    返回 {
+                // Use 媒体转base64 helper, hand-write provider-specific format
+                return parts.map(fn(part) {
+                    return {
                         "type": "media",
                         "mime_type": part.mime,
                         "data": 媒体转base64(part),
@@ -385,20 +401,22 @@ multimodal:
 For mainstream providers, use the built-in adapters directly — no need to hand-write JSON:
 
 ```helen
-# OpenAI-compatible provider (default, no on_media needed)
-let result = llm act "Analyze the image" media(img)
+main {
+    // OpenAI-compatible provider (default, no on_media needed)
+    let result = llm act "Analyze the image" media(img)
 
-# Claude — one-line adapter
-let result = llm act "Analyze the image"
-    media(img)
-    on_media fn(parts, provider) { 转Claude格式(parts) }
+    // Claude — one-line adapter
+    let result_claude = llm act "Analyze the image"
+        media(img)
+        on_media fn(parts, provider) { return 转Claude格式(parts) }
 
-# Gemini
-let result = llm act "Analyze the image"
-    media(img)
-    on_media fn(parts, provider) { 转Gemini格式(parts) }
+    // Gemini
+    let result_gemini = llm act "Analyze the image"
+        media(img)
+        on_media fn(parts, provider) { return 转Gemini格式(parts) }
 
-# Only hand-write on_media when a non-standard provider is needed
+    // Only hand-write on_media when a non-standard provider is needed
+}
 ```
 
 ### 1.5 Leverage Media Utility Functions
@@ -406,17 +424,19 @@ let result = llm act "Analyze the image"
 `media_to_base64()` and `save_media()` are especially useful in `on_generate` callbacks:
 
 ```helen
-on_generate fn(params) {
-    let resp = http_post("https://api.example.com/generate", {...})
-    let img = media_base64(resp.image_data, "image/png")
-    
-    # Save to specified path
-    保存媒体(img, params["output_path"])
-    
-    # Or get base64 for further processing
-    let b64 = 媒体转base64(img)
-    
-    返回 img
+main {
+    on_generate fn(params) {
+        let resp = http_post("https://api.example.com/generate", {...})
+        let img = media_base64(resp.image_data, "image/png")
+        
+        // Save to specified path
+        保存媒体(img, params["output_path"])
+        
+        // Or get base64 for further processing
+        let b64 = 媒体转base64(img)
+        
+        return img
+    }
 }
 ```
 
@@ -425,9 +445,11 @@ on_generate fn(params) {
 When processing mixed media lists, type predicates enable precise filtering:
 
 ```helen
-let parts = [img1, video1, audio1, img2]
-let images = parts.filter(是图片)    # Keep only images
-let videos = parts.filter(是视频)    # Keep only videos
+main {
+    let parts = [img1, video1, audio1, img2]
+    let images = parts.filter(是图片)    // Keep only images
+    let videos = parts.filter(是视频)    // Keep only videos
+}
 ```
 
 ### 2. Manage Large Media Reasonably
@@ -435,11 +457,13 @@ let videos = parts.filter(是视频)    # Keep only videos
 Large media files are automatically stored externally, but you can control this manually:
 
 ```helen
-# Small image (<1MB): inline storage
-let small_img = media("icon.png")
+main {
+    // Small image (<1MB): inline storage
+    let small_img = media("icon.png")
 
-# Large image (>=1MB): automatic external storage
-let large_img = media("high_res_photo.png")
+    // Large image (>=1MB): automatic external storage
+    let large_img = media("high_res_photo.png")
+}
 ```
 
 ### 3. Error Handling
@@ -447,11 +471,13 @@ let large_img = media("high_res_photo.png")
 Handle potential media loading errors:
 
 ```helen
-尝试 {
-    let img = media("possibly_nonexistent_file.png")
-    let result = llm act "Analyze" media(img)
-} 捕获 err {
-    print("Media loading failed: " + err.消息)
+main {
+    try {
+        let img = media("possibly_nonexistent_file.png")
+        let result = llm act "Analyze" media(img)
+    } catch err {
+        print("Media loading failed: " + err.message)
+    }
 }
 ```
 
@@ -460,9 +486,11 @@ Handle potential media loading errors:
 When processing multiple media, be aware of provider limits:
 
 ```helen
-# Default max 10 media per request
-let images = [media("img1.png"), media("img2.png"), media("img3.png")]
-let result = llm act "Analyze these images" media(images)
+main {
+    // Default max 10 media per request
+    let images = [media("img1.png"), media("img2.png"), media("img3.png")]
+    let result = llm act "Analyze these images" media(images)
+}
 ```
 
 > **Dynamic lists**: `media()` accepts `list[MediaPart]` and auto-flattens, no spread syntax needed.

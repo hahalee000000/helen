@@ -1,0 +1,20 @@
+// Test: 10-stdlib.md:1166
+
+main {
+    main {
+        // Literal search
+        let matches = grep_files("src/", "TODO")
+        // Returns: [{"file": "main.py", "line": 42, "text": "    # TODO: fix this"}]
+
+        // Regex search
+        let functions = grep_files("src/", "def \\w+\\(", regex=true)
+        // Returns all function definitions
+
+        // Case-insensitive search
+        let errors = grep_files("logs/", "error", case_sensitive=false)
+        // Returns all lines containing "error" (case-insensitive)
+
+        // Limit number of results
+        let first_10 = grep_files(".", "pattern", max_results=10)
+    }
+}

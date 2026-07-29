@@ -402,17 +402,19 @@ agent CustomerService(sessionId: str, question: str, reply: Channel) {
     }
 }
 
-// Multiple agents running concurrently (v1.18+ spawn pattern)
-let mb1 = spawn CustomerService("session-1", "How to reset password?")
-let mb2 = spawn CustomerService("session-2", "Billing issue")
-let mb3 = spawn CustomerService("session-3", "Technical support")
+main {
+    // Multiple agents running concurrently (v1.18+ spawn pattern)
+    let mb1 = spawn CustomerService("session-1", "How to reset password?")
+    let mb2 = spawn CustomerService("session-2", "Billing issue")
+    let mb3 = spawn CustomerService("session-3", "Technical support")
 
-// Wait for all sessions to complete
-let r1 = mb1.receive()
-let r2 = mb2.receive()
-let r3 = mb3.receive()
+    // Wait for all sessions to complete
+    let r1 = mb1.receive()
+    let r2 = mb2.receive()
+    let r3 = mb3.receive()
 
-print("Resolution rate: " + SessionStats.getResolutionRate())
+    print("Resolution rate: " + SessionStats.getResolutionRate())
+}
 ```
 
 ### Passing Messages with Channels
@@ -441,18 +443,20 @@ agent TaskConsumer(task: str, reply: Channel) {
     }
 }
 
-// Producer runs concurrently
-let producer_mb = spawn TaskProducer()
+main {
+    // Producer runs concurrently
+    let producer_mb = spawn TaskProducer()
 
-// Consume all tasks
-let task = producer_mb.receive()
-while (task != "done") {
-    let consumer_mb = spawn TaskConsumer(task)
-    let result = consumer_mb.receive()
-    print(result)
-    task = producer_mb.receive()
+    // Consume all tasks
+    let task = producer_mb.receive()
+    while (task != "done") {
+        let consumer_mb = spawn TaskConsumer(task)
+        let result = consumer_mb.receive()
+        print(result)
+        task = producer_mb.receive()
+    }
+    producer_mb.close()
 }
-producer_mb.close()
 ```
 
 ### Choosing a Collaboration Pattern

@@ -1,4 +1,4 @@
-// Test: 12-testing.md:196
+// Test: 12-testing.md:204
 
 // 我们想实现一个 FizzBuzz
 fn test_fizzbuzz() {
@@ -8,8 +8,12 @@ fn test_fizzbuzz() {
     expect(fizzbuzz(7)).toBe("7")
 }
 
-test_suite("FizzBuzz")
-test_case("returns correct string", test_fizzbuzz)
-test_end_suite()
+main {
+    main {
+        test_suite("FizzBuzz")
+        test_case("returns correct string", test_fizzbuzz)
+        test_end_suite()
 
-run_tests()
+        run_tests()
+    }
+}

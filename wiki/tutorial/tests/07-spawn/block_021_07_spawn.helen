@@ -1,0 +1,25 @@
+// Test: 07-spawn.md:589
+
+// Run 1: do work, then persist the child session_id for next time.
+agent Worker(reply: Channel) {
+    main {
+        insert_message("user", "checkpoint: phase 1 done, secret=BANANA_42")
+        reply.send(get_session_id())   // report child session_id
+        reply.close()
+    }
+}
+
+main {
+    main {
+        let mb = spawn Worker()
+        let child_sid = mb.receive()
+        write_file(".helen/last_child_session", child_sid)   // persist for next run
+    }
+
+    // Run 2 (later): resume the child session and continue.
+    main {
+        let child_sid = read_file(".helen/last_child_session")
+        let mb = spawn Worker() resume(child_sid)
+        // The spawned agent's transcript already contains the checkpoint message.
+    }
+}

@@ -1,25 +1,16 @@
-// Test: 10-stdlib.md:463
+// Test: 10-stdlib.md:501
 
-// === Context from preceding blocks ===
-let args = get_cli_args()  // 与 argv 相同
+main {
+    main {
+        // Auto compression (based on token thresholds)
+        let result = compress_context("auto")
+        print("Compressed from " + str(result["original_tokens"]) + " to " + str(result["compressed_tokens"]))
+        // Returns: {"status": "ok", "original_messages": 10, "compressed_messages": 5, ...}
 
-let parsed = parse_cli_args()
-// 输入: --verbose --output=json --port 8080 input.txt
-// 结果: {
-//   verbose: true,
-//   output: "json",
-//   port: "8080",
-//   _positional: ["input.txt"]
-// }
+        // Force LLM summary compression
+        compress_context("summarize")
 
-// === Test code ===
-// 自动压缩（基于 token 阈值）
-let result = compress_context("auto")
-print("从 " + str(result["original_tokens"]) + " 压缩到 " + str(result["compressed_tokens"]))
-// 返回: {"status": "ok", "original_messages": 10, "compressed_messages": 5, ...}
-
-// 强制使用 LLM 摘要压缩
-compress_context("summarize")
-
-// 截断保留最近 10 条消息
-compress_context("truncate")
+        // Truncate to keep the most recent 10 messages
+        compress_context("truncate")
+    }
+}

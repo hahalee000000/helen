@@ -256,13 +256,15 @@ Runs `find .helen/skills -name 'SKILL.md'`, extracts the top 6 lines (frontmatte
 **Example**: After debugging a subtle scope bug, the LLM might decide this pattern is worth capturing:
 
 ```helen
-save_new_skill(
-    "scope-pitfalls",
-    "debugging",
-    "scope,isolation,shared_let",
-    "# Scope Pitfalls\n\n## shared let Write-Back\n..."
-)
-```
+main {
+    save_new_skill(
+        "scope-pitfalls",
+        "debugging",
+        "scope,isolation,shared_let",
+        "# Scope Pitfalls\n\n## shared let Write-Back\n..."
+    )
+
+}```
 
 Next session, `load_skill("scope-pitfalls")` retrieves it. Or the LLM can simply see it listed in `SKILL_INDEX.md`.
 

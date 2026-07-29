@@ -1,0 +1,39 @@
+// Test: 11-building-agents.md:425
+
+// Producer Agent: generates tasks and sends via Channel
+agent TaskProducer(reply: Channel) {
+    description "Produce tasks"
+    main {
+        reply.send("send-email-1")
+        reply.send("send-email-2")
+        reply.send("send-email-3")
+        reply.send("done")  // Completion signal
+    }
+}
+
+// Consumer Agent: receives from Channel and processes tasks
+agent TaskConsumer(task: str, reply: Channel) {
+    description "Consume tasks"
+    main {
+        print("Processing: " + task)
+        // Process the task...
+        reply.send("completed: " + task)
+    }
+}
+
+main {
+    main {
+        // Producer runs concurrently
+        let producer_mb = spawn TaskProducer()
+
+        // Consume all tasks
+        let task = producer_mb.receive()
+        while (task != "done") {
+            let consumer_mb = spawn TaskConsumer(task)
+            let result = consumer_mb.receive()
+            print(result)
+            task = producer_mb.receive()
+        }
+        producer_mb.close()
+    }
+}

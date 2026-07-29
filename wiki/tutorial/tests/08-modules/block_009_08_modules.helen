@@ -9,5 +9,5 @@ import "./utils/text.helen" as text_utils
 import "./config.json" as config
 
 main {
-    // 使用所有导入的 Agent 和工具
+    // Use all imported Agents and utilities
 }

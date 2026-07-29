@@ -1,19 +1,12 @@
-// Test: 05-agents.md:120
+// Test: 05-agents.md:142
 
-agent SmartAssistant {
-    description "Smart assistant with custom context config"
-    
-    context {
-        compression "graduated"      // 压缩策略
-        cache-aware true             // 缓存感知
-        working-memory true          // 工作记忆
-        working-memory-tokens 5000   // 工作记忆词元预算
-    }
-    
-    tools ["read_file", "web_search"]
-    prompt "You are a helpful assistant."
-    
-    main {
-        return llm act "..."
-    }
+// === Context from preceding blocks ===
+agent Greeter(user_name: str, user_id: int) {
+}
+
+// === Test code ===
+agent Interviewer {
+    description "Conduct an interview"
+    max-turns 5    // Maximum 5 turns of conversation
+    prompt "Ask follow-up questions..."
 }

@@ -1,5 +1,7 @@
-// Test: 01-getting-started.md:150
+// Test: 01-getting-started.md:175
 
 main {
-    print("Hello, World!")
+    main {
+        print("Hello, World!")
+    }
 }

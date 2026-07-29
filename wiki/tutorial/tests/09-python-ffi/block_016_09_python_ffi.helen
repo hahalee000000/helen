@@ -1,0 +1,9 @@
+// Test: 09-python-ffi.md:387
+// @skip: needs Python module import
+
+import "math" as math
+
+main {
+    let value = math.nonexistent_function()
+    // Runtime error: 'math' has no property 'nonexistent_function'
+}

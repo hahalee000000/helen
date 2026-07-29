@@ -1,0 +1,29 @@
+// Test: 05-agents.md:941
+
+shared store Counter {
+    let count: int = 0
+    fn increment() { count = count + 1 }
+}
+
+agent Worker(reply: Channel) {
+    main {
+        Counter.increment()
+        reply.send("done")
+    }
+}
+
+main {
+    main {
+        // Start 3 concurrent agents sharing the same Counter
+        let mb1 = spawn Worker()
+        let mb2 = spawn Worker()
+        let mb3 = spawn Worker()
+
+        // Wait for all agents to finish
+        print(mb1.receive())  // "done"
+        print(mb2.receive())  // "done"
+        print(mb3.receive())  // "done"
+
+        print(Counter.count)  // Output: 3
+    }
+}

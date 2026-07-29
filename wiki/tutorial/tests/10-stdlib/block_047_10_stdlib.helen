@@ -1,0 +1,13 @@
+// Test: 10-stdlib.md:1226
+
+main {
+    main {
+        // File size (bytes)
+        let size = file_size("document.pdf")
+        print("File size: " + str(size) + " bytes")
+
+        // Modification time (ISO 8601 format)
+        let mtime = file_modified("data.csv")
+        print("Last modified: " + mtime)
+    }
+}

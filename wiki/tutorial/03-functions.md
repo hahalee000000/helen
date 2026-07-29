@@ -61,8 +61,10 @@ fn add(a: int, b: int): int {
     return a + b
 }
 
-add(1.5, 2.7)    // ❌ Compile error: argument 1 type 'FloatType' is not compatible with parameter type 'IntType'
-add(1, 2)        // ✅ Correct
+main {
+    add(1.5, 2.7)    // ❌ Compile error: argument 1 type 'FloatType' is not compatible with parameter type 'IntType'
+    add(1, 2)        // ✅ Correct
+}
 ```
 
 ### Runtime Checking (Variables)
@@ -74,11 +76,13 @@ fn add(a: int, b: int): int {
     return a + b
 }
 
-let x = 1.5
-add(x, 2)        // ❌ Runtime error: argument 1 type 'FloatType' is not compatible with parameter type 'IntType'
+main {
+    let x = 1.5
+    add(x, 2)        // ❌ Runtime error: argument 1 type 'FloatType' is not compatible with parameter type 'IntType'
 
-let y = 10
-add(y, 2)        // ✅ Correct
+    let y = 10
+    add(y, 2)        // ✅ Correct
+}
 ```
 
 ### Type Compatibility Rules
@@ -92,15 +96,17 @@ fn processFloat(x: float): float {
     return x * 2
 }
 
-processFloat(10)     // ✅ int can be converted to float
-processFloat(10.5)   // ✅ float matches directly
-
 fn processInt(x: int): int {
     return x + 1
 }
 
-processInt(10)       // ✅ int matches directly
-processInt(10.5)     // ❌ float cannot be converted to int
+main {
+    processFloat(10)     // ✅ int can be converted to float
+    processFloat(10.5)   // ✅ float matches directly
+
+    processInt(10)       // ✅ int matches directly
+    processInt(10.5)     // ❌ float cannot be converted to int
+}
 ```
 
 ## Recursion
@@ -163,11 +169,11 @@ agent DataProcessor {
 ## Scope
 
 ```helen
-let global_x = 100
+shared let global_x = 100
 
 fn test() {
     let local_x = 200
-    print(global_x)    // ✅ Can access global variable
+    print(global_x)    // ✅ Can access shared variable
     print(local_x)     // ✅ Can access local variable
 }
 
@@ -188,16 +194,18 @@ Helen supports closures and anonymous functions, allowing you to create inline f
 Use `fn(params) { body }` syntax to create anonymous functions:
 
 ```helen
-// Assign an anonymous function to a variable
-let add = fn(a, b) { return a + b }
-print(add(2, 3))  // 5
+main {
+    // Assign an anonymous function to a variable
+    let add = fn(a, b) { return a + b }
+    print(add(2, 3))  // 5
 
-// Pass directly as an argument
-let doubled = map([1, 2, 3], fn(x) { return x * 2 })
-print(doubled)  // [2, 4, 6]
+    // Pass directly as an argument
+    let doubled = map([1, 2, 3], fn(x) { return x * 2 })
+    print(doubled)  // [2, 4, 6]
 
-let evens = filter([1, 2, 3, 4, 5], fn(x) { return x % 2 == 0 })
-print(evens)  // [2, 4]
+    let evens = filter([1, 2, 3, 4, 5], fn(x) { return x % 2 == 0 })
+    print(evens)  // [2, 4]
+}
 ```
 
 ### Closures
@@ -210,20 +218,22 @@ fn make_adder(x) {
     return fn(y) { return x + y }
 }
 
-let add5 = make_adder(5)
-print(add5(10))  // 15
-print(add5(20))  // 25
-
-// Closures in practical applications
 fn make_multiplier(factor) {
     return fn(x) { return x * factor }
 }
 
-let double = make_multiplier(2)
-let triple = make_multiplier(3)
+main {
+    let add5 = make_adder(5)
+    print(add5(10))  // 15
+    print(add5(20))  // 25
 
-print(double(5))   // 10
-print(triple(5))   // 15
+    // Closures in practical applications
+    let double = make_multiplier(2)
+    let triple = make_multiplier(3)
+
+    print(double(5))   // 10
+    print(triple(5))   // 15
+}
 ```
 
 ### Working with Higher-order Functions
@@ -231,25 +241,27 @@ print(triple(5))   // 15
 Closures work well with higher-order functions like `map`, `filter`, and `reduce`:
 
 ```helen
-let nums = [1, 2, 3, 4, 5]
+main {
+    let nums = [1, 2, 3, 4, 5]
 
-// Use closures for data transformation
-let squared = map(nums, fn(n) { return n * n })
-print(squared)  // [1, 4, 9, 16, 25]
+    // Use closures for data transformation
+    let squared = map(nums, fn(n) { return n * n })
+    print(squared)  // [1, 4, 9, 16, 25]
 
-// Use closures for filtering
-let large = filter(nums, fn(n) { return n > 3 })
-print(large)  // [4, 5]
+    // Use closures for filtering
+    let large = filter(nums, fn(n) { return n > 3 })
+    print(large)  // [4, 5]
 
-// Use closures for aggregation
-let sum = reduce(nums, fn(acc, n) { return acc + n }, 0)
-print(sum)  // 15
+    // Use closures for aggregation
+    let sum = reduce(nums, fn(acc, n) { return acc + n }, 0)
+    print(sum)  // 15
 
-// Chained calls
-let result = nums
-    |> filter(fn(n) { return n % 2 == 0 })
-    |> map(fn(n) { return n * 10 })
-print(result)  // [20, 40]
+    // Chained calls
+    let result = nums
+        |> filter(fn(n) { return n % 2 == 0 })
+        |> map(fn(n) { return n * 10 })
+    print(result)  // [20, 40]
+}
 ```
 
 ### Caveats

@@ -1,4 +1,4 @@
-// Test: 03-functions.md:109
+// Test: 03-functions.md:115
 
 fn factorial(n: int): int {
     if n <= 1 {
@@ -8,5 +8,7 @@ fn factorial(n: int): int {
 }
 
 main {
-    print(factorial(5))    // 120
+    main {
+        print(factorial(5))    // 120
+    }
 }

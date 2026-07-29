@@ -26,9 +26,12 @@ agent CachedWorker(task_id: str, cache: map) {
 }
 
 // 使用
-let my_cache = {}
-let r1 = CachedWorker("task1", my_cache)
-let r2 = CachedWorker("task2", r1["cache"])
-let r3 = CachedWorker("task1", r2["cache"])  // 命中缓存
-print("缓存命中: " + str(cache_hits))
-print("缓存未命中: " + str(cache_misses))
+
+main {
+    let my_cache = {}
+    let r1 = CachedWorker("task1", my_cache)
+    let r2 = CachedWorker("task2", r1["cache"])
+    let r3 = CachedWorker("task1", r2["cache"])  // 命中缓存
+    print("缓存命中: " + str(cache_hits))
+    print("缓存未命中: " + str(cache_misses))
+}

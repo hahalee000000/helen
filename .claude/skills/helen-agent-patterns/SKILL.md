@@ -45,7 +45,9 @@ agent SimpleAgent {
     }
 }
 
-let result = SimpleAgent()
+main {
+    let result = SimpleAgent()
+}
 ```
 
 ### Parameterized Agent
@@ -62,7 +64,9 @@ agent Translator(text: str, target_lang: str) {
     }
 }
 
-let result = Translator("Hello", "Chinese")
+main {
+    let result = Translator("Hello", "Chinese")
+}
 ```
 
 ### Agent Configuration Options
@@ -71,10 +75,10 @@ let result = Translator("Hello", "Chinese")
 agent ConfiguredAgent {
     description "Agent with full configuration"
     prompt "You are an expert assistant."
-    model "gpt-4"              # LLM model
-    temperature 0.7            # Creativity (0.0-1.0)
-    max-turns 10               # Maximum tool call rounds
-    streaming true             # Enable streaming response
+    model "gpt-4"              // LLM model
+    temperature 0.7            // Creativity (0.0-1.0)
+    max-turns 10               // Maximum tool call rounds
+    streaming true             // Enable streaming response
     tools = ["web_search", "read_file", "write_file"]
 
     main {
@@ -145,7 +149,7 @@ Agents can load Skills as knowledge sources: `load_skill("helen-testing")`.
 
 | Variable Type | Visible in agent main | Description |
 |--------------|----------------------|-------------|
-| Module-level `let` | ❌ Not visible | Compile-time error (except @open) |
+| Module-level `let` | 🚫 Forbidden | E0355 TOP_LEVEL_STATEMENT (compile error) |
 | Module-level `const` | ✅ Auto-visible | Read-only sharing |
 | `shared let` (value types) | ✅ Visible | Writable across agents |
 | `shared store` | ✅ Visible | Accessed via methods |
@@ -161,8 +165,8 @@ Agents can load Skills as knowledge sources: `load_skill("helen-testing")`.
 ### Isolation Levels
 
 ```helen
-@open agent DebugAgent() {         // L0: Module-level let visible (for debugging)
-    main { return module_let }
+@open agent DebugAgent() {         // L0: Was for module-level let access; module let is now forbidden (E0355)
+    main { return ... }
 }
 agent NormalAgent() { ... }        // L1: Standard isolation (default)
 @strict agent StrictAgent(data: list) {  // L2: Deep-copies arguments and return values
@@ -174,26 +178,28 @@ agent NormalAgent() { ... }        // L1: Standard isolation (default)
 ### Example: Scope Isolation
 
 ```helen
-let module_counter = 0           // ❌ Not visible in agent main
+// ❌ let module_counter = 0     // E0355: module-level let is forbidden
 const MAX_RETRIES = 3            // ✅ Auto-visible in agent main
 shared let shared_count = 0      // ✅ Visible and writable in agent main
 
 agent Worker(task: str) {
     functions {
         fn process(): str {
-            module_counter = module_counter + 1  // ✅ Visible in functions block
+            // module_counter = module_counter + 1  // ❌ Would be ScopeViolationError
             return "processed: " + task
         }
     }
 
     main {
-        // ❌ Compile error: module_counter is not visible in agent main
+        // ❌ Compile error: module-level let is not visible in agent main
         print("Max retries: " + MAX_RETRIES)     // ✅ const auto-visible
         shared_count = shared_count + 1           // ✅ shared let visible
         return llm act "Process: " + task
     }
 }
 ```
+
+> **v1.30 note**: Module-level `let` is now a compile error (E0355 TOP_LEVEL_STATEMENT) — it is not just invisible in agent main, it is forbidden at the module level entirely.
 
 ### Parameter Read-Only + Closure Capture
 
@@ -288,9 +294,11 @@ In addition to variable scope isolation, v1.22 introduces **invocation-level con
 agent AgentA { main { return llm act "I am Alice" } }
 agent AgentB { main { return llm act "What is my name?" } }
 
-let a = AgentA()  // invocation_id: inv_abc123
-let b = AgentB()  // invocation_id: inv_def456
-// AgentB's LLM cannot see AgentA's conversation — each main {} is fresh context
+main {
+    let a = AgentA()  // invocation_id: inv_abc123
+    let b = AgentB()  // invocation_id: inv_def456
+    // AgentB's LLM cannot see AgentA's conversation — each main {} is fresh context
+}
 ```
 
 | Isolation Dimension | Scope Isolation (v1.10/v1.12) | Context Isolation (v1.22/v1.23) |
@@ -376,9 +384,12 @@ agent SupportRouter(query: str) {
     }
 }
 
-let response = SupportRouter("I can't login to my account")
-// Routes to TechSupport
+main {
+    let response = SupportRouter("I can't login to my account")
+    // Routes to TechSupport
+}
 ```
+
 
 ### Pattern 3: Pipeline Agent
 
@@ -426,7 +437,9 @@ agent ContentPipeline(topic: str) {
     }
 }
 
-let article = ContentPipeline("Helen programming language")
+main {
+    let article = ContentPipeline("Helen programming language")
+}
 ```
 
 ### Pattern 4: Concurrent Agent (spawn + Channel)
@@ -531,7 +544,9 @@ agent StreamingWriter(topic: str) {
     }
 }
 
-StreamingWriter("The future of AI")
+main {
+    StreamingWriter("The future of AI")
+}
 ```
 
 Streaming with full callbacks:
@@ -557,11 +572,13 @@ fn conditional_chunk(chunk: str) {
     if should_stop() { return false }  // Terminate streaming
 }
 
-let mailbox = spawn StreamingAgent("long task")
-mailbox.cancel()  // Interrupt background streaming
+main {
+    let mailbox = spawn StreamingAgent("long task")
+    mailbox.cancel()  // Interrupt background streaming
 
-cancel_llm_call(call_id)
-取消大模型调用(call_id)  // Chinese alias
+    cancel_llm_call(call_id)
+    取消大模型调用(call_id)  // Chinese alias
+}
 ```
 
 ### Pattern 5B: Injecting Hints After Tool Execution (on_tool_end, v1.21)
@@ -613,11 +630,13 @@ agent Worker {
 `on_tool_end` can be combined with `on_chunk` / `on_complete`:
 
 ```helen
-llm act "task"
-    逐块处理 fn(c) { stream_print(c) }
-    完成 fn() { print("\n✅ Done") }
-    工具结束 fn(name, result) { return "hint" }
-```
+main {
+    llm act "task"
+        逐块处理 fn(c) { stream_print(c) }
+        完成 fn() { print("\n✅ Done") }
+        工具结束 fn(name, result) { return "hint" }
+
+}```
 
 ### Pattern 6: Tool-Using Agent
 
@@ -699,12 +718,14 @@ agent RoleAgent(topic: str, config: map) {
     main { return llm act }
 }
 
-let configs = [
-    {"name": "Optimist", "description": "Sees the best in everything", "style": "Positive and upbeat"},
-    {"name": "Pessimist", "description": "Focuses on risks", "style": "Cautious and conservative"}
-]
-for config in configs {
-    let result = RoleAgent("AI trends", config)
+main {
+    let configs = [
+        {"name": "Optimist", "description": "Sees the best in everything", "style": "Positive and upbeat"},
+        {"name": "Pessimist", "description": "Focuses on risks", "style": "Cautious and conservative"}
+    ]
+    for config in configs {
+        let result = RoleAgent("AI trends", config)
+    }
 }
 ```
 
@@ -734,13 +755,15 @@ agent RobustAgent(task: str) {
 #### Agent Call Failure (AgentError)
 
 ```helen
-try {
-    let result = Contractor(req, dir)
-} catch AgentError err {
-    // err.agent_name — "Contractor"
-    // err.agent_args — {req: "...", dir: "..."}
-    // err.cause      — underlying exception
-    error("Failed: " + err.message)
+main {
+    try {
+        let result = Contractor(req, dir)
+    } catch AgentError err {
+        // err.agent_name — "Contractor"
+        // err.agent_args — {req: "...", dir: "..."}
+        // err.cause      — underlying exception
+        error("Failed: " + err.message)
+    }
 }
 ```
 
@@ -757,7 +780,7 @@ try {
 | 3 | **temperature** | Creative 0.9 / Precise 0.2 / Balanced 0.7 | Always 0.5 |
 | 4 | **max-turns** | Simple Q&A 3 / Complex tasks 15 | Unlimited |
 | 5 | **tools** | Least privilege: `["read_file"]` | `["read_file","write_file","shell_exec","web_search"]` |
-| 6 | **Scope** | `shared let` for cross-agent value sharing | Expecting module `let` to be visible in agent |
+| 6 | **Scope** | `shared let` for cross-agent value sharing | Expecting module `let` to be visible (E0355: module-level let is forbidden) |
 | 7 | **ground truth** | Inject environment facts via `{{}}` | Letting the LLM guess cwd/time |
 
 ### Key Principle: Inject Ground Truth (`{{}}`)

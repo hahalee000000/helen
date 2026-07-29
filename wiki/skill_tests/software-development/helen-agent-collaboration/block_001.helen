@@ -18,5 +18,8 @@ agent MyAgent(input: str) {
 }
 
 // 调用 Agent（像调用函数一样）
-let result = MyAgent("hello")
-print(result)
+
+main {
+    let result = MyAgent("hello")
+    print(result)
+}

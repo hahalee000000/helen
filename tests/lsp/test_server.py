@@ -120,13 +120,13 @@ class TestLspDocumentLifecycle:
         server._did_open({
             "textDocument": {
                 "uri": "file:///test.helen",
-                "text": "let x = 1",
+                "text": "const X = 1",
                 "version": 1,
             }
         })
         assert "file:///test.helen" in server.documents
         doc = server.documents["file:///test.helen"]
-        assert doc.content == "let x = 1"
+        assert doc.content == "const X = 1"
         assert doc.version == 1
 
     def test_did_change_updates_content(self):
@@ -135,7 +135,7 @@ class TestLspDocumentLifecycle:
         server._did_open({
             "textDocument": {
                 "uri": "file:///test.helen",
-                "text": "let x = 1",
+                "text": "const X = 1",
                 "version": 1,
             }
         })
@@ -153,7 +153,7 @@ class TestLspDocumentLifecycle:
         server._did_open({
             "textDocument": {
                 "uri": "file:///test.helen",
-                "text": "let x = 1",
+                "text": "const X = 1",
                 "version": 1,
             }
         })
@@ -289,7 +289,7 @@ class TestLspDefinition:
     def test_definition_not_found(self):
         """Go-to-definition returns empty for undefined symbol."""
         server = HelenLanguageServer()
-        content = "let x = 1"
+        content = "const X = 1"
         server._did_open({
             "textDocument": {
                 "uri": "file:///test.helen",
@@ -318,7 +318,7 @@ class TestLspDiagnostics:
     def test_analyze_valid_code_no_errors(self):
         """Valid code produces no diagnostics."""
         server = HelenLanguageServer()
-        diagnostics = server._analyze("let x = 1")
+        diagnostics = server._analyze("const X = 1")
         assert len(diagnostics) == 0
 
     def test_analyze_invalid_code_has_errors(self):

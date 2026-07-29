@@ -1,0 +1,14 @@
+// Test: 07-spawn.md:53
+
+main {
+    main {
+        // Send a message
+        mailbox.send("hello")
+
+        // Blocking receive
+        let msg = mailbox.receive()
+
+        // Receive with timeout
+        let msg_with_timeout = mailbox.receive(5.0)  // 5 second timeout, returns null
+    }
+}

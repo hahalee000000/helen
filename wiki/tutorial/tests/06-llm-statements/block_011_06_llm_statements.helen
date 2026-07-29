@@ -1,13 +1,19 @@
-// Test: 06-llm-statements.md:263
+// Test: 06-llm-statements.md:261
 
-main {
-    // 自动记录: [user] "Classify email priority"
-    llm if "Classify email priority" {
-        branch "urgent" { print("Urgent!") }
-        default { print("Other") }
+agent Coder {
+    tools ["write_file", "shell_exec", "read_file"]
+
+    main {
+        llm act "Create hello.py, then run it"
+            on_chunk fn(c) { stream_print(c) }
+            on_tool_end fn(name, result) {
+                if name == "write_file" {
+                    return "File written; next step is to run tests to verify"
+                }
+                if name == "shell_exec" {
+                    return {"role": "system", "content": "Warning: do not execute dangerous commands"}
+                }
+                return null
+            }
     }
-    // 自动记录: [assistant] "[routed to: urgent]"
-
-    // 下次 LLM 调用会包含上面的历史作为上下文
-    llm act "Draft response for the email"
 }

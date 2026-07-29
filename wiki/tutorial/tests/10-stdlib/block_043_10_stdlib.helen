@@ -1,0 +1,18 @@
+// Test: 10-stdlib.md:1147
+
+fn 统计代码行数(目录: str) {
+    let files = glob_files(目录, "*.py")
+    let total_lines = 0
+    for file in files {
+        let content = read_file(file)
+        total_lines += len(split(content, "\n"))
+    }
+    return {"files": len(files), "lines": total_lines}
+}
+
+main {
+    main {
+        let stats = 统计代码行数("src")
+        print("Found " + str(stats["files"]) + " files, " + str(stats["lines"]) + " lines total")
+    }
+}

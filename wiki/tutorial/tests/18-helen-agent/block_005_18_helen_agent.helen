@@ -1,0 +1,41 @@
+// Test: 18-helen-agent.md:455
+
+// === Context from preceding blocks ===
+agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Channel) {
+    description "Helen Programming Agent — self-evolving coding assistant"
+    model "qwen3.7-plus"
+    tools CHAT_TOOLS
+    transcript "persistent"        // full audit trail
+    
+}
+
+// Create a new skill at .helen/skills/<category>/<name>/SKILL.md
+fn save_new_skill(name: str, category: str, tags: str, content: str): map
+
+// Append to an existing skill (path safety enforced — see below)
+fn update_existing_skill(skill_path: str, addition: str): map
+
+// Rebuild the SKILL_INDEX.md from all SKILL.md files
+fn refresh_skill_index(): str
+
+// Append a fact to .helen/MEMORY.md under a category
+fn update_memory(category: str, key: str, value: str): map
+
+// Append a preference to .helen/USER.md under a category
+fn update_user_preference(category: str, preference: str): map
+
+// === Test code ===
+shared store ContextManager {
+    let initialized: bool = false
+    let pinned_uuids: list = []        // messages pinned across compression
+    let session_dir_path: str = ""     // current session directory
+    
+    fn init(cwd: str = "") {
+        // idempotent; forces re-setup if session_dir_path is empty
+        if initialized && session_dir_path != "" { return }
+        initialized = true
+        cached_version = detect_helen_version()
+        session_dir_path = _setup_session_scope(cwd)
+        _register_hooks()
+    }
+}

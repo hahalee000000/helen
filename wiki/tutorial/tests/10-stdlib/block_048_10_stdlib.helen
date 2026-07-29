@@ -1,0 +1,31 @@
+// Test: 10-stdlib.md:1240
+
+main {
+    main {
+        // List directory contents
+        let files = list_dir("src")
+        // Returns: ["main.py", "utils.py", "tests/"]
+
+        // With pattern filter
+        let py_files = list_dir("src", "*.py")
+        // Returns: ["main.py", "utils.py"]
+
+        // Recursively walk directory tree
+        let tree = walk_dir("project")
+        // Returns: [(dirpath, dirnames, filenames), ...]
+        for entry in tree {
+            let dir = entry[0]
+            let subdirs = entry[1]
+            let files = entry[2]
+            print(dir + ": " + str(len(files)) + " files")
+        }
+
+        // Create directories
+        mkdir("new_dir")
+        mkdir_p("deep/nested/dir")  // Recursive creation
+
+        // Delete
+        delete_file("temp.txt")
+        delete_dir("old_dir", recursive=true)
+    }
+}

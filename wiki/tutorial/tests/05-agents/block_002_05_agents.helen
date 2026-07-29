@@ -1,9 +1,11 @@
-// Test: 05-agents.md:32
+// Test: 05-agents.md:56
+// @should_fail
 
-agent Translator {
-    description "Translate text between languages"
-    prompt """
-    You are a professional translator.
-    Translate the given text accurately.
-    """
+// ❌ Wrong: the agent tries to use user_name and user_id, but they are
+// not passed in as parameters. The compiler will report "undefined variable"
+// because agents are strictly isolated from the caller's scope.
+agent Greeter {
+    main {
+        print("Hello " + user_name + ", your id is " + str(user_id))
+    }
 }

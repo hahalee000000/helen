@@ -53,13 +53,11 @@ Before each agent call, explicitly answer:
 ### ❌ Wrong Example: Assuming Context Is Automatically Inherited
 
 ```helen
-let user_name = "Alice"       // Module-level variable
-let user_id = 42              // Module-level variable
-
+// ❌ Wrong: the agent tries to use user_name and user_id, but they are
+// not passed in as parameters. The compiler will report "undefined variable"
+// because agents are strictly isolated from the caller's scope.
 agent Greeter {
     main {
-        // ❌ Wrong: user_name and user_id are not visible inside the agent
-        // The compiler will report "undefined variable"
         print("Hello " + user_name + ", your id is " + str(user_id))
     }
 }
@@ -536,30 +534,34 @@ agent CodeExplorer {
 // 3. read_file("src/processor.py")  → Read relevant files
 ```
 
-**`find_files` — Find files by pattern**
+**`find_files` — Find files by pattern** (inside an agent `main` or `functions` block)
 
 ```helen
-// Find all Python files
-find_files("src/", "**/*.py")
+main {
+    // Find all Python files
+    find_files("src/", "**/*.py")
 
-// Find all test files
-find_files("tests/", "**/test_*.py")
+    // Find all test files
+    find_files("tests/", "**/test_*.py")
 
-// Find configuration files
-find_files(".", "**/*.{json,yaml,toml}")
+    // Find configuration files
+    find_files(".", "**/*.{json,yaml,toml}")
+}
 ```
 
-**`search_files` — Search by content**
+**`search_files` — Search by content** (inside an agent `main` or `functions` block)
 
 ```helen
-// Text search (default)
-search_files("src/", "TODO")
+main {
+    // Text search (default)
+    search_files("src/", "TODO")
 
-// Regex search
-search_files("src/", "def \\w+Handler", regex=true)
+    // Regex search
+    search_files("src/", "def \\w+Handler", regex=true)
 
-// Case-insensitive
-search_files("docs/", "warning", case_sensitive=false)
+    // Case-insensitive
+    search_files("docs/", "warning", case_sensitive=false)
+}
 ```
 
 **Chinese aliases**: The corresponding stdlib functions are `查找文件()` and `搜索内容()`.
@@ -638,9 +640,10 @@ agent Translator(text: str, target: str) {
     }
 }
 
-// Invocation (recommended function-style call):
-let translated = Translator(text="Hello", target="French")
-// Function-style call: let translated = Translator(text="Hello", target="French")
+main {
+    // Invocation (recommended function-style call):
+    let translated = Translator(text="Hello", target="French")
+}
 ```
 
 **Variable definitions in the functions block**:
@@ -814,8 +817,10 @@ shared store Logger {
     }
 }
 
-Logger.log("starting up")             // level defaults to "info"
-Logger.log("disk full", "error")      // explicit level
+main {
+    Logger.log("starting up")             // level defaults to "info"
+    Logger.log("disk full", "error")      // explicit level
+}
 ```
 
 Before v1.29.15, calling a method without passing a defaulted parameter left the parameter `undefined`, causing runtime errors. The fix in `helen/interpreter/shared_store.py` evaluates the default expression at call time (not at declaration time), matching regular function semantics.
@@ -837,12 +842,14 @@ shared store BankAccount {
     }
 }
 
-// ✅ Public interface
-BankAccount.withdraw(100)
-print(BankAccount.balance)  // Output: 900
+main {
+    // ✅ Public interface
+    BankAccount.withdraw(100)
+    print(BankAccount.balance)  // Output: 900
 
-// ❌ Private field
-print(BankAccount._transactionLog)  // Error!
+    // ❌ Private field
+    print(BankAccount._transactionLog)  // Error!
+}
 ```
 
 ### Channel: Inter-Agent Message Communication (v1.18+)
@@ -858,9 +865,11 @@ agent Worker(task: str, reply: Channel) {
     }
 }
 
-// spawn returns a Channel, automatically injected as the agent's last parameter
-let mailbox = spawn Worker("Task A")
-print(mailbox.receive())  // "Done: Task A"
+main {
+    // spawn returns a Channel, automatically injected as the agent's last parameter
+    let mailbox = spawn Worker("Task A")
+    print(mailbox.receive())  // "Done: Task A"
+}
 ```
 
 **Channel API:**
@@ -887,12 +896,14 @@ agent Fetcher(url: str, reply: Channel) {
     }
 }
 
-let mb1 = spawn Fetcher("https://api.example.com/a")
-let mb2 = spawn Fetcher("https://api.example.com/b")
+main {
+    let mb1 = spawn Fetcher("https://api.example.com/a")
+    let mb2 = spawn Fetcher("https://api.example.com/b")
 
-// Wait for any Channel to return a result
-let result = mailbox_select([mb1, mb2])
-print("First to return: " + result)
+    // Wait for any Channel to return a result
+    let result = mailbox_select([mb1, mb2])
+    print("First to return: " + result)
+}
 ```
 
 **Chinese alias**: `邮箱选择([mb1, mb2])`.
@@ -910,14 +921,16 @@ agent Producer(items: list, reply: Channel) {
     }
 }
 
-// Consumer: receives messages from the Channel
-let mailbox = spawn Producer(["apple", "banana", "cherry"])
-let msg = mailbox.receive()
-while (msg != "done") {
-    print(msg)
-    msg = mailbox.receive()
+main {
+    // Consumer: receives messages from the Channel
+    let mailbox = spawn Producer(["apple", "banana", "cherry"])
+    let msg = mailbox.receive()
+    while (msg != "done") {
+        print(msg)
+        msg = mailbox.receive()
+    }
+    mailbox.close()
 }
-mailbox.close()
 ```
 
 ### spawn and Shared State (v1.18+)
@@ -937,17 +950,19 @@ agent Worker(reply: Channel) {
     }
 }
 
-// Start 3 concurrent agents sharing the same Counter
-let mb1 = spawn Worker()
-let mb2 = spawn Worker()
-let mb3 = spawn Worker()
+main {
+    // Start 3 concurrent agents sharing the same Counter
+    let mb1 = spawn Worker()
+    let mb2 = spawn Worker()
+    let mb3 = spawn Worker()
 
-// Wait for all agents to finish
-print(mb1.receive())  // "done"
-print(mb2.receive())  // "done"
-print(mb3.receive())  // "done"
+    // Wait for all agents to finish
+    print(mb1.receive())  // "done"
+    print(mb2.receive())  // "done"
+    print(mb3.receive())  // "done"
 
-print(Counter.count)  // Output: 3
+    print(Counter.count)  // Output: 3
+}
 ```
 
 **Thread safety guarantees**:

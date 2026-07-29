@@ -1,7 +1,11 @@
-// Test: 09-python-ffi.md:265
+// Test: 09-python-ffi.md:233
 
-import "nonexistent_module" as bad
+// main.helen
+import "bridge.helen"
 
 main {
-    // 运行时错误：Cannot import Python module 'nonexistent_module'
+    main {
+        init_greeter("Alice")
+        print(greet("Hello"))    // Hello, Alice!
+    }
 }

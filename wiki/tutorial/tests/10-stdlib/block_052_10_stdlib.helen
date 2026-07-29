@@ -1,0 +1,17 @@
+// Test: 10-stdlib.md:1322
+
+main {
+    main {
+        try {
+            let x = len(42)           // Python TypeError
+        } catch RuntimeError err {
+            print(err.message)        // "Python TypeError: object of type 'int' has no len()"
+        }
+
+        try {
+            let data = read_file("/nonexistent")
+        } catch RuntimeError err {
+            print(err.message)        // "Python FileNotFoundError: [Errno 2] ..."
+        }
+    }
+}

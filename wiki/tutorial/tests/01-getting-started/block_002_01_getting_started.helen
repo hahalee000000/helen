@@ -1,6 +1,11 @@
-// Test: 01-getting-started.md:171
+// Test: 01-getting-started.md:196
 
 // greet.helen
-for name in argv {
-    print("Hello, " + name + "!")
+
+main {
+    main {
+        for name in argv {
+            print("Hello, " + name + "!")
+        }
+    }
 }

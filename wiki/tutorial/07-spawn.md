@@ -50,29 +50,35 @@ main {
 ### send / receive
 
 ```helen
-// Send a message
-mailbox.send("hello")
+main {
+    // Send a message
+    mailbox.send("hello")
 
-// Blocking receive
-let msg = mailbox.receive()
+    // Blocking receive
+    let msg = mailbox.receive()
 
-// Receive with timeout
-let msg = mailbox.receive(5.0)  // 5 second timeout, returns null
+    // Receive with timeout
+    let msg_with_timeout = mailbox.receive(5.0)  // 5 second timeout, returns null
+}
 ```
 
 ### try_receive (non-blocking)
 
 ```helen
-let msg = mailbox.try_receive()
-if msg == null {
-    print("No messages yet")
+main {
+    let msg = mailbox.try_receive()
+    if msg == null {
+        print("No messages yet")
+    }
 }
 ```
 
 ### cancel
 
 ```helen
-mailbox.cancel()  // Send cancel signal + close channel
+main {
+    mailbox.cancel()  // Send cancel signal + close channel
+}
 ```
 
 The spawned agent can check the cancel signal via `reply.cancel_event`:
@@ -131,8 +137,10 @@ main {
 ### close
 
 ```helen
-mailbox.close()  // Close channel; the other end's receive() returns null
-```
+main {
+    mailbox.close()  // Close channel; the other end's receive() returns null
+
+}```
 
 ### Full Example: Streaming Progress
 
@@ -239,9 +247,11 @@ main {
 When you don't need the result, ignore spawn's return value:
 
 ```helen
-spawn Logger("System startup log")
-spawn Monitor("Health check")
-print("System started")  // Executes immediately, doesn't wait for spawned agents
+main {
+    spawn Logger("System startup log")
+    spawn Monitor("Health check")
+    print("System started")  // Executes immediately, doesn't wait for spawned agents
+}
 ```
 
 ---
@@ -373,32 +383,36 @@ Each spawned agent has its own transcript session. v1.23.7 introduces spawn rela
 ### Querying Spawn Relationships
 
 ```helen
-// Get all direct child sessions of the current session
-let children = get_spawned_sessions()
-for child in children {
-    print("Spawned: " + child["session_id"])
-    print("  Agent: " + child["agent_name"])
-}
+main {
+    // Get all direct child sessions of the current session
+    let children = get_spawned_sessions()
+    for child in children {
+        print("Spawned: " + child["session_id"])
+        print("  Agent: " + child["agent_name"])
+    }
 
-// Get the full spawn tree (including nested spawns)
-let tree = get_spawn_tree()
-print("Root: " + tree["session_id"])
-for child in tree["children"] {
-    print("  Child: " + child["session_id"])
+    // Get the full spawn tree (including nested spawns)
+    let tree = get_spawn_tree()
+    print("Root: " + tree["session_id"])
+    for child in tree["children"] {
+        print("  Child: " + child["session_id"])
+    }
 }
 ```
 
 ### Aggregate View
 
 ```helen
-// View the main session + all spawned complete execution flow
-let all_messages = replay_full_session()
-for msg in all_messages {
-    print("[" + msg["session_id"] + "] " + msg["role"] + ": " + msg["content"][:50])
-}
+main {
+    // View the main session + all spawned complete execution flow
+    let all_messages = replay_full_session()
+    for msg in all_messages {
+        print("[" + msg["session_id"] + "] " + msg["role"] + ": " + msg["content"][:50])
+    }
 
-// Cross-spawn search
-let errors = search_transcript("error", include_spawned=true)
+    // Cross-spawn search
+    let errors = search_transcript("error", include_spawned=true)
+}
 ```
 
 ### Cascading Deletion
@@ -406,14 +420,16 @@ let errors = search_transcript("error", include_spawned=true)
 When deleting a session, all spawned child sessions are cascade-deleted by default to avoid orphan transcripts:
 
 ```helen
-// Delete session and all its spawns (default)
-delete_session("session_abc123")
+main {
+    // Delete session and all its spawns (default)
+    delete_session("session_abc123")
 
-// Delete only the specified session, keep spawns
-delete_session("session_abc123", cascade=false)
+    // Delete only the specified session, keep spawns
+    delete_session("session_abc123", cascade=false)
 
-// Clean up old sessions (cascade-deletes spawns)
-cleanup_sessions(keep_count=10)  // Keep the most recent 10, cascade-delete spawns
+    // Clean up old sessions (cascade-deletes spawns)
+    cleanup_sessions(keep_count=10)  // Keep the most recent 10, cascade-delete spawns
+}
 ```
 
 **Design rationale**:
@@ -521,8 +537,10 @@ main {
 Chinese alias: `恢复会话("<session_id>")`.
 
 ```helen
-设 邮箱 = 分生 工作者("部署") 恢复会话(已存子会话id)
-```
+main {
+    设 邮箱 = 分生 工作者("部署") 恢复会话(已存子会话id)
+
+}```
 
 ### How it works
 

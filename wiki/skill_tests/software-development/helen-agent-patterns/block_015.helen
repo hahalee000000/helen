@@ -1,6 +1,6 @@
 // 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 15)
 
-# 定义专家
+// 定义专家
 agent TechSupport(query: str) {
     description "Technical support specialist"
     prompt "You are a technical support expert."
@@ -25,7 +25,7 @@ agent GeneralSupport(query: str) {
     }
 }
 
-# 路由 Agent
+// 路由 Agent
 agent SupportRouter(query: str) {
     description "Route support queries to specialists"
     
@@ -44,6 +44,9 @@ agent SupportRouter(query: str) {
     }
 }
 
-# 使用
-let response = SupportRouter("I can't login to my account")
-# 路由到 TechSupport
+// 使用
+
+main {
+    let response = SupportRouter("I can't login to my account")
+    # 路由到 TechSupport
+}

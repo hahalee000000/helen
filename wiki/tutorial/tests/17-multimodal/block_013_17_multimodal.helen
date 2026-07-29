@@ -1,13 +1,13 @@
-// Test: 17-multimodal.md:277
+// Test: 17-multimodal.md:293
 
 agent 图像比较器 {
-    description "比较多个图像的差异"
+    description "Compare differences between multiple images"
     
     main {
         let img1 = media("before.png")
         let img2 = media("after.png")
         
-        let comparison = llm act "比较这两张图片，指出主要的变化和差异"
+        let comparison = llm act "Compare these two images, pointing out the main changes and differences"
             media(img1, img2)
         
         print(comparison)

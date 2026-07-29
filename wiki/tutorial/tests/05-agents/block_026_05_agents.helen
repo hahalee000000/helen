@@ -1,0 +1,134 @@
+// Test: 05-agents.md:654
+
+// === Context from preceding blocks ===
+agent Greeter(user_name: str, user_id: int) {
+}
+
+agent Assistant {
+    description "Helpful assistant"
+    tools = ["web_search", "read_file"]   // LLM can autonomously call these two
+    functions {
+        fn fetch_summary(url: str): str {  // Declared in functions
+            return summarize(content)
+        }
+        fn dangerous_op() { ... }          // LLM cannot see this
+    }
+}
+
+agent SmartAssistant {
+    description "Smart assistant with custom context config"
+    
+    context {
+        compression "graduated"      // Compression strategy
+        cache-aware true             // Cache-aware
+        working-memory true          // Working memory
+        working-memory-tokens 5000   // Working memory token budget
+    }
+    
+    tools ["read_file", "web_search"]
+    prompt "You are a helpful assistant."
+    
+}
+
+agent Researcher(topic: str) {
+    description "Research assistant with optimized context"
+    
+    // Optimize context management
+    context {
+        compression "graduated"      // Graduated compression
+        cache-aware true             // Cache-aware
+        working-memory true          // Track research files
+        working-memory-tokens 8000   // Larger working memory
+    }
+    
+    tools ["web_search", "web_fetch", "read_file", "write_file"]
+    
+    prompt """
+    You are a research assistant.
+    Research topic: {{topic}}
+    
+    Use tools to search and organize information.
+    """
+    
+}
+
+agent ChatBot {
+    description "Chat bot with transcript management"
+    prompt "You are a helpful chat assistant."
+    
+}
+
+agent 工作Agent {
+    description "Simple task agent"
+    model "qwen3.7-plus"
+    transcript "none"  // Default: no transcript recording
+    
+}
+
+agent 调试Agent {
+    description "Debug agent with memory transcript"
+    model "qwen3.7-plus"
+    transcript "memory"  // In-memory only, no disk persistence
+    
+}
+
+agent 审计Agent {
+    description "Audit agent with persistent transcript"
+    model "qwen3.7-plus"
+    transcript "persistent"  // Full persistence to disk
+    
+}
+
+agent CodingAgent {
+    description "A coding assistant"
+    prompt "You are a Python expert. Help me with coding."
+    tools ["read_file", "write_file"]
+
+}
+
+agent Translator(text: str, target: str) {
+    description "Translate text"
+    model "gpt-4"
+    temperature 0.3
+    prompt """
+    Translate to {{target}}:
+    {{text}}
+    """
+    
+    functions {
+        const MAX_LENGTH = 1000
+        
+        fn validate_input(s: str): bool {
+            return len(s) > 0
+        }
+        
+        fn format_output(text: str): str {
+            if default_format == "formal" {
+                return text.upper()
+            }
+            return text
+        }
+    }
+    
+}
+
+// === Test code ===
+agent MyAgent {
+    description "Example agent"
+    prompt "..."
+    
+    functions {
+        let config = "default"
+        const MAX_RETRIES = 3
+        
+        fn get_config(): str {
+            return config  // ✅ Can access
+        }
+        
+        fn retry() {
+            for i in range(MAX_RETRIES) {
+                print("Retry " + str(i))
+            }
+        }
+    }
+}

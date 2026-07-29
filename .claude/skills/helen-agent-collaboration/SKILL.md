@@ -26,9 +26,9 @@ Caller ──parameters──► Agent Input
 ```
 
 ```helen
-// ❌ Wrong: assuming module variables are auto-visible
-let user_name = "Alice"
-agent Greeter { main { print("Hello " + user_name) } }  // Compile error!
+// ❌ Wrong: module-level let is forbidden (E0355)
+let user_name = "Alice"    // E0355 TOP_LEVEL_STATEMENT
+agent Greeter { main { print("Hello " + user_name) } }
 
 // ✅ Right: pass explicitly
 agent Greeter(user_name: str) { main { print("Hello " + user_name) } }
@@ -445,7 +445,7 @@ How to choose the right sharing mechanism for collaboration:
 | `shared store` | Complex mutable shared state | RLock thread-safe, `_` prefix for private fields |
 | Channel | Message/result passing between agents | spawn returns a Channel |
 
-**Key rules**: `shared let` forbids reference types; module-level `let` is not visible inside agent main (compile error).
+**Key rules**: `shared let` forbids reference types; module-level `let` is forbidden (E0355). Use `const`, `shared let`, or `shared store` for cross-agent sharing.
 
 Shared Store quick example:
 

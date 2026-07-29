@@ -1,21 +1,17 @@
-// Test: 09-python-ffi.md:160
+// Test: 09-python-ffi.md:153
 // @skip: needs Python module import
 
-import "os.path" as path
+import "json" as json
 
 main {
-    let filepath = "/home/user/documents/report.txt"
+    let encoder = json.JSONEncoder()
     
-    // 提取文件名
-    let basename = path.basename(filepath)
-    print(basename)    // report.txt
+    // Approach 1: Natural method call (recommended)
+    let result1 = encoder.encode({"name": "Alice"})
     
-    // 提取目录
-    let dirname = path.dirname(filepath)
-    print(dirname)     // /home/user/documents
+    // Approach 2: .call() by method name
+    let result2 = encoder.call("encode", {"name": "Alice"})
     
-    // 分离扩展名
-    let parts = path.splitext(filepath)
-    print(parts[0])    // /home/user/documents/report
-    print(parts[1])    // .txt
+    print(result1)    // {"name": "Alice"}
+    print(result2)    // {"name": "Alice"}
 }

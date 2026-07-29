@@ -1,0 +1,20 @@
+// Test: 07-spawn.md:492
+
+// debug.helen: Analyze the previous execution flow
+
+main {
+    main {
+        // View spawn tree
+        let tree = get_spawn_tree()
+        print("Spawn tree:")
+        for child in tree["children"] {
+            print("  - " + child["session_id"])
+        }
+
+        // Aggregate view of all messages
+        let all = replay_full_session()
+        for msg in all {
+            print("[" + msg["session_id"] + "] " + msg["role"] + ": " + msg["content"][:50])
+        }
+    }
+}

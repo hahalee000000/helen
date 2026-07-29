@@ -1,4 +1,4 @@
-// Test: 03-functions.md:318
+// Test: 03-functions.md:330
 
 // === Context from preceding blocks ===
 fn greet(name) {
@@ -16,22 +16,35 @@ fn factorial(n: int): int {
     return n * factorial(n - 1)
 }
 
-let global_x = 100
+shared let global_x = 100
 
 fn test() {
-    let local_x = 200
-    print(global_x)    // ✅ 可以访问全局变量
-    print(local_x)     // ✅ 可以访问局部变量
+    print(global_x)    // ✅ Can access shared variable
+    print(local_x)     // ✅ Can access local variable
+}
+
+// Closure captures outer variable
+fn make_adder(x) {
+    return fn(y) { return x + y }
+}
+
+fn make_multiplier(factor) {
+    return fn(x) { return x * factor }
 }
 
 alias <canonical> as <alias_name>
 
+别名 len as 长度
+别名 greet as 打招呼
+
 // === Test code ===
 函数 foo() { 返回 1 }
 alias foo as bar
-函数 foo() { 返回 2 }   // 重新定义 foo
+函数 foo() { 返回 2 }   // Redefine foo
 
-主函 {
-    foo()   // 2 - 使用新的 foo
-    bar()   // 1 - bar 仍指向旧的 foo
+main {
+    主函 {
+        foo()   // 2 - uses the new foo
+        bar()   // 1 - bar still points to the old foo
+    }
 }

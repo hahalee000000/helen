@@ -1,0 +1,17 @@
+// Test: 05-agents.md:860
+
+// Worker agent receives a Channel parameter to reply with results
+agent Worker(task: str, reply: Channel) {
+    main {
+        let result = "Done: " + task
+        reply.send(result)
+    }
+}
+
+main {
+    main {
+        // spawn returns a Channel, automatically injected as the agent's last parameter
+        let mailbox = spawn Worker("Task A")
+        print(mailbox.receive())  // "Done: Task A"
+    }
+}

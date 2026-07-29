@@ -1,0 +1,11 @@
+// Test: 10-stdlib.md:1272
+
+main {
+    main {
+        // Copy file
+        copy_file("source.txt", "backup.txt")
+
+        // Move/rename file
+        move_file("old_name.txt", "new_name.txt")
+    }
+}

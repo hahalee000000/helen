@@ -1,0 +1,25 @@
+// Test: 07-spawn.md:148
+
+agent LongTask(prompt: str, reply: Channel) {
+    main {
+        let result = llm act prompt on_chunk fn(chunk: str) {
+            reply.send({type: "progress", data: chunk})
+        }
+        reply.send({type: "done", data: result})
+    }
+}
+
+main {
+    main {
+        let mailbox = spawn LongTask("Write an AI research paper")
+        loop {
+            let msg = mailbox.receive()
+            if msg == null { break }
+            if msg["type"] == "progress" {
+                print(msg["data"])
+            } else {
+                print("Done: " + msg["data"])
+            }
+        }
+    }
+}

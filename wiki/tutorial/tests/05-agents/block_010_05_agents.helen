@@ -1,15 +1,17 @@
-// Test: 05-agents.md:183
+// Test: 05-agents.md:223
 
 // === Context from preceding blocks ===
+agent Greeter(user_name: str, user_id: int) {
+}
+
 agent Assistant {
     description "Helpful assistant"
-    tools = ["web_search", "read_file"]   // LLM 可以自主调用这两个
+    tools = ["web_search", "read_file"]   // LLM can autonomously call these two
     functions {
-        fn fetch_summary(url: str): str {  // 在 functions 里声明
-            let content = read_file(url)
+        fn fetch_summary(url: str): str {  // Declared in functions
             return summarize(content)
         }
-        fn dangerous_op() { ... }          // LLM 看不到
+        fn dangerous_op() { ... }          // LLM cannot see this
     }
 }
 
@@ -17,10 +19,10 @@ agent SmartAssistant {
     description "Smart assistant with custom context config"
     
     context {
-        compression "graduated"      // 压缩策略
-        cache-aware true             // 缓存感知
-        working-memory true          // 工作记忆
-        working-memory-tokens 5000   // 工作记忆词元预算
+        compression "graduated"      // Compression strategy
+        cache-aware true             // Cache-aware
+        working-memory true          // Working memory
+        working-memory-tokens 5000   // Working memory token budget
     }
     
     tools ["read_file", "web_search"]
@@ -29,6 +31,8 @@ agent SmartAssistant {
 }
 
 // === Test code ===
-context {
-    compression "traditional"
+main {
+    context {
+        compression "none"
+    }
 }

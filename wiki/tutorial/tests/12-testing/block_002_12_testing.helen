@@ -1,5 +1,22 @@
-// Test: 12-testing.md:74
+// Test: 12-testing.md:76
 
+// === Context from preceding blocks ===
+// calculator_test.helen
+
+fn add(a, b) { return a + b }
+fn subtract(a, b) { return a - b }
+
+fn test_add() {
+    assert_equal(add(2, 3), 5)
+    assert_equal(add(-1, 1), 0)
+}
+
+fn test_subtract() {
+    assert_equal(subtract(10, 4), 6)
+    assert_equal(subtract(0, 0), 0)
+}
+
+// === Test code ===
 fn test_assertions() {
     assert_true(10 > 5)
     assert_equal("hello" + " world", "hello world")

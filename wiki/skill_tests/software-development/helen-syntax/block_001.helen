@@ -10,11 +10,14 @@
 }
 
 // 中英混合
-设 结果 = 斐波那契(10)
-常量 LIMIT = 100
-如果 结果 < LIMIT {
-    print("OK")
-}
 
-// v1.10: 共享变量
-共享 let counter = 0
+main {
+    设 结果 = 斐波那契(10)
+    常量 LIMIT = 100
+    如果 结果 < LIMIT {
+        print("OK")
+    }
+
+    // v1.10: 共享变量
+    共享 let counter = 0
+}

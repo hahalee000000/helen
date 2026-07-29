@@ -1,4 +1,8 @@
-// Test: 10-stdlib.md:146
+// Test: 10-stdlib.md:150
 
-type(42)                      // "int"
-isinstance(42, "int")         // true
+main {
+    main {
+        type(42)                      // "int"
+        isinstance(42, "int")         // true
+    }
+}

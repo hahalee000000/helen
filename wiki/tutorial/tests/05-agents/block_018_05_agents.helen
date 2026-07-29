@@ -1,11 +1,41 @@
-// Test: 05-agents.md:471
+// Test: 05-agents.md:347
 
-agent CodingAgent {
-    description "A coding assistant"
-    prompt "You are a Python expert. Help me with coding."
-    tools ["read_file", "write_file"]
+agent ChatBot {
+    description "Chat bot with transcript management"
+    prompt "You are a helpful chat assistant."
     
     main {
-        llm act "How do I sort a list?"
+        // Get current session ID
+        let session_id = get_session_id()
+        print("Current session: " + session_id)
+        
+        // List all sessions
+        let sessions = list_sessions()
+        for s in sessions {
+            print("{s.session_id}: {s.message_count} messages")
+        }
+        
+        // Replay the current session
+        let messages = replay_transcript()
+        for msg in messages {
+            print("{msg.role}: {msg.content}")
+        }
+        
+        // Export session to file
+        export_transcript("chat_log.json", "json")
+        
+        // Get compression audit (analyze compression efficiency)
+        let audit = get_compression_audit()
+        for event in audit {
+            print("{event.layer}: {event.original_token_count} -> {event.compressed_token_count}")
+        }
+        
+        // Resume a previous session
+        let success = resume_session("session_1783492628_d9d9c0aa")
+        if success {
+            print("Session resumed")
+        }
+        
+        return llm act "Hello!"
     }
 }

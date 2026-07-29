@@ -1,9 +1,13 @@
-// Test: 04-control-flow.md:28
+// Test: 04-control-flow.md:30
 
-if 0 { print("不会执行") }        // 0 → false
-if "" { print("不会执行") }       // 空字符串 → false
-if [] { print("不会执行") }       // 空列表 → false
-if null { print("不会执行") }     // null → false
-if 1 { print("会执行") }          // 非零 → true
-if "hello" { print("会执行") }    // 非空字符串 → true
-if [1] { print("会执行") }        // 非空列表 → true
+main {
+    main {
+        if 0 { print("will not execute") }        // 0 → false
+        if "" { print("will not execute") }       // empty string → false
+        if [] { print("will not execute") }       // empty list → false
+        if null { print("will not execute") }     // null → false
+        if 1 { print("will execute") }          // nonzero → true
+        if "hello" { print("will execute") }    // non-empty string → true
+        if [1] { print("will execute") }        // non-empty list → true
+    }
+}

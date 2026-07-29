@@ -1,5 +1,40 @@
-// Test: 12-testing.md:214
+// Test: 12-testing.md:224
 
+// === Context from preceding blocks ===
+// calculator_test.helen
+
+fn add(a, b) { return a + b }
+fn subtract(a, b) { return a - b }
+
+fn test_add() {
+    assert_equal(add(2, 3), 5)
+    assert_equal(add(-1, 1), 0)
+}
+
+fn test_subtract() {
+    assert_equal(subtract(10, 4), 6)
+    assert_equal(subtract(0, 0), 0)
+}
+
+fn setup() {
+    // 重置全局状态、初始化数据
+    print("Setting up...")
+}
+
+fn teardown() {
+    // 清理资源
+    print("Tearing down...")
+}
+
+// 我们想实现一个 FizzBuzz
+fn test_fizzbuzz() {
+    expect(fizzbuzz(3)).toBe("Fizz")
+    expect(fizzbuzz(5)).toBe("Buzz")
+    expect(fizzbuzz(15)).toBe("FizzBuzz")
+    expect(fizzbuzz(7)).toBe("7")
+}
+
+// === Test code ===
 fn fizzbuzz(n) {
     if n % 15 == 0 { return "FizzBuzz" }
     if n % 3 == 0 { return "Fizz" }

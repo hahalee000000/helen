@@ -1,5 +1,9 @@
-// Test: 17-multimodal.md:428
+// Test: 17-multimodal.md:448
 
-let parts = [img1, video1, audio1, img2]
-let images = parts.filter(是图片)    # 只保留图片
-let videos = parts.filter(是视频)    # 只保留视频
+main {
+    main {
+        let parts = [img1, video1, audio1, img2]
+        let images = parts.filter(是图片)    // Keep only images
+        let videos = parts.filter(是视频)    // Keep only videos
+    }
+}

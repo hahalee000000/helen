@@ -1,0 +1,14 @@
+// Test: 07-spawn.md:423
+
+main {
+    main {
+        // Delete session and all its spawns (default)
+        delete_session("session_abc123")
+
+        // Delete only the specified session, keep spawns
+        delete_session("session_abc123", cascade=false)
+
+        // Clean up old sessions (cascade-deletes spawns)
+        cleanup_sessions(keep_count=10)  // Keep the most recent 10, cascade-delete spawns
+    }
+}

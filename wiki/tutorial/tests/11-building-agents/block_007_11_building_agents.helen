@@ -1,0 +1,55 @@
+// Test: 11-building-agents.md:367
+
+shared store SessionStats {
+    let totalSessions: int = 0
+    let resolvedSessions: int = 0
+    let activeSessions: list = []
+    
+    fn startSession(sessionId: str) {
+        totalSessions = totalSessions + 1
+        activeSessions.append(sessionId)
+    }
+    
+    fn endSession(sessionId: str) {
+        resolvedSessions = resolvedSessions + 1
+        activeSessions.remove(sessionId)
+    }
+    
+    fn getResolutionRate(): str {
+        if (totalSessions == 0) {
+            return "0%"
+        }
+        let rate = resolvedSessions * 100 / totalSessions
+        return str(rate) + "%"
+    }
+}
+
+// Agent receives reply Channel and sessionId parameters
+agent CustomerService(sessionId: str, question: str, reply: Channel) {
+    description "Handle customer session"
+    main {
+        SessionStats.startSession(sessionId)
+        
+        // Handle customer question...
+        let response = llm act Assistant "Question: " + question
+        
+        SessionStats.endSession(sessionId)
+        reply.send(response)
+    }
+}
+
+main {
+    main {
+        // Multiple agents running concurrently (v1.18+ spawn pattern)
+        let mb1 = spawn CustomerService("session-1", "How to reset password?")
+        let mb2 = spawn CustomerService("session-2", "Billing issue")
+        let mb3 = spawn CustomerService("session-3", "Technical support")
+
+        // Wait for all sessions to complete
+        let r1 = mb1.receive()
+        let r2 = mb2.receive()
+        let r3 = mb3.receive()
+
+        print("Resolution rate: " + SessionStats.getResolutionRate())
+    }
+}

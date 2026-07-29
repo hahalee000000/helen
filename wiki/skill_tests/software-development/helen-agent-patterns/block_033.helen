@@ -1,6 +1,6 @@
 // 来源: skills/software-development/helen-agent-patterns/SKILL.md (代码块 33)
 
-# ✅ 使用 shared let 进行跨 agent 共享（v1.12: 只允许值类型）
+// ✅ 使用 shared let 进行跨 agent 共享（v1.12: 只允许值类型）
 shared let cache_hits = 0
 shared let cache_misses = 0
 
@@ -15,15 +15,18 @@ agent CacheReader(key: str, cache: map) {
     }
 }
 
-# ❌ 错误 v1：期望模块级 let 在 agent main 中可见
-let local_cache = {}  // 模块级 let
+// ❌ 错误 v1：期望模块级 let 在 agent main 中可见
 
-agent BadCacheReader(key: str) {
-    main {
-        # 编译错误！local_cache 在 agent main 中不可见
-        return local_cache[key]
+main {
+    let local_cache = {}  // 模块级 let
+
+    agent BadCacheReader(key: str) {
+        main {
+            # 编译错误！local_cache 在 agent main 中不可见
+            return local_cache[key]
+        }
     }
-}
 
-# ❌ 错误 v2：v1.12 起 shared let 不能使用引用类型
-# shared let bad_cache = {}  # 语义错误！
+    # ❌ 错误 v2：v1.12 起 shared let 不能使用引用类型
+    # shared let bad_cache = {}  # 语义错误！
+}

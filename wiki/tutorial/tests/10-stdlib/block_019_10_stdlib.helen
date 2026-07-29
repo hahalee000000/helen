@@ -1,3 +1,7 @@
-// Test: 10-stdlib.md:399
+// Test: 10-stdlib.md:429
 
-let args = get_cli_args()  // 与 argv 相同
+main {
+    main {
+        let args = get_cli_args()  // Same as argv
+    }
+}

@@ -1,9 +1,13 @@
-// Test: 04-control-flow.md:91
+// Test: 04-control-flow.md:97
 
-// 如果左侧为 true，右侧不会执行
-let result = true || expensiveFunction()  // expensiveFunction() 不会执行
+main {
+    main {
+        // If the left side is true, the right side is not evaluated
+        let result = true || expensiveFunction()  // expensiveFunction() is not called
 
-// 实际应用：默认值
-let config = loadConfig() || defaultConfig()  // 只在加载失败时使用默认值
+        // Practical usage: default values
+        let config = loadConfig() || defaultConfig()  // Only use default when loading fails
 
-let user = getUser() || createDefaultUser()  // 如果获取失败，创建默认用户
+        let user = getUser() || createDefaultUser()  // If fetching fails, create a default user
+    }
+}

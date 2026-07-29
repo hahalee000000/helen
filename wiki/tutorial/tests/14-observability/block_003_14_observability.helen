@@ -1,6 +1,9 @@
-// Test: 14-observability.md:52
+// Test: 14-observability.md:54
 
 main {
-    let x = 42
-    debug("variable value", x)
+    main {
+        let x = 42
+        debug("variable value", x)
+        // Output: [DEBUG] variable value {"value": 42}
+    }
 }

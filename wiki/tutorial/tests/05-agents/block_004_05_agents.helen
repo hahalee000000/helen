@@ -1,13 +1,14 @@
-// Test: 05-agents.md:58
+// Test: 05-agents.md:100
 
-agent CreativeWriter {
-    description "Write creative stories"
-    temperature 0.9    // 高创造性
-    prompt "Write a story..."
+// === Context from preceding blocks ===
+agent Greeter(user_name: str, user_id: int) {
 }
 
-agent DataExtractor {
-    description "Extract structured data"
-    temperature 0.1    // 低随机性，精确输出
-    prompt "Extract data..."
+// === Test code ===
+agent Translator {
+    description "Translate text between languages"
+    prompt """
+    You are a professional translator.
+    Translate the given text accurately.
+    """
 }

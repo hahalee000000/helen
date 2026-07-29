@@ -11,6 +11,9 @@ agent Translator(text: str, target_lang: str) {
     }
 }
 
-# 调用
-let result = Translator("Hello", "Chinese")
-print(result)  # "你好"
+// 调用
+
+main {
+    let result = Translator("Hello", "Chinese")
+    print(result)  # "你好"
+}

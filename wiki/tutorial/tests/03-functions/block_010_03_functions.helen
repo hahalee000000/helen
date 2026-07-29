@@ -1,4 +1,4 @@
-// Test: 03-functions.md:140
+// Test: 03-functions.md:146
 
 // === Context from preceding blocks ===
 fn greet(name) {
@@ -29,7 +29,7 @@ agent DataProcessor {
         }
 
         fn transform(data) {
-            // 数据转换逻辑
+            // Data transformation logic
             return data
         }
     }

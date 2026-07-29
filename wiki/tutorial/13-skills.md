@@ -117,11 +117,13 @@ load_skill and follow its instructions. Err on the side of loading.
 After seeing the index, the LLM calls the `load_skill` tool to fetch the full content when needed.
 
 ```helen
-// Basic loading
-load_skill("helen-testing")
+main {
+    // Basic loading
+    load_skill("helen-testing")
 
-// Also list reference documents
-load_skill("helen-language-development", include_references=true)
+    // Also list reference documents
+    load_skill("helen-language-development", include_references=true)
+}
 ```
 
 ### Tier 3: Reference Documents
@@ -129,11 +131,13 @@ load_skill("helen-language-development", include_references=true)
 Skills can include a `references/` directory containing in-depth reference documents. The LLM can access them as follows:
 
 ```helen
-// List all reference documents (name, path, size, first 3 lines preview)
-list_skill_references("helen-language-development")
+main {
+    // List all reference documents (name, path, size, first 3 lines preview)
+    list_skill_references("helen-language-development")
 
-// Use read_file to load a specific reference document
-read_file(".../references/parser-disambiguation.md")
+    // Use read_file to load a specific reference document
+    read_file(".../references/parser-disambiguation.md")
+}
 ```
 
 Reference documents are not loaded automatically — the LLM consults them on demand, saving tokens.

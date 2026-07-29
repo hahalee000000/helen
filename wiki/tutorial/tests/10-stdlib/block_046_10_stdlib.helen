@@ -1,0 +1,11 @@
+// Test: 10-stdlib.md:1214
+
+main {
+    main {
+        // Read file
+        let content = read_file("config.json")
+
+        // Write file (auto-creates parent directories)
+        write_file("output/result.txt", "Hello World")
+    }
+}

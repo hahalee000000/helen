@@ -1,0 +1,8 @@
+// Test: 07-spawn.md:140
+
+main {
+    main {
+        mailbox.close()  // Close channel; the other end's receive() returns null
+
+    }
+}
