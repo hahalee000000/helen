@@ -228,7 +228,7 @@ Supported methods: `initialize` `textDocument/didOpen` `textDocument/didChange` 
 | **Crypto** | 11 | `hash_md5`, `hash_sha256`, `hash_sha512`, `hmac_sha256`, `uuid_generate`, `random_bytes` |
 | **IO** | 5 | `read_line`, `prompt`, `format_table`, `progress_bar`, `terminal_width` |
 | **Observability** | 4 | `debug`, `trace_on`, `trace_off`, `get_trace` |
-| **Context** | 27 | `clear_context`, `compress_context`, `context_stats`, `pin_message`, `working_memory_*`, `set_compression_strategy`, `export_context`, ... |
+| **Context** | 29 | `clear_context`, `compress_context`, `context_stats`, `pin_message`, `list_pinned_messages`, `working_memory_*`, `set_compression_strategy`, `export_context`, ... |
 | **Transcript** | 8 | `get_session_id`, `list_sessions`, `replay_transcript`, `export_transcript`, `get_session_dir`, `set_session_dir`, ... |
 | **Media** | 12 | `media`, `media_base64`, `to_openai_parts`, `to_claude_parts`, `to_gemini_parts`, `media_to_base64`, `save_media`, `is_image` |
 | **Test** | 14 | `test_suite`, `assert_true`, `assert_equal`, `expect`, `run_tests` |

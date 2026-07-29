@@ -1,6 +1,6 @@
 # Standard Library (Stdlib)
 
-> Module M15 | `helen/stdlib/__init__.py` | **287 builtins** | Tests: `tests/stdlib/`
+> Module M15 | `helen/stdlib/__init__.py` | **331 builtins** | Tests: `tests/stdlib/`
 
 ---
 
@@ -52,11 +52,11 @@ class BuiltinFunction:
 | **Quality** | 4 | `quality.py` |
 | **IO** | 5 | `__init__.py` |
 | **Observability** | 4 | `observability.py` |
-| **Context** | 27 | `context.py` |
+| **Context** | 29 | `context.py` |
 | **Transcript** | 11 | `transcript.py` |
 | **Media** | 12 | `media.py` |
 | **Tools** | 24 | `tools.py` |
-| **Total** | **292** | - |
+| **Total** | **331** | - |
 
 ---
 

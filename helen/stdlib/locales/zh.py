@@ -345,6 +345,8 @@ ALIASES: dict[str, str] = {
     "删除消息": "delete_message",
     "钉住消息": "pin_message",
     "取消钉住": "unpin_message",
+    "已钉住消息": "list_pinned_messages",
+    "钉住列表": "list_pinned_messages",
     "插入消息": "insert_message",
     "替换消息": "replace_message",
     "获取工作记忆": "working_memory_get",

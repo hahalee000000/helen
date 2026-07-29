@@ -41,7 +41,8 @@ Context duration is layered, with each layer serving a different reasoning granu
 │  Lifecycle: Across llm act calls, within Agent session      │
 │  Responsibility: User-explicitly pinned critical info,      │
 │    immune to all 5 compression layers                       │
-│  Implementation: pin_message(uuid), working_memory_set()    │
+│  Implementation: pin_message(uuid), list_pinned_messages(), │
+│                  working_memory_set()                       │
 ├─────────────────────────────────────────────────────────────┤
 │  Layer 1: Active Context (Active Layer) ⭐ Core             │
 │  Lifecycle: Agent session (during main {} execution)        │
@@ -472,6 +473,8 @@ Located in `helen/runtime/graduated_compression.py`, design principle: "cheapest
 
 **Pinned message compression immunity** (v1.19): Messages marked by `pin_message(uuid)` are preserved across all 5 layers: Layer 1 doesn't replace their content, Layer 2 doesn't drop them, Layer 3 doesn't clear them, Layer 4 doesn't archive them, Layer 5 doesn't summarize them. Used to protect critical context (system prompts, key decisions, few-shot examples, etc.). `Message.pinned: bool` field added to `history.py`, persisted alongside in `TranscriptStore`.
 
+**Pin recovery across agent restarts** (v1.30): `list_pinned_messages()` enumerates all `pinned=true` messages from the TranscriptStore (SSOT). `ContextManager.init()` calls it on startup to rebuild the in-memory `pinned_uuids` list, so `/pin` display state matches the actual persisted pin state. Without this, compression protection works across restarts (because it reads `msg.pinned` directly from transcript), but `/pin` would show an empty list.
+
 **Layer 4 improvement (timeline preservation)**: Inspired by RCC (Recurrent Context Compression) and CogCanvas, Context Collapse now segments old messages (10 per block), extracts file references, tool usage, and user intent from each segment, generating a timeline view that preserves the temporal structure of task progress.
 
 **Layer 5 improvement (LLM semantic summary)**: When `llm_client` parameter is provided, `_auto_compact` calls `LLMSummarizer` to generate high-quality semantic summaries, preserving task objectives, key decisions, file changes, etc. Falls back to zero-cost structural summary (extracting file paths, tool counts, user intent, etc.) when LLM is unavailable.
@@ -728,8 +731,9 @@ replace_message(uuid, new_content)         // Replace message content
 delete_message(uuid)                       // Logical delete (preserved in audit)
 
 // Pin (Compression Immunity)
-pin_message(uuid)      // Pin message, skipped by all 5 compression layers
-unpin_message(uuid)    // Unpin
+pin_message(uuid)             // Pin message, skipped by all 5 compression layers
+unpin_message(uuid)           // Unpin
+list_pinned_messages()        // List all pinned messages: [{uuid, role, snippet, token_count}]
 ```
 
 Pinned messages are preserved across Layers 1–5:
@@ -867,6 +871,7 @@ on_compression(None)
 | delete_message | 删除消息 |
 | pin_message | 钉住消息 |
 | unpin_message | 取消钉住 |
+| list_pinned_messages | 已钉住消息 / 钉住列表 |
 | insert_message | 插入消息 |
 | replace_message | 替换消息 |
 | working_memory_get | 获取工作记忆 |

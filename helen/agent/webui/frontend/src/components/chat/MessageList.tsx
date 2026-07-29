@@ -630,7 +630,7 @@ function renderInline(text: string): JSX.Element {
       parts.push(<strong key={`b-${match.index}`}>{token.slice(2, -2)}</strong>)
     } else if (token.startsWith('`') && token.endsWith('`')) {
       parts.push(
-        <code key={`c-${match.index}`} className="bg-muted px-1 rounded text-xs font-mono">
+        <code key={`c-${match.index}`} className="bg-muted text-foreground px-1 rounded text-xs font-mono">
           {token.slice(1, -1)}
         </code>
       )

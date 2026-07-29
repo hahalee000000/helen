@@ -827,7 +827,7 @@ REPL commands: `:stats` (context statistics), `:transcript` (message log), `:las
 
 - **helen-agent-collaboration** — Multi-Agent collaboration patterns in detail
 - **helen-syntax** — Helen syntax reference (shared let, agent main, etc.)
-- **helen-stdlib** — Complete context management API reference (`context_stats`/`compress_context`/`pin_message`, etc.)
+- **helen-stdlib** — Complete context management API reference (`context_stats`/`compress_context`/`pin_message`/`list_pinned_messages`, etc.)
 - **helen-testing** — Agent testing strategies
 
 ## Summary
@@ -840,7 +840,7 @@ Core principles of Helen Agent design patterns:
 4. 🛠 **Pattern Selection** — Expert / Router / Pipeline / Concurrent / Streaming / Tool-Using / Conversational
 5. 📋 **Best Practices** — clear description, least-privilege tools, inject ground truth
 
-For the context management API (`compress_context`, `working_memory`, `pin_message`, and 24+ other functions), see `helen-stdlib`.
+For the context management API (`compress_context`, `working_memory`, `pin_message`, `list_pinned_messages`, and 25+ other functions), see `helen-stdlib`.
 
 ---
 

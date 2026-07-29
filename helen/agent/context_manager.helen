@@ -47,6 +47,7 @@ shared store ContextManager {
         cached_version = detect_helen_version()
         session_dir_path = _setup_session_scope(cwd)
         _register_hooks()
+        _rebuild_pinned_uuids()
     }
 
     // ── 自动压缩 ────────────────────────────────────────────────
@@ -157,6 +158,11 @@ shared store ContextManager {
     /** 获取已钉住消息列表 */
     fn get_pinned(): list {
         return pinned_uuids
+    }
+
+    /** 设置钉住消息列表（供模块级 _rebuild_pinned_uuids 调用） */
+    fn set_pinned_uuids(list: list) {
+        pinned_uuids = list
     }
 
     // ── 会话统计 ────────────────────────────────────────────────
@@ -285,6 +291,27 @@ fn _register_hooks() {
         })
     } catch {
         // on_compression 不可用时静默降级
+    }
+}
+
+/** 从 transcript 重建 pinned_uuids（启动时调用，恢复持久化的 pin 状态）
+ *  解决 pin 状态"压缩保护跨重启有效，但 /pin 显示列表重启后清空"的不一致。
+ *  必须作为模块级函数（shared store 方法间互调受限），通过 ContextManager.pinned_uuids 写入。 */
+fn _rebuild_pinned_uuids() {
+    try {
+        let pinned = list_pinned_messages()
+        if pinned != null && len(pinned) > 0 {
+            let new_list = []
+            for m in pinned {
+                let uuid = m["uuid"]
+                if uuid != "" && uuid != null {
+                    new_list = new_list + [uuid]
+                }
+            }
+            ContextManager.set_pinned_uuids(new_list)
+        }
+    } catch {
+        // list_pinned_messages 不可用（旧版 Helen）或 transcript 为空，静默忽略
     }
 }
 

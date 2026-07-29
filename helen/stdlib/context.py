@@ -896,6 +896,89 @@ def _unpin_message(uuid: str) -> dict:
     }
 
 
+def _list_pinned_messages() -> list[dict[str, Any]]:
+    """List all pinned messages in the current transcript.
+
+    Returns a list of message summaries (uuid, role, snippet) for every
+    message whose `pinned` flag is True. Works even after actor restart —
+    reads directly from TranscriptStore, so pinned state persisted in
+    transcript.jsonl is recovered.
+
+    Returns:
+        List of message summary dicts, ordered by transcript position
+        (oldest first). Empty list when no messages are pinned or when
+        TranscriptStore is unavailable.
+
+        [
+            {
+                "uuid": str,          # message UUID
+                "role": str,          # "user" | "assistant" | "tool" | ...
+                "snippet": str,       # first 120 chars of content
+                "token_count": int,   # estimated tokens (0 if unknown)
+            },
+            ...
+        ]
+
+    Example:
+        let pinned = list_pinned_messages()
+        if len(pinned) == 0 {
+            print("没有钉住的消息")
+        } else {
+            for m in pinned {
+                print("[" + m["role"] + "] " + m["snippet"])
+            }
+        }
+
+    See also:
+        pin_message(uuid), unpin_message(uuid)
+    """
+    results: list[dict[str, Any]] = []
+
+    if _get_agent_context() is None:
+        return results
+
+    store = getattr(_get_agent_context(), 'transcript_store', None)
+    if store is None:
+        return results
+
+    transcript = getattr(store, 'transcript', None)
+    if transcript is None:
+        return results
+
+    for msg in transcript:
+        # BoundaryMarker doesn't have `pinned` — skip silently
+        if not getattr(msg, 'pinned', False):
+            continue
+
+        # Extract a short snippet from the message content
+        content = ""
+        raw = getattr(msg, 'content', None)
+        if isinstance(raw, str):
+            content = raw
+        elif isinstance(raw, list):
+            # Multi-part content (e.g. text + media) — concatenate text parts
+            parts = []
+            for p in raw:
+                if isinstance(p, dict) and p.get('type') == 'text':
+                    parts.append(str(p.get('text', '')))
+            content = " ".join(parts)
+        elif raw is not None:
+            content = str(raw)
+
+        snippet = content[:120]
+        if len(content) > 120:
+            snippet = snippet + "..."
+
+        results.append({
+            "uuid": getattr(msg, 'uuid', ''),
+            "role": getattr(msg, 'role', ''),
+            "snippet": snippet,
+            "token_count": getattr(msg, 'token_count', 0) or 0,
+        })
+
+    return results
+
+
 # ---------------------------------------------------------------------------
 # Working Memory access (P1)
 # ---------------------------------------------------------------------------

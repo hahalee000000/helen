@@ -31,7 +31,7 @@ Helen's standard library provides **203 built-in functions**, covering all core 
 | **Path** | 6 | `path_basename`, `path_dirname`, `path_exists`, `path_is_dir`, `path_is_file`, `path_join` |
 | **Tools** | 7 | `shell_exec`, `calculate`, `patch_file`, `load_skill`, `list_skill_references`, `web_search`, `web_fetch` |
 | **Observability** | 4 | `debug`, `trace_on`, `trace_off`, `get_trace` |
-| **Context** | 28 | `clear_context`, `compress_context`, `compress_context_target`, `context_stats`, `context_usage`, `get_message`, `delete_message`, `pin_message`, `unpin_message`, `insert_message`, `replace_message`, `working_memory_get`, `working_memory_set`, `working_memory_remove`, `working_memory_clear`, `set_compression_strategy`, `set_context_window`, `set_working_memory_enabled`, `set_cache_aware`, `get_context_config`, `search_context`, `context_slice`, `export_context`, `import_context`, `fork_context`, `restore_context`, `on_compression`, `on_context_overflow` |
+| **Context** | 29 | `clear_context`, `compress_context`, `compress_context_target`, `context_stats`, `context_usage`, `get_message`, `delete_message`, `pin_message`, `unpin_message`, `list_pinned_messages`, `insert_message`, `replace_message`, `working_memory_get`, `working_memory_set`, `working_memory_remove`, `working_memory_clear`, `set_compression_strategy`, `set_context_window`, `set_working_memory_enabled`, `set_cache_aware`, `get_context_config`, `search_context`, `context_slice`, `export_context`, `import_context`, `fork_context`, `restore_context`, `on_compression`, `on_context_overflow` |
 | **Transcript** | 22 | `get_session_id`, `get_session_meta`, `list_sessions`, `replay_transcript`, `replay_full_session`, `export_transcript`, `search_transcript`, `list_invocations`, `get_invocation`, `get_invocation_tree`, `invocation_path`, `get_compression_audit`, `resume_session`, `get_session_dir`, `set_session_dir`, `delete_session`, `delete_current_session`, `cleanup_sessions`, `get_spawned_sessions`, `get_spawn_tree` |
 | **Media** | 12 | `media`, `media_base64`, `is_media`, `media_type`, `to_openai_parts`, `to_claude_parts`, `to_gemini_parts`, `media_to_base64`, `save_media`, `is_image`, `is_video`, `is_audio` |
 | **Test** | 23 | `test_suite`, `test_case`, `test_case_skip`, `test_end_suite`, `set_test_timeout`, `run_tests`, `run_tests_json`, `test_count`, `test_reset`, `before_all`, `after_all`, `before_each`, `after_each`, `assert_equal`, `assert_not_equal`, `assert_true`, `assert_contains`, `assert_throws`, `describe`, `expect`, `it`, `it_skip`, `fail` |
@@ -456,6 +456,7 @@ insert_message("system", "Important note", 0)  # Insert message (position option
 replace_message(uuid, "New content")            # Replace message content
 delete_message(uuid)                            # Delete message
 pin_message(uuid) / unpin_message(uuid)         # Pin message (immune to compression)
+list_pinned_messages()                          # List all pinned messages: [{uuid, role, snippet, token_count}]
 
 # Working Memory — Auto-tracks active files, decisions, TODOs, error history
 working_memory_set("current_file", "main.py")

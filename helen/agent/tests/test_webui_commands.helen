@@ -63,8 +63,6 @@ fn test_help_response() {
     _assert_contains(response, "/unpin", "帮助包含 /unpin")
     _assert_contains(response, "/search", "帮助包含 /search")
     _assert_contains(response, "/mode", "帮助包含 /mode")
-    _assert_contains(response, "/quit", "帮助包含 /quit")
-    _assert_contains(response, "/exit", "帮助包含 /exit")
 
     // 验证是 Markdown 表格格式
     _assert_contains(response, "|", "帮助包含表格分隔符")
@@ -204,19 +202,6 @@ fn test_unknown_command_response() {
     _assert_contains(response, "/help", "未知命令建议查看帮助")
 }
 
-// ── quit/exit 命令测试（不发送响应） ────────────────────────
-
-fn test_quit_exit_commands() {
-    print("\n=== /quit, /exit 命令测试 ===")
-
-    // quit/exit 返回空字符串（由 chat_tui.helen 处理）
-    let response1 = execute_command(parse_command("/quit"))
-    _assert(response1 == "", "/quit 返回空字符串")
-
-    let response2 = execute_command(parse_command("/exit"))
-    _assert(response2 == "", "/exit 返回空字符串")
-}
-
 // ── 主测试 ──────────────────────────────────────────────────
 
 main {
@@ -240,7 +225,6 @@ main {
     test_pin_unpin_response()
     test_search_response()
     test_unknown_command_response()
-    test_quit_exit_commands()
 
     print("\n╔═══════════════════════════════════════════════════════════╗")
     print("║      Web UI 命令响应测试完成                             ║")

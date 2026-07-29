@@ -457,6 +457,11 @@ async def websocket_endpoint(websocket: WebSocket):
                     if is_clear:
                         response = response.replace("__HELEN_CLEAR_OK__", "").strip()
 
+                    # /clear-session 的响应中嵌入静默标记 __HELEN_CLEAR_SESSION_OK__
+                    is_clear_session = response and "__HELEN_CLEAR_SESSION_OK__" in response
+                    if is_clear_session:
+                        response = response.replace("__HELEN_CLEAR_SESSION_OK__", "").strip()
+
                     # /clear-session 后 actor 退出，需要重启
                     is_restart = response and "__HELEN_RESTART_ACTOR__" in response
                     if is_restart:
@@ -471,7 +476,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             "data": {"content": response, "is_slash_response": True}
                         })
                     else:
-                        # 空响应（如 /quit /exit）：发完成信号即可
+                        # 空响应（无输出类命令）：发完成信号即可
                         await manager.broadcast({
                             "type": "processing_complete",
                             "data": {}

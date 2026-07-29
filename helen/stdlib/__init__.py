@@ -149,7 +149,7 @@ from helen.stdlib.context import (
     _clear_context, _compress_context, _set_interpreter_context,  # noqa: F401
     _compress_context_target,  # Phase 1: Targeted compression
     _context_stats, _context_usage, _get_message,  # v1.19: Inspection
-    _delete_message, _pin_message, _unpin_message,  # v1.19: Fine-grained mutation
+    _delete_message, _pin_message, _unpin_message, _list_pinned_messages,  # v1.19: Fine-grained mutation
     _working_memory_get, _working_memory_set, _working_memory_remove, _working_memory_clear,  # P1
     _set_compression_strategy, _set_context_window, _set_working_memory_enabled,  # P2
     _set_cache_aware, _get_context_config,  # P2
@@ -1245,6 +1245,7 @@ def _register_context() -> list[BuiltinFunction]:
         BuiltinFunction("delete_message", "Delete a message by UUID", "delete_message(uuid)", _delete_message, "context"),
         BuiltinFunction("pin_message", "Pin a message by UUID (immune to compression)", "pin_message(uuid)", _pin_message, "context"),
         BuiltinFunction("unpin_message", "Unpin a previously pinned message", "unpin_message(uuid)", _unpin_message, "context"),
+        BuiltinFunction("list_pinned_messages", "List all pinned messages (uuid, role, snippet)", "list_pinned_messages()", _list_pinned_messages, "context"),
         BuiltinFunction("insert_message", "Insert a new message into context", "insert_message(role, content, position?)", _insert_message, "context"),
         BuiltinFunction("replace_message", "Replace a message's content by UUID", "replace_message(uuid, new_content)", _replace_message, "context"),
         # v1.19: Working Memory access (P1)
