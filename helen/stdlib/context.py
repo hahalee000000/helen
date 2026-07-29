@@ -841,13 +841,12 @@ def _pin_message(uuid: str) -> dict:
 
     msg.pinned = True
 
-    # If TranscriptStore holds a different reference, update it too
+    # v1.30.1: Persist pinned state to disk via TranscriptStore
+    persisted = False
     if _get_agent_context() is not None:
         store = getattr(_get_agent_context(), 'transcript_store', None)
         if store is not None:
-            ts_msg = store.get(uuid)
-            if ts_msg is not None and hasattr(ts_msg, 'pinned'):
-                ts_msg.pinned = True
+            persisted = store.update_pinned(uuid, True)
 
     return {
         "status": "ok",
@@ -882,12 +881,11 @@ def _unpin_message(uuid: str) -> dict:
 
     msg.pinned = False
 
+    # v1.30.1: Persist unpinned state to disk via TranscriptStore
     if _get_agent_context() is not None:
         store = getattr(_get_agent_context(), 'transcript_store', None)
         if store is not None:
-            ts_msg = store.get(uuid)
-            if ts_msg is not None and hasattr(ts_msg, 'pinned'):
-                ts_msg.pinned = False
+            store.update_pinned(uuid, False)
 
     return {
         "status": "ok",

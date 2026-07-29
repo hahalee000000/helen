@@ -1374,6 +1374,11 @@ errors: [Fixed token expiration handling - was missing refresh logic]
 
         Returns the response text with the <working_memory> block removed (if present).
 
+        v1.30.1 fix: Always strip the <working_memory> block from response,
+        regardless of working_memory_enabled. LLMs may still emit this block
+        (e.g. from system prompt patterns), and failing to strip it leaks
+        internal state to the user via on_chunk / final response.
+
         Args:
             response: Full LLM response text.
 
@@ -1382,22 +1387,23 @@ errors: [Fixed token expiration handling - was missing refresh logic]
         """
         import re
 
-        agent_ctx = getattr(self, '_agent_context', None)
-        if agent_ctx is None or not agent_ctx.working_memory_enabled:
-            return response
-
-        wm_update = self._extract_working_memory_update(response)
-        if wm_update:
-            agent_ctx.update_from_llm_summary(wm_update)
-
-        # Remove the <working_memory> block from response text (v1.25.1 fix)
-        # This prevents users from seeing the internal working memory update block
+        # v1.30.1: Always strip the block from response (prevents leaking
+        # to user via on_chunk / final response). Only update the store
+        # when working memory is enabled.
         cleaned_response = re.sub(
             r'<working_memory>.*?</working_memory>\s*',
             '',
             response,
             flags=re.DOTALL | re.IGNORECASE,
         )
+
+        agent_ctx = getattr(self, '_agent_context', None)
+        if agent_ctx is None or not agent_ctx.working_memory_enabled:
+            return cleaned_response
+
+        wm_update = self._extract_working_memory_update(response)
+        if wm_update:
+            agent_ctx.update_from_llm_summary(wm_update)
 
         return cleaned_response
 

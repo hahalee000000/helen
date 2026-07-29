@@ -108,8 +108,13 @@ End part.
         assert "Middle part." in cleaned
         assert "End part." in cleaned
 
-    def test_working_memory_disabled_returns_original(self):
-        """Test that when working memory is disabled, response is unchanged."""
+    def test_working_memory_disabled_still_strips_block(self):
+        """v1.30.1 fix: when working memory is disabled, block is still stripped.
+
+        Previously, disabling working memory caused the <working_memory> block
+        to leak into the final response (and on_chunk callbacks), exposing
+        internal state to the user.
+        """
         interp = Interpreter(llm_runtime=MockLLMRuntime())
         interp._agent_context = AgentContextManager(working_memory_enabled=False)
 
@@ -123,8 +128,9 @@ active_files: [test.py]
 
         cleaned = interp._apply_working_memory_update(response)
 
-        # When disabled, should return original (block still present)
-        assert cleaned == response
+        # v1.30.1: block should be stripped even when disabled
+        assert "<working_memory>" not in cleaned
+        assert "Response." in cleaned
 
 
 if __name__ == "__main__":

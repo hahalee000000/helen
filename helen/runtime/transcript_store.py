@@ -285,6 +285,20 @@ class TranscriptStoreBackend(ABC):
         """
         return None
 
+    def update_pinned(self, uuid: str, pinned: bool) -> None:
+        """Update the pinned state of a message in persistent storage.
+
+        Default implementation is a no-op — backends that support in-place
+        updates should override this.
+
+        v1.30.1: Added so pin/unpin state survives process restarts.
+
+        Args:
+            uuid: UUID of the message to update.
+            pinned: New pinned state (True = pinned, False = unpinned).
+        """
+        pass
+
 
 class JSONLBackend(TranscriptStoreBackend):
     """JSONL file backend for transcript persistence.
@@ -421,6 +435,56 @@ class JSONLBackend(TranscriptStoreBackend):
             logger.debug("JSONLBackend: no valid session_meta in %s: %s", self.path, e)
 
         return None
+
+    def update_pinned(self, uuid: str, pinned: bool) -> None:
+        """Update the pinned state of a message in the JSONL file.
+
+        v1.30.1: Rewrites the JSONL file with the updated pinned state.
+        Pin/unpin is rare, so the rewrite cost is acceptable.
+        """
+        if not self.path.exists():
+            return
+
+        try:
+            # Read all existing lines
+            items = []
+            with open(self.path, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        items.append(line)
+
+            # Update the pinned field for matching UUID
+            updated = []
+            found = False
+            for line in items:
+                try:
+                    data = json.loads(line)
+                    if data.get("uuid") == uuid and data.get("type") == "message":
+                        data["pinned"] = pinned
+                        found = True
+                    updated.append(json.dumps(data, ensure_ascii=False))
+                except json.JSONDecodeError:
+                    updated.append(line)
+
+            if not found:
+                return
+
+            # Close existing file handle
+            if self._file is not None:
+                try:
+                    self._file.close()
+                except OSError:
+                    pass
+                self._file = None
+
+            # Rewrite the file
+            with open(self.path, "w", encoding="utf-8") as f:
+                for line in updated:
+                    f.write(line + "\n")
+
+        except OSError as e:
+            logger.warning("JSONLBackend: failed to update pinned for %s: %s", uuid, e)
 
 
 class SQLiteBackend(TranscriptStoreBackend):
@@ -607,6 +671,36 @@ class SQLiteBackend(TranscriptStoreBackend):
         except Exception as e:
             logger.debug("SQLiteBackend: no valid session_meta: %s", e)
             return None
+
+    def update_pinned(self, uuid: str, pinned: bool) -> None:
+        """Update the pinned state of a message in SQLite.
+
+        v1.30.1: Parses the JSON data, updates pinned field, re-inserts
+        (INSERT OR REPLACE on UNIQUE uuid).
+        """
+        try:
+            cursor = self.conn.execute(
+                "SELECT data FROM transcript WHERE uuid = ?", (uuid,)
+            )
+            row = cursor.fetchone()
+            if not row:
+                return
+
+            data = json.loads(row[0])
+            data["pinned"] = pinned
+            self.conn.execute(
+                "INSERT OR REPLACE INTO transcript (uuid, type, data, timestamp) "
+                "VALUES (?, ?, ?, ?)",
+                (
+                    uuid,
+                    data.get("type", "message"),
+                    json.dumps(data, ensure_ascii=False),
+                    time.time(),
+                ),
+            )
+            self.conn.commit()
+        except Exception as e:
+            logger.warning("SQLiteBackend: failed to update pinned for %s: %s", uuid, e)
 
 
 def _item_to_dict(item: Message | BoundaryMarker) -> dict[str, Any]:
@@ -902,6 +996,31 @@ class TranscriptStore:
         if index is not None and 0 <= index < len(self.transcript):
             return self.transcript[index]
         return None
+
+    def update_pinned(self, uuid: str, pinned: bool) -> bool:
+        """Update the pinned state of a message and persist to disk.
+
+        v1.30.1: Ensures pin/unpin state survives process restarts by
+        delegating to the backend's update_pinned method.
+
+        Args:
+            uuid: UUID of the message to update.
+            pinned: New pinned state.
+
+        Returns:
+            True if the message was found and updated, False otherwise.
+        """
+        item = self.get(uuid)
+        if item is None or not isinstance(item, Message):
+            return False
+
+        item.pinned = pinned
+        self._dirty = True  # Invalidate view cache
+
+        if self._backend is not None:
+            self._backend.update_pinned(uuid, pinned)
+
+        return True
 
     def record_compression(
         self,
