@@ -386,6 +386,7 @@ ALIASES: dict[str, str] = {
     "删除会话": "delete_session",
     "删除当前会话": "delete_current_session",
     "清理会话": "cleanup_sessions",
+    "释放会话锁": "release_session_lock",
     # v1.23.7: Spawn tracking
     "获取子会话": "get_spawned_sessions",
     "获取会话树": "get_spawn_tree",

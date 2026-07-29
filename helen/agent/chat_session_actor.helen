@@ -774,5 +774,21 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
         }
 
         debug("ChatSessionActor: exited main loop, total requests: " + str(request_count))
+
+        // ── 清理 ──
+        // v1.30.2: 释放 session lock，防止 stale lock 阻止下次启动恢复 transcript
+        // （包括 pinned 消息）。否则 actor 退出后锁文件残留，新进程无法恢复 session，
+        // 导致 /pin 列表为空。
+        try {
+            let my_sid = get_session_id()
+            if my_sid != "" {
+                release_session_lock(my_sid)
+                debug("ChatSessionActor: released session lock for " + my_sid)
+            }
+        } catch RuntimeError err {
+            debug("ChatSessionActor: release lock failed: " + err.message)
+        } catch {
+            // release_session_lock 不可用（旧版 Helen）— 静默忽略
+        }
     }
 }

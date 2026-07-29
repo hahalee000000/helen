@@ -181,6 +181,7 @@ from helen.stdlib.transcript import (
     delete_session as _delete_session,  # v1.21: session deletion
     delete_current_session as _delete_current_session,  # v1.21: session deletion
     cleanup_sessions as _cleanup_sessions,  # v1.21: session cleanup
+    release_session_lock as _release_session_lock,  # v1.30.2: session lock release
 )
 
 # Import media functions (multimodal support)
@@ -1301,6 +1302,8 @@ def _register_transcript() -> list[BuiltinFunction]:
         BuiltinFunction("delete_session", "Permanently delete a session (v1.23.7: cascade=true deletes spawned sessions)", "delete_session(session_id, cascade?)", _delete_session, "transcript"),
         BuiltinFunction("delete_current_session", "Permanently delete current session (v1.23.7: cascade=true deletes spawned)", "delete_current_session(confirm?, cascade?)", _delete_current_session, "transcript"),
         BuiltinFunction("cleanup_sessions", "Clean up old sessions (v1.23.7: cascade=true deletes spawned)", "cleanup_sessions(keep_count?, older_than_days?, cascade?)", _cleanup_sessions, "transcript"),
+        # v1.30.2: Session lock release (prevent stale locks on actor exit)
+        BuiltinFunction("release_session_lock", "Release cross-process session lock (called on actor exit to prevent stale locks)", "release_session_lock(session_id)", _release_session_lock, "transcript"),
     ]
 
 

@@ -1601,6 +1601,44 @@ def set_session_dir(path: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Session lock management (v1.30.2)
+# ---------------------------------------------------------------------------
+
+def release_session_lock(session_id: str) -> dict:
+    """Release the cross-process lock for a session.
+
+    v1.30.2: Called on actor/process exit to prevent stale locks that would
+    block future session resumption (and thus pinned message recovery).
+
+    Safe to call when no lock exists or when the lock is held by another
+    process (no-op in both cases).
+
+    Args:
+        session_id: The session ID whose lock should be released.
+
+    Returns:
+        dict:
+        {
+            "status": "ok" | "error",
+            "session_id": str,
+        }
+    """
+    if not session_id:
+        return {"status": "error", "error": "session_id is required"}
+
+    try:
+        from helen.runtime.config import resolve_session_dir
+        from helen.runtime.session_manager import SessionManager
+
+        session_dir, _scope = resolve_session_dir()
+        manager = SessionManager(base_dir=session_dir)
+        manager.release_session_lock(session_id)
+        return {"status": "ok", "session_id": session_id}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
 # Session deletion (v1.21)
 # ---------------------------------------------------------------------------
 
