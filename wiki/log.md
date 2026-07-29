@@ -4,6 +4,108 @@
 
 ---
 
+## [2026-07-29] docs | Wiki 文档大规模补齐（P0/P1/P2/P3）
+
+**操作**: Wiki 文档全面更新，覆盖 v1.29.17 之前的所有文档缺口  
+**状态**: ✅ 完成
+
+### 变更清单
+
+**P0（关键文档）**:
+1. **新建 `wiki/tutorial/18-helen-agent.md`** — Helen Programming Agent 完整教程
+   - 架构（Web UI → chat_tui.helen → ChatSessionActor）
+   - 单 agent 长驻循环设计
+   - 工具集（CHAT_TOOLS）、斜杠命令、6 个项目级 skill
+   - 三层完整性防御 + Hooks 机制
+   - 与普通 agent 的差异对比
+2. **更新 `wiki/index.md`** — 版本徽章 v1.22 → v1.29.17，测试数 3037+ → 3247+
+   - 在 Tutorial 区加入 18-helen-agent 链接
+   - 在 Runtime 区加入 session-scoping 链接
+
+**P1（补充文档）**:
+3. **更新 `wiki/toolchain/cli.md`** — 新增 `helen agent` 子命令完整章节
+   - 在 Subcommands 列表加入 `helen agent`
+   - 新增 `## helen agent` 章节：架构、启动流程、session memento、Web UI、斜杠命令
+4. **新建 `wiki/runtime/session-scoping.md`** — Session 作用域解析权威文档
+   - 双层作用域（project vs global）的设计原理
+   - 解析优先级链（env var → CLI → config → scope）
+   - `.helen/` 项目标记自动创建（v1.29.16+）
+   - Memento 文件格式（JSON + 旧版纯字符串）
+   - **三层 bug 诊断记录**：lazy init 顺序 / 缺失项目标记 / shared store 共享 initialized 标志
+
+**P2（历史补全）**:
+5. **更新 `wiki/appendix/changelog.md`** — 补 v1.24 → v1.29.17 完整历史
+   - v1.24 resume_session 改进 + Python Bridge 增强
+   - v1.25 Working Memory + 文档大规模英文化重组
+   - v1.26 Helen agent 集成
+   - v1.27 spawn resume + 跨进程 session 锁
+   - v1.28 :ask 三层增强
+   - v1.29 Helen agent 成熟期 + session 作用域三层 bug 修复
+6. **更新 `wiki/log.md`** — 本文件，记录本次文档补齐操作
+
+**P3（教程补充）**:
+7. **更新 `wiki/tutorial/05-agents.md`** — 补充 shared store 方法默认参数说明（v1.29.15 修复）
+
+### 影响
+- 新增 2 个教程/运行时文档（18-helen-agent.md, session-scoping.md）
+- 更新 3 个现有文档（index.md, cli.md, 05-agents.md）
+- 版本历史补齐 6 个大版本（v1.24 → v1.29）
+- 测试数反映最新值：3247+
+
+### 缺口分析（操作前）
+- Wiki 索引声明 v1.22，实际已到 v1.29.17（差 7 个次版本）
+- `helen agent` 完全无教程（仅 CLI help 一行）
+- v1.29 三层 bug 诊断过程未记录
+- v1.24-v1.28 在 changelog 完全缺失
+
+---
+
+## [2026-07-28] fix | v1.29.15/16/17 — Session 作用域解析三层 bug 修复
+
+**操作**: 修复 `helen agent` 在项目目录运行时 session 错误存储到全局目录的问题  
+**状态**: ✅ 完成
+
+### 根因分析
+
+三层叠加的 bug，每一层单独出现都不致命，但组合起来导致 session 永久性存错位置。
+
+**Layer 1 — Lazy init 顺序（v1.29.15 修复）**:
+- `_init_transcript_store()` 直接调 `resolve_session_dir()`
+- 若任何代码路径在 `set_session_dir()` 之前触发了 TranscriptStore 初始化，全局路径就被永久烤进去
+- TranscriptStore 初始化是一次性的，再初始化是 no-op
+- **修复**：在 `resolve_session_dir()` 前显式 `detect_project_dir(os.getcwd())`
+
+**Layer 2 — 缺失项目标记（v1.29.16 修复）**:
+- Layer 1 修了，但 `detect_project_dir()` 在没 `.helen/` 时仍返回 None
+- 冷启动 fresh 目录依然掉回全局
+- **修复**：auto-create `.helen/` in cwd（先放 agent_launcher，后移回 interpreter）
+
+**Layer 3 — Shared store 共享 initialized 标志（v1.29.15 修复）**:
+- `ContextManager` 是 shared store，`initialized` 标志跨 spawned interpreter 共享
+- 一个 interpreter 跑过 `init()` 但 `session_dir_path` 设置失败 → 另一个 interpreter 看到 `initialized=true` 直接跳过 → 永久空路径
+- **修复**：`if initialized && session_dir_path != ""`，两个条件都满足才跳过
+
+### v1.29.17 — 职责归属重构
+
+- v1.29.16 把 `.helen/` 创建放在 `agent_launcher.py`
+- 用户正确指出：这应该是 interpreter 的职责，让 `helen app.helen`（不仅是 `helen agent`）也能自动建立项目标记
+- 职责回归 `agent_context.py`，撤回 launcher 改动
+
+### 附带修复
+- `SharedStoreMethod.__call__` 支持方法默认参数
+- `_detect_session_id()` 兼容 JSON memento 格式（`{"main": "...", "child": "..."}`）
+- `resume_session()` 移除 v1.29.9 冗余守卫
+
+### 测试结果
+- 冷启动 `helen agent` ✅ 正确创建 `.helen/` 并使用项目目录
+- 冷启动 `helen app.helen` ✅ 正确创建 `.helen/` 并使用项目目录
+- 3247 测试全部通过
+
+### 设计教训
+> 当 lazy init 与 shared state 结合时，检查 **每一份** 状态是否一致再决定跳过。单一 boolean `initialized` 标志可以掩盖 partial-initialization 的 bug，这些 bug 只在特定调用顺序下才暴露。
+
+---
+
 ## [2026-07-27] stdlib | 新增 find_from 和 json_parse_lenient 函数
 
 **操作**: 标准库扩展 + 解析器改进  

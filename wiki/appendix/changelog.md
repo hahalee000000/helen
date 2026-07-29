@@ -1,6 +1,187 @@
 # 版本历史
 
-> Helen v1.23 | PyPI 已发布 — `pip install helen-lang` — 修复 invocation 上下文隔离
+> Helen v1.29.17 | PyPI 已发布 — `pip install helen-lang` — Session 作用域解析 + `.helen/` 自动创建 + 项目标记修复
+
+---
+
+## v1.29: Helen Programming Agent 成熟期 + Session 作用域修复
+
+**发布日期**: 2026-07-28 (v1.29.17)
+**核心特性**: Helen agent 编程助手全面稳定；session 作用域解析三层 bug 修复；agent 级别 transcript 控制
+
+### v1.29.15 — session 目录 / memento 解析 / shared store 默认参数修复
+
+修复 `helen agent` 在项目目录运行时 session 错误存储到全局目录的问题（三层 bug）：
+
+1. `_detect_session_id()` 解析 JSON memento（提取 `main` 字段），兼容 v1.0 helenagent 新格式
+2. `SharedStoreMethod.__call__` 修复 shared store 方法默认参数支持（`fn foo(x: str = "default")` 不带参数时不再报 undefined）
+3. `_init_transcript_store()` 当 `scope=auto/project` 且 `HELEN_SESSION_DIR` 未设置时，直接 `detect_project_dir()` 使用项目目录
+4. `resume_session()` 移除 v1.29.9 未初始化错误守卫，直接触发延迟初始化
+5. `ContextManager.init(cwd: str = "")` 接受可选 `cwd` 参数
+
+**修改文件**：`interpreter/shared_store.py`, `python_bridge/import_hook.py`, `interpreter/agent_context.py`, `agent/context_manager.helen`, `agent/chat_session_actor.helen`, `stdlib/transcript.py`
+
+### v1.29.16 — 冷启动时自动创建 `.helen/` 项目标记 + ContextManager.init 容错
+
+根因（诊断日志揭示）：当项目目录没有 `.helen/` 时，`detect_project_dir()` 返回 `None`，session 因此错误地存储到全局 `~/.helen/sessions/`。Shared store 通过 spawn 共享 `initialized` 标志，导致 actor 的 `ContextManager.init(cwd)` 被跳过。
+
+修复：
+- `agent_launcher.py`: helen agent 启动时自动创建 `<cwd>/.helen/` 作为项目标记
+- `context_manager.helen`: `init()` 在 `session_dir_path` 为空时强制重新设置
+
+### v1.29.17 — 将 `.helen/` 项目标记创建职责移回 interpreter
+
+用户正确指出：创建 `.helen/` 项目标记应该是 interpreter 的职责，不是 helen agent 启动器的。这样 `helen app.helen`（带 transcript）也能在项目目录自动创建 `.helen/`，而不仅是 `helen agent`。
+
+- `agent_context.py`: `_init_transcript_store()` 在 `scope=auto/project` 且 `detect_project_dir()` 返回 `None` 时，自动在 cwd 创建 `.helen/` 作为项目标记（除非 cwd 本身就是 `~/.helen`）
+- `agent_launcher.py`: 撤回冷启动 `.helen/` 创建逻辑（职责回归 interpreter）
+
+测试验证：冷启动 `helen agent` ✅、冷启动 `helen app.helen` ✅，3247 测试全部通过。
+
+### v1.29.0 – v1.29.14 — 其他修复
+
+- **v1.29.0**: 新增 agent 级别 `transcript "none|memory|persistent"` 控制关键字
+- **v1.29.7**: 修复 issue #24 — `helen agent` 退出时遗留孤儿 uvicorn 进程
+- **v1.29.9**: 修复 session 目录污染（检查 `_transcript_store_initialized` 防止错误创建空 session 目录）
+- **v1.29.10**: 修复 CI 测试失败 — `_history` 在 resume session 时能访问 transcript store
+- **v1.29.12**: 新增 heartbeat 机制防止 actor 超时退出
+- **v1.29.13**: `/clear-session` 后正确清除 agent context 中的 session_id
+- **v1.29.14**: 修复 `/clear-session` 后 memento 中 main session ID 为空的问题
+
+---
+
+## v1.28: REPL `:ask` 三层增强 + Agent 同步
+
+**发布日期**: 2026-07-22 (v1.28.6)
+**核心特性**: 重写 REPL `:ask` 命令为 L1/L2/L3 三层增强；helen agent 同步到 helenagent v1.0
+
+### v1.28 — `:ask` 三层增强
+
+**L1 — 修好 + REPL 上下文注入**:
+- 移除 `_run_helen_assistant`，改为直接调 `HttpLLMRuntime.act_stream`
+- 每次 `:ask` 组装 system prompt = `framework_instructions + helen_conventions + skill_index + <repl_context>`
+- REPL 上下文块包含当前定义、最近错误、最近 50 行输出、cwd
+
+**L2 — REPL 状态工具化**:
+- 4 个 REPL 工具：`repl_definitions` / `repl_last_error` / `repl_history` / `repl_read_file`
+- LLM 可主动查询 REPL 状态
+
+**L3 — 多轮对话模式**:
+- `:ask`（无参数）进入对话子 REPL，独立 `AssistantSession`
+- 支持 `:ask --resume <sid>` 恢复历史对话
+
+### v1.28.2 — 工具声明修复
+
+修复 `tools` 声明缺少 `=` 导致 LLM 无法调用工具的 bug。
+
+### v1.28.4 — `/compress` token 计数 workaround
+
+修复 helen issue #23：`/compress` 命令 token 计数不准确。
+
+### v1.28.5 — 标准库和解析器增强
+
+stdlib 改进 + 解析器增强。
+
+### v1.28.6 — Unicode 转义序列支持
+
+修复 Unicode 转义序列（`\uXXXX`）解析。
+
+---
+
+## v1.27: `spawn resume` + 跨进程 session 锁
+
+**发布日期**: 2026-07-19 (v1.27.2)
+**核心特性**: `spawn Agent(...) resume("<session_id>")` 续跑先前保存的子会话；跨进程锁防止并发损坏
+
+### 语法
+
+```helen
+spawn Assistant(...) resume("session_abc123")
+```
+
+`resume` 子句让 spawn 出来的 agent 续跑先前保存的 transcript，而不是从空白开始。与运行时 `resume_session()` 的区别：
+
+| 特性 | `spawn ... resume("sid")` | `resume_session("sid")` |
+|---|---|---|
+| 时机 | spawn 时 | 运行时 stdlib 调用 |
+| 行为 | 直接续跑（同 session_id） | 把 sid 的消息导入当前新 session |
+| 跨进程锁 | 有（防并发损坏） | 无 |
+
+### v1.27.1 — `llm act` 能看到 resume 后的历史
+
+修复 agent `main {}` 中 `llm act` 看不到 resumed history 的问题。
+
+### v1.27.2 — agent 描述注入系统提示
+
+修复 agent `description` 没注入到 LLM 系统提示的问题。
+
+---
+
+## v1.26: Helen Programming Agent 集成
+
+**发布日期**: 2026-07-19 (v1.26.0)
+**核心特性**: 将 helenagent 作为内置编程助手集成到 Helen 语言仓库
+
+新增 `helen/agent/` 目录，包含完整的 Helen Programming Assistant（用纯 Helen 语言实现）：
+
+- `chat_session_actor.helen` — 唯一 agent，长驻 while 循环
+- `chat_tui.helen` — actor 生命周期管理
+- `chat_tui_web.py` — Web UI Python 入口
+- `commands.helen` — 斜杠命令系统（`/help`, `/clear`, `/compress`, `/stats`, `/memory`）
+- `context_manager.helen` — 上下文管理
+- `webui/` — React + FastAPI Web UI
+
+详见 [Tutorial 18: Helen Programming Agent](../tutorial/18-helen-agent.md)。
+
+---
+
+## v1.25: System Prompt-Based Working Memory
+
+**发布日期**: 2026-07-15 (v1.25.2)
+**核心特性**: 基于系统提示词的 working memory；文档大规模重组
+
+### v1.25.0 — Working Memory
+
+LLM 通过系统提示词中的 `<working_memory>` 块主动维护上下文，无需显式 API。这是对 v1.19 上下文管理 API 的简化替代——让 LLM 自己决定保留什么，比强制策略更贴合实际对话流。
+
+### v1.25.1 — 修复 3 个 P1 spawn bug
+
+修复 issues #20, #21, #22。
+
+### v1.25.2 — Working memory streaming 可见性修复
+
+修复 `<working_memory>` 块在 streaming 模式下对 LLM 不可见的问题；从 LLM 响应中移除 `<working_memory>` 块避免污染输出。
+
+### 文档重组
+
+- 全文档英文化（README、CLAUDE.md、skills、wiki、tutorial、Python 代码注释）
+- `docs/` 目录移入 `reports/`
+- 新增 skill 创建完整指引
+
+---
+
+## v1.24: `resume_session` 改进 + Python Bridge 增强
+
+**发布日期**: 2026-07-13 (v1.24.9)
+**核心特性**: resume_session 可见性标记 + 调用树完整性 + 幂等恢复；MediaPart 原生传递
+
+### v1.24.0 — `resume_session` 改进
+
+- 可见性标记：恢复的消息按 invocation 正确可见
+- 调用树完整性：spawn 链中的 resume 不会破坏调用关系
+- 幂等恢复：重复 resume 同一 session 不会重复导入消息
+
+### v1.24.2 / v1.24.3 — Python Bridge `session_id` 支持
+
+Python import hook 现在支持 `session_id` 参数（helen issue #16）：
+
+```python
+from my_helen_module import some_fn  # 自动使用 memento 中的 session_id
+```
+
+### v1.24.9 — MediaPart 原生传递
+
+Python ↔ Helen FFI 支持 `MediaPart` 原生传递，无需手动转换。`media(list)` 动态列表展平；`ReadOnlyView` 参数展平支持。
 
 ---
 

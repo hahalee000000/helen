@@ -2,7 +2,7 @@
 
 > **Helen** — A Prompt-first Agent Programming Language
 > [![PyPI version](https://img.shields.io/pypi/v/helen-lang.svg)](https://pypi.org/project/helen-lang/)
-> Version: v1.22 | Status: Published on PyPI (`pip install helen-lang`) | Invocation Tree + Per-Main Fresh Context + search_transcript + Context Management API + Transcript Scoping + spawn Concurrency + Chinese Syntax | Tests: 3037+ passed
+> Version: v1.29.17 | Status: Published on PyPI (`pip install helen-lang`) | Transcript Control + Session Scoping + spawn resume + Context Compression + Multi-Agent Isolation + Chinese Syntax | Tests: 3247+ passed
 
 ---
 
@@ -33,6 +33,7 @@
 - [[runtime/prompt-builder|Prompt Building]] — Two-layer progressive disclosure, template rendering
 - [[runtime/memory|Memory System]] — FileMemoryProvider, InMemoryProvider
 - [[runtime/transcript-store|TranscriptStore SSOT]] — Single source of truth for messages, SQLite/JSONL backends, LRU cache, UUID addressing, non-destructive compression (**v1.16 new feature**); `search_transcript()` content search (**v1.22 new feature**); `session_meta` session metadata — argv, startup time, version info (**v1.23.3 new feature**)
+- [[runtime/session-scoping|Session Scoping]] — Project vs global scope, `.helen/` marker auto-creation, `HELEN_SESSION_DIR` override, memento format (**v1.29 new**)
 - [[runtime/context-management|Context Management Architecture]] — Design philosophy (Context vs Transcript, four-layer lifecycle), unified entry point, three-channel, graduated compression, cache-aware, working memory (**authoritative document**)
 - [[runtime/context-compression-research|Context Compression Research]] — Academic references: RCC, CogCanvas, DAST, etc.
 - [[runtime/history|History Management]] — Token budget, truncation strategy, conversation_summary
@@ -70,6 +71,7 @@
 - [[tutorial/15-python-bridge|Python Bridge]] — Let Python directly use Helen Agents
 - [[tutorial/16-quality-assessment|Quality Assessment]] — 7-dimension framework, security scoring, CI integration
 - [[tutorial/17-multimodal|Multimodal Support]] — MediaPart, on_media/on_generate callbacks, media adaptation (**v1.17 new feature**)
+- [[tutorial/18-helen-agent|Helen Agent Programming Assistant]] — Interactive self-evolving coding assistant, Web UI, ChatSessionActor architecture, skill/memory evolution loop (**v1.26+ new**)
 
 ### 8. References
 - [[reference/python-integration|Helen ↔ Python Bidirectional Integration]] ⭐ — Full picture: FFI (Helen → Python) + Bridge (Python → Helen) + hybrid usage patterns

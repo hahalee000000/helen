@@ -10,6 +10,7 @@
 $ helen <file> [args...]  # Compile + execute (args passed to the program as argv)
 $ helen check <file>       # Validate only (Lex + Parse + Analyze)
 $ helen repl               # Interactive interpreter
+$ helen agent              # Launch the Helen programming assistant (Web UI)
 $ helen doc <files...>     # Generate documentation
 $ helen init               # Initialize config directory
 $ helen lsp                # Start Language Server (LSP)
@@ -394,6 +395,101 @@ Error: [E0311] at <repl>:2:5
     |         ^
 Undefined variable 'y'
 ```
+
+---
+
+## helen agent
+
+```bash
+$ helen agent
+Starting Helen Programming Agent...
+Web UI: http://localhost:5173
+```
+
+Launches the **Helen Programming Assistant** — an interactive, self-evolving coding agent built entirely in Helen. Unlike `helen repl` (which executes Helen code line by line), `helen agent` starts a *long-lived* agent that edits files, runs tests, checks quality, and learns skills on your behalf.
+
+### What It Does
+
+| Capability | Description |
+|---|---|
+| Code editing | Read, write, patch files in your project |
+| Quality checks | Runs `helen check`, reports scores, suggests fixes |
+| Test execution | Runs `pytest` / `helen test`, iterates until green |
+| Skill learning | Loads methodology skills on demand; can save new ones |
+| Memory | Keeps working memory + long-term memory across turns |
+| Persistent transcripts | Every session is recorded in `.helen/sessions/` |
+
+### Architecture
+
+```
+Web UI (React + Tailwind)
+  ↕ WebSocket
+FastAPI backend (chat_tui_web.py)
+  ↕
+chat_tui.helen (actor lifecycle)
+  ↕ Channel mailbox
+ChatSessionActor (long-lived agent, single main {} loop)
+  ├── File tools: read_file / write_file / patch_file
+  ├── Quality tools: run_helen_check / get_scores / run_helen_tests
+  ├── Meta tools: load_skill / save_new_skill
+  └── Hooks: save_code_file → auto-runs helen check
+```
+
+The entire agent behavior lives in `.helen` files under `helen/agent/`. The Python side is a thin I/O bridge.
+
+### What Happens at Startup
+
+1. `helen/cli/agent_launcher.py` resolves the current working directory
+2. If no `.helen/` marker exists in `cwd` or ancestors, it creates one (since v1.29.16)
+3. The Web UI backend (`chat_tui_web.py`) is spawned as a child process
+4. Signals (Ctrl+C, SIGTERM) are forwarded to the child; orphan processes are detected and cleaned up (since v1.29.7)
+5. `chat_tui.helen` imports `ChatSessionActor`, spawns it as a long-lived actor
+6. The actor's `main {}` loop pulls requests from a Channel mailbox and dispatches to the LLM
+
+### Session Memento
+
+The active session ID is saved to `.helen/current_session_id` so subsequent `helen agent` runs can resume. Since v1.29.15, the memento is a JSON object:
+
+```json
+{"main": "session_...", "child": "session_..."}
+```
+
+Older plain-string mementos are also accepted. See [Session Scoping](../runtime/session-scoping.md) for details.
+
+### Web UI
+
+The Web UI is served by FastAPI + React. Start it from `helen/agent/webui/`:
+
+```bash
+cd helen/agent/webui
+./start-all.sh        # backend + frontend
+```
+
+Features:
+- Real-time streaming of LLM tokens via WebSocket
+- Session management (create / switch / delete sessions)
+- Slash commands (sent as regular messages starting with `/`)
+- Agent status indicator (thinking / tool call / etc.)
+
+### Slash Commands
+
+While the agent is running, you can type slash commands:
+
+| Command | Effect |
+|---|---|
+| `/help` | Show available commands |
+| `/clear` | Clear conversation context (inserts `BoundaryMarker`) |
+| `/clear-session [<sid>]` | Delete the entire session (cascades to spawn transcripts) |
+| `/compress` | LLM-driven semantic context compression |
+| `/stats` | Session statistics (turns, tokens, tool calls) |
+| `/memory` | Show long-term memory state |
+| `/working-memory` | Show `<working_memory>` block |
+
+### See Also
+
+- [Tutorial 18: Helen Programming Agent](../tutorial/18-helen-agent.md) — full guide
+- [Session Scoping](../runtime/session-scoping.md) — how `.helen/` markers work
+- [TranscriptStore SSOT](../runtime/transcript-store.md) — persistent sessions
 
 ---
 

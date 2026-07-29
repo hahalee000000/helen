@@ -798,7 +798,27 @@ agent Worker() {
 - ✅ Thread-safe: All method calls are automatically locked (RLock)
 - ✅ Visible to all agents by default
 - ✅ Supports reference types like list, dict
+- ✅ Supports default parameter values on methods (since v1.29.15)
 - ❌ Cannot directly access fields with `_` prefix (private fields)
+
+**Default parameter values** (since v1.29.15):
+
+Shared store methods support default values just like regular functions:
+
+```helen
+shared store Logger {
+    let logs: list = []
+    
+    fn log(message: str, level: str = "info") {
+        logs.append("[" + level + "] " + message)
+    }
+}
+
+Logger.log("starting up")             // level defaults to "info"
+Logger.log("disk full", "error")      // explicit level
+```
+
+Before v1.29.15, calling a method without passing a defaulted parameter left the parameter `undefined`, causing runtime errors. The fix in `helen/interpreter/shared_store.py` evaluates the default expression at call time (not at declaration time), matching regular function semantics.
 
 **Private fields** (`_` prefix):
 
