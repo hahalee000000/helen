@@ -11,14 +11,14 @@ metadata:
 
 # Helen Standard Library Reference
 
-Helen's standard library provides **203 built-in functions**, covering all core needs for AI application development.
+Helen's standard library provides **333 built-in functions**, covering all core needs for AI application development.
 
 ## Category Overview
 
 | Category | Count | Representative Functions |
 |----------|--------|--------------------------|
 | **Core** | 17 | `print`, `len`, `str`, `int`, `float`, `bool`, `list`, `dict`, `abs`, `min`, `max`, `range`, `type`, `isinstance`, `input`, `multiline_input`, `exit` |
-| **String** | 41 | `upper`, `lower`, `strip`, `split`, `join`, `replace`, `find`, `find_from`, `reverse`, `repeat`, `regex_match`, `regex_replace`, `regex_split`, `format_float`, `tokenize`, `levenshtein`, `base64_encode` |
+| **String** | 43 | `upper`, `lower`, `strip`, `split`, `join`, `replace`, `find`, `find_from`, `reverse`, `repeat`, `regex_match`, `regex_replace`, `regex_split`, `format_float`, `tokenize`, `levenshtein`, `base64_encode`, `chr`, `ord` |
 | **Data** | 28 | `json_parse`, `json_parse_lenient`, `json_stringify`, `yaml_parse`, `toml_parse`, `csv_parse`, `xml_parse`, `html_escape`, `html_parse`, `markdown_parse`, `markdown_to_html` |
 | **Collection** | 22 | `sort`, `reverse`, `unique`, `flatten`, `zip`, `map`, `filter`, `reduce`, `chunk`, `set_union`, `set_intersection`, `set_difference` |
 | **Network** | 9 | `http_get`, `http_post`, `http_put`, `http_delete`, `http_download`, `url_parse`, `url_build`, `url_encode`, `url_decode` |
@@ -45,7 +45,7 @@ Helen's stdlib supports multilingual function names. Every stdlib function has a
 
 ### Chinese stdlib Aliases
 
-Helen has 230+ built-in Chinese aliases covering all stdlib categories. Common examples:
+Helen has 333 built-in Chinese aliases covering all stdlib categories. Common examples:
 
 | 英文 | 中文 | 类别 |
 |------|------|------|
@@ -63,6 +63,8 @@ Helen has 230+ built-in Chinese aliases covering all stdlib categories. Common e
 | `regex_split` | `正则分割` | String |
 | `find_from` | `从位置查找` | String |
 | `format_float` | `格式化浮点` | String |
+| `chr` | `字符` | String |
+| `ord` | `码点` | String |
 | `date_format` | `日期格式化` | Time |
 | `read_file` | `读文件` | File |
 | `write_file` | `写文件` | File |
@@ -163,6 +165,15 @@ main {
     // Whitespace handling
     let trimmed = strip("  hello  ")  // "hello"
     let padded = pad_start("42", 5, "0")  // "00042"
+
+    // Character ↔ code point (v1.31+)
+    let ch = chr(65)              // "A"
+    let cp = ord("中")            // 20013
+    let roundtrip = ord(chr(97))  // 97
+
+    // Chinese aliases
+    let ch2 = 字符(65)            // "A"
+    let cp2 = 码点("A")           // 65
 
     // Float formatting
     let formatted1 = format_float(8.5, 1)      // "8.5"

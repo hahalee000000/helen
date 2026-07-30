@@ -37,6 +37,12 @@ from typing import Any
 import httpx
 
 from helen.runtime.llm_runtime import LLMResponse, LLMRuntime
+from helen.runtime.resilience import (
+    classify_error,
+    compute_backoff,
+    is_retryable,
+    parse_retry_after,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -418,11 +424,18 @@ class HttpLLMRuntime(LLMRuntime):
     enable_message_sanitization: bool = True
     enable_tool_truncation: bool = True
     enable_reactive_compaction: bool = True
+    # Circuit breaker config (v1.31): fail fast when the API is fully down
+    # instead of retrying every call in a tool-calling loop.
+    circuit_failure_threshold: int = 5
+    circuit_recovery_timeout: float = 60.0
     _last_error: str | None = field(default=None, repr=False)
+    _last_status_code: int | None = field(default=None, repr=False)
+    _last_retry_after: float | None = field(default=None, repr=False)
     _client: Any = field(default=None, repr=False, init=False)
     _async_client: Any = field(default=None, repr=False, init=False)
     _tool_pool: Any = field(default=None, repr=False, init=False)
     _reactive_compactor: Any = field(default=None, repr=False, init=False)
+    _circuit_breaker: Any = field(default=None, repr=False, init=False)
 
     def __post_init__(self):
         """Auto-load configuration from Helen config."""
@@ -461,6 +474,12 @@ class HttpLLMRuntime(LLMRuntime):
         )
         # Persistent thread pool for concurrent tool execution
         self._tool_pool = ThreadPoolExecutor(max_workers=_MAX_TOOL_WORKERS)
+        # Circuit breaker (v1.31): fails fast when the API is down.
+        from helen.runtime.resilience import CircuitBreaker
+        self._circuit_breaker = CircuitBreaker(
+            failure_threshold=self.circuit_failure_threshold,
+            recovery_timeout=self.circuit_recovery_timeout,
+        )
 
     def close(self):
         """Close persistent HTTP clients and thread pool."""
@@ -736,11 +755,24 @@ class HttpLLMRuntime(LLMRuntime):
         3. Reactive Compaction — semantic (if llm_client available)
         4. Aggressive trim (last resort)
         """
+        # Fail fast if the circuit breaker is open.
+        if self._circuit_breaker is not None and not self._circuit_breaker.allow_request():
+            logger.warning(
+                "Circuit breaker OPEN - skipping API call (fail fast). "
+                "Will retry after %.0fs cooldown.",
+                self.circuit_recovery_timeout,
+            )
+            self._last_error = "Circuit breaker open - API unavailable"
+            return None
+
         context_overflow_retried = False
 
         for attempt in range(self.max_retries + 1):
             result = self._chat_with_messages(messages, model=model, temperature=temperature, tools=tools)
             if result is not None:
+                # Success - reset the circuit breaker.
+                if self._circuit_breaker is not None:
+                    self._circuit_breaker.record_success()
                 return result
 
             error = self._last_error or ""
@@ -775,31 +807,34 @@ class HttpLLMRuntime(LLMRuntime):
                         len(messages),
                     )
 
-            # Check if we should retry
-            if attempt < self.max_retries:
-                # Retry on timeout or server errors
-                is_retryable = (
-                    "timed out" in error.lower()
-                    or "500" in error
-                    or "502" in error
-                    or "503" in error
-                    or "504" in error
-                    or "429" in error  # rate limit
-                    or "connect" in error.lower()  # transient network errors
+            # Record failure on the circuit breaker (any non-success).
+            if self._circuit_breaker is not None:
+                self._circuit_breaker.record_failure()
+
+            # Classify and decide whether to retry.
+            category = classify_error(
+                self._last_status_code,
+                error,
+                context_overflow_fn=_is_context_length_error,
+            )
+
+            if attempt < self.max_retries and is_retryable(category):
+                # Layered backoff with full jitter + Retry-After floor.
+                wait_time = compute_backoff(
+                    category, attempt, retry_after=self._last_retry_after,
                 )
-                if is_retryable:
-                    # Exponential backoff: 1s, 2s, 4s
-                    wait_time = min(2 ** attempt, 10)
-                    logger.info(
-                        "API call failed (attempt %d/%d): %s — retrying in %ds",
-                        attempt + 1, self.max_retries + 1, error, wait_time,
-                    )
+                # Cap the absolute wait so a huge Retry-After can't stall forever.
+                wait_time = min(wait_time, 120.0)
+                logger.info(
+                    "API call failed (attempt %d/%d, %s): %s - retrying in %.1fs",
+                    attempt + 1, self.max_retries + 1, category.value, error[:120], wait_time,
+                )
+                if wait_time > 0:
                     time.sleep(wait_time)
-                    continue
+                continue
 
             # Non-retryable error or exhausted retries
             break
-
         return None
 
     def _get_model_context_window(self, model: str | None = None) -> int:
@@ -903,11 +938,20 @@ class HttpLLMRuntime(LLMRuntime):
             response.raise_for_status()
             result = response.json()
             choices = result.get("choices", [])
+            # Success - clear error state.
+            self._last_error = None
+            self._last_status_code = None
+            self._last_retry_after = None
             if choices:
                 return choices[0].get("message", {})
             return {"content": ""}
 
         except httpx.HTTPStatusError as e:
+            self._last_status_code = e.response.status_code
+            # Capture Retry-After header (common for 429 / 503).
+            self._last_retry_after = parse_retry_after(
+                e.response.headers.get("retry-after")
+            )
             # Read the error body for structured API error messages
             try:
                 error_data = e.response.json()
@@ -919,15 +963,23 @@ class HttpLLMRuntime(LLMRuntime):
                 self._last_error = f"HTTP error {e.response.status_code}: {e.response.reason_phrase}"
             return None
         except (httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError) as e:
+            self._last_status_code = None
+            self._last_retry_after = None
             self._last_error = f"HTTP request failed: {e}"
             return None
         except httpx.TimeoutException:
+            self._last_status_code = None
+            self._last_retry_after = None
             self._last_error = f"Request timed out after {self.timeout}s"
             return None
         except json.JSONDecodeError as e:
+            self._last_status_code = None
+            self._last_retry_after = None
             self._last_error = f"Invalid JSON response: {e}"
             return None
         except Exception as e:
+            self._last_status_code = None
+            self._last_retry_after = None
             self._last_error = f"Unexpected error: {e}"
             return None
 

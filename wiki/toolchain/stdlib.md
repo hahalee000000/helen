@@ -1,6 +1,6 @@
 # Standard Library (Stdlib)
 
-> Module M15 | `helen/stdlib/__init__.py` | **331 builtins** | Tests: `tests/stdlib/`
+> Module M15 | `helen/stdlib/__init__.py` | **333 builtins** | Tests: `tests/stdlib/`
 
 ---
 
@@ -39,7 +39,7 @@ class BuiltinFunction:
 | Category | Count | Module File |
 |----------|-------|-------------|
 | **Core** | 11 | `__init__.py` |
-| **String** | 38 | `string.py` |
+| **String** | 40 | `string.py` |
 | **Data** | 26 | `data.py`, `data_formats.py` |
 | **Collection** | 22 | `collection.py` |
 | **Network** | 9 | `network.py` |
@@ -56,7 +56,7 @@ class BuiltinFunction:
 | **Transcript** | 11 | `transcript.py` |
 | **Media** | 12 | `media.py` |
 | **Tools** | 24 | `tools.py` |
-| **Total** | **331** | - |
+| **Total** | **333** | - |
 
 ---
 
@@ -78,9 +78,9 @@ class BuiltinFunction:
 
 ---
 
-## String (38)
+## String (40)
 
-### Basic Operations (13)
+### Basic Operations (15)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -97,6 +97,8 @@ class BuiltinFunction:
 | `find` | `find(s, sub)` → int | Find substring position |
 | `find_from` | `find_from(s, sub, start)` → int | Find substring from position (**v1.26 new**) |
 | `substring` | `substring(s, start, end?)` → str | Extract substring |
+| `chr` | `chr(code)` → str | Convert Unicode code point to character (**v1.31 new**) |
+| `ord` | `ord(char)` → int | Convert character to Unicode code point (**v1.31 new**) |
 
 ### Regular Expressions (5)
 

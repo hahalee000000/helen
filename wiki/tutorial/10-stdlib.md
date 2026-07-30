@@ -9,7 +9,7 @@ The Helen standard library provides 285 built-in functions organized into 17 cat
 | Category | Count | Description |
 |----------|-------|-------------|
 | **Core** | 11 | Type conversion, general operations |
-| **String** | 37 | String processing, regex, text analysis, template interpolation |
+| **String** | 39 | String processing, regex, text analysis, template interpolation |
 | **Data** | 25 | JSON, HTML, CSV, Markdown, YAML, TOML, XML |
 | **Collection** | 22 | List, dict, set operations |
 | **Network** | 9 | HTTP requests, URL handling |
@@ -153,9 +153,9 @@ main {
 }
 ```
 
-## String Functions (37)
+## String Functions (39)
 
-### Basic Operations (12)
+### Basic Operations (14)
 
 ```helen
 main {
@@ -180,6 +180,16 @@ main {
     find("hello", "ell")          // 1
     replace("hello", "l", "L")    // "heLLo"
     substring("hello", 1, 3)      // "el"
+
+    // Character ↔ code point (v1.31+)
+    chr(65)                       // "A"
+    chr(20013)                    // "中"
+    ord("A")                      // 65
+    ord("中")                     // 20013
+
+    // Chinese aliases
+    字符(65)                      // "A"
+    码点("A")                     // 65
 
     // String interpolation (v1.8.1+)
     let template = "Hello, {{name}}! You are {{age}} years old."

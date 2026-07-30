@@ -12,6 +12,8 @@ from helen.stdlib.string import (
     _remove_punctuation, _normalize_whitespace, _extract_urls, _extract_emails,
     # Encoding
     _base64_encode, _base64_decode, _html_escape, _html_unescape,
+    # Character code (Issue #27)
+    _chr, _ord,
     # String ops
     _repeat, _reverse, _pad_left, _pad_right, _center, _count, _index,
 )
@@ -409,3 +411,84 @@ class TestIndex:
 
     def test_first_occurrence(self):
         assert _index("abcabc", "bc") == 1
+
+
+# ── Character Code Tests (Issue #27) ──────────────────────────
+
+
+class TestChr:
+    """Tests for chr (code point → character)."""
+
+    def test_ascii_uppercase(self):
+        assert _chr(65) == "A"
+
+    def test_ascii_lowercase(self):
+        assert _chr(97) == "a"
+
+    def test_newline(self):
+        assert _chr(10) == "\n"
+
+    def test_escape(self):
+        assert _chr(27) == "\x1b"
+
+    def test_cjk(self):
+        assert _chr(0x4e2d) == "中"
+
+    def test_zero(self):
+        assert _chr(0) == "\x00"
+
+    def test_max_codepoint(self):
+        assert _chr(0x10FFFF) == "\U0010ffff"
+
+    def test_negative_raises(self):
+        with pytest.raises(ValueError, match="not in range"):
+            _chr(-1)
+
+    def test_out_of_range_raises(self):
+        with pytest.raises(ValueError, match="not in range"):
+            _chr(0x110000)
+
+    def test_non_int_raises(self):
+        with pytest.raises(TypeError, match="must be an integer"):
+            _chr(65.0)
+
+    def test_string_raises(self):
+        with pytest.raises(TypeError, match="must be an integer"):
+            _chr("A")
+
+
+class TestOrd:
+    """Tests for ord (character → code point)."""
+
+    def test_ascii_uppercase(self):
+        assert _ord("A") == 65
+
+    def test_ascii_lowercase(self):
+        assert _ord("a") == 97
+
+    def test_newline(self):
+        assert _ord("\n") == 10
+
+    def test_cjk(self):
+        assert _ord("中") == 0x4e2d
+
+    def test_zero_char(self):
+        assert _ord("\x00") == 0
+
+    def test_non_string_raises(self):
+        with pytest.raises(TypeError, match="must be a string"):
+            _ord(65)
+
+    def test_empty_string_raises(self):
+        with pytest.raises(ValueError, match="expected a character"):
+            _ord("")
+
+    def test_multi_char_raises(self):
+        with pytest.raises(ValueError, match="expected a character"):
+            _ord("ab")
+
+    def test_roundtrip(self):
+        """chr and ord are inverses."""
+        for cp in [0, 65, 97, 0x4e2d, 0x10FFFF]:
+            assert _ord(_chr(cp)) == cp
+            assert _chr(_ord(chr(cp))) == chr(cp)

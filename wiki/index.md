@@ -49,7 +49,7 @@
 - [[toolchain/quality|Quality Assessment]] — 7-dimension framework, security scoring, CI integration
 - [[toolchain/lsp|Language Server]] — `helen lsp`, JSON-RPC 2.0, diagnostics/completion/go-to-definition
 - [[toolchain/vscode|VS Code Extension]] — Syntax highlighting, LSP integration, code completion, go-to-definition
-- [[toolchain/stdlib|Standard Library]] — 331 builtins (331 Chinese aliases) (core/string/data/collection/network/time/math/file/system/crypto/io/test/quality/context/transcript/media)
+- [[toolchain/stdlib|Standard Library]] — 333 builtins (333 Chinese aliases) (core/string/data/collection/network/time/math/file/system/crypto/io/test/quality/context/transcript/media)
 - [[toolchain/templates|Built-in Template Library]] — `helen template`, complete examples for common agent patterns
 - [[toolchain/error-format|Error Formatting]] — HLD 3.11.2 diagnostic output (with smart fix suggestions)
 

@@ -12,6 +12,8 @@ import pytest
 from helen.runtime.config import get_multimodal_config
 from helen.runtime.history import Message
 from helen.runtime.media_storage import (
+    MEDIA_REF_TYPE,
+    MediaIntegrityError,
     MediaStorage,
     _compute_content_hash,
     _guess_extension,
@@ -247,6 +249,163 @@ class TestMediaStorage:
         # Check files are removed
         media_files = list(storage.media_dir.glob("*"))
         assert len(media_files) == 0
+
+
+class TestMediaIntegrity:
+    """v1.31: integrity verification on restore (size + checksum)."""
+
+    def test_extract_stores_binary_size_and_checksum(self, tmp_path):
+        storage = MediaStorage(tmp_path, threshold_mb=1.0)
+        original = b"integrity test payload"
+        content = base64.b64encode(original).decode("utf-8")
+        media_ref = storage.extract_media(content, "image/png", "image")
+
+        assert media_ref["binary_size"] == len(original)
+        assert "checksum" in media_ref
+        assert len(media_ref["checksum"]) == 16
+
+    def test_restore_succeeds_with_intact_file(self, tmp_path):
+        storage = MediaStorage(tmp_path, threshold_mb=1.0)
+        original = b"intact data"
+        content = base64.b64encode(original).decode("utf-8")
+        media_ref = storage.extract_media(content, "image/png", "image")
+
+        assert storage.restore_media(media_ref) == content
+
+    def test_restore_detects_truncated_file(self, tmp_path):
+        storage = MediaStorage(tmp_path, threshold_mb=1.0)
+        original = b"0123456789" * 10  # 100 bytes
+        content = base64.b64encode(original).decode("utf-8")
+        media_ref = storage.extract_media(content, "image/png", "image")
+
+        # Truncate the file on disk.
+        filepath = Path(media_ref["path"])
+        filepath.write_bytes(original[:50])  # only 50 bytes
+
+        with pytest.raises(MediaIntegrityError, match="truncated"):
+            storage.restore_media(media_ref)
+
+    def test_restore_detects_corrupt_file(self, tmp_path):
+        storage = MediaStorage(tmp_path, threshold_mb=1.0)
+        original = b"original data here"  # 18 bytes
+        content = base64.b64encode(original).decode("utf-8")
+        media_ref = storage.extract_media(content, "image/png", "image")
+
+        # Same length, different content -> checksum mismatch (not size).
+        filepath = Path(media_ref["path"])
+        filepath.write_bytes(b"X" * 18)  # exactly 18 bytes, different content
+
+        with pytest.raises(MediaIntegrityError, match="checksum"):
+            storage.restore_media(media_ref)
+
+    def test_old_media_ref_without_integrity_fields_still_works(self, tmp_path):
+        """Backward compat: pre-v1.31 media_refs lack binary_size/checksum."""
+        storage = MediaStorage(tmp_path, threshold_mb=1.0)
+        original = b"legacy data"
+        content = base64.b64encode(original).decode("utf-8")
+
+        # Manually write a file and build a legacy media_ref (no integrity fields).
+        filepath = tmp_path / "media" / "legacy.png"
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        filepath.write_bytes(original)
+        legacy_ref = {
+            "type": MEDIA_REF_TYPE,
+            "path": str(filepath),
+            "mime": "image/png",
+            "media_type": "image",
+            "size": len(content),
+            # No binary_size, no checksum - as pre-v1.31.
+        }
+
+        # Should restore without error (skips verification).
+        assert storage.restore_media(legacy_ref) == content
+
+
+class TestMediaPlaceholderDegradation:
+    """v1.31: missing/corrupt media degrades to a readable text placeholder."""
+
+    def _make_image_ref(self, path: str) -> dict:
+        return {
+            "type": MEDIA_REF_TYPE,
+            "path": path,
+            "mime": "image/png",
+            "media_type": "image",
+            "binary_size": 100,
+            "checksum": "deadbeefdeadbeef",
+        }
+
+    def test_missing_file_becomes_text_placeholder(self, tmp_path):
+        storage = MediaStorage(tmp_path, threshold_mb=1.0)
+        ref = self._make_image_ref(str(tmp_path / "missing.png"))
+
+        result = storage.restore_content_parts([ref])
+
+        assert len(result) == 1
+        assert result[0]["type"] == "text"
+        assert "丢失" in result[0]["text"]
+        assert "missing.png" in result[0]["text"]
+
+    def test_corrupt_file_becomes_text_placeholder(self, tmp_path):
+        storage = MediaStorage(tmp_path, threshold_mb=1.0)
+        # Extract then corrupt.
+        original = b"0123456789" * 10
+        content = base64.b64encode(original).decode("utf-8")
+        media_ref = storage.extract_media(content, "image/png", "image")
+        Path(media_ref["path"]).write_bytes(b"corrupted!!")
+
+        result = storage.restore_content_parts([media_ref])
+
+        assert result[0]["type"] == "text"
+        assert "损坏" in result[0]["text"]
+
+    def test_placeholder_label_varies_by_media_type(self, tmp_path):
+        storage = MediaStorage(tmp_path, threshold_mb=1.0)
+        refs = [
+            {"type": MEDIA_REF_TYPE, "path": str(tmp_path / "a.png"),
+             "mime": "image/png", "media_type": "image"},
+            {"type": MEDIA_REF_TYPE, "path": str(tmp_path / "b.mp3"),
+             "mime": "audio/mp3", "media_type": "audio"},
+            {"type": MEDIA_REF_TYPE, "path": str(tmp_path / "c.mp4"),
+             "mime": "video/mp4", "media_type": "video"},
+        ]
+
+        result = storage.restore_content_parts(refs)
+
+        texts = [r["text"] for r in result]
+        assert any("图片" in t for t in texts)
+        assert any("音频" in t for t in texts)
+        assert any("视频" in t for t in texts)
+
+    def test_valid_media_restored_normally_alongside_missing(self, tmp_path):
+        """A missing file shouldn't break restoration of sibling valid parts."""
+        storage = MediaStorage(tmp_path, threshold_mb=1.0)
+        # Valid media.
+        original = b"good data"
+        content = base64.b64encode(original).decode("utf-8")
+        good_ref = storage.extract_media(content, "image/png", "image")
+        # Missing media.
+        missing_ref = self._make_image_ref(str(tmp_path / "gone.png"))
+
+        result = storage.restore_content_parts([good_ref, missing_ref])
+
+        assert len(result) == 2
+        # First restored as a proper image_url.
+        assert result[0]["type"] == "image_url"
+        # Second degraded to text.
+        assert result[1]["type"] == "text"
+        assert "丢失" in result[1]["text"]
+
+    def test_placeholder_is_llm_consumable(self, tmp_path):
+        """The placeholder must be a valid text content part, not a media_ref."""
+        storage = MediaStorage(tmp_path, threshold_mb=1.0)
+        ref = self._make_image_ref(str(tmp_path / "x.png"))
+
+        result = storage.restore_content_parts([ref])
+
+        # No media_ref should leak through - it's now a text part.
+        assert result[0]["type"] != MEDIA_REF_TYPE
+        assert result[0]["type"] == "text"
+        assert "text" in result[0]
 
 
 class TestTranscriptStoreIntegration:

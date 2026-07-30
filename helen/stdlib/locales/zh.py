@@ -83,6 +83,10 @@ ALIASES: dict[str, str] = {
     "html转义": "html_escape",
     "html反转义": "html_unescape",
 
+    # ── Character code (字符编码) ──────────────────────────────────
+    "字符": "chr",
+    "码点": "ord",
+
     # ── Data formats (数据格式) ──────────────────────────────────
     # JSON
     "json解析": "json_parse",

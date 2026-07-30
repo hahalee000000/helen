@@ -8,6 +8,14 @@ Design:
 - JSONL stores media_ref with path, mime, media_type
 - On read, restore original base64 content from file
 - Threshold configurable via multimodal.media_external_threshold_mb
+
+v1.31 resilience:
+- ``binary_size`` + ``checksum`` stored in media_ref for integrity verification
+  on restore (detects truncated/corrupted files instead of silently passing
+  garbage to the LLM).
+- ``restore_content_parts`` degrades to a readable text placeholder
+  (``[图片丢失: foo.png]``) when the external file is missing or corrupt,
+  instead of leaving an LLM-unusable ``media_ref`` dict in the message.
 """
 
 from __future__ import annotations
@@ -26,6 +34,14 @@ DEFAULT_EXTERNAL_THRESHOLD_MB = 1.0
 
 # Media reference type marker in JSONL
 MEDIA_REF_TYPE = "media_ref"
+
+
+class MediaIntegrityError(Exception):
+    """Raised when an external media file fails integrity verification.
+
+    Distinct from ``FileNotFoundError`` so callers can distinguish "missing"
+    from "present but corrupt/truncated" when choosing a degradation message.
+    """
 
 
 def _is_large_base64(content: str, threshold_bytes: int) -> bool:
@@ -159,11 +175,15 @@ class MediaStorage:
             "path": str(filepath),
             "mime": mime,
             "media_type": media_type,
-            "size": len(content),  # Base64 encoded size
+            "size": len(content),  # Base64 encoded size (backward compat)
+            # v1.31: integrity fields, verified on restore to detect
+            # truncated/corrupted files rather than silently passing garbage.
+            "binary_size": len(binary_data),
+            "checksum": hashlib.sha256(binary_data).hexdigest()[:16],
         }
 
     def restore_media(self, media_ref: dict[str, Any]) -> str:
-        """Restore media from external file.
+        """Restore media from external file, verifying integrity.
 
         Args:
             media_ref: Media reference dict with path
@@ -173,6 +193,8 @@ class MediaStorage:
 
         Raises:
             FileNotFoundError: If media file doesn't exist
+            MediaIntegrityError: If the file is truncated or corrupt (its size
+                or checksum doesn't match what was recorded at extract time)
         """
         filepath = Path(media_ref["path"])
 
@@ -182,16 +204,71 @@ class MediaStorage:
         try:
             # Read binary and encode to base64
             binary_data = filepath.read_bytes()
-            content = base64.b64encode(binary_data).decode("utf-8")
-            logger.debug(
-                "Restored media from %s (%d bytes)",
-                filepath,
-                len(binary_data),
-            )
-            return content
         except Exception as e:
-            logger.error("Failed to restore media from %s: %s", filepath, e)
+            logger.error("Failed to read media from %s: %s", filepath, e)
             raise
+
+        # v1.31: integrity verification. Older media_refs (pre-v1.31) lack
+        # these fields and skip the check, preserving backward compatibility.
+        expected_size = media_ref.get("binary_size")
+        if expected_size is not None and len(binary_data) != expected_size:
+            raise MediaIntegrityError(
+                f"Media file truncated/corrupt: {filepath.name} "
+                f"(expected {expected_size} bytes, got {len(binary_data)})"
+            )
+
+        expected_checksum = media_ref.get("checksum")
+        if expected_checksum is not None:
+            actual_checksum = hashlib.sha256(binary_data).hexdigest()[:16]
+            if actual_checksum != expected_checksum:
+                raise MediaIntegrityError(
+                    f"Media file checksum mismatch: {filepath.name} "
+                    f"(expected {expected_checksum}, got {actual_checksum})"
+                )
+
+        content = base64.b64encode(binary_data).decode("utf-8")
+        logger.debug(
+            "Restored media from %s (%d bytes, integrity verified)",
+            filepath,
+            len(binary_data),
+        )
+        return content
+
+    # ── Degradation helpers (v1.31) ────────────────────────────
+
+    # Human-readable labels for each media type, used in placeholder text.
+    _MEDIA_LABELS = {
+        "image": "图片",
+        "audio": "音频",
+        "video": "视频",
+    }
+
+    def _make_placeholder(
+        self,
+        media_ref: dict[str, Any],
+        reason: str,
+    ) -> dict[str, str]:
+        """Build a readable text content part for a missing/corrupt media file.
+
+        The LLM can't consume a raw ``media_ref`` dict, so when restoration
+        fails we substitute a text note that preserves context - the agent
+        knows an image was there and roughly what happened, rather than seeing
+        an opaque reference or a silent gap.
+
+        Args:
+            media_ref: The media reference that failed to restore.
+            reason: ``"丢失"`` (missing) or ``"损坏"`` (corrupt).
+
+        Returns:
+            A ``{"type": "text", "text": "..."}`` content part.
+        """
+        media_type = media_ref.get("media_type", "image")
+        label = self._MEDIA_LABELS.get(media_type, "媒体")
+        filename = Path(media_ref.get("path", "unknown")).name
+        return {
+            "type": "text",
+            "text": f"[{label}{reason}: {filename}]",
+        }
 
     def process_content_parts(
         self,
@@ -312,10 +389,19 @@ class MediaStorage:
                     else:
                         # Unknown media type, keep as media_ref
                         restored.append(part)
+                except FileNotFoundError as e:
+                    # File missing - degrade to a readable text placeholder so
+                    # the LLM has context instead of an opaque media_ref dict.
+                    logger.warning("Media file missing, using placeholder: %s", e)
+                    restored.append(self._make_placeholder(part, "丢失"))
+                except MediaIntegrityError as e:
+                    # File present but corrupt/truncated - don't feed garbage
+                    # to the LLM; substitute a placeholder noting the damage.
+                    logger.warning("Media file corrupt, using placeholder: %s", e)
+                    restored.append(self._make_placeholder(part, "损坏"))
                 except Exception as e:
                     logger.error("Failed to restore media_ref: %s", e)
-                    # Keep media_ref as-is on error
-                    restored.append(part)
+                    restored.append(self._make_placeholder(part, "丢失"))
                 continue
 
             # Keep other parts as-is

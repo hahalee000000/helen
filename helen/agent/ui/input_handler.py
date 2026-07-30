@@ -101,11 +101,6 @@ class InputHandler:
         self.history.clear()
 
 
-def is_prompt_toolkit_available() -> bool:
-    """检查 prompt_toolkit 是否可用"""
-    return PROMPT_TOOLKIT_AVAILABLE
-
-
 # ── Helen FFI 入口 ──────────────────────────────────────────────
 # 供 Helen ui_bridge.helen 调用的顶层辅助函数
 

@@ -151,8 +151,3 @@ def get_style(element: str, theme: Dict[str, str] = None) -> str:
     if theme is None:
         theme = THEME
     return theme.get(element, "")
-
-
-def list_themes() -> list:
-    """列出所有可用主题"""
-    return ["default", "dark", "light"]

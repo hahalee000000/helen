@@ -5,7 +5,7 @@ For the broader multi-project layout, see `../CLAUDE.md`.
 
 ## Overview
 
-**Helen** — a prompt-first Agent programming language (AI-native DSL). Combines deterministic constructs (variables, functions, control flow) with first-class LLM primitives (`llm act`, `llm if`). 91 bilingual keywords (45 English + 46 Chinese), 331 built-in functions, 3241 tests.
+**Helen** — a prompt-first Agent programming language (AI-native DSL). Combines deterministic constructs (variables, functions, control flow) with first-class LLM primitives (`llm act`, `llm if`). 91 bilingual keywords (45 English + 46 Chinese), 333 built-in functions, 3308 tests.
 
 ## Development Commands
 
@@ -19,7 +19,7 @@ helen check <file.helen>        # Validate syntax/semantics without executing
 helen repl                      # Interactive REPL
 
 # Testing
-pytest                              # Run all 3241 tests
+pytest                              # Run all 3308 tests
 pytest tests/core/                  # Run tests for a specific module
 helen test <file.helen>             # Run Helen's built-in test framework
 
@@ -59,8 +59,8 @@ helen/
 ├── runtime/       # llm_runtime.py, http_llm.py, tools.py, config.py, import_resolver.py
 │                  # prompt_builder.py, history.py, observability.py, fuzzy_match.py
 │                  # transcript_store.py, session_manager.py, channel.py
-├── stdlib/        # 331 built-in functions (21 categories)
-│                  # locales/zh.py (331 Chinese aliases)
+├── stdlib/        # 333 built-in functions (21 categories)
+│                  # locales/zh.py (333 Chinese aliases)
 │                  # mailbox.py (v1.18: mailbox_select)
 ├── ffi/           # Python FFI
 ├── cli/           # __main__.py, repl.py, ask_assistant.py, formatter.py, docgen.py
@@ -125,7 +125,7 @@ Also supports `.env` format and falls back to `~/.hermes/.env`.
 
 ## Testing Architecture
 
-Tests in `tests/` mirror source structure: `core/`, `semantic/`, `interpreter/`, `execution/`, `runtime/`, `stdlib/`, `language/`, `performance/`, `integration/`, `lsp/`, `cli/`. **3241 tests passing** (Python pytest).
+Tests in `tests/` mirror source structure: `core/`, `semantic/`, `interpreter/`, `execution/`, `runtime/`, `stdlib/`, `language/`, `performance/`, `integration/`, `lsp/`, `cli/`. **3308 tests passing** (Python pytest).
 
 Helen also has built-in test framework (`helen/stdlib/test.py`) with `test()`, `assert_equal()`, `assert_true()`, `assert_throws()`, expect chains, suites, filtering, JSON output.
 
@@ -135,7 +135,7 @@ Helen has 15 built-in skills in `.claude/skills/`. Claude Code auto-loads releva
 
 **Helen-Specific Skills** (for Helen development):
 - `helen-syntax` — Complete language syntax reference (91 keywords, types, expressions)
-- `helen-stdlib` — 331 built-in functions reference with examples
+- `helen-stdlib` — 333 built-in functions reference with examples
 - `helen-testing` — Test framework usage, TDD workflow, agent testing
 - `helen-quality` — 7-dimension quality assessment guide
 - `helen-agent-patterns` — Single agent design patterns (7 patterns)

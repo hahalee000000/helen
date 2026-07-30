@@ -26,6 +26,8 @@ from helen.stdlib.string import (
     _remove_punctuation, _normalize_whitespace, _extract_urls, _extract_emails,
     # Encoding
     _base64_encode, _base64_decode, _html_escape, _html_unescape,
+    # Character code (Issue #27)
+    _chr, _ord,
     # String ops
     _repeat, _reverse, _pad_left, _pad_right, _center, _count, _index, _contains,
     # Float formatting
@@ -892,6 +894,9 @@ def _register_string() -> list[BuiltinFunction]:
         BuiltinFunction("base64_decode", "Base64 decode", "base64_decode(s)", _base64_decode, "string"),
         BuiltinFunction("html_escape", "HTML escape", "html_escape(s)", _html_escape, "string"),
         BuiltinFunction("html_unescape", "HTML unescape", "html_unescape(s)", _html_unescape, "string"),
+        # Character code operations (Issue #27)
+        BuiltinFunction("chr", "Unicode code point to character", "chr(code)", _chr, "string"),
+        BuiltinFunction("ord", "Character to Unicode code point", "ord(char)", _ord, "string"),
         # String operations
         BuiltinFunction("repeat", "Repeat string", "repeat(s, n)", _repeat, "string"),
         BuiltinFunction("reverse", "Reverse string", "reverse(s)", _reverse, "string"),
