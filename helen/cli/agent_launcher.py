@@ -31,7 +31,6 @@ def check_agent_dependencies() -> tuple[bool, list[str]]:
         "fastapi": "fastapi",
         "uvicorn": "uvicorn",
         "websockets": "websockets",
-        "sqlalchemy": "sqlalchemy",
         "pydantic": "pydantic",
         "pydantic_settings": "pydantic-settings",
         "dotenv": "python-dotenv",
