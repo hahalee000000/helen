@@ -34,3 +34,6 @@ verify.py
 
 # Helen sessions (transcript recordings)
 .helen/sessions/
+
+# codebase-memory-mcp index artifact (regenerated per-machine, not for git)
+.codebase-memory/
