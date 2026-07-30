@@ -1,0 +1,11 @@
+{
+    "schema_version": 2,
+    "commit": "e179a5380fcd699951eaa6bf919d9beda56fefc0",
+    "indexed_at": "2026-07-30T08:42:55Z",
+    "project": "home-rxx-helen",
+    "nodes": 13634,
+    "edges": 57970,
+    "original_size": 36896768,
+    "compressed_size": 7181659,
+    "compression_level": 3
+}
