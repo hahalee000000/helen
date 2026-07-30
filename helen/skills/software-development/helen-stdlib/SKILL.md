@@ -11,14 +11,14 @@ metadata:
 
 # Helen Standard Library Reference
 
-Helen's standard library provides **203 built-in functions**, covering all core needs for AI application development.
+Helen's standard library provides **333 built-in functions**, covering all core needs for AI application development.
 
 ## Category Overview
 
 | Category | Count | Representative Functions |
 |----------|--------|--------------------------|
 | **Core** | 17 | `print`, `len`, `str`, `int`, `float`, `bool`, `list`, `dict`, `abs`, `min`, `max`, `range`, `type`, `isinstance`, `input`, `multiline_input`, `exit` |
-| **String** | 41 | `upper`, `lower`, `strip`, `split`, `join`, `replace`, `find`, `find_from`, `reverse`, `repeat`, `regex_match`, `regex_replace`, `regex_split`, `format_float`, `tokenize`, `levenshtein`, `base64_encode` |
+| **String** | 43 | `upper`, `lower`, `strip`, `split`, `join`, `replace`, `find`, `find_from`, `reverse`, `repeat`, `regex_match`, `regex_replace`, `regex_split`, `format_float`, `tokenize`, `levenshtein`, `base64_encode`, `chr`, `ord` |
 | **Data** | 28 | `json_parse`, `json_parse_lenient`, `json_stringify`, `yaml_parse`, `toml_parse`, `csv_parse`, `xml_parse`, `html_escape`, `html_parse`, `markdown_parse`, `markdown_to_html` |
 | **Collection** | 22 | `sort`, `reverse`, `unique`, `flatten`, `zip`, `map`, `filter`, `reduce`, `chunk`, `set_union`, `set_intersection`, `set_difference` |
 | **Network** | 9 | `http_get`, `http_post`, `http_put`, `http_delete`, `http_download`, `url_parse`, `url_build`, `url_encode`, `url_decode` |
@@ -45,7 +45,7 @@ Helen's stdlib supports multilingual function names. Every stdlib function has a
 
 ### Chinese stdlib Aliases
 
-Helen has 230+ built-in Chinese aliases covering all stdlib categories. Common examples:
+Helen has 333 built-in Chinese aliases covering all stdlib categories. Common examples:
 
 | 英文 | 中文 | 类别 |
 |------|------|------|
@@ -63,6 +63,8 @@ Helen has 230+ built-in Chinese aliases covering all stdlib categories. Common e
 | `regex_split` | `正则分割` | String |
 | `find_from` | `从位置查找` | String |
 | `format_float` | `格式化浮点` | String |
+| `chr` | `字符` | String |
+| `ord` | `码点` | String |
 | `date_format` | `日期格式化` | Time |
 | `read_file` | `读文件` | File |
 | `write_file` | `写文件` | File |
@@ -108,309 +110,338 @@ alias len as 我的长度
 ### Core
 
 ```helen
-# Type conversion
-let num = int("42")           # string → integer
-let text = str(3.14)          # float → string
-let flt = float("2.5")        # string → float
+main {
+    // Type conversion
+    let num = int("42")           // string → integer
+    let text = str(3.14)          // float → string
+    let flt = float("2.5")        // string → float
 
-# Length and range
-let length = len([1, 2, 3])   # 3
-let items = range(0, 10, 2)   # [0, 2, 4, 6, 8]
+    // Length and range
+    let length = len([1, 2, 3])   // 3
+    let items = range(0, 10, 2)   // [0, 2, 4, 6, 8]
 
-# Math basics
-let maximum = max(1, 2, 3)    # 3
-let minimum = min(1, 2, 3)    # 1
-let absolute = abs(-42)       # 42
+    // Math basics
+    let maximum = max(1, 2, 3)    // 3
+    let minimum = min(1, 2, 3)    // 1
+    let absolute = abs(-42)       // 42
 
-# Type checking
-if isinstance(value, str) {
-    print("It's a string")
+    // Type checking
+    if isinstance(value, str) {
+        print("It's a string")
+    }
 }
 ```
 
 ### String
 
 ```helen
-# Case conversion
-let upper = upper("hello")    # "HELLO"
-let lower = lower("WORLD")    # "world"
+main {
+    // Case conversion
+    let upper = upper("hello")    // "HELLO"
+    let lower = lower("WORLD")    // "world"
 
-# Split and join
-let parts = split("a,b,c", ",")  # ["a", "b", "c"]
-let joined = join(["a", "b"], "-")  # "a-b"
+    // Split and join
+    let parts = split("a,b,c", ",")  // ["a", "b", "c"]
+    let joined = join(["a", "b"], "-")  // "a-b"
 
-# Find and replace
-let found = find("hello world", "world")  # 6
-let replaced = replace("foo bar", "foo", "baz")  # "baz bar"
+    // Find and replace
+    let found = find("hello world", "world")  // 6
+    let replaced = replace("foo bar", "foo", "baz")  // "baz bar"
 
-# Regular expressions
-if regex_match("hello123", r"\d+") {
-    print("Contains digits")
+    // Regular expressions
+    if regex_match("hello123", r"\d+") {
+        print("Contains digits")
+    }
+    let cleaned = regex_replace("a1b2c3", r"\d", "")  // "abc"
+
+    // Split by regex pattern (multiple delimiters)
+    let tokens = regex_split("a, b; c  d", r"[,;\s]+")  // ["a", "b", "c", "d"]
+
+    // Find from position
+    let text = "hello world hello"
+    let pos1 = find(text, "hello")              // 0 (first occurrence)
+    let pos2 = find_from(text, "hello", 6)      // 12 (second occurrence)
+
+    // Whitespace handling
+    let trimmed = strip("  hello  ")  // "hello"
+    let padded = pad_start("42", 5, "0")  // "00042"
+
+    // Character ↔ code point (v1.31+)
+    let ch = chr(65)              // "A"
+    let cp = ord("中")            // 20013
+    let roundtrip = ord(chr(97))  // 97
+
+    // Chinese aliases
+    let ch2 = 字符(65)            // "A"
+    let cp2 = 码点("A")           // 65
+
+    // Float formatting
+    let formatted1 = format_float(8.5, 1)      // "8.5"
+    let formatted2 = format_float(7.857, 2)    // "7.86" (rounded)
+    let formatted3 = format_float(3.14159, 3)  // "3.142"
+
+    // Chinese aliases
+    let formatted = 格式化浮点(8.5, 1)  // "8.5"
 }
-let cleaned = regex_replace("a1b2c3", r"\d", "")  # "abc"
-
-# Split by regex pattern (multiple delimiters)
-let tokens = regex_split("a, b; c  d", r"[,;\s]+")  # ["a", "b", "c", "d"]
-
-# Find from position
-let text = "hello world hello"
-let pos1 = find(text, "hello")              # 0 (first occurrence)
-let pos2 = find_from(text, "hello", 6)      # 12 (second occurrence)
-
-# Whitespace handling
-let trimmed = strip("  hello  ")  # "hello"
-let padded = pad_start("42", 5, "0")  # "00042"
-
-# Float formatting
-let formatted1 = format_float(8.5, 1)      # "8.5"
-let formatted2 = format_float(7.857, 2)    # "7.86" (rounded)
-let formatted3 = format_float(3.14159, 3)  # "3.142"
-
-# Chinese aliases
-let formatted = 格式化浮点(8.5, 1)  # "8.5"
 ```
 
 ### Data
 
 ```helen
-# JSON
-let data = json_parse('{"name": "Helen", "version": 1}')
-let json = json_stringify(data, indent=2)
+main {
+    // JSON
+    let data = json_parse('{"name": "Helen", "version": 1}')
+    let json = json_stringify(data, indent=2)
 
-# Lenient JSON parsing (handles markdown fences from LLM output)
-let llm_output = "```json\n{\"key\": \"value\"}\n```"
-let data2 = json_parse_lenient(llm_output)  # Automatically strips fences
+    // Lenient JSON parsing (handles markdown fences from LLM output)
+    let llm_output = "```json\n{\"key\": \"value\"}\n```"
+    let data2 = json_parse_lenient(llm_output)  # Automatically strips fences
 
-# YAML
-let config = yaml_parse("key: value\nlist:\n  - item1\n  - item2")
+    # YAML
+    let config = yaml_parse("key: value\nlist:\n  - item1\n  - item2")
 
-# CSV
-let rows = csv_parse("name,age\nAlice,30\nBob,25")
-# [["name", "age"], ["Alice", "30"], ["Bob", "25"]]
+    # CSV
+    let rows = csv_parse("name,age\nAlice,30\nBob,25")
+    # [["name", "age"], ["Alice", "30"], ["Bob", "25"]]
 
-# URL encoding
-let encoded = url_encode("hello world&foo=bar")
-let decoded = url_decode(encoded)
+    # URL encoding
+    let encoded = url_encode("hello world&foo=bar")
+    let decoded = url_decode(encoded)
 
-# Base64
-let encoded = base64_encode("secret data")
-let decoded = base64_decode(encoded)
+    # Base64
+    let encoded = base64_encode("secret data")
+    let decoded = base64_decode(encoded)
+}
 ```
 
 ### Collection
 
 ```helen
-# Sort and deduplicate
-let sorted = sort([3, 1, 4, 1, 5])  # [1, 1, 3, 4, 5]
-let unique_items = unique([1, 2, 2, 3])  # [1, 2, 3]
+main {
+    // Sort and deduplicate
+    let sorted = sort([3, 1, 4, 1, 5])  // [1, 1, 3, 4, 5]
+    let unique_items = unique([1, 2, 2, 3])  // [1, 2, 3]
 
-# Map and filter
-let doubled = map([1, 2, 3], x => x * 2)  # [2, 4, 6]
-let evens = filter([1, 2, 3, 4], x => x % 2 == 0)  # [2, 4]
+    // Map and filter
+    let doubled = map([1, 2, 3], x => x * 2)  // [2, 4, 6]
+    let evens = filter([1, 2, 3, 4], x => x % 2 == 0)  // [2, 4]
 
-# Reduce
-let sum = reduce([1, 2, 3, 4], (acc, x) => acc + x, 0)  # 10
+    // Reduce
+    let sum = reduce([1, 2, 3, 4], (acc, x) => acc + x, 0)  // 10
 
-# Group by
-let grouped = group_by(users, u => u["role"])
-# {"admin": [...], "user": [...]}
+    // Group by
+    let grouped = group_by(users, u => u["role"])
+    // {"admin": [...], "user": [...]}
 
-# Chunk
-let chunks = chunk([1, 2, 3, 4, 5], 2)
-# [[1, 2], [3, 4], [5]]
+    // Chunk
+    let chunks = chunk([1, 2, 3, 4, 5], 2)
+    // [[1, 2], [3, 4], [5]]
 
-# Set operations
-let common = intersection([1, 2, 3], [2, 3, 4])  # [2, 3]
+    // Set operations
+    let common = intersection([1, 2, 3], [2, 3, 4])  // [2, 3]
+}
 ```
 
 ### Network
 
 ```helen
-# HTTP GET
-let response = http_get("https://api.example.com/data")
-let data = json_parse(response["body"])
+main {
+    // HTTP GET
+    let response = http_get("https://api.example.com/data")
+    let data = json_parse(response["body"])
 
-# HTTP POST
-let result = http_post(
-    "https://api.example.com/submit",
-    headers={"Content-Type": "application/json"},
-    body=json_stringify({"name": "Helen"})
-)
+    // HTTP POST
+    let result = http_post(
+        "https://api.example.com/submit",
+        headers={"Content-Type": "application/json"},
+        body=json_stringify({"name": "Helen"})
+    )
 
-# Download file
-http_download("https://example.com/file.pdf", "/tmp/file.pdf")
+    // Download file
+    http_download("https://example.com/file.pdf", "/tmp/file.pdf")
+}
 ```
 
 ### Time
 
 ```helen
-# Current time
-let now_ts = now()                    # Unix timestamp (seconds)
-let current = time()                  # Current time (datetime object)
+main {
+    // Current time
+    let now_ts = now()                    // Unix timestamp (seconds)
+    let current = time()                  // Current time (datetime object)
 
-# Formatting
-let formatted = date_format(now(), "%Y-%m-%d %H:%M:%S")
-# "2026-06-19 17:30:00"
+    // Formatting
+    let formatted = date_format(now(), "%Y-%m-%d %H:%M:%S")
+    // "2026-06-19 17:30:00"
 
-# Parsing
-let parsed = date_parse("2026-06-19", "%Y-%m-%d")
+    // Parsing
+    let parsed = date_parse("2026-06-19", "%Y-%m-%d")
 
-# Date arithmetic
-let tomorrow = date_add(now(), days=1)
-let diff = date_diff(date1, date2, "days")
+    // Date arithmetic
+    let tomorrow = date_add(now(), days=1)
+    let diff = date_diff(date1, date2, "days")
 
-# Sleep
-sleep(1.5)  # Sleep for 1.5 seconds
+    // Sleep
+    sleep(1.5)  // Sleep for 1.5 seconds
 
-# Stopwatch (high precision)
-let sw = stopwatch_start()
-let elapsed = stopwatch_elapsed(sw)   # Seconds (float, high precision)
-print("Elapsed: " + str(elapsed) + " seconds")
+    // Stopwatch (high precision)
+    let sw = stopwatch_start()
+    let elapsed = stopwatch_elapsed(sw)   // Seconds (float, high precision)
+    print("Elapsed: " + str(elapsed) + " seconds")
+}
 ```
 
 ### Math
 
 ```helen
-# Basic math
-let rounded = round(3.14159, 2)   # 3.14
-let root = sqrt(16)               # 4.0
-let ceiling = ceil(3.2)           # 4
-let flooring = floor(3.8)         # 3
-let power = pow(2, 10)            # 1024
+main {
+    // Basic math
+    let rounded = round(3.14159, 2)   // 3.14
+    let root = sqrt(16)               // 4.0
+    let ceiling = ceil(3.2)           // 4
+    let flooring = floor(3.8)         // 3
+    let power = pow(2, 10)            // 1024
 
-# Logarithms
-let natural = log(2.718)          # Natural log (ln)
-let base2 = log2(8)               # 3 (2^3 = 8)
-let base10 = log10(100)           # 2 (10^2 = 100)
-let exponential = exp(1)          # 2.718... (e^1)
+    // Logarithms
+    let natural = log(2.718)          // Natural log (ln)
+    let base2 = log2(8)               // 3 (2^3 = 8)
+    let base10 = log10(100)           // 2 (10^2 = 100)
+    let exponential = exp(1)          // 2.718... (e^1)
 
-# Trigonometric functions (radians)
-let cosine = cos(0)               # 1
-let sine = sin(3.14159 / 2)       # 1
-let tangent = tan(0)              # 0
-let angle = acos(0.5)             # 1.047... (60°)
-let angle2 = asin(0.5)            # 0.523... (30°)
-let angle3 = atan(1)              # 0.785... (45°)
-let angle4 = atan2(1, 1)          # 0.785... (45°, y/x)
+    // Trigonometric functions (radians)
+    let cosine = cos(0)               // 1
+    let sine = sin(3.14159 / 2)       // 1
+    let tangent = tan(0)              // 0
+    let angle = acos(0.5)             // 1.047... (60°)
+    let angle2 = asin(0.5)            // 0.523... (30°)
+    let angle3 = atan(1)              // 0.785... (45°)
+    let angle4 = atan2(1, 1)          // 0.785... (45°, y/x)
 
-# Statistics
-let avg = mean([1, 2, 3, 4, 5])   # 3.0
-let mid = median([1, 2, 3, 4, 5]) # 3
-let std = stddev([1, 2, 3, 4, 5]) # 1.414...
-let total = sum([1, 2, 3, 4, 5])  # 15
-let prod = product([1, 2, 3, 4])  # 24
+    // Statistics
+    let avg = mean([1, 2, 3, 4, 5])   // 3.0
+    let mid = median([1, 2, 3, 4, 5]) // 3
+    let std = stddev([1, 2, 3, 4, 5]) // 1.414...
+    let total = sum([1, 2, 3, 4, 5])  // 15
+    let prod = product([1, 2, 3, 4])  // 24
 
-# Random numbers
-let rand = random()               # Random float between 0 and 1
-let rand_int = randint(1, 100)    # Random integer between 1 and 100
-let item = choice([1, 2, 3, 4])   # Random selection
-let shuffled = shuffle([1, 2, 3]) # Random shuffle
+    // Random numbers
+    let rand = random()               // Random float between 0 and 1
+    let rand_int = randint(1, 100)    // Random integer between 1 and 100
+    let item = choice([1, 2, 3, 4])   // Random selection
+    let shuffled = shuffle([1, 2, 3]) // Random shuffle
+}
 ```
 
 ### File
 
 ```helen
-# Read/write files
-let content = read_file("/path/to/file.txt")
-write_file("/path/to/output.txt", "Hello, World!")
-append_file("/path/to/log.txt", "New log entry\n")
+main {
+    // Read/write files
+    let content = read_file("/path/to/file.txt")
+    write_file("/path/to/output.txt", "Hello, World!")
+    append_file("/path/to/log.txt", "New log entry\n")
 
-# File info
-if path_exists("/path/to/file.txt") {
-    let size = file_size("/path/to/file.txt")
-    print("File size: " + str(size) + " bytes")
+    // File info
+    if path_exists("/path/to/file.txt") {
+        let size = file_size("/path/to/file.txt")
+        print("File size: " + str(size) + " bytes")
+    }
+
+    // Directory operations
+    let files = list_dir("/path/to/dir")
+    mkdir("/path/to/new/dir")
+    mkdir_p("/path/to/deep/nested/dir")  // Recursive creation
+    copy_file("/src/file.txt", "/dst/file.txt")
+    delete_file("/path/to/file.txt")
+
+    // File search
+    let py_files = glob_files("src", "*.py")       // Recursively find all Python files
+    let md_files = glob_files("docs", "**/*.md")   // Use ** for explicit recursion
+
+    // Search file content (literal)
+    let matches = grep_files("src/", "TODO")
+    // [{"file": "main.py", "line": 42, "text": "    # TODO: fix this"}]
+
+    // Search file content (regex)
+    let functions = grep_files("src/", "def \\w+\\(", regex=true)
+
+    // Case-insensitive search
+    let errors = grep_files("logs/", "error", case_sensitive=false)
 }
-
-# Directory operations
-let files = list_dir("/path/to/dir")
-mkdir("/path/to/new/dir")
-mkdir_p("/path/to/deep/nested/dir")  # Recursive creation
-copy_file("/src/file.txt", "/dst/file.txt")
-delete_file("/path/to/file.txt")
-
-# File search
-let py_files = glob_files("src", "*.py")       # Recursively find all Python files
-let md_files = glob_files("docs", "**/*.md")   # Use ** for explicit recursion
-
-# Search file content (literal)
-let matches = grep_files("src/", "TODO")
-# [{"file": "main.py", "line": 42, "text": "    # TODO: fix this"}]
-
-# Search file content (regex)
-let functions = grep_files("src/", "def \\w+\\(", regex=true)
-
-# Case-insensitive search
-let errors = grep_files("logs/", "error", case_sensitive=false)
 ```
 
 ### System
 
 ```helen
-# Environment variables
-let home = env_get("HOME")
-env_set("MY_VAR", "value")
-let all_env = env_list()  # Sensitive values are auto-masked
+main {
+    // Environment variables
+    let home = env_get("HOME")
+    env_set("MY_VAR", "value")
+    let all_env = env_list()  // Sensitive values are auto-masked
 
-# CLI arguments (predefined constant argv + parsing functions)
-# Command line: helen tool.helen --verbose --output=json input.txt
-print(argv)  # ["--verbose", "--output=json", "input.txt"]
+    // CLI arguments (predefined constant argv + parsing functions)
+    // Command line: helen tool.helen --verbose --output=json input.txt
+    print(argv)  // ["--verbose", "--output=json", "input.txt"]
 
-let parsed = parse_cli_args()           # Auto-parse
-# {verbose: true, output: "json", _positional: ["input.txt"]}
+    let parsed = parse_cli_args()           // Auto-parse
+    // {verbose: true, output: "json", _positional: ["input.txt"]}
 
-let spec = {
-    "verbose": {"type": "flag", "default": false},
-    "output": {"type": "string", "default": "text"}
+    let spec = {
+        "verbose": {"type": "flag", "default": false},
+        "output": {"type": "string", "default": "text"}
+    }
+    let config = parse_cli_args(spec)       // Structured parsing (with types + defaults)
+
+    // Shell commands (default shell=true, uses /bin/bash, supports full shell syntax)
+    let result = shell_exec("ls -la")
+    let result = shell_exec("mkdir -p ~/project/{src,tests,contracts}")
+    let result = shell_exec("cat file.txt | grep pattern | wc -l")
+    print(result["output"])
+
+    // Safe mode: use shell=false when handling untrusted input to prevent shell injection
+    let result = shell_exec("echo " + user_input, shell=false)
+
+    // System info
+    let pid = pid()                   // Process ID
+    let os = platform()               // "linux", "darwin", "windows"
+    let host = hostname()             // Hostname
+    let py_ver = python_version()     // Python version
+    let cpus = cpu_count()            // CPU core count
+    let mem = memory_info()           // {total, available, used, percent}
+
+    // Logging
+    log_info("Application started")
+    log_error("Something went wrong", category="app")
 }
-let config = parse_cli_args(spec)       # Structured parsing (with types + defaults)
-
-# Shell commands (default shell=true, uses /bin/bash, supports full shell syntax)
-let result = shell_exec("ls -la")
-let result = shell_exec("mkdir -p ~/project/{src,tests,contracts}")
-let result = shell_exec("cat file.txt | grep pattern | wc -l")
-print(result["output"])
-
-# Safe mode: use shell=false when handling untrusted input to prevent shell injection
-let result = shell_exec("echo " + user_input, shell=false)
-
-# System info
-let pid = pid()                   # Process ID
-let os = platform()               # "linux", "darwin", "windows"
-let host = hostname()             # Hostname
-let py_ver = python_version()     # Python version
-let cpus = cpu_count()            # CPU core count
-let mem = memory_info()           # {total, available, used, percent}
-
-# Logging
-log_info("Application started")
-log_error("Something went wrong", category="app")
 ```
 
 ### Crypto
 
 ```helen
-# Hashing
-let md5_hash = md5("data")
-let sha256_hash = sha256("data")
-let sha512_hash = sha512("data")
+main {
+    // Hashing
+    let md5_hash = md5("data")
+    let sha256_hash = sha256("data")
+    let sha512_hash = sha512("data")
 
-# HMAC
-let sig = hmac_sha256("message", "secret_key")
+    // HMAC
+    let sig = hmac_sha256("message", "secret_key")
 
-# Random numbers
-let rand = random()               # Random float between 0 and 1
-let rand_int = randint(1, 100)    # Random integer
-let item = choice([1, 2, 3])      # Random selection
+    // Random numbers
+    let rand = random()               // Random float between 0 and 1
+    let rand_int = randint(1, 100)    // Random integer
+    let item = choice([1, 2, 3])      // Random selection
 
-# UUID
-let id = uuid_generate()          # "550e8400-e29b-41d4-a716-446655440000"
-let nil_id = uuid_nil()           # "00000000-0000-0000-0000-000000000000"
-let parsed = uuid_from_string("550E8400-E29B-41D4-A716-446655440000")
+    // UUID
+    let id = uuid_generate()          // "550e8400-e29b-41d4-a716-446655440000"
+    let nil_id = uuid_nil()           // "00000000-0000-0000-0000-000000000000"
+    let parsed = uuid_from_string("550E8400-E29B-41D4-A716-446655440000")
 
-# Random bytes
-let bytes = random_bytes(16)      # 32-character hex string
-let hex_str = random_hex(32)
-let b64 = random_base64(16)       # Base64-encoded random data
+    // Random bytes
+    let bytes = random_bytes(16)      // 32-character hex string
+    let hex_str = random_hex(32)
+    let b64 = random_base64(16)       // Base64-encoded random data
+}
 ```
 
 ## Observability
@@ -418,18 +449,20 @@ let b64 = random_base64(16)       # Base64-encoded random data
 AI-native observability functions providing structured debugging context for AI agents.
 
 ```helen
-# debug() — Structured debug output to stderr
-debug("variable value", x)
-# Output: [DEBUG] variable value {"value": 42}
-debug("checkpoint reached")
+main {
+    // debug() — Structured debug output to stderr
+    debug("variable value", x)
+    // Output: [DEBUG] variable value {"value": 42}
+    debug("checkpoint reached")
 
-# trace_on() / trace_off() — Enable/disable execution tracing
-trace_on()
-let result = compute_something()
-trace_off()
+    // trace_on() / trace_off() — Enable/disable execution tracing
+    trace_on()
+    let result = compute_something()
+    trace_off()
 
-# get_trace() — Get recent execution trace records
-let trace = get_trace(10)
+    // get_trace() — Get recent execution trace records
+    let trace = get_trace(10)
+}
 ```
 
 **Design features**: Zero overhead by default (no impact when tracing is off), JSON structured output (AI-consumable), automatic call stack + scope variable capture on errors/assertions, `llm act` automatically records call details.
@@ -439,74 +472,73 @@ let trace = get_trace(10)
 Functions for managing LLM conversation context, used for context control in long-running agent conversations.
 
 ```helen
-# Basic operations
-clear_context()                       # Clear context, returns {cleared_messages, cleared_tokens}
-compress_context("auto")              # Compress context
-# Strategies: "auto" | "summarize" (LLM summary) | "truncate" | "none" | "graduated"
+// All context-management API in action (must be inside main {})
+main {
+    // Basic operations
+    clear_context()                       // Clear context, returns {cleared_messages, cleared_tokens}
+    compress_context("auto")              // Compress context
+    // Strategies: "auto" | "summarize" (LLM summary) | "truncate" | "none" | "graduated"
 
-# Inspection
-context_stats()                       # {message_count, total_tokens, system_tokens, ...}
-context_usage()                       # 0.0-1.0 usage ratio
-let usage = context_usage()
-if usage > 0.8 { compress_context("auto") }
-get_message(uuid)                     # Get a single message
+    // Inspection
+    context_stats()                       // {message_count, total_tokens, system_tokens, ...}
+    context_usage()                       // 0.0-1.0 usage ratio
+    let usage = context_usage()
+    if usage > 0.8 { compress_context("auto") }
+    get_message(uuid)                     // Get a single message
 
-# Fine-grained Mutation
-insert_message("system", "Important note", 0)  # Insert message (position optional)
-replace_message(uuid, "New content")            # Replace message content
-delete_message(uuid)                            # Delete message
-pin_message(uuid) / unpin_message(uuid)         # Pin message (immune to compression)
-list_pinned_messages()                          # List all pinned messages: [{uuid, role, snippet, token_count}]
+    // Fine-grained Mutation
+    insert_message("system", "Important note", 0)  // Insert message (position optional)
+    replace_message(uuid, "New content")            // Replace message content
+    delete_message(uuid)                            // Delete message
+    pin_message(uuid) / unpin_message(uuid)         // Pin message (immune to compression)
+    list_pinned_messages()                          // List all pinned messages: [{uuid, role, snippet, token_count}]
 
-# Working Memory — Auto-tracks active files, decisions, TODOs, error history
-working_memory_set("current_file", "main.py")
-working_memory_set("decision", "Use JWT authentication")
-working_memory_get("current_file")       # "main.py"
-working_memory_remove("todo")
-working_memory_clear()
+    // Working Memory — Auto-tracks active files, decisions, TODOs, error history
+    working_memory_set("current_file", "main.py")
+    working_memory_set("decision", "Use JWT authentication")
+    working_memory_get("current_file")       // "main.py"
+    working_memory_remove("todo")
+    working_memory_clear()
 
-# Runtime Config
-set_compression_strategy("graduated")    # Dynamically adjust compression strategy
-set_context_window(128000)               # Set context window size
-set_working_memory_enabled(true)
-set_cache_aware(true)                    # Enable cache-aware compression (improves cache hit rate)
-get_context_config()                     # {strategy, window, working_memory, cache_aware}
+    // Runtime Config
+    set_compression_strategy("graduated")    // Dynamically adjust compression strategy
+    set_context_window(128000)               // Set context window size
+    set_working_memory_enabled(true)
+    set_cache_aware(true)                    // Enable cache-aware compression (improves cache hit rate)
+    get_context_config()                     // {strategy, window, working_memory, cache_aware}
 
-# Query
-search_context("authentication")         # [{uuid, role, content}, ...]
-context_slice(-5)                        # Last 5 messages
-context_slice(0, 10)                     # First 10 messages
+    // Query
+    search_context("authentication")         // [{uuid, role, content}, ...]
+    context_slice(-5)                        // Last 5 messages
+    context_slice(0, 10)                     // First 10 messages
 
-# Multi-Agent Transfer
-export_context()                         # Export [{role, content}, ...]
-import_context(messages)                 # Import into current session
-fork_context()                           # Create independent copy
+    // Multi-Agent Transfer
+    export_context()                         // Export [{role, content}, ...]
+    import_context(messages)                 // Import into current session
+    fork_context()                           // Create independent copy
 
-# Cross-session restore (v1.21+)
-restore_context("session_xxx")           # Restore active context from old transcript
-# After restore, LLM can see old session messages on the next llm act call
-# ⚠️ Only restores messages, not working_memory or config (those need manual restore)
+    // Cross-session restore (v1.21+)
+    restore_context("session_xxx")           // Restore active context from old transcript
 
-# vs resume_session:
-# - restore_context: Restores active context, supports filtering by agent/invocation
-# - resume_session:  Imports all messages into current new session
-
-# Lifecycle Hooks
-on_compression(fn(stats) {
-    print("About to compress: " + str(stats["token_count"]) + " tokens")
-})
-on_context_overflow(fn(stats) {
-    compress_context("truncate")
-})
+    // Lifecycle Hooks
+    on_compression(fn(stats) {
+        print("About to compress: " + str(stats["token_count"]) + " tokens")
+    })
+    on_context_overflow(fn(stats) {
+        compress_context("truncate")
+    })
+}
 ```
 
 **REPL debug commands**: `:trace on/off/show [n]`, `:last_error` (structured JSON), `:llm_log [n]` (LLM call audit log)
 
 **assert statement**:
 ```helen
-assert x > 0
-assert x > 0, "x must be positive"
-# Assertion failure throws AssertionError, which can be caught with try-catch
+main {
+    assert x > 0
+    assert x > 0, "x must be positive"
+    // Assertion failure throws AssertionError, which can be caught with try-catch
+}
 ```
 
 ## Test (Testing Framework)
@@ -520,16 +552,18 @@ fn test_subtract() {
     assert_equal(10 - 4, 6)
 }
 
-test_suite("Calculator")
-test_case("adds numbers", test_add)
-test_case("subtracts numbers", test_subtract)
-test_end_suite()
-run_tests()
+main {
+    test_suite("Calculator")
+    test_case("adds numbers", test_add)
+    test_case("subtracts numbers", test_subtract)
+    test_end_suite()
+    run_tests()
+}
 
-# CLI:
-# helen test calc.helen              # Run tests
-# helen test calc.helen --watch      # Watch mode
-# helen test calc.helen --filter "add"  # Filter
+// CLI:
+// helen test calc.helen              # Run tests
+// helen test calc.helen --watch      # Watch mode
+// helen test calc.helen --filter "add"  # Filter
 ```
 
 ### Expect Chain API
@@ -550,19 +584,21 @@ fn test_expect() {
 ## Quality (Quality Assessment)
 
 ```helen
-let source = read_file("my_program.helen")
+main {
+    let source = read_file("my_program.helen")
 
-let metrics = analyze_code(source, "my_program.helen")
-print("Functions: " + str(metrics["function_count"]))
+    let metrics = analyze_code(source, "my_program.helen")
+    print("Functions: " + str(metrics["function_count"]))
 
-let issues = check_security(source)
-print("Security issues: " + str(len(issues)))
+    let issues = check_security(source)
+    print("Security issues: " + str(len(issues)))
 
-let scores = quality_score(source, "my_program.helen")
-print("Total: " + str(scores["total"]) + " Grade: " + scores["grade"])
+    let scores = quality_score(source, "my_program.helen")
+    print("Total: " + str(scores["total"]) + " Grade: " + scores["grade"])
 
-print(quality_report(source, "my_program.helen"))
-# CLI: helen quality my_program.helen --json
+    print(quality_report(source, "my_program.helen"))
+    // CLI: helen quality my_program.helen --json
+}
 ```
 
 ### 7 Assessment Dimensions
@@ -584,22 +620,24 @@ TranscriptStore (v1.16) — SSOT, persistent storage for all conversation messag
 ### Session Management
 
 ```helen
-# get_session_id() — Current session ID
-let session = get_session_id()  # "session_{timestamp}_{uuid8}"
+main {
+    // get_session_id() — Current session ID
+    let session = get_session_id()  // "session_{timestamp}_{uuid8}"
 
-# get_session_meta() (v1.23.3) — Session metadata (recorded at startup)
-let meta = get_session_meta()
-# {argv, timestamp, helen_version, python_version, cwd, session_scope}
+    // get_session_meta() (v1.23.3) — Session metadata (recorded at startup)
+    let meta = get_session_meta()
+    // {argv, timestamp, helen_version, python_version, cwd, session_scope}
 
-# list_sessions(scope?) — List all sessions
-let sessions = list_sessions()
-# [{session_id, created_at, modified_at, size_bytes, message_count, scope}, ...]
-let global_sessions = list_sessions("global")
-let project_sessions = list_sessions("project")
+    // list_sessions(scope?) — List all sessions
+    let sessions = list_sessions()
+    // [{session_id, created_at, modified_at, size_bytes, message_count, scope}, ...]
+    let global_sessions = list_sessions("global")
+    let project_sessions = list_sessions("project")
 
-# Session directory management
-let info = get_session_dir()    # {session_dir, scope, project_dir}
-set_session_dir("/custom/path")
+    // Session directory management
+    let info = get_session_dir()    // {session_dir, scope, project_dir}
+    set_session_dir("/custom/path")
+}
 ```
 
 **Runtime isolation principles**:
@@ -612,45 +650,47 @@ set_session_dir("/custom/path")
 ### Replay, Export & Search
 
 ```helen
-# Replay
-replay_transcript()                              # Current session
-replay_transcript("session_123", true)           # Include compressed messages
-replay_transcript(agent="A", last_only=true)     # Filter by agent
-replay_transcript(invocation_id="inv_1", include_subtree=true)
+main {
+    // Replay
+    replay_transcript()                              // Current session
+    replay_transcript("session_123", true)           // Include compressed messages
+    replay_transcript(agent="A", last_only=true)     // Filter by agent
+    replay_transcript(invocation_id="inv_1", include_subtree=true)
 
-# Export
-export_transcript(null, "json")                  # Export current as JSON
-export_transcript(null, "text")                  # Export as plain text
-export_transcript("full.json", "json", include_spawned=true)  # Include spawned
+    // Export
+    export_transcript(null, "json")                  // Export current as JSON
+    export_transcript(null, "text")                  // Export as plain text
+    export_transcript("full.json", "json", include_spawned=true)  // Include spawned
 
-# Search (v1.22+) — Search persisted transcript (unlike search_context which searches current context)
-search_transcript("auth bug")                    # Basic search
-search_transcript("database", scope="all", limit=10)  # Across all sessions
-search_transcript("fix.*bug", regex=true)        # Regex
-search_transcript("TODO", role="user")           # Filter by role
-search_transcript("error", include_spawned=true) # Cross-spawn search (v1.23.7)
+    // Search (v1.22+) — Search persisted transcript (unlike search_context which searches current context)
+    search_transcript("auth bug")                    // Basic search
+    search_transcript("database", scope="all", limit=10)  // Across all sessions
+    search_transcript("fix.*bug", regex=true)        // Regex
+    search_transcript("TODO", role="user")           // Filter by role
+    search_transcript("error", include_spawned=true) // Cross-spawn search (v1.23.7)
 
-# Typical search → restore context workflow
-let matches = search_transcript("auth bug", scope="all")
-if len(matches) > 0 {
-    restore_context(matches[0]["session_id"])
+    // Typical search → restore context workflow
+    let matches = search_transcript("auth bug", scope="all")
+    if len(matches) > 0 {
+        restore_context(matches[0]["session_id"])
+    }
 }
 ```
 
 ### Invocation Tree Query (v1.22+)
 
 ```helen
-# Each agent main {} execution is an invocation with a unique invocation_id
-list_invocations()                               # List all invocations
-list_invocations(agent="Researcher", limit=10)   # Filter by agent
+// Each agent main {} execution is an invocation with a unique invocation_id
+list_invocations()                               // List all invocations
+list_invocations(agent="Researcher", limit=10)   // Filter by agent
 
-get_invocation("inv_xxx")                        # Query single
-# {agent_name, message_count, parent_invocation_id, ...}
+get_invocation("inv_xxx")                        // Query single
+// {agent_name, message_count, parent_invocation_id, ...}
 
-get_invocation_tree()                            # Full call tree (nested structure)
-invocation_path("inv_3")                         # "top -> A -> C"
+get_invocation_tree()                            // Full call tree (nested structure)
+invocation_path("inv_3")                         // "top -> A -> C"
 
-# Chinese aliases
+// Chinese aliases
 列出调用()
 获取调用("inv_xxx")
 获取调用树()
@@ -662,31 +702,35 @@ invocation_path("inv_3")                         # "top -> A -> C"
 ### Session Restore & Cleanup
 
 ```helen
-# Restore
-resume_session("session_123")                    # Import historical messages into current session
+main {
+    // Restore
+    resume_session("session_123")                    // Import historical messages into current session
 
-# Delete
-delete_session("session_123")                    # Default: cascade delete spawned
-delete_session("session_123", cascade=false)     # Only delete main session
-delete_current_session(true)                     # Delete current session
+    // Delete
+    delete_session("session_123")                    // Default: cascade delete spawned
+    delete_session("session_123", cascade=false)     // Only delete main session
+    delete_current_session(true)                     // Delete current session
 
-# Cleanup
-cleanup_sessions(keep_count=10)                  # Keep the most recent 10
-cleanup_sessions(older_than_days=30)             # Delete those older than 30 days
-cleanup_sessions(keep_count=5, older_than_days=7, cascade=false)
+    // Cleanup
+    cleanup_sessions(keep_count=10)                  // Keep the most recent 10
+    cleanup_sessions(older_than_days=30)             // Delete those older than 30 days
+    cleanup_sessions(keep_count=5, older_than_days=7, cascade=false)
 
-# Compression audit
-get_compression_audit()
-# [{timestamp, strategy, before_tokens, after_tokens, boundary_uuid}, ...]
-```
+    // Compression audit
+    get_compression_audit()
+    // [{timestamp, strategy, before_tokens, after_tokens, boundary_uuid}, ...]
+
+}```
 
 ### Spawn Relationship Tracking (v1.23.7)
 
 ```helen
-get_spawned_sessions()                           # Direct child sessions
-get_spawn_tree()                                 # Full spawn tree
-replay_full_session()                            # Aggregate main session + all spawned
-```
+main {
+    get_spawned_sessions()                           // Direct child sessions
+    get_spawn_tree()                                 // Full spawn tree
+    replay_full_session()                            // Aggregate main session + all spawned
+
+}```
 
 ### Session Scope (v1.20)
 
@@ -719,33 +763,35 @@ interp = Interpreter(session_id="session_xxx")
 v1.17 introduces multimodal support; `MediaPart` is a first-class data type.
 
 ```helen
-# Creation
-let img = media("/path/to/image.png")          # File path or URL
-let video = media("https://example.com/video.mp4")
-let audio = media("/path/to/audio.mp3", "audio")  # Explicitly specify type
-let base64_img = media_base64("iVBORw0KGgo...", "image/png")
+main {
+    // Creation
+    let img = media("/path/to/image.png")          // File path or URL
+    let video = media("https://example.com/video.mp4")
+    let audio = media("/path/to/audio.mp3", "audio")  // Explicitly specify type
+    let base64_img = media_base64("iVBORw0KGgo...", "image/png")
 
-# Inspection
-is_media(value)                                # Whether it's a MediaPart
-media_type(img)                                # "image" | "video" | "audio"
-is_image(img) / is_video(video) / is_audio(audio)
+    // Inspection
+    is_media(value)                                // Whether it's a MediaPart
+    media_type(img)                                // "image" | "video" | "audio"
+    is_image(img) / is_video(video) / is_audio(audio)
 
-# Format adapters
-to_openai_parts([img, video])                  # [{type: "image_url", ...}]
-to_claude_parts([img])                         # [{type: "image", source: {...}}]
-to_gemini_parts([img])
+    // Format adapters
+    to_openai_parts([img, video])                  // [{type: "image_url", ...}]
+    to_claude_parts([img])                         // [{type: "image", source: {...}}]
+    to_gemini_parts([img])
 
-# Utilities
-media_to_base64(img)                           # Convert to base64 string
-save_media(img, "/path/to/save.png")           # Save to file
+    // Utilities
+    media_to_base64(img)                           // Convert to base64 string
+    save_media(img, "/path/to/save.png")           // Save to file
 
-# Usage in llm act (callbacks as adapters)
-llm act "Analyze this image"
-    media("/path/to/image.png")
-    on_media fn(parts, provider) {
-        if provider == "claude" { return to_claude_parts(parts) }
-        return to_openai_parts(parts)
-    }
+    // Usage in llm act (callbacks as adapters)
+    llm act "Analyze this image"
+        media("/path/to/image.png")
+        on_media fn(parts, provider) {
+            if provider == "claude" { return to_claude_parts(parts) }
+            return to_openai_parts(parts)
+        }
+}
 ```
 
 ## LLM (LLM Call Control)
@@ -753,14 +799,16 @@ llm act "Analyze this image"
 Control ongoing LLM streaming calls.
 
 ```helen
-let call_id = current_llm_call_id()     # string | null
-cancel_llm_call(call_id)
-cancel_all_llm_calls()                  # Returns count of cancelled calls
+main {
+    let call_id = current_llm_call_id()     // string | null
+    cancel_llm_call(call_id)
+    cancel_all_llm_calls()                  // Returns count of cancelled calls
 
-# Chinese aliases
-取消大模型调用(call_id)
-当前大模型调用id()
-取消所有大模型调用()
+    // Chinese aliases
+    取消大模型调用(call_id)
+    当前大模型调用id()
+    取消所有大模型调用()
+}
 ```
 
 Used in `on_chunk` callbacks to detect termination conditions, Ctrl+C interruption, and timeout control.
@@ -772,36 +820,38 @@ v1.18 Channel-based message-passing concurrency model.
 ```helen
 agent Worker(task: str) {
     main {
-        # Execute task...
+        // Execute task...
         return "Result"
     }
 }
 
-# spawn returns a Channel (mailbox)
-let ch = spawn Worker("Task 1")
+main {
+    // spawn returns a Channel (mailbox)
+    let ch = spawn Worker("Task 1")
 
-# Channel methods
-ch.send("message")              # Send message
-let msg = ch.receive()          # Blocking receive
-let maybe = ch.try_receive()    # Non-blocking receive (returns null if no message)
-ch.cancel()                     # Cancel (interrupts streaming LLM call)
-ch.close()                      # Close channel
-ch.is_closed()                  # Check if closed
+    // Channel methods
+    ch.send("message")              // Send message
+    let msg = ch.receive()          // Blocking receive
+    let maybe = ch.try_receive()    // Non-blocking receive (returns null if no message)
+    ch.cancel()                     // Cancel (interrupts streaming LLM call)
+    ch.close()                      // Close channel
+    ch.is_closed()                  // Check if closed
 
-# Chinese aliases: 发送(), 接收(), 尝试接收(), 取消(), 关闭(), 已关闭()
+    // Chinese aliases: 发送(), 接收(), 尝试接收(), 取消(), 关闭(), 已关闭()
 
-# mailbox_select — Multi-channel select (race mode: first to complete wins)
-let m1 = spawn StrategyA()
-let m2 = spawn StrategyB()
-let m3 = spawn StrategyC()
-let result = mailbox_select([m1, m2, m3])  # {endpoint: Channel, message: "..."}
+    // mailbox_select — Multi-channel select (race mode: first to complete wins)
+    let m1 = spawn StrategyA()
+    let m2 = spawn StrategyB()
+    let m3 = spawn StrategyC()
+    let result = mailbox_select([m1, m2, m3])  // {endpoint: Channel, message: "..."}
 
-# With timeout
-let result = mailbox_select([m1, m2], timeout=5.0)  # Returns null on timeout
-if result == null { print("Timeout") }
+    // With timeout
+    let result = mailbox_select([m1, m2], timeout=5.0)  // Returns null on timeout
+    if result == null { print("Timeout") }
 
-# Chinese aliases
-let result = 邮箱选择([m1, m2, m3])
+    // Chinese aliases
+    let result = 邮箱选择([m1, m2, m3])
+}
 ```
 
 **Key features**: Snapshot semantics (spawn deep-copies all variables including SharedStore), isolated environment, streaming interrupt (`ch.cancel()`). Inter-agent data sharing is done explicitly through Channel messages.
@@ -811,16 +861,18 @@ let result = 邮箱选择([m1, m2, m3])
 Python exceptions are automatically wrapped as `RuntimeError`, with format `"Python <Type Name>: <Original Message>"`:
 
 ```helen
-try {
-    let x = len(42)
-} catch RuntimeError err {
-    print(err.message)    # "Python TypeError: object of type 'int' has no len()"
-}
+main {
+    try {
+        let x = len(42)
+    } catch RuntimeError err {
+        print(err.message)    // "Python TypeError: object of type 'int' has no len()"
+    }
 
-try {
-    let data = read_file("/nonexistent")
-} catch RuntimeError err {
-    print(err.message)    # "Python FileNotFoundError: [Errno 2] ..."
+    try {
+        let data = read_file("/nonexistent")
+    } catch RuntimeError err {
+        print(err.message)    // "Python FileNotFoundError: [Errno 2] ..."
+    }
 }
 ```
 

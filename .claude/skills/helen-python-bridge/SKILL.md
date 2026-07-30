@@ -31,16 +31,14 @@ import "math" as math
 import "json" as json
 import "mylib.renderer" as PyRenderer
 
-main {
-    // Call functions / access constants
-    let s = json.dumps({"k": "v"})
-    let pi = math.pi
+// Call functions / access constants
+let s = json.dumps({"k": "v"})
+let pi = math.pi
 
-    // Instantiate Python classes + call methods
-    let encoder = json.JSONEncoder()
-    let result = encoder.encode({"x": 1})        // Natural method call (recommended)
-    let result2 = encoder.call("encode", {"x": 1})  // Call by method name (dynamic scenarios)
-}
+// Instantiate Python classes + call methods
+let encoder = json.JSONEncoder()
+let result = encoder.encode({"x": 1})        // Natural method call (recommended)
+let result2 = encoder.call("encode", {"x": 1})  // Call by method name (dynamic scenarios)
 ```
 
 **Key points:**

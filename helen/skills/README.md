@@ -22,7 +22,6 @@ Helen skill system — providing professional knowledge and workflows for AI age
 │   ├── plan/                         ← Plan mode (write-only, no execution)
 │   └── subagent-driven-development/  ← Subagent execution workflow
 └── devops/                        ← DevOps skills
-    ├── hellen-consistency-checker/   ← Design document consistency checking
     └── github/                       ← GitHub workflow (PR, issue, CI/CD)
 ```
 
@@ -188,7 +187,6 @@ create_skill(
 | `writing-plans` | Development | Implementation plan writing guide |
 | `plan` | Development | Plan mode (write plans only, no execution) |
 | `subagent-driven-development` | Development | Subagent-driven development workflow |
-| `hellen-consistency-checker` | DevOps | Design document and code consistency checking |
 | `github` | DevOps | GitHub workflow (PR, issue, CI/CD) |
 
 ## Attribution

@@ -216,34 +216,40 @@ Helen provides **AI-native observability** instead of traditional interactive de
 ### assert Statement
 
 ```helen
-// Runtime assertion with optional message
-assert x > 0, "x must be positive"
+main {
+    // Runtime assertion with optional message
+    assert x > 0, "x must be positive"
 
-// Catchable — throws AssertionError
-try {
-    assert false, "test"
-} catch AssertionError e {
-    print("Caught: " + e.message)
+    // Catchable — throws AssertionError
+    try {
+        assert false, "test"
+    } catch AssertionError e {
+        print("Caught: " + e.message)
+    }
 }
 ```
 
 ### debug() Function
 
 ```helen
-// Structured debug output to stderr (JSON format)
-let x = 42
-debug("variable value", x)
-// Output: [DEBUG] variable value {"value": 42}
+main {
+    // Structured debug output to stderr (JSON format)
+    let x = 42
+    debug("variable value", x)
+    // Output: [DEBUG] variable value {"value": 42}
+}
 ```
 
 ### Execution Tracing
 
 ```helen
-// Programmatic control
-trace_on()
-let result = compute()
-trace_off()
-let trace = get_trace(10)
+main {
+    // Programmatic control
+    trace_on()
+    let result = compute()
+    trace_off()
+    let trace = get_trace(10)
+}
 ```
 
 **REPL commands**:
@@ -450,12 +456,14 @@ main {
 **症状**：闭包里的变量值和预期不一样。
 
 ```helen
-let callbacks = []
-for i in range(5) {
-    callbacks.append(fn() {
-        debug("闭包执行", {"i": i})   // 看捕获到的 i 是什么
-        return i * 2
-    })
+main {
+    let callbacks = []
+    for i in range(5) {
+        callbacks.append(fn() {
+            debug("闭包执行", {"i": i})   // 看捕获到的 i 是什么
+            return i * 2
+        })
+    }
 }
 ```
 
@@ -466,13 +474,15 @@ Helen 的闭包是**值捕获**（深拷贝），所以 i 应该都是不同值�
 **症状**：`llm act ... on_chunk fn(c) { print(c) }` 流式输出中途停了。
 
 ```helen
-let chunks = []
-llm act "long response" on_chunk fn(c: str) {
-    chunks.append(c)
-    debug("chunk 收到", {"len": len(c), "total": len(chunks)})
-    return true   // 注意：返回 false 会停止流式
+main {
+    let chunks = []
+    llm act "long response" on_chunk fn(c: str) {
+        chunks.append(c)
+        debug("chunk 收到", {"len": len(c), "total": len(chunks)})
+        return true   // 注意：返回 false 会停止流式
+    }
+    debug("流式结束", {"total_chunks": len(chunks)})
 }
-debug("流式结束", {"total_chunks": len(chunks)})
 ```
 
 看是 LLM 没继续返回，还是 callback 返回了 false 主动停止。
@@ -482,15 +492,17 @@ debug("流式结束", {"total_chunks": len(chunks)})
 **症状**：Agent A 把数据发给 Agent B，B 收到的数据不对。
 
 ```helen
-// 发送端
-let payload = {"key": "value"}
-debug("发送 payload", payload)
-channel.send(payload)
+main {
+    // 发送端
+    let payload = {"key": "value"}
+    debug("发送 payload", payload)
+    channel.send(payload)
 
-// 接收端（在另一个 agent 里）
-let received = channel.receive()
-debug("收到 payload", received)
-assert received["key"] == "value", "数据错乱"
+    // 接收端（在另一个 agent 里）
+    let received = channel.receive()
+    debug("收到 payload", received)
+    assert received["key"] == "value", "数据错乱"
+}
 ```
 
 两端加 debug 对比，看数据在哪一步被篡改。
@@ -500,12 +512,14 @@ assert received["key"] == "value", "数据错乱"
 **症状**：`import "other.helen"` 报错。
 
 ```helen
-debug("当前工作目录", {"cwd": env_get("PWD")})
-try {
-    import "other.helen"
-} catch e {
-    debug("import 失败", {"error": str(e), "type": type(e)})
-    throw e
+main {
+    debug("当前工作目录", {"cwd": env_get("PWD")})
+    try {
+        import "other.helen"
+    } catch e {
+        debug("import 失败", {"error": str(e), "type": type(e)})
+        throw e
+    }
 }
 ```
 
@@ -514,11 +528,13 @@ try {
 **症状**：`json_parse(text)` 解析失败。
 
 ```helen
-let text = response_body
-debug("要解析的文本", {"text": text, "len": len(text)})
-assert text[0] == "{", "不是 JSON 对象"
-let parsed = json_parse(text)
-debug("解析结果", parsed)
+main {
+    let text = response_body
+    debug("要解析的文本", {"text": text, "len": len(text)})
+    assert text[0] == "{", "不是 JSON 对象"
+    let parsed = json_parse(text)
+    debug("解析结果", parsed)
+}
 ```
 
 #### 场景 10：性能分析——为什么这么慢
@@ -526,15 +542,17 @@ debug("解析结果", parsed)
 **症状**：Agent 响应时间长。
 
 ```helen
-let t0 = stopwatch_start()
-let r1 = llm act "step 1"
-debug("step 1 耗时", {"ms": stopwatch_elapsed(t0)})
+main {
+    let t0 = stopwatch_start()
+    let r1 = llm act "step 1"
+    debug("step 1 耗时", {"ms": stopwatch_elapsed(t0)})
 
-let t1 = stopwatch_start()
-let r2 = llm act "step 2"
-debug("step 2 耗时", {"ms": stopwatch_elapsed(t1)})
+    let t1 = stopwatch_start()
+    let r2 = llm act "step 2"
+    debug("step 2 耗时", {"ms": stopwatch_elapsed(t1)})
 
-// 或者看 :llm_log 的 duration_ms 字段
+    // 或者看 :llm_log 的 duration_ms 字段
+}
 ```
 
 ### 5.4 与 pytest 的协作

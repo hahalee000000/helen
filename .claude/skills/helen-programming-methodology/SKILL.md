@@ -144,18 +144,16 @@ After each development cycle, perform a 7-dimension quality assessment:
 
 ```helen
 // Invoke quality assessment
-main {
-    let file_path = "src/my_module.helen"
-    let quality = get_quality_scores(file_path)
+let file_path = "src/my_module.helen"
+let quality = get_quality_scores(file_path)
 
-    // Check results
-    if quality["scores"]["overall"] < 7.5 {
-        print("⚠️ Quality score below threshold, improvement needed")
-        print("Security: " + str(quality["scores"]["security"]))
-        print("Correctness: " + str(quality["scores"]["correctness"]))
-        print("Maintainability: " + str(quality["scores"]["maintainability"]))
-        // ... other dimensions
-    }
+// Check results
+if quality["scores"]["overall"] < 7.5 {
+    print("⚠️ Quality score below threshold, improvement needed")
+    print("Security: " + str(quality["scores"]["security"]))
+    print("Correctness: " + str(quality["scores"]["correctness"]))
+    print("Maintainability: " + str(quality["scores"]["maintainability"]))
+    // ... other dimensions
 }
 ```
 
@@ -190,17 +188,18 @@ After each task, evaluate whether new skills have been discovered or existing sk
 
 ```helen
 // Evaluate task for reusable patterns
-fn create_skill_from_pattern(task_summary: str) {
-    // Check if this warrants a new skill
-    if is_reusable_pattern(task_summary) {
-        let skill_name = "jwt-refresh-pattern"
-        let skill_dir = ".helen/skills/" + skill_name
-        
-        // Create skill directory
-        shell_exec("mkdir -p " + skill_dir)
-        
-        // Create SKILL.md with proper YAML frontmatter
-        let skill_content = """---
+let task_summary = "Implemented JWT auth; discovered token refresh pattern for long sessions"
+
+// Check if this warrants a new skill
+if is_reusable_pattern(task_summary) {
+    let skill_name = "jwt-refresh-pattern"
+    let skill_dir = ".helen/skills/" + skill_name
+    
+    // Create skill directory
+    shell_exec("mkdir -p " + skill_dir)
+    
+    // Create SKILL.md with proper YAML frontmatter
+    let skill_content = """---
 name: """ + skill_name + """
 description: "JWT token refresh pattern for long-running agent sessions"
 version: 1.0.0
@@ -208,15 +207,15 @@ author: HelenAgent
 tags: [jwt, authentication, session-management]
 ---
 
-// JWT Refresh Pattern
+# JWT Refresh Pattern
 
-//# Problem
+## Problem
 Access tokens expire during long-running agent sessions, causing API failures.
 
-//# Solution
+## Solution
 Implement proactive token refresh 5 minutes before expiration.
 
-//# Code Example
+## Code Example
 ```helen
 fn refresh_token_if_needed(token: str): str {
     if is_expiring_soon(token) {
@@ -226,10 +225,9 @@ fn refresh_token_if_needed(token: str): str {
 }
 ```
 """
-        
-        write_file(skill_dir + "/SKILL.md", skill_content)
-        print("✅ Created skill: " + skill_name)
-    }
+    
+    write_file(skill_dir + "/SKILL.md", skill_content)
+    print("✅ Created skill: " + skill_name)
 }
 ```
 
@@ -237,14 +235,13 @@ fn refresh_token_if_needed(token: str): str {
 
 ```helen
 // Read existing skill
-fn update_skill() {
-    let skill_path = ".helen/skills/jwt-refresh-pattern/SKILL.md"
-    let existing = read_file(skill_path)
+let skill_path = ".helen/skills/jwt-refresh-pattern/SKILL.md"
+let existing = read_file(skill_path)
 
-    // Append new information
-    let addition = """
+// Append new information
+let addition = """
 
-//# Update (2026-07-25)
+## Update (2026-07-25)
 Discovered edge case: refresh fails when network is down.
 Solution: Implement retry with exponential backoff.
 
@@ -262,9 +259,8 @@ fn refresh_with_retry(token: str, max_retries: int = 3): str {
 ```
 """
 
-    write_file(skill_path, existing + addition)
-    print("✅ Updated skill: jwt-refresh-pattern")
-}
+write_file(skill_path, existing + addition)
+print("✅ Updated skill: jwt-refresh-pattern")
 ```
 
 **Skill creation checklist:**
@@ -288,24 +284,22 @@ Four-stage closed-loop example (using a JWT authentication module):
 
 ```helen
 // Phase 1: Contract Design
+let contract = call_contractor("Implement user authentication module", "JWT support required")
+
 // Phase 2 RED-GREEN: TDD Development
+let tests = call_test_builder("", contract)
+write_file("tests/test_auth.helen", tests)
+let impl = call_implementer("", tests, contract)
+write_file("src/auth.helen", impl)
+
 // Phase 3: Quality Assessment
-// Phase 4: Skill Evaluation
-main {
-    let contract = call_contractor("Implement user authentication module", "JWT support required")
-
-    let tests = call_test_builder("", contract)
-    write_file("tests/test_auth.helen", tests)
-    let impl = call_implementer("", tests, contract)
-    write_file("src/auth.helen", impl)
-
-    let quality = call_quality_gate("src/auth.helen")
-    if quality["verdict"] == "NEEDS_IMPROVEMENT" {
-        // Go back to Phase 2 for improvement
-    }
-
-    let skills = call_skill_evaluator("Implemented JWT authentication", "src/auth.helen, tests/test_auth.helen")
+let quality = call_quality_gate("src/auth.helen")
+if quality["verdict"] == "NEEDS_IMPROVEMENT" {
+    // Go back to Phase 2 for improvement
 }
+
+// Phase 4: Skill Evaluation
+let skills = call_skill_evaluator("Implemented JWT authentication", "src/auth.helen, tests/test_auth.helen")
 ```
 
 ## Helen Syntax Notes
@@ -313,29 +307,25 @@ main {
 ### 1. Logical Operators
 
 ```helen
-main {
-    // ✅ Correct
-    if a && b { }
-    if a || b { }
-    if !a { }
+// ✅ Correct
+if a && b { }
+if a || b { }
+if !a { }
 
-    // ❌ Wrong
-    if a and b { }
-    if a or b { }
-    if not a { }
-}
+// ❌ Wrong
+if a and b { }
+if a or b { }
+if not a { }
 ```
 
 ### 2. String Slicing
 
 ```helen
-main {
-    // ✅ Correct
-    let sub = substring(str, 0, 10)
+// ✅ Correct
+let sub = substring(str, 0, 10)
 
-    // ❌ Wrong
-    let sub = str[0:10]
-}
+// ❌ Wrong
+let sub = str[0:10]
 ```
 
 ### 3. Agent Invocation
@@ -374,17 +364,15 @@ fn process(): map {
 ### 5. Testing Framework
 
 ```helen
-main {
-    // ✅ Correct
-    test_suite("MyModule", fn() {
-        test_case("valid input", fn() {
-            assert_equal(result, expected)
-        })
+// ✅ Correct
+test_suite("MyModule", fn() {
+    test_case("valid input", fn() {
+        assert_equal(result, expected)
     })
+})
 
-    // ❌ Wrong (cannot use string as function name)
-    test_case("valid input", "test_function")
-}
+// ❌ Wrong (cannot use string as function name)
+test_case("valid input", "test_function")
 ```
 
 ## Quality Improvement Suggestions
@@ -413,20 +401,16 @@ After each task, evaluate whether new skills have been discovered or existing sk
 
 **Scenario 1: New pitfall discovered** → Create a new skill
 ```helen
-main {
-    let task_summary = "Recursive fibonacci n>30 causes stack overflow, switched to iterative implementation"
-    let evaluation = call_skill_evaluator(task_summary, "src/math.helen")
-    // Suggest creating "recursion-stack-overflow" skill
-}
+let task_summary = "Recursive fibonacci n>30 causes stack overflow, switched to iterative implementation"
+let evaluation = call_skill_evaluator(task_summary, "src/math.helen")
+// Suggest creating "recursion-stack-overflow" skill
 ```
 
 **Scenario 2: Update existing skill** → Supplement documentation
 ```helen
-main {
-    let task_summary = "Discovered helen-testing does not explain that mock objects must be defined outside test_suite"
-    let evaluation = call_skill_evaluator(task_summary, "tests/test_api.helen")
-    // Suggest updating helen-testing skill documentation
-}
+let task_summary = "Discovered helen-testing does not explain that mock objects must be defined outside test_suite"
+let evaluation = call_skill_evaluator(task_summary, "tests/test_api.helen")
+// Suggest updating helen-testing skill documentation
 ```
 
 ---

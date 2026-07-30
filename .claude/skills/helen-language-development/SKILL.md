@@ -270,22 +270,18 @@ Helen v1.10 supports Chinese fullwidth punctuation:
 ### Short-Circuit Evaluation
 
 ```helen
-main {
-    // && and || short-circuit
-    let result = a && b  // b not evaluated if a is false
-    let result = a || b  // b not evaluated if a is true
-}
+// && and || short-circuit
+let result = a && b  // b not evaluated if a is false
+let result = a || b  // b not evaluated if a is true
 ```
 
 ### Subscript/Field Assignment
 
 ```helen
-main {
-    // v1.10: assignment targets
-    arr[i] = x           // subscript assignment
-    obj.field = x        // field assignment
-    map["key"] = value   // map key assignment
-}
+// v1.10: assignment targets
+arr[i] = x           // subscript assignment
+obj.field = x        // field assignment
+map["key"] = value   // map key assignment
 ```
 
 ### 92 Bilingual Keywords

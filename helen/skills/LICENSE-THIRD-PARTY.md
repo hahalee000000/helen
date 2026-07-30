@@ -42,7 +42,6 @@ The following skills were copied from Hermes Agent and adapted for Helen:
 | `software-development/writing-plans` | Hermes Agent (adapted from obra/superpowers) | MIT |
 | `software-development/plan` | Hermes Agent (writing-craft adapted from obra/superpowers) | MIT |
 | `software-development/subagent-driven-development` | Hermes Agent (adapted from obra/superpowers) | MIT |
-| `devops/hellen-consistency-checker` | Hermes Agent | MIT |
 | `devops/github` | Hermes Agent | MIT |
 
 ## Adaptations Made

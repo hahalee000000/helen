@@ -22,18 +22,16 @@ Helen includes a complete testing framework with TDD development workflow suppor
 ```helen
 // calculator_test.helen
 
-main {
-    test_suite("Calculator", fn() {
-        test_case("adds numbers", fn() {
-            assert_equal(2 + 3, 5)
-        })
-        test_case("subtracts numbers", fn() {
-            assert_equal(10 - 4, 6)
-        })
+test_suite("Calculator", fn() {
+    test_case("adds numbers", fn() {
+        assert_equal(2 + 3, 5)
     })
+    test_case("subtracts numbers", fn() {
+        assert_equal(10 - 4, 6)
+    })
+})
 
-    run_tests()
-}
+run_tests()
 ```
 
 **Approach 2: Auto-discovery (simplest)**
@@ -49,9 +47,7 @@ fn test_subtract() {
     assert_equal(10 - 4, 6)
 }
 
-main {
-    run_tests()
-}
+run_tests()
 ```
 
 ### 2. Run Tests
@@ -90,21 +86,19 @@ fn test_contains() {
 ### Expect Chain API
 
 ```helen
-main {
-    expect(value)
-        .toBe(expected)           // Strict equality
-        .toEqual(expected)        // Deep equality
-        .toContain(item)          // Contains
-        .toBeGreaterThan(n)       // Greater than
-        .toBeLessThan(n)          // Less than
-        .toMatch(pattern)         // Regex match
-        .toStartWith(prefix)      // Starts with
-        .toEndWith(suffix)        // Ends with
-        .toHaveLength(n)          // Length check
-        .toHaveProperty(key)      // Property exists
-        .toThrow()                // Throws exception
-
-}```
+expect(value)
+    .toBe(expected)           // Strict equality
+    .toEqual(expected)        // Deep equality
+    .toContain(item)          // Contains
+    .toBeGreaterThan(n)       // Greater than
+    .toBeLessThan(n)          // Less than
+    .toMatch(pattern)         // Regex match
+    .toStartWith(prefix)      // Starts with
+    .toEndWith(suffix)        // Ends with
+    .toHaveLength(n)          // Length check
+    .toHaveProperty(key)      // Property exists
+    .toThrow()                // Throws exception
+```
 
 **Example:**
 
@@ -319,17 +313,15 @@ fn test_agent_error_handling() {
 ### Using before_each / after_each
 
 ```helen
-main {
-    before_each(fn() {
-        // Runs before each test
-        write_file("test_data.txt", "initial")
-    })
+before_each(fn() {
+    // Runs before each test
+    write_file("test_data.txt", "initial")
+})
 
-    after_each(fn() {
-        // Runs after each test
-        delete_file("test_data.txt")
-    })
-}
+after_each(fn() {
+    // Runs after each test
+    delete_file("test_data.txt")
+})
 
 fn test_read_data() {
     let content = read_file("test_data.txt")
@@ -346,29 +338,27 @@ fn test_modify_data() {
 ### Nested Test Suites
 
 ```helen
-main {
-    test_suite("Math", fn() {
-        test_suite("Addition", fn() {
-            test_case("positive numbers", fn() {
-                assert_equal(2 + 3, 5)
-            })
-            test_case("negative numbers", fn() {
-                assert_equal(-1 + -2, -3)
-            })
+test_suite("Math", fn() {
+    test_suite("Addition", fn() {
+        test_case("positive numbers", fn() {
+            assert_equal(2 + 3, 5)
         })
-        
-        test_suite("Multiplication", fn() {
-            test_case("positive numbers", fn() {
-                assert_equal(2 * 3, 6)
-            })
-            test_case("with zero", fn() {
-                assert_equal(5 * 0, 0)
-            })
+        test_case("negative numbers", fn() {
+            assert_equal(-1 + -2, -3)
         })
     })
+    
+    test_suite("Multiplication", fn() {
+        test_case("positive numbers", fn() {
+            assert_equal(2 * 3, 6)
+        })
+        test_case("with zero", fn() {
+            assert_equal(5 * 0, 0)
+        })
+    })
+})
 
-    run_tests()
-}
+run_tests()
 ```
 
 ## CLI Options

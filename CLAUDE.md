@@ -131,7 +131,11 @@ Helen also has built-in test framework (`helen/stdlib/test.py`) with `test()`, `
 
 ## Skill Index
 
-Helen has 15 built-in skills in `.claude/skills/`. Claude Code auto-loads relevant skills based on task context:
+Helen has 15 built-in skills. **SSOT is `helen/skills/<category>/<name>/`** — this is what ships with the package and what `load_skill()` loads at runtime. `.claude/skills/<name>/` is a **generated mirror** (via `scripts/sync_skills.sh`) for Claude Code's auto-load; **never edit `.claude/skills/` directly** — changes will be overwritten on next sync.
+
+To add or update a skill: edit `helen/skills/<category>/<name>/SKILL.md`, then run `./scripts/sync_skills.sh` before committing.
+
+Claude Code auto-loads relevant skills based on task context:
 
 **Helen-Specific Skills** (for Helen development):
 - `helen-syntax` — Complete language syntax reference (91 keywords, types, expressions)

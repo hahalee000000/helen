@@ -29,11 +29,9 @@ helen quality my_program.helen --dimension security
 ### In Code
 
 ```helen
-main {
-    let source = read_file("my_program.helen")
-    let scores = quality_score(source, "my_program.helen")
-    print("Grade: " + scores["grade"])
-}
+let source = read_file("my_program.helen")
+let scores = quality_score(source, "my_program.helen")
+print("Grade: " + scores["grade"])
 ```
 
 ## 7 Dimensions
