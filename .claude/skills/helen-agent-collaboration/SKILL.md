@@ -544,7 +544,7 @@ agent RobustOrchestrator(tasks: list) {
             let results = []
             for mb in mailboxes { results.append(mb.receive()) }
             return results
-        } catch AggregateError as e {
+        } catch AggregateError e {
             print("Some tasks failed: " + str(len(e.errors)))
             return []  // Handle the failure case
         }

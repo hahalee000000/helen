@@ -199,8 +199,10 @@ def _parse_cli_args(spec: dict | None = None) -> dict[str, Any]:
     Returns:
         Dict mapping argument names to their parsed values.
         Always includes "_positional" key with list of positional args.
+        Note: argv[0] (program name) is automatically skipped.
     """
-    args = list(_cli_args)
+    # Skip argv[0] (program name), parse only user arguments
+    args = list(_cli_args[1:]) if len(_cli_args) > 0 else []
     result: dict[str, Any] = {"_positional": []}
 
     if spec is None:

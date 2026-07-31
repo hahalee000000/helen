@@ -150,7 +150,7 @@ Example:
 `helen/interpreter/interpreter.py` line 674: `visit_import_stmt` reads `node.path` but AST field is `node.module_path` → `AttributeError`. One-character fix: `node.path` → `node.module_path`.
 
 ### catch Syntax
-HLD EBNF: `catch IDENTIFIER ("as" IDENTIFIER)?`. Tutorial uses `catch Type(var)` which parser rejects. Correct form: `catch Type as var` or `catch Type` (no binding).
+HLD EBNF: `catch IDENTIFIER ("as" IDENTIFIER)?`. Tutorial uses `catch Type(var)` which parser rejects. **Parser implementation**: `catch Type var` or `catch Type` (no binding). The `as` keyword is defined in HLD but **not implemented** in parser — `catch Type as var` produces `E0301`.
 
 ### Tutorial `llm if` Uses Wrong Syntax
 Tutorials 06 and 10 use `case "x":` inside `llm if` blocks. Implementation requires `branch "x" { }`. `case:` is `match` syntax only.

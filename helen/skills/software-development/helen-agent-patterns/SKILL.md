@@ -719,7 +719,7 @@ agent RobustAgent(task: str) {
         while attempt < max_retries {
             try {
                 return llm act task
-            } catch LLMError as e {
+            } catch LLMError e {
                 attempt = attempt + 1
                 if attempt >= max_retries {
                     throw RuntimeError("Failed after " + str(max_retries) + " attempts: " + e.message)
@@ -757,8 +757,53 @@ try {
 | 3 | **temperature** | Creative 0.9 / Precise 0.2 / Balanced 0.7 | Always 0.5 |
 | 4 | **max-turns** | Simple Q&A 3 / Complex tasks 15 | Unlimited |
 | 5 | **tools** | Least privilege: `["read_file"]` | `["read_file","write_file","shell_exec","web_search"]` |
-| 6 | **Scope** | `shared let` for cross-agent value sharing | Expecting module `let` to be visible in agent |
-| 7 | **ground truth** | Inject environment facts via `{{}}` | Letting the LLM guess cwd/time |
+| 6 | **model** | Omit (use default) or verify API support | Hardcoding unsupported models |
+| 7 | **Scope** | `shared let` for cross-agent value sharing | Expecting module `let` to be visible in agent |
+| 8 | **ground truth** | Inject environment facts via `{{}}` | Letting the LLM guess cwd/time |
+
+### Model Selection: Prefer Default, Verify Before Specifying
+
+> **Unless you have a specific reason, don't specify `model` — use the default from `~/.helen/config.yaml`.**
+
+When you do specify a model, **verify it's supported by your current API provider first**. Different providers (OpenAI, Anthropic, DashScope, etc.) support different models. Hardcoding an unsupported model causes runtime errors.
+
+```helen
+// ✅ Recommended: Use default model from config
+agent CodeReviewer {
+    description "Review code for quality"
+    prompt "You are a senior code reviewer."
+    // No model specified — uses default from ~/.helen/config.yaml
+    main { return llm act "Review this code" }
+}
+
+// ✅ Acceptable: Specify model when needed (e.g., vision tasks)
+agent ImageAnalyzer {
+    description "Analyze images"
+    model "qwen3.7-plus"  // Verified: supports vision on DashScope
+    main { 
+        let img = media("photo.png")
+        return llm act "Describe this image" media(img)
+    }
+}
+
+// ❌ Avoid: Hardcoding models without checking API support
+agent BrokenAgent {
+    model "gpt-4o"  // Error if using DashScope (doesn't support gpt-4o)
+    main { ... }
+}
+```
+
+**When to specify a model:**
+- **Vision tasks**: Need models with image support (e.g., `qwen3.7-plus`, `gpt-4-vision`)
+- **Specialized capabilities**: Code generation, reasoning, or domain-specific models
+- **Performance tuning**: Faster/cheaper models for simple tasks, more capable for complex ones
+
+**Before specifying, check your provider:**
+```bash
+# Check supported models (example for DashScope)
+curl -H "Authorization: Bearer $API_KEY" \
+  https://dashscope.aliyuncs.com/compatible-mode/v1/models
+```
 
 ### Key Principle: Inject Ground Truth (`{{}}`)
 

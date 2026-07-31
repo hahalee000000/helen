@@ -245,17 +245,31 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         """
         # v1.29: Don't trigger lazy initialization — only access transcript store
         # if it's already initialized OR if we're resuming a session.
-        # This prevents session directory creation when just reading history
-        # (e.g., for LLM context), but allows resumed sessions to load their history.
+        # v1.29 fix: When resuming a session, always read from TranscriptStore
+        # (the resumed history is stored there). For normal invocations, check
+        # transcript_level — if "none", messages are in _interpreter_history.
         if self._agent_context is not None:
             # Check if we're resuming a session (session_id was provided)
             is_resuming = getattr(self, '_session_id', None) is not None
             # Check if transcript store is already initialized without triggering it
             initialized = getattr(self._agent_context, '_transcript_store_initialized', False)
-            if (initialized or is_resuming) and self._agent_context.transcript_store is not None:
+
+            # For resumed sessions, always use TranscriptStore
+            if is_resuming and self._agent_context.transcript_store is not None:
                 all_messages = self._agent_context.transcript_store.read_view()
             else:
-                all_messages = self._interpreter_history
+                # For normal invocations, check transcript_level
+                inv_id = getattr(self, '_current_invocation_id', '')
+                transcript_level = "persistent"  # default
+                if inv_id and hasattr(self, '_invocation_index'):
+                    inv_meta = self._invocation_index.get(inv_id, {})
+                    transcript_level = inv_meta.get("transcript_level", "persistent")
+
+                # Use TranscriptStore only if initialized AND transcript_level != "none"
+                if initialized and transcript_level != "none" and self._agent_context.transcript_store is not None:
+                    all_messages = self._agent_context.transcript_store.read_view()
+                else:
+                    all_messages = self._interpreter_history
         else:
             all_messages = self._interpreter_history
 

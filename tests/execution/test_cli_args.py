@@ -30,8 +30,23 @@ from helen.cli.__main__ import run_command, main
 
 def parse_and_run(source: str, program_args: list[str] | None = None,
                   filename: str = "<test>") -> tuple:
-    """Parse and execute Helen source code end-to-end with optional CLI args."""
+    """Parse and execute Helen source code end-to-end with optional CLI args.
+
+    Note: In real CLI usage, program_args includes the program name as the first
+    element (see cli/__main__.py line 330: `program_args=[first] + argv[1:]`).
+
+    For test flexibility:
+    - If program_args is None or empty: no program name added
+    - If program_args[0] starts with '<' (like '<test>'): use as-is (already has program name)
+    - Otherwise: prepend filename as program name to simulate real CLI behavior
+    """
     errors = ErrorReporter()
+    # Simulate real CLI behavior: prepend program name if not present
+    if program_args and len(program_args) > 0:
+        first_arg = program_args[0]
+        # Check if first arg already looks like a program name (starts with '<' or ends with .helen)
+        if not (first_arg.startswith('<') or first_arg.endswith('.helen')):
+            program_args = [filename] + program_args
     interpreter = Interpreter(
         errors=errors,
         llm_runtime=MockLLMRuntime(),
@@ -63,9 +78,10 @@ class TestArgvVariable:
         assert result == []
 
     def test_argv_with_args(self):
-        """argv contains the CLI arguments passed to the program."""
+        """argv contains the program name followed by CLI arguments."""
         result, interp = parse_and_run("argv", program_args=["--verbose", "--output=json"])
-        assert result == ["--verbose", "--output=json"]
+        # argv[0] is the program name (added by CLI), followed by user arguments
+        assert result == ["<test>", "--verbose", "--output=json"]
 
     def test_argv_is_list(self):
         """argv is a list type."""
@@ -73,13 +89,15 @@ class TestArgvVariable:
         assert result == "list"
 
     def test_argv_length(self):
-        """len(argv) returns the number of arguments."""
+        """len(argv) returns the number of arguments (including program name)."""
         result, interp = parse_and_run("len(argv)", program_args=["a", "b", "c"])
-        assert result == 3
+        # argv[0] is program name, so total length is 4
+        assert result == 4
 
     def test_argv_indexing(self):
         """Individual argv elements can be accessed by index."""
-        result, interp = parse_and_run("argv[0]", program_args=["hello", "world"])
+        result, interp = parse_and_run("argv[1]", program_args=["hello", "world"])
+        # argv[0] is program name, argv[1] is first user arg
         assert result == "hello"
 
     def test_argv_last_element(self):
@@ -122,7 +140,8 @@ class TestArgvVariable:
         result
         """
         result, interp = parse_and_run(source, program_args=["a", "b", "c"])
-        assert result == "a b c "
+        # argv[0] is program name "<test>", followed by user args
+        assert result == "<test> a b c "
 
     def test_argv_const_protection(self):
         """argv cannot be reassigned (it's a const)."""
@@ -135,7 +154,8 @@ class TestArgvVariable:
         """argv handles arguments with special characters."""
         args = ["--path=/tmp/foo bar", "--quote=it's", "--emoji=🎉"]
         result, interp = parse_and_run("argv", program_args=args)
-        assert result == args
+        # argv[0] is program name, followed by user args
+        assert result == ["<test>"] + args
 
 
 # ─── argv Semantic Analysis Tests ───────────────────────────────────────────────
@@ -182,7 +202,8 @@ class TestArgvAgentPropagation:
         my_agent()
         """
         result, interp = parse_and_run(source, program_args=["--agent-test"])
-        assert result == ["--agent-test"]
+        # argv[0] is program name, argv[1] is user arg
+        assert result == ["<test>", "--agent-test"]
 
     def test_argv_visible_in_function(self):
         """argv is visible inside function bodies."""
@@ -193,7 +214,8 @@ class TestArgvAgentPropagation:
         get_args()
         """
         result, interp = parse_and_run(source, program_args=["a", "b"])
-        assert result == ["a", "b"]
+        # argv[0] is program name, followed by user args
+        assert result == ["<test>", "a", "b"]
 
 
 # ─── get_cli_args() Tests ───────────────────────────────────────────────────────
@@ -208,12 +230,13 @@ class TestGetCliArgs:
         assert result == []
 
     def test_get_cli_args_with_args(self):
-        """get_cli_args() returns the CLI arguments."""
+        """get_cli_args() returns the CLI arguments (including program name)."""
         result, interp = parse_and_run(
             "get_cli_args()",
             program_args=["--verbose", "--output=json"],
         )
-        assert result == ["--verbose", "--output=json"]
+        # get_cli_args() returns argv, which includes program name
+        assert result == ["<test>", "--verbose", "--output=json"]
 
     def test_get_cli_args_matches_argv(self):
         """get_cli_args() returns the same value as argv."""
@@ -433,7 +456,8 @@ class TestEdgeCases:
     def test_argv_with_equals_in_value(self):
         """argv handles --key=value where value contains =."""
         result, interp = parse_and_run("argv", program_args=["--expr=a=b"])
-        assert result == ["--expr=a=b"]
+        # argv[0] is program name, argv[1] is user arg
+        assert result == ["<test>", "--expr=a=b"]
 
     def test_parse_cli_args_equals_in_value(self):
         """parse_cli_args() handles --key=value where value has =."""
@@ -453,5 +477,6 @@ class TestEdgeCases:
         """Multiple interpreters have isolated CLI args."""
         _, interp1 = parse_and_run("argv", program_args=["--from-first"])
         _, interp2 = parse_and_run("argv", program_args=["--from-second"])
-        assert interp1.environment.lookup("argv") == ["--from-first"]
-        assert interp2.environment.lookup("argv") == ["--from-second"]
+        # argv[0] is program name, argv[1] is user arg
+        assert interp1.environment.lookup("argv") == ["<test>", "--from-first"]
+        assert interp2.environment.lookup("argv") == ["<test>", "--from-second"]

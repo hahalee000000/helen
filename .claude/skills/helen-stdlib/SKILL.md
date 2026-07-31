@@ -381,9 +381,10 @@ main {
 
     // CLI arguments (predefined constant argv + parsing functions)
     // Command line: helen tool.helen --verbose --output=json input.txt
-    print(argv)  // ["--verbose", "--output=json", "input.txt"]
-
-    let parsed = parse_cli_args()           // Auto-parse
+    print(argv)  // ["tool.helen", "--verbose", "--output=json", "input.txt"]
+    // Note: argv[0] is the program name
+    
+    let parsed = parse_cli_args()           // Auto-parse (skips argv[0])
     // {verbose: true, output: "json", _positional: ["input.txt"]}
 
     let spec = {

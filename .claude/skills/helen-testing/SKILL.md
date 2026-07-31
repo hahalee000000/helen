@@ -128,7 +128,7 @@ fn test_exceptions() {
     // Check exception message
     try {
         throw RuntimeError("specific error")
-    } catch RuntimeError as e {
+    } catch RuntimeError e {
         assert_contains(e.message, "specific")
     }
 }
@@ -166,7 +166,7 @@ fn test_runtime_errors() {
     try {
         let arr = [1, 2, 3]
         let x = arr[10]  // Index out of bounds
-    } catch RuntimeError as e {
+    } catch RuntimeError e {
         assert_contains(e.message, "index")
     }
 }

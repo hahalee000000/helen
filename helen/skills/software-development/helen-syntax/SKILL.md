@@ -77,16 +77,29 @@ main {
 
 | Variable | Type | Description |
 |----------|------|-------------|
-| `argv` | `const list<str>` | Command-line arguments (all arguments after `helen <file> [args...]`) |
+| `argv` | `const list<str>` | Command-line arguments. **`argv[0]` is the program name** (e.g., `"tool.helen"`), user arguments start at `argv[1]`. |
 
 `argv` is `const`, automatically visible (read-only) in agent isolated scope, and cannot be reassigned.
 
 ```helen
 // Command line: helen tool.helen --verbose --output=json input.txt
 main {
-    print(argv)          // ["--verbose", "--output=json", "input.txt"]
-    print(len(argv))     // 3
-    let config = parse_cli_args()  // {verbose: true, output: "json", _positional: ["input.txt"]}
+    print(argv)          // ["tool.helen", "--verbose", "--output=json", "input.txt"]
+    print(len(argv))     // 4 (includes program name)
+    
+    // Skip argv[0] to get user arguments
+    let args = []
+    let skip_first = true
+    for arg in argv {
+        if skip_first {
+            skip_first = false
+        } else {
+            args.append(arg)
+        }
+    }
+    print(args)          // ["--verbose", "--output=json", "input.txt"]
+    
+    let config = parse_cli_args(args)  // {verbose: true, output: "json", _positional: ["input.txt"]}
 }
 ```
 
@@ -580,7 +593,7 @@ main {
 main {
     assert x > 0
     assert x > 0, "x must be positive"
-    try { assert false, "test" } catch AssertionError as e { print("Caught: " + e.message) }
+    try { assert false, "test" } catch AssertionError e { print("Caught: " + e.message) }
 }
 ```
 

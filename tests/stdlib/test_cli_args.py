@@ -54,40 +54,44 @@ class TestGetCliArgs:
 
 
 class TestParseCliArgsAutoMode:
-    """Tests for _parse_cli_args() in auto-parse mode (no spec)."""
+    """Tests for _parse_cli_args() in auto-parse mode (no spec).
+
+    Note: _parse_cli_args() skips argv[0] (program name), so tests
+    must include a program name as the first element.
+    """
 
     def test_empty(self):
-        _set_cli_args([])
+        _set_cli_args(["program.helen"])  # Only program name
         result = _parse_cli_args()
         assert result == {"_positional": []}
 
     def test_long_flag(self):
-        _set_cli_args(["--verbose"])
+        _set_cli_args(["program.helen", "--verbose"])
         result = _parse_cli_args()
         assert result["verbose"] is True
 
     def test_long_flag_with_equals(self):
-        _set_cli_args(["--output=json"])
+        _set_cli_args(["program.helen", "--output=json"])
         result = _parse_cli_args()
         assert result["output"] == "json"
 
     def test_long_flag_with_space(self):
-        _set_cli_args(["--output", "json"])
+        _set_cli_args(["program.helen", "--output", "json"])
         result = _parse_cli_args()
         assert result["output"] == "json"
 
     def test_short_flag(self):
-        _set_cli_args(["-v"])
+        _set_cli_args(["program.helen", "-v"])
         result = _parse_cli_args()
         assert result["v"] is True
 
     def test_positional(self):
-        _set_cli_args(["file.txt"])
+        _set_cli_args(["program.helen", "file.txt"])
         result = _parse_cli_args()
         assert result["_positional"] == ["file.txt"]
 
     def test_mixed(self):
-        _set_cli_args(["--verbose", "--output=json", "input.txt", "-q"])
+        _set_cli_args(["program.helen", "--verbose", "--output=json", "input.txt", "-q"])
         result = _parse_cli_args()
         assert result["verbose"] is True
         assert result["output"] == "json"
@@ -96,88 +100,92 @@ class TestParseCliArgsAutoMode:
 
     def test_flag_followed_by_flag(self):
         """Two flags in a row — both become True."""
-        _set_cli_args(["--verbose", "--quiet"])
+        _set_cli_args(["program.helen", "--verbose", "--quiet"])
         result = _parse_cli_args()
         assert result["verbose"] is True
         assert result["quiet"] is True
 
     def test_value_with_equals(self):
         """Value containing = is preserved (split on first = only)."""
-        _set_cli_args(["--expr=a=b"])
+        _set_cli_args(["program.helen", "--expr=a=b"])
         result = _parse_cli_args()
         assert result["expr"] == "a=b"
 
     def test_negative_number_positional(self):
         """Negative numbers with len > 2 (e.g., -50) are positional."""
-        _set_cli_args(["-50"])
+        _set_cli_args(["program.helen", "-50"])
         result = _parse_cli_args()
         # -50 has len 3, so it's not a single-char short flag.
         assert result["_positional"] == ["-50"]
 
 
 class TestParseCliArgsSpecMode:
-    """Tests for _parse_cli_args() with spec dict."""
+    """Tests for _parse_cli_args() with spec dict.
+
+    Note: _parse_cli_args() skips argv[0] (program name), so tests
+    must include a program name as the first element.
+    """
 
     def test_flag_default(self):
-        _set_cli_args([])
+        _set_cli_args(["program.helen"])
         result = _parse_cli_args({"verbose": {"type": "flag", "default": False}})
         assert result["verbose"] is False
 
     def test_flag_present(self):
-        _set_cli_args(["--verbose"])
+        _set_cli_args(["program.helen", "--verbose"])
         result = _parse_cli_args({"verbose": {"type": "flag", "default": False}})
         assert result["verbose"] is True
 
     def test_string_default(self):
-        _set_cli_args([])
+        _set_cli_args(["program.helen"])
         result = _parse_cli_args({"output": {"type": "string", "default": "text"}})
         assert result["output"] == "text"
 
     def test_string_equals(self):
-        _set_cli_args(["--output=json"])
+        _set_cli_args(["program.helen", "--output=json"])
         result = _parse_cli_args({"output": {"type": "string", "default": "text"}})
         assert result["output"] == "json"
 
     def test_string_space(self):
-        _set_cli_args(["--output", "json"])
+        _set_cli_args(["program.helen", "--output", "json"])
         result = _parse_cli_args({"output": {"type": "string", "default": "text"}})
         assert result["output"] == "json"
 
     def test_int_type(self):
-        _set_cli_args(["--port=8080"])
+        _set_cli_args(["program.helen", "--port=8080"])
         result = _parse_cli_args({"port": {"type": "int", "default": 3000}})
         assert result["port"] == 8080
         assert isinstance(result["port"], int)
 
     def test_int_space(self):
-        _set_cli_args(["--port", "8080"])
+        _set_cli_args(["program.helen", "--port", "8080"])
         result = _parse_cli_args({"port": {"type": "int", "default": 3000}})
         assert result["port"] == 8080
 
     def test_float_type(self):
-        _set_cli_args(["--rate=0.5"])
+        _set_cli_args(["program.helen", "--rate=0.5"])
         result = _parse_cli_args({"rate": {"type": "float", "default": 1.0}})
         assert result["rate"] == 0.5
 
     def test_positional_in_spec(self):
-        _set_cli_args(["--verbose", "file.txt"])
+        _set_cli_args(["program.helen", "--verbose", "file.txt"])
         result = _parse_cli_args({"verbose": {"type": "flag", "default": False}})
         assert result["_positional"] == ["file.txt"]
 
     def test_unknown_flag_in_spec(self):
         """Unknown flags still get captured as True."""
-        _set_cli_args(["--unknown"])
+        _set_cli_args(["program.helen", "--unknown"])
         result = _parse_cli_args({"known": {"type": "flag", "default": False}})
         assert result["unknown"] is True
         assert result["known"] is False
 
     def test_short_flag_in_spec(self):
-        _set_cli_args(["-v"])
+        _set_cli_args(["program.helen", "-v"])
         result = _parse_cli_args({"v": {"type": "flag", "default": False}})
         assert result["v"] is True
 
     def test_multiple_specs(self):
-        _set_cli_args(["--verbose", "--output=json", "--port=8080", "file.txt"])
+        _set_cli_args(["program.helen", "--verbose", "--output=json", "--port=8080", "file.txt"])
         spec = {
             "verbose": {"type": "flag", "default": False},
             "output": {"type": "string", "default": "text"},
@@ -191,13 +199,13 @@ class TestParseCliArgsSpecMode:
 
     def test_int_invalid_value(self):
         """Invalid int value keeps the string."""
-        _set_cli_args(["--port=abc"])
+        _set_cli_args(["program.helen", "--port=abc"])
         result = _parse_cli_args({"port": {"type": "int", "default": 3000}})
         assert result["port"] == "abc"
 
     def test_positional_always_present(self):
         """_positional is always present, even if empty."""
-        _set_cli_args(["--verbose"])
+        _set_cli_args(["program.helen", "--verbose"])
         result = _parse_cli_args({"verbose": {"type": "flag", "default": False}})
         assert "_positional" in result
         assert result["_positional"] == []
