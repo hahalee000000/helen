@@ -201,8 +201,10 @@ class LlmMixin:
         # Call LLM routing
         try:
             selected = self.llm_runtime.route(desc_str, branches, context)
-        except HelenRuntimeError:
-            # LLM call failed -> execute default
+        except HelenRuntimeError as e:
+            # LLM call failed -> surface error to user and execute default branch
+            import sys
+            print(f"\n⚠ LLM routing failed (will use default branch): {e}", file=sys.stderr)
             selected = None
 
         # Record assistant response to history
@@ -549,12 +551,13 @@ class LlmMixin:
             if response_text:
                 response_text = self._apply_working_memory_update(response_text)
             return response_text
-        except HelenRuntimeError as e:
-            self._log_llm_audit("act", prompt, audit_start, agent_name, model, error=str(e))
-            return None
         except RuntimeError as e:
-            # Python RuntimeError from LLM runtime (e.g. API errors) —
-            # wrap in HelenRuntimeError so it propagates to the user
+            # Python RuntimeError from LLM runtime (e.g. API errors like
+            # timeout, rate limit, auth failure) — wrap in HelenRuntimeError
+            # so it propagates to the user as a visible error.
+            # Do NOT catch this silently: the user needs to know the LLM
+            # call failed (e.g. "Request timed out after 120s" or
+            # "API error (429 rate_limit_exceeded): ...").
             self._log_llm_audit("act", prompt, audit_start, agent_name, model, error=str(e))
             raise HelenRuntimeError(str(e), node.span) from e
 
@@ -797,12 +800,17 @@ class LlmMixin:
         except Exception as e:
             self._log_llm_audit("act_stream", prompt, audit_start, agent_name, model, error=str(e))
 
+            # Surface LLM errors visibly to the user — not just the error collector.
+            # Common causes: timeout, rate limit (429), auth failure, quota exhausted.
+            import sys
+            print(f"\n⚠ Streaming LLM call failed: {e}", file=sys.stderr)
+
             self.errors.error(
                 ErrorCode.RUNTIME_ERROR,
                 f"Streaming LLM call failed: {e}",
                 node.span,
             )
-            return None
+            raise HelenRuntimeError(f"Streaming LLM call failed: {e}", node.span) from e
 
     # ------------------------------------------------------------------
     # LLM Helper Methods
