@@ -760,6 +760,68 @@ try {
 | 6 | **model** | Omit (use default) or verify API support | Hardcoding unsupported models |
 | 7 | **Scope** | `shared let` for cross-agent value sharing | Expecting module `let` to be visible in agent |
 | 8 | **ground truth** | Inject environment facts via `{{}}` | Letting the LLM guess cwd/time |
+| 9 | **validation** | Auto-run `helen check` after writing code | Assuming code is correct without validation |
+
+### Writing Helen Code: Always Validate with `helen check`
+
+> **When an agent writes Helen code, it MUST run `helen check` immediately after writing to catch syntax errors.**
+
+This is non-negotiable. Writing code without validation leads to runtime errors that could have been caught at parse time.
+
+**Correct workflow:**
+
+```helen
+agent HelenCoder(task: str) {
+    description "Write and validate Helen code"
+    tools ["write_file", "shell_exec", "read_file"]
+    
+    main {
+        // Step 1: Write the code
+        let code = llm act "Write Helen code for: " + task
+        write_file("output.helen", code)
+        
+        // Step 2: IMMEDIATELY validate with helen check
+        let check_result = shell_exec("helen check output.helen")
+        
+        // Step 3: If errors, fix them
+        if check_result["exit_code"] != 0 {
+            print("❌ Syntax errors found:")
+            print(check_result["output"])
+            // Fix errors and re-check
+            let fixed_code = llm act "Fix these errors:\n" + check_result["output"] + "\n\nOriginal code:\n" + code
+            write_file("output.helen", fixed_code)
+            // Re-validate
+            let recheck = shell_exec("helen check output.helen")
+            if recheck["exit_code"] != 0 {
+                throw RuntimeError("Failed to fix syntax errors after retry")
+            }
+        }
+        
+        // Step 4: Code is validated, safe to run
+        print("✅ Code validated successfully")
+        return "Code written and validated: output.helen"
+    }
+}
+```
+
+**Why this matters:**
+- `helen check` catches syntax errors, type mismatches, and semantic issues
+- It runs in milliseconds, much faster than runtime debugging
+- Prevents cascading errors from invalid code
+- Provides clear error messages with line numbers
+
+**Tools needed:** `shell_exec` (to run `helen check`), `write_file` (to write code), `read_file` (to read errors)
+
+**Anti-pattern:**
+```helen
+// ❌ Writing code without validation
+main {
+    let code = llm act "Write Helen code"
+    write_file("output.helen", code)
+    // No helen check! Errors only discovered at runtime
+    shell_exec("helen output.helen")  // Might fail with cryptic errors
+}
+```
 
 ### Model Selection: Prefer Default, Verify Before Specifying
 

@@ -44,6 +44,34 @@ fn is_valid_input(input: str): bool {
 - Helper functions (pure functions, no side effects)
 - Input/output types for each function
 
+### 1.5 Syntax Validation: Always Run `helen check`
+
+Before running any Helen code, **always validate syntax first** with `helen check`.
+
+**Why this matters:**
+- Catches syntax errors, type mismatches, and semantic issues at parse time
+- Runs in milliseconds, much faster than runtime debugging
+- Prevents cascading errors from invalid code
+- Provides clear error messages with line numbers
+
+**When writing Helen code (as an agent or developer):**
+
+```bash
+# Step 1: Write the code
+write_file("output.helen", code)
+
+# Step 2: IMMEDIATELY validate
+helen check output.helen
+
+# Step 3: If errors exist, fix and re-check
+# Step 4: Only run the code after validation passes
+helen output.helen
+```
+
+**For agents writing Helen code:** Include `shell_exec` in tools and always run `helen check` after `write_file`. See `helen-agent-patterns` § "Writing Helen Code: Always Validate with `helen check`" for the complete workflow.
+
+---
+
 ### 2. TDD Development (RED-GREEN-REFACTOR)
 
 Strictly follow the three-stage cycle:
