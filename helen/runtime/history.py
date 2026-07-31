@@ -76,9 +76,12 @@ CHARS_PER_TOKEN_EN = 4.0  # English/Latin
 CHARS_PER_TOKEN_CJK = 1.2  # CJK characters (more tokens per char)
 CHARS_PER_TOKEN_MIXED = 3.0  # Mixed content estimate
 
-# History size limit: keep at most 80% of context window for history
-# (reserves 20% for system prompt, current instruction, and response)
-HISTORY_BUDGET_RATIO = 0.8
+# History size limit: keep at most 60% of context window for history.
+# Aligned with graduated compression first layer threshold (0.60) so that
+# both traditional and graduated strategies trigger compression at the same
+# usage level. Reserves 40% for system prompt, working memory, instruction,
+# and response buffer.
+HISTORY_BUDGET_RATIO = 0.6
 
 # Summary target: when compressing, aim for this many tokens
 COMPRESSION_SUMMARY_TOKENS = 2048

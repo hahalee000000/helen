@@ -1522,6 +1522,12 @@ errors: [Fixed token expiration handling - was missing refresh logic]
                 # v1.29: "memory" mode = don't persist to disk
                 persist = (transcript_level == "persistent")
                 agent_ctx.transcript_store.append(msg, persist=persist)
+                # Phase 7: Update working memory from message (must happen
+                # regardless of storage backend — early return would skip it)
+                # For multimodal content, extract text portion for working memory
+                from helen.runtime.history import _message_text
+                text_content = _message_text(content)
+                agent_ctx.update_from_message(text_content, role)
                 # Skip the fallback storage when using transcript store
                 return
 

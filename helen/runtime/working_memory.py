@@ -18,8 +18,54 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from helen.runtime.history import _message_text
+from helen.runtime.token_utils import estimate_tokens_simple, is_cjk
 
 logger = logging.getLogger(__name__)
+
+# Three-channel budget allocation (fractions of effective max tokens)
+# Effective max = max_tokens * (1 - RESPONSE_BUFFER_RATIO)
+RESPONSE_BUFFER_RATIO = 0.10
+THREE_CHANNEL_BUDGET = {"system": 0.10, "working": 0.45, "history": 0.35}
+
+
+def _tokens_to_chars(text: str, token_budget: int) -> int:
+    """Convert token budget to character budget (CJK-aware).
+
+    Uses the actual character composition of the text to estimate
+    how many characters fit within the token budget.
+
+    Args:
+        text: Reference text for character composition analysis
+        token_budget: Target number of tokens
+
+    Returns:
+        Estimated number of characters that fit within token_budget
+    """
+    if not text:
+        return 0
+    cjk_count = sum(1 for c in text if is_cjk(c))
+    total_len = len(text)
+    if total_len == 0:
+        return 0
+    # Weighted chars-per-token ratio based on actual composition
+    ratio = (cjk_count * 1.2 + (total_len - cjk_count) * 4.0) / total_len
+    return int(token_budget * ratio)
+
+
+def _truncate_to_token_budget(text: str, max_tokens: int) -> str:
+    """Truncate text to fit within token budget (CJK-aware).
+
+    Args:
+        text: Text to truncate
+        max_tokens: Maximum number of tokens allowed
+
+    Returns:
+        Truncated text that fits within max_tokens
+    """
+    if estimate_tokens_simple(text) <= max_tokens:
+        return text
+    char_budget = _tokens_to_chars(text, max_tokens)
+    return text[:max(0, char_budget)]
 
 
 @dataclass
@@ -39,29 +85,28 @@ class WorkingMemory:
     # Token budget for working memory
     max_tokens: int = 5000
 
-    def to_context(self, budget_chars: int | None = None) -> str:
+    def to_context(self, budget_tokens: int | None = None) -> str:
         """Format working memory as context for the LLM.
 
         Args:
-            budget_chars: Optional character budget. When provided, sections
+            budget_tokens: Optional token budget. When provided, sections
                 are progressively dropped (lowest-priority first) to fit
                 within the budget. Priority order (highest first):
                 Current Task > Recent Errors > Active Files >
                 Recent Decisions > Pending TODOs.
-                If None, max_tokens * 4 is used as the hard upper bound.
+                If None, max_tokens is used as the hard upper bound.
 
         Returns:
             Formatted string representation of working memory
         """
-        # max_tokens acts as a hard upper bound on output size.
+        # max_tokens acts as a hard upper bound on output size (in tokens).
         # When no explicit budget is given, use max_tokens as the limit.
-        effective_budget = budget_chars
+        effective_budget = budget_tokens
         if self.max_tokens > 0:
-            max_chars = self.max_tokens * 4  # Rough 4 chars/token estimate
             if effective_budget is None:
-                effective_budget = max_chars
+                effective_budget = self.max_tokens
             else:
-                effective_budget = min(effective_budget, max_chars)
+                effective_budget = min(effective_budget, self.max_tokens)
 
         # Build sections in priority order (highest priority first).
         # When over budget, sections are dropped from the END first.
@@ -109,45 +154,50 @@ class WorkingMemory:
         # With budget: drop lowest-priority sections until we fit.
         # Iterate from lowest priority (end of list) to highest.
         included = list(range(len(sections)))
-        total_chars = sum(
-            len("\n".join(sections[i][0] + sections[i][1])) + 1
+        total_tokens = sum(
+            estimate_tokens_simple("\n".join(sections[i][0] + sections[i][1]))
             for i in included
         ) if included else 0
 
-        while total_chars > effective_budget and len(included) > 1:
+        while total_tokens > effective_budget and len(included) > 1:
             # Drop the lowest-priority section still included
             # Keep at least one section — body truncation handles the rest
             dropped = included.pop()
-            total_chars -= (
-                len("\n".join(sections[dropped][0] + sections[dropped][1])) + 1
+            total_tokens -= estimate_tokens_simple(
+                "\n".join(sections[dropped][0] + sections[dropped][1])
             )
 
         # If even the highest-priority section alone exceeds budget,
         # truncate its body content to fit.
         parts = []
-        remaining_chars = effective_budget
+        remaining_tokens = effective_budget
         for idx in included:
             header, body = sections[idx]
             header_str = "\n".join(header)
             body_str = "\n".join(body)
             section_str = f"{header_str}\n{body_str}"
+            section_tokens = estimate_tokens_simple(section_str)
 
-            if len(section_str) <= remaining_chars:
+            if section_tokens <= remaining_tokens:
                 parts.append(section_str)
-                remaining_chars -= len(section_str) + 1  # +1 for trailing \n
-            elif remaining_chars > len(header_str) + 4:
-                # Can fit header + partial body; truncate body
-                body_budget = remaining_chars - len(header_str) - 2
-                truncated_body = body_str[:body_budget]
-                # Cut at last complete line to avoid mid-character break
-                last_newline = truncated_body.rfind("\n")
-                if last_newline > 0:
-                    truncated_body = truncated_body[:last_newline]
-                parts.append(f"{header_str}\n{truncated_body}")
-                remaining_chars = 0
-                break
+                remaining_tokens -= section_tokens
             else:
-                break
+                header_tokens = estimate_tokens_simple(header_str)
+                if remaining_tokens > header_tokens + 2:
+                    # Can fit header + partial body; truncate body
+                    # Estimate chars/token ratio (CJK-aware) for truncation
+                    body_budget_tokens = remaining_tokens - header_tokens - 1
+                    char_budget = _tokens_to_chars(body_str, body_budget_tokens)
+                    truncated_body = body_str[:char_budget]
+                    # Cut at last complete line to avoid mid-character break
+                    last_newline = truncated_body.rfind("\n")
+                    if last_newline > 0:
+                        truncated_body = truncated_body[:last_newline]
+                    parts.append(f"{header_str}\n{truncated_body}")
+                    remaining_tokens = 0
+                    break
+                else:
+                    break
 
         return "\n".join(parts)
 
@@ -349,15 +399,19 @@ def build_three_channel_context(
 ) -> list[dict]:
     """Build three-channel context for LLM submission.
 
-    Channel 1 (15%): System instructions
-    Channel 2 (50%): Working memory
+    Channel 1 (10%): System instructions
+    Channel 2 (45%): Working memory (capped by working_memory.max_tokens)
     Channel 3 (35%): Long-term memory (compressed history)
+    Response buffer (10%): Reserved for model response
+
+    Budgets are token-based (not character-based) for accuracy with
+    CJK and multimodal content.
 
     Args:
         system_prompt: System prompt text
         working_memory: Working memory instance
         history: Conversation history (may be compressed)
-        budget: Token budget allocation (default: 15/50/35 split)
+        budget: Token budget allocation (default: 10/45/35 + 10% response)
         max_tokens: Maximum context window tokens (for budget enforcement)
 
     Returns:
@@ -368,51 +422,45 @@ def build_three_channel_context(
         max_tokens = DEFAULT_CONTEXT_WINDOW
 
     if budget is None:
-        budget = {
-            "system": 0.15,
-            "working": 0.50,
-            "history": 0.35,
-        }
+        budget = THREE_CHANNEL_BUDGET
+
+    # Reserve response buffer before distributing to channels
+    effective_max = int(max_tokens * (1.0 - RESPONSE_BUFFER_RATIO))
 
     messages = []
 
-    # Channel 1: System instructions (budget: 15% of max_tokens)
-    system_budget = int(max_tokens * budget.get("system", 0.15))
+    # Channel 1: System instructions (token-based budget)
+    system_budget = int(effective_max * budget.get("system", 0.10))
     if system_prompt:
-        # Truncate system prompt if it exceeds budget (rough: 4 chars/token)
-        max_chars = system_budget * 4
-        truncated_prompt = system_prompt[:max_chars] if len(system_prompt) > max_chars else system_prompt
+        truncated_prompt = _truncate_to_token_budget(system_prompt, system_budget)
         messages.append({
             "role": "system",
             "content": truncated_prompt,
         })
 
-    # Channel 2: Working memory (budget: 50% of max_tokens, capped by working_memory.max_tokens)
-    working_budget = int(max_tokens * budget.get("working", 0.50))
+    # Channel 2: Working memory (token-based, capped by working_memory.max_tokens)
+    working_budget = int(effective_max * budget.get("working", 0.45))
     working_budget = min(working_budget, working_memory.max_tokens)
-    working_budget_chars = working_budget * 4  # Rough conversion
 
-    working_context = working_memory.to_context(budget_chars=working_budget_chars)
+    working_context = working_memory.to_context(budget_tokens=working_budget)
     if working_context:
         messages.append({
             "role": "system",
             "content": f"[Working Memory]\n{working_context}",
         })
 
-    # Channel 3: Conversation history (budget: 35% of max_tokens)
-    history_budget = int(max_tokens * budget.get("history", 0.35))
-    history_budget_chars = history_budget * 4  # Rough conversion
+    # Channel 3: Conversation history (token-based, uses msg.token_count
+    # which correctly handles multimodal content including image token estimate)
+    history_budget = int(effective_max * budget.get("history", 0.35))
 
-    # Truncate history to fit within budget
+    # Select history messages from most recent to oldest within token budget
     selected_history = []
-    used_chars = 0
-    # Iterate from most recent to oldest, keep until budget exhausted
+    used_tokens = 0
     for msg in reversed(history):
-        # v1.17: Use _message_text for multimodal content length calculation
-        msg_chars = len(_message_text(msg.content))
-        if used_chars + msg_chars <= history_budget_chars:
+        msg_tokens = msg.token_count  # Handles multimodal correctly
+        if used_tokens + msg_tokens <= history_budget:
             selected_history.insert(0, msg)
-            used_chars += msg_chars
+            used_tokens += msg_tokens
         else:
             break  # Budget exhausted
 

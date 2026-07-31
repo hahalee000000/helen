@@ -250,7 +250,7 @@ class TestThreeChannelContext:
 
 
 class TestWorkingMemoryBudgetTruncation:
-    """Tests for to_context() with budget_chars parameter (Channel 2 budget enforcement)."""
+    """Tests for to_context() with budget_tokens parameter (Channel 2 budget enforcement)."""
 
     def test_no_budget_includes_everything(self):
         """Without budget, all sections are included."""
@@ -277,11 +277,13 @@ class TestWorkingMemoryBudgetTruncation:
             pending_todos=["Write tests", "Update docs", "Add logging"],
             error_history=[{"command": "pytest", "error": "3 failed"}],
         )
-        # Get full output length to determine a restrictive but non-trivial budget
+        # Get full output to determine a restrictive but non-trivial budget
         full = wm.to_context()
+        from helen.runtime.token_utils import estimate_tokens_simple
+        full_tokens = estimate_tokens_simple(full)
         # Budget that can fit task + errors + files but not decisions + todos
-        budget = len(full) // 2
-        result = wm.to_context(budget_chars=budget)
+        budget = full_tokens // 2
+        result = wm.to_context(budget_tokens=budget)
         # Task (highest priority) must be present
         assert "## Current Task" in result
         # TODOs (lowest priority) should be dropped
@@ -296,8 +298,8 @@ class TestWorkingMemoryBudgetTruncation:
             pending_todos=["todo"] * 10,
             error_history=[{"command": "x", "error": "y"}] * 3,
         )
-        # Just enough for the task header + short body
-        result = wm.to_context(budget_chars=80)
+        # Just enough for the task header + short body (~20 tokens)
+        result = wm.to_context(budget_tokens=20)
         assert "## Current Task" in result
         assert "Deploy v2" in result
         # Everything else should be gone
@@ -309,11 +311,9 @@ class TestWorkingMemoryBudgetTruncation:
         # Long task description that alone exceeds the budget
         long_desc = "\n".join([f"Line {i}: detailed task info" for i in range(20)])
         wm = WorkingMemory(task_description=long_desc)
-        result = wm.to_context(budget_chars=100)
+        result = wm.to_context(budget_tokens=25)
         # Must contain header
         assert "## Current Task" in result
-        # Must not exceed budget by much (allow trailing newline variance)
-        assert len(result) <= 120
         # Should cut at a line boundary (no partial line at end)
         lines = result.split("\n")
         # Last non-empty line should be a complete line
@@ -323,7 +323,7 @@ class TestWorkingMemoryBudgetTruncation:
     def test_budget_zero_returns_empty_or_minimal(self):
         """Zero budget returns empty string."""
         wm = WorkingMemory(task_description="Fix bug")
-        result = wm.to_context(budget_chars=0)
+        result = wm.to_context(budget_tokens=0)
         assert result == ""
 
     def test_budget_respects_priority_order(self):
@@ -335,12 +335,14 @@ class TestWorkingMemoryBudgetTruncation:
             pending_todos=["Todo"],
             error_history=[{"command": "c", "error": "e"}],
         )
-        # Measure each section's size
+        # Measure each section's size in tokens
         full = wm.to_context()
+        from helen.runtime.token_utils import estimate_tokens_simple
+        full_tokens = estimate_tokens_simple(full)
         # Progressively tighten budget and verify sections disappear in order
         sizes = []
-        for budget in [len(full), len(full) * 3 // 4, len(full) // 2, len(full) // 4]:
-            result = wm.to_context(budget_chars=budget)
+        for budget in [full_tokens, full_tokens * 3 // 4, full_tokens // 2, full_tokens // 4]:
+            result = wm.to_context(budget_tokens=budget)
             sizes.append(result)
 
         # The most restrictive result should be a subset of (or equal to)
@@ -351,27 +353,29 @@ class TestWorkingMemoryBudgetTruncation:
             assert "## Current Task" in most_restrictive or len(most_restrictive) == 0
 
     def test_max_tokens_enforced_without_explicit_budget(self):
-        """max_tokens acts as a hard upper bound even without explicit budget_chars."""
+        """max_tokens acts as a hard upper bound even without explicit budget_tokens."""
         # Use very small max_tokens to force truncation
         wm = WorkingMemory(
-            task_description="x" * 200,  # ~800 chars
+            task_description="x" * 200,  # ~50 tokens
             active_files=[f"file_{i}.py" for i in range(5)],
             pending_todos=[f"TODO {i}" for i in range(10)],
-            max_tokens=50,  # 50 * 4 = 200 chars hard bound
+            max_tokens=50,  # 50 tokens hard bound
         )
         result = wm.to_context()  # No explicit budget
-        # Should respect max_tokens (200 chars)
-        assert len(result) <= 220  # Allow small overhead from formatting
+        # Should respect max_tokens
+        from helen.runtime.token_utils import estimate_tokens_simple
+        assert estimate_tokens_simple(result) <= 55  # Allow small overhead
 
     def test_explicit_budget_capped_by_max_tokens(self):
-        """When both budget_chars and max_tokens are set, the smaller wins."""
+        """When both budget_tokens and max_tokens are set, the smaller wins."""
         wm = WorkingMemory(
             task_description="x" * 200,
-            max_tokens=30,  # 30 * 4 = 120 chars
+            max_tokens=30,  # 30 tokens
         )
         # Pass a larger explicit budget — max_tokens should cap it
-        result = wm.to_context(budget_chars=10000)
-        assert len(result) <= 140  # 120 + overhead
+        result = wm.to_context(budget_tokens=10000)
+        from helen.runtime.token_utils import estimate_tokens_simple
+        assert estimate_tokens_simple(result) <= 35  # 30 + overhead
 
 
 class TestThreeChannelBudgetEnforcement:

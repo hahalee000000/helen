@@ -605,7 +605,7 @@ def _context_stats() -> dict:
 
     Example:
         let stats = context_stats()
-        if stats["usage_ratio"] > 0.8 {
+        if stats["usage_ratio"] > 0.6 {
             compress_context("auto")
         }
     """

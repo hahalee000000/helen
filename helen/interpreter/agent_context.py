@@ -662,6 +662,11 @@ class AgentContextManager:
         2. Three-channel context building (if working memory enabled)
         3. Budget tag injection (Phase 9A: Context Awareness)
 
+        When working memory is enabled, compression targets the actual
+        history budget after three-channel allocation (not the full
+        context window), eliminating the gap where history passes
+        compression but gets truncated by three-channel.
+
         Args:
             system_prompt: System prompt text
             history: Conversation history
@@ -671,8 +676,28 @@ class AgentContextManager:
         Returns:
             List of message dicts ready for LLM API
         """
-        # Apply compression via unified entry point
-        compressed_history = self._compress_history(history, max_tokens)
+        # Determine the effective budget for history compression.
+        # When working memory is enabled, three-channel allocates:
+        #   effective_max = max_tokens * 0.9  (10% response buffer)
+        #   system = 10% of effective_max
+        #   working = 45% of effective_max (capped by wm.max_tokens)
+        #   history = remainder
+        # Pass history_budget (not max_tokens) so compression triggers
+        # at the right threshold relative to actual available space.
+        if self.working_memory_enabled:
+            from helen.runtime.working_memory import (
+                RESPONSE_BUFFER_RATIO, THREE_CHANNEL_BUDGET,
+            )
+            effective_max = int(max_tokens * (1.0 - RESPONSE_BUFFER_RATIO))
+            system_budget = int(effective_max * THREE_CHANNEL_BUDGET.get("system", 0.10))
+            working_budget = min(
+                int(effective_max * THREE_CHANNEL_BUDGET.get("working", 0.45)),
+                self.working_memory.max_tokens,
+            )
+            history_budget = effective_max - system_budget - working_budget
+            compressed_history = self._compress_history(history, history_budget)
+        else:
+            compressed_history = self._compress_history(history, max_tokens)
 
         # Phase 9A: Inject budget tag into system prompt
         enhanced_system_prompt = self._inject_budget_tag(system_prompt, max_tokens)
@@ -745,12 +770,12 @@ class AgentContextManager:
 
         # Skip graduated compression when below the first layer threshold —
         # graduated_compress would return the history unchanged anyway.
-        # For traditional, check against budget (80% of max_tokens).
+        # For traditional, check against budget (60% of max_tokens).
         if strategy == "graduated" and usage_ratio < 0.60:
             return history
         if strategy == "traditional":
             total_tokens = sum(m.token_count for m in history)
-            if total_tokens <= int(max_tokens * 0.8):
+            if total_tokens <= int(max_tokens * 0.6):
                 return history
 
         # Branch: cache_aware wraps the base strategy; otherwise run it directly.

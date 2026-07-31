@@ -484,7 +484,7 @@ main {
     context_stats()                       // {message_count, total_tokens, system_tokens, ...}
     context_usage()                       // 0.0-1.0 usage ratio
     let usage = context_usage()
-    if usage > 0.8 { compress_context("auto") }
+    if usage > 0.6 { compress_context("auto") }
     get_message(uuid)                     // Get a single message
 
     // Fine-grained Mutation
