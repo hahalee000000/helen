@@ -75,6 +75,15 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
             Even if you "feel like you know", verify with a tool call.
             When truly unable to obtain a fact, MUST honestly say so rather than fabricate.
         </P0>
+        <P0 name="diagnosis">
+            Before proposing a fix, MUST complete root cause investigation:
+            1. Check ALL relevant data points — not just the first one that confirms your hypothesis.
+            2. Verify assumptions with concrete evidence (file contents, variable values, API responses).
+            3. Rule out at least 2-3 alternative explanations before settling on one.
+            4. NEVER modify code before diagnosis is complete — wrong fixes make debugging harder.
+            5. When debugging, load_skill("debugging") for systematic methodology.
+            6. When multiple symptoms exist, investigate each independently before correlating.
+        </P0>
     </framework_instructions>
 
     ## Security & Safety
@@ -101,6 +110,19 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
     Use load_skill() to load domain knowledge when you need guidance.
     You have all tools available — use them directly, no need to delegate.
 
+    ## Debugging Workflow
+    When investigating issues (bugs, failures, unexpected behavior), follow this process:
+
+    1. **Observe** — read error messages, logs, and debug output carefully; do NOT skim
+    2. **Collect evidence** — check ALL relevant data points (not just one file or one log line)
+    3. **Hypothesize** — form 2-3 possible root causes, ranked by likelihood
+    4. **Verify** — test each hypothesis with concrete evidence; rule out alternatives
+    5. **Fix** — only after root cause is confirmed with evidence
+    6. **Learn** — save the debugging pattern to memory for future reference
+
+    Load `debugging` skill for systematic methodology and Helen observability tools (debug/trace_on).
+    IMPORTANT: Do NOT modify code in step 1-4 — premature fixes hide the real root cause.
+
     ## Core Workflow
     You operate in an implicit agentic loop. For each user request:
 
@@ -114,7 +136,11 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
       "检查 main.helen"
         → read_file("main.helen") → run_helen_check("main.helen") → 报告
       "修复 bug: xxx"
-        → read_file(相关文件) → write_file/patch_file → shell_exec("helen test") → 报告
+        → load_skill("debugging") → 收集证据 → 确认根因 → read_file(相关文件) → write_file/patch_file → shell_exec("helen test") → 报告
+      "调试/诊断 xxx 为什么不能正常工作"
+        → load_skill("debugging") → query_llm_log(5) 检查 LLM 调用 → query_last_error() 查错误 → 对比每个数据点的输入/输出 → 确认根因 → 修复 → 验证
+      "图片/文件处理失败"
+        → 检查 debug 目录所有文件 → 对比每张图/文件的类型、大小、输入输出 → 区分代码问题 vs 数据问题 → 确认根因 → 修复
       "设计一个 auth 接口"
         → load_skill("helen-contractor-design") → read_file → write_file → 报告
       "给 auth 模块写完整测试"
@@ -135,10 +161,11 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
     3. write_file / patch_file — for non-code files
     4. shell_exec — for running commands
     5. load_skill("helen-syntax") / load_skill("helen-stdlib") — before writing unfamiliar code
-    6. run_helen_check(path) — for manual syntax check
-    7. verify_after_change / run_single_test — for TDD workflow
-    8. get_scores / get_metrics — for quality assessment
-    9. **pre_exit_check** — call before session ends
+    6. **load_skill("debugging")** — when investigating bugs, failures, or unexpected behavior
+    7. run_helen_check(path) — for manual syntax check
+    8. verify_after_change / run_single_test — for TDD workflow
+    9. get_scores / get_metrics — for quality assessment
+    10. **pre_exit_check** — call before session ends
 
     PostToolUse hooks:
     - save_code_file/patch_code_file automatically run `helen check` on .helen files.
@@ -162,6 +189,7 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
     ## Reminders
     IMPORTANT: Use tools directly for all tasks — you have all the capabilities.
     IMPORTANT: Load skills before writing Helen code you're unsure about.
+    IMPORTANT: Load `debugging` skill before investigating bugs — it provides systematic methodology.
     IMPORTANT: Never modify ~/helen/ — it's the language runtime.
     IMPORTANT: Submit Helen issues to https://github.com/hahalee000000/helen/issues.
     """
@@ -636,6 +664,62 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
                 }
             }
             return result
+        }
+
+        // ── 调试与可观测性工具（P1/P2）──
+
+        fn emit_debug(message: str, data: str): str {
+            // 包装 stdlib debug()，data 为 JSON 字符串
+            // 输出到 stderr，自动记录到 transcript
+            if data == "" {
+                return debug(message)
+            }
+            let parsed = json_parse(data)
+            return debug(message, parsed)
+        }
+
+        fn search_session_transcript(query: str, limit: int): str {
+            // 搜索当前会话的 transcript 记录
+            // 用于回溯过去的对话和工具调用
+            let results = search_transcript(query, limit=limit)
+            return json_stringify(results)
+        }
+
+        fn get_context_stats(): map {
+            // 返回当前 context 使用统计
+            // 包括 token 使用率、消息数、压缩状态等
+            return context_stats()
+        }
+
+        fn enable_tracing(): str {
+            // 启用执行追踪，后续代码执行会被记录
+            // 用 get_execution_trace() 查看追踪结果
+            return trace_on()
+        }
+
+        fn get_execution_trace(n: int): str {
+            // 获取最近 n 条执行追踪记录
+            // 需要先调用 enable_tracing() 开启追踪
+            return get_trace(n)
+        }
+
+        fn query_llm_log(n: int): str {
+            // 查询最近 n 条 LLM 调用审计日志
+            // 显示 model、prompt、response、tokens、duration、error
+            // 用于诊断 LLM 调用失败（如空响应、超时、上下文溢出）
+            return get_llm_log(n)
+        }
+
+        fn query_last_error(): str {
+            // 查询最近一次错误的完整上下文
+            // 包括错误类型、消息、位置、调用栈、作用域变量、执行追踪
+            return get_last_error()
+        }
+
+        fn query_call_stack(): str {
+            // 查询当前调用栈
+            // 显示正在执行的函数/agent 及其位置
+            return get_call_stack()
         }
     }
 

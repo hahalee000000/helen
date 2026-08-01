@@ -29,7 +29,6 @@ const CHAT_TOOLS = [
     // 基础工具
     "read_file", "write_file", "patch_file", "shell_exec",
     "web_search", "web_fetch", "calculate",
-    "path_exists", "mkdir_p", "list_dir", "glob_files",
     // 技能与记忆
     "load_skill", "update_memory", "update_user_preference",
     // 质量检查与测试（从 specialist agents 合并）
@@ -41,6 +40,10 @@ const CHAT_TOOLS = [
     "save_new_skill", "update_existing_skill", "refresh_skill_index",
     // 项目初始化
     "create_project_structure",
+    // 调试与可观测性（P1/P2）
+    "emit_debug", "search_session_transcript", "get_context_stats",
+    "enable_tracing", "get_execution_trace",
+    "query_llm_log", "query_last_error", "query_call_stack",
     // Hooks
     "save_code_file", "patch_code_file", "pre_exit_check"
 ]

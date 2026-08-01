@@ -508,6 +508,93 @@ def _get_trace(n: int = 50) -> str:
     return "(no interpreter context)"
 
 
+def _get_llm_log(n: int = 10) -> str:
+    """Get recent LLM call audit log entries.
+
+    Returns a formatted string showing the most recent LLM calls,
+    including model, prompt (truncated), tokens, duration, and errors.
+
+    Args:
+        n: Number of recent entries to return (default 10).
+
+    Returns:
+        Formatted audit log string.
+    """
+    if _interpreter_observability is None:
+        return "(no interpreter context)"
+    entries = _interpreter_observability.llm_audit.entries
+    if not entries:
+        return "(no LLM calls recorded)"
+    recent = entries[-n:]
+    lines = []
+    for i, entry in enumerate(recent):
+        d = entry.to_dict()
+        model = d.get("model", "?")
+        call_type = d.get("type", "?")
+        agent = d.get("agent", "")
+        tokens_in = d.get("tokens_in", 0)
+        tokens_out = d.get("tokens_out", 0)
+        duration = d.get("duration_ms", 0)
+        prompt_preview = d.get("prompt", "")[:100]
+        error = d.get("error", "")
+        response_preview = d.get("response", "")[:100] if d.get("response") else ""
+        tool_calls = d.get("tool_calls", [])
+        prefix = f"[{i+1}]"
+        line = f"{prefix} {call_type} model={model}"
+        if agent:
+            line += f" agent={agent}"
+        line += f" tokens={tokens_in}/{tokens_out} duration={duration:.0f}ms"
+        if tool_calls:
+            tc_names = [tc.get("name", "?") for tc in tool_calls[:3]]
+            line += f" tools=[{', '.join(tc_names)}]"
+        if error:
+            line += f" ERROR: {error[:100]}"
+        lines.append(line)
+        if prompt_preview:
+            lines.append(f"    prompt: {prompt_preview}")
+        if response_preview:
+            lines.append(f"    response: {response_preview}")
+    return "\n".join(lines)
+
+
+def _get_last_error() -> str:
+    """Get the last error snapshot with full context.
+
+    Returns a formatted string showing the error type, message, location,
+    call stack, and variables in scope.
+
+    Returns:
+        Formatted error snapshot string, or "(no errors recorded)".
+    """
+    if _interpreter_observability is None:
+        return "(no interpreter context)"
+    err = _interpreter_observability.last_error
+    if err is None:
+        return "(no errors recorded)"
+    return err.format_text(verbose=True)
+
+
+def _get_call_stack() -> str:
+    """Get the current call stack.
+
+    Returns a formatted string showing the current function/agent call stack.
+
+    Returns:
+        Formatted call stack string, or "(empty)" if no calls in progress.
+    """
+    if _interpreter_observability is None:
+        return "(no interpreter context)"
+    stack = _interpreter_observability.call_stack.to_list()
+    if not stack:
+        return "(empty call stack)"
+    lines = ["Call Stack (most recent first):"]
+    for i, frame in enumerate(stack):
+        func = frame.get("function", "?")
+        loc = frame.get("location", "?")
+        lines.append(f"  [{i+1}] {loc} in {func}")
+    return "\n".join(lines)
+
+
 # ── String builtins ────────────────────────────────────────────
 
 def _upper(s: str) -> str:
@@ -1177,6 +1264,9 @@ def _register_debug() -> list[BuiltinFunction]:
         BuiltinFunction("trace_on", "Enable execution tracing", "trace_on()", _trace_on, "debug"),
         BuiltinFunction("trace_off", "Disable execution tracing", "trace_off()", _trace_off, "debug"),
         BuiltinFunction("get_trace", "Get recent execution trace", "get_trace(n?)", _get_trace, "debug"),
+        BuiltinFunction("get_llm_log", "Get recent LLM call audit log", "get_llm_log(n?)", _get_llm_log, "debug"),
+        BuiltinFunction("get_last_error", "Get last error snapshot with context", "get_last_error()", _get_last_error, "debug"),
+        BuiltinFunction("get_call_stack", "Get current call stack", "get_call_stack()", _get_call_stack, "debug"),
     ]
 
 

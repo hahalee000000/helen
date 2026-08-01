@@ -725,9 +725,13 @@ class HttpLLMRuntime(LLMRuntime):
                         })
                         continue
                     else:
-                        # Exhausted nudge retries
+                        # Exhausted nudge retries — raise error instead of silently returning empty
                         logger.warning("Empty response after %d nudge retries", max_empty_retries)
-                        break
+                        raise RuntimeError(
+                            f"LLM returned empty response after {max_empty_retries} nudge retries. "
+                            f"Possible causes: context too large, model safety filter, or API issue. "
+                            f"Model: {use_model}, messages: {len(messages)}."
+                        )
 
                 # Valid final response
                 final_text = content
@@ -1325,7 +1329,16 @@ class HttpLLMRuntime(LLMRuntime):
                             })
                             continue
                         else:
+                            # Exhausted nudge retries — raise error instead of silently returning empty
                             logger.warning("Empty stream response after %d nudge retries", max_empty_retries)
+                            yield {
+                                "type": "error",
+                                "message": (
+                                    f"LLM returned empty response after {max_empty_retries} nudge retries. "
+                                    f"Possible causes: context too large, model safety filter, or API issue. "
+                                    f"Model: {use_model}, messages: {len(messages)}."
+                                ),
+                            }
                             break
 
                     # Valid final response — already streamed
