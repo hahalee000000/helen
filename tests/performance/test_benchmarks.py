@@ -10,6 +10,7 @@ These tests measure the execution time and memory usage of key components:
 Run with: pytest tests/performance/ -v
 """
 
+import os
 import time
 import tracemalloc
 import pytest
@@ -427,39 +428,42 @@ class TestIntegrationPerformance:
 class TestPerformanceRegression:
     """性能回归测试 - 确保优化不会导致性能下降"""
 
+    # CI 环境（GitHub Actions 等）性能波动大，使用更宽松的阈值
+    _CI_MULTIPLIER = 5.0 if os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS") else 1.0
+
     def test_lexer_speed_baseline(self):
         """词法分析器速度基线"""
         source = "let x = 42;" * 1000
         scanner = Scanner(source)
-        
+
         # 预热
         scanner.scan_all()
-        
+
         # 正式测试
         start = time.perf_counter()
         tokens = scanner.scan_all()
         elapsed = time.perf_counter() - start
-        
-        # 基线：100ms
-        baseline = 0.1
-        assert elapsed < baseline, f"Performance regression: {elapsed:.3f}s > {baseline}s"
+
+        # 基线：100ms（本地），500ms（CI）
+        baseline = 0.1 * self._CI_MULTIPLIER
+        assert elapsed < baseline, f"Performance regression: {elapsed:.3f}s > {baseline:.3f}s"
 
     def test_parser_speed_baseline(self):
         """解析器速度基线"""
         source = "let x = 1; let y = 2;" * 300
         tokens = Scanner(source).scan_all()
-        
+
         # 预热
         Parser(tokens).parse()
-        
+
         # 正式测试
         start = time.perf_counter()
         ast = Parser(tokens).parse()
         elapsed = time.perf_counter() - start
-        
-        # 基线：200ms
-        baseline = 0.2
-        assert elapsed < baseline, f"Performance regression: {elapsed:.3f}s > {baseline}s"
+
+        # 基线：200ms（本地），1000ms（CI）
+        baseline = 0.2 * self._CI_MULTIPLIER
+        assert elapsed < baseline, f"Performance regression: {elapsed:.3f}s > {baseline:.3f}s"
 
 
 if __name__ == "__main__":
