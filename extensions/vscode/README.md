@@ -1,28 +1,34 @@
 # Helen Language VS Code Extension
 
-[![Version](https://img.shields.io/badge/version-1.10.0-blue.svg)](https://github.com/hahalee00000/helen)
-[![Helen](https://img.shields.io/badge/Helen-v1.10-green.svg)](https://github.com/hahalee00000/helen)
+[![Version](https://img.shields.io/badge/version-1.30.5-blue.svg)](https://github.com/hahalee00000/helen)
+[![Helen](https://img.shields.io/badge/Helen-v1.30.5-green.svg)](https://github.com/hahalee00000/helen)
 
-VS Code extension for the [Helen Agent Programming Language](https://github.com/hahalee00000/helen) - a domain-specific language for building AI agents.
+VS Code extension for the [Helen Agent Programming Language](https://github.com/hahalee00000/helen) — a prompt-first AI-native DSL with 91 bilingual keywords, 333 built-in functions, and first-class LLM primitives.
 
 ## Features
 
 ### 🎨 Syntax Highlighting
-- Full syntax highlighting for `.helen` files
-- English and Chinese keyword support (91 bilingual keywords)
-- CJK identifier support
-- Agent declarations and function definitions
-- String interpolation support
+- Full syntax highlighting for `.helen` files (TextMate grammar)
+- 91 bilingual keywords (English + Chinese)
+- CJK identifier and fullwidth punctuation support
+- Agent declarations, LLM primitives, channel/concurrency syntax
+- String interpolation (`{expr}`), nested block comments (`/* */`)
+- Decorators (`@open`, `@strict`, `@sandbox`)
+- Multimodal keywords (`media()`, `on_media`, `on_chunk`)
 
 ### 🔍 Language Server (LSP)
-- **Real-time diagnostics** - Syntax and semantic errors as you type
-- **Code completion** - Keywords (English + Chinese), types, and stdlib functions
-- **Go-to-definition** - Jump to agent/function/variable declarations (including `shared let`)
+- **Real-time diagnostics** — full Lexer → Parser → SemanticAnalyzer pipeline, errors as you type
+- **Code completion** — 91 keywords (EN+CN), context keywords, 16 snippet templates, 333 stdlib functions with signatures
+- **Go-to-definition** — jump to agent/function/variable/protocol declarations
+- **Find references** — cross-document symbol references
+- **Hover** — type info and docstrings for stdlib functions, keywords, and user-defined symbols
+- **Document symbols** — outline view with hierarchical agent → method → variable nesting
+- **Smart snippets** — agent, fn, llm act, llm if, shared store, match, try, spawn, @decorator templates
 
 ### ⚡ Quick Actions
 - Restart Language Server command
-- Status bar indicator
-- Automatic server startup
+- Status bar indicator (click to restart)
+- Automatic server startup on `.helen` file open
 
 ## Installation
 
@@ -43,21 +49,52 @@ helen help
 
 ### Install Extension
 
-**From VSIX (recommended for development):**
+**From VSIX (recommended):**
 ```bash
-cd vscode-extension
+cd extensions/vscode
+npm install
+npm run compile
+npm run package
+# Install the generated helen-language-1.30.5.vsix in VS Code
+```
+
+**Install from VS Code directly:**
+```bash
+code --install-extension helen-language-1.30.5.vsix
+```
+
+### Windows Installation
+
+On Windows, ensure the Python Scripts directory is on your `%PATH%`:
+
+```powershell
+# Find the Scripts directory
+python -c "import sysconfig; print(sysconfig.get_path('scripts'))"
+# Typical location: C:\Users\<You>\AppData\Roaming\Python\Python312\Scripts
+
+# Add to PATH (run in PowerShell as Administrator)
+[Environment]::SetEnvironmentVariable("PATH", $env:PATH + ";C:\Users\<You>\AppData\Roaming\Python\Python312\Scripts", "User")
+```
+
+Or set the LSP path explicitly in VS Code settings:
+```json
+{
+    "helen.lsp.path": "C:\\Users\\<You>\\AppData\\Roaming\\Python\\Python312\\Scripts\\helen.cmd"
+}
+```
+
+**Windows (PowerShell):**
+```powershell
+cd extensions\vscode
 npm install
 npm run compile
 npx vsce package
-# Install the generated .vsix file in VS Code
+# Then in VS Code: Ctrl+Shift+P → "Extensions: Install from VSIX..."
 ```
 
-**From source:**
+**From VS Code directly:**
 ```bash
-# Copy the vscode-extension folder to your VS Code extensions directory
-# Linux: ~/.vscode/extensions/
-# macOS: ~/.vscode/extensions/
-# Windows: %USERPROFILE%\.vscode\extensions\
+code --install-extension helen-language-1.30.5.vsix
 ```
 
 ## Configuration
@@ -93,28 +130,36 @@ If Helen is installed in a custom location:
 ### Example Helen Code
 
 ```helen
-// Define an AI agent
+// Define an AI agent with tools
 agent code_reviewer {
-    description = "Reviews code for quality and security"
-    model = "gpt-4"
-    temperature = 0.3
-    
+    description "Reviews code for quality and security"
+    model "gpt-4"
+    temperature 0.3
+    tools ["read_file", "search_files"]
+
     functions {
         fn review(code: str): dict {
             let issues = []
-            // Analysis logic...
             return {"issues": issues, "score": 85}
         }
     }
+
+    main {
+        let result = llm act code_reviewer("Review this code")
+        print(result)
+    }
 }
 
-// Pattern matching
-fn categorize(error: dict): str {
-    let code = error["code"] ?? 0
-    return match code {
-        case 1..100 { "error-patterns" }
-        case 101..200 { "code-quality" }
-        default { "general" }
+// Spawn agent with Channel communication
+let ch = spawn code_reviewer("review src/main.py")
+let response = ch.receive()
+
+// Pattern matching with type patterns
+fn categorize(error: any): str {
+    match error {
+        case n is int => { return "code-{n}" }
+        case s is str => { return "msg-{s}" }
+        default { return "unknown" }
     }
 }
 
@@ -123,13 +168,29 @@ protocol Validator {
     fn validate(data: any): bool
 }
 
-// Shared variable (v1.10)
-shared let counter = 0
+// Shared store for cross-agent state (v1.12)
+shared store Counter {
+    fields {
+        let count = 0
+    }
+    methods {
+        fn increment(): int {
+            let count = count + 1
+            return count
+        }
+    }
+}
 
-// Main entry point
-fn main() {
-    let result = code_reviewer.review("print('hello')")
-    print(result)
+// Decorator: sandbox agent with no tools
+@sandbox agent safe_agent {
+    description "Runs with no tool access"
+    main {
+        let result = llm if ("Is this safe?") {
+            return "safe"
+        } else {
+            return "unsafe"
+        }
+    }
 }
 ```
 
@@ -147,8 +208,9 @@ The status bar shows "Helen" when the Language Server is active. Click it to res
 
 1. **Check Helen installation:**
    ```bash
-   which helen
-   helen help
+   which helen        # Linux/macOS
+   where helen        # Windows
+   helen --version
    ```
 
 2. **Check VS Code settings:**
@@ -160,6 +222,29 @@ The status bar shows "Helen" when the Language Server is active. Click it to res
    - View → Output
    - Select "Helen Language Server" from dropdown
    - Look for error messages
+
+### Windows: LSP Server Not Found
+
+If VS Code shows "Failed to start Helen Language Server" on Windows:
+
+1. **Open PowerShell and run:**
+   ```powershell
+   where helen
+   # Should show: C:\Users\<You>\AppData\Roaming\Python\Python312\Scripts\helen.cmd
+   ```
+
+2. **If `where` fails**, the Scripts directory isn't on PATH. Either:
+   - Add it to PATH (see [Windows Installation](#windows-installation) above)
+   - Or set `helen.lsp.path` in VS Code settings to the full path of `helen.cmd`
+
+3. **If VS Code was launched from desktop shortcut**, it inherits a different PATH than terminal.
+   Restart VS Code from the terminal:
+   ```powershell
+   code .
+   ```
+
+4. **Verify in VS Code Output panel** (View → Output → "Helen Language Server"):
+   Look for `Helen LSP binary: ...` — it should show the detected path.
 
 ### Syntax Highlighting Not Working
 
@@ -186,8 +271,8 @@ npm run compile
 ### Packaging
 
 ```bash
-npx vsce package
-# Creates helen-language-1.10.0.vsix
+npm run package
+# Creates helen-language-1.30.5.vsix
 ```
 
 ### Testing
@@ -205,14 +290,17 @@ For complete Helen language documentation, see:
 
 ### Key Features
 
-- **Agent declarations** with LLM configuration and `functions {}` blocks
+- **Agent declarations** with model, tools, prompt templates, and transcript control
 - **Bilingual keywords** — full Chinese/English support (91 keywords)
-- **Pattern matching** with `match/case`
+- **LLM primitives** — `llm act` (tool-calling loop), `llm if` (LLM-routed branching)
+- **Concurrency** — `spawn` with Channel-based inter-agent communication
+- **Shared stores** — thread-safe mutable shared state across agents
+- **Pattern matching** with `match/case` (range, type, wildcard, variable binding)
 - **Protocols** (interfaces) with `protocol/impl`
-- **Shared variables** with `shared let` for cross-agent state
-- **Error handling** with `try/catch/finally`
-- **Async/await** for concurrent operations
-- **Standard library** with common utilities
+- **Multimodal support** — `media()`, image/audio/video callbacks
+- **Context management** — working memory, graduated compression, caching
+- **333 built-in functions** across 21 categories
+- **15 built-in skills** for agent capabilities (code review, TDD, debugging, etc.)
 
 ## License
 

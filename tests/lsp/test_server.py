@@ -2,7 +2,8 @@
 
 from helen.lsp.server import (
     HelenLanguageServer, Position, Range, Diagnostic,
-    CompletionItem, Location, HELLEN_KEYWORDS, HELLEN_TYPES,
+    CompletionItem, Location, HELLEN_KEYWORDS, HELLEN_CONTEXT_KEYWORDS,
+    HELLEN_SNIPPETS, HELLEN_TYPES, _KEYWORD_DESCRIPTIONS,
 )
 
 
@@ -95,7 +96,19 @@ class TestLspInitialize:
         server = HelenLanguageServer()
         caps = server.capabilities
         assert "textDocumentSync" in caps
-        assert caps["textDocumentSync"] == 2  # Incremental
+        assert caps["textDocumentSync"] == 1  # Full (not incremental — server does full replacement)
+
+    def test_capabilities_include_hover(self):
+        """Capabilities include hoverProvider (v1.30.5)."""
+        server = HelenLanguageServer()
+        caps = server.capabilities
+        assert caps.get("hoverProvider") is True
+
+    def test_capabilities_include_document_symbol(self):
+        """Capabilities include documentSymbolProvider (v1.30.5)."""
+        server = HelenLanguageServer()
+        caps = server.capabilities
+        assert caps.get("documentSymbolProvider") is True
 
     def test_capabilities_include_completion(self):
         """Capabilities include completionProvider."""
@@ -464,4 +477,213 @@ class TestUriToPath:
         error_messages = [d.message for d in diagnostics if d.severity == 1]
         assert any("import file not found" in m for m in error_messages), (
             "Expected 'import file not found' when URI is missing"
+        )
+
+
+class TestLspKeywords:
+    """Test comprehensive keyword coverage (v1.30.5 update)."""
+
+    def test_formal_keywords_from_tokens(self):
+        """HELLEN_KEYWORDS contains all 91 formal keywords from tokens.py."""
+        from helen.core.tokens import keywords
+        formal = set(keywords().keys())
+        # All formal keywords should be in the completion list
+        missing = formal - set(HELLEN_KEYWORDS)
+        assert not missing, f"Formal keywords missing from LSP completion: {missing}"
+
+    def test_context_keywords_present(self):
+        """HELLEN_CONTEXT_KEYWORDS includes spawn/channel/callback keywords."""
+        # Note: 'spawn' is a formal keyword (in tokens.py), so it's in HELLEN_KEYWORDS,
+        # not HELLEN_CONTEXT_KEYWORDS. This test covers context keywords that are
+        # recognized by the parser as identifiers with contextual meaning.
+        expected = {
+            "Channel", "send", "receive", "try_receive", "cancel",
+            "close", "mailbox_select", "on_chunk", "on_complete",
+            "on_tool_end", "on_media", "on_generate", "media", "provider",
+            "context", "memory", "resume", "expect",
+        }
+        actual = set(HELLEN_CONTEXT_KEYWORDS)
+        missing = expected - actual
+        assert not missing, f"Context keywords missing: {missing}"
+
+    def test_chinese_formal_keywords_present(self):
+        """Chinese formal keywords are in the completion list."""
+        expected_cn = {
+            "智能体", "大模型", "执行", "分生", "设", "定义", "常量",
+            "函数", "返回", "如果", "否则", "对于", "属于", "当",
+            "中断", "继续", "匹配", "情况", "默认", "分支",
+            "尝试", "捕获", "最终", "抛出", "断言", "真", "假",
+            "空", "是", "提示词", "描述", "模型", "工具",
+            "流式输出", "温度", "最大轮次", "函数区", "主函",
+            "导入", "作为", "协议", "实现", "共享", "别名", "仓库", "记录",
+        }
+        actual = set(HELLEN_KEYWORDS)
+        missing = expected_cn - actual
+        assert not missing, f"Chinese keywords missing from LSP: {missing}"
+
+    def test_keyword_descriptions_cover_keywords(self):
+        """Every formal + context keyword has a hover description."""
+        all_keywords = set(HELLEN_KEYWORDS + HELLEN_CONTEXT_KEYWORDS)
+        missing = all_keywords - set(_KEYWORD_DESCRIPTIONS.keys())
+        assert not missing, f"Keywords without hover descriptions: {missing}"
+
+
+class TestLspSnippets:
+    """Test snippet templates (v1.30.5)."""
+
+    def test_snippets_are_valid(self):
+        """Each snippet has required fields."""
+        for s in HELLEN_SNIPPETS:
+            assert "label" in s, f"Snippet missing label: {s}"
+            assert "detail" in s, f"Snippet missing detail: {s}"
+            assert "insertText" in s, f"Snippet missing insertText: {s}"
+
+    def test_key_snippets_exist(self):
+        """Key snippet templates exist."""
+        labels = {s["label"] for s in HELLEN_SNIPPETS}
+        expected = {"agent", "fn", "llm act", "llm if", "shared store",
+                    "spawn", "match", "try", "for", "while", "import",
+                    "protocol", "@sandbox", "@open", "@strict"}
+        missing = expected - labels
+        assert not missing, f"Key snippets missing: {missing}"
+
+    def test_completion_returns_snippets(self):
+        """Completion response includes snippet items."""
+        server = HelenLanguageServer()
+        uri = "file:///test.helen"
+        server.documents[uri] = __import__('helen.lsp.server', fromlist=['DocumentState']).DocumentState(
+            uri=uri, content="agent Test {\n  main { }\n}\n", version=1
+        )
+        result = server._completion({
+            "textDocument": {"uri": uri},
+            "position": {"line": 2, "character": 10},
+        })
+        labels = [item["label"] for item in result["items"]]
+        assert "agent" in labels, "agent snippet not in completion"
+        # Snippet items should have insertTextFormat=2
+        agent_items = [item for item in result["items"] if item["label"] == "agent"]
+        assert any(item.get("insertTextFormat") == 2 for item in agent_items)
+
+
+class TestLspHover:
+    """Test hover support (v1.30.5)."""
+
+    def _make_server_with_doc(self, content: str) -> tuple:
+        server = HelenLanguageServer()
+        uri = "file:///test.helen"
+        server.documents[uri] = __import__('helen.lsp.server', fromlist=['DocumentState']).DocumentState(
+            uri=uri, content=content, version=1
+        )
+        return server, uri
+
+    def test_hover_on_keyword(self):
+        """Hover on a keyword returns its description."""
+        server, uri = self._make_server_with_doc("agent Test {\n  main { }\n}\n")
+        result = server._hover({
+            "textDocument": {"uri": uri},
+            "position": {"line": 0, "character": 2},  # on 'agent'
+        })
+        assert result is not None
+        assert "agent" in result["contents"]["value"].lower()
+
+    def test_hover_on_user_function(self):
+        """Hover on a user-defined function shows declaration."""
+        server, uri = self._make_server_with_doc("fn greet(name: str): str {\n  return name\n}\n")
+        result = server._hover({
+            "textDocument": {"uri": uri},
+            "position": {"line": 0, "character": 4},  # on 'greet'
+        })
+        assert result is not None
+        assert "greet" in result["contents"]["value"]
+
+    def test_hover_on_agent_declaration(self):
+        """Hover on an agent shows agent declaration."""
+        server, uri = self._make_server_with_doc("agent MyBot {\n  description \"test\"\n  main { }\n}\n")
+        result = server._hover({
+            "textDocument": {"uri": uri},
+            "position": {"line": 0, "character": 8},  # on 'MyBot'
+        })
+        assert result is not None
+        assert "MyBot" in result["contents"]["value"]
+        assert "Agent" in result["contents"]["value"]
+
+    def test_hover_unknown_symbol_returns_none(self):
+        """Hover on unknown symbol returns None."""
+        server, uri = self._make_server_with_doc("let x = 42\n")
+        result = server._hover({
+            "textDocument": {"uri": uri},
+            "position": {"line": 0, "character": 20},  # beyond line content
+        })
+        assert result is None
+
+
+class TestLspDocumentSymbols:
+    """Test document symbol support (v1.30.5)."""
+
+    def _make_server_with_doc(self, content: str) -> tuple:
+        server = HelenLanguageServer()
+        uri = "file:///test.helen"
+        server.documents[uri] = __import__('helen.lsp.server', fromlist=['DocumentState']).DocumentState(
+            uri=uri, content=content, version=1
+        )
+        return server, uri
+
+    def test_symbols_includes_agent(self):
+        """Agent declarations appear in document symbols."""
+        server, uri = self._make_server_with_doc("agent MyAgent {\n  description \"test\"\n  main { }\n}\n")
+        result = server._document_symbol({"textDocument": {"uri": uri}})
+        names = [s["name"] for s in result]
+        assert any("MyAgent" in n for n in names), f"Agent not in symbols: {names}"
+
+    def test_symbols_includes_function(self):
+        """Top-level function declarations appear in document symbols."""
+        server, uri = self._make_server_with_doc("fn helper(): void {\n  return\n}\n")
+        result = server._document_symbol({"textDocument": {"uri": uri}})
+        names = [s["name"] for s in result]
+        assert any("helper" in n for n in names), f"Function not in symbols: {names}"
+
+    def test_symbols_includes_variable(self):
+        """Variable declarations appear in document symbols."""
+        server, uri = self._make_server_with_doc("let counter = 0\n")
+        result = server._document_symbol({"textDocument": {"uri": uri}})
+        names = [s["name"] for s in result]
+        assert "counter" in names, f"Variable not in symbols: {names}"
+
+    def test_symbols_nested_in_agent(self):
+        """Functions inside agent {} are nested as children."""
+        content = (
+            "agent Bot {\n"
+            "  description \"bot\"\n"
+            "  functions {\n"
+            "    fn tool_call(): void { return }\n"
+            "  }\n"
+            "  main { }\n"
+            "}\n"
+        )
+        server, uri = self._make_server_with_doc(content)
+        result = server._document_symbol({"textDocument": {"uri": uri}})
+        # Find the agent symbol
+        agent_syms = [s for s in result if "Bot" in s["name"]]
+        assert len(agent_syms) == 1, f"Expected one agent symbol: {result}"
+        agent = agent_syms[0]
+        # Agent should have children (functions)
+        children = agent.get("children", [])
+        child_names = [c["name"] for c in children]
+        assert any("tool_call" in n for n in child_names), (
+            f"Function not nested in agent: {child_names}"
+        )
+
+    def test_symbols_empty_document(self):
+        """Empty document returns empty symbols list."""
+        server, uri = self._make_server_with_doc("")
+        result = server._document_symbol({"textDocument": {"uri": uri}})
+        assert result == []
+
+    def test_symbols_decorated_agent(self):
+        """Decorated agents appear with decorator in name."""
+        server, uri = self._make_server_with_doc("@sandbox agent SafeBot {\n  main { }\n}\n")
+        result = server._document_symbol({"textDocument": {"uri": uri}})
+        names = [s["name"] for s in result]
+        assert any("@sandbox" in n and "SafeBot" in n for n in names), (
+            f"Decorated agent not in symbols: {names}"
         )

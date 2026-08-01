@@ -27,17 +27,20 @@ let client: LanguageClient | undefined;
  *
  * Resolution order (when user hasn't configured `helen.lsp.path`):
  *   1. `helen` on PATH (resolves via OS shell — works for most installs)
- *   2. `~/.local/bin/helen` (pip --user install on Linux/macOS)
- *   3. `<workspace>/.venv/bin/helen` (venv activated or project-local)
- *   4. `~/helen/.venv/bin/helen` (common dev layout)
+ *   2. pip --user install location (platform-specific)
+ *   3. `<workspace>/.venv/bin/helen` (Linux/macOS venv)
+ *   4. `<workspace>\.venv\Scripts\helen.exe` (Windows venv)
+ *   5. `~/helen/.venv/...` (common dev layout)
  *
  * Returns the first existing executable, or the literal 'helen' as a
  * last-resort fallback (so the error message stays actionable).
  */
 function findHelenBinary(): string {
+    const isWindows = process.platform === 'win32';
+    const exeName = isWindows ? 'helen.cmd' : 'helen';
+
     // 1. Try PATH via Node's `which`-style lookup
     const pathDirs = (process.env.PATH || '').split(path.delimiter);
-    const exeName = process.platform === 'win32' ? 'helen.cmd' : 'helen';
     for (const dir of pathDirs) {
         const candidate = path.join(dir, exeName);
         try {
@@ -49,26 +52,60 @@ function findHelenBinary(): string {
         }
     }
 
-    // 2. pip --user install location
     const home = os.homedir();
-    const userBin = path.join(home, '.local', 'bin', 'helen');
-    if (fs.existsSync(userBin)) {
-        return userBin;
+
+    // 2. pip --user install location (platform-specific)
+    if (isWindows) {
+        // Windows: %APPDATA%\Python\PythonXY\Scripts\helen.exe
+        // Try multiple Python version directories
+        const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
+        const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+        const pythonScriptDirs = [
+            path.join(appData, 'Python'),
+            path.join(localAppData, 'Programs', 'Python'),
+        ];
+        for (const pythonDir of pythonScriptDirs) {
+            try {
+                if (fs.existsSync(pythonDir)) {
+                    // Scan for Python version subdirectories
+                    for (const entry of fs.readdirSync(pythonDir, { withFileTypes: true })) {
+                        if (entry.isDirectory() && entry.name.startsWith('Python')) {
+                            const candidate = path.join(pythonDir, entry.name, 'Scripts', exeName);
+                            if (fs.existsSync(candidate)) {
+                                return candidate;
+                            }
+                        }
+                    }
+                }
+            } catch {
+                // ignore errors
+            }
+        }
+    } else {
+        // Linux/macOS: ~/.local/bin/helen
+        const userBin = path.join(home, '.local', 'bin', 'helen');
+        if (fs.existsSync(userBin)) {
+            return userBin;
+        }
     }
 
-    // 3. Workspace venv
+    // 3. Workspace venv (platform-specific)
     const folders = vscode.workspace.workspaceFolders;
     if (folders && folders.length > 0) {
         for (const folder of folders) {
-            const venvBin = path.join(folder.uri.fsPath, '.venv', 'bin', 'helen');
+            const venvBin = isWindows
+                ? path.join(folder.uri.fsPath, '.venv', 'Scripts', exeName)
+                : path.join(folder.uri.fsPath, '.venv', 'bin', 'helen');
             if (fs.existsSync(venvBin)) {
                 return venvBin;
             }
         }
     }
 
-    // 4. Common dev layout: ~/helen/.venv/bin/helen
-    const devVenv = path.join(home, 'helen', '.venv', 'bin', 'helen');
+    // 4. Common dev layout: ~/helen/.venv/... (platform-specific)
+    const devVenv = isWindows
+        ? path.join(home, 'helen', '.venv', 'Scripts', exeName)
+        : path.join(home, 'helen', '.venv', 'bin', 'helen');
     if (fs.existsSync(devVenv)) {
         return devVenv;
     }
@@ -134,10 +171,14 @@ export function activate(context: vscode.ExtensionContext) {
         console.log('Helen Language Server started');
     }).catch((error) => {
         console.error('Failed to start Helen Language Server:', error);
+        const isWindows = process.platform === 'win32';
+        const hint = isWindows
+            ? `On Windows, ensure Scripts\\ is on PATH (e.g. %APPDATA%\\Python\\PythonXY\\Scripts\\) ` +
+              `or set 'helen.lsp.path' to the full path of helen.cmd in settings.`
+            : `Install helen-lang (pip install helen-lang) and ensure 'helen' is ` +
+              `on your PATH, or set 'helen.lsp.path' in settings.`;
         vscode.window.showErrorMessage(
-            `Failed to start Helen Language Server: ${error.message}. ` +
-            `Install helen-lang (pip install helen-lang) and ensure 'helen' is ` +
-            `on your PATH, or set 'helen.lsp.path' in settings.`
+            `Failed to start Helen Language Server: ${error.message}. ${hint}`
         );
     });
 

@@ -1,9 +1,12 @@
-"""Helen Language Server Protocol implementation (HLD M12).
+"""Helen Language Server Protocol implementation (HLD M12, v1.30.5).
 
 Provides IDE support via LSP:
 - Diagnostics: real-time error reporting on file change
-- Completion: keyword and identifier completion
+- Completion: keyword (91 bilingual) + stdlib + snippet templates
 - Go-to-definition: navigate to agent/function/variable declarations
+- Find references: cross-document symbol references
+- Hover: type info and docstrings for stdlib functions
+- Document symbols: outline view of agents/functions/classes/variables
 
 Uses JSON-RPC 2.0 over stdio (LSP standard transport).
 """
@@ -73,6 +76,8 @@ class CompletionItem:
     kind: int = 1  # 1=Text, 2=Method, 3=Function, 4=Constructor, 5=Field, 6=Variable, 7=Class, 8=Interface, 9=Module, 10=Property, 11=Unit, 12=Value, 13=Enum, 14=Keyword, 15=Snippet, 16=Color, 17=File, 18=Reference, 19=Folder, 20=EnumMember
     detail: str | None = None
     insert_text: str | None = None
+    insert_text_format: int | None = None  # 1=PlainText, 2=Snippet
+    documentation: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {"label": self.label, "kind": self.kind}
@@ -80,6 +85,10 @@ class CompletionItem:
             result["detail"] = self.detail
         if self.insert_text:
             result["insertText"] = self.insert_text
+        if self.insert_text_format:
+            result["insertTextFormat"] = self.insert_text_format
+        if self.documentation:
+            result["documentation"] = {"kind": "markdown", "value": self.documentation}
         return result
 
 
@@ -95,8 +104,11 @@ class Location:
 
 
 # ── Helen keywords for completion ─────────────────────────────
+# Authoritative source: helen/core/tokens.py _KEYWORD_MAP (91 entries)
+# plus context keywords recognized by the parser as identifiers.
 
 HELLEN_KEYWORDS = [
+    # === Formal keywords (from tokens.py _KEYWORD_MAP) ===
     # Agent keywords
     "agent", "main", "prompt", "description", "model", "temperature",
     "max-turns", "tools", "streaming",
@@ -115,35 +127,345 @@ HELLEN_KEYWORDS = [
     "import", "as",
     # LLM keywords
     "llm", "act",
-    # Async
-    "async", "await",
+    # Concurrency (v1.18)
+    "spawn",
+    # Shared store (v1.12)
+    "store",
     # Protocol/Interface (v1.7)
     "protocol", "impl", "is",
     # Agent functions block
     "functions",
+    # Transcript (v1.29)
+    "transcript",
     # Literals
     "true", "false", "null",
     # Chinese keywords (v1.10 — bilingual support)
-    "设", "定义", "常量", "函数", "返回",    # let (设 primary, 定义 legacy), const, fn, return
-    "如果", "否则", "对于", "属于", "当",  # if, else, for, in, while
-    "中断", "继续",                     # break, continue
-    "匹配", "情况", "默认", "分支",       # match, case, default, branch
-    "尝试", "捕获", "最终", "抛出", "断言",  # try, catch, finally, throw, assert
-    "真", "假", "空", "是",             # true, false, null, is
-    "智能体", "大模型", "执行",               # agent, llm, act
-    "异步", "等待",                     # async, await
-    "提示词", "描述", "模型", "工具",       # prompt, description, model, tools
-    "流式输出", "温度", "最大轮次",        # streaming, temperature, max-turns
-    "函数区", "主函",                   # functions, main
-    "导入", "作为",                     # import, as
-    "协议", "实现",                     # protocol, impl
-    "共享", "别名",                     # shared, alias
+    "设", "定义", "常量", "函数", "返回",
+    "如果", "否则", "对于", "属于", "当",
+    "中断", "继续",
+    "匹配", "情况", "默认", "分支",
+    "尝试", "捕获", "最终", "抛出", "断言",
+    "真", "假", "空", "是",
+    "智能体", "大模型", "执行", "分生",
+    "提示词", "描述", "模型", "工具",
+    "流式输出", "温度", "最大轮次",
+    "函数区", "主函",
+    "导入", "作为",
+    "协议", "实现",
+    "共享", "别名",
+    "仓库", "记录",
 ]
 
+# Context keywords: not in _KEYWORD_MAP (parsed as IDENTIFIER + context check)
+HELLEN_CONTEXT_KEYWORDS = [
+    # Async/concurrency
+    "async", "await",
+    # Channel (v1.18)
+    "Channel", "send", "receive", "try_receive", "cancel", "close",
+    "mailbox_select",
+    # LLM callbacks (v1.21)
+    "on_chunk", "on_complete", "on_tool_end", "on_media", "on_generate",
+    # Multimodal (v1.17)
+    "media", "provider",
+    # Context management (v1.12, v1.19)
+    "context", "memory", "persistent", "none",
+    # Session resume (v1.27)
+    "resume",
+    # Test framework
+    "expect",
+    # Chinese context keywords
+    "上下文", "记忆", "恢复会话",
+    "逐块处理", "完成", "工具结束", "处理媒体", "生成",
+    "媒体",
+]
+
+# Agent property keywords (inside agent {} blocks)
+HELLEN_AGENT_PROPERTIES = [
+    "description", "model", "temperature", "max-turns", "tools",
+    "streaming", "prompt", "transcript",
+    "描述", "模型", "温度", "最大轮次", "工具", "流式输出", "提示词", "记录",
+]
+
+# Built-in types
 HELLEN_TYPES = [
     "str", "int", "float", "bool", "list", "dict", "map",
     "any", "void", "number",
+    # Union/Optional syntax hints
+    "Optional", "Union",
+    # Protocol/Agent types
+    "Protocol", "Agent",
+    # Literal type
+    "Literal",
 ]
+
+# ── Snippet templates (insertTextFormat=2, LSP snippet syntax) ──
+# $0 = final cursor position, $1/$2 = tab stops
+
+HELLEN_SNIPPETS = [
+    {
+        "label": "agent",
+        "detail": "Agent declaration block",
+        "insertText": (
+            "agent ${1:AgentName} {\n"
+            "    description \"${2:description}\"\n"
+            "    model \"${3:model}\"\n"
+            "    temperature ${4:0.7}\n"
+            "    tools [${5}]\n"
+            "    prompt {\n"
+            "        {{${6:input}}}\n"
+            "    }\n"
+            "    functions {\n"
+            "        ${7}\n"
+            "    }\n"
+            "    main {\n"
+            "        $0\n"
+            "    }\n"
+            "}"
+        ),
+    },
+    {
+        "label": "fn",
+        "detail": "Function declaration",
+        "insertText": "fn ${1:name}(${2:args}): ${3:void} {\n    $0\n}",
+    },
+    {
+        "label": "llm act",
+        "detail": "LLM act with tool loop",
+        "insertText": (
+            "llm act ${1:agent}(${2:prompt}) {\n"
+            "    on_chunk {\n"
+            "        ${3}\n"
+            "    }\n"
+            "    on_complete {\n"
+            "        ${4}\n"
+            "    }\n"
+            "}$0"
+        ),
+    },
+    {
+        "label": "llm if",
+        "detail": "LLM-routed conditional branch",
+        "insertText": (
+            "llm if (${1:condition}) {\n"
+            "    ${2:branch1}\n"
+            "} else {\n"
+            "    ${3:branch2}\n"
+            "}$0"
+        ),
+    },
+    {
+        "label": "shared store",
+        "detail": "Thread-safe shared store declaration",
+        "insertText": (
+            "shared store ${1:StoreName} {\n"
+            "    fields {\n"
+            "        ${2}\n"
+            "    }\n"
+            "    methods {\n"
+            "        ${3}\n"
+            "    }\n"
+            "}$0"
+        ),
+    },
+    {
+        "label": "spawn",
+        "detail": "Spawn agent and return Channel",
+        "insertText": "spawn ${1:Agent}(${2:args})$0",
+    },
+    {
+        "label": "match",
+        "detail": "Pattern matching block",
+        "insertText": (
+            "match ${1:expression} {\n"
+            "    case ${2:pattern} => {\n"
+            "        ${3}\n"
+            "    }\n"
+            "    default => {\n"
+            "        $0\n"
+            "    }\n"
+            "}"
+        ),
+    },
+    {
+        "label": "try",
+        "detail": "Try/catch error handling",
+        "insertText": (
+            "try {\n"
+            "    ${1}\n"
+            "} catch ${2:e} {\n"
+            "    ${3}\n"
+            "}$0"
+        ),
+    },
+    {
+        "label": "if",
+        "detail": "If/else conditional",
+        "insertText": "if ${1:condition} {\n    ${2}\n} else {\n    $0\n}",
+    },
+    {
+        "label": "for",
+        "detail": "For-in loop",
+        "insertText": "for ${1:item} in ${2:collection} {\n    $0\n}",
+    },
+    {
+        "label": "while",
+        "detail": "While loop",
+        "insertText": "while ${1:condition} {\n    $0\n}",
+    },
+    {
+        "label": "import",
+        "detail": "Import statement",
+        "insertText": "import \"${1:path}\"${2: as ${3:alias}}$0",
+    },
+    {
+        "label": "protocol",
+        "detail": "Protocol declaration",
+        "insertText": "protocol ${1:Name} {\n    ${2}\n}$0",
+    },
+    {
+        "label": "@sandbox",
+        "detail": "Sandbox agent decorator (tools=[])",
+        "insertText": "@sandbox agent ${1:AgentName} {\n    $0\n}",
+    },
+    {
+        "label": "@open",
+        "detail": "Open agent decorator (can access module let)",
+        "insertText": "@open agent ${1:AgentName} {\n    $0\n}",
+    },
+    {
+        "label": "@strict",
+        "detail": "Strict agent decorator (deep-copies shared let)",
+        "insertText": "@strict agent ${1:AgentName} {\n    $0\n}",
+    },
+]
+
+# ── Keyword descriptions for hover ────────────────────────────
+_KEYWORD_DESCRIPTIONS: dict[str, str] = {
+    "agent": "Declare an agent (AI-native autonomous entity)",
+    "fn": "Declare a function",
+    "let": "Declare a mutable variable",
+    "const": "Declare an immutable constant",
+    "if": "Conditional branch",
+    "else": "Alternative branch",
+    "for": "Loop over a collection",
+    "in": "Membership / iteration operator",
+    "while": "Loop while condition is true",
+    "match": "Pattern matching (range, type, wildcard, variable binding)",
+    "case": "A pattern match arm",
+    "branch": "Branch arm (legacy)",
+    "default": "Default match arm",
+    "return": "Return a value from a function",
+    "break": "Exit a loop",
+    "continue": "Skip to next iteration",
+    "try": "Try block for error handling",
+    "catch": "Catch block for handling errors",
+    "finally": "Block executed regardless of errors",
+    "throw": "Raise an error",
+    "assert": "Assert a condition (raises AssertionError)",
+    "import": "Import a module",
+    "as": "Alias an import",
+    "llm": "LLM primitive (act / if)",
+    "act": "LLM tool-calling loop",
+    "spawn": "Spawn an agent and return a Channel (mailbox)",
+    "Channel": "Inter-agent communication channel (spawn return type)",
+    "send": "Send a message through a Channel",
+    "receive": "Blocking receive from a Channel",
+    "try_receive": "Non-blocking receive from a Channel",
+    "cancel": "Cancel a spawned agent",
+    "close": "Close a Channel",
+    "mailbox_select": "Multi-channel select (like Go select)",
+    "shared": "Shared variable or shared store declaration",
+    "store": "Thread-safe shared store (fields + methods)",
+    "protocol": "Protocol declaration (structural typing)",
+    "impl": "Protocol implementation",
+    "is": "Type pattern in match",
+    "alias": "Create a function alias",
+    "functions": "Agent functions block (LLM-callable tools)",
+    "main": "Agent main block (entry point)",
+    "transcript": "Agent transcript control (none/memory/persistent)",
+    "prompt": "Agent prompt template",
+    "description": "Agent description",
+    "model": "Agent/model identifier",
+    "temperature": "LLM sampling temperature",
+    "max-turns": "Maximum LLM interaction turns",
+    "tools": "List of tools available to the agent",
+    "streaming": "Enable streaming output",
+    "async": "Async function marker",
+    "await": "Await an async result",
+    "call": "Explicit function call",
+    "true": "Boolean true",
+    "false": "Boolean false",
+    "null": "Null / empty value",
+    "context": "Context management (clear_context, compress_context)",
+    "memory": "In-memory transcript mode",
+    "persistent": "Persistent (disk) transcript mode",
+    "none": "No transcript recording (default)",
+    "resume": "Resume a saved session",
+    "expect": "Test expectation",
+    "on_chunk": "Streaming callback: called for each text chunk",
+    "on_complete": "Streaming callback: called when generation completes",
+    "on_tool_end": "Tool callback: called after a tool executes",
+    "on_media": "Multimodal callback: called for media parts",
+    "on_generate": "Generation callback: called before LLM request",
+    "media": "Multimodal media() function",
+    "provider": "Media provider identifier",
+    # Chinese keyword descriptions
+    "智能体": "声明一个智能体（AI 原生自主实体）",
+    "函数": "声明一个函数",
+    "设": "声明一个可变变量",
+    "定义": "声明一个不可变常量（legacy alias for 设）",
+    "常量": "声明一个不可变常量",
+    "如果": "条件分支",
+    "否则": "否则分支",
+    "对于": "遍历集合",
+    "属于": "成员/迭代运算符",
+    "当": "当条件为真时循环",
+    "返回": "从函数返回值",
+    "中断": "退出循环",
+    "继续": "跳到下一次迭代",
+    "匹配": "模式匹配",
+    "情况": "匹配分支",
+    "默认": "默认匹配分支",
+    "分支": "分支（legacy）",
+    "尝试": "尝试块（错误处理）",
+    "捕获": "捕获块",
+    "最终": "最终块（无论是否出错都执行）",
+    "抛出": "抛出错误",
+    "断言": "断言条件",
+    "大模型": "大模型原语（执行/如果）",
+    "执行": "大模型工具调用循环",
+    "分生": "分生（spawn）智能体并返回 Channel",
+    "提示词": "智能体提示词模板",
+    "描述": "智能体描述",
+    "模型": "模型标识符",
+    "温度": "LLM 采样温度",
+    "最大轮次": "最大交互轮次",
+    "工具": "智能体可用工具列表",
+    "流式输出": "启用流式输出",
+    "函数区": "智能体函数区（LLM 可调用的工具）",
+    "主函": "智能体主函数（入口）",
+    "导入": "导入模块",
+    "作为": "导入别名",
+    "协议": "协议声明（结构化类型）",
+    "实现": "协议实现",
+    "共享": "共享变量或共享仓库",
+    "别名": "函数别名",
+    "仓库": "线程安全的共享仓库",
+    "记录": "智能体 transcript 控制",
+    "真": "布尔真",
+    "假": "布尔假",
+    "空": "空值",
+    "是": "类型模式匹配",
+    "上下文": "上下文管理",
+    "记忆": "内存 transcript 模式",
+    "恢复会话": "恢复已保存的会话",
+    "逐块处理": "流式回调：处理每个文本块",
+    "完成": "流式回调：生成完成时调用",
+    "工具结束": "工具回调：工具执行后调用",
+    "处理媒体": "多模态回调：处理媒体部分",
+    "生成": "生成回调：LLM 请求前调用",
+    "媒体": "多模态 media() 函数",
+}
 
 
 # ── LSP Server ─────────────────────────────────────────────────
@@ -167,13 +489,15 @@ class HelenLanguageServer:
     def __init__(self) -> None:
         self.documents: dict[str, DocumentState] = {}
         self.capabilities = {
-            "textDocumentSync": 2,  # Incremental
+            "textDocumentSync": 1,  # Full sync (we replace content on every change)
             "completionProvider": {
-                "triggerCharacters": [".", '"', "'", " "],
+                "triggerCharacters": [".", '"', "'", " ", "@"],
                 "resolveProvider": False,
             },
             "definitionProvider": True,
             "referencesProvider": True,
+            "hoverProvider": True,
+            "documentSymbolProvider": True,
             "diagnosticProvider": {
                 "interFileDependencies": False,
                 "workspaceDiagnostics": False,
@@ -215,6 +539,10 @@ class HelenLanguageServer:
             return self._references(params)
         elif method == "textDocument/diagnostic":
             return self._diagnostic(params)
+        elif method == "textDocument/hover":
+            return self._hover(params)
+        elif method == "textDocument/documentSymbol":
+            return self._document_symbol(params)
         else:
             return None
 
@@ -271,15 +599,10 @@ class HelenLanguageServer:
 
         doc.version = version
 
-        # Apply changes (full sync for simplicity)
+        # Apply changes (Full sync — matches textDocumentSync: 1)
         for change in changes:
             if "text" in change:
-                if "range" in change:
-                    # Incremental update (simplified: replace all)
-                    doc.content = change["text"]
-                else:
-                    # Full content replacement
-                    doc.content = change["text"]
+                doc.content = change["text"]
 
         self._publish_diagnostics(uri)
 
@@ -291,20 +614,37 @@ class HelenLanguageServer:
     def _completion(self, params: dict[str, Any]) -> dict[str, Any]:
         """Handle textDocument/completion."""
         uri = params.get("textDocument", {}).get("uri", "")
-        _ = params.get("position", {})  # position available for future filtering
+        position = params.get("position", {})
 
         doc = self.documents.get(uri)
         if doc is None:
             return {"isIncomplete": False, "items": []}
 
+        # Detect context for smart snippet filtering
+        line_text = ""
+        if position:
+            lines = doc.content.split("\n")
+            line_idx = position.get("line", 0)
+            if 0 <= line_idx < len(lines):
+                line_text = lines[line_idx].lstrip()
+
         items = []
 
-        # Add keywords
+        # Add formal keywords (from tokens.py _KEYWORD_MAP)
         for kw in HELLEN_KEYWORDS:
             items.append(
                 CompletionItem(
                     label=kw, kind=14,  # Keyword
                     detail="Helen keyword"
+                ).to_dict()
+            )
+
+        # Add context keywords (parsed as identifiers but used as keywords)
+        for kw in HELLEN_CONTEXT_KEYWORDS:
+            items.append(
+                CompletionItem(
+                    label=kw, kind=14,  # Keyword
+                    detail="context keyword"
                 ).to_dict()
             )
 
@@ -314,6 +654,18 @@ class HelenLanguageServer:
                 CompletionItem(
                     label=t, kind=8,  # Interface (type)
                     detail="Helen type"
+                ).to_dict()
+            )
+
+        # Add snippet templates (kind=15 Snippet)
+        for snippet in HELLEN_SNIPPETS:
+            items.append(
+                CompletionItem(
+                    label=snippet["label"],
+                    kind=15,  # Snippet
+                    detail=snippet["detail"],
+                    insert_text=snippet["insertText"],
+                    insert_text_format=2,  # Snippet format
                 ).to_dict()
             )
 
@@ -329,6 +681,7 @@ class HelenLanguageServer:
                         kind=3,  # Function
                         detail=func.description,
                         insert_text=f"{func.name}(",
+                        documentation=func.description,
                     ).to_dict()
                 )
                 seen_labels.add(func.name)
@@ -341,6 +694,7 @@ class HelenLanguageServer:
                             kind=3,  # Function
                             detail=f"alias of {canonical}",
                             insert_text=f"{alias}(",
+                            documentation=f"Alias of `{canonical}`",
                         ).to_dict()
                     )
                     seen_labels.add(alias)
@@ -515,6 +869,280 @@ class HelenLanguageServer:
                         ]
 
         return []
+
+    def _hover(self, params: dict[str, Any]) -> dict[str, Any] | None:
+        """Handle textDocument/hover.
+
+        Returns type info and documentation for the symbol at cursor position.
+        Supports:
+        - stdlib functions: show description and signature
+        - Keywords: show brief description
+        - Types: show type description
+        - User-defined agents/functions: show declaration line
+        """
+        uri = params.get("textDocument", {}).get("uri", "")
+        position = params.get("position", {})
+
+        doc = self.documents.get(uri)
+        if doc is None:
+            return None
+
+        line_num = position.get("line", 0) + 1
+        char_num = position.get("character", 0) + 1
+
+        # Get the word at cursor
+        target = self._get_symbol_at(doc.content, line_num, char_num)
+        if not target:
+            return None
+
+        # Check stdlib functions first
+        try:
+            from helen.stdlib import stdlib  # noqa: PLC0415
+            for func in stdlib.list_all():
+                if func.name == target:
+                    sig = f"`{func.name}()` — {func.description}"
+                    return {
+                        "contents": {"kind": "markdown", "value": sig},
+                    }
+            # Check aliases
+            if target in stdlib.aliases:
+                canonical = stdlib.aliases[target]
+                return {
+                    "contents": {
+                        "kind": "markdown",
+                        "value": f"`{target}` — alias of `{canonical}`",
+                    },
+                }
+        except ImportError:
+            pass
+
+        # Check keywords
+        all_keywords = set(HELLEN_KEYWORDS + HELLEN_CONTEXT_KEYWORDS)
+        if target in all_keywords:
+            desc = _KEYWORD_DESCRIPTIONS.get(target, f"Helen keyword: `{target}`")
+            return {
+                "contents": {"kind": "markdown", "value": f"**{target}** — {desc}"},
+            }
+
+        # Check types
+        if target in HELLEN_TYPES:
+            return {
+                "contents": {"kind": "markdown", "value": f"**{target}** — Helen type"},
+            }
+
+        # Check decorators
+        if target in ("open", "strict", "sandbox", "开放", "严格", "沙箱"):
+            return {
+                "contents": {
+                    "kind": "markdown",
+                    "value": f"**@{target}** — Agent isolation decorator",
+                },
+            }
+
+        # Check user-defined symbols (scan document for declarations)
+        import re  # noqa: PLC0415
+        lines = doc.content.split("\n")
+        for i, line in enumerate(lines):
+            stripped = line.lstrip()
+            # agent declaration
+            m = re.match(rf'(@\w+\s+)?agent\s+{re.escape(target)}\s*[\({{]', stripped)
+            if m:
+                return {
+                    "contents": {
+                        "kind": "markdown",
+                        "value": f"```helen\n{stripped.rstrip()}\n```\nAgent declaration (line {i + 1})",
+                    },
+                }
+            # function declaration
+            m = re.match(rf'fn\s+{re.escape(target)}\s*\(([^)]*)\)', stripped)
+            if m:
+                return {
+                    "contents": {
+                        "kind": "markdown",
+                        "value": f"```helen\n{stripped.rstrip()}\n```\nFunction declaration (line {i + 1})",
+                    },
+                }
+            # shared store
+            m = re.match(rf'shared\s+store\s+{re.escape(target)}\s*[\({{]', stripped)
+            if m:
+                return {
+                    "contents": {
+                        "kind": "markdown",
+                        "value": f"```helen\n{stripped.rstrip()}\n```\nShared store declaration (line {i + 1})",
+                    },
+                }
+            # variable declaration
+            m = re.match(rf'(?:shared\s+)?(?:let|const|设|定义|常量)\s+{re.escape(target)}\s*(?::\s*(\S+))?\s*=', stripped)
+            if m:
+                type_info = m.group(1) or "inferred"
+                return {
+                    "contents": {
+                        "kind": "markdown",
+                        "value": f"```helen\n{stripped.rstrip()}\n```\nVariable (type: `{type_info}`, line {i + 1})",
+                    },
+                }
+            # protocol declaration
+            m = re.match(rf'protocol\s+{re.escape(target)}\s*[\({{]', stripped)
+            if m:
+                return {
+                    "contents": {
+                        "kind": "markdown",
+                        "value": f"```helen\n{stripped.rstrip()}\n```\nProtocol declaration (line {i + 1})",
+                    },
+                }
+
+        return None
+
+    def _document_symbol(self, params: dict[str, Any]) -> list[dict[str, Any]]:
+        """Handle textDocument/documentSymbol.
+
+        Returns a hierarchical list of symbols in the document for the outline view.
+        Symbol kinds:
+        - 2=Struct (agent, shared store, protocol)
+        - 5=Class (class declarations)
+        - 6=Method (functions inside agent)
+        - 12=Function (standalone functions)
+        - 13=Variable (let/const)
+        """
+        import re  # noqa: PLC0415
+
+        uri = params.get("textDocument", {}).get("uri", "")
+        doc = self.documents.get(uri)
+        if doc is None:
+            return []
+
+        symbols = []
+        lines = doc.content.split("\n")
+
+        # Track agent blocks for nesting methods inside agents
+        agent_stack: list[dict[str, Any]] = []  # stack of agent symbol dicts
+
+        for i, line in enumerate(lines):
+            stripped = line.lstrip()
+            indent = len(line) - len(stripped)
+
+            # Pop agents that we've exited (by indent)
+            while agent_stack and agent_stack[-1].get("_indent", -1) >= indent and indent > 0:
+                agent_stack.pop()
+
+            # @decorator + agent declaration
+            m = re.match(r'(@\w+\s+)?agent\s+(\w+)\s*[\({]', stripped)
+            if m:
+                decorator = m.group(1) or ""
+                name = m.group(2)
+                sym: dict[str, Any] = {
+                    "name": f"{decorator.strip()}agent {name}".strip(),
+                    "kind": 2,  # Struct
+                    "range": {
+                        "start": {"line": i, "character": 0},
+                        "end": {"line": i, "character": len(line)},
+                    },
+                    "selectionRange": {
+                        "start": {"line": i, "character": indent + len(decorator) + len("agent ")},
+                        "end": {"line": i, "character": indent + len(decorator) + len("agent ") + len(name)},
+                    },
+                    "children": [],
+                    "_indent": indent,
+                }
+                symbols.append(sym)
+                agent_stack.append(sym)
+                continue
+
+            # shared store
+            m = re.match(r'shared\s+store\s+(\w+)\s*[\({]', stripped)
+            if m:
+                name = m.group(1)
+                sym = {
+                    "name": f"shared store {name}",
+                    "kind": 2,  # Struct
+                    "range": {
+                        "start": {"line": i, "character": 0},
+                        "end": {"line": i, "character": len(line)},
+                    },
+                    "selectionRange": {
+                        "start": {"line": i, "character": indent + len("shared store ")},
+                        "end": {"line": i, "character": indent + len("shared store ") + len(name)},
+                    },
+                    "children": [],
+                    "_indent": indent,
+                }
+                symbols.append(sym)
+                agent_stack.append(sym)
+                continue
+
+            # protocol
+            m = re.match(r'protocol\s+(\w+)\s*[\({]', stripped)
+            if m:
+                name = m.group(1)
+                sym = {
+                    "name": f"protocol {name}",
+                    "kind": 11,  # Struct/Interface
+                    "range": {
+                        "start": {"line": i, "character": 0},
+                        "end": {"line": i, "character": len(line)},
+                    },
+                    "selectionRange": {
+                        "start": {"line": i, "character": indent + len("protocol ")},
+                        "end": {"line": i, "character": indent + len("protocol ") + len(name)},
+                    },
+                    "children": [],
+                }
+                symbols.append(sym)
+                continue
+
+            # fn declaration (top-level or inside agent)
+            m = re.match(r'fn\s+(\w+)\s*\(([^)]*)\)\s*(?::\s*(\S+))?\s*\{', stripped)
+            if m:
+                name = m.group(1)
+                ret_type = m.group(3) or ""
+                fn_sym: dict[str, Any] = {
+                    "name": f"fn {name}({m.group(2)})" + (f": {ret_type}" if ret_type else ""),
+                    "kind": 6 if agent_stack else 12,  # Method if inside agent, else Function
+                    "range": {
+                        "start": {"line": i, "character": 0},
+                        "end": {"line": i, "character": len(line)},
+                    },
+                    "selectionRange": {
+                        "start": {"line": i, "character": indent + len("fn ")},
+                        "end": {"line": i, "character": indent + len("fn ") + len(name)},
+                    },
+                }
+                if agent_stack:
+                    agent_stack[-1].setdefault("children", []).append(fn_sym)
+                else:
+                    symbols.append(fn_sym)
+                continue
+
+            # Variable declarations (let/const/shared let)
+            m = re.match(r'(?:shared\s+)?(?:let|const|设|定义|常量)\s+(\w+)', stripped)
+            if m:
+                name = m.group(1)
+                var_sym = {
+                    "name": name,
+                    "kind": 13,  # Variable
+                    "range": {
+                        "start": {"line": i, "character": 0},
+                        "end": {"line": i, "character": len(line)},
+                    },
+                    "selectionRange": {
+                        "start": {"line": i, "character": indent + len(m.group(0)) - len(name)},
+                        "end": {"line": i, "character": indent + len(m.group(0))},
+                    },
+                }
+                if agent_stack:
+                    agent_stack[-1].setdefault("children", []).append(var_sym)
+                else:
+                    symbols.append(var_sym)
+                continue
+
+        # Clean up internal _indent keys before returning
+        def _clean(sym_dict: dict[str, Any]) -> dict[str, Any]:
+            sym_dict.pop("_indent", None)
+            for child in sym_dict.get("children", []):
+                _clean(child)
+            return sym_dict
+
+        return [_clean(s) for s in symbols]
 
     def _diagnostic(self, params: dict[str, Any]) -> dict[str, Any]:
         """Handle textDocument/diagnostic."""

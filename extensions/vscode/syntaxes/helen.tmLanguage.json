@@ -135,7 +135,7 @@
         },
         {
           "name": "keyword.agent.property.helen",
-          "match": "(?:\\b(?:description|model|tools|temperature|max-turns|streaming|prompt)\\b|描述|模型|工具|温度|最大轮次|流式输出|提示词)"
+          "match": "(?:\\b(?:description|model|tools|temperature|max-turns|streaming|prompt|transcript|resume)\\b|描述|模型|工具|温度|最大轮次|流式输出|提示词|记录|恢复会话)"
         },
         {
           "name": "keyword.decoration.helen",
