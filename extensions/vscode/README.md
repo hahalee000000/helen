@@ -1,7 +1,7 @@
 # Helen Language VS Code Extension
 
-[![Version](https://img.shields.io/badge/version-1.30.5-blue.svg)](https://github.com/hahalee00000/helen)
-[![Helen](https://img.shields.io/badge/Helen-v1.30.5-green.svg)](https://github.com/hahalee00000/helen)
+[![Version](https://img.shields.io/badge/version-1.30.6-blue.svg)](https://github.com/hahalee00000/helen)
+[![Helen](https://img.shields.io/badge/Helen-v1.30.6-green.svg)](https://github.com/hahalee00000/helen)
 
 VS Code extension for the [Helen Agent Programming Language](https://github.com/hahalee00000/helen) — a prompt-first AI-native DSL with 91 bilingual keywords, 333 built-in functions, and first-class LLM primitives.
 
@@ -55,12 +55,12 @@ cd extensions/vscode
 npm install
 npm run compile
 npm run package
-# Install the generated helen-language-1.30.5.vsix in VS Code
+# Install the generated helen-language-1.30.6.vsix in VS Code
 ```
 
 **Install from VS Code directly:**
 ```bash
-code --install-extension helen-language-1.30.5.vsix
+code --install-extension helen-language-1.30.6.vsix
 ```
 
 ### Windows Installation
@@ -94,7 +94,7 @@ npx vsce package
 
 **From VS Code directly:**
 ```bash
-code --install-extension helen-language-1.30.5.vsix
+code --install-extension helen-language-1.30.6.vsix
 ```
 
 ## Configuration
@@ -272,7 +272,7 @@ npm run compile
 
 ```bash
 npm run package
-# Creates helen-language-1.30.5.vsix
+# Creates helen-language-1.30.6.vsix
 ```
 
 ### Testing
