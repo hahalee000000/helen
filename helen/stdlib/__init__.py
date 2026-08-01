@@ -880,6 +880,9 @@ def _stream_clear() -> str:
 def _progress_bar(current: int, total: int, width: int = 40) -> str:
     """Display a progress bar with percentage.
 
+    Updates in place on the same line using carriage return (\r).
+    When progress reaches 100%, automatically moves to a new line.
+
     Args:
         current: Current progress value
         total: Total value (100% = total)
@@ -896,8 +899,15 @@ def _progress_bar(current: int, total: int, width: int = 40) -> str:
     filled = int(width * percentage / 100)
     bar = "█" * filled + "░" * (width - filled)
     result = f"\r[{bar}] {percentage:.0f}%"
-    sys.stdout.write(result)
+    # Pad with spaces to overwrite any residual characters from previous
+    # longer output (e.g. when percentage shrinks from 100% to 50%)
+    padding = " " * max(0, (width + 10) - len(result) + 2)
+    sys.stdout.write(result + padding)
     sys.stdout.flush()
+    # Auto-newline when complete so subsequent print() starts on a fresh line
+    if percentage >= 100.0:
+        sys.stdout.write("\n")
+        sys.stdout.flush()
     return result
 
 
