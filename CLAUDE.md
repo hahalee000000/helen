@@ -7,7 +7,7 @@ For the broader multi-project layout, see `../CLAUDE.md`.
 
 **Helen** — a prompt-first Agent programming language (AI-native DSL). Combines deterministic constructs (variables, functions, control flow) with first-class LLM primitives (`llm act`, `llm if`). 
 
-- **Version**: 1.30.7
+- **Version**: 1.30.8
 - **Keywords**: 91 bilingual (45 English + 46 Chinese)
 - **Built-in functions**: 333 stdlib functions (21 categories)
 - **Tests**: ~3300 passing (Python pytest)

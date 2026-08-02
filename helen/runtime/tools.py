@@ -258,9 +258,11 @@ def _shell_exec(command: str, timeout: int = 120, shell: bool = True) -> str:
         executable = None
         if shell and sys.platform != "win32":
             executable = "/bin/bash"
+        # Use UTF-8 encoding with error replacement to handle mixed encodings on Windows
         result = subprocess.run(
             cmd, shell=shell, capture_output=True, text=True,
             timeout=timeout, executable=executable,
+            encoding="utf-8", errors="replace",
         )
         output = result.stdout
         # Truncate if too long
@@ -298,9 +300,11 @@ def _shell_exec_full(command: str, timeout: int = 30, shell: bool = True) -> str
         executable = None
         if shell and sys.platform != "win32":
             executable = "/bin/bash"
+        # Use UTF-8 encoding with error replacement to handle mixed encodings on Windows
         result = subprocess.run(
             cmd, shell=shell, capture_output=True, text=True,
             timeout=timeout, executable=executable,
+            encoding="utf-8", errors="replace",
         )
         output = result.stdout
         if result.stderr:

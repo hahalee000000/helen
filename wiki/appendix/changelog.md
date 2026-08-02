@@ -1,6 +1,18 @@
 # 版本历史
 
-> Helen v1.30.7 | 跨平台支持：Windows/macOS/Linux 统一启动器 + stdlib 替代 shell 命令
+> Helen v1.30.8 | 修复 Windows 编码问题：shell_exec 使用 UTF-8 + errors=replace
+
+---
+
+## v1.30.8: Windows 编码修复
+
+**发布日期**: 2026-08-02
+**修复**: `shell_exec()` 在 Windows 上遇到非 GBK 字符时崩溃的问题
+
+### 变更
+
+- `helen/runtime/tools.py`: `subprocess.run()` 添加 `encoding="utf-8", errors="replace"` 参数
+- 修复 `UnicodeDecodeError: 'gbk' codec can't decode byte ...` 错误
 
 ---
 
