@@ -1,6 +1,31 @@
 # 版本历史
 
-> Helen v1.30.9 | 修复 `helen test` 创建空 session 目录的问题
+> Helen v1.30.10 | 修复 start_webui.py 使用错误的 Python 解释器导致会话历史丢失
+
+---
+
+## v1.30.10: 修复 start_webui.py Python 解释器问题
+
+**发布日期**: 2026-08-02
+**修复**: `start_webui.py` 使用与 `start-backend.sh` 相同的 Python 查找策略
+
+### 变更
+
+- `helen/agent/webui/start_webui.py`: 新增 `find_helen_python()` 函数
+  - 优先使用 `HELEN_VENV` 环境变量
+  - 回退到 `~/.venv`（共享虚拟环境）
+  - 最后使用 `sys.executable`
+- 修复问题：`start_webui.py` 使用 `sys.executable`（可能是不同的 Python），导致后端无法访问 Helen，会话历史无法恢复
+
+### 问题根因
+
+`start-backend.sh` 使用 `$HELEN_VENV/bin/python`（Helen 安装所在的 Python）。
+`start_webui.py` 使用 `sys.executable`（运行脚本的 Python，可能不同）。
+
+当两者不一致时，后端进程无法 import Helen，导致：
+- TranscriptStore 无法正确初始化
+- 会话历史无法恢复
+- `resume_session()` 失败但不报错
 
 ---
 

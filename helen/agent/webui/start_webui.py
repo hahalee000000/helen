@@ -51,11 +51,48 @@ def cleanup_all() -> None:
     terminate_process_tree(_frontend_proc)
 
 
+def find_helen_python() -> str:
+    """Find the Python executable where Helen is installed.
+
+    Tries (in order):
+    1. HELEN_VENV environment variable (set by user or start-backend.sh)
+    2. ~/.venv (shared venv used by start-backend.sh)
+    3. Current sys.executable (fallback)
+    """
+    import sys
+    from pathlib import Path
+
+    # Check HELEN_VENV env var
+    helen_venv = os.environ.get("HELEN_VENV")
+    if helen_venv:
+        venv_path = Path(helen_venv)
+        if IS_WINDOWS:
+            python = venv_path / "Scripts" / "python.exe"
+        else:
+            python = venv_path / "bin" / "python"
+        if python.exists():
+            return str(python)
+
+    # Check default shared venv (~/.venv)
+    home_venv = Path.home() / ".venv"
+    if home_venv.exists():
+        if IS_WINDOWS:
+            python = home_venv / "Scripts" / "python.exe"
+        else:
+            python = home_venv / "bin" / "python"
+        if python.exists():
+            return str(python)
+
+    # Fallback to current Python
+    return sys.executable
+
+
 def start_backend(backend_dir: Path, env: dict) -> subprocess.Popen:
     """Start the FastAPI backend server."""
     global _backend_proc
 
     user_cwd = env.get("HELEN_WEBUI_CWD", str(Path.cwd()))
+    helen_python = find_helen_python()
 
     backend_env = env.copy()
 
@@ -75,6 +112,7 @@ def start_backend(backend_dir: Path, env: dict) -> subprocess.Popen:
         backend_env["ENV_FILE"] = str(env_file)
 
     print("🔧 Starting backend...")
+    print(f"   Python: {helen_python}")
     print("   Backend:  http://localhost:8000")
     print("   API Docs: http://localhost:8000/docs")
 
@@ -96,7 +134,7 @@ def start_backend(backend_dir: Path, env: dict) -> subprocess.Popen:
     preexec_fn = None if IS_WINDOWS else os.setsid
 
     _backend_proc = subprocess.Popen(
-        [sys.executable, "-c", backend_code],
+        [helen_python, "-c", backend_code],
         cwd=str(backend_dir),
         env=backend_env,
         creationflags=creationflags,
