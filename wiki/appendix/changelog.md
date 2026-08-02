@@ -1,6 +1,86 @@
 # 版本历史
 
-> Helen v1.29.17 | PyPI 已发布 — `pip install helen-lang` — Session 作用域解析 + `.helen/` 自动创建 + 项目标记修复
+> Helen v1.30.7 | 跨平台支持：Windows/macOS/Linux 统一启动器 + stdlib 替代 shell 命令
+
+---
+
+## v1.30.7: Windows/macOS/Linux 跨平台支持
+
+**发布日期**: 2026-08-02
+**核心特性**: Helen agent 全面跨平台支持；统一 Python 启动器替代 bash 脚本；agent 代码 stdlib 化
+
+### 主要变更
+
+#### 1. 跨平台启动器（`start_webui.py`）
+
+新增 `helen/agent/webui/start_webui.py`，统一 Windows/macOS/Linux 启动流程：
+
+- **单一 Python 入口**：替代 `start-web.sh`、`start-backend.sh`、`start-frontend.sh`
+- **无 bash 依赖**：Windows 无需 Git Bash 或 WSL
+- **进程树管理**：Windows 用 `taskkill /T /PID`，Unix 用 `os.killpg`
+- **优雅退出**：退出码 0 静默退出，非 0 才显示警告
+
+`helen/cli/agent_launcher.py` 简化为 ~180 行（原 ~390 行），统一调用 `start_webui.py`。
+
+#### 2. 跨平台辅助函数（`utils.helen`）
+
+新增两个共享函数：
+
+- **`get_cwd()`**：跨平台获取工作目录。优先读 `HELEN_WEBUI_CWD` 环境变量，回退到 `cd`（Windows）或 `pwd`（Unix）
+- **`get_home()`**：跨平台获取主目录。Unix 用 `$HOME`，Windows 用 `$USERPROFILE`
+
+#### 3. Agent 代码 stdlib 化
+
+所有 `.helen` agent 文件改用 stdlib 函数替代 Unix shell 命令：
+
+| 原 Unix 命令 | stdlib 替代 |
+|-------------|------------|
+| `shell_exec("pwd")` | `get_cwd()` |
+| `shell_exec("echo $HOME")` | `get_home()` |
+| `shell_exec("date +%s")` | `time()` |
+| `shell_exec("date +%Y-%m-%d")` | `date()` |
+| `shell_exec("uname -s")` | `platform()` |
+| `shell_exec("echo $VAR")` | `env_get("VAR", "")` |
+| `shell_exec("export X=y")` | `env_set("X", "y")` |
+| `shell_exec("rm -f ...")` | `delete_file(...)` |
+| `shell_exec("rm -rf ...")` | `delete_dir(..., recursive=true)` |
+| `shell_exec("mv a b")` | `move_file(a, b)` |
+| `shell_exec("echo $RANDOM")` | `random()` |
+
+#### 4. Python runtime 跨平台修复
+
+- **`runtime/tools.py`**：`shell_exec()` 不再硬编码 `/bin/bash`；Unix 用 bash，Windows 用默认 shell
+- **`stdlib/__init__.py:_debug()`**：新增 `HELEN_DEBUG` 环境变量控制。设为 `0/false/no/off` 时禁用 debug 输出。agent 启动默认 `HELEN_DEBUG=0`
+
+#### 5. 修改的文件
+
+**Python**:
+- `helen/cli/agent_launcher.py` — 简化为统一调用 `start_webui.py`
+- `helen/agent/webui/start_webui.py` — **新增**跨平台启动器
+- `helen/runtime/tools.py` — 跨平台 shell 执行
+- `helen/stdlib/__init__.py` — `debug()` 支持 `HELEN_DEBUG` 环境变量
+
+**Helen**:
+- `helen/agent/utils.helen` — 新增 `get_cwd()`, `get_home()`
+- `helen/agent/chat_tui.helen` — 使用 `get_cwd()`
+- `helen/agent/context.helen` — stdlib 化（`date()`, `platform()`, `get_cwd()`, `get_home()`, `env_get()`）
+- `helen/agent/context_manager.helen` — stdlib 化（`date()`, `now()`, `get_cwd()`）
+- `helen/agent/session_stats.helen` — 使用 `time()`
+- `helen/agent/output.helen` — 使用 `time()`, `env_get()`
+- `helen/agent/ui_event_queue.helen` — 使用 `time()`
+- `helen/agent/commands.helen` — 使用 `delete_file()`, `delete_dir()`
+- `helen/agent/task_manager.helen` — 使用 `now()`, `delete_file()`, 跨平台 `mklink`/`ln -s`
+- `helen/agent/chat_session_actor.helen` — 使用 `move_file()`
+- `helen/agent/tests/benchmark.helen` — 使用 `time()`
+
+**Wiki/Skills**:
+- `wiki/toolchain/cli.md` — 更新启动说明
+- `wiki/tutorial/18-helen-agent.md` — 新增跨平台章节
+- `wiki/appendix/changelog.md` — 本条目
+- `helen/skills/software-development/helen-agent-collaboration/SKILL.md` — 示例改用 `get_cwd()`
+- `helen/skills/software-development/helen-stdlib/SKILL.md` — 新增跨平台替代说明
+- `helen/skills/software-development/helen-programming-methodology/SKILL.md` — 示例改用 `mkdir_p()`
+- `helen/skills/README.md` — 示例改用 `mkdir_p()`
 
 ---
 

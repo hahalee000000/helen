@@ -511,7 +511,8 @@ The most common orchestrator mistake: **holding ground-truth facts but not injec
 // ✅ Orchestrator resolves ground truth once, fans out via {{}}
 agent Orchestrator(task: str) {
     main {
-        let cwd = shell_exec("pwd")
+        // Cross-platform (v1.30.7+): use get_cwd() from utils.helen
+        let cwd = get_cwd()
         let git_branch = shell_exec("git branch --show-current")
         let now = now()
         return Worker(task, cwd, git_branch, now)
@@ -528,6 +529,8 @@ agent Worker(task: str, cwd: str, branch: str, now: str) {
     main { return llm act }
 }
 ```
+
+> **Cross-platform note (v1.30.7+):** `get_cwd()` is defined in `utils.helen` and works on Windows, macOS, and Linux. It reads `HELEN_WEBUI_CWD` env var first, then falls back to `cd` (Windows) or `pwd` (Unix). Avoid `shell_exec("pwd")` directly — it fails on Windows.
 
 Principle: **Whoever owns the facts is responsible for injecting them**. A shared `shared store` works for mutable state, but immutable facts like time/OS/path are cheapest and least error-prone passed directly into the prompt via `{{}}`. See **helen-agent-patterns § Best Practice 7** for details.
 

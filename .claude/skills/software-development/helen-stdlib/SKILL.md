@@ -393,14 +393,26 @@ main {
     }
     let config = parse_cli_args(spec)       // Structured parsing (with types + defaults)
 
-    // Shell commands (default shell=true, uses /bin/bash, supports full shell syntax)
-    let result = shell_exec("ls -la")
-    let result = shell_exec("mkdir -p ~/project/{src,tests,contracts}")
-    let result = shell_exec("cat file.txt | grep pattern | wc -l")
+    // Shell commands (default shell=true)
+    // On Unix: uses /bin/bash; on Windows (v1.30.7+): uses default shell (cmd.exe)
+    let result = shell_exec("ls -la")               // Unix only
+    let result = shell_exec("mkdir -p ~/project/{src,tests,contracts}")  // Unix only
+    let result = shell_exec("cat file.txt | grep pattern | wc -l")       // Unix only
     print(result["output"])
 
     // Safe mode: use shell=false when handling untrusted input to prevent shell injection
     let result = shell_exec("echo " + user_input, shell=false)
+
+    // Cross-platform alternatives (v1.30.7+): prefer stdlib over shell when possible
+    // get_cwd()         instead of shell_exec("pwd")
+    // date()            instead of shell_exec("date +%Y-%m-%d")
+    // time()            instead of shell_exec("date +%s")
+    // now()             instead of shell_exec("date '+%Y-%m-%d %H:%M:%S'")
+    // env_get("HOME", "") instead of shell_exec("echo $HOME")
+    // env_set("X", "y")  instead of shell_exec("export X=y")
+    // delete_file(path)  instead of shell_exec("rm -f path")
+    // delete_dir(path, recursive=true) instead of shell_exec("rm -rf path")
+    // move_file(a, b)    instead of shell_exec("mv a b")
 
     // System info
     let pid = pid()                   // Process ID
@@ -484,7 +496,7 @@ main {
     context_stats()                       // {message_count, total_tokens, system_tokens, ...}
     context_usage()                       // 0.0-1.0 usage ratio
     let usage = context_usage()
-    if usage > 0.8 { compress_context("auto") }
+    if usage > 0.6 { compress_context("auto") }
     get_message(uuid)                     // Get a single message
 
     // Fine-grained Mutation

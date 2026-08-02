@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+IS_WINDOWS = sys.platform == "win32"
+
 
 def check_nodejs() -> bool:
     """Check if Node.js is installed."""
@@ -13,9 +15,10 @@ def check_nodejs() -> bool:
             ["node", "--version"],
             capture_output=True,
             text=True,
+            shell=IS_WINDOWS,  # node.exe works without shell, but keep consistent
         )
         return result.returncode == 0
-    except FileNotFoundError:
+    except (FileNotFoundError, OSError):
         return False
 
 
@@ -47,22 +50,37 @@ def check_agent_dependencies() -> tuple[bool, list[str]]:
 
 
 def check_node_modules(agent_dir: Path) -> bool:
-    """Check if frontend node_modules exists."""
+    """Check if frontend node_modules exists and is usable."""
     frontend_dir = agent_dir / "webui" / "frontend"
     node_modules = frontend_dir / "node_modules"
-    return node_modules.exists()
+    if not node_modules.exists():
+        return False
+    # Verify key binary exists (incomplete installs leave empty node_modules)
+    if IS_WINDOWS:
+        vite_bin = node_modules / ".bin" / "vite.cmd"
+    else:
+        vite_bin = node_modules / ".bin" / "vite"
+    return vite_bin.exists()
 
 
 def install_node_modules(agent_dir: Path) -> bool:
     """Install frontend dependencies."""
     frontend_dir = agent_dir / "webui" / "frontend"
     print("📦 Installing frontend dependencies...")
-    result = subprocess.run(
-        ["npm", "install"],
-        cwd=frontend_dir,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        # shell=True is required on Windows: npm is a .cmd batch file,
+        # and CreateProcess can only resolve direct executables without it.
+        result = subprocess.run(
+            ["npm", "install"],
+            cwd=frontend_dir,
+            capture_output=True,
+            text=True,
+            shell=IS_WINDOWS,
+        )
+    except (FileNotFoundError, OSError) as e:
+        print(f"❌ Failed to run npm: {e}")
+        print("   Make sure Node.js is installed: https://nodejs.org/")
+        return False
     if result.returncode != 0:
         print(f"❌ Error installing node modules:")
         print(result.stderr)
@@ -72,7 +90,7 @@ def install_node_modules(agent_dir: Path) -> bool:
 
 
 def launch_agent():
-    """Launch helenagent Web UI."""
+    """Launch Helen Web UI (cross-platform)."""
     print("=" * 60)
     print("🚀 Helen Programming Assistant")
     print("=" * 60)
@@ -140,7 +158,7 @@ def launch_agent():
         print("Example:")
         print("  llm:")
         print('    base_url: "https://api.openai.com/v1"')
-        print('    api_key: "your-api-key"')
+        print('    api_key: "your-key"')
         print('    model: "gpt-4"')
         print()
         response = input("Continue anyway? [y/N] ")
@@ -148,52 +166,66 @@ def launch_agent():
             return 1
         print()
 
-    # Launch Web UI
-    start_script = agent_dir / "start-web.sh"
+    # Launch Web UI using cross-platform Python script
+    start_script = agent_dir / "webui" / "start_webui.py"
     if not start_script.exists():
-        print("❌ Error: start-web.sh not found")
+        print("❌ Error: start_webui.py not found")
         return 1
+
+    # Pass user's current directory to the Web UI
+    # This ensures the Web UI uses the user's project directory, not the agent directory
+    env = os.environ.copy()
+    env["HELEN_WEBUI_CWD"] = str(Path.cwd())
 
     print("✅ Starting Helen programming assistant...")
     print()
 
-    # Pass user's current directory to start-web.sh
-    # This ensures the Web UI uses the user's project directory, not the agent directory
-    import os
-    env = os.environ.copy()
-    env["HELEN_WEBUI_CWD"] = str(Path.cwd())
-
     try:
-        # Use Popen with process group to enable signal forwarding
-        # This prevents orphan processes when helen agent is killed
-        proc = subprocess.Popen(
-            ["bash", str(start_script)],
-            cwd=agent_dir,
-            env=env,
-            preexec_fn=os.setsid,  # Create new process group
-        )
+        if IS_WINDOWS:
+            # On Windows, use CREATE_NEW_PROCESS_GROUP for proper process management
+            proc = subprocess.Popen(
+                [sys.executable, str(start_script)],
+                cwd=str(agent_dir),
+                env=env,
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+            )
+        else:
+            # On Unix, use process group for signal forwarding
+            proc = subprocess.Popen(
+                [sys.executable, str(start_script)],
+                cwd=str(agent_dir),
+                env=env,
+                preexec_fn=os.setsid,
+            )
 
-        # Signal forwarding: forward SIGTERM/SIGINT to the entire process group
-        def forward_signal(signum, frame):
-            try:
-                # Send signal to the entire process group
-                os.killpg(os.getpgid(proc.pid), signum)
-            except ProcessLookupError:
-                # Process already exited
-                pass
+            # Signal forwarding: forward SIGTERM/SIGINT to the entire process group
+            def forward_signal(signum, frame):
+                try:
+                    os.killpg(os.getpgid(proc.pid), signum)
+                except ProcessLookupError:
+                    pass
 
-        # Register signal handlers
-        signal.signal(signal.SIGTERM, forward_signal)
-        signal.signal(signal.SIGINT, forward_signal)
+            signal.signal(signal.SIGTERM, forward_signal)
+            signal.signal(signal.SIGINT, forward_signal)
 
         try:
-            # Wait for the process to complete
             proc.wait()
             return proc.returncode
         except KeyboardInterrupt:
-            # Ctrl+C pressed - forward SIGINT to process group
-            forward_signal(signal.SIGINT, None)
-            proc.wait()
+            if IS_WINDOWS:
+                # On Windows, terminate the process tree
+                try:
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                        capture_output=True,
+                        timeout=10,
+                    )
+                except (subprocess.TimeoutExpired, OSError):
+                    pass
+            else:
+                # On Unix, forward SIGINT to process group
+                forward_signal(signal.SIGINT, None)
+                proc.wait()
             print("\n👋 Helen agent stopped")
             return 0
     except Exception as e:

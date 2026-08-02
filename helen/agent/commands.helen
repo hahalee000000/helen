@@ -226,7 +226,7 @@ fn _cmd_clear_session(args: list): str {
             // 清除 current_session_id 文件，强制下次调用创建新 session
             try {
                 if path_exists(".helen/current_session_id") {
-                    shell_exec("rm -f .helen/current_session_id")
+                    delete_file(".helen/current_session_id")  // 跨平台：用 stdlib
                 }
             } catch {
                 // 清除文件失败不影响主流程
@@ -615,8 +615,15 @@ fn _cmd_cleanup_sessions(): str {
                 continue
             }
 
-            // 删除目录
-            let rm_result = shell_exec("rm -rf " + path_join(session_dir, name))
+            // 删除目录（跨平台：用 stdlib delete_dir）
+            let target_path = path_join(session_dir, name)
+            try {
+                delete_dir(target_path, recursive=true)
+            } catch {
+                // 删除失败，计数为错误
+                errors = errors + 1
+                continue
+            }
             deleted = deleted + 1
         } catch {
             errors = errors + 1

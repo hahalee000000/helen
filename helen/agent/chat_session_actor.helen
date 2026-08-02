@@ -655,7 +655,7 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
             let final_path = "./.helen/skills/SKILL_INDEX.md"
             try {
                 write_file(temp_path, result)
-                shell_exec("mv " + temp_path + " " + final_path)
+                move_file(temp_path, final_path)  // 跨平台：用 stdlib
             } catch {
                 try {
                     write_file(final_path, result)

@@ -452,9 +452,19 @@ def _debug(message: str, data: Any = None) -> str:
 
     Returns:
         The formatted debug string.
+
+    Note:
+        Set HELEN_DEBUG=0 or HELEN_DEBUG=false to disable debug output.
+        By default, debug output is enabled.
     """
     import json
+    import os
     import sys
+
+    # Check if debug output is disabled
+    debug_enabled = os.environ.get("HELEN_DEBUG", "1")
+    if debug_enabled.lower() in ("0", "false", "no", "off"):
+        return ""
 
     if data is not None:
         try:

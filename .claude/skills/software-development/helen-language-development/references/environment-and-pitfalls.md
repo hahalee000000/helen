@@ -149,7 +149,7 @@ agent KnowledgeAssistant(query: str) {
 
 **Pitfall**: Large knowledge bases may exceed LLM context limits. Helen now has automatic context window protection (HLD 3.12):
 - History is auto-trimmed to fit model's context window (model-aware lookup for 40+ models)
-- When history exceeds 80% of context window, old messages are compressed into a summary
+- When history exceeds 60% of context window, old messages are compressed into a summary
 - API context-too-large errors auto-retry with message trimming
 - Tool results per turn capped at `MAX_TOOL_RESULTS_PER_TURN = 10`
 

@@ -439,12 +439,28 @@ The entire agent behavior lives in `.helen` files under `helen/agent/`. The Pyth
 
 ### What Happens at Startup
 
-1. `helen/cli/agent_launcher.py` resolves the current working directory
-2. If no `.helen/` marker exists in `cwd` or ancestors, it creates one (since v1.29.16)
-3. The Web UI backend (`chat_tui_web.py`) is spawned as a child process
-4. Signals (Ctrl+C, SIGTERM) are forwarded to the child; orphan processes are detected and cleaned up (since v1.29.7)
+1. `helen/cli/agent_launcher.py` checks Node.js and Python dependencies
+2. Resolves the current working directory, sets `HELEN_WEBUI_CWD` env var
+3. Spawns `helen/agent/webui/start_webui.py` (cross-platform Python launcher)
+4. `start_webui.py` starts the FastAPI backend and Vite frontend
 5. `chat_tui.helen` imports `ChatSessionActor`, spawns it as a long-lived actor
 6. The actor's `main {}` loop pulls requests from a Channel mailbox and dispatches to the LLM
+
+### Cross-Platform Support (v1.30.7+)
+
+The agent launcher works on **Windows, macOS, and Linux**:
+
+- **Single Python launcher**: `start_webui.py` replaces platform-specific bash scripts
+- **No bash dependency**: Windows works without Git Bash or WSL
+- **`get_cwd()` helper**: Cross-platform working directory detection (env var + platform fallback)
+- **stdlib over shell**: Agent code uses `time()`, `date()`, `env_get()`, `delete_file()` etc. instead of Unix shell commands
+
+To enable debug output (hidden by default):
+
+```bash
+HELEN_DEBUG=1 helen agent          # Unix
+set HELEN_DEBUG=1 && helen agent   # Windows
+```
 
 ### Session Memento
 
@@ -458,9 +474,13 @@ Older plain-string mementos are also accepted. See [Session Scoping](../runtime/
 
 ### Web UI
 
-The Web UI is served by FastAPI + React. Start it from `helen/agent/webui/`:
+The Web UI is served by FastAPI + React. It is started automatically by `helen agent`, or can be started directly:
 
 ```bash
+# Via Python launcher (cross-platform, recommended)
+python helen/agent/webui/start_webui.py
+
+# Or via bash scripts (Unix only, legacy)
 cd helen/agent/webui
 ./start-all.sh        # backend + frontend
 ```

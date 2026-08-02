@@ -18,12 +18,13 @@ fn collect_all_facts(): map {
     let facts = {}
 
     // ── 环境层（所有应用通用）──
-    facts["current_date"] = strip(shell_exec("date +%Y-%m-%d"))
-    facts["platform"] = lower(strip(shell_exec("uname -s")))
-    facts["user"] = strip(shell_exec("whoami"))
-    facts["cwd"] = strip(shell_exec("pwd"))
-    facts["home"] = strip(shell_exec("echo $HOME"))
-    facts["shell"] = strip(shell_exec("echo $SHELL"))
+    // 跨平台：使用 stdlib 代替 shell 命令
+    facts["current_date"] = date()  // 返回 "YYYY-MM-DD"
+    facts["platform"] = platform()  // 返回 "linux", "darwin", "windows"
+    facts["user"] = strip(shell_exec("whoami"))  // whoami 跨平台可用
+    facts["cwd"] = get_cwd()
+    facts["home"] = get_home()
+    facts["shell"] = _detect_shell()
 
     // session_id：优先用 stdlib，失败则 shell 生成
     facts["session_id"] = _safe_session_id()
@@ -43,12 +44,12 @@ fn collect_all_facts(): map {
 
 /** 收集项目层事实子集（用于 specialist agents） */
 fn collect_project_facts(): map {
-    let cwd = strip(shell_exec("pwd"))
+    let cwd = get_cwd()
     let facts = {}
     facts["project_root"] = cwd
     facts["project_type"] = _detect_project_type(cwd)
     facts["helen_version"] = detect_helen_version()  // 动态检测
-    facts["current_date"] = strip(shell_exec("date +%Y-%m-%d"))
+    facts["current_date"] = date()
     return facts
 }
 
@@ -111,14 +112,29 @@ fn _safe_session_id(): str {
         let sid = get_session_id()
         if sid != null && sid != "" { return sid }
     } catch { }
-    // 回退：shell 生成
-    let ts = strip(shell_exec("date +%s"))
-    let rand = strip(shell_exec("echo $RANDOM"))
+    // 回退：用 stdlib 生成（跨平台）
+    let ts = str(int(time()))
+    let rand = str(int(random() * 99999))
     return "session_" + ts + "_" + rand
 }
 
+/** 跨平台检测 shell 类型 */
+fn _detect_shell(): str {
+    // Unix: $SHELL 环境变量
+    let shell = env_get("SHELL", "")
+    if shell != "" { return shell }
+    // Windows: $ComSpec 或默认 cmd.exe
+    let comspec = env_get("ComSpec", "")
+    if comspec != "" { return comspec }
+    if platform() == "windows" { return "cmd.exe" }
+    return "/bin/sh"
+}
+
 fn _detect_locale(): str {
-    let lang = strip(shell_exec("echo $LANG"))
+    // 跨平台：尝试多个环境变量
+    let lang = env_get("LANG", "")
+    if lang == "" { lang = env_get("LANGUAGE", "") }
+    if lang == "" { lang = env_get("LC_ALL", "") }
     if contains(lang, "zh") { return "zh-CN" }
     if contains(lang, "en") { return "en-US" }
     if contains(lang, "ja") { return "ja-JP" }

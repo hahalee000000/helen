@@ -122,12 +122,12 @@ fn generate_task_id(requirement: str = "", project_name: str = ""): str {
     return name
 }
 
-/** 获取当前时间戳字符串 */
+/** 获取当前时间戳字符串（跨平台） */
 fn get_current_time(): str {
-    let time_str = shell_exec("date '+%Y-%m-%d %H:%M:%S'")
-    // 移除换行符
-    let parts = split(time_str, "\n")
-    return parts[0]
+    // 用 stdlib now() 返回 "YYYY-MM-DDTHH:MM:SS"，转换为 "YYYY-MM-DD HH:MM:SS"
+    let now_str = now()
+    // 将 'T' 替换为空格
+    return replace(now_str, "T", " ")
 }
 
 /** 创建任务目录结构 */
@@ -149,12 +149,22 @@ fn create_task_directory(project_dir: str, task_id: str): str {
     let readme_content = "# " + task_id + "\n\n创建时间: " + current_time + "\n"
     write_file(task_dir + "/README.md", readme_content)
 
-    // 更新 latest 符号链接
+    // 更新 latest 符号链接（跨平台处理）
     let latest_link = project_dir + "/latest"
     if path_exists(latest_link) {
-        shell_exec("rm -f " + latest_link)
+        try {
+            delete_file(latest_link)  // 跨平台：用 stdlib
+        } catch {
+            // 删除失败继续
+        }
     }
-    shell_exec("ln -s " + task_id + " " + latest_link)
+    // 创建符号链接：Unix 用 ln -s，Windows 用 mklink /D
+    if platform() == "windows" {
+        // Windows mklink 需要 cmd /c
+        shell_exec("cmd /c mklink /D \"" + latest_link + "\" \"" + task_id + "\"")
+    } else {
+        shell_exec("ln -s " + task_id + " " + latest_link)
+    }
 
     return task_dir
 }

@@ -17,10 +17,42 @@
 //    - 业务逻辑（→ 放到对应的 agent 或编排模块）
 //
 // 当前内容：
+//    - get_cwd / get_home: 跨平台路径获取
 //    - validate_path: 路径安全性验证（防 shell 注入）
 //    - ensure_python_path: Python FFI 环境设置
 //    - detect_helen_version / safe_git_branch / check_git_dirty: 环境事实检测
 //
+
+// ── 跨平台辅助函数 ──
+
+/** 跨平台获取当前工作目录
+ *
+ * 优先使用 HELEN_WEBUI_CWD 环境变量（由 agent_launcher.py 在 Windows/Linux 统一设置）。
+ * 回退到平台特定的 shell 命令：Windows 用 `cd`，Unix 用 `pwd`。
+ *
+ * 为什么不用 `shell_exec("pwd")`：Windows 没有 pwd 命令，会返回错误字符串。
+ */
+fn get_cwd(): str {
+    let env_cwd = env_get("HELEN_WEBUI_CWD", "")
+    if env_cwd != "" {
+        return env_cwd
+    }
+    if platform() == "windows" {
+        return strip(shell_exec("cd"))
+    }
+    return strip(shell_exec("pwd"))
+}
+
+/** 跨平台获取用户主目录
+ *
+ * Unix: $HOME
+ * Windows: $USERPROFILE 或 $HOME
+ */
+fn get_home(): str {
+    let home = env_get("HOME", "")
+    if home != "" { return home }
+    return env_get("USERPROFILE", "")
+}
 
 /** 验证文件路径安全性，防止 shell 注入。
  *  只允许字母数字、点、下划线、短横线、斜杠。
@@ -41,14 +73,18 @@ fn validate_path(path: str): str {
 /** 确保 PYTHONPATH 包含当前目录（用于 Python FFI 导入 ui 模块）。
  *  幂等：多次调用安全。 */
 fn ensure_python_path() {
-    let cwd = strip(shell_exec("pwd"))
-    let python_path = strip(shell_exec("echo $PYTHONPATH"))
+    let cwd = get_cwd()
+    let python_path = env_get("PYTHONPATH", "")
     if !contains(python_path, cwd) {
         let new_path = cwd
         if len(python_path) > 0 {
-            new_path = cwd + ":" + python_path
+            if platform() == "windows" {
+                new_path = cwd + ";" + python_path
+            } else {
+                new_path = cwd + ":" + python_path
+            }
         }
-        shell_exec("export PYTHONPATH=" + new_path)
+        env_set("PYTHONPATH", new_path)
     }
 }
 
@@ -59,7 +95,10 @@ fn ensure_python_path() {
 fn detect_helen_version(): str {
     // 优先:helen --version 命令(输出格式 "Helen 1.27.1")
     try {
-        let out = strip(shell_exec("helen --version 2>/dev/null"))
+        // 跨平台：Windows 用 NUL，Unix 用 /dev/null
+        let null_dev = "/dev/null"
+        if platform() == "windows" { null_dev = "NUL" }
+        let out = strip(shell_exec("helen --version 2>" + null_dev))
         let marker = "Helen "
         let start = find(out, marker)
         if start >= 0 {
@@ -70,7 +109,7 @@ fn detect_helen_version(): str {
     } catch { }
     // 兜底 1:从 ~/helen/wiki/appendix/changelog.md 读取
     try {
-        let home = strip(shell_exec("echo $HOME"))
+        let home = get_home()
         let changelog = path_join(home, "helen", "wiki", "appendix", "changelog.md")
         if path_exists(changelog) {
             let content = read_file(changelog)

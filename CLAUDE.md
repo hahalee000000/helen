@@ -5,13 +5,21 @@ For the broader multi-project layout, see `../CLAUDE.md`.
 
 ## Overview
 
-**Helen** — a prompt-first Agent programming language (AI-native DSL). Combines deterministic constructs (variables, functions, control flow) with first-class LLM primitives (`llm act`, `llm if`). 91 bilingual keywords (45 English + 46 Chinese), 333 built-in functions, 3308 tests.
+**Helen** — a prompt-first Agent programming language (AI-native DSL). Combines deterministic constructs (variables, functions, control flow) with first-class LLM primitives (`llm act`, `llm if`). 
+
+- **Version**: 1.30.7
+- **Keywords**: 91 bilingual (45 English + 46 Chinese)
+- **Built-in functions**: 333 stdlib functions (21 categories)
+- **Tests**: ~3300 passing (Python pytest)
+- **Python**: 3.12+ required
 
 ## Development Commands
 
 ```bash
-uv pip install -e .                 # Install in editable mode (Python 3.12+, using uv)
-uv pip install -e ".[dev]"          # Install dev dependencies (pytest, flake8)
+# Installation
+uv pip install -e .                 # Install in editable mode
+uv pip install -e ".[dev]"          # Install with dev dependencies (pytest, flake8)
+uv pip install -e ".[all]"          # Install all optional features
 
 # Running programs
 helen <file.helen>              # Execute a Helen program
@@ -19,8 +27,9 @@ helen check <file.helen>        # Validate syntax/semantics without executing
 helen repl                      # Interactive REPL
 
 # Testing
-pytest                              # Run all 3308 tests
+pytest                              # Run all tests
 pytest tests/core/                  # Run tests for a specific module
+pytest tests/core/test_lexer.py::test_name  # Run a single test
 helen test <file.helen>             # Run Helen's built-in test framework
 
 # Quality & tooling
@@ -29,6 +38,20 @@ helen quality <file.helen>          # 7-dimension quality assessment
 helen doc <file.helen>              # Generate documentation
 helen lsp                           # Start Language Server (JSON-RPC over stdio)
 ```
+
+## Code Intelligence with codebase-memory-mcp
+
+**Default to using codebase-memory-mcp tools** for code exploration, debugging, and maintenance instead of manual grep/glob/read.
+
+Available tools (in priority order):
+- `search_graph` — Find functions, classes, variables (use instead of Grep for definitions)
+- `trace_path` — Trace callers/callees, data flow, cross-service paths
+- `get_code_snippet` — Read specific function/class source (use instead of Read for targeted code)
+- `query_graph` — Cypher queries for complex patterns (call chains, dependencies, hot paths)
+- `get_architecture` — High-level architecture overview
+- `search_code` — Graph-augmented code search (text pattern + structural ranking)
+
+Project name: `C-Users-rxx-helen`
 
 ## Architecture (3-layer pipeline)
 
@@ -47,21 +70,25 @@ Layer 3: Toolchain
   LSP (diagnostics, completion, go-to-definition, alias-aware)
 ```
 
+**Key architectural boundaries** (from codebase graph):
+- `execution` → `core` (443 calls): test execution depends heavily on core
+- `semantic` → `core` (309 calls): semantic analysis built on core
+- `stdlib` → `runtime` (266 calls): stdlib functions integrate with runtime
+- `interpreter` → `runtime` (237 calls): interpreter uses runtime for LLM
+
 ## Key Source Layout
 
 ```
 helen/
 ├── core/          # lexer.py, parser.py, ast.py, tokens.py, errors.py, source_span.py
 ├── semantic/      # analyzer.py (two-pass semantic analysis)
-├── interpreter/   # interpreter.py, llm_mixin.py, environment.py, exceptions.py
-│                  # pattern_mixin.py, exception_mixin.py, import_mixin.py, streaming_mixin.py
-│                  # closure.py, readonly_view.py, shared_store.py
+├── interpreter/   # interpreter.py + mixins (llm, pattern, exception, import, streaming)
+│                  # environment.py, exceptions.py, closure.py, readonly_view.py, shared_store.py
 ├── runtime/       # llm_runtime.py, http_llm.py, tools.py, config.py, import_resolver.py
 │                  # prompt_builder.py, history.py, observability.py, fuzzy_match.py
 │                  # transcript_store.py, session_manager.py, channel.py
 ├── stdlib/        # 333 built-in functions (21 categories)
-│                  # locales/zh.py (333 Chinese aliases)
-│                  # mailbox.py (v1.18: mailbox_select)
+│                  # locales/zh.py (Chinese aliases), mailbox.py (v1.18: mailbox_select)
 ├── ffi/           # Python FFI
 ├── cli/           # __main__.py, repl.py, ask_assistant.py, formatter.py, docgen.py
 ├── lsp/           # Language Server Protocol
@@ -73,7 +100,7 @@ helen/
 
 - **🎯 First Principle: Caller Decides Context**: Before calling an agent, explicitly consider what context to provide. Agents are strictly isolated — each invocation creates independent execution environment. All information must be passed explicitly through parameters, `shared store`, `const`, or Channel.
 
-- **Agent declarations**: `agent` blocks with description, model, temperature, tools, prompt template (`{{var}}`), `functions {}` block (LLM-callable tools), `transcript` control (v1.29), and `main {}` logic. Transcript levels: `"none"` (default, no recording), `"memory"` (in-memory only), `"persistent"` (write to disk).
+- **Agent declarations**: `agent` blocks with description, model, temperature, tools, prompt template (`{{var}}`), `functions {}` block (LLM-callable tools), `transcript` control (v1.29), and `main {}` logic. Transcript levels: `"none"` (default), `"memory"` (in-memory), `"persistent"` (write to disk).
 
 - **Agent isolation levels (v1.12)**: `@open agent` (can access module `let`), `@strict agent` (deep-copies shared let), `@sandbox agent` (forces `tools=[]`). Default: standard isolation — module `let` invisible, `const` auto-visible read-only.
 
@@ -125,7 +152,7 @@ Also supports `.env` format and falls back to `~/.hermes/.env`.
 
 ## Testing Architecture
 
-Tests in `tests/` mirror source structure: `core/`, `semantic/`, `interpreter/`, `execution/`, `runtime/`, `stdlib/`, `language/`, `performance/`, `integration/`, `lsp/`, `cli/`. **3308 tests passing** (Python pytest).
+Tests in `tests/` mirror source structure: `core/`, `semantic/`, `interpreter/`, `execution/`, `runtime/`, `stdlib/`, `language/`, `performance/`, `integration/`, `lsp/`, `cli/`.
 
 Helen also has built-in test framework (`helen/stdlib/test.py`) with `test()`, `assert_equal()`, `assert_true()`, `assert_throws()`, expect chains, suites, filtering, JSON output.
 

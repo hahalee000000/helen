@@ -250,13 +250,17 @@ def _shell_exec(command: str, timeout: int = 120, shell: bool = True) -> str:
     """
     import shlex
     import subprocess
+    import sys
 
     try:
         cmd = command if shell else shlex.split(command)
-        # Use bash instead of sh to support brace expansion and other bash features
+        # Use bash on Unix for brace expansion; on Windows use default shell (cmd.exe)
+        executable = None
+        if shell and sys.platform != "win32":
+            executable = "/bin/bash"
         result = subprocess.run(
             cmd, shell=shell, capture_output=True, text=True,
-            timeout=timeout, executable='/bin/bash' if shell else None,
+            timeout=timeout, executable=executable,
         )
         output = result.stdout
         # Truncate if too long
@@ -286,13 +290,17 @@ def _shell_exec_full(command: str, timeout: int = 30, shell: bool = True) -> str
     """
     import shlex
     import subprocess
+    import sys
 
     try:
         cmd = command if shell else shlex.split(command)
-        # Use bash instead of sh to support brace expansion and other bash features
+        # Use bash on Unix for brace expansion; on Windows use default shell (cmd.exe)
+        executable = None
+        if shell and sys.platform != "win32":
+            executable = "/bin/bash"
         result = subprocess.run(
             cmd, shell=shell, capture_output=True, text=True,
-            timeout=timeout, executable='/bin/bash' if shell else None,
+            timeout=timeout, executable=executable,
         )
         output = result.stdout
         if result.stderr:

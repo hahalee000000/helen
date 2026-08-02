@@ -68,7 +68,7 @@ fn spawn_chat_actor(): map {
     // v1.0 session 恢复：读取 memento 中的子 session_id，用 spawn resume() 复用历史子 session
     let child_sid = ""
     try {
-        let memento_path = strip(shell_exec("pwd")) + "/.helen/current_session_id"
+        let memento_path = get_cwd() + "/.helen/current_session_id"
         if path_exists(memento_path) {
             let content = read_file(memento_path)
             let data = json_parse(content)
@@ -81,10 +81,10 @@ fn spawn_chat_actor(): map {
     let mailbox = null
     try {
         if child_sid != "" {
-            mailbox = spawn ChatSessionActor(strip(shell_exec("pwd")), sid, full_env_context) resume(child_sid)
+            mailbox = spawn ChatSessionActor(get_cwd(), sid, full_env_context) resume(child_sid)
             debug("spawned ChatSessionActor with session_id=" + sid + " resume(child=" + child_sid + ")")
         } else {
-            mailbox = spawn ChatSessionActor(strip(shell_exec("pwd")), sid, full_env_context)
+            mailbox = spawn ChatSessionActor(get_cwd(), sid, full_env_context)
             debug("spawned ChatSessionActor with session_id=" + sid + " (fresh child session)")
         }
     } catch RuntimeError err {

@@ -38,8 +38,14 @@ Best of all: the entire assistant is written in Helen itself. The kernel (CLI la
 ### Launch the Web UI
 
 ```bash
-cd helen/agent/webui
-./start-all.sh          # starts backend (FastAPI) + frontend (React)
+# Recommended: cross-platform Python launcher (Windows/macOS/Linux)
+python helen/agent/webui/start_webui.py
+```
+
+Or from CLI:
+
+```bash
+helen agent             # starts the programming assistant (launches Web UI)
 ```
 
 Open the URL shown (default `http://localhost:5173`). The Web UI talks to a FastAPI backend which spawns `helen agent` under the hood.
@@ -52,10 +58,25 @@ helen agent             # starts the programming assistant (currently launches W
 
 The CLI subcommand `helen agent` is defined in `helen/cli/__main__.py` and delegates to `helen/cli/agent_launcher.py`. The launcher is responsible for:
 
-1. Resolving the current working directory and session ID
-2. Creating the `.helen/` project marker if missing (since v1.29.16)
-3. Spawning the Web UI backend
+1. Checking Node.js and Python dependencies
+2. Setting the `HELEN_WEBUI_CWD` environment variable (cross-platform working directory)
+3. Spawning `start_webui.py` (cross-platform Python launcher)
 4. Forwarding signals (Ctrl+C) gracefully to child processes
+
+#### Cross-Platform Support (v1.30.7+)
+
+The agent works on **Windows, macOS, and Linux** without bash:
+
+- **`start_webui.py`**: Single Python launcher replaces platform-specific bash scripts
+- **`get_cwd()`**: Cross-platform working directory detection (uses `HELEN_WEBUI_CWD` env var with platform-specific fallback)
+- **stdlib over shell**: Agent code uses stdlib functions (`time()`, `date()`, `env_get()`, `delete_file()`, `move_file()`) instead of Unix shell commands
+
+To enable debug output (hidden by default since v1.30.7):
+
+```bash
+HELEN_DEBUG=1 helen agent          # Unix
+set HELEN_DEBUG=1 && helen agent   # Windows
+```
 
 See [CLI documentation](../toolchain/cli.md#helen-agent) for the full subcommand reference.
 
@@ -468,7 +489,7 @@ shared store ContextManager {
 }
 ```
 
-The `init(cwd)` parameter was added in v1.29.15 to avoid `shell_exec("pwd")` returning the wrong path inside a spawned actor. See [Session Scoping](../runtime/session-scoping.md) for the full story.
+The `init(cwd)` parameter was added in v1.29.15 to avoid `shell_exec("pwd")` returning the wrong path inside a spawned actor. Since v1.30.7, the agent uses a cross-platform `get_cwd()` helper (defined in `utils.helen`) that reads `HELEN_WEBUI_CWD` env var and falls back to platform-specific commands (`cd` on Windows, `pwd` on Unix). See [Session Scoping](../runtime/session-scoping.md) for the full story.
 
 ---
 
@@ -489,6 +510,14 @@ webui/
 │       ├── components/
 │       ├── pages/
 │       ├── hooks/
+│       ├── services/
+│       └── stores/
+├── start_webui.py   # Cross-platform launcher (Windows/macOS/Linux)
+├── start-all.sh     # Unix legacy launcher
+├── start-backend.sh
+├── start-frontend.sh
+└── stop-all.sh
+```/
 │       └── stores/
 ├── start-all.sh
 ├── start-backend.sh

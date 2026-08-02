@@ -87,7 +87,7 @@ fn ui_emit_agent_start(agent_name: str) {
     UIEventQueue.push({
         "type": "agent_start",
         "agent": agent_name,
-        "timestamp": int(shell_exec("date +%s"))
+        "timestamp": int(time())  // 跨平台：用 stdlib time()
     })
 }
 
@@ -97,7 +97,7 @@ fn ui_emit_agent_end(agent_name: str, duration_ms: int) {
         "type": "agent_end",
         "agent": agent_name,
         "duration_ms": duration_ms,
-        "timestamp": int(shell_exec("date +%s"))
+        "timestamp": int(time())  // 跨平台：用 stdlib time()
     })
 }
 

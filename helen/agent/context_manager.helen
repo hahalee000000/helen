@@ -92,8 +92,11 @@ shared store ContextManager {
         try {
             working_memory_set("git_branch", safe_git_branch())
             working_memory_set("git_dirty", check_git_dirty())
-            working_memory_set("current_date", strip(shell_exec("date +%Y-%m-%d")))
-            working_memory_set("current_time", strip(shell_exec("date +%H:%M:%S")))
+            working_memory_set("current_date", date())  // "YYYY-MM-DD"
+            // 当前时间：从 now() 提取 HH:MM:SS
+            let now_str = now()  // "YYYY-MM-DDTHH:MM:SS"
+            let time_str = substring(now_str, 11, 19)  // "HH:MM:SS"
+            working_memory_set("current_time", time_str)
             last_fact_refresh = turn
         } catch RuntimeError err {
             warning("working_memory 写入失败: " + err.message)
@@ -239,14 +242,14 @@ shared store ContextManager {
 
 /** 配置会话作用域：优先项目 .helen/sessions/，否则全局
  *  v1.29.15: 接受可选 cwd 参数，避免 shell_exec("pwd") 在 actor/子线程上下文
- *  中返回不正确的路径。当 cwd 提供时直接使用，否则回退到 shell_exec("pwd")。*/
+ *  中返回不正确的路径。当 cwd 提供时直接使用，否则回退到 get_cwd()。*/
 fn _setup_session_scope(cwd_hint: str): str {
     let project_helen = ""
     if cwd_hint != "" {
         project_helen = path_join(cwd_hint, ".helen")
     } else {
         try {
-            let cwd = strip(shell_exec("pwd"))
+            let cwd = get_cwd()
             project_helen = path_join(cwd, ".helen")
         } catch {
             project_helen = ".helen"

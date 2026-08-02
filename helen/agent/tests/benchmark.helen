@@ -16,9 +16,9 @@ import "../output.helen"
 
 // ── 计时辅助 ────────────────────────────────────────────────────
 
-/** 获取当前时间戳（秒，浮点） */
+/** 获取当前时间戳（秒，浮点）— 跨平台：用 stdlib time() */
 fn _now(): float {
-    return float(shell_exec("date +%s.%N"))
+    return time()  // time() 返回 float（秒）
 }
 
 /** 格式化耗时（毫秒） */

@@ -336,9 +336,8 @@ fn agent_end(agent_name: str) {
     if OutputState.get_level() == OUTPUT_RICH {
         let duration_ms = 0
         if MinimalModeState.get_thinking_start() > 0 {
-            let now_result = shell_exec("date +%s")
             try {
-                let ts_now = int(strip(now_result))
+                let ts_now = int(time())  // 跨平台：用 stdlib time()
                 duration_ms = (ts_now - MinimalModeState.get_thinking_start()) * 1000
             } catch {}
         }
@@ -347,10 +346,9 @@ fn agent_end(agent_name: str) {
         return
     }
     if OutputState.get_level() <= OUTPUT_MINIMAL {
-        let now_result = shell_exec("date +%s")
         let elapsed = ""
         try {
-            let ts_now = int(strip(now_result))
+            let ts_now = int(time())  // 跨平台：用 stdlib time()
             if MinimalModeState.get_thinking_start() > 0 {
                 elapsed = " (" + str(ts_now - MinimalModeState.get_thinking_start()) + "s)"
             }
@@ -390,13 +388,18 @@ fn newline(n: int = 1) {
 
 /** 检查终端是否支持颜色 */
 fn detect_color_support(): bool {
-    let term = shell_exec("echo $TERM", 5)
+    // 跨平台：用 env_get() 代替 echo $TERM
+    let term = env_get("TERM", "")
     if contains(term, "xterm") || contains(term, "256color") || contains(term, "screen") {
         return true
     }
-    let no_color = shell_exec("echo $NO_COLOR", 5)
+    let no_color = env_get("NO_COLOR", "")
     if no_color != "" {
         return false
+    }
+    // Windows 终端通常支持颜色
+    if platform() == "windows" {
+        return true
     }
     return true
 }

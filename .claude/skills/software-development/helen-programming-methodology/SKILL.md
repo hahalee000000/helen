@@ -223,8 +223,8 @@ if is_reusable_pattern(task_summary) {
     let skill_name = "jwt-refresh-pattern"
     let skill_dir = ".helen/skills/" + skill_name
     
-    // Create skill directory
-    shell_exec("mkdir -p " + skill_dir)
+    // Create skill directory (cross-platform: use stdlib mkdir_p)
+    mkdir_p(skill_dir)
     
     // Create SKILL.md with proper YAML frontmatter
     let skill_content = """---

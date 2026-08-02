@@ -28,7 +28,7 @@ shared store SessionStats {
         // total_tokens_estimated 跨轮次累计，而不是每轮重置）。
         // start_time 为 0 表示首次调用。
         if start_time == 0 {
-            start_time = int(shell_exec("date +%s"))
+            start_time = int(time())  // 跨平台：用 stdlib time()
         }
         // 注意：conversation_turns / agent_calls / total_tokens_estimated 保留上轮值
         // 注意：last_* 也不重置，保留上一轮快照供 /stats 读
@@ -48,7 +48,7 @@ shared store SessionStats {
 
     fn get_elapsed_time(): int {
         if start_time == 0 { return 0 }
-        let ts_now = int(shell_exec("date +%s"))
+        let ts_now = int(time())  // 跨平台：用 stdlib time()
         return ts_now - start_time
     }
 
