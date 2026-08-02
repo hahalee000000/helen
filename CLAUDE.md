@@ -41,7 +41,22 @@ helen lsp                           # Start Language Server (JSON-RPC over stdio
 
 ## Code Intelligence with codebase-memory-mcp
 
-**Default to using codebase-memory-mcp tools** for code exploration, debugging, and maintenance instead of manual grep/glob/read.
+**MUST use codebase-memory-mcp tools FIRST** for code exploration, debugging, and maintenance. Only fall back to manual grep/glob/read when MCP tools cannot answer the question or when you already know the exact file and line.
+
+### When to use MCP tools (default):
+- Finding function/class definitions → `search_graph`
+- Understanding who calls a function → `trace_path` (mode=calls, direction=inbound)
+- Understanding what a function calls → `trace_path` (mode=calls, direction=outbound)
+- Reading specific function/class source → `get_code_snippet`
+- Complex multi-hop queries (call chains, dependencies) → `query_graph`
+- High-level architecture overview → `get_architecture`
+- Text search with structural ranking → `search_code`
+
+### When grep/read is acceptable:
+- Simple one-off text search ("find all occurrences of string literal X")
+- Already know exact file path and line number
+- Searching non-Python files (markdown, yaml, etc.) that aren't indexed
+- MCP server is unavailable or unresponsive
 
 Available tools (in priority order):
 - `search_graph` — Find functions, classes, variables (use instead of Grep for definitions)
