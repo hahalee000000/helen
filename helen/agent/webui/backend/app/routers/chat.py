@@ -209,7 +209,8 @@ async def get_transcript(session_id: str):
     # 解析 transcript.jsonl
     entries = []
     try:
-        with open(transcript_path) as f:
+        # v1.30.10: 显式指定 UTF-8 编码
+        with open(transcript_path, encoding="utf-8") as f:
             for line_num, line in enumerate(f, 1):
                 line = line.strip()
                 if not line:
@@ -622,7 +623,8 @@ async def upload_file(
         "size": len(contents),
         "created_at": datetime.now().isoformat(),
     }
-    (upload_dir / "metadata.json").write_text(json.dumps(metadata))
+    # v1.30.10: 显式指定 UTF-8 编码
+    (upload_dir / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
 
     # 保存文件内容
     (upload_dir / "file").write_bytes(contents)
@@ -658,5 +660,6 @@ async def get_upload_file(upload_id: str):
     if not metadata_path.exists():
         raise HTTPException(404, "File metadata not found")
 
-    metadata = json.loads(metadata_path.read_text())
+    # v1.30.10: 显式指定 UTF-8 编码
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     return FileResponse(file_path, media_type=metadata["mime_type"])

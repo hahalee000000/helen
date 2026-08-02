@@ -38,7 +38,8 @@ def read_transcript_entries(helen_session_id: str) -> list[dict]:
         return []
     entries = []
     try:
-        with open(path) as f:
+        # v1.30.10: 显式指定 UTF-8 编码，避免 Windows GBK 默认编码导致读取失败
+        with open(path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -65,7 +66,8 @@ def get_current_helen_session_id() -> str:
     if not memento_path.exists():
         return ""
     try:
-        memento_content = memento_path.read_text().strip()
+        # v1.30.10: 显式指定 UTF-8 编码
+        memento_content = memento_path.read_text(encoding="utf-8").strip()
         if memento_content.startswith("{"):
             data = json.loads(memento_content)
             child_sid = data.get("child", "")

@@ -725,10 +725,13 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
 
     main {
         // ── 恢复会话历史 ──
-        if session_id != "" {
+        // 使用当前 transcript session ID（通过 spawn resume 设置），而不是参数 session_id
+        // 参数 session_id 是 main session，实际对话在 child session
+        let my_sid = get_session_id()
+        if my_sid != "" {
             try {
-                resume_session(session_id)
-                debug("ChatSessionActor: resumed session " + session_id)
+                resume_session(my_sid)
+                debug("ChatSessionActor: resumed session " + my_sid)
 
                 // ── 上下文压缩（防止历史 boilerplate 导致溢出）──
                 // resume 后会加载所有历史消息，包括重复的 prompt boilerplate

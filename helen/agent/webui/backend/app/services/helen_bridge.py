@@ -277,7 +277,8 @@ class HelenBridge:
                 try:
                     stat = transcript.stat()
                     msg_count = 0
-                    with open(transcript) as f:
+                    # v1.30.10: 显式指定 UTF-8 编码
+                    with open(transcript, encoding="utf-8") as f:
                         for line in f:
                             if '"type": "message"' in line:
                                 msg_count += 1
