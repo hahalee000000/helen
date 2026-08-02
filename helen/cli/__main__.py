@@ -523,7 +523,13 @@ def test_command(argv: list[str]) -> int:
             from helen.runtime.import_resolver import ImportResolver
             source_dir = str(source_path.parent.absolute()) if source_path.parent else os.getcwd()
             import_resolver = ImportResolver(base_dir=source_dir)
-            interp = Interpreter(errors=errors, llm_runtime=llm_runtime, import_resolver=import_resolver)
+            # v1.30.8: Disable transcript store for tests to avoid creating empty session directories
+            interp = Interpreter(
+                errors=errors,
+                llm_runtime=llm_runtime,
+                import_resolver=import_resolver,
+                transcript_store_enabled=False,
+            )
             try:
                 interp.interpret(program)
             except Exception as e:

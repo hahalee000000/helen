@@ -1,6 +1,22 @@
 # 版本历史
 
-> Helen v1.30.8 | 修复 Windows 编码问题：shell_exec 使用 UTF-8 + errors=replace
+> Helen v1.30.9 | 修复 `helen test` 创建空 session 目录的问题
+
+---
+
+## v1.30.9: 修复 `helen test` session 污染
+
+**发布日期**: 2026-08-02
+**修复**: `helen test` 不再创建空 session 目录
+
+### 变更
+
+- `helen/cli/__main__.py`: `test_command` 创建 `Interpreter` 时传 `transcript_store_enabled=False`
+- 修复问题：每次 `helen test` 运行都在 `.helen/sessions/` 创建空 session 目录
+
+### 问题根因
+
+`helen test` 创建 `Interpreter` 时使用默认的 `transcript_store_enabled=True`。虽然 `transcript_level` 是 "none"，但某处代码访问了 `session_id` 属性（懒初始化），导致 `_init_transcript_store()` 被调用并创建 session 目录。
 
 ---
 
