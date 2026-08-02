@@ -10,7 +10,18 @@ from pathlib import Path
 import pytest
 
 
-HELEN_AGENT_DIR = Path(__file__).parent.parent.parent / "agent"
+# 获取项目根目录（更可靠的方式）
+def _get_project_root() -> Path:
+    """获取项目根目录，向上查找直到找到 pyproject.toml"""
+    current = Path(__file__).resolve()
+    for parent in [current] + list(current.parents):
+        if (parent / "pyproject.toml").exists():
+            return parent
+    # 回退到默认路径
+    return Path(__file__).parent.parent.parent
+
+
+HELEN_AGENT_DIR = _get_project_root() / "helen" / "agent"
 
 
 def run_helen_code(code: str, env: dict | None = None) -> str:
