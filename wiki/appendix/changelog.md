@@ -1,6 +1,31 @@
 # 版本历史
 
-> Helen v1.30.10 | 修复 start_webui.py 使用错误的 Python 解释器导致会话历史丢失
+> Helen v1.30.11 | 修复 Windows UTF-8 编码和会话恢复问题
+
+---
+
+## v1.30.11: 修复 Windows UTF-8 编码和会话恢复
+
+**发布日期**: 2026-08-02
+**修复**: Windows 上会话历史无法显示、会话恢复失败
+
+### 变更
+
+- **会话恢复**：`helen/agent/chat_session_actor.helen`
+  - 使用 `get_session_id()` 获取正确的子会话 ID
+  - 之前使用参数 `session_id`（主会话 ID），导致恢复错误的会话
+
+- **UTF-8 编码**：所有文件 I/O 操作显式指定 UTF-8 编码
+  - `helen/agent/webui/backend/app/services/session_index.py`
+  - `helen/agent/webui/backend/app/routers/chat.py`
+  - `helen/agent/webui/backend/app/services/helen_bridge.py`
+
+### 问题根因
+
+Windows 默认使用 GBK 编码读取文件，当 transcript 文件包含中文字符时：
+- `open(path)` 使用 GBK 解码，遇到 UTF-8 中文字符抛异常
+- 异常被捕获后返回空列表，导致前端显示"无历史消息"
+- `resume_session()` 使用错误的会话 ID，无法加载正确的历史
 
 ---
 

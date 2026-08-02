@@ -1,50 +1,22 @@
 [build-system]
-requires = ["setuptools>=45"]
+requires = [ "setuptools>=45",]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "helen-lang"
-version = "1.30.10"
-description = "Helen â€” A Prompt-first Agent Programming Language for AI-native applications. Build multi-agent systems with built-in LLM primitives, bilingual support (English/Chinese), and automatic context management. Alternative to LangChain, CrewAI, AutoGen for agent orchestration."
+version = "1.30.11"
+description = "Helen ¡ª A Prompt-first Agent Programming Language for AI-native applications. Build multi-agent systems with built-in LLM primitives, bilingual support (English/Chinese), and automatic context management. Alternative to LangChain, CrewAI, AutoGen for agent orchestration."
 readme = "README.md"
 requires-python = ">=3.12"
-authors = [
-    {name = "Helen Team", email = "2229855189@qq.com"}
-]
-license = {text = "MIT"}
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Software Development :: Compilers",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
-    "Topic :: Software Development :: Libraries :: Python Modules",
-    "Operating System :: OS Independent",
-    "Typing :: Typed",
-    "Natural Language :: Chinese (Simplified)",
-    "Natural Language :: English",
-]
-keywords = [
-    "helen", "helen-lang",
-    "ai", "artificial-intelligence", "machine-learning", "deep-learning",
-    "llm", "gpt", "claude", "large-language-model", "chatgpt",
-    "agent", "ai-agent", "multi-agent", "agent-orchestration", "autonomous-agent",
-    "prompt", "prompt-engineering", "prompt-first",
-    "dsl", "domain-specific-language", "programming-language",
-    "langchain", "crewai", "autogen", "langchain-alternative",
-    "chatbot", "conversational-ai", "natural-language",
-    "bilingual", "chinese-programming", "ä¸­æ–‡ç¼–ç¨‹",
-    "context-management", "transcript", "session-management",
-    "tool-calling", "function-calling", "agent-framework",
-]
-dependencies = [
-    "pyyaml>=6.0",
-    "toml>=0.10",
-    "httpx>=0.24.0",
-]
+classifiers = [ "Development Status :: 4 - Beta", "Intended Audience :: Developers", "License :: OSI Approved :: MIT License", "Programming Language :: Python :: 3", "Programming Language :: Python :: 3.12", "Topic :: Software Development :: Compilers", "Topic :: Scientific/Engineering :: Artificial Intelligence", "Topic :: Internet :: WWW/HTTP :: Dynamic Content", "Topic :: Software Development :: Libraries :: Python Modules", "Operating System :: OS Independent", "Typing :: Typed", "Natural Language :: Chinese (Simplified)", "Natural Language :: English",]
+keywords = [ "helen", "helen-lang", "ai", "artificial-intelligence", "machine-learning", "deep-learning", "llm", "gpt", "claude", "large-language-model", "chatgpt", "agent", "ai-agent", "multi-agent", "agent-orchestration", "autonomous-agent", "prompt", "prompt-engineering", "prompt-first", "dsl", "domain-specific-language", "programming-language", "langchain", "crewai", "autogen", "langchain-alternative", "chatbot", "conversational-ai", "natural-language", "bilingual", "chinese-programming", "ÖÐÎÄ±à³Ì", "context-management", "transcript", "session-management", "tool-calling", "function-calling", "agent-framework",]
+dependencies = [ "pyyaml>=6.0", "toml>=0.10", "httpx>=0.24.0",]
+[[project.authors]]
+name = "Helen Team"
+email = "2229855189@qq.com"
+
+[project.license]
+text = "MIT"
 
 [project.urls]
 Homepage = "https://github.com/hahalee000000/helen"
@@ -52,60 +24,28 @@ Repository = "https://github.com/hahalee000000/helen"
 Issues = "https://github.com/hahalee000000/helen/issues"
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0", "pytest-cov>=4.0", "pytest-asyncio>=0.21.0", "flake8>=6.0"]
-# P3: Accurate token counting via tiktoken (optional, falls back to heuristic)
-accurate-tokens = ["tiktoken>=0.5.0"]
-# Programming assistant (helenagent) dependencies
-agent = [
-    "fastapi>=0.109.0",
-    "uvicorn[standard]>=0.27.0",
-    "websockets>=12.0",
-    "pydantic>=2.5.3",
-    "pydantic-settings>=2.1.0",
-    "python-dotenv>=1.0.0",
-    "python-multipart>=0.0.32",
-]
-# All optional features
-all = ["tiktoken>=0.5.0", "fastapi>=0.109.0", "uvicorn[standard]>=0.27.0", "websockets>=12.0", "pydantic>=2.5.3", "pydantic-settings>=2.1.0", "python-dotenv>=1.0.0", "python-multipart>=0.0.32"]
+dev = [ "pytest>=7.0", "pytest-cov>=4.0", "pytest-asyncio>=0.21.0", "flake8>=6.0",]
+accurate-tokens = [ "tiktoken>=0.5.0",]
+agent = [ "fastapi>=0.109.0", "uvicorn[standard]>=0.27.0", "websockets>=12.0", "pydantic>=2.5.3", "pydantic-settings>=2.1.0", "python-dotenv>=1.0.0", "python-multipart>=0.0.32",]
+all = [ "tiktoken>=0.5.0", "fastapi>=0.109.0", "uvicorn[standard]>=0.27.0", "websockets>=12.0", "pydantic>=2.5.3", "pydantic-settings>=2.1.0", "python-dotenv>=1.0.0", "python-multipart>=0.0.32",]
 
 [project.scripts]
 helen = "helen.cli.__main__:main"
 
-[tool.setuptools.packages.find]
-include = ["helen*"]
-exclude = ["helen.agent.webui.frontend.node_modules*", "helen.agent.webui.frontend.dist*"]
+[tool.flake8]
+max-line-length = 120
+extend-ignore = [ "E501",]
 
-# Include non-Python files in the wheel (skills, agent programs, config samples)
 [tool.setuptools.package-data]
-"helen" = [
-    "py.typed",
-    # Agent files (helenagent)
-    "agent/*.helen",
-    "agent/*.md",
-    "agent/*.sh",
-    "agent/**/*.helen",
-    "agent/**/*.md",
-    "agent/**/*.sh",
-    "agent/**/*.py",
-    "agent/**/*.json",
-    "agent/**/*.txt",
-    "agent/**/*.yaml",
-    "agent/**/*.yml",
-    "agent/**/*.toml",
-    # Skills (built-in + agent project skills)
-    "skills/*/SKILL.md",
-    "skills/*/references/*.md",
-    "agent/.helen/skills/*/SKILL.md",
-    "agent/.helen/skills/*/references/*.md",
-]
+helen = [ "py.typed", "agent/*.helen", "agent/*.md", "agent/*.sh", "agent/**/*.helen", "agent/**/*.md", "agent/**/*.sh", "agent/**/*.py", "agent/**/*.json", "agent/**/*.txt", "agent/**/*.yaml", "agent/**/*.yml", "agent/**/*.toml", "skills/*/SKILL.md", "skills/*/references/*.md", "agent/.helen/skills/*/SKILL.md", "agent/.helen/skills/*/references/*.md",]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = [ "tests",]
 asyncio_mode = "auto"
 
 [tool.coverage.run]
-source = ["helen"]
+source = [ "helen",]
 
-[tool.flake8]
-max-line-length = 120
-extend-ignore = ["E501"]
+[tool.setuptools.packages.find]
+include = [ "helen*",]
+exclude = [ "helen.agent.webui.frontend.node_modules*", "helen.agent.webui.frontend.dist*",]
