@@ -276,6 +276,8 @@ def transcript_to_messages(helen_session_id: str = "") -> list[dict]:
 
     返回:[{id, role, content, attachments, timestamp}]
     """
+    from datetime import datetime
+
     if not helen_session_id:
         helen_session_id = get_current_helen_session_id()
     if not helen_session_id:
@@ -284,10 +286,16 @@ def transcript_to_messages(helen_session_id: str = "") -> list[dict]:
     entries = read_transcript_entries(helen_session_id)
 
     # session_meta 的 timestamp 作为消息时间戳(消息本身无 timestamp 字段)
-    session_timestamp = None
+    # v1.30.12: 将 Unix 时间戳(秒)转换为 ISO 格式字符串,避免前端误解析为毫秒
+    session_timestamp_iso = None
     for e in entries:
         if e.get("type") == "session_meta":
-            session_timestamp = e.get("timestamp")
+            ts = e.get("timestamp")
+            if ts is not None and isinstance(ts, (int, float)):
+                try:
+                    session_timestamp_iso = datetime.fromtimestamp(ts).isoformat()
+                except (ValueError, OSError):
+                    session_timestamp_iso = None
             break
 
     messages = []
@@ -332,7 +340,7 @@ def transcript_to_messages(helen_session_id: str = "") -> list[dict]:
             "role": role,
             "content": text_content,
             "attachments": attachments,
-            "timestamp": session_timestamp,
+            "timestamp": session_timestamp_iso,
         })
 
     return messages

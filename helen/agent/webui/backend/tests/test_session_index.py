@@ -197,14 +197,17 @@ class TestTranscriptToMessages:
         assert msgs[0]["content"] == "真实输入"
 
     def test_timestamp_from_session_meta(self, session_index, temp_agent_dir):
-        """timestamp 取自 session_meta"""
+        """timestamp 取自 session_meta，转换为 ISO 格式"""
+        from datetime import datetime
         sid = "test-session"
         _write_transcript(temp_agent_dir, sid, [
             json.dumps({"type": "session_meta", "timestamp": 999.0}),
             json.dumps({"type": "message", "role": "user", "content": "你好", "uuid": "u1"}),
         ])
         msgs = session_index.transcript_to_messages(sid)
-        assert msgs[0]["timestamp"] == 999.0
+        # v1.30.12: timestamp 现在是 ISO 格式字符串，不是原始浮点数
+        expected_iso = datetime.fromtimestamp(999.0).isoformat()
+        assert msgs[0]["timestamp"] == expected_iso
 
 
 # ── read_session_preview ───────────────────────────────────────
