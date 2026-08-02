@@ -273,6 +273,26 @@ def _extract_session_flags(argv: list[str]) -> tuple[str | None, list[str]]:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point."""
+    # v1.30.12: Fix Windows GBK encoding issue for Chinese output
+    # Ensure stdout/stderr use UTF-8 on Windows to properly display Chinese characters
+    if sys.platform == "win32":
+        import io
+        # Only reconfigure if not already UTF-8
+        if sys.stdout.encoding.lower() != "utf-8":
+            sys.stdout = io.TextIOWrapper(
+                sys.stdout.buffer,
+                encoding="utf-8",
+                errors="replace",
+                line_buffering=True
+            )
+        if sys.stderr.encoding.lower() != "utf-8":
+            sys.stderr = io.TextIOWrapper(
+                sys.stderr.buffer,
+                encoding="utf-8",
+                errors="replace",
+                line_buffering=True
+            )
+
     argv = list(argv) if argv is not None else sys.argv[1:]
 
     if not argv:
