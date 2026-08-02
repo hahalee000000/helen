@@ -202,6 +202,9 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "最终": TokenType.FINALLY,
     "抛出": TokenType.THROW,
     "断言": TokenType.ASSERT,
+    # Logical operators (v1.30.12: 中文逻辑运算符)
+    "且": TokenType.AND,
+    "或": TokenType.OR,
     # Literals
     "真": TokenType.TRUE,
     "假": TokenType.FALSE,

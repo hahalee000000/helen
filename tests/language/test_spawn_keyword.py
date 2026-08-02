@@ -41,7 +41,7 @@ class TestSpawnKeyword:
     def test_spawn_keyword_count_unchanged(self):
         """Total keyword count stays at 91 (v1.29: added transcript/记录)."""
         kw = keywords()
-        assert len(kw) == 91
+        assert len(kw) == 93
 
     def test_spawn_expr_node_exists(self):
         """SpawnExprNode exists in AST module."""

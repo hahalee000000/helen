@@ -101,8 +101,8 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
     ## Development Workflow
     When implementing features, follow this process:
     1. Understand the requirement (read relevant files with read_file)
-    2. Design the interface (load_skill("helen-contractor-design") for guidance)
-    3. Write tests first (load_skill("helen-tdd-methodology") for TDD approach)
+    2. Design the interface (load_skill("helen-programming-methodology") for contract-first guidance)
+    3. Write tests first (load_skill("helen-programming-methodology") for TDD approach)
     4. Implement the code using write_file or patch_code_file
     5. Verify with run_helen_check and run_helen_tests (or verify_after_change)
     6. Assess quality with get_scores if needed
@@ -142,11 +142,11 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
       "图片/文件处理失败"
         → 检查 debug 目录所有文件 → 对比每张图/文件的类型、大小、输入输出 → 区分代码问题 vs 数据问题 → 确认根因 → 修复
       "设计一个 auth 接口"
-        → load_skill("helen-contractor-design") → read_file → write_file → 报告
+        → load_skill("helen-programming-methodology") → read_file → write_file → 报告
       "给 auth 模块写完整测试"
-        → load_skill("helen-test-patterns") → read_file → write_file(test) → run_helen_tests → 报告
+        → load_skill("helen-testing") → read_file → write_file(test) → run_helen_tests → 报告
       "用 TDD 实现这个功能"
-        → load_skill("helen-tdd-methodology") → write_file(test) → run_single_test(确认失败) → write_file(实现) → verify_after_change → 报告
+        → load_skill("helen-programming-methodology") → write_file(test) → run_single_test(确认失败) → write_file(实现) → verify_after_change → 报告
       "实现一个完整的 HTTP 服务器"
         → create_project_structure → 设计 → 测试 → 实现 → 验证（使用所有工具）
       "解释这段代码"

@@ -43,6 +43,28 @@ Helen's standard library provides **333 built-in functions**, covering all core 
 
 Helen's stdlib supports multilingual function names. Every stdlib function has an English canonical name and localized aliases, all loaded at startup.
 
+### ⚠️ stdlib Function Names vs Keywords
+
+**stdlib function names (like `长度`, `打印`, `排序`) are NOT reserved keywords.** They can be used as variable names, though this is discouraged to avoid confusion.
+
+```helen
+// ✓ Allowed but discouraged — stdlib names are not reserved
+设 长度 = 10          // Shadows the stdlib function 长度()
+设 打印 = "hello"     // Shadows the stdlib function 打印()
+
+// ✗ NOT allowed — these are reserved keywords
+设 描述 = "hello"     // Error: 描述 is a keyword (agent description)
+设 模型 = "qwen"      // Error: 模型 is a keyword (model selection)
+
+// ✓ Recommended — use distinct names
+设 数据长度 = 10
+设 输出内容 = "hello"
+```
+
+**Key distinction**:
+- **Keywords** (93 total): Reserved, cannot be identifiers. Examples: `设`, `如果`, `描述`, `模型`, `且`, `或`
+- **stdlib functions** (333 Chinese aliases): NOT reserved, can be shadowed. Examples: `长度`, `打印`, `排序`
+
 ### Chinese stdlib Aliases
 
 Helen has 333 built-in Chinese aliases covering all stdlib categories. Common examples:

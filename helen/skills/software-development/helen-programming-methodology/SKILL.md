@@ -74,7 +74,34 @@ helen output.helen
 
 ### 2. TDD Development (RED-GREEN-REFACTOR)
 
+> **⚠️ TDD Iron Law: NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST**
+>
+> Write code before the test? **Delete it. Start over.** No exceptions.
+>
+> For the complete TDD workflow (common rationalizations, red flags, verification checklist), see **test-driven-development** skill.
+
 Strictly follow the three-stage cycle:
+
+**RED Phase**: Write failing tests
+
+**Why this order matters:**
+- Tests written after code pass immediately → proves nothing
+- Test-first forces you to see the test fail, proving it actually tests something
+- "I'll write tests after" = testing what you built, not what's required
+
+**Common rationalizations (all wrong):**
+| Excuse | Reality |
+|--------|---------|
+| "Too simple to test" | Simple code breaks. Test takes 30 seconds. |
+| "I'll test after" | Tests passing immediately prove nothing. |
+| "TDD will slow me down" | TDD faster than debugging. |
+| "Need to explore first" | Fine. Throw away exploration, start with TDD. |
+
+**Red flags — STOP and restart with TDD:**
+- Code before test
+- Test passes immediately on first run
+- Can't explain why test failed
+- "Just this once" without TDD
 
 **RED Phase**: Write failing tests
 

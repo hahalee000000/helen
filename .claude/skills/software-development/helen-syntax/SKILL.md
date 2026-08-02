@@ -1,7 +1,7 @@
 ---
 name: helen-syntax
 description: "Helen language syntax quick reference — keywords, types, expressions, statements"
-version: 1.17.0
+version: 1.30.12
 author: Helen Team
 license: MIT
 tags: [helen, syntax, reference, language, chinese-punctuation, chinese-quotes]
@@ -9,9 +9,33 @@ tags: [helen, syntax, reference, language, chinese-punctuation, chinese-quotes]
 
 # Helen Syntax Reference
 
-## Keywords (89 total: 44 English + 45 Chinese)
+## Keywords (93 total: 45 English + 48 Chinese)
 
 Bilingual keywords map to the same TokenType and can be freely mixed. The parser/interpreter requires no changes.
+
+### ⚠️ Reserved Keywords — Cannot Be Used as Identifiers
+
+**All keywords are reserved and CANNOT be used as variable names, function names, or any other identifiers.**
+
+```helen
+// ✗ WRONG — 描述/模型/工具 are reserved keywords
+设 描述 = "hello"     // Error: Expected variable name after 'let'/'const'
+设 模型 = "qwen"      // Error: 模型 is a keyword
+函数 工具() {}        // Error: 工具 is a keyword
+
+// ✓ CORRECT — use non-keyword names
+设 图片描述 = "hello"
+设 模型名称 = "qwen"
+函数 工具箱() {}
+```
+
+**Common reserved Chinese keywords** (frequently misused):
+- Agent declaration: `描述`, `模型`, `工具`, `提示词`, `温度`, `最大轮次`, `流式输出`, `函数区`, `主函`
+- Control flow: `如果`, `否则`, `对于`, `属于`, `当`, `中断`, `继续`
+- Variable/function: `设`, `常量`, `函数`, `返回`
+- Logical operators: `且` (AND), `或` (OR)
+
+**Note**: stdlib function names (like `长度`, `打印`, `排序`) are NOT keywords and CAN be used as variable names.
 
 ### Keyword Mapping Table
 
@@ -34,6 +58,7 @@ Bilingual keywords map to the same TokenType and can be freely mixed. The parser
 | `true` / `false` | `真` / `假` | 布尔值 |
 | `null` | `空` | 空值 |
 | `is` | `是` | 类型判断 |
+| `and` / `or` | `且` / `或` | 逻辑运算符 (v1.30.12) |
 | `agent` | `智能体` | Agent 声明 |
 | `llm` | `大模型` | LLM 操作关键字 |
 | `act` | `执行` | 自主执行（支持 `on_chunk`/`on_complete`/`on_tool_end` 回调） |
