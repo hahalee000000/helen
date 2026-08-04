@@ -179,7 +179,9 @@ main {
     // Finding and replacing
     find("hello", "ell")          // 1
     replace("hello", "l", "L")    // "heLLo"
-    substring("hello", 1, 3)      // "el"
+    substring("hello", 1, 3)      // "el"   — end is exclusive INDEX, not length
+    substring("id=repo1", 3)      // "repo1" — omit end to slice to string end
+    substring("id=repo1", 3, 8)   // "repo1" — to extract N chars use (s, start, start+N)
 
     // Character ↔ code point (v1.31+)
     chr(65)                       // "A"

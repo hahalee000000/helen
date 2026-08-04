@@ -492,3 +492,48 @@ class TestOrd:
         for cp in [0, 65, 97, 0x4e2d, 0x10FFFF]:
             assert _ord(_chr(cp)) == cp
             assert _chr(_ord(chr(cp))) == chr(cp)
+
+
+# ── substring (exclusive-end index semantics) ────────────────────────
+# The third parameter is an EXCLUSIVE END INDEX, not a length.
+# This has been a recurring source of confusion — document via tests.
+
+from helen.stdlib import _substring
+
+
+class TestSubstring:
+    def test_start_only(self):
+        """Omitting end extracts from start to string end."""
+        assert _substring("id=repo1", 3) == "repo1"
+        assert _substring("hello", 0) == "hello"
+        assert _substring("hello", 5) == ""
+
+    def test_start_and_end_exclusive(self):
+        """End index is exclusive — matches Python slice semantics."""
+        assert _substring("hello", 1, 3) == "el"
+        assert _substring("Hello, World!", 0, 5) == "Hello"
+        # Common pitfall: substring("id=repo1", 3, 5) is "re", NOT "repo1"
+        assert _substring("id=repo1", 3, 5) == "re"
+        # To extract from index 3 to end: either omit end, or pass len
+        assert _substring("id=repo1", 3, 8) == "repo1"
+        assert _substring("id=repo1", 3) == "repo1"
+
+    def test_extract_n_chars(self):
+        """To extract N characters starting at position P, use substring(s, P, P+N)."""
+        s = "abcdefghijklmnopqrstuvwxyz"
+        # Extract 5 chars starting at index 3
+        assert _substring(s, 3, 3 + 5) == "defgh"
+
+    def test_end_beyond_length(self):
+        """End index beyond string length is clamped gracefully."""
+        assert _substring("hello", 0, 100) == "hello"
+        assert _substring("hi", 1, 999) == "i"
+
+    def test_empty_string(self):
+        assert _substring("", 0) == ""
+        assert _substring("", 0, 0) == ""
+
+    def test_empty_result(self):
+        assert _substring("hello", 3, 3) == ""
+        assert _substring("hello", 5, 5) == ""
+

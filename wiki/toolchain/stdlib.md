@@ -96,7 +96,7 @@ class BuiltinFunction:
 | `replace` | `replace(s, old, new)` → str | Replace substring |
 | `find` | `find(s, sub)` → int | Find substring position |
 | `find_from` | `find_from(s, sub, start)` → int | Find substring from position (**v1.26 new**) |
-| `substring` | `substring(s, start, end?)` → str | Extract substring |
+| `substring` | `substring(s, start, end?)` → str | Extract `s[start:end]` — *end* is an **exclusive index**, not a length. Omit *end* to slice to string end. |
 | `chr` | `chr(code)` → str | Convert Unicode code point to character (**v1.31 new**) |
 | `ord` | `ord(char)` → int | Convert character to Unicode code point (**v1.31 new**) |
 

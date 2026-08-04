@@ -170,6 +170,15 @@ main {
     let found = find("hello world", "world")  // 6
     let replaced = replace("foo bar", "foo", "baz")  // "baz bar"
 
+    // Substring extraction (Python-style: start inclusive, end exclusive)
+    let s = "Hello, World!"
+    let head = substring(s, 0, 5)      // "Hello"   — indices 0..4
+    let tail = substring(s, 7)         // "World!"  — omit end → to string end
+    // ⚠️ third param is an EXCLUSIVE INDEX, not a length:
+    //    substring("id=repo1", 3, 5)  → "re"  (NOT "repo1")
+    //    substring("id=repo1", 3)     → "repo1"
+    //    to extract N chars from pos P:  substring(s, P, P + N)
+
     // Regular expressions
     if regex_match("hello123", r"\d+") {
         print("Contains digits")

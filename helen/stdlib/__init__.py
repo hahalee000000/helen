@@ -912,7 +912,44 @@ def _path_is_dir(path: str) -> bool:
 
 
 def _substring(s: str, start: int, end: int | None = None) -> str:
-    """Extract substring. If end is None, extracts from start to end of string."""
+    """Extract a substring from *s* using Python-style index semantics.
+
+    Parameters
+    ----------
+    s : str
+        The source string.
+    start : int
+        Zero-based start index (inclusive). Negative values count from
+        the end, matching Python slice behaviour.
+    end : int, optional
+        Zero-based end index (**exclusive**). If omitted or ``None``,
+        the substring extends to the end of *s*.
+
+    Returns
+    -------
+    str
+        ``s[start:end]`` — the slice of *s* from index *start* up to,
+        but not including, index *end*.
+
+    Examples
+    --------
+    >>> substring("Hello, World!", 0, 5)
+    "Hello"
+    >>> substring("Hello, World!", 7)
+    "World!"
+    >>> substring("id=repo1", 3)        # from index 3 to end
+    "repo1"
+    >>> substring("id=repo1", 3, 5)     # indices 3 and 4 only
+    "re"
+
+    Note
+    ----
+    The third parameter is an **exclusive end index**, NOT a length.
+    To extract *N* characters starting at *start*, use
+    ``substring(s, start, start + N)``.  To extract from *start* to
+    the end of the string, simply omit the third parameter:
+    ``substring(s, start)``.
+    """
     if end is None:
         return s[start:]
     return s[start:end]
