@@ -33,6 +33,64 @@ When designing multi-agent systems, start by drawing a **context flow diagram**:
 
 ---
 
+## Agent Configuration Reference
+
+Before building agents, understand the configuration options available in agent declarations:
+
+```helen
+agent MyAgent {
+    // === Identity ===
+    description "What this agent does"  // Shown to LLM as system context
+    model "gpt-4"                        // LLM model to use (optional, uses default)
+    
+    // === Behavior ===
+    temperature 0.7     // Sampling temperature (0.0-2.0)
+                        // Lower = more deterministic, higher = more creative
+    max-turns 10        // Max LLM interaction turns for tool-calling loops
+    max-tokens 4096     // Max output tokens per response (v1.31.2)
+                        // Controls response length limit
+                        // Default: API provider's default (usually 4096)
+                        // Set higher for long-form content (e.g., 131072 for 128k)
+    
+    // === Tools ===
+    tools ["read_file", "write_file"]  // List of tools agent can use
+    // or
+    tools = MY_TOOLS_CONST              // Reference to const list
+    
+    // === Transcript ===
+    transcript "persistent"  // "none" (default), "memory", or "persistent"
+    
+    // === Context Management ===
+    context {
+        compression "graduated"      // "none", "traditional", or "graduated"
+        cache-aware true             // Enable cache-aware compression
+        working-memory true          // Enable working memory tracking
+        working-memory-tokens 5000   // Token budget for working memory
+    }
+    
+    // === Prompt Template ===
+    prompt """
+    You are a helpful assistant.
+    {{user_input}}
+    """
+    
+    main {
+        // Agent logic
+    }
+}
+```
+
+### Configuration Guidelines
+
+| Setting | When to Use | Example Values |
+|---------|-------------|----------------|
+| `temperature` | Control creativity vs determinism | 0.1 (factual), 0.7 (balanced), 1.2 (creative) |
+| `max-turns` | Limit tool-calling iterations | 1 (single response), 10 (moderate), 50 (complex tasks) |
+| `max-tokens` | Control response length | 100 (short), 4096 (default), 131072 (long-form) |
+| `transcript` | Control conversation persistence | "none" (ephemeral), "memory" (session), "persistent" (disk) |
+
+---
+
 ## Case Study: Intelligent Customer Service System
 
 ### Requirements

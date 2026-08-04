@@ -916,7 +916,7 @@ class Parser:
             elif self._check(
                 TokenType.DESCRIPTION, TokenType.MODEL, TokenType.TOOLS,
                 TokenType.MEMORY, TokenType.TEMPERATURE,
-                TokenType.MAX_TURNS, TokenType.STREAMING,
+                TokenType.MAX_TURNS, TokenType.MAX_TOKENS, TokenType.STREAMING,
             ) or self._is_context_keyword("memory") or self._current().lexeme == "记忆":
                 declarations.append(self._declaration_block())
             else:

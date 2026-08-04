@@ -70,6 +70,7 @@ Bilingual keywords map to the same TokenType and can be freely mixed. The parser
 | `streaming` | `流式输出` | 启用流式 |
 | `temperature` | `温度` | 温度参数 |
 | `max-turns` | `最大轮次` | 最大工具调用轮次 |
+| `max-tokens` | `最大tokens` | LLM 响应最大输出 token 数 (v1.31.2) |
 | `functions` | `函数区` | Agent 内函数定义区 |
 | `main` | `主函` | 入口块 |
 | `import` / `as` | `导入` / `作为` | 模块导入 |
