@@ -84,6 +84,7 @@ class TokenType(Enum):
     STREAMING = auto()
     TEMPERATURE = auto()
     MAX_TURNS = auto()
+    MAX_TOKENS = auto()  # v1.31.2: max output tokens for LLM response
     MEMORY = auto()
     PROMPT = auto()
     LLM = auto()
@@ -140,6 +141,7 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "streaming": TokenType.STREAMING,
     "temperature": TokenType.TEMPERATURE,
     "max-turns": TokenType.MAX_TURNS,
+    "max-tokens": TokenType.MAX_TOKENS,  # v1.31.2: max output tokens
     "prompt": TokenType.PROMPT,
     "llm": TokenType.LLM,
     "import": TokenType.IMPORT,
@@ -222,6 +224,7 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "流式输出": TokenType.STREAMING,
     "温度": TokenType.TEMPERATURE,
     "最大轮次": TokenType.MAX_TURNS,
+    "最大tokens": TokenType.MAX_TOKENS,  # v1.31.2: max output tokens
     "函数区": TokenType.FUNCTIONS,
     "主函": TokenType.MAIN,
     # Other

@@ -39,9 +39,9 @@ class TestSpawnKeyword:
             assert kw["生成"] != TokenType.SPAWN
 
     def test_spawn_keyword_count_unchanged(self):
-        """Total keyword count stays at 91 (v1.29: added transcript/记录)."""
+        """Total keyword count stays at 95 (v1.29: added transcript/记录, v1.30.12: added 且/或, v1.31.2: added max-tokens/最大tokens)."""
         kw = keywords()
-        assert len(kw) == 93
+        assert len(kw) == 95
 
     def test_spawn_expr_node_exists(self):
         """SpawnExprNode exists in AST module."""

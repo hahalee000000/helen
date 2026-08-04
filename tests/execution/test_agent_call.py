@@ -150,6 +150,7 @@ class TestAgentDeclarations:
             memory=None,
             temperature=None,
             max_turns=None,
+            max_tokens=None,
             span=_span(),
         )
         agent = AgentDeclNode(

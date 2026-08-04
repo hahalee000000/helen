@@ -529,6 +529,7 @@ class HttpLLMRuntime(LLMRuntime):
         model: str | None = None,
         temperature: float = 1.0,
         max_turns: int = 1,
+        max_tokens: int | None = None,  # v1.31.2: max output tokens
         history: list[dict[str, Any]] | None = None,
         system_prompt: str | None = None,
         dispatch_fn: Any = None,
@@ -602,7 +603,7 @@ class HttpLLMRuntime(LLMRuntime):
 
             # API call with retry
             response_msg = self._chat_with_messages_retry(
-                messages, model=use_model, temperature=temperature, tools=tools,
+                messages, model=use_model, temperature=temperature, tools=tools, max_tokens=max_tokens,
             )
             if response_msg is None:
                 # API call failed — raise error instead of silently returning empty
@@ -749,6 +750,7 @@ class HttpLLMRuntime(LLMRuntime):
         model: str | None = None,
         temperature: float = 1.0,
         tools: list[dict[str, Any]] | None = None,
+        max_tokens: int | None = None,  # v1.31.2: max output tokens
     ) -> dict[str, Any] | None:
         """Send a chat completion request with retry logic.
 
@@ -772,7 +774,7 @@ class HttpLLMRuntime(LLMRuntime):
         context_overflow_retried = False
 
         for attempt in range(self.max_retries + 1):
-            result = self._chat_with_messages(messages, model=model, temperature=temperature, tools=tools)
+            result = self._chat_with_messages(messages, model=model, temperature=temperature, tools=tools, max_tokens=max_tokens)
             if result is not None:
                 # Success - reset the circuit breaker.
                 if self._circuit_breaker is not None:
@@ -914,6 +916,7 @@ class HttpLLMRuntime(LLMRuntime):
         model: str | None = None,
         temperature: float = 1.0,
         tools: list[dict[str, Any]] | None = None,
+        max_tokens: int | None = None,  # v1.31.2: max output tokens
     ) -> dict[str, Any] | None:
         """Send a chat completion request and return the full message dict.
 
@@ -936,6 +939,8 @@ class HttpLLMRuntime(LLMRuntime):
         }
         if tools:
             payload["tools"] = tools
+        if max_tokens is not None:  # v1.31.2: optional max output tokens
+            payload["max_tokens"] = max_tokens
 
         try:
             response = self._client.post(url, json=payload)
@@ -1006,6 +1011,7 @@ class HttpLLMRuntime(LLMRuntime):
         system_prompt: str | None = None,
         tools: list[dict[str, Any]] | None = None,
         max_turns: int = 5,
+        max_tokens: int | None = None,  # v1.31.2: max output tokens
         history: list[dict[str, Any]] | None = None,
         dispatch_fn: Any = None,
         cancel_event: Any = None,
@@ -1093,6 +1099,8 @@ class HttpLLMRuntime(LLMRuntime):
             }
             if tools:
                 payload["tools"] = tools
+            if max_tokens is not None:  # v1.31.2: optional max output tokens
+                payload["max_tokens"] = max_tokens
 
             try:
                 # Collect streamed chunks with health checking

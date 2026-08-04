@@ -2027,6 +2027,7 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         model = self._get_agent_setting("model")
         temperature = float(self._get_agent_setting("temperature", 1.0))
         system_prompt = self._get_agent_setting("description")
+        max_tokens = self._get_agent_setting("max-tokens")  # v1.31.2
 
         # Get the stream iterator from LLM runtime
         if hasattr(self.llm_runtime, 'act_stream'):
@@ -2035,6 +2036,7 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
                 model=model,
                 temperature=temperature,
                 system_prompt=system_prompt,
+                max_tokens=max_tokens,
             )
             return StreamingResponse(stream_iterator)
         else:
@@ -2044,6 +2046,7 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
                 model=model,
                 temperature=temperature,
                 system_prompt=system_prompt,
+                max_tokens=max_tokens,
             )
             if response and response.text:
                 return self._create_streaming_response(response.text)

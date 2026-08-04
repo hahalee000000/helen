@@ -1052,6 +1052,7 @@ class Parser:
             TokenType.MEMORY: "memory",
             TokenType.TEMPERATURE: "temperature",
             TokenType.MAX_TURNS: "max_turns",
+            TokenType.MAX_TOKENS: "max_tokens",  # v1.31.2
             TokenType.STREAMING: "streaming",
         }
         field_name = field_map.get(token_type)
@@ -1067,6 +1068,7 @@ class Parser:
             memory=value if field_name == "memory" else None,
             temperature=value if field_name == "temperature" else None,
             max_turns=value if field_name == "max_turns" else None,
+            max_tokens=value if field_name == "max_tokens" else None,
             streaming=streaming_value,
             span=span,
         )

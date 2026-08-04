@@ -111,7 +111,7 @@ HELLEN_KEYWORDS = [
     # === Formal keywords (from tokens.py _KEYWORD_MAP) ===
     # Agent keywords
     "agent", "main", "prompt", "description", "model", "temperature",
-    "max-turns", "tools", "streaming",
+    "max-turns", "max-tokens", "tools", "streaming",
     # Variable declarations
     "let", "const", "shared",
     # Control flow
@@ -149,7 +149,7 @@ HELLEN_KEYWORDS = [
     "真", "假", "空", "是",
     "智能体", "大模型", "执行", "分生",
     "提示词", "描述", "模型", "工具",
-    "流式输出", "温度", "最大轮次",
+    "流式输出", "温度", "最大轮次", "最大tokens",
     "函数区", "主函",
     "导入", "作为",
     "协议", "实现",
@@ -182,9 +182,9 @@ HELLEN_CONTEXT_KEYWORDS = [
 
 # Agent property keywords (inside agent {} blocks)
 HELLEN_AGENT_PROPERTIES = [
-    "description", "model", "temperature", "max-turns", "tools",
+    "description", "model", "temperature", "max-turns", "max-tokens", "tools",
     "streaming", "prompt", "transcript",
-    "描述", "模型", "温度", "最大轮次", "工具", "流式输出", "提示词", "记录",
+    "描述", "模型", "温度", "最大轮次", "最大tokens", "工具", "流式输出", "提示词", "记录",
 ]
 
 # Built-in types
@@ -389,6 +389,7 @@ _KEYWORD_DESCRIPTIONS: dict[str, str] = {
     "model": "Agent/model identifier",
     "temperature": "LLM sampling temperature",
     "max-turns": "Maximum LLM interaction turns",
+    "max-tokens": "Maximum output tokens for LLM response",
     "tools": "List of tools available to the agent",
     "streaming": "Enable streaming output",
     "async": "Async function marker",
@@ -441,6 +442,7 @@ _KEYWORD_DESCRIPTIONS: dict[str, str] = {
     "模型": "模型标识符",
     "温度": "LLM 采样温度",
     "最大轮次": "最大交互轮次",
+    "最大tokens": "LLM 响应最大输出 token 数",
     "工具": "智能体可用工具列表",
     "流式输出": "启用流式输出",
     "函数区": "智能体函数区（LLM 可调用的工具）",

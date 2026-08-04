@@ -992,6 +992,7 @@ class TestVisitMethods:
         decl = DeclarationNode(
             description=None, model=None, tools=None,
             memory=None, temperature=None, max_turns=None,
+            max_tokens=None,
             span=_span(),
         )
         interp = Interpreter(ErrorReporter())

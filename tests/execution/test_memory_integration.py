@@ -66,6 +66,7 @@ class TestMemoryInAgentDeclaration:
             memory=_lit("./memory/data.json"),
             temperature=None,
             max_turns=None,
+            max_tokens=None,
             span=_span(),
         )
         assert decl.memory is not None
@@ -79,6 +80,7 @@ class TestMemoryInAgentDeclaration:
             memory=_lit("vector://knowledge-base"),
             temperature=None,
             max_turns=None,
+            max_tokens=None,
             span=_span(),
         )
         assert decl.memory.value == "vector://knowledge-base"

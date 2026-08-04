@@ -316,6 +316,7 @@ class LlmMixin:
         model = self._get_agent_setting("model")
         temperature = float(self._get_agent_setting("temperature", 1.0))
         max_turns = int(self._get_agent_setting("max-turns", 1))
+        max_tokens = self._get_agent_setting("max-tokens")  # v1.31.2: optional
 
         # Phase 7: Apply context config if agent has one
         if self._current_agent is not None and hasattr(self._current_agent, 'context_config'):
@@ -461,10 +462,10 @@ class LlmMixin:
 
         try:
             if has_streaming:
-                return self._visit_llm_act_streaming(node, user_prompt, model, temperature, max_turns,
+                return self._visit_llm_act_streaming(node, user_prompt, model, temperature, max_turns, max_tokens,
                                                        tools, system_prompt, history_for_llm)
             else:
-                return self._visit_llm_act_sync(node, user_prompt, model, temperature, max_turns,
+                return self._visit_llm_act_sync(node, user_prompt, model, temperature, max_turns, max_tokens,
                                                 tools, system_prompt, history_for_llm)
         finally:
             # Restore previous generate tools to handle recursive llm act calls (v1.17)
@@ -497,7 +498,7 @@ class LlmMixin:
         self.observability.llm_audit.log(entry)
 
     def _visit_llm_act_sync(self: Any, node: LlmActExprNode, prompt: str,
-                            model: str, temperature: float, max_turns: int,
+                            model: str, temperature: float, max_turns: int, max_tokens: int | None,
                             tools: list, system_prompt: str, history_for_llm: list) -> object:
         """Synchronous llm act: call act() and return response text."""
         audit_start = time.time()
@@ -525,7 +526,7 @@ class LlmMixin:
 
             response = self.llm_runtime.act(
                 prompt, tools=tools, model=model,
-                temperature=temperature, max_turns=max_turns,
+                temperature=temperature, max_turns=max_turns, max_tokens=max_tokens,
                 system_prompt=system_prompt,
                 history=history_for_llm,
                 dispatch_fn=dispatch_fn,
@@ -562,7 +563,7 @@ class LlmMixin:
             raise HelenRuntimeError(str(e), node.span) from e
 
     def _visit_llm_act_streaming(self: Any, node: LlmActExprNode, prompt: str,
-                                 model: str, temperature: float, max_turns: int,
+                                 model: str, temperature: float, max_turns: int, max_tokens: int | None,
                                  tools: list, system_prompt: str, history_for_llm: list) -> object:
         """Streaming llm act: call act_stream() and dispatch chunks via callbacks."""
         # Check if LLM runtime supports streaming
@@ -669,7 +670,7 @@ class LlmMixin:
                     stream_iter = self.llm_runtime.act_stream(
                         prompt, model=model, temperature=temperature,
                         system_prompt=system_prompt, tools=tools,
-                        max_turns=max_turns,
+                        max_turns=max_turns, max_tokens=max_tokens,
                         history=history_for_llm,
                         dispatch_fn=dispatch_fn,
                         cancel_event=stream_handle.cancelled,
@@ -681,7 +682,7 @@ class LlmMixin:
                     stream_iter = self.llm_runtime.act_stream(
                         prompt, model=model, temperature=temperature,
                         system_prompt=system_prompt, tools=tools,
-                        max_turns=max_turns,
+                        max_turns=max_turns, max_tokens=max_tokens,
                         history=history_for_llm,
                         dispatch_fn=dispatch_fn,
                         on_tool_end_fn=on_tool_end_fn,
@@ -833,6 +834,7 @@ class LlmMixin:
                 "model": "model",
                 "temperature": "temperature",
                 "max-turns": "max_turns",
+                "max-tokens": "max_tokens",  # v1.31.2
             }
             field = field_map.get(name)
             if field is not None:

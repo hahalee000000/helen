@@ -143,7 +143,8 @@ class MockLLMRuntime(LLMRuntime):
 
     def act(self, prompt: str, tools: list[dict[str, Any]] | None = None,
             model: str | None = None, temperature: float = 1.0,
-            max_turns: int = 1, history: list[dict[str, Any]] | None = None,
+            max_turns: int = 1, max_tokens: int | None = None,
+            history: list[dict[str, Any]] | None = None,
             system_prompt: str | None = None,
             dispatch_fn: Any = None,
             on_tool_end_fn: Any = None,
@@ -162,6 +163,7 @@ class MockLLMRuntime(LLMRuntime):
             "model": model,
             "temperature": temperature,
             "max_turns": max_turns,
+            "max_tokens": max_tokens,
             "history": history,
             "system_prompt": system_prompt,
             "dispatch_fn": dispatch_fn,

@@ -638,6 +638,7 @@ class DeclarationNode(StatementNode):
     memory: str | None
     temperature: float | None
     max_turns: int | None
+    max_tokens: int | None  # v1.31.2: max output tokens for LLM response
     span: SourceSpan
     streaming: bool = False  # Whether agent returns StreamingResponse
 
