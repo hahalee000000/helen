@@ -947,7 +947,18 @@ class HttpLLMRuntime(LLMRuntime):
             self._last_status_code = None
             self._last_retry_after = None
             if choices:
-                return choices[0].get("message", {})
+                message = choices[0].get("message", {})
+                # v1.31.2: Detect response truncation (finish_reason: length)
+                finish_reason = choices[0].get("finish_reason")
+                if finish_reason == "length":
+                    logger.warning(
+                        "Response truncated due to max_tokens limit "
+                        "(finish_reason: length). Consider increasing max_tokens "
+                        "or using context compression."
+                    )
+                    # Mark message as truncated for upstream handling
+                    message["_truncated"] = True
+                return message
             return {"content": ""}
 
         except httpx.HTTPStatusError as e:
@@ -1089,6 +1100,7 @@ class HttpLLMRuntime(LLMRuntime):
                 full_chunks: list[str] = []
                 tool_calls_acc: dict[int, dict] = {}  # index -> {name, args_str, id}
                 usage_info: dict[str, int] = {}  # token usage from final chunk
+                finish_reason: str | None = None  # v1.31.2: track truncation
                 last_chunk_time = 0.0
                 stale_threshold = 90.0  # seconds without data = stale
 
@@ -1135,6 +1147,11 @@ class HttpLLMRuntime(LLMRuntime):
                                 if not choices:
                                     continue
 
+                                # v1.31.2: Capture finish_reason from final chunk
+                                chunk_finish_reason = choices[0].get("finish_reason")
+                                if chunk_finish_reason:
+                                    finish_reason = chunk_finish_reason
+
                                 delta = choices[0].get("delta", {})
 
                                 # Text content chunk
@@ -1170,6 +1187,18 @@ class HttpLLMRuntime(LLMRuntime):
                 # Yield usage info at the end of this turn's stream
                 if usage_info:
                     yield {"type": "usage", "usage": usage_info}
+
+                # v1.31.2: Warn if response was truncated
+                if finish_reason == "length":
+                    logger.warning(
+                        "Streaming response truncated due to max_tokens limit "
+                        "(finish_reason: length). Consider increasing max_tokens "
+                        "or using context compression."
+                    )
+                    yield {
+                        "type": "warning",
+                        "message": "Response truncated (max_tokens limit reached)"
+                    }
 
                 # Build full_content from chunks (O(n) join instead of O(n²) +=)
                 full_content = "".join(full_chunks)
