@@ -354,8 +354,8 @@ $ helen repl
 **Notes:**
 - Both REPL and script modes call the LLM API directly
 - Response time: 7-11 seconds (depending on network and model)
-- Automatically reads configuration from `~/.helen/config.yaml` or `~/.helen/.env`
-- Backward compatible with `~/.hermes/.env` configuration
+- Automatically reads configuration from `~/.helen/config.yaml` or environment variables (`HELEN_API_KEY`, `HELEN_BASE_URL`, `HELEN_MODEL`)
+- If not configured, Helen will prompt you with an interactive setup wizard
 
 **Configuration:**
 Ensure `~/.helen/config.yaml` contains:
@@ -366,10 +366,11 @@ llm:
   model: "qwen3.7-plus"
 ```
 
-Or use `~/.helen/.env`:
-```
-HELEN_API_KEY=***
-HELEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+Or use environment variables:
+```bash
+export HELEN_API_KEY=***
+export HELEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+export HELEN_MODEL=qwen3.7-plus
 ```
 
 ---

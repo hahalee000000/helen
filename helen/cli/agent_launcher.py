@@ -147,25 +147,6 @@ def launch_agent():
             return 1
         print()
 
-    # Check LLM configuration
-    config_path = Path.home() / ".helen" / "config.yaml"
-    if not config_path.exists():
-        print("⚠️  Warning: LLM configuration not found")
-        print()
-        print(f"Please configure your LLM API in:")
-        print(f"  {config_path}")
-        print()
-        print("Example:")
-        print("  llm:")
-        print('    base_url: "https://api.openai.com/v1"')
-        print('    api_key: "your-key"')
-        print('    model: "gpt-4"')
-        print()
-        response = input("Continue anyway? [y/N] ")
-        if response.lower() != 'y':
-            return 1
-        print()
-
     # Launch Web UI using cross-platform Python script
     start_script = agent_dir / "webui" / "start_webui.py"
     if not start_script.exists():

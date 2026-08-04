@@ -51,19 +51,42 @@ helen --version
 
 ### Post-Installation Configuration
 
-Helen creates the config directory `~/.helen/` on first run:
+Helen automatically checks for LLM configuration on first run. If not configured, it will prompt you with an interactive setup wizard:
+
+```bash
+$ helen
+⚠️  Helen is not configured
+
+============================================================
+🚀 Helen Setup Wizard
+============================================================
+
+Configure your LLM API settings:
+
+API Base URL [https://api.openai.com/v1]: https://dashscope.aliyuncs.com/compatible-mode/v1
+
+Your API key will be masked (input not visible):
+API Key: ********
+
+Model [gpt-4]: qwen3.7-plus
+
+✅ Configuration saved to: /home/user/.helen/config.yaml
+
+You can now run Helen programs:
+  helen <file.helen>
+```
+
+Alternatively, you can run the setup wizard explicitly:
 
 ```bash
 $ helen init
 Helen home: /home/user/.helen
 Skills directory: /home/user/.helen/skills
-Config created: /home/user/.helen/config.yaml
 
-Next steps:
-  1. Edit /home/user/.helen/config.yaml
-  2. Set your API key (your LLM provider's API key)
-  3. Run a Helen program: helen <file.helen>
+[Interactive wizard starts...]
 ```
+
+Or configure manually by editing `~/.helen/config.yaml` directly.
 
 ### Directory Structure
 
@@ -94,24 +117,25 @@ transcript:
   max_memory_items: 1000
 ```
 
-`.env` format is also supported (`~/.helen/.env`):
+### Environment Variables
+
+You can also configure Helen using environment variables (these override config.yaml):
 
 ```bash
-HELEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-HELEN_API_KEY=your-api-key-here
-HELEN_MODEL=qwen3.7-plus
+export HELEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+export HELEN_API_KEY=your-api-key-here
+export HELEN_MODEL=qwen3.7-plus
 ```
 
-### Configuration Loading Priority
+Environment variables are useful for CI/CD pipelines and temporary overrides.
 
-Configuration is loaded from multiple sources; later sources override earlier ones:
+### Configuration Behavior
 
-| Priority | File | Description |
-|----------|------|-------------|
-| 1 (lowest) | `~/.hermes/.env` | Hermes compatibility fallback |
-| 2 | `~/.helen/.env` | Helen .env format |
-| 3 | `~/.helen/config.yml` | Helen YAML |
-| 4 (highest) | `~/.helen/config.yaml` | Helen YAML |
+Helen checks for configuration before running commands that require LLM access:
+
+- **TTY mode** (interactive terminal): If not configured, automatically runs the setup wizard
+- **Non-TTY mode** (scripts, CI/CD): Shows an error and exits. Set `HELEN_API_KEY` environment variable instead
+- **Commands that skip config check**: `--version`, `--help`, `init`, `check`, `doc`, `quality`, `lsp`, `template`
 
 ### Skill Directory Priority
 

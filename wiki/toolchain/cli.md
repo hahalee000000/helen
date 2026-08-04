@@ -52,12 +52,18 @@ See also [LSP Documentation](lsp.md) and [VS Code Extension Documentation](vscod
 $ helen init
 Helen home: /home/user/.helen
 Skills directory: /home/user/.helen/skills
-Config created: /home/user/.helen/config.yaml
 
-Next steps:
-  1. Edit /home/user/.helen/config.yaml
-  2. Set your API key
-  3. Run a Helen program: helen <file.helen>
+============================================================
+🚀 Helen Setup Wizard
+============================================================
+
+Configure your LLM API settings:
+
+API Base URL [https://api.openai.com/v1]: 
+API Key: ********
+Model [gpt-4]: 
+
+✅ Configuration saved to: /home/user/.helen/config.yaml
 ```
 
 Initializes the Helen standalone config directory `~/.helen/`:
@@ -66,9 +72,9 @@ Initializes the Helen standalone config directory `~/.helen/`:
 |---------|-------------|
 | `~/.helen/` | Helen home directory |
 | `~/.helen/skills/` | Skill directory |
-| `~/.helen/config.yaml` | LLM API config template |
+| `~/.helen/config.yaml` | LLM API config (via interactive wizard) |
 
-If `config.yaml` already exists, it will not be overwritten — you will only be prompted to edit it.
+If already configured, `helen init` will show the current config path and exit.
 
 ### Configuration File Format
 
@@ -83,22 +89,23 @@ llm:
   timeout: 60
 ```
 
-.env format (`~/.helen/.env`):
+### Environment Variables
+
+You can also use environment variables (these override config.yaml):
 
 ```bash
-HELEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-HELEN_API_KEY=your-api-key-here
-HELEN_MODEL=qwen3.7-plus
+export HELEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+export HELEN_API_KEY=your-api-key-here
+export HELEN_MODEL=qwen3.7-plus
 ```
 
-### Config Loading Priority
+### Automatic Configuration Check
 
-| Priority | File | Description |
-|----------|------|-------------|
-| 1 (lowest) | `~/.hermes/.env` | Hermes compatibility fallback |
-| 2 | `~/.helen/.env` | Helen .env |
-| 3 | `~/.helen/config.yml` | Helen YAML |
-| 4 (highest) | `~/.helen/config.yaml` | Helen YAML |
+Helen automatically checks for configuration before running commands:
+
+- **Interactive terminal (TTY)**: If not configured, runs the setup wizard automatically
+- **Non-interactive mode**: Shows error message. Use environment variables instead
+- **Commands that skip config check**: `--version`, `--help`, `init`, `check`, `doc`, `quality`, `lsp`, `template`
 
 ### Skill Directory Priority
 

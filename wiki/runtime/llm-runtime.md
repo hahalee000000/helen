@@ -140,21 +140,14 @@ class HttpLLMRuntime(LLMRuntime):
     timeout: int = 120
 ```
 
-**Configuration loading:** Via `helen.runtime.config` module, loads from multiple sources by priority:
+**Configuration loading:** Via `helen.runtime.config` module, loads from two sources:
 
-| Priority | File | Description |
-|--------|------|------|
-| 1 (lowest) | `~/.hermes/.env` | Hermes compatibility fallback |
-| 2 | `~/.helen/.env` | Helen .env format |
-| 3 | `~/.helen/config.yml` | Helen YAML |
-| 4 (highest) | `~/.helen/config.yaml` | Helen YAML |
+1. **Configuration file**: `~/.helen/config.yaml` (YAML format)
+2. **Environment variables** (override config file): `HELEN_BASE_URL`, `HELEN_API_KEY`, `HELEN_MODEL`
 
-Supported environment variable names:
-- `HELEN_BASE_URL` / `DASHSCOPE_BASE_URL` / `OPENAI_BASE_URL`
-- `HELEN_API_KEY` / `DASHSCOPE_API_KEY` / `OPENAI_API_KEY`
-- `HELEN_MODEL` / `DEFAULT_MODEL`
-- `HELEN_TEMPERATURE` / `TEMPERATURE`
-- `HELEN_TIMEOUT` / `TIMEOUT`
+Environment variables take precedence over config file values. This is useful for CI/CD pipelines and temporary overrides.
+
+**Interactive setup:** When Helen is not configured and running in an interactive terminal, it automatically launches a setup wizard to guide users through configuration.
 
 **Performance:** 7-11 seconds/call (no process startup overhead)
 

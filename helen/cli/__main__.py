@@ -271,6 +271,44 @@ def _extract_session_flags(argv: list[str]) -> tuple[str | None, list[str]]:
     return session_id, remaining
 
 
+def _preflight_config_check() -> None:
+    """Check if Helen is configured, run wizard if needed.
+
+    This function is called before executing any command that requires
+    LLM configuration. If configuration is missing:
+    - In TTY mode: runs interactive setup wizard
+    - In non-TTY mode: shows error message and exits
+
+    Commands that skip this check:
+    - init, check, doc, quality, lsp, template (don't need LLM)
+    - --version, --help (handled before this check)
+    """
+    from helen.runtime.config import is_configured, run_setup_wizard
+
+    if is_configured():
+        return  # Already configured
+
+    # Check if running in a TTY
+    if not sys.stdin.isatty():
+        # Non-interactive mode
+        print("❌ Error: Helen is not configured", file=sys.stderr)
+        print()
+        print("Configuration required. Run one of:", file=sys.stderr)
+        print("  helen init              # Interactive setup", file=sys.stderr)
+        print("  helen                   # Start REPL (will prompt for config)", file=sys.stderr)
+        print()
+        print("Or set environment variable: HELEN_API_KEY", file=sys.stderr)
+        sys.exit(1)
+
+    # Interactive mode: run wizard
+    print("⚠️  Helen is not configured")
+    print()
+    success = run_setup_wizard()
+    if not success:
+        print("❌ Setup incomplete. Cannot proceed without configuration.", file=sys.stderr)
+        sys.exit(1)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point."""
     # v1.30.12: Fix Windows GBK encoding issue for Chinese output
@@ -296,12 +334,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     argv = list(argv) if argv is not None else sys.argv[1:]
 
     if not argv:
+        _preflight_config_check()  # Check config before REPL
         return repl_command()
 
     # Extract global session flags before subcommand dispatch
     session_id, argv = _extract_session_flags(argv)
 
     if not argv:
+        _preflight_config_check()  # Check config before REPL
         return repl_command(session_id=session_id)
 
     # Check for known subcommands
@@ -309,6 +349,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     first = argv[0]
 
     if first in subcommands:
+        # Allow-list: commands that don't need LLM config
+        no_config_commands = {"init", "check", "doc", "quality", "lsp", "template"}
+
+        if first not in no_config_commands:
+            _preflight_config_check()  # Check config before LLM-requiring commands
+
         # Subcommand mode
         if first == "check":
             if len(argv) < 2:
@@ -347,6 +393,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         # Default: treat first argument as a file to run,
         # argv[0] = script name (Issue #30), argv[1:] = program arguments
+        _preflight_config_check()  # Check config before running file
         return run_command(first, program_args=[first] + argv[1:], session_id=session_id)
 
     _print_help()
@@ -357,13 +404,13 @@ def init_command() -> int:
     """Initialize Helen configuration directory.
 
     Creates ~/.helen/ with:
-    - config.yaml (LLM API configuration)
+    - config.yaml (via interactive wizard)
     - skills/ directory
 
     Returns:
         0 on success, 1 on error.
     """
-    from helen.runtime.config import get_helen_home, save_config
+    from helen.runtime.config import get_helen_home, is_configured, run_setup_wizard
 
     # Create Helen home directory
     helen_home = get_helen_home()
@@ -374,31 +421,17 @@ def init_command() -> int:
     skills_dir.mkdir(exist_ok=True)
     print(f"Skills directory: {skills_dir}")
 
-    # Check if config already exists
-    config_path = helen_home / "config.yaml"
-    if config_path.exists():
-        print(f"Config already exists: {config_path}")
+    # Check if already configured
+    if is_configured():
+        config_path = helen_home / "config.yaml"
+        print(f"\n✅ Helen is already configured: {config_path}")
         print("Edit it directly to update settings.")
         return 0
 
-    # Create default config
-    default_config = {
-        "base_url": "https://api.openai.com/v1",
-        "api_key": "YOUR_API_KEY_HERE",
-        "model": "gpt-4",
-        "temperature": 0.7,
-        "timeout": 60,
-    }
-
-    config_path = save_config(default_config)
-    print(f"Config created: {config_path}")
+    # Run interactive wizard
     print()
-    print("Next steps:")
-    print(f"  1. Edit {config_path}")
-    print("  2. Set your API key")
-    print("  3. Run a Helen program: helen <file.helen>")
-
-    return 0
+    success = run_setup_wizard()
+    return 0 if success else 1
 
 
 def test_command(argv: list[str]) -> int:

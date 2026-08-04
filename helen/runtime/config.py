@@ -15,12 +15,8 @@ from typing import Any
 # Helen home directory
 HELEN_HOME = Path.home() / ".helen"
 
-# Configuration file paths (in priority order)
-CONFIG_FILES = [
-    HELEN_HOME / "config.yaml",
-    HELEN_HOME / "config.yml",
-    HELEN_HOME / ".env",
-]
+# Configuration file path
+CONFIG_FILE = HELEN_HOME / "config.yaml"
 
 # Default LLM settings
 DEFAULT_LLM_CONFIG = {
@@ -323,12 +319,9 @@ def get_multimodal_config() -> dict[str, Any]:
 def load_config() -> dict[str, Any]:
     """Load Helen configuration.
 
-    Loads from multiple sources and merges them:
-    1. ~/.helen/.env (Helen .env)
-    2. ~/.helen/config.yml (Helen YAML)
-    3. ~/.helen/config.yaml (Helen YAML, highest priority)
-
-    Later sources override earlier ones.
+    Loads from two sources (later overrides earlier):
+    1. ~/.helen/config.yaml (YAML configuration)
+    2. Environment variables: HELEN_BASE_URL, HELEN_API_KEY, HELEN_MODEL
 
     Returns:
         Configuration dictionary with keys:
@@ -338,22 +331,28 @@ def load_config() -> dict[str, Any]:
         - temperature: Default temperature
         - timeout: Request timeout
     """
+    import os
+
     config = DEFAULT_LLM_CONFIG.copy()
 
-    # Load from all sources in order (later overrides earlier)
-    sources = [
-        (HELEN_HOME / ".env", _load_env_config),
-        (HELEN_HOME / "config.yml", _load_yaml_config),
-        (HELEN_HOME / "config.yaml", _load_yaml_config),
-    ]
+    # Load from config.yaml
+    config_path = HELEN_HOME / "config.yaml"
+    if config_path.exists():
+        yaml_config = _load_yaml_config(config_path)
+        for key, value in yaml_config.items():
+            if value is not None and value != "":
+                config[key] = value
 
-    for path, loader in sources:
-        if path.exists():
-            source_config = loader(path)
-            # Only update keys that are present in source
-            for key, value in source_config.items():
-                if value is not None and value != "":
-                    config[key] = value
+    # Override with environment variables (highest priority)
+    env_mappings = {
+        "HELEN_BASE_URL": "base_url",
+        "HELEN_API_KEY": "api_key",
+        "HELEN_MODEL": "model",
+    }
+    for env_var, config_key in env_mappings.items():
+        env_value = os.environ.get(env_var)
+        if env_value:
+            config[config_key] = env_value
 
     return config
 
@@ -420,88 +419,11 @@ def _load_yaml_config(path: Path) -> dict[str, Any]:
         # Locale setting (top-level)
         if "locale" in data:
             config["locale"] = str(data["locale"])
-    except ImportError:
-        # PyYAML not installed, try simple parsing
-        config.update(_parse_yaml_simple(path))
     except Exception as e:
         import logging
         logging.debug("Failed to load YAML config from %s: %s", path, e)
 
     return config
-
-
-def _parse_yaml_simple(path: Path) -> dict[str, Any]:
-    """Simple YAML parser for basic key-value pairs (no PyYAML dependency)."""
-    config = {}
-    try:
-        with open(path, encoding="utf-8") as f:
-            content = f.read()
-
-        # Simple parser for llm: section
-        in_llm_section = False
-        for line in content.split("\n"):
-            stripped = line.strip()
-            if stripped == "llm:":
-                in_llm_section = True
-                continue
-            if in_llm_section:
-                if stripped and not stripped.startswith("#"):
-                    if ":" in stripped and not line.startswith(" "):
-                        # New top-level section
-                        in_llm_section = False
-                        continue
-                    if ":" in stripped:
-                        key, _, value = stripped.partition(":")
-                        key = key.strip()
-                        value = value.strip().strip('"').strip("'")
-                        if key == "base_url":
-                            config["base_url"] = value
-                        elif key == "api_key":
-                            config["api_key"] = value
-                        elif key == "model":
-                            config["model"] = value
-                        elif key == "temperature":
-                            config["temperature"] = float(value)
-                        elif key == "timeout":
-                            config["timeout"] = int(value)
-    except Exception as e:
-        import logging
-        logging.debug("Failed to parse simple YAML config from %s: %s", path, e)
-
-    return config
-
-
-def _load_env_config(path: Path) -> dict[str, Any]:
-    """Load configuration from .env file."""
-    config = {}
-    try:
-        with open(path, encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                if "=" in line:
-                    key, _, value = line.partition("=")
-                    key = key.strip()
-                    value = value.strip().strip('"').strip("'")
-
-                    # Map env vars to config keys
-                    if key in ("HELEN_BASE_URL", "DASHSCOPE_BASE_URL", "OPENAI_BASE_URL"):
-                        config["base_url"] = value
-                    elif key in ("HELEN_API_KEY", "DASHSCOPE_API_KEY", "OPENAI_API_KEY"):
-                        config["api_key"] = value
-                    elif key in ("HELEN_MODEL", "DEFAULT_MODEL"):
-                        config["model"] = value
-                    elif key in ("HELEN_TEMPERATURE", "TEMPERATURE"):
-                        config["temperature"] = float(value)
-                    elif key in ("HELEN_TIMEOUT", "TIMEOUT"):
-                        config["timeout"] = int(value)
-    except Exception as e:
-        import logging
-        logging.debug("Failed to load .env config from %s: %s", path, e)
-
-    return config
-
 
 def save_config(config: dict[str, Any]) -> Path:
     """Save configuration to ~/.helen/config.yaml.
@@ -536,3 +458,99 @@ def save_config(config: dict[str, Any]) -> Path:
         f.write("\n".join(lines))
 
     return config_path
+
+
+def is_configured() -> bool:
+    """Check if Helen is configured with required LLM settings.
+
+    Returns True if either:
+    - config.yaml exists with non-empty api_key, OR
+    - HELEN_API_KEY environment variable is set
+
+    Returns:
+        True if configured, False otherwise
+    """
+    import os
+
+    # Check environment variable first (highest priority)
+    if os.environ.get("HELEN_API_KEY"):
+        return True
+
+    # Check config.yaml
+    config_path = HELEN_HOME / "config.yaml"
+    if not config_path.exists():
+        return False
+
+    try:
+        config = _load_yaml_config(config_path)
+        api_key = config.get("api_key")
+        # Check that api_key exists and is not a placeholder
+        return bool(api_key and api_key != "YOUR_API_KEY_HERE")
+    except Exception:
+        return False
+
+
+def run_setup_wizard() -> bool:
+    """Interactive setup wizard for initial configuration.
+
+    Prompts user for:
+    - base_url (with default: https://api.openai.com/v1)
+    - api_key (masked input using getpass)
+    - model (with default: gpt-4)
+
+    Returns:
+        True if configuration was saved successfully, False otherwise
+    """
+    import getpass
+
+    print("=" * 60)
+    print("🚀 Helen Setup Wizard")
+    print("=" * 60)
+    print()
+    print("Configure your LLM API settings:")
+    print()
+
+    try:
+        # Prompt for base_url
+        default_base_url = DEFAULT_LLM_CONFIG["base_url"]
+        base_url = input(f"API Base URL [{default_base_url}]: ").strip()
+        if not base_url:
+            base_url = default_base_url
+
+        # Prompt for api_key (masked)
+        print()
+        print("Your API key will be masked (input not visible):")
+        api_key = getpass.getpass("API Key: ").strip()
+        if not api_key:
+            print("❌ Error: API key is required")
+            return False
+
+        # Prompt for model
+        default_model = DEFAULT_LLM_CONFIG["model"]
+        model = input(f"Model [{default_model}]: ").strip()
+        if not model:
+            model = default_model
+
+        # Save configuration
+        config = {
+            "base_url": base_url,
+            "api_key": api_key,
+            "model": model,
+        }
+
+        config_path = save_config(config)
+        print()
+        print(f"✅ Configuration saved to: {config_path}")
+        print()
+        print("You can now run Helen programs:")
+        print(f"  helen <file.helen>")
+        print()
+        return True
+
+    except KeyboardInterrupt:
+        print("\n\n⚠️  Setup cancelled by user")
+        return False
+    except EOFError:
+        # Non-interactive environment
+        print("\n❌ Error: Cannot run interactive wizard in non-interactive mode")
+        return False
