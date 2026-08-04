@@ -1,6 +1,183 @@
 # 版本历史
 
-> Helen v1.30.11 | 修复 Windows UTF-8 编码和会话恢复问题
+> Helen v1.31.0 | 配置系统简化与交互式设置向导
+
+---
+
+## v1.31.0: 配置系统简化与交互式设置向导
+
+**发布日期**: 2026-08-04
+**核心特性**: 简化配置系统，添加交互式设置向导，自动配置检查
+
+### 主要变更
+
+#### 1. 配置系统简化（Breaking Change）
+
+**移除的配置源**：
+- ❌ `.env` 文件支持（`~/.helen/.env`）
+- ❌ `config.yml` 支持（`~/.helen/config.yml`）
+- ❌ 提供商特定环境变量（`DASHSCOPE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`）
+
+**保留的配置方式**：
+- ✅ 配置文件：`~/.helen/config.yaml`
+- ✅ 环境变量：`HELEN_BASE_URL`, `HELEN_API_KEY`, `HELEN_MODEL`
+
+**优先级**：环境变量 > 配置文件
+
+**影响**：
+- 使用 `.env` 或 `config.yml` 的用户需要迁移到 `config.yaml` 或环境变量
+- 使用 `DASHSCOPE_API_KEY` 等变量的用户需要改为 `HELEN_API_KEY`
+
+#### 2. 交互式设置向导
+
+**新功能**：`run_setup_wizard()` - 交互式配置向导
+
+**触发条件**：
+- TTY 模式（交互式终端）：未配置时自动启动向导
+- 非 TTY 模式（脚本/CI）：显示错误并退出
+
+**向导流程**：
+1. 提示输入 API Base URL（带默认值）
+2. 提示输入 API Key（使用 getpass 掩码输入）
+3. 提示输入 Model（带默认值）
+4. 保存到 `~/.helen/config.yaml`
+
+**代码位置**：
+- `helen/runtime/config.py`: `run_setup_wizard()` 函数
+- `helen/cli/__main__.py`: `_preflight_config_check()` 函数
+
+#### 3. 自动配置检查
+
+**检查时机**：在需要 LLM 的命令执行前
+
+**跳过检查的命令**：
+- `--version`, `--help`
+- `init`（创建配置）
+- `check`, `doc`, `quality`（纯前端操作）
+- `lsp`（LSP 服务器）
+- `template`（模板管理）
+
+**需要检查的命令**：
+- `repl`, `test`, `agent`, `watch`
+- 运行 `.helen` 文件
+
+**检查逻辑**：
+```python
+def _preflight_config_check():
+    if is_configured():
+        return  # 已配置，继续执行
+    
+    if not sys.stdin.isatty():
+        # 非交互式：报错退出
+        print("❌ Error: Helen is not configured")
+        sys.exit(1)
+    
+    # 交互式：运行向导
+    run_setup_wizard()
+```
+
+#### 4. 配置检查函数
+
+**新增函数**：
+- `is_configured()`: 检查是否已配置
+  - 检查环境变量 `HELEN_API_KEY`
+  - 检查 `config.yaml` 中的 `api_key`
+  - 拒绝占位符 `YOUR_API_KEY_HERE`
+
+**代码位置**：`helen/runtime/config.py`
+
+### 代码变更
+
+**修改的文件**：
+- `helen/runtime/config.py`: 简化配置加载逻辑，添加 `is_configured()` 和 `run_setup_wizard()`
+- `helen/cli/__main__.py`: 添加 `_preflight_config_check()`，在 3 个插入点调用
+- `helen/cli/agent_launcher.py`: 删除重复的配置检查代码
+
+**删除的函数**：
+- `_load_env_config()`: 不再支持 `.env` 文件
+- `_parse_yaml_simple()`: 不再需要简单的 YAML 解析器
+
+**新增的测试**：
+- `tests/test_config_simplification.py`: 12 个单元测试
+- `tests/test_cli_config_check.py`: 9 个集成测试
+- 删除: `tests/runtime/test_config_coverage.py`（测试已删除的函数）
+
+### 文档更新
+
+**更新的 Wiki 页面**：
+- `wiki/tutorial/01-getting-started.md`: 更新配置说明，添加向导示例
+- `wiki/toolchain/cli.md`: 更新 `helen init` 命令文档
+- `wiki/runtime/llm-runtime.md`: 更新配置加载说明
+- `wiki/tutorial/06-llm-statements.md`: 更新配置引用
+
+### 迁移指南
+
+**从 `.env` 迁移**：
+```bash
+# 旧方式（不再支持）
+~/.helen/.env
+HELEN_API_KEY=***
+
+# 新方式 1：使用 config.yaml
+~/.helen/config.yaml
+llm:
+  api_key: "***"
+
+# 新方式 2：使用环境变量
+export HELEN_API_KEY=***
+```
+
+**从 `config.yml` 迁移**：
+```bash
+# 旧方式（不再支持）
+~/.helen/config.yml
+
+# 新方式：重命名为 config.yaml
+mv ~/.helen/config.yml ~/.helen/config.yaml
+```
+
+**从提供商特定变量迁移**：
+```bash
+# 旧方式（不再支持）
+export DASHSCOPE_API_KEY=***
+export OPENAI_API_KEY=***
+
+# 新方式
+export HELEN_API_KEY=***
+```
+
+### 用户体验改进
+
+**首次使用流程**：
+```bash
+$ helen
+⚠️  Helen is not configured
+
+============================================================
+🚀 Helen Setup Wizard
+============================================================
+
+Configure your LLM API settings:
+
+API Base URL [https://api.openai.com/v1]: 
+API Key: ********
+Model [gpt-4]: 
+
+✅ Configuration saved to: /home/user/.helen/config.yaml
+```
+
+**CI/CD 集成**：
+```bash
+# 设置环境变量即可
+export HELEN_API_KEY=***
+helen program.helen  # 无需交互，直接运行
+```
+
+### 测试覆盖
+
+- **单元测试**: 12 个测试（配置加载、配置检查、向导功能）
+- **集成测试**: 9 个测试（CLI 行为、跳过检查、非 TTY 错误）
+- **总测试数**: 3437 个测试全部通过 ✅
 
 ---
 
