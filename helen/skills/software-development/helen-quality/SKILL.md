@@ -122,6 +122,24 @@ agent Programmer {
 
 The annotation path supports both absolute and relative paths (relative to the source file). The file must actually exist.
 
+## Engineering Dimension — Naming Convention
+
+The engineering dimension (weight 10%) penalizes **shadowing builtins**. Helen has 333 stdlib functions and 91 keywords — never use them as variable names. Use **suffix-qualified names**:
+
+| ❌ Penalized | ✅ Preferred |
+|-------------|-------------|
+| `let map = {}` | `let config_map = {}` |
+| `let list = []` | `let item_list = []` |
+| `let count = 0` | `let total_count = 0` |
+| `let str = "x"` | `let raw_str = "x"` |
+| `let result = ...` | `let find_result = ...` |
+
+Common suffixes: `_map`, `_list`, `_count`, `_text`, `_result`, `_config`, `_data`, `_file`, `_path`, `_name`, `_id`, `_value`
+
+Chinese identifiers (`结果字典`, `配置列表`, `扫描数量`) naturally avoid English builtin collisions.
+
+See [helen-syntax: Variable Naming Convention](../helen-syntax/SKILL.md#variable-naming-convention--avoid-shadowing-builtins) for full details.
+
 ## CI Integration
 
 ```bash

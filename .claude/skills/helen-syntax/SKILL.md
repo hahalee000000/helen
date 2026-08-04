@@ -35,7 +35,7 @@ Bilingual keywords map to the same TokenType and can be freely mixed. The parser
 - Variable/function: `设`, `常量`, `函数`, `返回`
 - Logical operators: `且` (AND), `或` (OR)
 
-**Note**: stdlib function names (like `长度`, `打印`, `排序`) are NOT keywords and CAN be used as variable names.
+**Note**: stdlib function names (like `长度`, `打印`, `排序`) are NOT keywords and technically CAN be used as variable names. However, **shadowing builtins is strongly discouraged** — the interpreter may raise `ShadowBuiltinError`, and it causes confusion. See [Variable Naming Convention](#variable-naming-convention) below.
 
 ### Keyword Mapping Table
 
@@ -276,6 +276,58 @@ const PI = 3.14159            // Constant (top-level allowed)
 main {
     let x = 42                    // Mutable variable
     let name: str = "Helen"       // Type annotation
+}
+```
+
+### Variable Naming Convention — Avoid Shadowing Builtins
+
+Helen has 333 stdlib functions (e.g. `len`, `find`, `format`, `map`, `list`, `count`, `str`, `print`, `sort`, `keys`, `values`, `contains`, `split`, `join`, `strip`, `replace`, `substring`) and 91 reserved keywords. **Never use these as variable names.** The interpreter may raise `ShadowBuiltinError`, and the code becomes confusing.
+
+**Rule: use suffix-qualified names — short names must carry a role suffix.**
+
+| ❌ Don't | ✅ Do | Why |
+|----------|------|-----|
+| `let map = {}` | `let config_map = {}` | shadows `map()` builtin |
+| `let list = []` | `let item_list = []` | shadows `list` type/builtin |
+| `let count = 0` | `let total_count = 0` | shadows `count()` builtin |
+| `let str = "hi"` | `let raw_str = "hi"` | shadows `str()` builtin |
+| `let result = find()` | `let find_result = find()` | `result` too generic |
+| `let data = ...` | `let user_data = ...` | compound name |
+| `let file = ...` | `let log_file = ...` | compound name |
+| `let key = "x"` | `let api_key = "x"` | compound name |
+
+**Common suffixes:** `_map`, `_list`, `_count`, `_text`, `_str`, `_result`, `_config`, `_data`, `_file`, `_path`, `_name`, `_id`, `_type`, `_value`, `_item`, `_key`, `_index`, `_flag`, `_status`, `_error`
+
+**Compound names are safest:** `user_name`, `scan_result`, `log_file`, `api_key`, `total_count`, `error_message`, `config_map`, `item_list`
+
+**Chinese identifiers naturally avoid conflicts:** `描述文本`, `配置字典`, `结果列表`, `扫描数量` — these rarely collide with English builtin names.
+
+```helen
+// ❌ WRONG — shadows builtins
+fn process(items: list): map {
+    let map = {}           // shadows map()
+    let list = []          // shadows list
+    let count = len(items) // shadows count()
+    let str = "done"       // shadows str()
+    return map
+}
+
+// ✅ CORRECT — suffix-qualified
+fn process(items: list): map {
+    let result_map = {}
+    let output_list = []
+    let item_count = len(items)
+    let status_text = "done"
+    return result_map
+}
+
+// ✅ CORRECT — Chinese names avoid conflicts naturally
+fn 处理(项目列表: list): map {
+    设 结果字典 = {}
+    设 输出列表 = []
+    设 项目数量 = 长度(项目列表)
+    设 状态文本 = "完成"
+    返回 结果字典
 }
 ```
 
