@@ -30,7 +30,7 @@ Helen's standard library provides **333 built-in functions**, covering all core 
 | **IO** | 9 | `stream_print`, `stream_clear`, `progress_bar`, `mkdir`, `mkdir_p`, `append_file`, `stream_cursor_up`, `stream_cursor_down` |
 | **Path** | 6 | `path_basename`, `path_dirname`, `path_exists`, `path_is_dir`, `path_is_file`, `path_join` |
 | **Tools** | 7 | `shell_exec`, `calculate`, `patch_file`, `load_skill`, `list_skill_references`, `web_search`, `web_fetch` |
-| **Observability** | 4 | `debug`, `trace_on`, `trace_off`, `get_trace` |
+| **Observability** | 8 | `debug`, `trace_on`, `trace_off`, `get_trace`, `coverage_on`, `coverage_off`, `coverage_report`, `coverage_summary` |
 | **Context** | 29 | `clear_context`, `compress_context`, `compress_context_target`, `context_stats`, `context_usage`, `get_message`, `delete_message`, `pin_message`, `unpin_message`, `list_pinned_messages`, `insert_message`, `replace_message`, `working_memory_get`, `working_memory_set`, `working_memory_remove`, `working_memory_clear`, `set_compression_strategy`, `set_context_window`, `set_working_memory_enabled`, `set_cache_aware`, `get_context_config`, `search_context`, `context_slice`, `export_context`, `import_context`, `fork_context`, `restore_context`, `on_compression`, `on_context_overflow` |
 | **Transcript** | 22 | `get_session_id`, `get_session_meta`, `list_sessions`, `replay_transcript`, `replay_full_session`, `export_transcript`, `search_transcript`, `list_invocations`, `get_invocation`, `get_invocation_tree`, `invocation_path`, `get_compression_audit`, `resume_session`, `get_session_dir`, `set_session_dir`, `delete_session`, `delete_current_session`, `cleanup_sessions`, `get_spawned_sessions`, `get_spawn_tree` |
 | **Media** | 12 | `media`, `media_base64`, `is_media`, `media_type`, `to_openai_parts`, `to_claude_parts`, `to_gemini_parts`, `media_to_base64`, `save_media`, `is_image`, `is_video`, `is_audio` |
@@ -497,10 +497,19 @@ main {
 
     // get_trace() — Get recent execution trace records
     let trace = get_trace(10)
+
+    // Coverage measurement — track function/line/branch coverage
+    coverage_on()          // Enable coverage tracking
+    let result = tested_function()
+    coverage_off()         // Disable coverage tracking
+    let report = coverage_report("text")  // "text" | "json" | "html"
+    let summary = coverage_summary()      // One-line summary
 }
 ```
 
 **Design features**: Zero overhead by default (no impact when tracing is off), JSON structured output (AI-consumable), automatic call stack + scope variable capture on errors/assertions, `llm act` automatically records call details.
+
+**Coverage CLI**: Use `helen coverage <test_files> [--source <dir>] [--html <dir>]` to run tests with coverage measurement. See `helen coverage --help` for options.
 
 ## Context (Context Management)
 

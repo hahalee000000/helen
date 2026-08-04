@@ -1,0 +1,84 @@
+// Coverage Measurement Example
+// This file demonstrates Helen's test coverage measurement feature.
+//
+// Usage:
+//   helen coverage coverage_example.helen
+//   helen coverage coverage_example.helen --html coverage_html/
+//   helen coverage coverage_example.helen --format json
+//
+// The coverage tool measures:
+//   - Function coverage: which functions were called
+//   - Line coverage: which code lines were executed
+//   - Branch coverage: which if/else branches were taken
+
+// A simple calculator with various code paths
+fn do_math(op, a, b) {
+    if op == "+" {
+        return a + b
+    } else if op == "-" {
+        return a - b
+    } else if op == "*" {
+        return a * b
+    } else if op == "/" {
+        if b == 0 {
+            return null  // Division by zero
+        }
+        return a / b
+    } else {
+        return null  // Unknown operator
+    }
+}
+
+// A function with multiple branches
+fn classify_number(n) {
+    if n > 0 {
+        return "positive"
+    } else if n < 0 {
+        return "negative"
+    } else {
+        return "zero"
+    }
+}
+
+// A recursive function
+fn factorial(n) {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+// Tests that cover some but not all code paths
+fn test_addition() {
+    assert_equal(do_math("+", 2, 3), 5)
+    assert_equal(do_math("+", -1, 1), 0)
+}
+
+fn test_subtraction() {
+    assert_equal(do_math("-", 10, 3), 7)
+}
+
+fn test_positive_numbers() {
+    assert_equal(classify_number(5), "positive")
+    assert_equal(classify_number(100), "positive")
+}
+
+fn test_factorial() {
+    assert_equal(factorial(0), 1)
+    assert_equal(factorial(5), 120)
+}
+
+// Note: The following code paths are NOT covered by the tests above:
+// - do_math("*", ...) - multiplication not tested
+// - do_math("/", ...) - division not tested (especially div by zero)
+// - do_math with unknown operator
+// - classify_number(-5) - negative numbers not tested
+// - classify_number(0) - zero case not tested
+//
+// Try running with coverage to see which lines are covered:
+//   helen coverage coverage_example.helen
+//
+// Expected output (approximate):
+//   Functions: 6/6 (100%) - all functions are called
+//   Lines:     ~15/25 (60%) - many branches not exercised
+//   Branches:  ~4/10 (40%) - only some if/else branches taken

@@ -473,6 +473,7 @@ class ObservabilityManager:
     - Execution tracing
     - Error snapshots
     - LLM audit logging
+    - Coverage measurement
     """
 
     def __init__(self):
@@ -481,6 +482,9 @@ class ObservabilityManager:
         self.tracer = ExecutionTracer()
         self.llm_audit = LLMAuditLog()
         self._last_error: ErrorSnapshot | None = None
+        # Coverage measurement (default off)
+        from helen.runtime.coverage import CoverageTracker
+        self.coverage: CoverageTracker = CoverageTracker()
 
     def capture_error(self, error_type: str, message: str,
                       span: SourceSpan | None,
@@ -518,6 +522,7 @@ class ObservabilityManager:
         self.tracer.clear()
         self.llm_audit.clear()
         self._last_error = None
+        self.coverage.reset()
 
 
 # ---------------------------------------------------------------------------

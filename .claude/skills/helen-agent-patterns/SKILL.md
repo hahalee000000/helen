@@ -74,6 +74,7 @@ agent ConfiguredAgent {
     model "gpt-4"              # LLM model
     temperature 0.7            # Creativity (0.0-1.0)
     max-turns 10               # Maximum tool call rounds
+    max-tokens 4096            # Max output tokens (v1.31.2)
     streaming true             # Enable streaming response
     tools = ["web_search", "read_file", "write_file"]
 
@@ -756,11 +757,12 @@ try {
 | 2 | **prompt** | Specific role + steps + output format | `"You analyze things."` |
 | 3 | **temperature** | Creative 0.9 / Precise 0.2 / Balanced 0.7 | Always 0.5 |
 | 4 | **max-turns** | Simple Q&A 3 / Complex tasks 15 | Unlimited |
-| 5 | **tools** | Least privilege: `["read_file"]` | `["read_file","write_file","shell_exec","web_search"]` |
-| 6 | **model** | Omit (use default) or verify API support | Hardcoding unsupported models |
-| 7 | **Scope** | `shared let` for cross-agent value sharing | Expecting module `let` to be visible in agent |
-| 8 | **ground truth** | Inject environment facts via `{{}}` | Letting the LLM guess cwd/time |
-| 9 | **validation** | Auto-run `helen check` after writing code | Assuming code is correct without validation |
+| 5 | **max-tokens** | Short 100 / Default 4096 / Long-form 131072 | Omitting when long responses needed |
+| 6 | **tools** | Least privilege: `["read_file"]` | `["read_file","write_file","shell_exec","web_search"]` |
+| 7 | **model** | Omit (use default) or verify API support | Hardcoding unsupported models |
+| 8 | **Scope** | `shared let` for cross-agent value sharing | Expecting module `let` to be visible in agent |
+| 9 | **ground truth** | Inject environment facts via `{{}}` | Letting the LLM guess cwd/time |
+| 10 | **validation** | Auto-run `helen check` after writing code | Assuming code is correct without validation |
 
 ### Writing Helen Code: Always Validate with `helen check`
 

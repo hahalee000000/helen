@@ -271,6 +271,106 @@ $ helen test file.helen --json
 3. 创建一个包含 `before_each` 的测试套件，验证钩子函数正确执行
 4. 用 `--watch` 模式实现一个简单的 TDD 循环
 
+## 测试覆盖率测量
+
+Helen 内置了测试覆盖率测量工具，可以追踪哪些代码被测试执行了。
+
+### 基本用法
+
+```bash
+# 运行测试并测量覆盖率
+helen coverage test_file.helen
+
+# 测量整个目录
+helen coverage tests/
+
+# 包含源代码覆盖率
+helen coverage test_math.helen --source math_utils.helen
+```
+
+### 覆盖率类型
+
+| 类型 | 说明 |
+|------|------|
+| **函数覆盖率** | 哪些函数被测试调用 |
+| **行覆盖率** | 哪些代码行被执行 |
+| **分支覆盖率** | 哪些 if/else 分支被走到 |
+
+### 输出格式
+
+```bash
+# 文本格式（默认）
+helen coverage tests/ --format text
+
+# JSON 格式
+helen coverage tests/ --format json > coverage.json
+
+# HTML 报告（可视化）
+helen coverage tests/ --html coverage_html/
+```
+
+### 示例输出
+
+```
+============================================================
+HELEN COVERAGE REPORT
+============================================================
+
+  Lines:     22/46  (47.8%)
+  Functions: 7/7  (100.0%)
+  Branches:  6/6  (100.0%)
+
+Files:
+  File                                          Lines      Funcs
+  ---------------------------------------- ---------- ----------
+  calculator.helen                            15/20      3/4    
+  calculator_test.helen                       7/7        4/4    
+
+============================================================
+```
+
+### 在代码中控制覆盖率
+
+```helen
+main {
+    // 手动启用覆盖率跟踪
+    coverage_on()
+    
+    let result = tested_function()
+    
+    // 获取覆盖率摘要
+    let summary = coverage_summary()
+    print(summary)
+    // 输出: Coverage: Lines 85.0% (17/20) | Functions 100.0% (4/4) | ...
+    
+    // 生成详细报告
+    let report = coverage_report("text")
+    print(report)
+    
+    // 禁用覆盖率
+    coverage_off()
+}
+```
+
+### CI 集成
+
+在 CI 中使用覆盖率检查：
+
+```yaml
+# GitHub Actions 示例
+- name: Run tests with coverage
+  run: |
+    helen coverage tests/ --format json > coverage.json
+    # 检查覆盖率是否达标
+    COVERED=$(jq '.summary.functions.covered' coverage.json)
+    TOTAL=$(jq '.summary.functions.total' coverage.json)
+    PERCENT=$((COVERED * 100 / TOTAL))
+    if [ $PERCENT -lt 80 ]; then
+      echo "Coverage $PERCENT% is below 80% threshold"
+      exit 1
+    fi
+```
+
 ---
 
 > **相关文档**: [[toolchain/testing|测试框架 API 参考]] | [[tutorial/01-getting-started|入门指南]]

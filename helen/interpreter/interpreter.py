@@ -389,6 +389,9 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
 
     def _execute(self, node: StatementNode) -> object:
         """Execute a statement node, returning its result."""
+        # Record line coverage (if enabled)
+        if self.observability.coverage.enabled and hasattr(node, 'span') and node.span:
+            self.observability.coverage.record_line(node.span)
         return node.accept(self)
 
     def _execute_stmts(self, stmts: list[StatementNode]) -> object:
@@ -982,7 +985,11 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         """Execute an if/else statement."""
         condition = node.condition.accept(self)
         if self._truthy(condition):
+            # Record branch: "then" taken (branch_id=1)
+            self.observability.coverage.record_branch(node.span, 1)
             return node.then_branch.accept(self)
+        # Record branch: "else" taken (branch_id=0)
+        self.observability.coverage.record_branch(node.span, 0)
         if node.else_branch is not None:
             return node.else_branch.accept(self)
         return None
@@ -1053,6 +1060,8 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
     def visit_function_decl(self, node: FunctionDeclNode) -> object:
         """Register a function definition (do not execute)."""
         self._functions[node.name] = node
+        # Register function for coverage tracking
+        self.observability.coverage.register_function(node.span, node.name)
         return None
 
     def visit_lambda(self, node: LambdaNode) -> object:
@@ -1135,6 +1144,8 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         self._agents[node.name] = node
         # Track as current agent for llm act setting extraction (HLD 3.6.5)
         self._current_agent = node
+        # Register agent for coverage tracking
+        self.observability.coverage.register_function(node.span, node.name)
         return None
 
     def visit_agent_param(self, node: AgentParamNode) -> object:
@@ -1538,6 +1549,8 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
                 call_args[param.name] = args[i]
         self.observability.call_stack.push(func.name, func.span, call_args)
         self.observability.tracer.trace("call", func.span, {"function": func.name, "args": call_args})
+        # Record function coverage
+        self.observability.coverage.record_function(func.span, func.name)
 
         # v1.10: Use provided parent_env (for module functions) or current env
         if parent_env is not None:
@@ -1636,6 +1649,9 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
 
         # Execute lambda body in the new environment
         with self._push_scope(call_env):
+            # Record closure coverage
+            if lambda_node.span:
+                self.observability.coverage.record_function(lambda_node.span, "<closure>")
             result = self._execute_stmts(lambda_node.body.body)
             if isinstance(result, ReturnSentinel):
                 return result.value
@@ -1771,6 +1787,8 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         # Push call stack frame (AI observability)
         self.observability.call_stack.push(agent.name, agent.span, args)
         self.observability.tracer.trace("call", agent.span, {"agent": agent.name, "args": args, "isolation": isolation_level, "invocation_id": inv_id})
+        # Record agent coverage
+        self.observability.coverage.record_function(agent.span, agent.name)
 
         # Create a completely isolated environment (HLD 3.5.2)
         # Start from a fresh root, not inheriting parent agent's variables.

@@ -223,6 +223,94 @@ agent DebugHelper {
 - LLM audit logging is on by default
 - Memory usage has an upper bound and does not grow with conversation length
 
+## Test Coverage Measurement
+
+Helen provides built-in test coverage measurement to track which code is executed during tests.
+
+### CLI Usage
+
+```bash
+# Run tests with coverage measurement
+helen coverage test_file.helen
+
+# Measure coverage for a directory
+helen coverage tests/
+
+# Include source code coverage
+helen coverage test_math.helen --source math_utils.helen
+
+# Generate HTML report
+helen coverage tests/ --html coverage_html/
+
+# JSON output
+helen coverage tests/ --format json > coverage.json
+```
+
+### Coverage Types
+
+| Type | Description |
+|------|-------------|
+| **Function Coverage** | Which functions were called during tests |
+| **Line Coverage** | Which code lines were executed |
+| **Branch Coverage** | Which if/else branches were taken |
+
+### Programmatic API
+
+```helen
+main {
+    // Enable coverage tracking
+    coverage_on()
+    
+    // ... run some code ...
+    let result = tested_function()
+    
+    // Get coverage summary (one-line)
+    let summary = coverage_summary()
+    // Output: "Coverage: Lines 85.0% (17/20) | Functions 100.0% (4/4) | ..."
+    
+    // Get detailed report
+    let text_report = coverage_report("text")
+    let json_report = coverage_report("json")
+    
+    // Disable coverage
+    coverage_off()
+}
+```
+
+### Example Output
+
+```
+============================================================
+HELEN COVERAGE REPORT
+============================================================
+
+  Lines:     22/46  (47.8%)
+  Functions: 7/7  (100.0%)
+  Branches:  6/6  (100.0%)
+
+Files:
+  File                                          Lines      Funcs
+  ---------------------------------------- ---------- ----------
+  calculator.helen                            15/20      3/4    
+  calculator_test.helen                       7/7        4/4    
+
+============================================================
+```
+
+### Design Features
+
+- **Zero overhead by default**: Coverage tracking is disabled unless explicitly enabled
+- **Minimal logging**: Only records file/line/function names, never parameter values
+- **Resource-bounded**: 1M counter limit prevents memory exhaustion
+- **Thread-safe**: Uses locks to protect counter updates
+
+### Integration with Observability
+
+Coverage measurement integrates with Helen's existing observability infrastructure:
+- `ObservabilityManager.coverage` — CoverageTracker instance
+- Works alongside `ExecutionTracer`, `CallStackTracker`, and `LLMAuditLog`
+- Uses same enable/disable pattern as `trace_on()`/`trace_off()`
+
 ## Exercises
 
 1. Use `assert` to validate input parameters
@@ -230,3 +318,4 @@ agent DebugHelper {
 3. Use `debug()` to output intermediate results
 4. Use `:last_error` to inspect error context
 5. Use `:llm_log` to inspect the LLM call audit log
+6. Use `helen coverage` to measure test coverage of your code

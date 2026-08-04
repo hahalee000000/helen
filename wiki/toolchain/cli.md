@@ -15,6 +15,7 @@ $ helen doc <files...>     # Generate documentation
 $ helen init               # Initialize config directory
 $ helen lsp                # Start Language Server (LSP)
 $ helen test <file>        # Run tests
+$ helen coverage <file>    # Run tests with coverage measurement
 $ helen quality <file>     # 7-dimension quality assessment
 ```
 
@@ -517,6 +518,76 @@ While the agent is running, you can type slash commands:
 - [Tutorial 18: Helen Programming Agent](../tutorial/18-helen-agent.md) — full guide
 - [Session Scoping](../runtime/session-scoping.md) — how `.helen/` markers work
 - [TranscriptStore SSOT](../runtime/transcript-store.md) — persistent sessions
+
+---
+
+## helen coverage
+
+```bash
+$ helen coverage test_file.helen [options]
+$ helen coverage tests/ --html coverage_html/
+$ helen coverage test_math.helen --source math_utils.helen
+```
+
+Runs tests and measures code coverage. Reports which functions, lines, and branches were executed during testing.
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--format <fmt>` | Output format: `text` (default), `json`, or `html` |
+| `--output <path>` | Save report to file |
+| `--html <dir>` | Generate HTML report in directory |
+| `--source <dir>` | Source directory to measure coverage for |
+
+### Coverage Types
+
+| Type | Description |
+|------|-------------|
+| **Function Coverage** | Which functions were called during tests |
+| **Line Coverage** | Which code lines were executed |
+| **Branch Coverage** | Which if/else branches were taken |
+
+### Example Output
+
+```
+============================================================
+HELEN COVERAGE REPORT
+============================================================
+
+  Lines:     22/46  (47.8%)
+  Functions: 7/7  (100.0%)
+  Branches:  6/6  (100.0%)
+
+Files:
+  File                                          Lines      Funcs
+  ---------------------------------------- ---------- ----------
+  calculator.helen                            15/20      3/4    
+  calculator_test.helen                       7/7        4/4    
+
+============================================================
+```
+
+### Programmatic Coverage Control
+
+Coverage can also be controlled programmatically in Helen code:
+
+```helen
+main {
+    coverage_on()           // Enable coverage tracking
+    // ... run code ...
+    let summary = coverage_summary()
+    let report = coverage_report("text")
+    coverage_off()          // Disable coverage tracking
+}
+```
+
+### Design Features
+
+- **Zero overhead by default**: No performance impact when not enabled
+- **Minimal logging**: Only records file/line/function names, never values
+- **Resource-bounded**: 1M counter limit prevents memory exhaustion
+- **Thread-safe**: Uses locks for counter updates
 
 ---
 

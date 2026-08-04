@@ -372,7 +372,7 @@ class TestQualityScorer:
 
         scorer = QualityScorer()
 
-        # All documented
+        # All documented, no project root
         good_metrics = CodeMetrics(
             function_count=3,
             functions=[
@@ -381,10 +381,10 @@ class TestQualityScorer:
                 FunctionMetrics("fn3", 21, 30, 10, 2, 1, True, 2),
             ],
         )
-        score = scorer.score_documentation(good_metrics)
-        assert score == 10.0
+        score = scorer.score_documentation(good_metrics, project_root="")
+        assert score == 6.0  # Only function docstrings (3/3 * 6.0)
 
-        # None documented
+        # None documented, no project root
         bad_metrics = CodeMetrics(
             function_count=3,
             functions=[
@@ -393,8 +393,8 @@ class TestQualityScorer:
                 FunctionMetrics("fn3", 21, 30, 10, 2, 1, False, 2),
             ],
         )
-        score = scorer.score_documentation(bad_metrics)
-        assert score == 0.0
+        score = scorer.score_documentation(bad_metrics, project_root="")
+        assert score == 0.0  # No docs at all
 
     def test_engineering_checks_all_naming(self):
         """Bug fix #13: should check ALL naming violations, not just first."""
@@ -706,15 +706,32 @@ class TestIssue7TestCoverageScoring:
     Python tests and @test-location annotations."""
 
     def test_annotation_existing_path(self, tmp_path):
-        """@test-location pointing at an existing file → 8.0"""
+        """@test-location pointing at an existing file with tests → count-based score"""
         test_file = tmp_path / "tests" / "test_my_agent.py"
         test_file.parent.mkdir()
-        test_file.write_text("# test")
+        # Add actual test functions to get a good score
+        test_file.write_text("""
+def test_one():
+    pass
+
+def test_two():
+    pass
+
+def test_three():
+    pass
+
+def test_four():
+    pass
+
+def test_five():
+    pass
+""")
 
         src = f'// @test-location: {test_file}\nfn foo() {{}}\n'
         scorer = QualityScorer()
         score = scorer.score_test_coverage("/some/path/agent.helen", source=src)
-        assert score == 8.0
+        # 5 tests → 6.0 (5-19 range)
+        assert score == 6.0
 
     def test_annotation_nonexistent_path_falls_through(self, tmp_path):
         """@test-location pointing at a non-existing file → skip."""
@@ -725,28 +742,47 @@ class TestIssue7TestCoverageScoring:
         assert score == 2.0
 
     def test_python_tests_in_tests_dir(self, tmp_path):
-        """tests/ directory with *.py files → 6.0"""
+        """tests/ directory with *.py files → count-based score"""
         tests_dir = tmp_path / "tests"
         tests_dir.mkdir()
-        (tests_dir / "test_something.py").write_text("# test")
+        # Add test functions
+        (tests_dir / "test_something.py").write_text("""
+def test_one():
+    pass
+
+def test_two():
+    pass
+""")
 
         scorer = QualityScorer()
         score = scorer.score_test_coverage(str(tmp_path / "main.helen"))
-        assert score == 6.0
+        # 2 tests → 4.0 (1-4 range)
+        assert score == 4.0
 
     def test_parent_level_matching_py_test(self, tmp_path):
-        """Parent-level tests/ with matching *.py → 7.0"""
+        """Parent-level tests/ with matching *.py → count-based score"""
         # Set up: tmp_path/project/agent.helen and tmp_path/tests/test_agent.py
         project_dir = tmp_path / "project"
         project_dir.mkdir()
         tests_dir = tmp_path / "tests"
         tests_dir.mkdir()
-        (tests_dir / "test_agent.py").write_text("# test")
+        # Add test functions
+        (tests_dir / "test_agent.py").write_text("""
+def test_one():
+    pass
+
+def test_two():
+    pass
+
+def test_three():
+    pass
+""")
 
         agent_file = project_dir / "agent.helen"
         scorer = QualityScorer()
         score = scorer.score_test_coverage(str(agent_file))
-        assert score == 7.0
+        # 3 tests → 4.0 (1-4 range)
+        assert score == 4.0
 
     def test_no_tests_found(self, tmp_path):
         """No tests anywhere → 2.0"""
@@ -760,11 +796,34 @@ class TestIssue7TestCoverageScoring:
         project_dir.mkdir()
         tests_dir = tmp_path / "tests"
         tests_dir.mkdir()
-        (tests_dir / "test_helen_programmer.py").write_text("# test")
+        # Add test functions
+        (tests_dir / "test_helen_programmer.py").write_text("""
+def test_one():
+    pass
+
+def test_two():
+    pass
+
+def test_three():
+    pass
+
+def test_four():
+    pass
+
+def test_five():
+    pass
+
+def test_six():
+    pass
+
+def test_seven():
+    pass
+""")
 
         src = "fn helper(): str { return \"ok\" }\n"
         agent_file = project_dir / "helen_programmer.helen"
 
         score = _quality_score(src, str(agent_file))
-        assert score["test_coverage"] == 7.0
+        # 7 tests → 6.0 (5-19 range)
+        assert score["test_coverage"] == 6.0
 

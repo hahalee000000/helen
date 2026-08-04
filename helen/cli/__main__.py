@@ -346,12 +346,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return repl_command(session_id=session_id)
 
     # Check for known subcommands
-    subcommands = {"check", "repl", "doc", "init", "test", "quality", "lsp", "watch", "template", "agent"}
+    subcommands = {"check", "repl", "doc", "init", "test", "quality", "lsp", "watch", "template", "agent", "coverage"}
     first = argv[0]
 
     if first in subcommands:
         # Allow-list: commands that don't need LLM config
-        no_config_commands = {"init", "check", "doc", "quality", "lsp", "template"}
+        no_config_commands = {"init", "check", "doc", "quality", "lsp", "template", "coverage"}
 
         if first not in no_config_commands:
             _preflight_config_check()  # Check config before LLM-requiring commands
@@ -384,6 +384,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif first == "agent":
             from helen.cli.agent_launcher import launch_agent
             return launch_agent()
+        elif first == "coverage":
+            return coverage_command(argv[1:])
     elif first in ("-h", "--help", "help"):
         _print_help()
         return 0
@@ -435,6 +437,253 @@ def init_command() -> int:
     return 0 if success else 1
 
 
+def coverage_command(argv: list[str]) -> int:
+    """Run Helen test file(s) with coverage measurement.
+
+    Usage:
+        helen coverage <test_file> [test_file2 ...] [options]
+
+    Options:
+        --format <fmt>    Output format: text (default), json, html
+        --output <path>   Save report to file (default: stdout)
+        --source <dir>    Source directory to measure coverage for
+        --html <dir>      Generate HTML report in directory
+
+    Examples:
+        helen coverage tests/
+        helen coverage tests/ --format json
+        helen coverage tests/ --html coverage_html/
+        helen coverage tests/ --output coverage.json
+
+    Returns:
+        0 if all tests pass, 1 if any fail, 2 on error.
+    """
+    import time
+    from pathlib import Path
+
+    # Parse arguments
+    files: list[str] = []
+    output_format = "text"
+    output_path: str | None = None
+    html_dir: str | None = None
+    source_dirs: list[str] = []
+
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg == "--format":
+            if i + 1 >= len(argv):
+                print("Error: --format requires an argument (text, json, html)", file=sys.stderr)
+                return 2
+            i += 1
+            output_format = argv[i]
+            if output_format not in ("text", "json", "html"):
+                print(f"Error: unknown format '{output_format}'. Use text, json, or html.", file=sys.stderr)
+                return 2
+        elif arg == "--output":
+            if i + 1 >= len(argv):
+                print("Error: --output requires a path argument", file=sys.stderr)
+                return 2
+            i += 1
+            output_path = argv[i]
+        elif arg == "--html":
+            if i + 1 >= len(argv):
+                print("Error: --html requires a directory argument", file=sys.stderr)
+                return 2
+            i += 1
+            html_dir = argv[i]
+        elif arg == "--source":
+            if i + 1 >= len(argv):
+                print("Error: --source requires a directory argument", file=sys.stderr)
+                return 2
+            i += 1
+            source_dirs.append(argv[i])
+        elif not arg.startswith("-"):
+            files.append(arg)
+        else:
+            print(f"Unknown option: {arg}", file=sys.stderr)
+            return 2
+        i += 1
+
+    if not files:
+        print("Error: 'coverage' requires at least one test file argument", file=sys.stderr)
+        print("Usage: helen coverage <file|directory> [file2 ...] [options]", file=sys.stderr)
+        return 1
+
+    # Expand directories
+    expanded_files: list[str] = []
+    for f in files:
+        p = Path(f)
+        if p.is_dir():
+            for helen_file in p.rglob("*.helen"):
+                expanded_files.append(str(helen_file))
+        elif p.exists():
+            expanded_files.append(f)
+        else:
+            print(f"Error: file not found: {f}", file=sys.stderr)
+            return 1
+
+    if not expanded_files:
+        print("Error: no .helen test files found", file=sys.stderr)
+        return 1
+
+    # Import dependencies
+    from helen.core.errors import ErrorCode, ErrorReporter
+    from helen.core.lexer import Scanner
+    from helen.core.parser import Parser
+    from helen.semantic.analyzer import SemanticAnalyzer
+    from helen.interpreter.interpreter import Interpreter
+    from helen.runtime.http_llm import HttpLLMRuntime
+    from helen.runtime.import_resolver import ImportResolver
+    from helen.stdlib.test import _registry
+
+    # Reset test registry
+    _registry.reset()
+
+    total_start = time.monotonic()
+
+    # Create a shared coverage tracker
+    from helen.runtime.coverage import CoverageTracker
+    shared_tracker = CoverageTracker()
+
+    # Collect all source files to include in coverage
+    all_source_files: list[Path] = []
+
+    # Load source files for coverage reporting
+    for source_dir in source_dirs:
+        src_path = Path(source_dir)
+        if src_path.is_dir():
+            for src_file in src_path.rglob("*.helen"):
+                # Skip test files (they're handled separately)
+                if src_file.name.startswith("test_"):
+                    continue
+                all_source_files.append(src_file)
+        elif src_path.exists() and src_path.suffix == ".helen":
+            all_source_files.append(src_path)
+
+    # Register all source files for coverage (source + test files)
+    all_files_to_process = all_source_files + [Path(f) for f in expanded_files]
+    for src_file in all_files_to_process:
+        try:
+            source_text = src_file.read_text(encoding="utf-8")
+            shared_tracker.register_source(str(src_file.absolute()), source_text.splitlines())
+        except Exception:
+            pass
+
+    # Create a shared interpreter for all files so functions are visible across files
+    errors = ErrorReporter()
+    llm_runtime = HttpLLMRuntime()
+    # Use the first file's directory as base for imports
+    base_dir = str(Path(expanded_files[0]).parent.absolute()) if expanded_files else os.getcwd()
+    import_resolver = ImportResolver(base_dir=base_dir)
+    shared_interp = Interpreter(
+        errors=errors,
+        llm_runtime=llm_runtime,
+        import_resolver=import_resolver,
+        transcript_store_enabled=False,
+    )
+    shared_interp.observability.coverage = shared_tracker
+    shared_tracker.enabled = True
+
+    # First pass: interpret source files to register their functions
+    for src_file in all_source_files:
+        try:
+            source_text = src_file.read_text(encoding="utf-8")
+            file_errors = ErrorReporter()
+            scanner = Scanner(source=source_text, file=str(src_file))
+            tokens = scanner.scan_all()
+            parser = Parser(tokens, errors=file_errors)
+            program = parser.parse()
+            if not file_errors.has_errors:
+                analyzer = SemanticAnalyzer(file_errors)
+                analyzer.analyze(program)
+                if not file_errors.has_errors:
+                    shared_interp.interpret(program)
+        except Exception:
+            pass
+
+    # Second pass: interpret test files (registers tests + makes source functions available)
+    for file in expanded_files:
+        source_path = Path(file)
+        source_text = source_path.read_text(encoding="utf-8")
+
+        file_errors = ErrorReporter()
+
+        # Lex
+        scanner = Scanner(source=source_text, file=file)
+        try:
+            tokens = scanner.scan_all()
+        except Exception as e:
+            file_errors.error(ErrorCode.SCANNER_ERROR, str(e))
+            _report_errors(file_errors, source_text.splitlines())
+            return 2
+
+        # Parse
+        parser = Parser(tokens, errors=file_errors)
+        program = parser.parse()
+
+        if file_errors.has_errors:
+            _report_errors(file_errors, source_text.splitlines())
+            return 2
+
+        # Analyze
+        analyzer = SemanticAnalyzer(file_errors)
+        analyzer.analyze(program)
+
+        if file_errors.has_errors:
+            _report_errors(file_errors, source_text.splitlines())
+            return 2
+
+        # Interpret with shared interpreter (coverage already enabled)
+        try:
+            shared_interp.interpret(program)
+        except Exception as e:
+            print(f"RuntimeError: {e}", file=sys.stderr)
+            return 2
+
+        if file_errors.has_errors:
+            _report_errors(file_errors, source_text.splitlines())
+            return 2
+
+        # Auto-discover fn test_* functions and register them
+        for func_name, func_node in shared_interp._functions.items():
+            if func_name.startswith("test_"):
+                def make_wrapper(interp_ref, node):
+                    def wrapper():
+                        interp_ref._call_function(node, [])
+                    return wrapper
+                _registry.register_test(func_name, make_wrapper(shared_interp, func_node))
+
+    # Run tests WITH coverage enabled
+    report = _registry.run_all()
+    total_elapsed = (time.monotonic() - total_start) * 1000
+
+    # Disable coverage after tests complete
+    shared_tracker.enabled = False
+
+    # Print test results
+    from helen.stdlib.test import _format_report
+    print(_format_report(report))
+
+    print()
+
+    # Generate coverage report
+    if html_dir:
+        html_path = shared_tracker.save_to_file(
+            str(Path(html_dir) / "index.html"), format="html"
+        )
+        print(f"📊 HTML coverage report generated: {html_path}")
+    elif output_path:
+        fmt = "html" if output_path.endswith(".html") else "json"
+        saved_path = shared_tracker.save_to_file(output_path, format=fmt)
+        print(f"📊 Coverage report saved: {saved_path}")
+    else:
+        # Print text report to stdout
+        print(shared_tracker.generate_report(output_format))
+
+    return 0 if report.failed == 0 else 1
+
+
 def test_command(argv: list[str]) -> int:
     """Run Helen test file(s) and report results.
 
@@ -448,7 +697,7 @@ def test_command(argv: list[str]) -> int:
         --only <name>       Run only the test with this exact name
         --suite <name>      Run only tests in this suite
         --filter <pattern>  Run only tests matching this pattern (regex)
-        --coverage          Show code coverage (requires pytest-cov)
+        --coverage          Show coverage hint (use 'helen coverage' for detailed measurement)
 
     Returns:
         0 if all tests pass, 1 if any fail, 2 on error.
@@ -656,10 +905,10 @@ def test_command(argv: list[str]) -> int:
         # Show coverage info
         if coverage:
             print("\n📊 Coverage:")
-            print("   To measure coverage of your Helen code, run tests with pytest:")
-            print("   python -m pytest tests/ --cov=helen --cov-report=term-missing")
+            print("   Use 'helen coverage' for detailed coverage measurement:")
+            print("   helen coverage <test_file> [test_file2 ...] [--format text|json|html]")
             print()
-            print("   For Helen program coverage, add debug() calls to track execution.")
+            print("   Example: helen coverage tests/ --html coverage_html/")
 
         return 0 if report.failed == 0 else 1
 
@@ -797,12 +1046,15 @@ def quality_command(argv: list[str]) -> int:
 
         scorer = QualityScorer()
 
+        # Determine project root (directory containing the file)
+        project_root = str(source_path.parent)
+
         score = QualityScore(
             architecture=scorer.score_architecture(metrics),
             code_quality=scorer.score_code_quality(metrics),
             security=scorer.score_security(security_issues),
             test_coverage=scorer.score_test_coverage(file, source=source_text),
-            documentation=scorer.score_documentation(metrics),
+            documentation=scorer.score_documentation(metrics, project_root=project_root),
             maintainability=scorer.score_maintainability(metrics),
             engineering=scorer.score_engineering(metrics),
         )
@@ -879,6 +1131,7 @@ Usage:
   helen <file> [args...]         Run a Helen program (args become `argv`)
   helen check <file> [args...]   Check without executing
   helen test <file> [opts]       Run Helen test file(s)
+  helen coverage <file> [opts]   Run tests with coverage measurement
   helen quality <file>           Run 7-dimension quality assessment
   helen doc [files]              Generate API documentation
   helen init                     Initialize Helen configuration

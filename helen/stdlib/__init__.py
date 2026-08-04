@@ -504,6 +504,68 @@ def _trace_off() -> str:
     return "Warning: No interpreter context available"
 
 
+def _coverage_on() -> str:
+    """Enable test coverage tracking.
+
+    When enabled, the interpreter records which functions, lines, and branches
+    are executed. Use coverage_off() or coverage_report() to get results.
+
+    Returns:
+        Status message.
+    """
+    if _interpreter_observability is not None:
+        _interpreter_observability.coverage.enabled = True
+        return "✓ Coverage tracking enabled"
+    return "Error: No interpreter context available"
+
+
+def _coverage_off() -> str:
+    """Disable test coverage tracking.
+
+    Returns:
+        Status message.
+    """
+    if _interpreter_observability is not None:
+        _interpreter_observability.coverage.enabled = False
+        return "✓ Coverage tracking disabled"
+    return "Error: No interpreter context available"
+
+
+def _coverage_report(format: str = "text") -> str:
+    """Generate a coverage report.
+
+    Args:
+        format: Report format - "text" (default), "json", or "html".
+
+    Returns:
+        Formatted coverage report.
+    """
+    if _interpreter_observability is None:
+        return "Error: No interpreter context available"
+    return _interpreter_observability.coverage.generate_report(format)
+
+
+def _coverage_summary() -> str:
+    """Get a brief coverage summary.
+
+    Returns:
+        One-line summary of coverage percentages.
+    """
+    if _interpreter_observability is None:
+        return "Error: No interpreter context available"
+
+    summary = _interpreter_observability.coverage.get_summary()
+    lines = summary["lines"]
+    funcs = summary["functions"]
+    branches = summary["branches"]
+
+    return (
+        f"Coverage: Lines {lines['percent']}% ({lines['covered']}/{lines['total']})"
+        f" | Functions {funcs['percent']}% ({funcs['covered']}/{funcs['total']})"
+        f" | Branches {branches['percent']}% ({branches['covered']}/{branches['total']})"
+    )
+
+
 def _get_trace(n: int = 50) -> str:
     """Get recent execution trace entries.
 
@@ -1287,6 +1349,11 @@ def _register_debug() -> list[BuiltinFunction]:
         BuiltinFunction("get_llm_log", "Get recent LLM call audit log", "get_llm_log(n?)", _get_llm_log, "debug"),
         BuiltinFunction("get_last_error", "Get last error snapshot with context", "get_last_error()", _get_last_error, "debug"),
         BuiltinFunction("get_call_stack", "Get current call stack", "get_call_stack()", _get_call_stack, "debug"),
+        # Coverage measurement
+        BuiltinFunction("coverage_on", "Enable coverage tracking", "coverage_on()", _coverage_on, "debug"),
+        BuiltinFunction("coverage_off", "Disable coverage tracking", "coverage_off()", _coverage_off, "debug"),
+        BuiltinFunction("coverage_report", "Generate coverage report", "coverage_report(format?)", _coverage_report, "debug"),
+        BuiltinFunction("coverage_summary", "Get coverage summary", "coverage_summary()", _coverage_summary, "debug"),
     ]
 
 

@@ -48,7 +48,7 @@ class PatternMixin:
     def visit_match_stmt(self, node: MatchStmtNode) -> object:
         """Execute a match statement with range, wildcard, variable binding, and type pattern support."""
         subject = node.subject.accept(self)
-        for case in node.cases:
+        for case_idx, case in enumerate(node.cases):
             pattern_node = case.pattern
             matched = False
             bindings = {}  # Variable bindings for this case
@@ -89,6 +89,8 @@ class PatternMixin:
                     matched = self._truthy(guard_result)
 
             if matched:
+                # Record branch: this case was matched (branch_id = case_idx)
+                self.observability.coverage.record_branch(node.span, case_idx)
                 with self._push_scope():
                     # Bind variables in the case scope
                     for name, value in bindings.items():
@@ -96,6 +98,8 @@ class PatternMixin:
                     return self._execute_stmts(case.body)
         # Default branch
         if node.default:
+            # Record branch: default was matched (branch_id = -1)
+            self.observability.coverage.record_branch(node.span, -1)
             with self._push_scope():
                 return self._execute_stmts(node.default)
         return None

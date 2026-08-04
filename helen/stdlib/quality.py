@@ -877,21 +877,50 @@ class QualityScorer:
 
         return max(0.0, min(10.0, score))
 
+    def _count_test_cases(self, test_files: list[Path]) -> int:
+        """Count test cases in Helen and Python test files.
+
+        Helen: count functions starting with 'test_' or '函数 test_'
+        Python: count functions starting with 'test_'
+        """
+        count = 0
+        for test_file in test_files:
+            try:
+                content = test_file.read_text(encoding='utf-8')
+                if test_file.suffix == '.helen':
+                    # Helen: fn test_xxx() or 函数 test_xxx()
+                    helen_tests = re.findall(r'(?:fn|函数)\s+test_\w+\s*\(', content)
+                    count += len(helen_tests)
+                elif test_file.suffix == '.py':
+                    # Python: def test_xxx()
+                    py_tests = re.findall(r'def\s+test_\w+\s*\(', content)
+                    count += len(py_tests)
+            except Exception:
+                pass
+        return count
+
     def score_test_coverage(self, file_path: str, source: str = "") -> float:
         """Score test coverage (15% weight).
 
+        Scoring based on test case count:
+        - 0 tests: 2.0
+        - 1-4 tests: 4.0
+        - 5-19 tests: 6.0
+        - 20-49 tests: 8.0
+        - 50+ tests: 10.0
+
         Detection strategy (highest score wins):
-        1. ``// @test-location: <path>`` annotation in source → 8.0
-           (lets agent programs point at external test suites)
-        2. Co-located ``<name>_test.helen`` or ``test_<name>.helen`` → 8.0
-        3. ``tests/`` sub-directory next to the file (any *.helen OR *.py
-           test files) → 6.0
-        4. Parent-level ``tests/`` directory containing *.py files that
-           reference the source file's stem → 7.0
+        1. ``// @test-location: <path>`` annotation in source → count tests
+        2. Co-located ``<name>_test.helen`` or ``test_<name>.helen`` → count tests
+        3. ``tests/`` sub-directory next to the file → count tests
+        4. Parent-level ``tests/`` directory → count tests
         5. No tests found → 2.0
         """
         if not file_path:
             return 5.0  # Unknown
+
+        path = Path(file_path)
+        test_files: list[Path] = []
 
         # ── 1. Explicit annotation ──────────────────────────────────
         if source:
@@ -899,50 +928,88 @@ class QualityScorer:
             if m:
                 loc = Path(m.group(1)).expanduser()
                 if loc.exists():
-                    return 8.0
-
-        path = Path(file_path)
+                    if loc.is_file():
+                        test_files.append(loc)
+                    elif loc.is_dir():
+                        test_files.extend(loc.glob('*.helen'))
+                        test_files.extend(loc.glob('*.py'))
 
         # ── 2. Co-located test file ─────────────────────────────────
         test_file = path.with_name(path.stem + '_test.helen')
         test_file2 = path.with_name('test_' + path.name)
-        if test_file.exists() or test_file2.exists():
-            return 8.0
+        if test_file.exists():
+            test_files.append(test_file)
+        if test_file2.exists():
+            test_files.append(test_file2)
 
         # ── 3. tests/ sub-directory next to the file ────────────────
         tests_dir = path.parent / 'tests'
         if tests_dir.exists():
-            helen_tests = list(tests_dir.glob('*.helen'))
-            py_tests = list(tests_dir.glob('*.py')) + \
-                        list(tests_dir.glob('test_*.py')) + \
-                        list(tests_dir.glob('*_test.py'))
-            if helen_tests or py_tests:
-                return 6.0
+            test_files.extend(tests_dir.glob('*.helen'))
+            test_files.extend(tests_dir.glob('test_*.py'))
+            test_files.extend(tests_dir.glob('*_test.py'))
 
-        # ── 4. Parent-level tests/ directory with matching *.py ─────
-        # Walk up at most 3 levels looking for a `tests/` directory that
-        # contains Python test files whose name matches the source stem.
+        # ── 4. Parent-level tests/ directory ────────────────────────
         stem = path.stem
         for parent in [path.parent] + list(path.parents)[:3]:
             candidate = parent / 'tests'
             if candidate.exists() and candidate.is_dir():
-                # Match any *.py whose filename contains the source stem
                 for py_file in candidate.rglob('*.py'):
                     if stem in py_file.stem:
-                        return 7.0
+                        test_files.append(py_file)
 
-        return 2.0  # No tests found
+        # ── Count test cases and score ──────────────────────────────
+        if not test_files:
+            return 2.0  # No tests found
 
-    def score_documentation(self, metrics: CodeMetrics) -> float:
-        """Score documentation (10% weight)."""
-        if not metrics.functions:
-            return 5.0
+        test_count = self._count_test_cases(test_files)
 
-        documented = sum(1 for f in metrics.functions if f.has_docstring)
-        ratio = documented / metrics.function_count
+        # Score based on test count
+        if test_count == 0:
+            return 2.0
+        elif test_count < 5:
+            return 4.0
+        elif test_count < 20:
+            return 6.0
+        elif test_count < 50:
+            return 8.0
+        else:
+            return 10.0
 
-        # Scale to 0-10
-        return ratio * 10.0
+    def score_documentation(self, metrics: CodeMetrics, project_root: str = "") -> float:
+        """Score documentation (10% weight).
+
+        Scoring:
+        - Project-level docs (4 points max):
+          * README.md: 2 points
+          * ARCHITECTURE.md: 1 point
+          * API.md or docs/ directory: 1 point
+        - Function docstrings (6 points max):
+          * Ratio of documented functions * 6.0
+        """
+        score = 0.0
+
+        # ── 1. Project-level documentation (4 points) ───────────────
+        if project_root:
+            root = Path(project_root)
+            if (root / "README.md").exists() or (root / "README").exists():
+                score += 2.0
+            if (root / "ARCHITECTURE.md").exists():
+                score += 1.0
+            if (root / "API.md").exists() or (root / "docs").is_dir():
+                score += 1.0
+
+        # ── 2. Function docstrings (6 points) ───────────────────────
+        if metrics.functions:
+            documented = sum(1 for f in metrics.functions if f.has_docstring)
+            ratio = documented / len(metrics.functions)
+            score += ratio * 6.0
+        else:
+            # No functions, give partial credit if project docs exist
+            if score > 0:
+                score += 3.0
+
+        return min(10.0, score)
 
     def score_maintainability(self, metrics: CodeMetrics) -> float:
         """Score maintainability (10% weight)."""
