@@ -350,3 +350,57 @@ agent ResearchBot {
         assert len(program.statements) == 1
         agent = program.statements[0]
         assert agent.name == "ResearchBot"
+
+
+class TestKeywordAsVariableNoHang:
+    """Regression: parser must not hang when a keyword is used as variable name.
+
+    Before the fix, ``let protocol = ...`` caused ``_protocol_decl`` to enter
+    an infinite loop because ``_consume`` on failure does not advance the
+    token position, and the while loop had no progress guard.
+
+    See: helen-security agent hang on 2026-08-05.
+    """
+
+    @pytest.mark.parametrize("keyword", [
+        "protocol", "impl", "agent", "fn", "let", "const",
+        "if", "else", "for", "while", "match", "return",
+        "try", "catch", "throw", "assert",
+    ])
+    def test_keyword_as_variable_name_does_not_hang(self, keyword: str) -> None:
+        """Using a keyword as variable name must report errors, not hang."""
+        source = f"""fn foo(): str {{
+    let {keyword} = "hello"
+    return {keyword}
+}}
+"""
+        # Must complete within 2 seconds (previously would hang forever)
+        import signal
+
+        def timeout_handler(signum, frame):
+            raise TimeoutError(f"Parser hung on keyword '{keyword}' as variable name")
+
+        old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(2)
+        try:
+            program, errors = _parse_source(source)
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old_handler)
+        # Should have parse errors (keyword can't be used as variable name)
+        assert errors.has_errors, f"Expected parse error for keyword '{keyword}'"
+
+    def test_protocol_variable_name_reports_clear_errors(self) -> None:
+        """``let protocol = ...`` should report 'Expected variable name' error."""
+        source = """fn normalize(repo: str): str {
+    let protocol = "https"
+    return protocol
+}
+"""
+        program, errors = _parse_source(source)
+        assert errors.has_errors
+        error_messages = [str(e) for e in errors.errors]
+        # First error should be about variable name
+        assert any("variable name" in m.lower() for m in error_messages), (
+            f"Expected 'variable name' error, got: {error_messages}"
+        )

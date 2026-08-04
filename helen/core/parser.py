@@ -1193,6 +1193,9 @@ class Parser:
 
         methods: list[FunctionDeclNode] = []
         while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF):
+            # Guard against infinite loop when no tokens are consumed
+            # (e.g. error recovery from ``let protocol = ...``).
+            prev_pos = self._pos
             # Parse method signature (no body)
             self._consume(TokenType.FN, "Expected 'fn' in protocol.")
             method_name = self._consume(TokenType.IDENTIFIER, "Expected method name.")
@@ -1225,6 +1228,9 @@ class Parser:
                 span=self._make_span(start, self._previous())
             )
             methods.append(method)
+            if self._pos == prev_pos:
+                # No progress — skip token to avoid infinite loop
+                self._advance()
 
         end = self._consume(TokenType.RIGHT_BRACE, "Expected '}' after protocol body.")
         return ProtocolDeclNode(
