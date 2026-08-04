@@ -542,14 +542,14 @@ class LlmMixin:
             )
 
             # P1: Record tool calls + final response to history
+            # v1.31.2: Strip working memory tags BEFORE recording to history
+            # to prevent <working_memory> content from persisting in transcript
             if response:
+                if response.text:
+                    response.text = self._apply_working_memory_update(response.text)
                 self._record_llm_response_to_history(response)
 
-            # v1.25: Extract and apply working memory update from response
-            # v1.25.1: Remove <working_memory> block from response before returning
             response_text = response.text if response else None
-            if response_text:
-                response_text = self._apply_working_memory_update(response_text)
             return response_text
         except RuntimeError as e:
             # Python RuntimeError from LLM runtime (e.g. API errors like
@@ -779,10 +779,14 @@ class LlmMixin:
                 stream_resp = _StreamResponse()
                 stream_resp.text = full_text
                 stream_resp.tool_calls = tool_calls_log
+                # v1.31.2: Strip working memory tags BEFORE recording to history
+                # to prevent <working_memory> content from persisting in transcript
+                if stream_resp.text:
+                    stream_resp.text = self._apply_working_memory_update(stream_resp.text)
                 self._record_llm_response_to_history(stream_resp)
 
             # Log to audit trail
-            audit_response = full_text + (" [interrupted]" if interrupted else "")
+            audit_response = (stream_resp.text if hasattr(stream_resp, 'text') else full_text) + (" [interrupted]" if interrupted else "")
             self._log_llm_audit(
                 "act_stream", prompt, audit_start, agent_name, model,
                 response=audit_response,
@@ -791,12 +795,7 @@ class LlmMixin:
                 tool_calls=tool_calls_log,
             )
 
-            # v1.25: Extract and apply working memory update from response
-            # v1.25.1: Remove <working_memory> block from response before returning
-            if full_text:
-                full_text = self._apply_working_memory_update(full_text)
-
-            return full_text
+            return stream_resp.text if hasattr(stream_resp, 'text') else full_text
         except Exception as e:
             self._log_llm_audit("act_stream", prompt, audit_start, agent_name, model, error=str(e))
 
