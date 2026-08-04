@@ -106,6 +106,7 @@ def run_command(file: str, program_args: list[str] | None = None, session_id: st
         import_resolver=import_resolver,
         program_args=program_args,
         session_id=session_id,  # v1.24: Resume specific session
+        transcript_store_enabled=False,  # v1.31.1: Disable transcript for batch runs
     )
     try:
         interp.interpret(program)
