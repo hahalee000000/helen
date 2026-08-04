@@ -17,7 +17,13 @@ def test_load_config_from_yaml():
   timeout: 30
 """)
 
-        with patch("helen.runtime.config.HELEN_HOME", Path(tmpdir)):
+        # Clear env override so yaml value is actually exercised
+        # (tests/conftest.py sets HELEN_API_KEY for subprocess-based tests)
+        with patch.dict(os.environ, {}, clear=False), \
+             patch("helen.runtime.config.HELEN_HOME", Path(tmpdir)):
+            os.environ.pop("HELEN_API_KEY", None)
+            os.environ.pop("HELEN_BASE_URL", None)
+            os.environ.pop("HELEN_MODEL", None)
             from helen.runtime.config import load_config
             config = load_config()
 
