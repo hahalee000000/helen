@@ -953,6 +953,12 @@ class HttpLLMRuntime(LLMRuntime):
             self._last_retry_after = None
             if choices:
                 message = choices[0].get("message", {})
+                # v1.34.1: GLM/DeepSeek models put content in 'reasoning_content'
+                # when content is empty. Fall back to reasoning_content.
+                if not message.get("content"):
+                    reasoning = message.get("reasoning_content", "")
+                    if reasoning:
+                        message["content"] = reasoning
                 # v1.31.2: Detect response truncation (finish_reason: length)
                 finish_reason = choices[0].get("finish_reason")
                 if finish_reason == "length":
@@ -1164,6 +1170,10 @@ class HttpLLMRuntime(LLMRuntime):
 
                                 # Text content chunk
                                 content = delta.get("content", "")
+                                # v1.34.1: GLM/DeepSeek models stream content via
+                                # 'reasoning_content' when 'content' is empty.
+                                if not content:
+                                    content = delta.get("reasoning_content", "")
                                 if content:
                                     full_chunks.append(content)
                                     yield {"type": "content", "content": content}
