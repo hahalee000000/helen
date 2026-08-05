@@ -774,6 +774,7 @@ class LlmMixin:
 
             # Record tool calls + final response to history (including partial)
             full_text = "".join(full_response)
+            stream_resp = None  # Initialize to avoid UnboundLocalError
             if full_text or tool_calls_log:
                 class _StreamResponse:
                     pass
@@ -787,7 +788,7 @@ class LlmMixin:
                 self._record_llm_response_to_history(stream_resp)
 
             # Log to audit trail
-            audit_response = (stream_resp.text if hasattr(stream_resp, 'text') else full_text) + (" [interrupted]" if interrupted else "")
+            audit_response = (stream_resp.text if stream_resp is not None and hasattr(stream_resp, 'text') else full_text) + (" [interrupted]" if interrupted else "")
             self._log_llm_audit(
                 "act_stream", prompt, audit_start, agent_name, model,
                 response=audit_response,
@@ -796,7 +797,7 @@ class LlmMixin:
                 tool_calls=tool_calls_log,
             )
 
-            return stream_resp.text if hasattr(stream_resp, 'text') else full_text
+            return stream_resp.text if stream_resp is not None and hasattr(stream_resp, 'text') else full_text
         except Exception as e:
             self._log_llm_audit("act_stream", prompt, audit_start, agent_name, model, error=str(e))
 
