@@ -1112,6 +1112,7 @@ class HttpLLMRuntime(LLMRuntime):
                 # Collect streamed chunks with health checking
                 # Use list+join (O(n)) instead of += (O(n²)) for long responses
                 full_chunks: list[str] = []
+                reasoning_chunks: list[str] = []  # v1.34.1: GLM/DeepSeek reasoning_content
                 tool_calls_acc: dict[int, dict] = {}  # index -> {name, args_str, id}
                 usage_info: dict[str, int] = {}  # token usage from final chunk
                 finish_reason: str | None = None  # v1.31.2: track truncation
@@ -1168,15 +1169,21 @@ class HttpLLMRuntime(LLMRuntime):
 
                                 delta = choices[0].get("delta", {})
 
-                                # Text content chunk
+                                # v1.34.1: OpenAI protocol compatibility
+                                # Standard OpenAI: content field
+                                # GLM/DeepSeek: reasoning_content (thinking) then content (answer)
+                                # We collect both separately, only yield content to frontend.
+                                # If no content at stream end, fall back to reasoning_content.
                                 content = delta.get("content", "")
-                                # v1.34.1: GLM/DeepSeek models stream content via
-                                # 'reasoning_content' when 'content' is empty.
-                                if not content:
-                                    content = delta.get("reasoning_content", "")
                                 if content:
                                     full_chunks.append(content)
                                     yield {"type": "content", "content": content}
+
+                                # Collect reasoning_content separately (not yielded to avoid
+                                # flooding frontend with thinking process)
+                                reasoning = delta.get("reasoning_content", "")
+                                if reasoning:
+                                    reasoning_chunks.append(reasoning)
 
                                 # Tool call deltas (streaming accumulation)
                                 tc_deltas = delta.get("tool_calls")
@@ -1220,6 +1227,19 @@ class HttpLLMRuntime(LLMRuntime):
 
                 # Build full_content from chunks (O(n) join instead of O(n²) +=)
                 full_content = "".join(full_chunks)
+
+                # v1.34.1: OpenAI protocol compatibility
+                # If no content was streamed (GLM/DeepSeek may only produce
+                # reasoning_content when max_tokens is too small), fall back
+                # to reasoning_content so the user gets a visible response.
+                if not full_content and reasoning_chunks:
+                    full_content = "".join(reasoning_chunks)
+                    yield {"type": "content", "content": full_content}
+                    logger.warning(
+                        "LLM returned only reasoning_content (no content field). "
+                        "Consider increasing max_tokens to allow the model to "
+                        "produce a final answer."
+                    )
 
                 # After stream completes: check if we got tool calls
                 if tool_calls_acc:
@@ -1422,6 +1442,7 @@ class HttpLLMRuntime(LLMRuntime):
                             # Reset tool call accumulation for retry
                             tool_calls_acc.clear()
                             full_chunks.clear()
+                            reasoning_chunks.clear()
                             stream_retry = 0  # Reset stream retry counter
                             continue  # Retry with recovered messages
                         else:
@@ -1445,6 +1466,7 @@ class HttpLLMRuntime(LLMRuntime):
                         stream_retry += 1
                         tool_calls_acc.clear()
                         full_chunks.clear()
+                        reasoning_chunks.clear()
                         continue
 
                     yield {"type": "error", "message": full_error}
@@ -1463,6 +1485,7 @@ class HttpLLMRuntime(LLMRuntime):
                     stream_retry += 1
                     tool_calls_acc.clear()
                     full_chunks.clear()
+                    reasoning_chunks.clear()
                     continue
                 yield {"type": "error", "message": f"HTTP request failed: {e}"}
                 break
@@ -1478,6 +1501,7 @@ class HttpLLMRuntime(LLMRuntime):
                     stream_retry += 1
                     tool_calls_acc.clear()
                     full_chunks.clear()
+                    reasoning_chunks.clear()
                     continue
                 yield {"type": "error", "message": f"Request timed out after {self.timeout}s"}
                 break
