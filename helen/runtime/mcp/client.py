@@ -104,7 +104,7 @@ class MCPClient:
                 "capabilities": {},
                 "clientInfo": {
                     "name": "helen",
-                    "version": "1.32.0",
+                    "version": "1.33.0",
                 },
             })
             logger.info("Started MCP server '%s'", self.name)
