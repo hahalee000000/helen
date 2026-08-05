@@ -8,6 +8,9 @@
 
 ```helen
 // File I/O — no imports needed
+import std.core.*
+import std.io.*
+import std.path.*
 write_file("data/output.txt", "Hello!")     // auto-creates parent dirs
 append_file("data/output.txt", "\nMore")    // auto-creates if missing
 let content = read_file("data/output.txt")  // returns "" if not found
@@ -28,6 +31,7 @@ path_join("/home", "user", "file.txt")      // "/home/user/file.txt"
 ### String Operations (stdlib — preferred)
 
 ```helen
+import std.str.*
 let sub = substring("Hello, World!", 0, 5)   // "Hello"
 let rest = substring("Hello, World!", 7)     // "World!"
 let cmd = trim_prefix("/remember fact", "/remember ")  // "fact"
@@ -84,6 +88,7 @@ agent MyAgent(input: str) {
 ### Memory-Augmented Agent Example
 
 ```helen
+import std.core.*
 agent SmartAgent(user_input: str) {
     prompt "You are an assistant with persistent memory..."
     tools = ["read_file", "write_file", "web_search"]
@@ -118,6 +123,10 @@ agent SmartAgent(user_input: str) {
 ### Interactive Agent with Commands
 
 ```helen
+import std.core.*
+import std.io.*
+import std.path.*
+import std.str.*
 main {
     print("Agent ready. Type /quit to exit.")
     

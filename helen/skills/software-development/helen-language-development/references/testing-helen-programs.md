@@ -63,6 +63,7 @@ modified_source = source.replace(
 
 ```helen
 // Helen side — accept path as parameter, don't hardcode
+import std.core.*
 agent HelenAssistant(question: str, docs_path: str) {
     functions {
         fn load_docs(): str {

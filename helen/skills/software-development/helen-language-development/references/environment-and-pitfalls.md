@@ -108,6 +108,7 @@ Helen is an AI-native DSL being developed at `/home/admin/helen/`. All 966 tests
 
 **Implementation**:
 ```helen
+import std.core.*
 agent KnowledgeAssistant(query: str) {
     prompt "You are an expert assistant. Answer questions based on the provided context."
     
@@ -351,6 +352,7 @@ Commands are handled in `_handle_repl_command()` in `helen/cli/repl.py`. They ar
 **Example**:
 ```helen
 // ❌ Semantic error: match must have a default branch
+import std.core.*
 match status {
     case "active" { print("Active"); }
     case "pending" { print("Pending"); }
@@ -862,6 +864,7 @@ catch RuntimeError as err { ... } // ❌ not supported
 
 ```helen
 // ✅ Independent use at top level
+import std.core.*
 llm act "What is 2+2?"
 let result = llm act "Translate this text"
 print(llm act "Summarize: " + content)
@@ -934,6 +937,7 @@ if buffer_lines and not line.strip():
 **Bug found via tutorial testing**: `let count = count + 1` inside a `while` loop creates a **new local variable** that shadows the outer `count`, so the loop condition `count < 5` always sees the original value → **infinite loop**.
 
 ```helen
+import std.core.*
 let count = 0
 while (count < 5) {
     print(count)
@@ -951,6 +955,8 @@ When writing or reviewing while-loop tutorials, **always use assignment** (`coun
 **Working syntax**:
 ```helen
 // spawn returns a Channel (mailbox) immediately - agent runs in background thread
+import std.concurrency.*
+import std.core.*
 agent Worker(input: str, reply: Channel) {
     main {
         let result = process(input)
@@ -1403,6 +1409,7 @@ agent SimpleAgent(text: str) {
 
 ```helen
 // ✅ Expression form — evaluates prompt, calls LLM, returns response text
+import std.core.*
 return llm act "translate " + text + " to " + target
 let result = llm act prompt
 print(llm act "summarize this: " + content)
@@ -1581,6 +1588,7 @@ AnyError (root)
 
 **Syntax**:
 ```helen
+import std.core.*
 throw RuntimeError("something went wrong")  // with message
 throw LLMError                               // default message
 
@@ -1674,6 +1682,7 @@ The tutorial test runner (`tests/tutorial/run_tutorial_tests.py`) executes each 
 
 ```helen
 // ❌ FAILS tutorial test — uncaught exception
+import std.core.*
 throw RuntimeError("something went wrong")
 
 // ✅ PASSES tutorial test — exception is caught

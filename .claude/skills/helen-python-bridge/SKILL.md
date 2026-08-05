@@ -96,6 +96,7 @@ from translator import TranslatorAgent, SummarizerAgent, format_text
 
 ```helen
 // translator.helen
+import std.str.*
 const default_lang = "English"
 
 // Regular function (pure computation, no LLM calls)

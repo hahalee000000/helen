@@ -29,6 +29,8 @@ helen quality my_program.helen --dimension security
 ### In Code
 
 ```helen
+import std.core.*
+import std.quality.*
 let source = read_file("my_program.helen")
 let scores = quality_score(source, "my_program.helen")
 print("Grade: " + scores["grade"])

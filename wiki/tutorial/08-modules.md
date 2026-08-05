@@ -85,6 +85,7 @@ The imported file's `main` block is **not** automatically executed:
 
 ```helen
 // lib.helen
+import std.core.*
 fn utility() {
     return "useful"
 }

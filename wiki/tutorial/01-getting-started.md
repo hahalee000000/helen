@@ -196,6 +196,7 @@ See [TranscriptStore documentation](../runtime/transcript-store.md) and [stdlib 
 Create `hello.helen`:
 
 ```helen
+import std.core.*
 main {
     print("Hello, World!")
 }
@@ -218,6 +219,7 @@ $ helen greet.helen Alice Bob
 
 ```helen
 // greet.helen
+import std.core.*
 main {
     for name in argv {
         print("Hello, " + name + "!")
@@ -234,6 +236,8 @@ You can also use `parse_cli_args()` for structured parsing:
 
 ```helen
 // tool.helen — Run: helen tool.helen --verbose --output=json file.txt
+import std.core.*
+import std.system.*
 main {
     let config = parse_cli_args({
         "verbose": {"type": "flag", "default": false},
@@ -305,6 +309,7 @@ helen help
 Create `test.helen`:
 
 ```helen
+import std.core.*
 fn greet(name: string): string {
     return "Hello, " + name + "!"
 }
@@ -522,6 +527,7 @@ Helen supports both English and Chinese keywords. Chinese keywords map to the sa
 
 ```helen
 // Pure Chinese Hello World
+import std.core.*
 主函 {
     print("你好，世界！")
 }

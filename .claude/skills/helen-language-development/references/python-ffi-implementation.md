@@ -500,6 +500,8 @@ def test_import_python_module(self):
 ### Basic math operations
 
 ```helen
+import std.core.*
+import std.math.*
 import "math" as math
 
 main {
@@ -517,6 +519,7 @@ main {
 ### JSON processing
 
 ```helen
+import std.core.*
 import "json" as json
 
 main {
@@ -532,6 +535,8 @@ main {
 ### Nested modules
 
 ```helen
+import std.core.*
+import std.str.*
 import "os.path" as path
 
 main {

@@ -34,6 +34,7 @@ The 31 skips are **conservative safety/integration guards**, NOT evidence of mis
 ### While Loop: `let` vs Assignment Shadowing → Infinite Loop
 
 ```helen
+import std.core.*
 let count = 0
 while (count < 5) {
     print(count)

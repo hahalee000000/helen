@@ -216,6 +216,7 @@ Helen provides **AI-native observability** instead of traditional interactive de
 ### assert Statement
 
 ```helen
+import std.core.*
 main {
     // Runtime assertion with optional message
     assert x > 0, "x must be positive"
@@ -232,6 +233,7 @@ main {
 ### debug() Function
 
 ```helen
+import std.debug.*
 main {
     // Structured debug output to stderr (JSON format)
     let x = 42
@@ -243,6 +245,7 @@ main {
 ### Execution Tracing
 
 ```helen
+import std.debug.*
 main {
     // Programmatic control
     trace_on()
@@ -338,6 +341,7 @@ Helen 程序出问题了吗？
 **❌ 无可观测性的 Agent**（出问题时无从下手）：
 
 ```helen
+import std.tools.*
 agent Researcher(topic: str) {
     main {
         let plan = llm act "Plan research on " + topic
@@ -351,6 +355,9 @@ agent Researcher(topic: str) {
 **✅ 带可观测性的 Agent**（出问题时有迹可循）：
 
 ```helen
+import std.core.*
+import std.debug.*
+import std.tools.*
 agent Researcher(topic: str) {
     main {
         debug("Researcher 启动", {"topic": topic})
@@ -403,6 +410,8 @@ helen repl
 **症状**：Agent 反复调用同一个工具不前进。
 
 ```helen
+import std.core.*
+import std.debug.*
 main {
     debug("tool loop iter", {"i": i, "history_len": len(history)})
     llm act "continue task"
@@ -416,6 +425,8 @@ main {
 **症状**：Agent 突然"忘记"之前的对话。
 
 ```helen
+import std.context.*
+import std.debug.*
 main {
     let stats = context_stats()
     debug("上下文状态", {
@@ -435,6 +446,8 @@ main {
 **症状**：主 Agent 正常，spawn 的子 Agent 出错。
 
 ```helen
+import std.core.*
+import std.debug.*
 agent Worker(task: str) {
     main {
         debug("Worker 启动", {"task": task, "spawned_from": "MainAgent"})
@@ -456,6 +469,7 @@ main {
 **症状**：闭包里的变量值和预期不一样。
 
 ```helen
+import std.debug.*
 main {
     let callbacks = []
     for i in range(5) {
@@ -474,6 +488,8 @@ Helen 的闭包是**值捕获**（深拷贝），所以 i 应该都是不同值�
 **症状**：`llm act ... on_chunk fn(c) { print(c) }` 流式输出中途停了。
 
 ```helen
+import std.core.*
+import std.debug.*
 main {
     let chunks = []
     llm act "long response" on_chunk fn(c: str) {
@@ -492,6 +508,7 @@ main {
 **症状**：Agent A 把数据发给 Agent B，B 收到的数据不对。
 
 ```helen
+import std.debug.*
 main {
     // 发送端
     let payload = {"key": "value"}
@@ -512,6 +529,9 @@ main {
 **症状**：`import "other.helen"` 报错。
 
 ```helen
+import std.core.*
+import std.debug.*
+import std.system.*
 main {
     debug("当前工作目录", {"cwd": env_get("PWD")})
     try {
@@ -528,6 +548,9 @@ main {
 **症状**：`json_parse(text)` 解析失败。
 
 ```helen
+import std.core.*
+import std.data.*
+import std.debug.*
 main {
     let text = response_body
     debug("要解析的文本", {"text": text, "len": len(text)})
@@ -542,6 +565,8 @@ main {
 **症状**：Agent 响应时间长。
 
 ```helen
+import std.debug.*
+import std.time.*
 main {
     let t0 = stopwatch_start()
     let r1 = llm act "step 1"
@@ -574,6 +599,9 @@ main {
 
 ```helen
 // translator.helen — 带完整可观测性的翻译 Agent
+import std.core.*
+import std.debug.*
+import std.str.*
 agent Translator(text: str, target: str) {
     description "Translate text with observability"
     

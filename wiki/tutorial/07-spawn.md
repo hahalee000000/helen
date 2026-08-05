@@ -21,6 +21,7 @@ Helen v1.18 uses `spawn` + Channel message queues for concurrency. `spawn Agent(
 ## Basic spawn Usage
 
 ```helen
+import std.core.*
 agent Worker(task: str, reply: Channel) {
     description "Background worker agent"
     main {
@@ -65,6 +66,7 @@ main {
 ### try_receive (non-blocking)
 
 ```helen
+import std.core.*
 main {
     let msg = mailbox.try_receive()
     if msg == null {
@@ -84,6 +86,7 @@ main {
 The spawned agent can check the cancel signal via `reply.cancel_event`:
 
 ```helen
+import std.core.*
 agent LongTask(reply: Channel) {
     main {
         for i in range(100) {
@@ -103,6 +106,7 @@ When a spawned agent is streaming LLM output, the main thread can send a cancel 
 2. **`on_chunk` callback returns `false`**: immediately interrupt LLM streaming
 
 ```helen
+import std.core.*
 agent StreamWorker(prompt: str, reply: Channel) {
     main {
         let result = llm act prompt on_chunk fn(chunk: str) {
@@ -137,14 +141,7 @@ main {
 ### close
 
 ```helen
-main {
-    mailbox.close()  // Close channel; the other end's receive() returns null
-
-}```
-
-### Full Example: Streaming Progress
-
-```helen
+import std.core.*
 agent LongTask(prompt: str, reply: Channel) {
     main {
         let result = llm act prompt on_chunk fn(chunk: str) {
@@ -175,6 +172,8 @@ main {
 `mailbox_select([m1, m2, ...])` receives the first message that arrives from multiple channels:
 
 ```helen
+import std.concurrency.*
+import std.core.*
 agent StrategyA(problem: str, reply: Channel) {
     main {
         let result = llm act "Strategy A solves: " + problem
@@ -212,6 +211,8 @@ main {
 Spawned agents are fully isolated from the outer environment by default. To access the main thread's shared store, explicitly pass the reference through the channel:
 
 ```helen
+import std.core.*
+import std.dict.*
 shared store Counter {
     let count: int = 0
     fn inc() { count = count + 1 }
@@ -247,6 +248,7 @@ main {
 When you don't need the result, ignore spawn's return value:
 
 ```helen
+import std.core.*
 main {
     spawn Logger("System startup log")
     spawn Monitor("Health check")
@@ -261,6 +263,8 @@ main {
 Channels support bidirectional communication — the main thread and spawned agent can send messages to each other:
 
 ```helen
+import std.core.*
+import std.tools.*
 agent Calculator(reply: Channel) {
     main {
         loop {
@@ -288,6 +292,7 @@ main {
 Uncaught exceptions in spawned agents propagate through the channel:
 
 ```helen
+import std.core.*
 agent RiskyTask(reply: Channel) {
     main {
         let result = 100 / 0  // Throws exception
@@ -383,6 +388,8 @@ Each spawned agent has its own transcript session. v1.23.7 introduces spawn rela
 ### Querying Spawn Relationships
 
 ```helen
+import std.core.*
+import std.transcript.*
 main {
     // Get all direct child sessions of the current session
     let children = get_spawned_sessions()
@@ -403,6 +410,8 @@ main {
 ### Aggregate View
 
 ```helen
+import std.core.*
+import std.transcript.*
 main {
     // View the main session + all spawned complete execution flow
     let all_messages = replay_full_session()
@@ -420,6 +429,7 @@ main {
 When deleting a session, all spawned child sessions are cascade-deleted by default to avoid orphan transcripts:
 
 ```helen
+import std.transcript.*
 main {
     // Delete session and all its spawns (default)
     delete_session("session_abc123")
@@ -490,6 +500,8 @@ helen --session=session_abc123 debug.helen
 
 ```helen
 // debug.helen: Analyze the previous execution flow
+import std.core.*
+import std.transcript.*
 main {
     // View spawn tree
     let tree = get_spawn_tree()
@@ -513,6 +525,8 @@ main {
 By default, `spawn` starts the child agent in a **fresh** transcript session. v1.27 adds an optional `resume("<session_id>")` clause so a spawned agent **continues a previously saved child-session conversation** instead of starting from scratch:
 
 ```helen
+import std.context.*
+import std.core.*
 agent Worker(task: str, reply: Channel) {
     main {
         // The resumed transcript is already loaded; the LLM "remembers"
@@ -537,6 +551,7 @@ main {
 Chinese alias: `恢复会话("<session_id>")`.
 
 ```helen
+import std.transcript.*
 main {
     设 邮箱 = 分生 工作者("部署") 恢复会话(已存子会话id)
 
@@ -587,6 +602,10 @@ Stale locks (holder PID no longer alive) and same-process reuse (e.g. spawning a
 
 ```helen
 // Run 1: do work, then persist the child session_id for next time.
+import std.context.*
+import std.core.*
+import std.io.*
+import std.transcript.*
 agent Worker(reply: Channel) {
     main {
         insert_message("user", "checkpoint: phase 1 done, secret=BANANA_42")

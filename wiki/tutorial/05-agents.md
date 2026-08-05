@@ -56,6 +56,7 @@ Before each agent call, explicitly answer:
 // ❌ Wrong: the agent tries to use user_name and user_id, but they are
 // not passed in as parameters. The compiler will report "undefined variable"
 // because agents are strictly isolated from the caller's scope.
+import std.core.*
 agent Greeter {
     main {
         print("Hello " + user_name + ", your id is " + str(user_id))
@@ -66,6 +67,7 @@ agent Greeter {
 ### ✅ Correct Example: Explicitly Passing via Parameters
 
 ```helen
+import std.core.*
 agent Greeter(user_name: str, user_id: int) {
     main {
         // ✅ All information enters the agent via parameters
@@ -224,6 +226,7 @@ agent Assistant {
 - **Omitting `tools`** means the LLM has no tools available (except the built-in `load_skill`).
 
 ```helen
+import std.core.*
 agent Assistant {
     description "Helpful assistant"
     tools = ["web_search", "read_file"]   // LLM can autonomously call these two
@@ -411,6 +414,8 @@ agent DefaultAgent {
 Helen automatically saves all conversation history. You can access and manage sessions via stdlib functions in an agent:
 
 ```helen
+import std.core.*
+import std.transcript.*
 agent ChatBot {
     description "Chat bot with transcript management"
     prompt "You are a helpful chat assistant."
@@ -489,6 +494,7 @@ See [TranscriptStore documentation](../runtime/transcript-store.md) and [stdlib 
 By default, agent transcripts are **not persisted** to avoid cluttering the working directory with session files. You can explicitly control transcript behavior per agent:
 
 ```helen
+import std.core.*
 agent 工作Agent {
     description "Simple task agent"
     model "qwen3.7-plus"
@@ -673,6 +679,8 @@ For how to **write well-crafted** `prompt` and `description` — structure layou
 Agents can include a `main` block as the execution entry point, invoked with `call`:
 
 ```helen
+import std.core.*
+import std.str.*
 agent Translator(text: str, target: str) {
     description "Translate text"
     model "gpt-4"
@@ -718,6 +726,7 @@ main {
 The `functions {}` block now supports `let` and `const` declarations; these variables are visible to all functions in the agent:
 
 ```helen
+import std.core.*
 agent MyAgent {
     description "Example agent"
     prompt "..."
@@ -763,6 +772,7 @@ main {
 ## Calling Agents
 
 ```helen
+import std.core.*
 agent Summarizer {
     description "Summarize text"
     prompt "Summarize the following:"
@@ -778,6 +788,7 @@ main {
 ## Complete Example: Email Classification System
 
 ```helen
+import std.core.*
 agent EmailClassifier {
     description "Classify emails into categories"
     model "gpt-4"
@@ -841,6 +852,8 @@ Multi-agent systems often need to share state or communicate with each other. He
 `shared store` is used to share **mutable state** across agents, especially reference types (list, dict).
 
 ```helen
+import std.core.*
+import std.str.*
 shared store TaskRegistry {
     let tasks: list = []
     let counter: int = 0
@@ -876,6 +889,7 @@ agent Worker() {
 Shared store methods support default values just like regular functions:
 
 ```helen
+import std.math.*
 shared store Logger {
     let logs: list = []
     
@@ -895,6 +909,7 @@ Before v1.29.15, calling a method without passing a defaulted parameter left the
 **Private fields** (`_` prefix):
 
 ```helen
+import std.core.*
 shared store BankAccount {
     let balance: int = 1000
     _transactionLog: list = []  // Private: not visible externally
@@ -925,6 +940,7 @@ main {
 
 ```helen
 // Worker agent receives a Channel parameter to reply with results
+import std.core.*
 agent Worker(task: str, reply: Channel) {
     main {
         let result = "Done: " + task
@@ -956,6 +972,9 @@ main {
 When listening on multiple Channels simultaneously, use `mailbox_select` for multiplexing:
 
 ```helen
+import std.concurrency.*
+import std.core.*
+import std.tools.*
 agent Fetcher(url: str, reply: Channel) {
     main {
         let data = web_fetch(url)
@@ -979,6 +998,7 @@ main {
 
 ```helen
 // Producer agent: sends multiple messages to a Channel
+import std.core.*
 agent Producer(items: list, reply: Channel) {
     main {
         for item in items {
@@ -1005,6 +1025,7 @@ main {
 `spawn` can start agents in the background and communicate via Channels. Multiple spawned agents can concurrently access a shared store:
 
 ```helen
+import std.core.*
 shared store Counter {
     let count: int = 0
     fn increment() { count = count + 1 }

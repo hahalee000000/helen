@@ -21,15 +21,7 @@ Traditional debuggers (breakpoints, stepping, variable watching) are designed fo
 ### Basic Syntax
 
 ```helen
-main {
-    assert x > 0
-    assert x > 0, "x must be positive"
-
-}```
-
-### Assertion Failure
-
-```helen
+import std.core.*
 fn divide(a, b) {
     assert b != 0, "divisor must not be zero"
     return a / b
@@ -51,6 +43,7 @@ When an assertion fails, structured error context (JSON format) is automatically
 ## debug() Function
 
 ```helen
+import std.debug.*
 main {
     let x = 42
     debug("variable value", x)
@@ -77,6 +70,8 @@ main {
 ### Programmatic Tracing
 
 ```helen
+import std.core.*
+import std.debug.*
 main {
     trace_on()
     let x = compute_value()
@@ -158,6 +153,8 @@ Displayed information:
 ### Programmatic Access
 
 ```helen
+import std.context.*
+import std.core.*
 main {
     // Get context statistics
     let stats = context_stats()
@@ -180,6 +177,9 @@ main {
 
 ```helen
 // Helper function: fix code
+import std.core.*
+import std.debug.*
+import std.io.*
 fn fix_code(code: str): str {
     // Actual code fix logic
     return code  // Simplified example
@@ -257,6 +257,7 @@ helen coverage tests/ --format json > coverage.json
 ### Programmatic API
 
 ```helen
+import std.debug.*
 main {
     // Enable coverage tracking
     coverage_on()

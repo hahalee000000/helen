@@ -22,6 +22,7 @@ Before writing any implementation code, design the interface contract first:
 ```helen
 // contracts/my_module.helen
 
+import std.core.*
 protocol MyModule {
     fn process_data(input: str): map
     fn validate_config(config: map): bool
@@ -108,6 +109,7 @@ Strictly follow the three-stage cycle:
 ```helen
 // tests/test_my_module.helen
 
+import std.test.*
 import "contracts/my_module.helen"
 
 fn test_process_data_valid_input() {
@@ -134,6 +136,7 @@ Run the tests and confirm they all FAIL.
 ```helen
 // src/my_module.helen
 
+import std.str.*
 import "contracts/my_module.helen"
 
 fn process_data(input: str): map {
@@ -199,6 +202,7 @@ After each development cycle, perform a 7-dimension quality assessment:
 
 ```helen
 // Invoke quality assessment
+import std.core.*
 let file_path = "src/my_module.helen"
 let quality = get_quality_scores(file_path)
 
@@ -242,36 +246,6 @@ After each task, evaluate whether new skills have been discovered or existing sk
 **Creating a new skill:**
 
 ```helen
-// Evaluate task for reusable patterns
-let task_summary = "Implemented JWT auth; discovered token refresh pattern for long sessions"
-
-// Check if this warrants a new skill
-if is_reusable_pattern(task_summary) {
-    let skill_name = "jwt-refresh-pattern"
-    let skill_dir = ".helen/skills/" + skill_name
-    
-    // Create skill directory (cross-platform: use stdlib mkdir_p)
-    mkdir_p(skill_dir)
-    
-    // Create SKILL.md with proper YAML frontmatter
-    let skill_content = """---
-name: """ + skill_name + """
-description: "JWT token refresh pattern for long-running agent sessions"
-version: 1.0.0
-author: HelenAgent
-tags: [jwt, authentication, session-management]
----
-
-# JWT Refresh Pattern
-
-## Problem
-Access tokens expire during long-running agent sessions, causing API failures.
-
-## Solution
-Implement proactive token refresh 5 minutes before expiration.
-
-## Code Example
-```helen
 fn refresh_token_if_needed(token: str): str {
     if is_expiring_soon(token) {
         return call_refresh_api(token)
@@ -289,18 +263,8 @@ fn refresh_token_if_needed(token: str): str {
 **Updating an existing skill:**
 
 ```helen
-// Read existing skill
-let skill_path = ".helen/skills/jwt-refresh-pattern/SKILL.md"
-let existing = read_file(skill_path)
-
-// Append new information
-let addition = """
-
-## Update (2026-07-25)
-Discovered edge case: refresh fails when network is down.
-Solution: Implement retry with exponential backoff.
-
-```helen
+import std.core.*
+import std.time.*
 fn refresh_with_retry(token: str, max_retries: int = 3): str {
     for i in range(max_retries) {
         try {
@@ -339,6 +303,7 @@ Four-stage closed-loop example (using a JWT authentication module):
 
 ```helen
 // Phase 1: Contract Design
+import std.io.*
 let contract = call_contractor("Implement user authentication module", "JWT support required")
 
 // Phase 2 RED-GREEN: TDD Development
@@ -377,6 +342,7 @@ if not a { }
 
 ```helen
 // ✅ Correct
+import std.str.*
 let sub = substring(str, 0, 10)
 
 // ❌ Wrong
@@ -420,6 +386,7 @@ fn process(): map {
 
 ```helen
 // ✅ Correct
+import std.test.*
 test_suite("MyModule", fn() {
     test_case("valid input", fn() {
         assert_equal(result, expected)
@@ -438,6 +405,7 @@ test_case("valid input", "test_function")
 
 ```helen
 // ❌ Duplicated logic scattered across multiple places
+import std.core.*
 fn process_a(input: str): map {
     if len(input) == 0 { return {"status": "error", "code": 1001} }
     // ...

@@ -98,6 +98,7 @@ For the complete list, see `helen/stdlib/locales/zh.py`.
 
 ```helen
 // Use Chinese stdlib function names directly (no import or alias needed)
+import std.core.*
 函数 数据处理() {
     定义 原始数据 = [3, 1, 4, 1, 5, 9, 2, 6]
     定义 排序后 = 排序(原始数据)
@@ -132,6 +133,7 @@ alias len as 我的长度
 ### Core
 
 ```helen
+import std.core.*
 main {
     // Type conversion
     let num = int("42")           // string → integer
@@ -157,6 +159,8 @@ main {
 ### String
 
 ```helen
+import std.core.*
+import std.str.*
 main {
     // Case conversion
     let upper = upper("hello")    // "HELLO"
@@ -219,6 +223,9 @@ main {
 ### Data
 
 ```helen
+import std.data.*
+import std.network.*
+import std.str.*
 main {
     // JSON
     let data = json_parse('{"name": "Helen", "version": 1}')
@@ -248,6 +255,7 @@ main {
 ### Collection
 
 ```helen
+import std.list.*
 main {
     // Sort and deduplicate
     let sorted = sort([3, 1, 4, 1, 5])  // [1, 1, 3, 4, 5]
@@ -276,6 +284,8 @@ main {
 ### Network
 
 ```helen
+import std.data.*
+import std.network.*
 main {
     // HTTP GET
     let response = http_get("https://api.example.com/data")
@@ -296,6 +306,8 @@ main {
 ### Time
 
 ```helen
+import std.core.*
+import std.time.*
 main {
     // Current time
     let now_ts = now()                    // Unix timestamp (seconds)
@@ -325,6 +337,8 @@ main {
 ### Math
 
 ```helen
+import std.crypto.*
+import std.math.*
 main {
     // Basic math
     let rounded = round(3.14159, 2)   // 3.14
@@ -366,6 +380,10 @@ main {
 ### File
 
 ```helen
+import std.core.*
+import std.file.*
+import std.io.*
+import std.path.*
 main {
     // Read/write files
     let content = read_file("/path/to/file.txt")
@@ -404,6 +422,9 @@ main {
 ### System
 
 ```helen
+import std.core.*
+import std.system.*
+import std.tools.*
 main {
     // Environment variables
     let home = env_get("HOME")
@@ -462,6 +483,7 @@ main {
 ### Crypto
 
 ```helen
+import std.crypto.*
 main {
     // Hashing
     let md5_hash = md5("data")
@@ -493,6 +515,7 @@ main {
 AI-native observability functions providing structured debugging context for AI agents.
 
 ```helen
+import std.debug.*
 main {
     // debug() — Structured debug output to stderr
     debug("variable value", x)
@@ -526,6 +549,8 @@ Functions for managing LLM conversation context, used for context control in lon
 
 ```helen
 // All context-management API in action (must be inside main {})
+import std.context.*
+import std.core.*
 main {
     // Basic operations
     clear_context()                       // Clear context, returns {cleared_messages, cleared_tokens}
@@ -597,6 +622,7 @@ main {
 ## Test (Testing Framework)
 
 ```helen
+import std.test.*
 fn test_add() {
     assert_equal(2 + 3, 5)
 }
@@ -622,6 +648,7 @@ main {
 ### Expect Chain API
 
 ```helen
+import std.test.*
 fn test_expect() {
     expect(42).toBe(42)
     expect("hello").toContain("ell")
@@ -637,6 +664,8 @@ fn test_expect() {
 ## Quality (Quality Assessment)
 
 ```helen
+import std.core.*
+import std.quality.*
 main {
     let source = read_file("my_program.helen")
 
@@ -673,6 +702,7 @@ TranscriptStore (v1.16) — SSOT, persistent storage for all conversation messag
 ### Session Management
 
 ```helen
+import std.transcript.*
 main {
     // get_session_id() — Current session ID
     let session = get_session_id()  // "session_{timestamp}_{uuid8}"
@@ -703,6 +733,9 @@ main {
 ### Replay, Export & Search
 
 ```helen
+import std.context.*
+import std.core.*
+import std.transcript.*
 main {
     // Replay
     replay_transcript()                              // Current session
@@ -734,6 +767,7 @@ main {
 
 ```helen
 // Each agent main {} execution is an invocation with a unique invocation_id
+import std.transcript.*
 list_invocations()                               // List all invocations
 list_invocations(agent="Researcher", limit=10)   // Filter by agent
 
@@ -755,29 +789,7 @@ invocation_path("inv_3")                         // "top -> A -> C"
 ### Session Restore & Cleanup
 
 ```helen
-main {
-    // Restore
-    resume_session("session_123")                    // Import historical messages into current session
-
-    // Delete
-    delete_session("session_123")                    // Default: cascade delete spawned
-    delete_session("session_123", cascade=false)     // Only delete main session
-    delete_current_session(true)                     // Delete current session
-
-    // Cleanup
-    cleanup_sessions(keep_count=10)                  // Keep the most recent 10
-    cleanup_sessions(older_than_days=30)             // Delete those older than 30 days
-    cleanup_sessions(keep_count=5, older_than_days=7, cascade=false)
-
-    // Compression audit
-    get_compression_audit()
-    // [{timestamp, strategy, before_tokens, after_tokens, boundary_uuid}, ...]
-
-}```
-
-### Spawn Relationship Tracking (v1.23.7)
-
-```helen
+import std.transcript.*
 main {
     get_spawned_sessions()                           // Direct child sessions
     get_spawn_tree()                                 // Full spawn tree
@@ -816,6 +828,7 @@ interp = Interpreter(session_id="session_xxx")
 v1.17 introduces multimodal support; `MediaPart` is a first-class data type.
 
 ```helen
+import std.media.*
 main {
     // Creation
     let img = media("/path/to/image.png")          // File path or URL
@@ -852,6 +865,7 @@ main {
 Control ongoing LLM streaming calls.
 
 ```helen
+import std.llm.*
 main {
     let call_id = current_llm_call_id()     // string | null
     cancel_llm_call(call_id)
@@ -871,6 +885,8 @@ Used in `on_chunk` callbacks to detect termination conditions, Ctrl+C interrupti
 v1.18 Channel-based message-passing concurrency model.
 
 ```helen
+import std.concurrency.*
+import std.core.*
 agent Worker(task: str) {
     main {
         // Execute task...
@@ -914,6 +930,7 @@ main {
 Python exceptions are automatically wrapped as `RuntimeError`, with format `"Python <Type Name>: <Original Message>"`:
 
 ```helen
+import std.core.*
 main {
     try {
         let x = len(42)
@@ -1083,6 +1100,7 @@ Create `.mcp.json` in your project root:
 MCP tools are automatically discovered and can be used in agent `tools` declarations:
 
 ```helen
+import std.core.*
 agent CodeAnalyzer {
     tools = ["search_code", "get_code_snippet", "read_file"]
     

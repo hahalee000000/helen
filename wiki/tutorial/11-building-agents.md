@@ -170,6 +170,7 @@ agent ResponsePolisher {
 ## Step 2: Implement Routing Logic
 
 ```helen
+import std.core.*
 main {
     let customer_question = "How do I reset my password?"
 
@@ -212,6 +213,7 @@ main {
 
 ```helen
 // Knowledge base query agent — receives reply Channel to return results
+import std.core.*
 agent KnowledgeBase(query: str, reply: Channel) {
     description "Search knowledge base"
     prompt "Search knowledge base for: {{query}}"
@@ -264,6 +266,7 @@ main {
 ## Step 4: Add Error Handling
 
 ```helen
+import std.core.*
 main {
     let question = "How do I reset my password?"
 
@@ -349,6 +352,8 @@ Working memory automatically tracks key information during agent execution:
 
 ```helen
 // Helper function: fix code
+import std.core.*
+import std.io.*
 fn fix_code(code: str): str {
     // Actual code repair logic
     return code  // Simplified example
@@ -422,6 +427,7 @@ In real applications, multiple Agents often need to **share state** or **communi
 Suppose our customer service system needs to track statistics across all sessions:
 
 ```helen
+import std.core.*
 shared store SessionStats {
     let totalSessions: int = 0
     let resolvedSessions: int = 0
@@ -481,6 +487,7 @@ Suppose we need a background task processing queue:
 
 ```helen
 // Producer Agent: generates tasks and sends via Channel
+import std.core.*
 agent TaskProducer(reply: Channel) {
     description "Produce tasks"
     main {

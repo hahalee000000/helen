@@ -137,6 +137,7 @@ Write the Helen program with:
 - Standalone execution example
 
 ```helen
+import std.core.*
 agent MyFeature(param1: str, param2: str) {
     prompt "..."
     
@@ -301,6 +302,7 @@ if not source_dir.exists():
 **Fix**: Load both documentation AND source code for comprehensive coverage:
 
 ```helen
+import std.core.*
 fn load_documentation(): str {
     return read_file(docs_path)
 }

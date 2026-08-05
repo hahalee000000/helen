@@ -197,6 +197,7 @@ agent NormalAgent() { ... }        // L1: Standard isolation (default)
 ### Example: Scope Isolation
 
 ```helen
+import std.core.*
 let module_counter = 0           // ❌ Not visible in agent main
 const MAX_RETRIES = 3            // ✅ Auto-visible in agent main
 shared let shared_count = 0      // ✅ Visible and writable in agent main
@@ -221,6 +222,8 @@ agent Worker(task: str) {
 ### Parameter Read-Only + Closure Capture
 
 ```helen
+import std.core.*
+import std.list.*
 agent ProcessItems(items: list<int>) {
     main {
         let first = items[0]         // ✅ Readable
@@ -248,6 +251,7 @@ agent DataProcessor(data: list) {
 ### shared let Cross-Agent Collaboration
 
 ```helen
+import std.core.*
 shared let request_count = 0
 shared let last_request_time = ""
 
@@ -272,6 +276,7 @@ agent CacheWriter(cache: map, key: str, value: any) {
 ### Shared Store Collaboration (v1.12)
 
 ```helen
+import std.core.*
 shared store TaskManager {
     let pending = 0
     let completed = 0
@@ -457,6 +462,7 @@ let article = ContentPipeline("Helen programming language")
 **Scenario**: Multiple Agents execute concurrently to improve throughput
 
 ```helen
+import std.core.*
 agent DataFetcher(source: str) {
     description "Fetch data from a source"
     tools = ["http_get"]
@@ -498,6 +504,7 @@ Each agent created by `spawn` runs in an **independent Interpreter instance** wi
 #### ❌ Anti-pattern: Assuming Automatic Inheritance
 
 ```helen
+import std.transcript.*
 agent Worker(task: str, ch: Channel) {
     main {
         let sid = get_session_id()     // ❌ This is the worker's own new session
@@ -509,6 +516,7 @@ agent Worker(task: str, ch: Channel) {
 #### ✅ Relay Template: Explicitly Pass session_id
 
 ```helen
+import std.transcript.*
 main {
     let parent_sid = get_session_id()
     let m = spawn Worker("task", parent_sid)  // Pass explicitly
@@ -542,6 +550,7 @@ agent Worker(task: str, parent_sid: str, ch: Channel) {
 **v1.18**: `llm stream` was removed (v1.14), `for await` was removed (v1.18). Streaming is unified under `llm act` + `on_chunk`.
 
 ```helen
+import std.io.*
 fn print_chunk(chunk: str) {
     stream_print(chunk)
 }
@@ -560,6 +569,8 @@ StreamingWriter("The future of AI")
 Streaming with full callbacks:
 
 ```helen
+import std.core.*
+import std.io.*
 fn on_chunk(chunk: str) { stream_print(chunk) }
 fn on_complete() { print("\n\n✅ Done") }
 
@@ -573,6 +584,8 @@ agent StreamingWriter(topic: str) {
 **v1.32**: Closures are first-class callable objects, so you can use anonymous closures directly:
 
 ```helen
+import std.core.*
+import std.io.*
 agent StreamingWriter(topic: str) {
     main {
         llm act "Write article about " + topic
@@ -587,6 +600,8 @@ agent StreamingWriter(topic: str) {
 `on_chunk` returning `false` terminates streaming early. `spawn` + `Channel.cancel()` interrupts background agent streaming:
 
 ```helen
+import std.io.*
+import std.llm.*
 fn conditional_chunk(chunk: str) {
     stream_print(chunk)
     if should_stop() { return false }  // Terminate streaming
@@ -611,6 +626,7 @@ cancel_llm_call(call_id)
 Injected hints are automatically saved to TranscriptStore.
 
 ```helen
+import std.io.*
 agent Coder {
     tools ["write_file", "shell_exec", "read_file"]
 
@@ -648,6 +664,8 @@ agent Worker {
 `on_tool_end` can be combined with `on_chunk` / `on_complete`:
 
 ```helen
+import std.core.*
+import std.io.*
 llm act "task"
     逐块处理 fn(c) { stream_print(c) }
     完成 fn() { print("\n✅ Done") }
@@ -746,6 +764,8 @@ for config in configs {
 ### Error Handling and Retry
 
 ```helen
+import std.core.*
+import std.time.*
 agent RobustAgent(task: str) {
     main {
         let max_retries = 3
@@ -807,6 +827,9 @@ This is non-negotiable. Writing code without validation leads to runtime errors 
 **Correct workflow:**
 
 ```helen
+import std.core.*
+import std.io.*
+import std.tools.*
 agent HelenCoder(task: str) {
     description "Write and validate Helen code"
     tools ["write_file", "shell_exec", "read_file"]
@@ -851,6 +874,8 @@ agent HelenCoder(task: str) {
 **Anti-pattern:**
 ```helen
 // ❌ Writing code without validation
+import std.io.*
+import std.tools.*
 main {
     let code = llm act "Write Helen code"
     write_file("output.helen", code)
@@ -867,6 +892,7 @@ When you do specify a model, **verify it's supported by your current API provide
 
 ```helen
 // ✅ Recommended: Use default model from config
+import std.media.*
 agent CodeReviewer {
     description "Review code for quality"
     prompt "You are a senior code reviewer."
@@ -953,6 +979,8 @@ description "Agent for /home/rxx/helen"  // Static! Use prompt + {{}}
 ## Debugging Tips
 
 ```helen
+import std.core.*
+import std.debug.*
 main {
     trace_on()
     let result = MyAgent("test")

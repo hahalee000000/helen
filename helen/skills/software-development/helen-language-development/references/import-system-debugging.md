@@ -177,6 +177,7 @@ Don't leave debug prints in production code. Remove all `print(..., file=sys.std
 **File-based test:**
 ```helen
 // test_import.helen
+import std.core.*
 import "config.json"
 import "config.json" as cfg
 import "readme.md" as docs

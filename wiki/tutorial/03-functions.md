@@ -5,6 +5,7 @@
 ## Basic Functions
 
 ```helen
+import std.core.*
 fn greet(name) {
     print("Hello, " + name + "!")
 }
@@ -17,6 +18,7 @@ main {
 ## Return Values
 
 ```helen
+import std.core.*
 fn add(a, b) {
     return a + b
 }
@@ -30,6 +32,7 @@ main {
 ### No Return Value
 
 ```helen
+import std.core.*
 fn say_hello() {
     print("Hello!")
     // Implicitly returns null
@@ -112,6 +115,7 @@ main {
 ## Recursion
 
 ```helen
+import std.core.*
 fn factorial(n: int): int {
     if n <= 1 {
         return 1
@@ -127,6 +131,7 @@ main {
 ## Functions as Values
 
 ```helen
+import std.core.*
 fn double(x) {
     return x * 2
 }
@@ -143,6 +148,7 @@ fn apply(op, value) {
 Agents can define internal functions in a `functions` block:
 
 ```helen
+import std.core.*
 agent DataProcessor {
     description "Process and analyze data"
 
@@ -169,6 +175,7 @@ agent DataProcessor {
 ## Scope
 
 ```helen
+import std.core.*
 shared let global_x = 100
 
 fn test() {
@@ -194,6 +201,8 @@ Helen supports closures and anonymous functions, allowing you to create inline f
 Use `fn(params) { body }` syntax to create anonymous functions:
 
 ```helen
+import std.core.*
+import std.list.*
 main {
     // Assign an anonymous function to a variable
     let add = fn(a, b) { return a + b }
@@ -214,6 +223,7 @@ Closures can capture the environment at the point of definition, accessing outer
 
 ```helen
 // Closure captures outer variable
+import std.core.*
 fn make_adder(x) {
     return fn(y) { return x + y }
 }
@@ -241,6 +251,8 @@ main {
 Closures work well with higher-order functions like `map`, `filter`, and `reduce`:
 
 ```helen
+import std.core.*
+import std.list.*
 main {
     let nums = [1, 2, 3, 4, 5]
 
@@ -279,6 +291,7 @@ Starting from v1.32, closures are **first-class callable objects** that can be u
 You can now pass anonymous closures directly to hooks like `on_chunk` and `on_complete`:
 
 ```helen
+import std.core.*
 main {
     // Anonymous closures work as callbacks
     let response = llm act "Count from 1 to 5"
@@ -298,6 +311,8 @@ main {
 Closures work seamlessly with stdlib higher-order functions:
 
 ```helen
+import std.core.*
+import std.list.*
 main {
     let nums = [1, 2, 3, 4, 5]
     
@@ -322,6 +337,8 @@ Closures use **weak references** to the interpreter to avoid circular references
 - Attempting to call an unbound closure raises a clear error
 
 ```helen
+import std.core.*
+import std.list.*
 main {
     // Closure captures environment
     let multiplier = 10

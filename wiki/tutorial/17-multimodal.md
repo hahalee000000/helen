@@ -20,6 +20,7 @@ This design provides the following advantages:
 `MediaPart` is a first-class citizen data type representing media content:
 
 ```helen
+import std.media.*
 main {
     // Create from file
     let img = media("file:///path/to/image.png")
@@ -56,6 +57,8 @@ Each `MediaPart` object contains the following fields:
 Passing media in `llm act`:
 
 ```helen
+import std.core.*
+import std.media.*
 agent 图像分析 {
     description "Analyze image content"
     
@@ -72,6 +75,7 @@ agent 图像分析 {
 You can pass multiple media objects:
 
 ```helen
+import std.media.*
 main {
     let img1 = media("image1.png")
     let img2 = media("image2.png")
@@ -84,6 +88,7 @@ main {
 The `on_media` callback converts a list of `MediaPart` objects into the format required by a specific provider. Helen provides three built-in format adapter stdlib functions — in most cases you never need to hand-write JSON:
 
 ```helen
+import std.media.*
 agent Claude媒体处理 {
     main {
         let img = media("diagram.png")
@@ -107,6 +112,7 @@ agent Claude媒体处理 {
 **Custom adapters**: Only needed when using a non-standard provider or requiring special handling:
 
 ```helen
+import std.list.*
 main {
     on_media fn(parts, provider) {
         // Only hand-write for non-standard providers
@@ -134,6 +140,8 @@ main {
 The `on_generate` callback registers media generation capability as a tool, letting the LLM decide when to invoke it:
 
 ```helen
+import std.core.*
+import std.media.*
 agent 图像生成器 {
     description "Generate images from descriptions"
     
@@ -171,6 +179,7 @@ agent 图像生成器 {
 Specifies the provider to use (affects default adapter behavior):
 
 ```helen
+import std.media.*
 main {
     let result = llm act "Analyze this image"
         media(img)
@@ -183,6 +192,8 @@ main {
 Multimodal also supports streaming output callbacks:
 
 ```helen
+import std.core.*
+import std.media.*
 main {
     let result = llm act "Describe this image in detail"
         media(img)
@@ -223,6 +234,7 @@ All multimodal-related functions support Chinese aliases:
 Convert a list of `MediaPart` objects into a specific provider's content format:
 
 ```helen
+import std.media.*
 main {
     // OpenAI-compatible format (default, usually no need to specify manually)
     let parts = to_openai_parts(media_list)
@@ -239,6 +251,7 @@ main {
 ### Media Utilities
 
 ```helen
+import std.media.*
 main {
     // Convert any MediaPart to a pure base64 string (regardless of source: file/url/base64)
     let b64 = media_to_base64(img)
@@ -252,6 +265,8 @@ main {
 ### Type Predicates
 
 ```helen
+import std.core.*
+import std.media.*
 main {
     if 是图片(part) { print("This is an image") }
     if 是视频(part) { print("This is a video") }
@@ -267,6 +282,8 @@ main {
 ### Image Analysis Agent
 
 ```helen
+import std.core.*
+import std.media.*
 agent 图像分析助手 {
     description "A professional image analysis assistant that can understand and describe image content"
     model "qwen-vl-max"
@@ -290,6 +307,8 @@ agent 图像分析助手 {
 ### Multi-Image Comparison Agent
 
 ```helen
+import std.core.*
+import std.media.*
 agent 图像比较器 {
     description "Compare differences between multiple images"
     
@@ -308,6 +327,8 @@ agent 图像比较器 {
 ### Image Generation Agent
 
 ```helen
+import std.core.*
+import std.media.*
 agent 创意图像生成器 {
     description "Generate images from text descriptions"
     
@@ -335,6 +356,8 @@ agent 创意图像生成器 {
 Using built-in format adapters (recommended):
 
 ```helen
+import std.core.*
+import std.media.*
 agent Claude分析 {
     main {
         let img = media("chart.png")
@@ -352,6 +375,8 @@ agent Claude分析 {
 Hand-writing an adapter for a non-standard provider:
 
 ```helen
+import std.list.*
+import std.media.*
 agent 自定义媒体处理 {
     main {
         let img = media("chart.png")
@@ -401,6 +426,7 @@ multimodal:
 For mainstream providers, use the built-in adapters directly — no need to hand-write JSON:
 
 ```helen
+import std.media.*
 main {
     // OpenAI-compatible provider (default, no on_media needed)
     let result = llm act "Analyze the image" media(img)
@@ -424,6 +450,8 @@ main {
 `media_to_base64()` and `save_media()` are especially useful in `on_generate` callbacks:
 
 ```helen
+import std.media.*
+import std.network.*
 main {
     on_generate fn(params) {
         let resp = http_post("https://api.example.com/generate", {...})
@@ -445,6 +473,7 @@ main {
 When processing mixed media lists, type predicates enable precise filtering:
 
 ```helen
+import std.list.*
 main {
     let parts = [img1, video1, audio1, img2]
     let images = parts.filter(是图片)    // Keep only images
@@ -457,6 +486,7 @@ main {
 Large media files are automatically stored externally, but you can control this manually:
 
 ```helen
+import std.media.*
 main {
     // Small image (<1MB): inline storage
     let small_img = media("icon.png")
@@ -471,6 +501,8 @@ main {
 Handle potential media loading errors:
 
 ```helen
+import std.core.*
+import std.media.*
 main {
     try {
         let img = media("possibly_nonexistent_file.png")
@@ -486,6 +518,7 @@ main {
 When processing multiple media, be aware of provider limits:
 
 ```helen
+import std.media.*
 main {
     // Default max 10 media per request
     let images = [media("img1.png"), media("img2.png"), media("img3.png")]

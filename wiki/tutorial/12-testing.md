@@ -20,6 +20,7 @@ Helen 是 AI 原生语言——Agent 写的代码更需要自动化测试保障�
 ```helen
 // calculator_test.helen
 
+import std.test.*
 fn add(a, b) { return a + b }
 fn subtract(a, b) { return a - b }
 
@@ -73,6 +74,7 @@ $ helen test calculator_test.helen
 | `assert_throws(fn)` | 断言抛出异常 |
 
 ```helen
+import std.test.*
 fn test_assertions() {
     assert_true(10 > 5)
     assert_equal("hello" + " world", "hello world")
@@ -91,6 +93,7 @@ fn test_assertions() {
 更可读的断言风格：
 
 ```helen
+import std.test.*
 fn test_expect_chain() {
     // 基本断言
     expect(42).toBe(42)
@@ -130,6 +133,7 @@ fn test_expect_chain() {
 ### 多个测试套件
 
 ```helen
+import std.test.*
 main {
     test_suite("String Utils")
     test_case("uppercase", test_upper)
@@ -163,6 +167,8 @@ helen test file.helen --filter "add|subtract"
 `before_each` 和 `after_each` 在每个测试前后运行：
 
 ```helen
+import std.core.*
+import std.test.*
 fn setup() {
     // 重置全局状态、初始化数据
     print("Setting up...")
@@ -188,6 +194,7 @@ main {
 还没写好的测试可以暂时跳过：
 
 ```helen
+import std.test.*
 main {
     test_suite("Feature")
     test_case("completed feature", test_done)
@@ -202,6 +209,7 @@ main {
 
 ```helen
 // 我们想实现一个 FizzBuzz
+import std.test.*
 fn test_fizzbuzz() {
     expect(fizzbuzz(3)).toBe("Fizz")
     expect(fizzbuzz(5)).toBe("Buzz")
@@ -221,6 +229,7 @@ main {
 ### 2. GREEN — 实现功能
 
 ```helen
+import std.core.*
 fn fizzbuzz(n) {
     if n % 15 == 0 { return "FizzBuzz" }
     if n % 3 == 0 { return "Fizz" }
@@ -332,6 +341,8 @@ Files:
 ### 在代码中控制覆盖率
 
 ```helen
+import std.core.*
+import std.debug.*
 main {
     // 手动启用覆盖率跟踪
     coverage_on()

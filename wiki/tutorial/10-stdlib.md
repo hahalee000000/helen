@@ -49,6 +49,7 @@ Full list: see `helen/stdlib/locales/zh.py`.
 
 ```helen
 // Directly use Chinese stdlib function names (no import or alias needed)
+import std.core.*
 函数 数据处理() {
     let 原始数据 = [3, 1, 4, 1, 5, 9, 2, 6]
     let 排序后 = 排序(原始数据)
@@ -210,6 +211,7 @@ main {
 ### Type Conversion
 
 ```helen
+import std.core.*
 main {
     str(42)                       // "42"
     int("42")                     // 42
@@ -220,6 +222,7 @@ main {
 ### General Operations
 
 ```helen
+import std.core.*
 main {
     len("hello")                  // 5
     len([1, 2, 3])               // 3
@@ -236,6 +239,7 @@ main {
 ### Type Checking
 
 ```helen
+import std.core.*
 main {
     type(42)                      // "int"
     isinstance(42, "int")         // true
@@ -247,6 +251,7 @@ main {
 ### Basic Operations (14)
 
 ```helen
+import std.str.*
 main {
     // Case
     upper("hello")                // "HELLO"
@@ -299,6 +304,8 @@ main {
 ### Regular Expressions (5)
 
 ```helen
+import std.core.*
+import std.str.*
 main {
     // Match
     let m = regex_match(r"\d+", "123abc")
@@ -325,6 +332,7 @@ main {
 ### Text Analysis (8)
 
 ```helen
+import std.str.*
 main {
     // Tokenization
     tokenize("Hello, world!")     // ["Hello", "world"]
@@ -358,6 +366,7 @@ main {
 ### Encoding Conversion (4)
 
 ```helen
+import std.str.*
 main {
     // Base64
     base64_encode("Hello")        // "SGVsbG8="
@@ -372,6 +381,7 @@ main {
 ### String Operations (7)
 
 ```helen
+import std.str.*
 main {
     repeat("ab", 3)               // "ababab"
     reverse("hello")              // "olleh"
@@ -390,6 +400,8 @@ main {
 ### JSON (4)
 
 ```helen
+import std.core.*
+import std.data.*
 main {
     // Parse
     let data = json_parse('{"name": "Alice", "age": 30}')
@@ -408,6 +420,7 @@ main {
 ### HTML (3)
 
 ```helen
+import std.data.*
 main {
     // Extract text
     html_text("<p>Hello <b>World</b></p>")
@@ -425,6 +438,7 @@ main {
 ### Markdown (2)
 
 ```helen
+import std.data.*
 main {
     // Convert to HTML
     markdown_to_html("# Title\n\nParagraph")
@@ -439,6 +453,7 @@ main {
 ### CSV (4)
 
 ```helen
+import std.data.*
 main {
     // Parse
     let rows = csv_parse("name,age\nAlice,30")
@@ -457,6 +472,7 @@ main {
 ### YAML (4)
 
 ```helen
+import std.data.*
 main {
     // Parse
     let data = yaml_parse("name: Alice\nage: 30")
@@ -475,6 +491,7 @@ main {
 ### TOML (4)
 
 ```helen
+import std.data.*
 main {
     // Parse
     let data = toml_parse("name = \"Alice\"\nage = 30")
@@ -499,6 +516,8 @@ Collection functions handle list, dict, and set operations.
 New dict manipulation functions for common operations:
 
 ```helen
+import std.core.*
+import std.dict.*
 main {
     let user = {"name": "Alice", "age": 30, "city": "Beijing"}
     
@@ -542,6 +561,7 @@ main {
 ### List Operations
 
 ```helen
+import std.list.*
 main {
     let numbers = [3, 1, 4, 1, 5, 9, 2, 6]
     
@@ -563,6 +583,7 @@ main {
 ### Set Operations
 
 ```helen
+import std.core.*
 main {
     let s1 = make_set([1, 2, 3, 4])
     let s2 = make_set([3, 4, 5, 6])
@@ -590,6 +611,8 @@ $ helen my_tool.helen --verbose --output=json --port=8080 input.txt
 `argv` is a predefined `const list<str>` containing all command-line arguments:
 
 ```helen
+import std.core.*
+import std.str.*
 main {
     // Direct access
     print(argv)  // ["--verbose", "--output=json", "--port=8080", "input.txt"]
@@ -614,6 +637,7 @@ main {
 Standard library function form equivalent to `argv`:
 
 ```helen
+import std.system.*
 main {
     let args = get_cli_args()  // Same as argv
 }
@@ -624,6 +648,7 @@ main {
 **Auto mode** (no arguments) — automatically recognizes various argument types:
 
 ```helen
+import std.system.*
 main {
     let parsed = parse_cli_args()
     // Input: --verbose --output=json --port 8080 input.txt
@@ -646,6 +671,8 @@ Supported argument formats:
 **Spec mode** (pass a spec map) — with type conversion and defaults:
 
 ```helen
+import std.core.*
+import std.system.*
 main {
     let spec = {
         "verbose": {"type": "flag", "default": false},
@@ -669,6 +696,8 @@ Context management functions for controlling the lifecycle of LLM conversation c
 ### Clearing Context
 
 ```helen
+import std.context.*
+import std.core.*
 main {
     // Clear the current conversation history
     let result = clear_context()
@@ -686,6 +715,8 @@ main {
 ### Compressing Context
 
 ```helen
+import std.context.*
+import std.core.*
 main {
     // Auto compression (based on token thresholds)
     let result = compress_context("auto")
@@ -709,6 +740,8 @@ main {
 **Long-conversation agent example**:
 
 ```helen
+import std.context.*
+import std.core.*
 agent ChatBot {
     main {
         let message_count = 0
@@ -743,6 +776,9 @@ agent ChatBot {
 Resumes an old transcript session into the current active context — the LLM can see all restored messages at the next `llm act` call.
 
 ```helen
+import std.context.*
+import std.core.*
+import std.transcript.*
 main {
     // 1. List all old sessions
     let sessions = list_sessions()
@@ -782,6 +818,9 @@ main {
 **Saving/restoring full context across sessions (including working_memory)**:
 
 ```helen
+import std.context.*
+import std.core.*
+import std.io.*
 main {
     // Before session ends: export full snapshot to file
     let snapshot = export_context()
@@ -800,6 +839,8 @@ Session recording management functions for accessing and manipulating Helen's co
 ### Getting Session ID
 
 ```helen
+import std.core.*
+import std.transcript.*
 main {
     // Get current session ID
     let session_id = get_session_id()
@@ -816,6 +857,8 @@ main {
 ### Listing All Sessions
 
 ```helen
+import std.core.*
+import std.transcript.*
 main {
     // List all transcript sessions
     let sessions = list_sessions()
@@ -836,6 +879,8 @@ main {
 ### Replaying Sessions
 
 ```helen
+import std.core.*
+import std.transcript.*
 main {
     // Replay current session (valid view only)
     let messages = replay_transcript()
@@ -859,6 +904,8 @@ main {
 Use `replay_full_session()` to view the complete execution flow of the main session and all its spawned child sessions:
 
 ```helen
+import std.core.*
+import std.transcript.*
 main {
     // Aggregate view of main session + all spawns
     let messages = replay_full_session()
@@ -885,6 +932,7 @@ main {
 ### Exporting Sessions
 
 ```helen
+import std.transcript.*
 main {
     // Export as JSON
     export_transcript("my_chat.json", "json")
@@ -916,6 +964,8 @@ main {
 Search persisted transcripts by **content**. In general situations you can't remember session IDs, but you remember what was discussed — use `search_transcript` to find relevant sessions.
 
 ```helen
+import std.core.*
+import std.transcript.*
 main {
     // Search within the current session
     let matches = search_transcript("authentication bug")
@@ -956,6 +1006,9 @@ main {
 **Typical usage**: Search then restore full context
 
 ```helen
+import std.context.*
+import std.core.*
+import std.transcript.*
 main {
     // Find relevant historical discussions
     let matches = search_transcript("authentication bug", scope="all", limit=5)
@@ -980,6 +1033,8 @@ main {
 Each agent `main {}` execution is an **invocation** with a unique `invocation_id`. The transcript records all invocations completely, and you can use query functions to trace the call structure.
 
 ```helen
+import std.core.*
+import std.transcript.*
 main {
     // List all invocations
     let invs = list_invocations()
@@ -1013,6 +1068,7 @@ main {
 **Combined with replay_transcript filtering**:
 
 ```helen
+import std.transcript.*
 main {
     // See only agent A's messages
     let a_msgs = replay_transcript(agent="A")
@@ -1028,6 +1084,7 @@ main {
 **Combined with restore_context for precise recovery**:
 
 ```helen
+import std.context.*
 main {
     // Restore only agent A's most recent run
     restore_context("session_xxx", agent="A", last_only=true)
@@ -1040,6 +1097,8 @@ main {
 ### Getting Compression Audit
 
 ```helen
+import std.core.*
+import std.transcript.*
 main {
     // Get audit trail of all compression events
     let audit = get_compression_audit()
@@ -1069,6 +1128,8 @@ main {
 v1.23.7 introduces spawn relationship tracking, allowing you to query and manage spawned child sessions:
 
 ```helen
+import std.core.*
+import std.transcript.*
 main {
     // Get direct child sessions of the current session
     let children = get_spawned_sessions()
@@ -1109,6 +1170,7 @@ main {
 When deleting a session, all spawned child sessions are cascade-deleted by default to avoid orphan transcripts:
 
 ```helen
+import std.transcript.*
 main {
     // Delete session and all its spawns (default)
     delete_session("session_abc123")
@@ -1142,6 +1204,8 @@ main {
 ### Session Recovery
 
 ```helen
+import std.core.*
+import std.transcript.*
 main {
     // Resume a specific session
     let success = resume_session("session_1783492628_d9d9c0aa")
@@ -1238,6 +1302,7 @@ Transcript functions support Chinese aliases — you can directly use Chinese fu
 **Usage examples**:
 
 ```helen
+import std.core.*
 main {
     // Use Chinese function names
     let 会话id = 获取会话id()
@@ -1304,6 +1369,7 @@ File operation functions are organized into three groups: basic I/O, directory o
 #### glob_files — Recursively find files
 
 ```helen
+import std.file.*
 main {
     // Find all Python files (recursive)
     let py_files = glob_files("src", "*.py")
@@ -1332,6 +1398,9 @@ main {
 **Example**: Count lines of all Python files in a project
 
 ```helen
+import std.core.*
+import std.file.*
+import std.str.*
 fn 统计代码行数(目录: str) {
     let files = glob_files(目录, "*.py")
     let total_lines = 0
@@ -1351,6 +1420,7 @@ main {
 #### grep_files — Search file contents
 
 ```helen
+import std.file.*
 main {
     // Literal search
     let matches = grep_files("src/", "TODO")
@@ -1381,6 +1451,8 @@ main {
 **Example**: Find all unhandled exceptions
 
 ```helen
+import std.core.*
+import std.file.*
 agent 异常检查助手 {
     description "Check for unhandled exceptions in code"
     main {
@@ -1399,6 +1471,8 @@ agent 异常检查助手 {
 ### Basic File I/O (2)
 
 ```helen
+import std.core.*
+import std.io.*
 main {
     // Read file
     let content = read_file("config.json")
@@ -1411,6 +1485,8 @@ main {
 ### File Information (2)
 
 ```helen
+import std.core.*
+import std.file.*
 main {
     // File size (bytes)
     let size = file_size("document.pdf")
@@ -1425,6 +1501,9 @@ main {
 ### Directory Operations (6)
 
 ```helen
+import std.core.*
+import std.file.*
+import std.io.*
 main {
     // List directory contents
     let files = list_dir("src")
@@ -1457,6 +1536,7 @@ main {
 ### File Operations (2)
 
 ```helen
+import std.file.*
 main {
     // Copy file
     copy_file("source.txt", "backup.txt")
@@ -1469,6 +1549,8 @@ main {
 ### Temporary Files (2)
 
 ```helen
+import std.file.*
+import std.io.*
 main {
     // Create temporary file
     let tmp = temp_file(suffix=".txt", prefix="data_")
@@ -1486,6 +1568,7 @@ main {
 ### Path Operations (6)
 
 ```helen
+import std.path.*
 main {
     // Path joining
     let full_path = path_join("src", "utils", "helper.py")
@@ -1507,6 +1590,7 @@ main {
 Python exceptions thrown during standard library function calls are automatically wrapped as `RuntimeError` and can be caught with try-catch:
 
 ```helen
+import std.core.*
 main {
     try {
         let x = len(42)           // Python TypeError
@@ -1549,6 +1633,7 @@ Create `.mcp.json` in your project root:
 MCP tools are automatically discovered and can be used in agent `tools` declarations:
 
 ```helen
+import std.core.*
 agent CodeAnalyzer {
     description = "Analyze code using codebase-memory"
     

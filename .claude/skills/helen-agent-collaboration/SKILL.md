@@ -27,6 +27,7 @@ Caller ──parameters──► Agent Input
 
 ```helen
 // ❌ Wrong: assuming module variables are auto-visible
+import std.core.*
 let user_name = "Alice"
 agent Greeter { main { print("Hello " + user_name) } }  // Compile error!
 
@@ -53,6 +54,8 @@ main { Greeter("Alice") }
 Multiple agents execute in sequence; each agent's output becomes the next agent's input.
 
 ```helen
+import std.core.*
+import std.io.*
 agent WorkflowOrchestrator(requirement: str) {
     description "Workflow orchestrator - sequential chain pattern"
     prompt """
@@ -112,6 +115,7 @@ Call multiple agents concurrently to process different sub-tasks, then aggregate
 
 ```helen
 // v1.12: Results passed via return values, not shared let
+import std.core.*
 shared let completed_count = 0
 
 agent CodeAnalyzer(path: str) {
@@ -180,6 +184,7 @@ Multiple agents form a processing pipeline; each stage handles a specific aspect
 
 ```helen
 // v1.12: Using value-type counters to track progress
+import std.core.*
 shared let pipeline_stage = 0
 
 agent DataCollector(source: str) {
@@ -450,6 +455,8 @@ How to choose the right sharing mechanism for collaboration:
 Shared Store quick example:
 
 ```helen
+import std.core.*
+import std.dict.*
 shared store TaskRegistry {
     tasks: dict = {}
     _counter: int = 0
@@ -469,6 +476,7 @@ v1.18 introduces `spawn` + Channel message queues, replacing the old async/await
 
 ```helen
 // spawn returns a Channel (mailbox)
+import std.core.*
 agent Sender(output: Channel) {
     main {
         output.send("Hello from sender")
@@ -509,6 +517,8 @@ The most common orchestrator mistake: **holding ground-truth facts but not injec
 
 ```helen
 // ✅ Orchestrator resolves ground truth once, fans out via {{}}
+import std.time.*
+import std.tools.*
 agent Orchestrator(task: str) {
     main {
         // Cross-platform (v1.30.7+): use get_cwd() from utils.helen
@@ -539,6 +549,7 @@ Principle: **Whoever owns the facts is responsible for injecting them**. A share
 **Concurrent error handling**: Combine spawn + Channel with try/catch AggregateError:
 
 ```helen
+import std.core.*
 agent RobustOrchestrator(tasks: list) {
     main {
         let mailboxes = []

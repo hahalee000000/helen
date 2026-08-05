@@ -7,6 +7,7 @@
 ### if / else
 
 ```helen
+import std.core.*
 main {
     let score = 85
 
@@ -27,6 +28,7 @@ main {
 ### Truthy Rules
 
 ```helen
+import std.core.*
 main {
     if 0 { print("will not execute") }        // 0 → false
     if "" { print("will not execute") }       // empty string → false
@@ -120,6 +122,8 @@ main {
 #### Practical Examples
 
 ```helen
+import std.core.*
+import std.dict.*
 main {
     // Safe list access
     let items = [1, 2, 3]
@@ -139,6 +143,7 @@ main {
 ### for ... in
 
 ```helen
+import std.core.*
 main {
     for item in ["apple", "banana", "cherry"] {
         print(item)
@@ -152,6 +157,7 @@ main {
 ### Iteration with Index
 
 ```helen
+import std.core.*
 main {
     let fruits = ["apple", "banana", "cherry"]
     for fruit in fruits {
@@ -163,6 +169,7 @@ main {
 ### range Iteration
 
 ```helen
+import std.core.*
 main {
     for i in range(5) {
         print(i)    // 0, 1, 2, 3, 4
@@ -181,6 +188,7 @@ main {
 ### while
 
 ```helen
+import std.core.*
 main {
     let count = 0
     while (count < 5) {
@@ -195,6 +203,7 @@ main {
 ### break / continue
 
 ```helen
+import std.core.*
 main {
     for i in range(10) {
         if i == 3 {
@@ -212,6 +221,7 @@ main {
 ## Pattern Matching
 
 ```helen
+import std.core.*
 main {
     let status = "success"
 
@@ -228,6 +238,7 @@ main {
 ### Number Matching
 
 ```helen
+import std.core.*
 main {
     let code = 404
 
@@ -245,6 +256,7 @@ main {
 Use the `..` operator to match numeric ranges (inclusive):
 
 ```helen
+import std.core.*
 main {
     let score = 85
 
@@ -266,6 +278,7 @@ main {
 Use `if` to add additional conditional checks:
 
 ```helen
+import std.core.*
 main {
     let x = 25
 
@@ -287,6 +300,7 @@ Guard conditions are evaluated after the range match; both must be satisfied for
 Use the `throw` statement to actively raise exceptions of predefined types:
 
 ```helen
+import std.core.*
 main {
     // With a message — caught by try-catch
     try {
@@ -307,6 +321,7 @@ main {
 Using throw in functions for parameter validation:
 
 ```helen
+import std.core.*
 fn validate_age(age: int) {
     if (age < 0) {
         throw RuntimeError("age cannot be negative")
@@ -342,6 +357,7 @@ main {
 ### try / catch
 
 ```helen
+import std.core.*
 main {
     try {
         let result = validate_age(-5)
@@ -359,6 +375,7 @@ main {
 ### catch-all
 
 ```helen
+import std.core.*
 main {
     try {
         risky_operation()
@@ -372,6 +389,7 @@ main {
 ### finally
 
 ```helen
+import std.core.*
 main {
     try {
         open_file()
@@ -415,6 +433,7 @@ main {
 ### Complete Example: Custom Validation
 
 ```helen
+import std.core.*
 fn divide(a: int, b: int): int {
     if (b == 0) {
         throw RuntimeError("division by zero")
@@ -438,6 +457,8 @@ main {
 Python exceptions thrown by stdlib functions (`TypeError`, `ValueError`, `FileNotFoundError`, etc.) are automatically wrapped as `RuntimeError` and can be caught with try-catch:
 
 ```helen
+import std.core.*
+import std.str.*
 main {
     try {
         let x = len(42)        // Python TypeError
@@ -459,6 +480,7 @@ main {
 ## Comprehensive Example: FizzBuzz
 
 ```helen
+import std.core.*
 main {
     for i in range(1, 101) {
         if (i % 15 == 0) {

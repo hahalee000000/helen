@@ -36,6 +36,8 @@ import "os.path" as path
 ### Calling Python Functions
 
 ```helen
+import std.core.*
+import std.math.*
 import "math" as math
 
 main {
@@ -50,6 +52,7 @@ main {
 ### Accessing Python Constants
 
 ```helen
+import std.core.*
 import "math" as math
 
 main {
@@ -94,6 +97,7 @@ main {
 ### Example: JSON Processing
 
 ```helen
+import std.core.*
 import "json" as json
 
 main {
@@ -116,6 +120,8 @@ main {
 Supports importing nested modules (e.g. `os.path`):
 
 ```helen
+import std.core.*
+import std.str.*
 import "os.path" as path
 
 main {
@@ -136,6 +142,7 @@ main {
 Create instances by accessing the class name in a module and calling `()`:
 
 ```helen
+import std.core.*
 import "json" as json
 
 main {
@@ -150,6 +157,7 @@ main {
 Two approaches, same effect:
 
 ```helen
+import std.core.*
 import "json" as json
 
 main {
@@ -189,6 +197,7 @@ class Greeter:
 Using it in Helen:
 
 ```helen
+import std.core.*
 import "mylib.greeter" as PyGreeter
 
 main {
@@ -231,6 +240,7 @@ fn greet(prefix: str): str {
 
 ```helen
 // main.helen
+import std.core.*
 import "bridge.helen"
 
 main {
@@ -246,6 +256,8 @@ main {
 ### Example 1: Math Computation
 
 ```helen
+import std.core.*
+import std.math.*
 import "math" as math
 
 main {
@@ -269,6 +281,7 @@ main {
 ### Example 2: File Path Operations
 
 ```helen
+import std.core.*
 import "os.path" as path
 
 main {
@@ -292,6 +305,7 @@ main {
 ### Example 3: Data Processing
 
 ```helen
+import std.core.*
 import "json" as json
 
 main {
@@ -317,6 +331,8 @@ main {
 ### Example 4: Using Python Libraries in Agents
 
 ```helen
+import std.core.*
+import std.math.*
 import "math" as math
 
 agent DataAnalyzer(data: list) {
@@ -395,6 +411,8 @@ main {
 ### Handling with try-catch
 
 ```helen
+import std.core.*
+import std.math.*
 import "math" as math
 
 main {

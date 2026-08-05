@@ -22,6 +22,7 @@ Helen has two keyword-level LLM statements:
 `llm act` is used to directly call the LLM with a prompt string:
 
 ```helen
+import std.core.*
 main {
     let result = llm act "Translate 'Hello, world!' to French"
     print(result)
@@ -34,6 +35,7 @@ main {
 In an agent's `main` block, `llm act` automatically uses the agent's configuration (model, temperature, etc.):
 
 ```helen
+import std.core.*
 agent Translator(text: str, target: str) {
     description "Translate text"
     model "qwen-plus"
@@ -61,6 +63,7 @@ main {
 You can pass expressions after `llm act` to dynamically build prompts:
 
 ```helen
+import std.core.*
 main {
     let review = "This product is amazing!"
     let result = llm act "Analyze sentiment of: " + review
@@ -112,6 +115,7 @@ main {
 ### Basic Usage
 
 ```helen
+import std.core.*
 main {
     llm if "Classify email priority" {
         branch "urgent" {
@@ -138,6 +142,7 @@ main {
 ### Nested Usage
 
 ```helen
+import std.core.*
 main {
     let query = "How do I reset my password?"
 
@@ -176,6 +181,7 @@ main {
 Use `on_chunk` to specify a callback function for custom processing of each chunk:
 
 ```helen
+import std.io.*
 fn handle_chunk(chunk) {
     stream_print("[" + chunk + "]")
 }
@@ -188,6 +194,7 @@ main {
 Use `on_complete` to specify a callback after streaming is finished:
 
 ```helen
+import std.core.*
 fn handle_chunk(chunk) {
     print(chunk, end="")
 }
@@ -211,6 +218,7 @@ The `on_complete` callback is called after streaming finishes, suitable for:
 Streaming callbacks for `llm act` automatically use the agent's configuration (model, temperature, prompt) when inside an agent:
 
 ```helen
+import std.io.*
 agent Poet(topic: str) {
     description "Write poetry"
     temperature 0.9
@@ -228,6 +236,7 @@ agent Poet(topic: str) {
 ### Dynamic Prompts
 
 ```helen
+import std.io.*
 fn print_chunk(chunk: str) {
     stream_print(chunk)
 }
@@ -258,6 +267,7 @@ main {
 **Persistence**: All injected hints are automatically saved to TranscriptStore and can be viewed via the REPL's `:transcript` command, supporting session replay and auditing.
 
 ```helen
+import std.io.*
 agent Coder {
     tools ["write_file", "shell_exec", "read_file"]
 
@@ -314,6 +324,7 @@ main {
 Every LLM interaction is automatically recorded in the conversation history:
 
 ```helen
+import std.core.*
 main {
     // Automatically recorded: [user] "Classify email priority"
     llm if "Classify email priority" {

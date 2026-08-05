@@ -111,6 +111,8 @@ main {
 
 ```helen
 // Command line: helen tool.helen --verbose --output=json input.txt
+import std.core.*
+import std.system.*
 main {
     print(argv)          // ["tool.helen", "--verbose", "--output=json", "input.txt"]
     print(len(argv))     // 4 (includes program name)
@@ -147,6 +149,7 @@ Violation raises **E0355 `TOP_LEVEL_STATEMENT`**.
 
 ```helen
 // ✅ Correct — declarations at top level, executable code in main
+import std.core.*
 const LIMIT = 100
 fn helper(): int { return 42 }
 agent Worker { main { ... } }
@@ -212,6 +215,7 @@ main {
 
 ### Member Access
 ```helen
+import std.core.*
 main {
     let item = list[0]         // List index
     let value = map["key"]     // Map lookup
@@ -306,6 +310,7 @@ Helen has 333 stdlib functions (e.g. `len`, `find`, `format`, `map`, `list`, `co
 
 ```helen
 // ❌ WRONG — shadows builtins
+import std.core.*
 fn process(items: list): map {
     let map = {}           // shadows map()
     let list = []          // shadows list
@@ -335,6 +340,7 @@ fn 处理(项目列表: list): map {
 
 ### Function Declarations
 ```helen
+import std.core.*
 fn add(a: int, b: int): int {     // Return type uses : syntax (v1.10, -> removed)
     return a + b
 }
@@ -366,6 +372,7 @@ fn 数据处理() {
 
 ### Agent Declarations
 ```helen
+import std.core.*
 agent Translator {
     description "Translate text between languages"
     prompt "You are a professional translator."
@@ -468,6 +475,7 @@ Agent `main {}` runs in an isolated environment and **cannot** directly access m
 
 ```helen
 // 1. Closure callbacks (best — buffer fully internalized)
+import std.core.*
 agent Streamer {
     main {
         let buf = ""
@@ -526,6 +534,7 @@ agent Normal() { main { ... } }              // L1: Standard isolation (default)
 Structured shared mutable state (fields can be value or reference types, thread-safe):
 
 ```helen
+import std.dict.*
 shared store Counter {
     count: int = 0
     fn increment() { count += 1 }
@@ -557,6 +566,7 @@ Fields with `_` prefix are private (inaccessible from agent code).
 `spawn Agent(...)` launches a concurrent agent and returns a Channel (mailbox) for message passing:
 
 ```helen
+import std.concurrency.*
 main {
     let ch = spawn Worker("task")
 
@@ -602,6 +612,7 @@ main {
 ```helen
 // llm act — autonomous execution (usable as expression since v1.10)
 // llm if — routing classification
+import std.core.*
 fn handle_chunk(chunk) { print(chunk, end="") }
 fn done() { print("\n✅ Done") }
 fn after_tool(name, result) {
@@ -631,6 +642,7 @@ Callbacks as adapters — protocol differences are handled by user callbacks, He
 
 ```helen
 // media() — ordinary stdlib function, returns MediaPart object
+import std.media.*
 main {
     let img = media("photo.jpg")
     llm act "Describe this image" media(img)
@@ -656,6 +668,7 @@ When `on_media` is not specified, the default OpenAI-compatible adapter is used.
 
 ### Exception Handling
 ```helen
+import std.core.*
 main {
     try {
         risky_operation()
@@ -686,6 +699,7 @@ main {
 
 ### Assertions
 ```helen
+import std.core.*
 main {
     assert x > 0
     assert x > 0, "x must be positive"
@@ -695,6 +709,7 @@ main {
 
 ### Pattern Matching
 ```helen
+import std.core.*
 main {
     // Basic matching
     match status {
@@ -741,6 +756,8 @@ main {
 
 ### Closures and Anonymous Functions
 ```helen
+import std.core.*
+import std.list.*
 fn make_counter() {                     // Closure (lexical scope, value capture)
     let count = 0
     return fn() { count = count + 1; return count }
@@ -766,6 +783,7 @@ main {
 
 ### Protocols
 ```helen
+import std.core.*
 protocol Printable {
     fn to_string(self): String
 }
@@ -820,6 +838,7 @@ Precedence: `||` has precedence 3, `&&` has precedence 4 (higher than `||`).
 ```helen
 // Single-line comment (use // for single-line)
 
+import std.core.*
 main {
     """
     Multi-line string (can serve as a documentation block)

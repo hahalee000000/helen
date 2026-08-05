@@ -31,6 +31,7 @@ Skills are modular knowledge units that exist as Markdown files. They allow the 
 **Practical relationship**: An agent can load a skill as a knowledge source:
 
 ```helen
+import std.tools.*
 agent Developer {
     tools = ["load_skill"]
     main {
@@ -117,6 +118,7 @@ load_skill and follow its instructions. Err on the side of loading.
 After seeing the index, the LLM calls the `load_skill` tool to fetch the full content when needed.
 
 ```helen
+import std.tools.*
 main {
     // Basic loading
     load_skill("helen-testing")
@@ -131,6 +133,8 @@ main {
 Skills can include a `references/` directory containing in-depth reference documents. The LLM can access them as follows:
 
 ```helen
+import std.core.*
+import std.tools.*
 main {
     // List all reference documents (name, path, size, first 3 lines preview)
     list_skill_references("helen-language-development")

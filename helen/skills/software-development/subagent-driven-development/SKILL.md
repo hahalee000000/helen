@@ -434,6 +434,8 @@ For each task, create a temporary Helen script that:
 
 ```helen
 // temp_agent.helen — Generated per task
+import std.core.*
+import std.io.*
 import "json" as json
 import "os" as os
 
@@ -522,6 +524,8 @@ for task in plan_tasks:
 Helen's `spawn` primitive enables concurrent task execution via Channel message queues:
 
 ```helen
+import std.core.*
+import std.system.*
 import "os" as os
 import "json" as json
 

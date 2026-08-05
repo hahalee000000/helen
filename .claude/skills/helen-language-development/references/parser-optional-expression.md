@@ -37,6 +37,7 @@ if self._check(*bare_form_tokens):
 
 **Problem**: Statement keywords alone miss cases like:
 ```helen
+import std.core.*
 let result = llm act
 print(result)    // IDENTIFIER on next line — not a keyword!
 ```
@@ -124,6 +125,7 @@ if self._current().line > previous_token.line:
 
 This is essential for cases like:
 ```helen
+import std.core.*
 let result = llm act
 print(result)    // print is IDENTIFIER, not a keyword — keyword check fails
 ```

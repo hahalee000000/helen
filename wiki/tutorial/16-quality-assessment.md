@@ -25,6 +25,8 @@ helen quality my_program.helen --dimension security
 ### Using in Helen Code
 
 ```helen
+import std.core.*
+import std.quality.*
 main {
     let source = read_file("my_program.helen")
 

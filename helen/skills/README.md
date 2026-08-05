@@ -133,6 +133,8 @@ Agents can create new skills to capture reusable patterns, best practices, or do
 ### Programmatic Creation (Helen Code)
 
 ```helen
+import std.core.*
+import std.io.*
 fn create_skill(name: str, description: str, content: str) {
     let skill_dir = ".helen/skills/" + name
     

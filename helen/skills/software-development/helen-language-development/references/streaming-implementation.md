@@ -27,6 +27,7 @@ Phase 3: Legacy streaming response (StreamingResponse wrapper, streaming true fi
 
 ```helen
 // Basic streaming (auto-prints chunks)
+import std.io.*
 llm act "Write a poem"
 
 // With callback

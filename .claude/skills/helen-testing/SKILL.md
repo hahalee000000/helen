@@ -22,6 +22,7 @@ Helen includes a complete testing framework with TDD development workflow suppor
 ```helen
 // calculator_test.helen
 
+import std.test.*
 test_suite("Calculator", fn() {
     test_case("adds numbers", fn() {
         assert_equal(2 + 3, 5)
@@ -39,6 +40,7 @@ run_tests()
 ```helen
 // calculator_test.helen
 
+import std.test.*
 fn test_add() {
     assert_equal(2 + 3, 5)
 }
@@ -71,6 +73,7 @@ helen test calculator_test.helen
 **assert_contains example:**
 
 ```helen
+import std.test.*
 fn test_contains() {
     // String
     assert_contains("hello world", "world")
@@ -86,6 +89,7 @@ fn test_contains() {
 ### Expect Chain API
 
 ```helen
+import std.test.*
 expect(value)
     .toBe(expected)           // Strict equality
     .toEqual(expected)        // Deep equality
@@ -103,6 +107,7 @@ expect(value)
 **Example:**
 
 ```helen
+import std.test.*
 fn test_expect_api() {
     expect(42).toBe(42)
     expect([1, 2, 3]).toContain(2)
@@ -114,6 +119,7 @@ fn test_expect_api() {
 ### Exception Testing (v1.10 enhanced)
 
 ```helen
+import std.test.*
 fn test_exceptions() {
     // Basic exception testing
     assert_throws(fn() {
@@ -156,6 +162,8 @@ AnyError
 **Exception testing examples:**
 
 ```helen
+import std.core.*
+import std.test.*
 fn test_runtime_errors() {
     // stdlib exceptions are wrapped as RuntimeError
     expect(fn() {
@@ -177,6 +185,7 @@ fn test_runtime_errors() {
 ### Testing a Simple Agent
 
 ```helen
+import std.test.*
 agent Adder(a: int, b: int) {
     description "Add two numbers"
     
@@ -194,6 +203,10 @@ fn test_adder_agent() {
 ### Testing an Agent with Tools
 
 ```helen
+import std.core.*
+import std.file.*
+import std.io.*
+import std.test.*
 agent FileProcessor(path: str) {
     description "Process a file"
     tools = ["read_file"]
@@ -220,6 +233,7 @@ fn test_file_processor() {
 ### Testing Agent Scope Isolation (v1.10)
 
 ```helen
+import std.test.*
 shared let shared_counter = 0
 const MAX_VALUE = 100
 
@@ -252,6 +266,9 @@ fn test_agent_scope_isolation() {
 ### Testing Concurrent Agents
 
 ```helen
+import std.core.*
+import std.test.*
+import std.time.*
 agent SlowWorker(id: str, delay: int) {
     description "Worker with delay"
     
@@ -285,6 +302,7 @@ fn test_concurrent_agents() {
 ### Testing Agent Error Handling
 
 ```helen
+import std.test.*
 agent FailingAgent(task: str) {
     description "Agent that may fail"
     
@@ -313,6 +331,10 @@ fn test_agent_error_handling() {
 ### Using before_each / after_each
 
 ```helen
+import std.core.*
+import std.file.*
+import std.io.*
+import std.test.*
 before_each(fn() {
     // Runs before each test
     write_file("test_data.txt", "initial")
@@ -338,6 +360,7 @@ fn test_modify_data() {
 ### Nested Test Suites
 
 ```helen
+import std.test.*
 test_suite("Math", fn() {
     test_suite("Addition", fn() {
         test_case("positive numbers", fn() {
@@ -417,6 +440,7 @@ fn test1() { ... }
 
 ```helen
 // ✅ Each test is independent
+import std.test.*
 fn test_feature_a() {
     let data = setup_data()
     assert_equal(process(data), expected_a)
@@ -442,6 +466,7 @@ fn test_feature_b() {
 ### 3. Test Boundary Conditions
 
 ```helen
+import std.test.*
 fn test_edge_cases() {
     // Empty input
     assert_equal(process([]), [])
@@ -461,6 +486,7 @@ fn test_edge_cases() {
 ### 4. Using Mock Data
 
 ```helen
+import std.test.*
 fn test_with_mock_data() {
     // Prepare mock data
     let mock_user = {
@@ -555,6 +581,8 @@ helen coverage tests/ --format json > coverage.json
 #### Programmatic API
 
 ```helen
+import std.core.*
+import std.debug.*
 main {
     // Enable coverage tracking
     coverage_on()
@@ -640,6 +668,9 @@ Files:
 Place checkpoints at key positions to output structured debug info to stderr:
 
 ```helen
+import std.core.*
+import std.debug.*
+import std.test.*
 fn test_complex_logic() {
     let input = [1, 2, 3, 4, 5]
     
@@ -658,6 +689,8 @@ fn test_complex_logic() {
 **Best practices for placing debug in agents**:
 
 ```helen
+import std.core.*
+import std.debug.*
 agent MyAgent(task: str) {
     main {
         // 1. Entry checkpoint: log parameters
@@ -685,6 +718,9 @@ agent MyAgent(task: str) {
 Wrap suspicious code blocks with `trace_on()` / `trace_off()` to trace execution:
 
 ```helen
+import std.core.*
+import std.debug.*
+import std.test.*
 fn test_with_trace() {
     trace_on()
     
@@ -764,6 +800,7 @@ See the actual prompt the LLM received, the response, token usage, and call dura
 
 ```helen
 // ❌ Wrong: `is` operator cannot be used inside function call arguments
+import std.test.*
 fn test_type_check() {
     assert_true(x is list)      // Parse error!
     assert_true(x is str)       // Parse error!
@@ -788,6 +825,9 @@ When testing agents that contain `llm act`, the tests will make actual LLM API c
 
 ```helen
 // Pure logic function — fast unit test
+import std.core.*
+import std.dict.*
+import std.test.*
 fn test_get_config() {
     let config = get_default_config()
     assert_equal(len(config), 4)

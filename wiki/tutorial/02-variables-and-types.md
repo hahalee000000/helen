@@ -7,6 +7,7 @@
 ### `let` — Mutable Variables
 
 ```helen
+import std.core.*
 main {
     let x = 42
     x = 100       // ✅ Can be modified
@@ -127,6 +128,8 @@ main {
 Helen uses `&&` (and), `||` (or), `!` (not) as logical operators:
 
 ```helen
+import std.core.*
+import std.path.*
 main {
     let and_result = true && false   // false
     let or_result = true || false    // true
@@ -160,6 +163,7 @@ main {
 ## List Operations
 
 ```helen
+import std.core.*
 main {
     let nums = [1, 2, 3]
     let first = nums[0]        // 1
@@ -173,6 +177,8 @@ main {
 Helen lists are based on Python lists and automatically support all common methods:
 
 ```helen
+import std.list.*
+import std.str.*
 main {
     let items = [1, 2, 3]
 
@@ -298,6 +304,7 @@ main {
 #### Practical Example
 
 ```helen
+import std.core.*
 main {
     // Update a record in an array
     let users = [
@@ -322,6 +329,7 @@ main {
 ## Type Checking
 
 ```helen
+import std.core.*
 main {
     let x = 42
     let t = type(x)            // "int"
