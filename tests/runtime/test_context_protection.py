@@ -221,7 +221,8 @@ class TestToolResultsPerTurn:
         assert len(result) == 5
 
     def test_enforcement_over_limit(self):
-        calls = [{"function": {"name": f"fn{i}"}, "id": f"id{i}"} for i in range(20)]
+        # Generate more calls than the limit (128)
+        calls = [{"function": {"name": f"fn{i}"}, "id": f"id{i}"} for i in range(200)]
         result = _enforce_tool_results_per_turn(calls)
         assert len(result) == MAX_TOOL_RESULTS_PER_TURN
         # Should keep the first N
@@ -230,7 +231,8 @@ class TestToolResultsPerTurn:
 
     def test_constant_value(self):
         # Verify the constant is set to a reasonable value
-        assert MAX_TOOL_RESULTS_PER_TURN == 10
+        # Increased from 10 to 128 to support complex multi-tool scenarios
+        assert MAX_TOOL_RESULTS_PER_TURN == 128
 
 
 class TestContextLengthErrorDetection:

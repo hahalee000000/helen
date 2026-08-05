@@ -1347,3 +1347,81 @@ main {
 ```
 
 Exception messages follow the format `"Python <type name>: <original message>"`, and you can distinguish specific Python exception types by the message prefix in catch blocks.
+
+## MCP Tools Integration (v1.33+)
+
+Helen v1.33 introduces MCP (Model Context Protocol) client support, allowing agents to dynamically discover and call tools from external MCP servers. MCP tools integrate seamlessly with built-in tools.
+
+### Configuration
+
+Create `.mcp.json` in your project root:
+
+```json
+{
+  "mcpServers": {
+    "codebase-memory": {
+      "command": "npx",
+      "args": ["-y", "@anthropic-ai/codebase-memory-mcp"],
+      "tool_timeout_sec": 60
+    }
+  }
+}
+```
+
+### Using MCP Tools
+
+MCP tools are automatically discovered and can be used in agent `tools` declarations:
+
+```helen
+agent CodeAnalyzer {
+    description = "Analyze code using codebase-memory"
+    
+    // MCP tools are referenced by name, just like built-in tools
+    tools = ["search_code", "get_code_snippet", "read_file"]
+    
+    main {
+        // LLM can now call search_code and get_code_snippet from MCP
+        let result = llm act "Search for authentication-related functions"
+        print(result)
+    }
+}
+```
+
+### How It Works
+
+1. **Lazy initialization**: MCP is initialized on first tool access
+2. **Tool discovery**: Helen queries each MCP server for available tools
+3. **Schema conversion**: MCP tool schemas are converted to OpenAI format
+4. **Unified dispatch**: MCP tools are called via `dispatch_tool()` like built-in tools
+
+### Priority Order
+
+When LLM calls a tool, Helen checks in this order:
+1. Built-in tools (highest priority)
+2. Agent functions (`functions {}` block)
+3. MCP tools (lowest priority)
+
+### Error Handling
+
+MCP errors don't crash your program:
+
+```helen
+main {
+    // If MCP tool fails, LLM receives error JSON
+    // and can handle it appropriately
+    let result = llm act "Try calling an MCP tool"
+    
+    // MCP tools return JSON results
+    // {"output": "..."} or {"error": "..."}
+}
+```
+
+### Complete Guide
+
+See [MCP Integration Guide](../runtime/mcp-integration.md) for:
+- Architecture details
+- Multiple MCP servers
+- Error handling strategies
+- Performance considerations
+- Troubleshooting
+

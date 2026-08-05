@@ -4,17 +4,23 @@ Provides a set of tools that LLM can call during `llm act` execution.
 Each tool has an OpenAI-format schema and a Python handler function.
 
 Tools are registered at module level and discovered by name.
+Also supports MCP (Model Context Protocol) tools via lazy initialization.
 """
 
 from __future__ import annotations
 
+import atexit
 import json
+import logging
 import os
 import urllib.request
 import urllib.error
 import urllib.parse
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -29,6 +35,9 @@ class HelenTool:
 
 # Global tool registry
 _tools: dict[str, HelenTool] = {}
+
+# Global MCP registry (lazy initialized)
+_mcp_registry: Any = None  # MCPToolRegistry | None
 
 
 def register_tool(name: str, description: str, parameters: dict[str, Any],
@@ -55,7 +64,7 @@ def list_tools() -> list[HelenTool]:
 def get_tool_schemas(tool_names: list[str] | None = None) -> list[dict[str, Any]]:
     """Return OpenAI-format tool schemas for the given tool names.
 
-    If tool_names is None, returns all registered tools.
+    If tool_names is None, returns all registered tools (including MCP tools).
     """
     names = tool_names if tool_names is not None else list(_tools.keys())
     schemas = []
@@ -71,6 +80,18 @@ def get_tool_schemas(tool_names: list[str] | None = None) -> list[dict[str, Any]
                 "parameters": tool.parameters,
             },
         })
+
+    # Add MCP tools
+    mcp_schemas = get_mcp_tool_schemas()
+    if tool_names is None:
+        # Include all MCP tools
+        schemas.extend(mcp_schemas)
+    else:
+        # Only include requested MCP tools
+        for schema in mcp_schemas:
+            if schema["function"]["name"] in tool_names:
+                schemas.append(schema)
+
     return schemas
 
 
@@ -78,14 +99,19 @@ def dispatch_tool(name: str, args: dict[str, Any]) -> str:
     """Execute a tool by name with the given arguments.
 
     Returns the tool result as a string, or an error message.
+    Checks built-in tools first, then MCP tools.
     """
+    # Check built-in tools first
     tool = _tools.get(name)
-    if tool is None:
-        return json.dumps({"error": f"Unknown tool: {name}"}, ensure_ascii=False)
-    try:
-        return tool.handler(**args)
-    except Exception as e:
-        return json.dumps({"error": f"Tool '{name}' failed: {type(e).__name__}: {e}"}, ensure_ascii=False)
+    if tool is not None:
+        try:
+            return tool.handler(**args)
+        except Exception as e:
+            return json.dumps({"error": f"Tool '{name}' failed: {type(e).__name__}: {e}"}, ensure_ascii=False)
+
+    # Check MCP tools
+    mcp_result = dispatch_mcp_tool(name, args)
+    return mcp_result
 
 
 # ── Built-in Tool Implementations ──────────────────────────────
@@ -811,3 +837,95 @@ def _register_builtin_tools() -> None:
 
 # Auto-register on import
 _register_builtin_tools()
+
+
+# ── MCP (Model Context Protocol) Tool Support ──────────────────
+
+
+def _ensure_mcp_initialized() -> None:
+    """Ensure MCP is initialized (lazy initialization).
+
+    Loads .mcp.json from current directory if it exists.
+    Safe to call multiple times.
+    """
+    global _mcp_registry
+    if _mcp_registry is None:
+        # Try to load .mcp.json from current directory
+        config_path = Path.cwd() / ".mcp.json"
+        if config_path.exists():
+            initialize_mcp(config_path)
+
+
+def initialize_mcp(config_path: Path) -> None:
+    """Initialize MCP servers and register their tools.
+
+    Args:
+        config_path: Path to .mcp.json file
+
+    Notes:
+        - Safe to call multiple times (idempotent)
+        - Registers cleanup on exit via atexit
+        - Errors are logged but don't raise (MCP is optional)
+    """
+    global _mcp_registry
+    if _mcp_registry is not None:
+        return  # Already initialized
+
+    from helen.runtime.mcp import MCPToolRegistry
+
+    _mcp_registry = MCPToolRegistry()
+    _mcp_registry.initialize(config_path)
+
+    # Register cleanup
+    atexit.register(shutdown_mcp)
+
+    logger.info("MCP initialized from %s", config_path)
+
+
+def shutdown_mcp() -> None:
+    """Shutdown all MCP servers.
+
+    Notes:
+        - Safe to call multiple times
+        - Errors are logged but don't raise
+    """
+    global _mcp_registry
+    if _mcp_registry is not None:
+        _mcp_registry.shutdown()
+        _mcp_registry = None
+
+
+def get_mcp_tool_schemas() -> list[dict[str, Any]]:
+    """Get tool schemas for all MCP tools.
+
+    Returns:
+        List of tool schemas in OpenAI function calling format
+
+    Notes:
+        - Lazily initializes MCP on first call
+        - Returns empty list if MCP not available
+    """
+    _ensure_mcp_initialized()
+    if _mcp_registry is None:
+        return []
+    return _mcp_registry.get_tool_schemas()
+
+
+def dispatch_mcp_tool(name: str, args: dict[str, Any]) -> str:
+    """Dispatch a tool call to MCP server.
+
+    Args:
+        name: Tool name
+        args: Tool arguments
+
+    Returns:
+        JSON string with tool result
+
+    Notes:
+        - Lazily initializes MCP on first call
+        - Returns error JSON if MCP not available
+    """
+    _ensure_mcp_initialized()
+    if _mcp_registry is None:
+        return json.dumps({"error": f"Unknown tool: {name}"}, ensure_ascii=False)
+    return _mcp_registry.dispatch(name, args)

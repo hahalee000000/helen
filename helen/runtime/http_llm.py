@@ -187,7 +187,7 @@ def _last_user_message_matches(messages: list[dict[str, Any]], prompt: Any) -> b
 # Maximum characters per tool result before truncation
 MAX_TOOL_RESULT_CHARS = 16000
 # Maximum total tool results per turn (enforced to prevent context explosion)
-MAX_TOOL_RESULTS_PER_TURN = 10
+MAX_TOOL_RESULTS_PER_TURN = 128
 
 
 def _truncate_tool_result(result: str, max_chars: int = MAX_TOOL_RESULT_CHARS) -> str:

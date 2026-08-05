@@ -961,9 +961,68 @@ helen template spawn_channel --copy my_worker.helen  # Copy to current directory
 
 Templates: `simple_agent`, `spawn_channel`, `shared_store`, `context_object`, `pipeline`. All templates follow the "Caller Decides Context" principle — all agent information is passed explicitly through parameters.
 
+## MCP Tools Integration (v1.33+)
+
+Helen v1.33 introduces MCP (Model Context Protocol) client support. MCP tools extend Helen's built-in tools with external capabilities.
+
+### Configuration
+
+Create `.mcp.json` in your project root:
+
+```json
+{
+  "mcpServers": {
+    "codebase-memory": {
+      "command": "npx",
+      "args": ["-y", "@anthropic-ai/codebase-memory-mcp"],
+      "tool_timeout_sec": 60
+    }
+  }
+}
+```
+
+### Using MCP Tools
+
+MCP tools are automatically discovered and can be used in agent `tools` declarations:
+
+```helen
+agent CodeAnalyzer {
+    tools = ["search_code", "get_code_snippet", "read_file"]
+    
+    main {
+        // LLM can call MCP tools like built-in tools
+        let result = llm act "Search for authentication functions"
+        print(result)
+    }
+}
+```
+
+### Tool Priority
+
+When LLM calls a tool, Helen checks in this order:
+1. Built-in tools (highest priority)
+2. Agent functions (`functions {}` block)
+3. MCP tools (lowest priority)
+
+### Error Handling
+
+MCP errors don't crash your program:
+
+```helen
+main {
+    // If MCP tool fails, LLM receives error JSON
+    // and can handle it appropriately
+    let result = llm act "Try calling an MCP tool"
+}
+```
+
+### Complete Guide
+
+See [MCP Integration Guide](../../../wiki/runtime/mcp-integration.md) for detailed documentation.
+
 ---
 
-**Last updated**: 2026-07-24
+**Last updated**: 2026-08-05
 
 ## Related Skills
 

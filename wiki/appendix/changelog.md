@@ -1,6 +1,93 @@
 # 版本历史
 
-> Helen v1.31.0 | 配置系统简化与交互式设置向导
+> Helen v1.33.0 | MCP 客户端集成
+
+---
+
+## v1.33.0: MCP 客户端集成
+
+**发布日期**: 2026-08-05
+**核心特性**: Model Context Protocol 客户端支持，外部工具发现与调用
+
+### 主要变更
+
+#### 1. MCP 客户端支持
+
+**新模块**: `helen/runtime/mcp/`
+
+- ✅ 读取项目根目录的 `.mcp.json` 配置
+- ✅ 启动 MCP 服务器进程（subprocess + stdio）
+- ✅ JSON-RPC 2.0 over stdio 通信
+- ✅ 自动发现 MCP 工具并注册到 Helen 工具系统
+- ✅ 多 MCP 服务器支持
+- ✅ 懒加载初始化（首次访问时自动初始化）
+- ✅ 错误隔离（MCP 失败不影响 Helen 核心功能）
+
+**配置示例**:
+
+```json
+{
+  "mcpServers": {
+    "codebase-memory": {
+      "command": "npx",
+      "args": ["-y", "@anthropic-ai/codebase-memory-mcp"],
+      "tool_timeout_sec": 60
+    }
+  }
+}
+```
+
+**使用方式**:
+
+```helen
+agent CodeAnalyzer {
+    tools = ["search_code", "get_code_snippet"]  // MCP 工具
+    
+    main {
+        let result = llm act "Search for authentication functions"
+        print(result)
+    }
+}
+```
+
+**核心文件**:
+- `helen/runtime/mcp/__init__.py` - 包导出
+- `helen/runtime/mcp/exceptions.py` - MCP 异常定义
+- `helen/runtime/mcp/config.py` - 配置加载
+- `helen/runtime/mcp/client.py` - JSON-RPC 客户端
+- `helen/runtime/mcp/server_manager.py` - 多服务器管理
+- `helen/runtime/mcp/registry.py` - 工具注册和分发
+
+**集成点**:
+- `helen/runtime/tools.py` - 添加 MCP 工具支持（懒加载）
+- MCP 工具与内置工具统一通过 `dispatch_tool()` 调用
+
+**测试**:
+- 19 个 MCP 测试全部通过
+- Mock MCP 服务器用于测试
+- 配置测试（8 个）+ 集成测试（11 个）
+
+**文档**:
+- `wiki/runtime/mcp-integration.md` - 完整 MCP 集成指南
+- `wiki/tutorial/10-stdlib.md` - 添加 MCP 工具章节
+- `wiki/index.md` - 添加 MCP 文档链接
+
+#### 2. 工具调用限制调整
+
+**变更**: `MAX_TOOL_RESULTS_PER_TURN` 从 10 增加到 128
+
+**原因**: 支持复杂多工具场景，避免 LLM 请求大量工具调用时被截断
+
+**影响文件**:
+- `helen/runtime/http_llm.py` - 常量定义
+- `tests/runtime/test_context_protection.py` - 更新测试
+
+### 兼容性
+
+- ✅ 向后兼容：无 `.mcp.json` 时静默跳过
+- ✅ Python 3.12+
+- ✅ MCP 协议版本：2024-11-05
+- ✅ 仅支持 stdio 传输
 
 ---
 

@@ -40,6 +40,7 @@
 - [[runtime/import|Module System]] — Multi-format import, circular detection, path safety
 - [[runtime/skills|Skill System]] — Three-layer search architecture, two-layer disclosure mechanism
 - [[runtime/working_memory|Working Memory]] — v1.25 system prompt-based approach: LLM proactively maintains context via `<working_memory>` block (**v1.25 new feature**)
+- [[runtime/mcp-integration|MCP Integration]] — Model Context Protocol client support, external tool discovery and invocation, multi-server management (**v1.33 new feature**)
 
 > Note: Content from `runtime/graduated_compression`, `runtime/cache_aware_compression`, and `runtime/agent_context` has been merged into `runtime/context-management`. Old pages archived to `_archive/`. `working_memory` has been rewritten with the v1.25 approach.
 
