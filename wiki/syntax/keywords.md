@@ -38,6 +38,10 @@ Helen supports bilingual keywords. Chinese keywords and English keywords map to 
 | `streaming` | `流式输出` | Enable streaming |
 | `temperature` | `温度` | Temperature parameter |
 | `max-turns` | `最大轮次` | Maximum turns |
+| `max-tokens` | `最大tokens` | Max output tokens (v1.31.2) |
+| `thinking-mode` | `思考模式` | Enable thinking mode (v1.36) |
+| `reasoning-effort` | `推理强度` | Reasoning effort level (v1.36) |
+| `provider` | `提供商` | Explicit provider override (v1.36) |
 | `functions` | `函数区` | Function definition block |
 | `main` | `主函` | Entry point |
 | `import` / `as` | `导入` / `作为` | Module import |
@@ -146,6 +150,34 @@ Maximum interaction turns.
 
 ```helen
 max-turns 3
+```
+
+### `max-tokens`
+Maximum output tokens for LLM response (v1.31.2).
+
+```helen
+max-tokens 4096
+```
+
+### `thinking-mode`
+Enable thinking/reasoning mode for LLM (v1.36). When enabled, the model produces a chain-of-thought reasoning before the final answer.
+
+```helen
+thinking-mode true
+```
+
+### `reasoning-effort`
+Control reasoning effort level (v1.36). Values: `low`, `medium`, `high`, `max`.
+
+```helen
+reasoning-effort "high"
+```
+
+### `provider`
+Explicit provider override (v1.36, context keyword). Used to override auto-detected platform protocol.
+
+```helen
+provider "zhipu"
 ```
 
 ### `prompt`

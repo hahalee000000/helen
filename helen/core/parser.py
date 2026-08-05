@@ -917,7 +917,8 @@ class Parser:
                 TokenType.DESCRIPTION, TokenType.MODEL, TokenType.TOOLS,
                 TokenType.MEMORY, TokenType.TEMPERATURE,
                 TokenType.MAX_TURNS, TokenType.MAX_TOKENS, TokenType.STREAMING,
-            ) or self._is_context_keyword("memory") or self._current().lexeme == "记忆":
+                TokenType.THINKING_MODE, TokenType.REASONING_EFFORT,
+            ) or self._is_context_keyword("memory", "提供商") or self._current().lexeme == "记忆":
                 declarations.append(self._declaration_block())
             else:
                 self._error(f"Unexpected token in agent body: {self._current().type.name}")
@@ -1054,8 +1055,14 @@ class Parser:
             TokenType.MAX_TURNS: "max_turns",
             TokenType.MAX_TOKENS: "max_tokens",  # v1.31.2
             TokenType.STREAMING: "streaming",
+            TokenType.THINKING_MODE: "thinking_mode",  # v1.36
+            TokenType.REASONING_EFFORT: "reasoning_effort",  # v1.36
         }
         field_name = field_map.get(token_type)
+
+        # v1.36: Handle "提供商" as context keyword (provider is reserved for llm act clause)
+        if field_name is None and start.lexeme == "提供商":
+            field_name = "provider"
 
         streaming_value = False
         if field_name == "streaming" and isinstance(value, LiteralNode):
@@ -1069,8 +1076,11 @@ class Parser:
             temperature=value if field_name == "temperature" else None,
             max_turns=value if field_name == "max_turns" else None,
             max_tokens=value if field_name == "max_tokens" else None,
-            streaming=streaming_value,
             span=span,
+            streaming=streaming_value,
+            thinking_mode=value if field_name == "thinking_mode" else None,
+            reasoning_effort=value if field_name == "reasoning_effort" else None,
+            provider=value if field_name == "provider" else None,
         )
 
     def _main_block(self) -> MainBlockNode:
@@ -1859,12 +1869,17 @@ class Parser:
             return TokenType.EOF in types
         return self._current().type in types
 
-    def _is_context_keyword(self, keyword: str) -> bool:
-        """Check if current token is an identifier matching a context keyword (v1.6)."""
+    def _is_context_keyword(self, *keywords: str) -> bool:
+        """Check if current token is an identifier matching any context keyword (v1.6).
+
+        v1.36: Supports multiple keywords (e.g., _is_context_keyword("memory", "提供商"))
+        """
         if self._at_end():
             return False
         tok = self._current()
-        return tok.type == TokenType.IDENTIFIER and tok.lexeme == keyword
+        if tok.type != TokenType.IDENTIFIER:
+            return False
+        return tok.lexeme in keywords
 
     def _peek(self) -> Token:
         """Peek at the current token (without consuming it)."""

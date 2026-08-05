@@ -9,7 +9,7 @@ tags: [helen, syntax, reference, language, chinese-punctuation, chinese-quotes]
 
 # Helen Syntax Reference
 
-## Keywords (93 total: 45 English + 48 Chinese)
+## Keywords (99 total: 48 English + 51 Chinese)
 
 Bilingual keywords map to the same TokenType and can be freely mixed. The parser/interpreter requires no changes.
 
@@ -71,6 +71,8 @@ Bilingual keywords map to the same TokenType and can be freely mixed. The parser
 | `temperature` | `温度` | 温度参数 |
 | `max-turns` | `最大轮次` | 最大工具调用轮次 |
 | `max-tokens` | `最大tokens` | LLM 响应最大输出 token 数 (v1.31.2) |
+| `thinking-mode` | `思考模式` | 启用思考/推理模式 (v1.36) |
+| `reasoning-effort` | `推理强度` | 推理强度: low/medium/high/max (v1.36) |
 | `functions` | `函数区` | Agent 内函数定义区 |
 | `main` | `主函` | 入口块 |
 | `import` / `as` | `导入` / `作为` | 模块导入 |
@@ -424,6 +426,22 @@ agent 工作Agent {
     描述 "简单任务"
     记录 "无"  // 或 "内存", "持久"
     主函 { ... }
+}
+
+// Thinking mode (v1.36) - enables chain-of-thought reasoning
+agent DeepThinker {
+    description "Deep reasoning agent"
+    model "deepseek-v4-pro"
+    thinking-mode true          // Enable thinking/reasoning
+    reasoning-effort "high"     // low/medium/high/max
+    main { return llm act "Solve this complex problem" }
+}
+
+// Provider override (v1.36, context keyword - not reserved)
+agent CustomProvider {
+    model "deepseek-v4-flash"
+    provider "deepseek"         // Override auto-detected protocol
+    main { return llm act "Hello" }
 }
 ```
 

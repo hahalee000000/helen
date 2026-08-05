@@ -55,11 +55,15 @@ class LLMRuntime(ABC):
     @abstractmethod
     def act(self, prompt: str, tools: list[dict[str, Any]] | None = None,
             model: str | None = None, temperature: float = 1.0,
-            max_turns: int = 1, history: list[dict[str, Any]] | None = None,
+            max_turns: int = 1, max_tokens: int | None = None,
+            history: list[dict[str, Any]] | None = None,
             system_prompt: str | None = None,
             dispatch_fn: Any = None,
             on_tool_end_fn: Any = None,
-            hint_collector_fn: Any = None) -> LLMResponse:
+            hint_collector_fn: Any = None,
+            thinking_enabled: bool = False,  # v1.36
+            reasoning_effort: str | None = None,  # v1.36
+            ) -> LLMResponse:
         """Execute an autonomous LLM action (sync version).
 
         Args:
@@ -148,7 +152,10 @@ class MockLLMRuntime(LLMRuntime):
             system_prompt: str | None = None,
             dispatch_fn: Any = None,
             on_tool_end_fn: Any = None,
-            hint_collector_fn: Any = None) -> LLMResponse:
+            hint_collector_fn: Any = None,
+            thinking_enabled: bool = False,  # v1.36
+            reasoning_effort: str | None = None,  # v1.36
+            ) -> LLMResponse:
         """Return the preset act_return value.
 
         Args:

@@ -641,6 +641,9 @@ class DeclarationNode(StatementNode):
     max_tokens: int | None  # v1.31.2: max output tokens for LLM response
     span: SourceSpan
     streaming: bool = False  # Whether agent returns StreamingResponse
+    thinking_mode: bool | None = None  # v1.36: enable thinking/reasoning mode
+    reasoning_effort: str | None = None  # v1.36: reasoning effort level (low/medium/high/max)
+    provider: str | None = None  # v1.36: explicit provider override
 
     def accept(self, visitor: Visitor[R]) -> R:
         """Dispatch to the visitor."""

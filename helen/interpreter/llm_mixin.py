@@ -317,6 +317,9 @@ class LlmMixin:
         temperature = float(self._get_agent_setting("temperature", 1.0))
         max_turns = int(self._get_agent_setting("max-turns", 1))
         max_tokens = self._get_agent_setting("max-tokens")  # v1.31.2: optional
+        # v1.36: thinking mode settings
+        thinking_mode = self._get_agent_setting("thinking-mode")  # bool or None
+        reasoning_effort = self._get_agent_setting("reasoning-effort")  # str or None
 
         # Phase 7: Apply context config if agent has one
         if self._current_agent is not None and hasattr(self._current_agent, 'context_config'):
@@ -463,10 +466,12 @@ class LlmMixin:
         try:
             if has_streaming:
                 return self._visit_llm_act_streaming(node, user_prompt, model, temperature, max_turns, max_tokens,
-                                                       tools, system_prompt, history_for_llm)
+                                                       tools, system_prompt, history_for_llm,
+                                                       thinking_mode, reasoning_effort)
             else:
                 return self._visit_llm_act_sync(node, user_prompt, model, temperature, max_turns, max_tokens,
-                                                tools, system_prompt, history_for_llm)
+                                                tools, system_prompt, history_for_llm,
+                                                thinking_mode, reasoning_effort)
         finally:
             # Restore previous generate tools to handle recursive llm act calls (v1.17)
             if prev_generate_tools is not None:
@@ -499,7 +504,8 @@ class LlmMixin:
 
     def _visit_llm_act_sync(self: Any, node: LlmActExprNode, prompt: str,
                             model: str, temperature: float, max_turns: int, max_tokens: int | None,
-                            tools: list, system_prompt: str, history_for_llm: list) -> object:
+                            tools: list, system_prompt: str, history_for_llm: list,
+                            thinking_mode: Any = None, reasoning_effort: str | None = None) -> object:
         """Synchronous llm act: call act() and return response text."""
         audit_start = time.time()
         agent_name = self._current_agent.name if self._current_agent else None
@@ -532,6 +538,8 @@ class LlmMixin:
                 dispatch_fn=dispatch_fn,
                 on_tool_end_fn=on_tool_end_fn,
                 hint_collector_fn=hint_collector,
+                thinking_enabled=bool(thinking_mode) if thinking_mode is not None else False,
+                reasoning_effort=reasoning_effort,
             )
 
             # Log to audit trail
@@ -564,7 +572,8 @@ class LlmMixin:
 
     def _visit_llm_act_streaming(self: Any, node: LlmActExprNode, prompt: str,
                                  model: str, temperature: float, max_turns: int, max_tokens: int | None,
-                                 tools: list, system_prompt: str, history_for_llm: list) -> object:
+                                 tools: list, system_prompt: str, history_for_llm: list,
+                                 thinking_mode: Any = None, reasoning_effort: str | None = None) -> object:
         """Streaming llm act: call act_stream() and dispatch chunks via callbacks."""
         # Check if LLM runtime supports streaming
         if not hasattr(self.llm_runtime, 'act_stream'):
@@ -676,18 +685,33 @@ class LlmMixin:
                         cancel_event=stream_handle.cancelled,
                         on_tool_end_fn=on_tool_end_fn,
                         hint_collector_fn=hint_collector,
+                        thinking_enabled=bool(thinking_mode) if thinking_mode is not None else False,
+                        reasoning_effort=reasoning_effort,
                     )
                 except TypeError:
-                    # Fallback: custom LLMRuntime doesn't support cancel_event
-                    stream_iter = self.llm_runtime.act_stream(
-                        prompt, model=model, temperature=temperature,
-                        system_prompt=system_prompt, tools=tools,
-                        max_turns=max_turns, max_tokens=max_tokens,
-                        history=history_for_llm,
-                        dispatch_fn=dispatch_fn,
-                        on_tool_end_fn=on_tool_end_fn,
-                        hint_collector_fn=hint_collector,
-                    )
+                    # Fallback: custom LLMRuntime doesn't support cancel_event or thinking params
+                    try:
+                        stream_iter = self.llm_runtime.act_stream(
+                            prompt, model=model, temperature=temperature,
+                            system_prompt=system_prompt, tools=tools,
+                            max_turns=max_turns, max_tokens=max_tokens,
+                            history=history_for_llm,
+                            dispatch_fn=dispatch_fn,
+                            cancel_event=stream_handle.cancelled,
+                            on_tool_end_fn=on_tool_end_fn,
+                            hint_collector_fn=hint_collector,
+                        )
+                    except TypeError:
+                        # Fallback: custom LLMRuntime doesn't support cancel_event
+                        stream_iter = self.llm_runtime.act_stream(
+                            prompt, model=model, temperature=temperature,
+                            system_prompt=system_prompt, tools=tools,
+                            max_turns=max_turns, max_tokens=max_tokens,
+                            history=history_for_llm,
+                            dispatch_fn=dispatch_fn,
+                            on_tool_end_fn=on_tool_end_fn,
+                            hint_collector_fn=hint_collector,
+                        )
 
                 for event in stream_iter:
                     # Check cancel signals
@@ -836,6 +860,9 @@ class LlmMixin:
                 "temperature": "temperature",
                 "max-turns": "max_turns",
                 "max-tokens": "max_tokens",  # v1.31.2
+                "thinking-mode": "thinking_mode",  # v1.36
+                "reasoning-effort": "reasoning_effort",  # v1.36
+                "provider": "provider",  # v1.36
             }
             field = field_map.get(name)
             if field is not None:

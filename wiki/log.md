@@ -4,6 +4,172 @@
 
 ---
 
+## [2026-08-05] docs | 更新 Phase 3 文档 (v1.37)
+
+**操作**: 为 Phase 3 多轮推理保留和 Endpoint ID 验证更新文档
+**状态**: ✅ 完成
+
+### 更新文件
+
+**Wiki 文档**:
+- `wiki/runtime/llm-runtime.md` - 新增 "Multi-turn Reasoning Preservation" 和 "Endpoint ID Validation" 章节
+- `wiki/runtime/llm-provider-protocol-reference.md` - 更新 Helen Implementation Notes，标记已解决问题
+- `wiki/tutorial/05-agents.md` - 新增 thinking mode + tool calls 自动保留 reasoning_content 说明
+
+**内置技能**:
+- `helen-agent-patterns/SKILL.md` - 新增 thinking + tool calls 多轮推理保留说明
+- 运行 `./scripts/sync_skills.sh` 同步到 .claude/skills/
+
+### 验证
+- 46 tests passed (协议 + 流式 + thinking mode 测试)
+
+---
+
+## [2026-08-05] feat | Phase 3 高级功能 (v1.37)
+
+**操作**: 实现多轮推理保留 + Doubao Endpoint ID 验证
+**状态**: ✅ 完成
+
+### 变更内容
+
+**1. 多轮推理保留 (correctness fix)**:
+- `helen/runtime/http_llm.py` - `act_stream()` 修复丢弃 `reasoning_content` 的 bug
+- DeepSeek 工具调用多轮对话不再返回 400 错误
+- Minimax 思考链在工具调用间保持连续性
+
+**2. Doubao Endpoint ID 验证**:
+- `helen/runtime/provider_protocol.py` - `VolcengineProtocol._validate_endpoint_id()`
+- 提示生产环境使用 `ep-XXXXX` 格式
+
+**测试**:
+- `tests/runtime/test_http_llm_stream.py` - 2 个多轮推理保留测试
+- `tests/runtime/test_provider_protocol.py` - 3 个 Endpoint ID 验证测试
+- 3594 passed (Phase 1: 3579 + Phase 2: 10 + Phase 3: 5)
+
+---
+
+## [2026-08-05] docs | 更新 wiki/教程/技能文档 (Phase 1+2)
+
+**操作**: 为 v1.35 协议抽象层和 v1.36 thinking mode 更新全部文档
+**状态**: ✅ 完成
+
+### 更新文件
+
+**Wiki 文档**:
+- `wiki/syntax/keywords.md` - 新增 thinking-mode/reasoning-effort/provider 关键字
+- `wiki/appendix/changelog.md` - 新增 v1.35/v1.36 版本条目
+- `wiki/runtime/llm-runtime.md` - 新增 Platform Protocol Abstraction 章节
+- `wiki/tutorial/05-agents.md` - 新增 thinking-mode/reasoning-effort/provider 配置说明
+- `wiki/index.md` - 更新 LLM Runtime 条目
+
+**内置技能** (SSOT: helen/skills/):
+- `helen-syntax/SKILL.md` - 关键字数 93->99，新增 thinking mode 示例
+- `helen-agent-patterns/SKILL.md` - 新增 thinking mode 和 provider override 说明
+- 运行 `./scripts/sync_skills.sh` 同步到 .claude/skills/
+
+### 验证
+- 3589 tests passed (零回归)
+
+---
+
+## [2026-08-05] feat | LLM Provider Protocol Abstraction (Phase 1 + Phase 2)
+
+**操作**: 实现多厂商 OpenAI 兼容协议抽象层 + thinking mode 语法支持
+**状态**: ✅ 完成
+
+### Phase 1: 协议抽象层 (v1.35)
+
+**新增文件**:
+- `helen/runtime/provider_protocol.py` - 平台协议抽象（DashScope/Volcengine/Zhipu/DeepSeek/Minimax/Kimi/OpenAI）
+- `helen/runtime/model_capabilities.py` - 模型能力检测（30+ 模型注册表）
+- `tests/runtime/test_provider_protocol.py` - 27 个协议测试
+- `tests/runtime/test_model_capabilities.py` - 11 个能力测试
+
+**核心设计**: 两层抽象
+- Layer 1: PlatformProtocol (base_url) - 处理协议格式差异
+- Layer 2: ModelCapabilities (model_id) - 处理特性可用性
+
+**关键事实**（经官方文档验证）: 协议由平台决定，不由模型决定
+
+### Phase 2: Thinking Mode 语法支持 (v1.36)
+
+**新增关键字** (99 total: 48 English + 51 Chinese):
+- `thinking-mode` / `思考模式` - 启用思考/推理模式
+- `reasoning-effort` / `推理强度` - 推理强度 (low/medium/high/max)
+- `提供商` (context keyword) - 显式厂商覆盖
+
+**Helen 语法**:
+```helen
+agent 智能助手() {
+    描述 "思考助手"
+    大模型 "deepseek-v4-pro"
+    思考模式 true
+    推理强度 "high"
+    主函 { 返回 llm act "复杂问题" }
+}
+```
+
+**修改文件**:
+- `helen/core/tokens.py` - 新增 THINKING_MODE, REASONING_EFFORT token 类型
+- `helen/core/ast.py` - DeclarationNode 新增 thinking_mode/reasoning_effort/provider 字段
+- `helen/core/parser.py` - 解析新声明 + 提供商 context keyword
+- `helen/interpreter/llm_mixin.py` - 提取设置并传递给 runtime
+- `helen/runtime/llm_runtime.py` - act()/act_stream() 新增 thinking_enabled/reasoning_effort 参数
+- `helen/runtime/http_llm.py` - 集成 thinking mode 到请求构建
+- `helen/lsp/server.py` - LSP 补全和悬停支持
+- `tests/interpreter/test_thinking_mode.py` - 10 个新测试
+
+**测试**: 3589 passed (Phase 1: 3579 + Phase 2: 10 new)
+
+---
+
+## [2026-08-05] feat | LLM Provider OpenAI-Compatible Protocol Reference
+
+**操作**: 新增 6 家主流大模型厂商的 OpenAI 兼容协议完整参考文档
+**状态**: ✅ 完成
+
+### 变更内容
+
+**新增文档**:
+- `wiki/runtime/llm-provider-protocol-reference.md` — 完整的 LLM 对话生命周期协议参考
+
+**覆盖厂商**:
+1. **Qwen/DashScope (通义千问)** — enable_thinking, thinking_budget, native DashScope API
+2. **Zhipu/GLM (智谱)** — tool_stream, forced thinking, tool_choice limitation
+3. **DeepSeek** — reasoning_effort, Responses API, Anthropic compatibility
+4. **Minimax** — reasoning_split, reasoning_details, dual protocol, service_tier
+5. **Kimi/Moonshot** — $web_search builtin, Partial Mode, prompt_cache_key
+6. **Doubao/Volcengine Ark (豆包/火山引擎)** — Endpoint ID system, Managed Agents API
+
+**文档内容**:
+- 认证与 Base URL
+- 请求参数对比（通用 + 厂商特有）
+- 消息格式（文本、多模态、工具调用）
+- 响应格式（非流式 + 流式 SSE）
+- Function Calling / Tool Use
+- Reasoning/Thinking 内容处理
+- Token 使用统计与缓存
+- 结构化输出
+- 多模态/视觉支持
+- 错误处理
+- 模型名称与上下文窗口
+- 厂商特有扩展总结
+- Helen 实现注意事项与 TODO
+
+**更新索引**:
+- `wiki/index.md` — 添加新文档链接到 Runtime Systems 章节
+
+**数据来源**:
+- 6 个并行搜索代理从各厂商官方文档抓取
+- Qwen: help.aliyun.com
+- Zhipu: docs.bigmodel.cn
+- DeepSeek: api-docs.deepseek.com
+- Minimax: platform.minimaxi.com
+- Kimi: platform.kimi.ai
+- Doubao: volcengine.com/docs/82379
+
+---
+
 ## [2026-08-05] feat | 闭包成为一等可调用对象（v1.32）
 
 **操作**: 实现闭包的 Python callable 支持，使用弱引用避免循环引用  

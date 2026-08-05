@@ -23,6 +23,9 @@ class TestHttpLLMRuntimeStream:
         runtime._client = MagicMock()
         runtime._async_client = AsyncMock()
         runtime._tool_pool = MagicMock()
+        # v1.35: Initialize platform protocol for tests
+        from helen.runtime.provider_protocol import OpenAIProtocol
+        runtime._platform_protocol = OpenAIProtocol()
         return runtime
 
     def test_act_stream_exists(self):
@@ -158,3 +161,114 @@ class TestHttpLLMRuntimePool:
         runtime._client.close.assert_called_once()
         runtime._async_client.aclose.assert_called_once()
         runtime._tool_pool.shutdown.assert_called_once_with(wait=False)
+
+
+class TestReasoningContentPreservation:
+    """Test reasoning_content preservation in multi-turn tool calls (v1.37)."""
+
+    def _make_runtime(self):
+        """Create a runtime with mocked httpx client."""
+        runtime = HttpLLMRuntime.__new__(HttpLLMRuntime)
+        runtime.base_url = "http://test"
+        runtime.api_key = "test-key"
+        runtime.default_model = "test-model"
+        runtime.timeout = 120
+        runtime.max_retries = 0
+        runtime.enable_concurrent_tools = True
+        runtime.enable_message_sanitization = True
+        runtime.enable_tool_truncation = True
+        runtime._last_error = None
+        runtime._client = MagicMock()
+        runtime._async_client = AsyncMock()
+        runtime._tool_pool = MagicMock()
+        from helen.runtime.provider_protocol import OpenAIProtocol
+        runtime._platform_protocol = OpenAIProtocol()
+        return runtime
+
+    def test_streaming_preserves_reasoning_content_in_tool_call_multi_turn(self):
+        """v1.37: reasoning_content must be preserved in assistant message for next turn.
+
+        DeepSeek requires reasoning_content in tool-call multi-turn (400 error if missing).
+        """
+        runtime = self._make_runtime()
+
+        # Turn 1: reasoning_content + tool_calls
+        sse_lines_turn1 = [
+            'data: {"choices": [{"delta": {"reasoning_content": "Let me think"}}]}',
+            'data: {"choices": [{"delta": {"reasoning_content": " about this"}}]}',
+            'data: {"choices": [{"delta": {"tool_calls": [{"index": 0, "id": "call_1", "function": {"name": "calc", "arguments": "{}"}}]}}]}',
+            'data: [DONE]',
+        ]
+        # Turn 2: final answer
+        sse_lines_turn2 = [
+            'data: {"choices": [{"delta": {"content": "Final answer"}}]}',
+            'data: [DONE]',
+        ]
+
+        captured_payloads = []
+        responses = [iter(sse_lines_turn1), iter(sse_lines_turn2)]
+
+        def make_stream(*args, **kwargs):
+            # Capture the payload for each request
+            payload = kwargs.get('json', {})
+            captured_payloads.append(payload)
+            mock_stream = MagicMock()
+            mock_stream.__enter__ = MagicMock(return_value=mock_stream)
+            mock_stream.__exit__ = MagicMock(return_value=False)
+            mock_stream.iter_lines = MagicMock(return_value=responses.pop(0))
+            mock_stream.raise_for_status = MagicMock()
+            return mock_stream
+
+        runtime._client.stream.side_effect = make_stream
+
+        with patch('helen.runtime.tools.dispatch_tool', return_value="42"):
+            events = list(runtime.act_stream("test prompt", tools=[{"type": "function"}]))
+
+        # Verify turn 2 payload contains assistant message with reasoning_content
+        assert len(captured_payloads) == 2
+        turn2_messages = captured_payloads[1]["messages"]
+        # Find the assistant message with tool_calls
+        assistant_msgs = [m for m in turn2_messages if m.get("role") == "assistant" and m.get("tool_calls")]
+        assert len(assistant_msgs) == 1
+        # v1.37: reasoning_content should be preserved
+        assert "reasoning_content" in assistant_msgs[0]
+        assert assistant_msgs[0]["reasoning_content"] == "Let me think about this"
+
+    def test_streaming_no_reasoning_content_when_absent(self):
+        """When no reasoning_content is produced, don't add empty field."""
+        runtime = self._make_runtime()
+
+        sse_lines_turn1 = [
+            'data: {"choices": [{"delta": {"tool_calls": [{"index": 0, "id": "call_1", "function": {"name": "calc", "arguments": "{}"}}]}}]}',
+            'data: [DONE]',
+        ]
+        sse_lines_turn2 = [
+            'data: {"choices": [{"delta": {"content": "Done"}}]}',
+            'data: [DONE]',
+        ]
+
+        captured_payloads = []
+        responses = [iter(sse_lines_turn1), iter(sse_lines_turn2)]
+
+        def make_stream(*args, **kwargs):
+            payload = kwargs.get('json', {})
+            captured_payloads.append(payload)
+            mock_stream = MagicMock()
+            mock_stream.__enter__ = MagicMock(return_value=mock_stream)
+            mock_stream.__exit__ = MagicMock(return_value=False)
+            mock_stream.iter_lines = MagicMock(return_value=responses.pop(0))
+            mock_stream.raise_for_status = MagicMock()
+            return mock_stream
+
+        runtime._client.stream.side_effect = make_stream
+
+        with patch('helen.runtime.tools.dispatch_tool', return_value="42"):
+            events = list(runtime.act_stream("test prompt", tools=[{"type": "function"}]))
+
+        # Verify no reasoning_content field when none was produced
+        assert len(captured_payloads) == 2
+        turn2_messages = captured_payloads[1]["messages"]
+        assistant_msgs = [m for m in turn2_messages if m.get("role") == "assistant" and m.get("tool_calls")]
+        assert len(assistant_msgs) == 1
+        # reasoning_content should NOT be present (no empty field)
+        assert "reasoning_content" not in assistant_msgs[0]

@@ -122,6 +122,8 @@ class TokenType(Enum):
     SHARED = auto()    # v1.10: shared let — cross-agent visible variable
     ALIAS = auto()     # v1.10: function alias statement (alias X as Y)
     TRANSCRIPT = auto()  # v1.29: agent transcript control (none/memory/persistent)
+    THINKING_MODE = auto()  # v1.36: thinking/reasoning mode toggle
+    REASONING_EFFORT = auto()  # v1.36: reasoning effort level (low/medium/high/max)
 
     # === Special ===
     EOF = auto()
@@ -130,7 +132,7 @@ class TokenType(Enum):
 # Type alias for literal values a token can carry
 LiteralValue = Union[str, int, float, bool, None]
 
-# Keyword → TokenType mapping (91 entries: 45 English + 46 Chinese)
+# Keyword → TokenType mapping (97 entries: 48 English + 49 Chinese)
 # Note: MEMORY and WILDCARD are context keywords — handled by lexer/parser directly,
 # not via this map, so they can also be used as variable names.
 _KEYWORD_MAP: dict[str, TokenType] = {
@@ -177,6 +179,8 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "shared": TokenType.SHARED,    # v1.10: shared let
     "alias": TokenType.ALIAS,     # v1.10: function alias
     "transcript": TokenType.TRANSCRIPT,  # v1.29: agent transcript control
+    "thinking-mode": TokenType.THINKING_MODE,  # v1.36: thinking mode toggle
+    "reasoning-effort": TokenType.REASONING_EFFORT,  # v1.36: reasoning effort
     "仓库": TokenType.STORE,   # v1.12: Chinese equivalent
     "true": TokenType.TRUE,
     "false": TokenType.FALSE,
@@ -239,6 +243,9 @@ _KEYWORD_MAP: dict[str, TokenType] = {
     "别名": TokenType.ALIAS,
     # v1.29: transcript keyword (agent transcript control)
     "记录": TokenType.TRANSCRIPT,
+    # v1.36: thinking mode keywords (思考模式/推理强度)
+    "思考模式": TokenType.THINKING_MODE,
+    "推理强度": TokenType.REASONING_EFFORT,
 }
 
 

@@ -199,7 +199,7 @@ class TestChineseKeywordsLexer:
         kw = keywords()
         chinese = {k: v for k, v in kw.items()
                    if any('\u4e00' <= c <= '\u9fff' for c in k)}
-        assert len(chinese) == 49, f"Expected 49, got {len(chinese)}: {sorted(chinese.keys())}"
+        assert len(chinese) == 51, f"Expected 51, got {len(chinese)}: {sorted(chinese.keys())}"
 
     def test_no_lexer_errors(self):
         """Full Chinese program should produce zero lexer errors."""

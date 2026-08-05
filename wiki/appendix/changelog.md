@@ -1,6 +1,154 @@
 # 版本历史
 
-> Helen v1.33.0 | MCP 客户端集成
+> Helen v1.37 | LLM Provider Protocol Abstraction + Thinking Mode + Multi-turn Reasoning
+
+---
+
+## v1.37: Phase 3 高级功能
+
+**发布日期**: 2026-08-05
+**核心特性**: 多轮推理保留、Doubao Endpoint ID 验证
+
+### 1. 多轮推理保留 (correctness fix)
+
+**问题**: 流式模式下 `act_stream()` 在构建下一轮 assistant 消息时丢弃了 `reasoning_content`，导致 DeepSeek 工具调用多轮对话返回 400 错误，Minimax 丢失上下文。
+
+**修复**: 在 `act_stream()` 中保留 `reasoning_content`，添加到 assistant 消息。
+
+```python
+# v1.37: Preserve reasoning_content for multi-turn tool calls
+full_reasoning = "".join(reasoning_chunks) if reasoning_chunks else ""
+assistant_msg = {"role": "assistant", "content": full_content or None}
+if full_reasoning:
+    assistant_msg["reasoning_content"] = full_reasoning
+```
+
+**影响**:
+- DeepSeek 工具调用多轮对话不再返回 400 错误
+- Minimax 思考链在工具调用间保持连续性
+- 非流式 `act()` 已正确处理，无需修改
+
+### 2. Doubao Endpoint ID 验证
+
+**新增**: `VolcengineProtocol._validate_endpoint_id()` 验证 Endpoint ID 格式。
+
+- 生产环境应使用 `ep-XXXXX` 格式的 Endpoint ID
+- 直接使用模型名（如 `doubao-pro-128k`）会记录 debug 警告
+- 不阻断执行，仅提示用户最佳实践
+
+### 修改文件
+
+- `helen/runtime/http_llm.py` - `act_stream()` 保留 reasoning_content
+- `helen/runtime/provider_protocol.py` - `VolcengineProtocol` 新增 `_validate_endpoint_id()`
+- `tests/runtime/test_http_llm_stream.py` - 2 个多轮推理保留测试
+- `tests/runtime/test_provider_protocol.py` - 3 个 Endpoint ID 验证测试
+
+### 测试
+
+3594 passed (Phase 1: 3579 + Phase 2: 10 + Phase 3: 5)
+
+---
+
+## v1.36: Thinking Mode 语法支持
+
+**发布日期**: 2026-08-05
+**核心特性**: Thinking mode 语法、多厂商协议抽象层
+
+### 新增关键字 (99 total: 48 English + 51 Chinese)
+
+| 关键字 | 中文 | 说明 |
+|--------|------|------|
+| `thinking-mode` | `思考模式` | 启用思考/推理模式 |
+| `reasoning-effort` | `推理强度` | 推理强度 (low/medium/high/max) |
+| `provider` | `提供商` | 显式厂商覆盖 (context keyword) |
+
+### Agent 声明语法
+
+```helen
+agent 智能助手() {
+    描述 "带思考的助手"
+    大模型 "deepseek-v4-pro"
+    思考模式 true
+    推理强度 "high"
+    提供商 "智谱"           // 可选：显式厂商覆盖
+
+    主函 {
+        返回 llm act "复杂问题"
+    }
+}
+```
+
+### 厂商参数映射
+
+| 平台 | thinking-mode 映射 | reasoning-effort 映射 |
+|------|-------------------|----------------------|
+| DashScope | `enable_thinking: true` + `thinking_budget` | `thinking_budget` 数值 |
+| Zhipu | `thinking: {type: "enabled"}` | `reasoning_effort` 字符串 |
+| DeepSeek | `thinking: {type: "enabled"}` | `reasoning_effort` 字符串 |
+| Minimax | `reasoning_split: true` + `thinking: {type: "adaptive"}` | - |
+| Kimi | - | `reasoning_effort` 字符串 |
+| Volcengine | `thinking: {type: "enabled"}` | - |
+
+### 修改文件
+
+- `helen/core/tokens.py` - 新增 `THINKING_MODE`, `REASONING_EFFORT` token 类型
+- `helen/core/ast.py` - `DeclarationNode` 新增 `thinking_mode`/`reasoning_effort`/`provider` 字段
+- `helen/core/parser.py` - 解析新声明 + `提供商` context keyword
+- `helen/interpreter/llm_mixin.py` - 提取设置并传递给 runtime
+- `helen/runtime/llm_runtime.py` - `act()`/`act_stream()` 新增 `thinking_enabled`/`reasoning_effort` 参数
+- `helen/runtime/http_llm.py` - 集成 thinking mode 到请求构建
+- `helen/lsp/server.py` - LSP 补全和悬停支持
+- `tests/interpreter/test_thinking_mode.py` - 10 个新测试
+
+---
+
+## v1.35: LLM Provider Protocol Abstraction
+
+**发布日期**: 2026-08-05
+**核心特性**: 多厂商 OpenAI 兼容协议抽象层
+
+### 两层协议抽象
+
+**Layer 1: PlatformProtocol (base_url)** - 处理协议格式差异
+**Layer 2: ModelCapabilities (model_id)** - 处理特性可用性
+
+### 关键设计原则
+
+> **协议由平台决定，不由模型决定。**
+
+- DashScope 上的 DeepSeek 模型使用 DashScope 协议（`reasoning_content` 独立字段）
+- 火山方舟上的所有模型使用统一协议
+- 同一模型在不同平台上协议细节不同
+
+### 支持的平台 (7 个)
+
+| 平台 | 协议类 | Base URL |
+|------|--------|----------|
+| DashScope | `DashScopeProtocol` | `dashscope.aliyuncs.com` |
+| Volcengine | `VolcengineProtocol` | `ark.cn-beijing.volces.com` |
+| Zhipu | `ZhipuProtocol` | `open.bigmodel.cn` |
+| DeepSeek | `DeepSeekProtocol` | `api.deepseek.com` |
+| Minimax | `MinimaxProtocol` | `api.minimaxi.com` / `api.minimax.io` |
+| Kimi | `KimiProtocol` | `api.moonshot.ai` |
+| OpenAI (default) | `OpenAIProtocol` | 其他 |
+
+### 新增文件
+
+- `helen/runtime/provider_protocol.py` - 平台协议抽象（7 个平台）
+- `helen/runtime/model_capabilities.py` - 模型能力检测（30+ 模型注册表）
+- `tests/runtime/test_provider_protocol.py` - 27 个协议测试
+- `tests/runtime/test_model_capabilities.py` - 11 个能力测试
+
+### 关键差异处理
+
+| 差异 | 处理方式 |
+|------|---------|
+| DashScope `enable_thinking` | `build_request_payload()` 转换 |
+| Zhipu `tool_choice` 只支持 auto | `supports_tool_choice()` 检测 |
+| Minimax `reasoning_details` 累积式 | `parse_streaming_delta()` 计算增量 |
+| Kimi usage 在 `choices[0].usage` | `extract_streaming_usage()` 提取 |
+| Doubao `encrypted_content` | `parse_response()` 优先处理 |
+| DeepSeek 流式互斥 | `ModelCapabilities.reasoning_content_streaming` |
 
 ---
 

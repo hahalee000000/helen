@@ -137,6 +137,8 @@ HELLEN_KEYWORDS = [
     "functions",
     # Transcript (v1.29)
     "transcript",
+    # Thinking mode (v1.36)
+    "thinking-mode", "reasoning-effort",
     # Literals
     "true", "false", "null",
     # Chinese keywords (v1.10 — bilingual support)
@@ -155,6 +157,7 @@ HELLEN_KEYWORDS = [
     "协议", "实现",
     "共享", "别名",
     "仓库", "记录",
+    "思考模式", "推理强度",  # v1.36: thinking mode (formal keywords)
 ]
 
 # Context keywords: not in _KEYWORD_MAP (parsed as IDENTIFIER + context check)
@@ -178,6 +181,7 @@ HELLEN_CONTEXT_KEYWORDS = [
     "上下文", "记忆", "恢复会话",
     "逐块处理", "完成", "工具结束", "处理媒体", "生成",
     "媒体",
+    "提供商",  # v1.36: provider override (context keyword)
 ]
 
 # Agent property keywords (inside agent {} blocks)
@@ -390,6 +394,12 @@ _KEYWORD_DESCRIPTIONS: dict[str, str] = {
     "temperature": "LLM sampling temperature",
     "max-turns": "Maximum LLM interaction turns",
     "max-tokens": "Maximum output tokens for LLM response",
+    "thinking-mode": "Enable thinking/reasoning mode (v1.36)",
+    "reasoning-effort": "Reasoning effort level: low/medium/high/max (v1.36)",
+    "provider": "Explicit provider override (v1.36)",
+    "思考模式": "启用思考/推理模式 (v1.36)",
+    "推理强度": "推理强度: low/medium/high/max (v1.36)",
+    "提供商": "显式指定厂商 (v1.36)",
     "tools": "List of tools available to the agent",
     "streaming": "Enable streaming output",
     "async": "Async function marker",

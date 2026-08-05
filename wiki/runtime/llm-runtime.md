@@ -171,6 +171,110 @@ def _chat(self, prompt: str, model: str = None, temperature: float = 1.0):
 
 ---
 
+## Platform Protocol Abstraction (v1.35)
+
+HttpLLMRuntime uses a **two-layer protocol abstraction** to support multiple OpenAI-compatible providers:
+
+### Layer 1: PlatformProtocol (base_url)
+
+Protocol is determined by the **platform** (base_url), not the model. This is because aggregator platforms like DashScope and Volcengine Ark normalize the protocol across all models they host.
+
+```python
+from helen.runtime.provider_protocol import detect_protocol
+
+# Auto-detect from base_url
+protocol = detect_protocol("https://dashscope.aliyuncs.com/compatible-mode/v1")
+# -> DashScopeProtocol (ALL models on DashScope use this protocol)
+```
+
+**Supported platforms:**
+
+| Platform | Protocol Class | Key Behavior |
+|----------|---------------|--------------|
+| DashScope | `DashScopeProtocol` | `enable_thinking` + `thinking_budget` |
+| Volcengine Ark | `VolcengineProtocol` | `encrypted_content` priority, Endpoint ID |
+| Zhipu (GLM) | `ZhipuProtocol` | `tool_choice` only supports `"auto"` |
+| DeepSeek | `DeepSeekProtocol` | `reasoning_effort`, mutually exclusive streaming |
+| Minimax | `MinimaxProtocol` | `reasoning_split`, cumulative `reasoning_details` |
+| Kimi (Moonshot) | `KimiProtocol` | Usage at `choices[0].usage` (not top-level) |
+| OpenAI (default) | `OpenAIProtocol` | Standard OpenAI protocol |
+
+### Layer 2: ModelCapabilities (model_id)
+
+While PlatformProtocol handles format differences, ModelCapabilities handles **feature availability** per model:
+
+```python
+from helen.runtime.model_capabilities import get_model_capabilities
+
+caps = get_model_capabilities("deepseek-v4-pro")
+# -> ModelCapabilities(
+#     supports_thinking=True,
+#     reasoning_content_streaming="mutually_exclusive",  # Critical!
+#   )
+```
+
+**Key capability differences:**
+
+| Model | Streaming Behavior | Special |
+|-------|-------------------|---------|
+| `deepseek-v4-pro` | mutually_exclusive | - |
+| `MiniMax-M3` | cumulative | `has_reasoning_details=True` |
+| `glm-4.7` | incremental | `forced_thinking=True` (cannot disable) |
+| `doubao-seed-1.6-thinking` | incremental | `has_encrypted_content=True` |
+| `qwen-max` | incremental | `supports_thinking=False` (not Qwen3) |
+
+### Protocol Methods
+
+```python
+class PlatformProtocol:
+    def build_request_payload(base_payload, *, model_id, thinking_enabled, reasoning_effort) -> dict
+    def parse_response(response_data) -> dict
+    def parse_streaming_delta(delta, context) -> dict
+    def extract_streaming_usage(chunk) -> dict | None
+    def parse_error(status_code, response_body) -> str
+    def supports_tool_choice(value) -> bool
+```
+
+The runtime delegates provider-specific logic to the protocol, keeping `http_llm.py` clean and extensible.
+
+### Multi-turn Reasoning Preservation (v1.37)
+
+When using `thinking-mode` together with tool calls, the `reasoning_content` must be preserved in the assistant message when feeding tool results back to the LLM. This is a **correctness requirement** for some providers:
+
+| Provider | Behavior if `reasoning_content` is missing in tool-call multi-turn |
+|----------|--------------------------------------------------------------------|
+| **DeepSeek** | Returns **400 error** (requires `reasoning_content` in all subsequent requests) |
+| **Minimax** | Loses chain-of-thought continuity (reasoning breaks across tool calls) |
+| Others | Ignores missing `reasoning_content` (no error, but context may degrade) |
+
+**Implementation**: Both `act()` (non-streaming) and `act_stream()` (streaming) preserve `reasoning_content` when building the assistant message for the next tool-call round:
+
+```python
+# v1.37: Preserve reasoning_content for multi-turn tool calls
+full_reasoning = "".join(reasoning_chunks) if reasoning_chunks else ""
+assistant_msg = {"role": "assistant", "content": full_content or None}
+if full_reasoning:
+    assistant_msg["reasoning_content"] = full_reasoning
+```
+
+### Endpoint ID Validation (v1.37)
+
+For Volcengine Ark (Doubao), the protocol validates the Endpoint ID format:
+
+- **Production**: Should use Endpoint IDs (`ep-XXXXX` format) created in the Ark console
+- **Preset**: Direct model names (e.g., `doubao-pro-128k`) work but log a debug warning
+- The validation is non-blocking (only logs a warning, does not fail)
+
+```python
+# VolcengineProtocol._validate_endpoint_id()
+if not model_id.startswith("ep-"):
+    logger.debug("Using model name instead of Endpoint ID - recommended for production")
+```
+
+> **See also**: [[runtime/llm-provider-protocol-reference|LLM Provider Protocol Reference]] for full protocol details across all 6 providers.
+
+---
+
 ## Built-in Tool System
 
 Helen provides 7 built-in tools that the LLM can call via function calling during `llm act` execution:

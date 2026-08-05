@@ -436,6 +436,9 @@ class HttpLLMRuntime(LLMRuntime):
     _tool_pool: Any = field(default=None, repr=False, init=False)
     _reactive_compactor: Any = field(default=None, repr=False, init=False)
     _circuit_breaker: Any = field(default=None, repr=False, init=False)
+    # v1.35: Platform protocol for provider-specific handling
+    # Initialized in __post_init__, but has default for test compatibility
+    _platform_protocol: Any = field(default=None, repr=False, init=False)
 
     def __post_init__(self):
         """Auto-load configuration from Helen config."""
@@ -448,6 +451,11 @@ class HttpLLMRuntime(LLMRuntime):
                 self.api_key = config.get("api_key", "")
             if not self.default_model:
                 self.default_model = config.get("model", "qwen3.7-plus")
+
+        # v1.35: Detect platform protocol from base_url
+        from helen.runtime.provider_protocol import detect_protocol
+        self._platform_protocol = detect_protocol(self.base_url)
+        logger.debug(f"Using platform protocol: {self._platform_protocol.name}")
 
         # Initialize reactive compactor for mid-turn compression
         if self.enable_reactive_compaction:
@@ -480,6 +488,17 @@ class HttpLLMRuntime(LLMRuntime):
             failure_threshold=self.circuit_failure_threshold,
             recovery_timeout=self.circuit_recovery_timeout,
         )
+
+    @property
+    def platform_protocol(self):
+        """Get platform protocol, lazily initializing if needed.
+
+        v1.35: This ensures protocol is available even if tests bypass __post_init__.
+        """
+        if self._platform_protocol is None:
+            from helen.runtime.provider_protocol import detect_protocol
+            self._platform_protocol = detect_protocol(self.base_url)
+        return self._platform_protocol
 
     def close(self):
         """Close persistent HTTP clients and thread pool."""
@@ -535,6 +554,8 @@ class HttpLLMRuntime(LLMRuntime):
         dispatch_fn: Any = None,
         on_tool_end_fn: Any = None,
         hint_collector_fn: Any = None,
+        thinking_enabled: bool = False,  # v1.36
+        reasoning_effort: str | None = None,  # v1.36
     ) -> LLMResponse:
         """Execute an autonomous LLM action with enhanced reliability.
 
@@ -604,6 +625,7 @@ class HttpLLMRuntime(LLMRuntime):
             # API call with retry
             response_msg = self._chat_with_messages_retry(
                 messages, model=use_model, temperature=temperature, tools=tools, max_tokens=max_tokens,
+                thinking_enabled=thinking_enabled, reasoning_effort=reasoning_effort,
             )
             if response_msg is None:
                 # API call failed — raise error instead of silently returning empty
@@ -751,6 +773,8 @@ class HttpLLMRuntime(LLMRuntime):
         temperature: float = 1.0,
         tools: list[dict[str, Any]] | None = None,
         max_tokens: int | None = None,  # v1.31.2: max output tokens
+        thinking_enabled: bool = False,  # v1.36
+        reasoning_effort: str | None = None,  # v1.36
     ) -> dict[str, Any] | None:
         """Send a chat completion request with retry logic.
 
@@ -774,7 +798,7 @@ class HttpLLMRuntime(LLMRuntime):
         context_overflow_retried = False
 
         for attempt in range(self.max_retries + 1):
-            result = self._chat_with_messages(messages, model=model, temperature=temperature, tools=tools, max_tokens=max_tokens)
+            result = self._chat_with_messages(messages, model=model, temperature=temperature, tools=tools, max_tokens=max_tokens, thinking_enabled=thinking_enabled, reasoning_effort=reasoning_effort)
             if result is not None:
                 # Success - reset the circuit breaker.
                 if self._circuit_breaker is not None:
@@ -917,6 +941,8 @@ class HttpLLMRuntime(LLMRuntime):
         temperature: float = 1.0,
         tools: list[dict[str, Any]] | None = None,
         max_tokens: int | None = None,  # v1.31.2: max output tokens
+        thinking_enabled: bool = False,  # v1.35: thinking mode
+        reasoning_effort: str | None = None,  # v1.35: reasoning effort
     ) -> dict[str, Any] | None:
         """Send a chat completion request and return the full message dict.
 
@@ -925,15 +951,18 @@ class HttpLLMRuntime(LLMRuntime):
             model: Optional model override.
             temperature: Sampling temperature.
             tools: Optional list of tool schemas for function calling.
+            thinking_enabled: Enable thinking/reasoning mode (v1.35).
+            reasoning_effort: Reasoning effort level (v1.35).
 
         Returns:
             The assistant message dict (may contain 'content' and/or 'tool_calls'),
             or None on failure.
         """
         url = f"{self.base_url}/chat/completions"
+        use_model = model or self.default_model or "default"
 
         payload: dict[str, Any] = {
-            "model": model or self.default_model or "default",
+            "model": use_model,
             "messages": messages,
             "temperature": temperature,
         }
@@ -941,6 +970,14 @@ class HttpLLMRuntime(LLMRuntime):
             payload["tools"] = tools
         if max_tokens is not None:  # v1.31.2: optional max output tokens
             payload["max_tokens"] = max_tokens
+
+        # v1.35: Let platform protocol transform payload
+        payload = self.platform_protocol.build_request_payload(
+            payload,
+            model_id=use_model,
+            thinking_enabled=thinking_enabled,
+            reasoning_effort=reasoning_effort,
+        )
 
         try:
             response = self._client.post(url, json=payload)
@@ -952,7 +989,13 @@ class HttpLLMRuntime(LLMRuntime):
             self._last_status_code = None
             self._last_retry_after = None
             if choices:
-                message = choices[0].get("message", {})
+                # v1.35: Use platform protocol to parse response
+                parsed = self.platform_protocol.parse_response(result)
+                message = {
+                    "content": parsed.get("content", ""),
+                    "reasoning_content": parsed.get("reasoning_content", ""),
+                    "tool_calls": parsed.get("tool_calls", []),
+                }
                 # v1.34.1: GLM/DeepSeek models put content in 'reasoning_content'
                 # when content is empty. Fall back to reasoning_content.
                 if not message.get("content"):
@@ -960,7 +1003,7 @@ class HttpLLMRuntime(LLMRuntime):
                     if reasoning:
                         message["content"] = reasoning
                 # v1.31.2: Detect response truncation (finish_reason: length)
-                finish_reason = choices[0].get("finish_reason")
+                finish_reason = parsed.get("finish_reason")
                 if finish_reason == "length":
                     logger.warning(
                         "Response truncated due to max_tokens limit "
@@ -981,9 +1024,9 @@ class HttpLLMRuntime(LLMRuntime):
             # Read the error body for structured API error messages
             try:
                 error_data = e.response.json()
-                api_error = error_data.get("error", {})
-                error_msg = api_error.get("message", str(e))
-                error_code = api_error.get("code", "")
+                # v1.35: Use platform protocol to parse error
+                error_msg = self.platform_protocol.parse_error(e.response.status_code, error_data)
+                error_code = error_data.get("error", {}).get("code", "")
                 self._last_error = f"API error ({e.response.status_code} {error_code}): {error_msg}"
             except Exception:
                 self._last_error = f"HTTP error {e.response.status_code}: {e.response.reason_phrase}"
@@ -1023,6 +1066,8 @@ class HttpLLMRuntime(LLMRuntime):
         cancel_event: Any = None,
         on_tool_end_fn: Any = None,
         hint_collector_fn: Any = None,
+        thinking_enabled: bool = False,  # v1.36
+        reasoning_effort: str | None = None,  # v1.36
     ):
         """Stream LLM response with enhanced reliability features.
 
@@ -1108,6 +1153,14 @@ class HttpLLMRuntime(LLMRuntime):
             if max_tokens is not None:  # v1.31.2: optional max output tokens
                 payload["max_tokens"] = max_tokens
 
+            # v1.36: Let platform protocol transform payload
+            payload = self.platform_protocol.build_request_payload(
+                payload,
+                model_id=use_model,
+                thinking_enabled=thinking_enabled,
+                reasoning_effort=reasoning_effort,
+            )
+
             try:
                 # Collect streamed chunks with health checking
                 # Use list+join (O(n)) instead of += (O(n²)) for long responses
@@ -1153,8 +1206,9 @@ class HttpLLMRuntime(LLMRuntime):
                             try:
                                 chunk_data = json.loads(data_str)
 
-                                # Capture usage info (sent in final chunk when include_usage=True)
-                                chunk_usage = chunk_data.get("usage")
+                                # v1.35: Use platform protocol to extract usage
+                                # (Kimi: usage at choices[0].usage, others: top-level)
+                                chunk_usage = self.platform_protocol.extract_streaming_usage(chunk_data)
                                 if chunk_usage:
                                     usage_info = chunk_usage
 
@@ -1243,8 +1297,15 @@ class HttpLLMRuntime(LLMRuntime):
 
                 # After stream completes: check if we got tool calls
                 if tool_calls_acc:
+                    # v1.37: Preserve reasoning_content for multi-turn tool calls.
+                    # DeepSeek requires reasoning_content to be passed back in tool-call
+                    # multi-turn conversations (returns 400 error if missing).
+                    # Minimax also needs it for context continuity.
+                    full_reasoning = "".join(reasoning_chunks) if reasoning_chunks else ""
                     # Build assistant message with tool calls
                     assistant_msg: dict[str, Any] = {"role": "assistant", "content": full_content or None}
+                    if full_reasoning:
+                        assistant_msg["reasoning_content"] = full_reasoning
                     assistant_msg["tool_calls"] = [
                         {
                             "id": tool_calls_acc[i]["id"],

@@ -76,11 +76,33 @@ agent ConfiguredAgent {
     max-turns 10               # Maximum tool call rounds
     max-tokens 4096            # Max output tokens (v1.31.2)
     streaming true             # Enable streaming response
+    thinking-mode true         # Enable thinking/reasoning (v1.36)
+    reasoning-effort "high"    # low/medium/high/max (v1.36)
     tools = ["web_search", "read_file", "write_file"]
 
     main {
         return llm act "Do something complex"
     }
+}
+```
+
+**Thinking mode (v1.36):** When enabled, the model produces chain-of-thought reasoning before the final answer. The reasoning is captured separately (not streamed to frontend) and mapped to provider-specific parameters automatically:
+
+| Platform | `thinking-mode true` maps to |
+|----------|------------------------------|
+| DashScope | `enable_thinking: true` + `thinking_budget` |
+| Zhipu / DeepSeek / Volcengine | `thinking: {type: "enabled"}` |
+| Minimax | `reasoning_split: true` + `thinking: {type: "adaptive"}` |
+
+> **Thinking + Tool Calls (v1.37):** When using `thinking-mode` together with `tools`, the `reasoning_content` is automatically preserved across tool-call rounds. This is required by DeepSeek (returns 400 error if missing) and Minimax (loses context). Helen handles this automatically in both `act()` and `act_stream()` - no user action needed.
+
+**Provider override (v1.36):** The `provider` context keyword optionally overrides auto-detection from `base_url`:
+
+```helen
+agent CustomProvider {
+    model "deepseek-v4-flash"
+    provider "deepseek"         # Force DeepSeek protocol
+    main { return llm act "Hello" }
 }
 ```
 

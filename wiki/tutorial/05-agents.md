@@ -146,6 +146,73 @@ agent Interviewer {
 }
 ```
 
+### max-tokens - Output Length Limit (v1.31.2)
+
+Limits the maximum output tokens for LLM response.
+
+```helen
+agent Concise {
+    description "Concise responder"
+    max-tokens 100    // Limit to 100 output tokens
+    main { return llm act "Summarize in one sentence" }
+}
+```
+
+### thinking-mode - Enable Reasoning (v1.36)
+
+Enables thinking/reasoning mode for the LLM. When enabled, the model produces a chain-of-thought reasoning before the final answer. The reasoning content is captured separately in `reasoning_content` field and not streamed to the frontend.
+
+```helen
+agent Thinker {
+    description "Deep reasoning agent"
+    model "deepseek-v4-pro"
+    thinking-mode true    // Enable thinking mode
+    main { return llm act "Solve this complex problem..." }
+}
+```
+
+### reasoning-effort - Control Reasoning Depth (v1.36)
+
+Controls the reasoning effort level. Values: `"low"`, `"medium"`, `"high"`, `"max"`. Higher effort produces more thorough reasoning at the cost of latency and tokens.
+
+```helen
+agent DeepThinker {
+    description "Maximum reasoning effort"
+    model "deepseek-v4-pro"
+    thinking-mode true
+    reasoning-effort "max"    // Use maximum reasoning effort
+    main { return llm act "Analyze this thoroughly" }
+}
+```
+
+**Provider mapping** (auto-detected from `base_url`):
+
+| Platform | `thinking-mode true` maps to | `reasoning-effort` maps to |
+|----------|------------------------------|---------------------------|
+| DashScope | `enable_thinking: true` + `thinking_budget` | `thinking_budget` (1024/4096/16384/32768) |
+| Zhipu (GLM) | `thinking: {type: "enabled"}` | `reasoning_effort` string |
+| DeepSeek | `thinking: {type: "enabled"}` | `reasoning_effort` string |
+| Minimax | `reasoning_split: true` + `thinking: {type: "adaptive"}` | - |
+| Kimi | - | `reasoning_effort` string |
+| Volcengine (Doubao) | `thinking: {type: "enabled"}` | - |
+
+> **Thinking + Tool Calls (v1.37):** When using `thinking-mode` together with `tools`, the `reasoning_content` is automatically preserved across tool-call rounds. This is a correctness requirement for DeepSeek (returns 400 error if missing) and Minimax (loses context). Helen handles this automatically - no user action needed.
+
+### provider - Explicit Provider Override (v1.36)
+
+Optionally overrides the auto-detected platform protocol. Useful when using API aggregators or custom endpoints.
+
+```helen
+agent Assistant {
+    description "Custom provider"
+    model "deepseek-v4-flash"
+    provider "deepseek"    // Force DeepSeek protocol (overrides base_url detection)
+    main { return llm act "Hello" }
+}
+```
+
+> **Note**: `provider` is a context keyword (not reserved), so it can still be used as a variable name. Auto-detection from `base_url` is the default and works for all standard providers.
+
 ### tools — LLM-Visible Tool Whitelist
 
 `tools = [...]` is the **sole whitelist for LLM visibility** (two-layer authorization model).
