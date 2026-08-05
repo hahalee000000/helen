@@ -1269,8 +1269,22 @@ class Parser:
         )
 
     def _import_stmt(self) -> ImportStmtNode:
-        """Parse an import statement: import "path" as alias."""
+        """Parse an import statement: import "path" as alias | import std.mod.{funcs}.
+
+        Supports two forms:
+        1. File import: import "path/to/module.helen" as alias
+        2. Stdlib module import (v1.34):
+           - import std.str.{len, upper}  # selective import
+           - import std.str.*             # import all
+           - import std.str as S          # namespace import
+        """
         start = self._previous()
+
+        # Check if this is a stdlib module import (starts with identifier)
+        if self._check(TokenType.IDENTIFIER) and self._current().lexeme == "std":
+            return self._import_stdlib_module(start)
+
+        # Traditional file import
         path_tok = self._consume(TokenType.STRING, "Expected string path after 'import'.")
         alias: str | None = None
         if self._match(TokenType.AS):
@@ -1279,6 +1293,76 @@ class Parser:
         end = self._previous()
         return ImportStmtNode(module_path=path_tok.literal or path_tok.lexeme, alias=alias,
                               span=self._make_span(start, end))
+
+    def _import_stdlib_module(self, start: Token) -> ImportStmtNode:
+        """Parse stdlib module import: import std.mod.{funcs} | import std.mod.* | import std.mod as NS."""
+        # Consume 'std'
+        self._advance()
+
+        # Consume '.'
+        self._consume(TokenType.DOT, "Expected '.' after 'std'.")
+
+        # Consume module name (e.g., 'str', 'list', 'dict')
+        module_tok = self._consume(TokenType.IDENTIFIER, "Expected module name after 'std.'.")
+        module_name = f"std.{module_tok.lexeme}"
+
+        # Check for import style
+        if self._match(TokenType.DOT):
+            # Selective import: import std.str.{len, upper}
+            # or wildcard: import std.str.*
+            if self._match(TokenType.STAR):
+                # Wildcard import
+                imported_names = ["*"]
+            elif self._match(TokenType.LEFT_BRACE):
+                # Selective import
+                imported_names = []
+                if not self._check(TokenType.RIGHT_BRACE):
+                    name_tok = self._consume(TokenType.IDENTIFIER, "Expected function name.")
+                    imported_names.append(name_tok.lexeme)
+                    while self._match(TokenType.COMMA):
+                        name_tok = self._consume(TokenType.IDENTIFIER, "Expected function name.")
+                        imported_names.append(name_tok.lexeme)
+                self._consume(TokenType.RIGHT_BRACE, "Expected '}' after import list.")
+            else:
+                self._error("Expected '{' or '*' after 'std.module.'.")
+                imported_names = []
+
+            end = self._previous()
+            return ImportStmtNode(
+                module_path="",  # Not used for stdlib modules
+                alias=None,
+                span=self._make_span(start, end),
+                is_stdlib_module=True,
+                module_name=module_name,
+                imported_names=imported_names,
+                namespace=None,
+            )
+        elif self._match(TokenType.AS):
+            # Namespace import: import std.str as S
+            ns_tok = self._consume(TokenType.IDENTIFIER, "Expected namespace after 'as'.")
+            end = self._previous()
+            return ImportStmtNode(
+                module_path="",
+                alias=None,
+                span=self._make_span(start, end),
+                is_stdlib_module=True,
+                module_name=module_name,
+                imported_names=["*"],  # Import all under namespace
+                namespace=ns_tok.lexeme,
+            )
+        else:
+            self._error("Expected '.', or 'as' after module name.")
+            # Fallback
+            end = self._previous()
+            return ImportStmtNode(
+                module_path="",
+                alias=None,
+                span=self._make_span(start, end),
+                is_stdlib_module=True,
+                module_name=module_name,
+                imported_names=["*"],
+                namespace=None,
+            )
 
     def _alias_stmt(self) -> AliasStmtNode:
         """Parse an alias statement: alias <canonical> as <alias_name>.

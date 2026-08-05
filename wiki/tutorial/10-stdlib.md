@@ -116,6 +116,95 @@ ALIASES = {
 
 All alias files matching `helen/stdlib/locales/*.py` are automatically loaded at startup.
 
+## Modular Imports (v1.34)
+
+Helen v1.34 introduces modular imports for stdlib functions, providing explicit control over which functions are imported and avoiding naming conflicts.
+
+### Import Syntax
+
+Helen supports three forms of stdlib module imports:
+
+#### 1. Selective Import
+
+Import specific functions from a module:
+
+```helen
+import std.str.{upper, lower}
+import std.list.{sort, map}
+import std.dict.{get, set_key}
+
+main {
+    print(upper("hello"))  // "HELLO"
+    print(sort([3, 1, 2]))  // [1, 2, 3]
+}
+```
+
+#### 2. Wildcard Import
+
+Import all functions from a module:
+
+```helen
+import std.str.*
+import std.list.*
+
+main {
+    // All string and list functions are now available
+    print(upper("hello"))
+    print(map([1, 2, 3], fn(x) { return x * 2 }))
+}
+```
+
+#### 3. Namespace Import
+
+Import a module under a namespace to avoid naming conflicts:
+
+```helen
+import std.dict as Dict
+import std.list as List
+
+main {
+    let data = {"name": "Alice", "age": 30}
+    
+    // Use namespace prefix
+    let keys = Dict.keys(data)
+    let sorted = List.sort([3, 1, 2])
+}
+```
+
+### Available Modules
+
+| Module | Description | Key Functions |
+|--------|-------------|---------------|
+| `std.str` | String operations | `upper`, `lower`, `split`, `join`, `replace`, `find`, `contains`, `starts_with`, `ends_with`, `regex_match`, `regex_replace` |
+| `std.list` | List operations | `map`, `filter`, `reduce`, `sort`, `unique`, `flatten`, `chunk`, `zip`, `find_if`, `every`, `some` |
+| `std.dict` | Dictionary operations | `keys`, `values`, `entries`, `get`, `set_key`, `has_key`, `remove_key`, `merge`, `pick`, `omit` |
+| `std.math` | Mathematical operations | `abs`, `round`, `floor`, `ceil`, `min`, `max`, `sum`, `pow`, `sqrt` |
+| `std.time` | Time and date operations | `now`, `format_time`, `parse_time`, `sleep` |
+| `std.file` | File operations | `read_file`, `write_file`, `file_exists`, `list_dir`, `mkdir` |
+| `std.system` | System operations | `env_get`, `env_set`, `get_args`, `exit` |
+| `std.io` | I/O operations | `print`, `input`, `read_line` |
+
+### Benefits of Modular Imports
+
+1. **Explicit Dependencies**: Clear which functions your code uses
+2. **Avoid Naming Conflicts**: Use namespaces to prevent collisions
+3. **Better IDE Support**: IDEs can provide better autocomplete and type checking
+4. **Easier Refactoring**: Clear module boundaries make code easier to understand and modify
+
+### Backward Compatibility
+
+All stdlib functions are still available globally without explicit imports. Modular imports are optional and provide an alternative way to access stdlib functions.
+
+```helen
+// Both forms work identically
+import std.str.{upper}
+// or just use upper() directly (global stdlib)
+
+main {
+    print(upper("hello"))  // Works either way
+}
+```
+
 ## Core Functions (11)
 
 ### Type Conversion

@@ -1401,6 +1401,10 @@ class SemanticAnalyzer(Visitor[None]):
     # ------------------------------------------------------------------
 
     def visit_import_stmt(self, node: ImportStmtNode) -> None:
+        # v1.34: Handle stdlib module imports
+        if node.is_stdlib_module:
+            return self._analyze_stdlib_import(node)
+
         path = node.module_path
 
         # Check if this is a Python module import
@@ -1532,6 +1536,66 @@ class SemanticAnalyzer(Visitor[None]):
                     f"failed to parse imported file '{path}': {str(e)}",
                     node.span,
                 )
+
+    def _analyze_stdlib_import(self, node: ImportStmtNode) -> None:
+        """Analyze stdlib module import (v1.34).
+
+        For stdlib modules, we don't need to define symbols since they're already
+        available as builtins. We just validate that the imported names exist.
+        """
+        from helen.stdlib.modules import (
+            StrModule, ListModule, DictModule, MathModule,
+            TimeModule, FileModule, SystemModule, IOModule,
+        )
+
+        # Map module names to module classes
+        module_map = {
+            "std.str": StrModule,
+            "std.list": ListModule,
+            "std.dict": DictModule,
+            "std.math": MathModule,
+            "std.time": TimeModule,
+            "std.file": FileModule,
+            "std.system": SystemModule,
+            "std.io": IOModule,
+        }
+
+        module_name = node.module_name
+        if module_name not in module_map:
+            self.errors.error(
+                ErrorCode.IMPORT_NOT_FOUND,
+                f"Unknown stdlib module '{module_name}'. Available: {', '.join(module_map.keys())}",
+                node.span,
+            )
+            return
+
+        module_class = module_map[module_name]
+        exports = module_class.__exports__
+
+        # Validate imported names exist
+        if node.namespace:
+            # Namespace import: import std.str as S
+            # Just validate the module exists (already done above)
+            from helen.semantic.symbols import Symbol
+            sym = Symbol(node.namespace, kind="module", is_const=True)
+            self._define_user_symbol(node.namespace, sym, node.span)
+        elif node.imported_names and "*" in node.imported_names:
+            # Wildcard import: import std.str.*
+            # All names are already available as builtins, nothing to do
+            pass
+        elif node.imported_names:
+            # Selective import: import std.str.{len, upper}
+            # Validate that all requested names exist
+            for name in node.imported_names:
+                if name not in exports:
+                    self.errors.error(
+                        ErrorCode.IMPORT_NOT_FOUND,
+                        f"Function '{name}' not found in module '{module_name}'. "
+                        f"Available: {', '.join(exports.keys())}",
+                        node.span,
+                    )
+                    return
+            # Names are already available as builtins, nothing to define
 
     # ------------------------------------------------------------------
     # Alias statement

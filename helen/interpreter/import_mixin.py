@@ -47,9 +47,14 @@ class ImportMixin:
         - .md/.txt: Load as text, register to import_resolver.data
         - .json/.yaml: Parse as data, register to import_resolver.data
         - Python modules (no extension or .py): Import via Python FFI
+        - v1.34: Stdlib modules (std.str, std.list, etc.)
 
         v1.6: Module imports support function/agent access via alias
         """
+        # v1.34: Handle stdlib module imports
+        if node.is_stdlib_module:
+            return self._import_stdlib_module(node)
+
         # Check if this is a Python module import
         # Python modules: no extension, or .py extension, or dotted names like "os.path"
         # Helen/data files: .helen, .json, .md, .txt, .yaml, .yml
@@ -273,5 +278,73 @@ class ImportMixin:
         except ImportError as e:
             self._runtime_error(node.span, f"Cannot import Python module '{module_name}': {e}")
             return None
+
+        return None
+
+    def _import_stdlib_module(self, node: ImportStmtNode) -> object:
+        """Import a stdlib module (v1.34).
+
+        Supports three forms:
+        - import std.str.{len, upper}  # selective import
+        - import std.str.*             # import all
+        - import std.str as S          # namespace import
+        """
+        from helen.stdlib.modules import (
+            StrModule, ListModule, DictModule, MathModule,
+            TimeModule, FileModule, SystemModule, IOModule,
+        )
+
+        # Map module names to module classes
+        module_map = {
+            "std.str": StrModule,
+            "std.list": ListModule,
+            "std.dict": DictModule,
+            "std.math": MathModule,
+            "std.time": TimeModule,
+            "std.file": FileModule,
+            "std.system": SystemModule,
+            "std.io": IOModule,
+        }
+
+        module_name = node.module_name
+        if module_name not in module_map:
+            self._runtime_error(
+                node.span,
+                f"Unknown stdlib module '{module_name}'. Available: {', '.join(module_map.keys())}",
+            )
+            return None
+
+        module_class = module_map[module_name]
+        exports = module_class.__exports__
+
+        # Handle different import styles
+        if node.namespace:
+            # Namespace import: import std.str as S
+            # Create a module object with all functions
+            module_obj = {}
+            for name, func in exports.items():
+                module_obj[name] = func
+            self.environment.define(node.namespace, module_obj, is_const=True)
+        elif node.imported_names and "*" in node.imported_names:
+            # Wildcard import: import std.str.*
+            # Import all functions directly into current scope
+            for name, func in exports.items():
+                self.environment.define(name, func, is_const=True)
+        elif node.imported_names:
+            # Selective import: import std.str.{len, upper}
+            # Import only specified functions
+            for name in node.imported_names:
+                if name not in exports:
+                    self._runtime_error(
+                        node.span,
+                        f"Function '{name}' not found in module '{module_name}'. "
+                        f"Available: {', '.join(exports.keys())}",
+                    )
+                    return None
+                self.environment.define(name, exports[name], is_const=True)
+        else:
+            # Default: import all (same as wildcard)
+            for name, func in exports.items():
+                self.environment.define(name, func, is_const=True)
 
         return None

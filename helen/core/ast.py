@@ -801,10 +801,23 @@ class ImplDeclNode(StatementNode):
 
 @dataclass(frozen=True)
 class ImportStmtNode(StatementNode):
-    """Import statement: import \"path\" as alias."""
+    """Import statement: import "path" as alias | import std.mod.{func1, func2}.
+
+    Supports two forms:
+    1. File import: import "path/to/module.helen" as alias
+    2. Stdlib module import: import std.mod.{func1, func2} (v1.34)
+       - import std.str.{len, upper}  # selective import
+       - import std.str.*             # import all
+       - import std.str as S          # namespace import
+    """
     module_path: str
     alias: str | None
     span: SourceSpan
+    # v1.34: stdlib module support
+    is_stdlib_module: bool = False
+    module_name: str | None = None  # e.g., "std.str", "std.list"
+    imported_names: list[str] | None = None  # e.g., ["len", "upper"] or ["*"]
+    namespace: str | None = None  # e.g., "S" for "import std.str as S"
 
     def accept(self, visitor: Visitor[R]) -> R:
         """Dispatch to the visitor."""

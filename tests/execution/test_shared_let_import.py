@@ -123,7 +123,7 @@ class TestImportResolverSharedLet:
         tmpdir = tempfile.mkdtemp()
         try:
             with open(os.path.join(tmpdir, "mod.helen"), "w") as f:
-                f.write("let local = 0\nfn get(): int { return local }\n")
+                f.write("let local = 0\nfn get_value(): int { return local }\n")
 
             resolver = ImportResolver(base_dir=tmpdir)
             resolver.resolve("mod.helen")
@@ -142,8 +142,8 @@ class TestSharedLetSameModule:
     def test_function_reads_shared_let(self):
         source = """
         shared let counter = 0
-        fn get(): int { return counter }
-        main { get() }
+        fn get_value(): int { return counter }
+        main { get_value() }
         """
         result, _ = _run_file(source, {})
         assert result == 0
@@ -184,14 +184,14 @@ class TestSharedLetNonAliasedImport:
         module = """
         shared let counter = 0
         fn inc() { counter = counter + 1 }
-        fn get(): int { return counter }
+        fn get_value(): int { return counter }
         """
         main = """
         import "mod.helen"
         main {
             inc()
             inc()
-            get()
+            get_value()
         }
         """
         result, _ = _run_file(main, {"mod.helen": module})
@@ -201,7 +201,7 @@ class TestSharedLetNonAliasedImport:
         module = """
         shared let buffer = ""
         fn append(s: str) { buffer = buffer + s }
-        fn get(): str { return buffer }
+        fn get_value(): str { return buffer }
         """
         main = """
         import "mod.helen"
@@ -209,7 +209,7 @@ class TestSharedLetNonAliasedImport:
             append("hello")
             append(" ")
             append("world")
-            get()
+            get_value()
         }
         """
         result, _ = _run_file(main, {"mod.helen": module})

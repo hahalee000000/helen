@@ -961,6 +961,85 @@ helen template spawn_channel --copy my_worker.helen  # Copy to current directory
 
 Templates: `simple_agent`, `spawn_channel`, `shared_store`, `context_object`, `pipeline`. All templates follow the "Caller Decides Context" principle — all agent information is passed explicitly through parameters.
 
+## Modular Imports (v1.34+)
+
+Helen v1.34 introduces modular imports for stdlib functions, providing explicit control over which functions are imported and avoiding naming conflicts.
+
+### Import Syntax
+
+Three forms of stdlib module imports are supported:
+
+#### 1. Selective Import
+Import specific functions:
+
+```helen
+import std.str.{upper, lower}
+import std.list.{sort, map}
+import std.dict.{get, set_key}
+
+main {
+    print(upper("hello"))  // "HELLO"
+    print(sort([3, 1, 2]))  // [1, 2, 3]
+}
+```
+
+#### 2. Wildcard Import
+Import all functions from a module:
+
+```helen
+import std.str.*
+import std.list.*
+
+main {
+    print(upper("hello"))
+    print(map([1, 2, 3], fn(x) { return x * 2 }))
+}
+```
+
+#### 3. Namespace Import
+Import under a namespace to avoid conflicts:
+
+```helen
+import std.dict as Dict
+import std.list as List
+
+main {
+    let data = {"name": "Alice"}
+    let keys = Dict.keys(data)
+    let sorted = List.sort([3, 1, 2])
+}
+```
+
+### Available Modules
+
+| Module | Key Functions |
+|--------|---------------|
+| `std.str` | `upper`, `lower`, `split`, `join`, `replace`, `find`, `contains`, `regex_match`, `regex_replace` |
+| `std.list` | `map`, `filter`, `reduce`, `sort`, `unique`, `flatten`, `chunk`, `zip`, `find_if` |
+| `std.dict` | `keys`, `values`, `entries`, `get`, `set_key`, `has_key`, `remove_key`, `merge`, `pick`, `omit` |
+| `std.math` | `abs`, `round`, `floor`, `ceil`, `min`, `max`, `sum`, `pow`, `sqrt` |
+| `std.time` | `now`, `format_time`, `parse_time`, `sleep` |
+| `std.file` | `read_file`, `write_file`, `file_exists`, `list_dir`, `mkdir` |
+| `std.system` | `env_get`, `env_set`, `get_args`, `exit` |
+| `std.io` | `print`, `input`, `read_line` |
+
+### Benefits
+
+- **Explicit dependencies**: Clear which functions your code uses
+- **Avoid naming conflicts**: Use namespaces to prevent collisions
+- **Better IDE support**: Improved autocomplete and type checking
+- **Easier refactoring**: Clear module boundaries
+
+### Backward Compatibility
+
+All stdlib functions remain available globally. Modular imports are optional.
+
+```helen
+// Both forms work identically
+import std.str.{upper}
+// or just use upper() directly (global stdlib)
+```
+
 ## MCP Tools Integration (v1.33+)
 
 Helen v1.33 introduces MCP (Model Context Protocol) client support. MCP tools extend Helen's built-in tools with external capabilities.
