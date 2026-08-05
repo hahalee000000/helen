@@ -49,6 +49,7 @@ from helen.stdlib.collection import (
     _sort, _unique, _flatten, _chunk, _zip,
     # Dict ops
     _keys, _values, _entries, _merge, _pick, _omit,
+    _remove_key, _get, _set_key, _has_key,
     # Set ops
     _make_set, _set_union, _set_intersection, _set_difference, _set_has,
 )
@@ -1261,6 +1262,10 @@ def _register_collection() -> list[BuiltinFunction]:
         BuiltinFunction("merge", "Merge dicts", "merge(*dicts)", _merge, "collection"),
         BuiltinFunction("pick", "Pick dict keys", "pick(dict, keys)", _pick, "collection"),
         BuiltinFunction("omit", "Omit dict keys", "omit(dict, keys)", _omit, "collection"),
+        BuiltinFunction("remove_key", "Remove single key", "remove_key(dict, key)", _remove_key, "collection"),
+        BuiltinFunction("get", "Get value with default", "get(dict, key, default?)", _get, "collection"),
+        BuiltinFunction("set_key", "Set key-value pair", "set_key(dict, key, value)", _set_key, "collection"),
+        BuiltinFunction("has_key", "Check key exists", "has_key(dict, key)", _has_key, "collection"),
         # Collection set operations
         BuiltinFunction("make_set", "Create set", "make_set(items)", _make_set, "collection"),
         BuiltinFunction("set_union", "Set union", "set_union(s1, s2)", _set_union, "collection"),

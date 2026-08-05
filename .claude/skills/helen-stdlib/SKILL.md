@@ -20,7 +20,7 @@ Helen's standard library provides **333 built-in functions**, covering all core 
 | **Core** | 17 | `print`, `len`, `str`, `int`, `float`, `bool`, `list`, `dict`, `abs`, `min`, `max`, `range`, `type`, `isinstance`, `input`, `multiline_input`, `exit` |
 | **String** | 43 | `upper`, `lower`, `strip`, `split`, `join`, `replace`, `find`, `find_from`, `reverse`, `repeat`, `regex_match`, `regex_replace`, `regex_split`, `format_float`, `tokenize`, `levenshtein`, `base64_encode`, `chr`, `ord` |
 | **Data** | 28 | `json_parse`, `json_parse_lenient`, `json_stringify`, `yaml_parse`, `toml_parse`, `csv_parse`, `xml_parse`, `html_escape`, `html_parse`, `markdown_parse`, `markdown_to_html` |
-| **Collection** | 22 | `sort`, `reverse`, `unique`, `flatten`, `zip`, `map`, `filter`, `reduce`, `chunk`, `set_union`, `set_intersection`, `set_difference` |
+| **Collection** | 26 | `sort`, `reverse`, `unique`, `flatten`, `zip`, `map`, `filter`, `reduce`, `chunk`, `set_union`, `set_intersection`, `set_difference`, `remove_key`, `get`, `set_key`, `has_key` |
 | **Network** | 9 | `http_get`, `http_post`, `http_put`, `http_delete`, `http_download`, `url_parse`, `url_build`, `url_encode`, `url_decode` |
 | **Time** | 16 | `now`, `time`, `date`, `datetime`, `date_format`, `date_parse`, `date_add`, `date_diff`, `sleep`, `stopwatch_start`, `stopwatch_elapsed`, `stopwatch_lap` |
 | **Math** | 27 | `round`, `sqrt`, `floor`, `ceil`, `sum`, `product`, `mean`, `median`, `mode`, `stddev`, `variance`, `percentile`, `correlation`, `cos`, `sin`, `tan`, `pow`, `log`, `log2`, `log10`, `exp` |

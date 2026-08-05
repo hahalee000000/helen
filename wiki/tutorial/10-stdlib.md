@@ -11,7 +11,7 @@ The Helen standard library provides 285 built-in functions organized into 17 cat
 | **Core** | 11 | Type conversion, general operations |
 | **String** | 39 | String processing, regex, text analysis, template interpolation |
 | **Data** | 25 | JSON, HTML, CSV, Markdown, YAML, TOML, XML |
-| **Collection** | 22 | List, dict, set operations |
+| **Collection** | 26 | List, dict, set operations (v1.33 added `remove_key`, `get`, `set_key`, `has_key`) |
 | **Network** | 9 | HTTP requests, URL handling |
 | **Time** | 13 | Date/time, formatting, arithmetic |
 | **Math** | 15 | Math operations, statistical analysis |
@@ -398,6 +398,93 @@ main {
     // File operations
     toml_save("config.toml", data)
     let loaded = toml_load("config.toml")
+}
+```
+
+## Collection Functions (26)
+
+Collection functions handle list, dict, and set operations.
+
+### Dict Operations (v1.33 Enhanced)
+
+New dict manipulation functions for common operations:
+
+```helen
+main {
+    let user = {"name": "Alice", "age": 30, "city": "Beijing"}
+    
+    // Check if key exists
+    if has_key(user, "email") {
+        print("Has email: " + user["email"])
+    }
+    
+    // Get value with default
+    let email = get(user, "email", "N/A")
+    print("Email: " + email)  // "N/A"
+    
+    // Add or update a key (immutable)
+    let updated = set_key(user, "email", "alice@example.com")
+    print(updated)  // {"name": "Alice", "age": 30, "city": "Beijing", "email": "alice@example.com"}
+    
+    // Remove a key (immutable)
+    let removed = remove_key(updated, "city")
+    print(removed)  // {"name": "Alice", "age": 30, "email": "alice@example.com"}
+    
+    // Chinese aliases also work
+    let 检查 = 包含键(user, "name")  // true
+    let 获取值 = 获取(user, "age")    // 30
+    let 新增 = 设置键(user, "phone", "123")
+    let 删除 = 删除键(新增, "phone")
+}
+```
+
+**Dict Functions**:
+- `keys(dict)` — Get all keys as list
+- `values(dict)` — Get all values as list
+- `entries(dict)` — Get all (key, value) pairs
+- `merge(*dicts)` — Merge multiple dicts
+- `pick(dict, keys)` — Keep only specified keys
+- `omit(dict, keys)` — Remove specified keys (multiple)
+- `remove_key(dict, key)` — Remove single key (**v1.33 new**)
+- `get(dict, key, default?)` — Get value with optional default (**v1.33 new**)
+- `set_key(dict, key, value)` — Set key-value pair, returns new dict (**v1.33 new**)
+- `has_key(dict, key)` — Check if key exists (**v1.33 new**)
+
+### List Operations
+
+```helen
+main {
+    let numbers = [3, 1, 4, 1, 5, 9, 2, 6]
+    
+    // Map, filter, reduce
+    let doubled = map(numbers, fn(x) { return x * 2 })
+    let evens = filter(numbers, fn(x) { return x % 2 == 0 })
+    let sum = reduce(numbers, fn(acc, x) { return acc + x }, 0)
+    
+    // Sort and unique
+    let sorted = sort(numbers)
+    let unique_vals = unique(numbers)
+    
+    // Chunk and zip
+    let chunks = chunk(numbers, 3)  // [[3,1,4], [1,5,9], [2,6]]
+    let zipped = zip([1, 2, 3], ["a", "b", "c"])  // [[1,"a"], [2,"b"], [3,"c"]]
+}
+```
+
+### Set Operations
+
+```helen
+main {
+    let s1 = make_set([1, 2, 3, 4])
+    let s2 = make_set([3, 4, 5, 6])
+    
+    let union = set_union(s1, s2)        // {1, 2, 3, 4, 5, 6}
+    let intersection = set_intersection(s1, s2)  // {3, 4}
+    let difference = set_difference(s1, s2)      // {1, 2}
+    
+    if set_has(s1, 3) {
+        print("s1 contains 3")
+    }
 }
 ```
 

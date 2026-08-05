@@ -143,6 +143,10 @@ ALIASES: dict[str, str] = {
     "合并": "merge",
     "选取": "pick",
     "剔除": "omit",
+    "删除键": "remove_key",
+    "获取": "get",
+    "设置键": "set_key",
+    "包含键": "has_key",
     # Set operations
     "构造集合": "make_set",
     "集合并": "set_union",

@@ -397,6 +397,81 @@ def _omit(d: dict[Any, Any], keys: list[Any]) -> dict[Any, Any]:
     return {k: v for k, v in d.items() if k not in keys}
 
 
+def _remove_key(d: dict[Any, Any], key: Any) -> dict[Any, Any]:
+    """Remove a single key from dict.
+
+    Args:
+        d: Input dict
+        key: Key to remove
+
+    Returns:
+        New dict without the specified key
+
+    Example:
+        let data = {"a": 1, "b": 2, "c": 3}
+        let result = remove_key(data, "b")  // {"a": 1, "c": 3}
+    """
+    return {k: v for k, v in d.items() if k != key}
+
+
+def _get(d: dict[Any, Any], key: Any, default: Any = None) -> Any:
+    """Get value by key with optional default.
+
+    Args:
+        d: Input dict
+        key: Key to look up
+        default: Default value if key not found (default: None)
+
+    Returns:
+        Value for key, or default if key not found
+
+    Example:
+        let data = {"name": "Alice", "age": 30}
+        let name = get(data, "name")  // "Alice"
+        let email = get(data, "email", "N/A")  // "N/A"
+    """
+    return d.get(key, default)
+
+
+def _set_key(d: dict[Any, Any], key: Any, value: Any) -> dict[Any, Any]:
+    """Set a key-value pair in dict (immutable).
+
+    Args:
+        d: Input dict
+        key: Key to set
+        value: Value to set
+
+    Returns:
+        New dict with the key set to value
+
+    Example:
+        let data = {"a": 1, "b": 2}
+        let result = set_key(data, "c", 3)  // {"a": 1, "b": 2, "c": 3}
+        let updated = set_key(data, "a", 10)  // {"a": 10, "b": 2}
+    """
+    result = d.copy()
+    result[key] = value
+    return result
+
+
+def _has_key(d: dict[Any, Any], key: Any) -> bool:
+    """Check if dict contains a key.
+
+    Args:
+        d: Input dict
+        key: Key to check
+
+    Returns:
+        True if key exists in dict
+
+    Example:
+        let data = {"name": "Alice", "age": 30}
+        let has_name = has_key(data, "name")  // true
+        let has_email = has_key(data, "email")  // false
+    """
+    return key in d
+
+
 # ── Set operations ─────────────────────────────────────────────
 
 
