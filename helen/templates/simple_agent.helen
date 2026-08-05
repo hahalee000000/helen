@@ -6,6 +6,7 @@
 // ═════════════════════════════════════════════════════════════════════
 
 // ── Agent 定义 ───────────────────────────────────────────────────────
+import std.core.*
 agent Worker(task: str) {
     description "Process a single task"
     // model "gpt-4"           // 可选：指定模型

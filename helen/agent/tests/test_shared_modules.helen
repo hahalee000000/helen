@@ -5,6 +5,8 @@
 // 运行: helen tests/test_shared_modules.helen
 //
 
+import std.core.*
+import std.str.*
 import "../json_utils.helen"
 import "../memory_utils.helen"
 import "../context.helen"

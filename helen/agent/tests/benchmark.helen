@@ -11,6 +11,10 @@
 // 运行：helen tests/benchmark.helen
 //
 
+import std.core.*
+import std.data.*
+import std.str.*
+import std.time.*
 import "../ui_event_queue.helen"
 import "../output.helen"
 

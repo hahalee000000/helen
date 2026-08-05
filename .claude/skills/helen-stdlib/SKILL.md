@@ -1012,16 +1012,34 @@ main {
 
 ### Available Modules
 
+Helen v1.38 provides **22 stdlib modules** covering every stdlib category.
+
 | Module | Key Functions |
 |--------|---------------|
-| `std.str` | `upper`, `lower`, `split`, `join`, `replace`, `find`, `contains`, `regex_match`, `regex_replace` |
-| `std.list` | `map`, `filter`, `reduce`, `sort`, `unique`, `flatten`, `chunk`, `zip`, `find_if` |
-| `std.dict` | `keys`, `values`, `entries`, `get`, `set_key`, `has_key`, `remove_key`, `merge`, `pick`, `omit` |
-| `std.math` | `abs`, `round`, `floor`, `ceil`, `min`, `max`, `sum`, `pow`, `sqrt` |
-| `std.time` | `now`, `format_time`, `parse_time`, `sleep` |
-| `std.file` | `read_file`, `write_file`, `file_exists`, `list_dir`, `mkdir` |
-| `std.system` | `env_get`, `env_set`, `get_args`, `exit` |
-| `std.io` | `print`, `input`, `read_line` |
+| `std.core` | `len`, `str`, `int`, `float`, `bool`, `print`, `abs`, `min`, `max`, `range`, `type`, `isinstance` (17) |
+| `std.str` | `upper`, `lower`, `split`, `join`, `replace`, `find`, `contains`, `regex_match`, `regex_replace`, `base64_encode` (43) |
+| `std.list` | `map`, `filter`, `reduce`, `sort`, `unique`, `flatten`, `chunk`, `zip`, `find_if`, `every` (11) |
+| `std.dict` | `keys`, `values`, `entries`, `get`, `set_key`, `has_key`, `remove_key`, `merge`, `pick`, `omit` (10) |
+| `std.math` | `round`, `floor`, `ceil`, `sum`, `pow`, `sqrt`, `log`, `sin`, `cos`, `random` (27) |
+| `std.time` | `now`, `date`, `date_format`, `date_parse`, `date_add`, `date_diff`, `sleep`, `stopwatch_start` (16) |
+| `std.file` | `read_file`, `write_file`, `append_file`, `delete_file`, `copy_file`, `list_dir`, `glob_files` (12) |
+| `std.io` | `progress_bar`, `stream_print`, `stream_clear`, `mkdir`, `mkdir_p`, `stream_cursor_up` (9) |
+| `std.system` | `env_get`, `env_set`, `shell_exec`, `exec`, `get_cli_args`, `platform`, `cpu_count`, `pid` (24) |
+| `std.path` | `path_basename`, `path_dirname`, `path_exists`, `path_is_dir`, `path_is_file`, `path_join` (6) |
+| `std.data` | `json_parse`, `json_parse_lenient`, `json_stringify`, `yaml_parse`, `toml_parse`, `csv_parse`, `xml_parse` (28) |
+| `std.network` | `http_get`, `http_post`, `http_put`, `http_delete`, `http_download`, `url_parse`, `url_build` (9) |
+| `std.tools` | `shell_exec`, `calculate`, `patch_file`, `load_skill`, `web_search`, `web_fetch`, `find_files` (7) |
+| `std.debug` | `debug`, `trace_on`, `trace_off`, `get_trace`, `coverage_on`, `coverage_report` (11) |
+| `std.context` | `clear_context`, `compress_context`, `context_stats`, `working_memory_set`, `search_context` (29) |
+| `std.transcript` | `get_session_id`, `list_sessions`, `replay_transcript`, `resume_session`, `search_transcript` (21) |
+| `std.media` | `media`, `media_base64`, `is_media`, `to_openai_parts`, `save_media`, `is_image` (12) |
+| `std.test` | `test_suite`, `test_case`, `assert_equal`, `assert_true`, `expect`, `run_tests` (23) |
+| `std.quality` | `analyze_code`, `check_security`, `quality_score`, `quality_report` (4) |
+| `std.llm` | `cancel_llm_call`, `current_llm_call_id`, `cancel_all_llm_calls` (3) |
+| `std.crypto` | `md5`, `sha256`, `hmac_sha256`, `random`, `randint`, `choice`, `uuid_generate` (17) |
+| `std.concurrency` | `mailbox_select` (1) |
+
+Note: `std.tools`, `std.transcript`, `std.llm` use keyword-named modules. The parser accepts them after `std.` even though they are reserved keywords in other contexts.
 
 ### Benefits
 

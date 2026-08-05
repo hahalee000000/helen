@@ -1,6 +1,7 @@
 // Simple Chat Bot - Helen Language Demo
 // 最简聊天机器人设计
 
+import std.core.*
 agent ChatBot(user_input: str) {
     description "A friendly chat assistant"
     prompt """

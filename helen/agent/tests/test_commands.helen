@@ -5,6 +5,7 @@
 // 运行: helen tests/test_commands.helen
 //
 
+import std.core.*
 import "../commands.helen"
 import "../output.helen"
 

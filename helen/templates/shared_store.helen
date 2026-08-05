@@ -6,6 +6,8 @@
 // ═════════════════════════════════════════════════════════════════════
 
 // ── 共享数据存储 ─────────────────────────────────────────────────────
+import std.core.*
+import std.str.*
 shared store DataStore {
     let results: dict = {}
     let counter: int = 0

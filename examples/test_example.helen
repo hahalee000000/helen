@@ -3,6 +3,9 @@
 
 // ── Define test functions ────────────────────────────────────
 
+import std.core.*
+import std.str.*
+import std.test.*
 fn test_assert_true() {
     assert_true(1 == 1)
     assert_true("hello" != "")

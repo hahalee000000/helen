@@ -7,6 +7,7 @@
 
 // ── Worker Agent ─────────────────────────────────────────────────────
 // 注意：最后一个参数必须是 Channel（spawn 自动注入）
+import std.core.*
 agent Worker(task: str, ch: Channel) {
     description "Background worker that reports results via Channel"
 

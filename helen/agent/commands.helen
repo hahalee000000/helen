@@ -20,6 +20,14 @@
 //   }
 //
 
+import std.context.*
+import std.core.*
+import std.dict.*
+import std.file.*
+import std.list.*
+import std.path.*
+import std.str.*
+import std.transcript.*
 import "output.helen"
 import "context_manager.helen"
 import "system_reminders.helen"

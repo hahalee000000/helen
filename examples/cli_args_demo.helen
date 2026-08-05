@@ -3,6 +3,8 @@
 
 // 1. Access raw arguments via the `argv` const
 
+import std.core.*
+import std.system.*
 main {
     print("=== Raw argv ===")
     print(argv)

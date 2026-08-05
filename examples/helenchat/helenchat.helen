@@ -14,6 +14,9 @@
 
 // ─── HelenChat Agent ─────────────────────────────────────────────
 
+import std.core.*
+import std.io.*
+import std.path.*
 agent HelenChat(user_input: str) {
     description "HelenChat - an autonomous AI agent powered by Helen"
     prompt """

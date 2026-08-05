@@ -5,6 +5,7 @@
 // 运行: helen tests/test_utils.helen
 //
 
+import std.core.*
 import "../utils.helen"
 
 fn _assert(condition: bool, test_name: str) {

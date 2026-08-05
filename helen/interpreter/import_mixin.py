@@ -292,10 +292,15 @@ class ImportMixin:
         from helen.stdlib.modules import (
             StrModule, ListModule, DictModule, MathModule,
             TimeModule, FileModule, SystemModule, IOModule,
+            CoreModule, DataModule, NetworkModule, PathModule,
+            ToolsModule, DebugModule, ContextModule, TranscriptModule,
+            MediaModule, TestModule, QualityModule, LLMModule,
+            CryptoModule, ConcurrencyModule,
         )
 
         # Map module names to module classes
         module_map = {
+            # v1.34
             "std.str": StrModule,
             "std.list": ListModule,
             "std.dict": DictModule,
@@ -304,6 +309,21 @@ class ImportMixin:
             "std.file": FileModule,
             "std.system": SystemModule,
             "std.io": IOModule,
+            # v1.38
+            "std.core": CoreModule,
+            "std.data": DataModule,
+            "std.network": NetworkModule,
+            "std.path": PathModule,
+            "std.tools": ToolsModule,
+            "std.debug": DebugModule,
+            "std.context": ContextModule,
+            "std.transcript": TranscriptModule,
+            "std.media": MediaModule,
+            "std.test": TestModule,
+            "std.quality": QualityModule,
+            "std.llm": LLMModule,
+            "std.crypto": CryptoModule,
+            "std.concurrency": ConcurrencyModule,
         }
 
         module_name = node.module_name

@@ -391,5 +391,91 @@ class SmartInterpreter:
 
 ---
 
-**最后更新**: 2026-07-16  
-**版本**: v1.21
+## 标准库模块化导入 (v1.34+, v1.38 扩展)
+
+Helen v1.34 引入标准库的模块化导入,v1.38 扩展到 **22 个模块**覆盖所有标准库类别。
+
+### 三种导入形式
+
+```helen
+// 1. 通配符导入(最常用)
+import std.core.*
+import std.str.*
+import std.list.*
+
+// 2. 选择性导入
+import std.data.{json_parse, yaml_parse}
+import std.path.{path_join, path_exists}
+
+// 3. 命名空间导入(避免冲突)
+import std.dict as Dict
+import std.list as List
+
+main {
+    let keys = Dict.keys({"a": 1, "b": 2})
+    let sorted = List.sort([3, 1, 2])
+}
+```
+
+### 22 个标准库模块
+
+| 模块 | 内容 | 函数数 |
+|------|------|:------:|
+| `std.core` | `len`, `str`, `int`, `print`, `abs`, `min`, `max`, `range`, `type` | 17 |
+| `std.str` | `upper`, `lower`, `split`, `join`, `replace`, `regex_match`, `base64_encode` | 43 |
+| `std.list` | `map`, `filter`, `reduce`, `sort`, `unique`, `flatten`, `chunk`, `zip` | 11 |
+| `std.dict` | `keys`, `values`, `entries`, `get`, `set_key`, `has_key`, `merge`, `pick` | 10 |
+| `std.math` | `round`, `floor`, `ceil`, `sum`, `pow`, `sqrt`, `log`, `sin`, `cos` | 27 |
+| `std.time` | `now`, `date`, `date_format`, `date_parse`, `date_add`, `sleep` | 16 |
+| `std.file` | `read_file`, `write_file`, `append_file`, `delete_file`, `list_dir` | 12 |
+| `std.io` | `progress_bar`, `stream_print`, `stream_clear`, `mkdir` | 9 |
+| `std.system` | `env_get`, `env_set`, `shell_exec`, `platform`, `cpu_count`, `pid` | 24 |
+| `std.path` | `path_basename`, `path_dirname`, `path_exists`, `path_join` | 6 |
+| `std.data` | `json_parse`, `json_stringify`, `yaml_parse`, `toml_parse`, `csv_parse` | 28 |
+| `std.network` | `http_get`, `http_post`, `http_put`, `http_delete`, `http_download` | 9 |
+| `std.tools` | `shell_exec`, `calculate`, `patch_file`, `load_skill`, `web_search` | 7 |
+| `std.debug` | `debug`, `trace_on`, `trace_off`, `coverage_on`, `coverage_report` | 11 |
+| `std.context` | `clear_context`, `compress_context`, `context_stats`, `working_memory_set` | 29 |
+| `std.transcript` | `get_session_id`, `list_sessions`, `replay_transcript`, `resume_session` | 21 |
+| `std.media` | `media`, `media_base64`, `is_media`, `to_openai_parts`, `save_media` | 12 |
+| `std.test` | `test_suite`, `test_case`, `assert_equal`, `assert_true`, `expect` | 23 |
+| `std.quality` | `analyze_code`, `check_security`, `quality_score`, `quality_report` | 4 |
+| `std.llm` | `cancel_llm_call`, `current_llm_call_id`, `cancel_all_llm_calls` | 3 |
+| `std.crypto` | `md5`, `sha256`, `hmac_sha256`, `random`, `randint`, `uuid_generate` | 17 |
+| `std.concurrency` | `mailbox_select` | 1 |
+
+注:`std.tools`、`std.transcript`、`std.llm` 使用关键字作为模块名。parser 在 `std.` 后接受这些关键字 token。
+
+### 推荐用法
+
+v1.38 起,**显式导入是推荐风格**:
+
+```helen
+// 推荐:显式声明依赖
+import std.core.*
+import std.str.*
+import std.path.*
+
+main {
+    let content = read_file("data.txt")  // from std.core
+    let name = upper("helen")            // from std.str
+    let exists = path_exists("data.txt") // from std.path
+}
+
+// 也允许:不导入直接使用(向后兼容,但不推荐)
+main {
+    print(len("hello"))  // 全局 stdlib 仍可用
+}
+```
+
+### 设计原则
+
+- **显式优于隐式**:代码依赖一目了然
+- **按类别分组**:每个标准库类别对应一个模块
+- **避免命名冲突**:命名空间导入 (`import std.dict as Dict`) 可隔离同名函数
+- **向后兼容**:全局 stdlib 仍可用,显式导入是可选的最佳实践
+
+---
+
+**最后更新**: 2026-08-06
+**版本**: v1.38

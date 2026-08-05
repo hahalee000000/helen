@@ -1,6 +1,11 @@
 // 任务目录管理器
 // 为每个编程任务创建独立的目录结构，避免文件覆盖
 
+import std.core.*
+import std.io.*
+import std.str.*
+import std.time.*
+import std.tools.*
 import "utils.helen"
 
 /** 从需求中提取任务名称（fallback 用）

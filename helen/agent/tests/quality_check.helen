@@ -1,6 +1,9 @@
 // 质量评估脚本 — 检查核心 agent 文件质量
 // v1.0: specialist agents 已合并到 chat_session_actor.helen
 
+import std.core.*
+import std.path.*
+import std.quality.*
 main {
     let files = ["chat_session_actor.helen"]
 

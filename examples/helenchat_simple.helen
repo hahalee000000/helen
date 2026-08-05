@@ -3,6 +3,7 @@
 //
 // 用法: helen examples/helenchat_simple.helen
 
+import std.core.*
 agent HelenChat(user_input: str) {
     description "友好的对话式 AI 助手"
     prompt """

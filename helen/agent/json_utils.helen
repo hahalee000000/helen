@@ -14,6 +14,9 @@
  *    fallback_field: 回退 map 中存放 raw 文本的字段名
  *
  *  返回: 解析后的 map */
+import std.core.*
+import std.data.*
+import std.str.*
 fn safe_parse_agent_json(raw: str, default_val: map, fallback_field: str): map {
     if raw == "" {
         return default_val

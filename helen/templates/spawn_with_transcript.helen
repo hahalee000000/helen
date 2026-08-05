@@ -6,6 +6,8 @@
 // ═════════════════════════════════════════════════════════════════════
 
 // ── Worker Agent ─────────────────────────────────────────────────────
+import std.core.*
+import std.transcript.*
 agent Worker(task: str, parent_sid: str, ch: Channel) {
     description "Worker that inherits parent transcript"
 

@@ -32,6 +32,11 @@
  *
  * 为什么不用 `shell_exec("pwd")`：Windows 没有 pwd 命令，会返回错误字符串。
  */
+import std.core.*
+import std.path.*
+import std.str.*
+import std.system.*
+import std.tools.*
 fn get_cwd(): str {
     let env_cwd = env_get("HELEN_WEBUI_CWD", "")
     if env_cwd != "" {

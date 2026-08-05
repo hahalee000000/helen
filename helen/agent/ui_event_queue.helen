@@ -27,6 +27,8 @@
 
 // ── UIEventQueue Shared Store ─────────────────────────────────────
 
+import std.core.*
+import std.time.*
 shared store UIEventQueue {
     // 事件队列（FIFO）
     let events: list = []

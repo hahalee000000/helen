@@ -7,6 +7,8 @@
 // v1.19-v1.20: 提醒间隔根据 context_usage() 动态调整
 //
 
+import std.context.*
+import std.core.*
 shared let _turn_counter = 0  // 对话轮次计数器
 const REMINDER_INTERVAL = 10  // 低压默认间隔（每 10 轮）
 

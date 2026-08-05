@@ -6,6 +6,8 @@
 // ═════════════════════════════════════════════════════════════════════
 
 // ── Agent 接收 Context 字典 ──────────────────────────────────────────
+import std.core.*
+import std.transcript.*
 agent Processor(ctx: dict) {
     description "Process with aggregated context"
 

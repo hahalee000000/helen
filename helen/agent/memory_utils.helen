@@ -17,6 +17,9 @@ fn load_memory(): str {
 }
 
 /** 读取用户偏好文件（.helen/USER.md）。 */
+import std.core.*
+import std.path.*
+import std.str.*
 fn load_user_preferences(): str {
     let path = ".helen/USER.md"
     if !path_exists(path) {

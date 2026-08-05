@@ -1312,8 +1312,16 @@ class Parser:
         # Consume '.'
         self._consume(TokenType.DOT, "Expected '.' after 'std'.")
 
-        # Consume module name (e.g., 'str', 'list', 'dict')
-        module_tok = self._consume(TokenType.IDENTIFIER, "Expected module name after 'std.'.")
+        # Consume module name (e.g., 'str', 'list', 'dict').
+        # Some stdlib module names collide with keywords (tools, transcript, llm),
+        # so accept those keyword tokens too when they appear after 'std.'.
+        _KEYWORD_MODULE_NAMES = {
+            TokenType.TOOLS, TokenType.TRANSCRIPT, TokenType.LLM,
+        }
+        if self._check(TokenType.IDENTIFIER) or self._current().type in _KEYWORD_MODULE_NAMES:
+            module_tok = self._advance()
+        else:
+            module_tok = self._consume(TokenType.IDENTIFIER, "Expected module name after 'std.'.")
         module_name = f"std.{module_tok.lexeme}"
 
         # Check for import style

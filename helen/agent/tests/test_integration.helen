@@ -13,6 +13,8 @@
 // 运行：helen tests/test_integration.helen
 //
 
+import std.core.*
+import std.str.*
 import "../chat_session_actor.helen"
 import "../output.helen"
 import "../ui_event_queue.helen"

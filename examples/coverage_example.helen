@@ -12,6 +12,7 @@
 //   - Branch coverage: which if/else branches were taken
 
 // A simple calculator with various code paths
+import std.test.*
 fn do_math(op, a, b) {
     if op == "+" {
         return a + b

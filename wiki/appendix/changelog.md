@@ -1,6 +1,83 @@
 # 版本历史
 
-> Helen v1.37 | LLM Provider Protocol Abstraction + Thinking Mode + Multi-turn Reasoning
+> Helen v1.38 | Extended stdlib modules + codebase migration to explicit imports
+
+---
+
+## v1.38: 扩展标准库模块 + 代码库迁移
+
+**发布日期**: 2026-08-06
+**核心特性**: 14 个新标准库模块、parser 关键字模块名支持、核心代码迁移至显式导入
+
+### 1. 扩展标准库模块 (14 个新模块)
+
+v1.34 引入 8 个标准库模块,v1.38 扩展到 **22 个模块**,覆盖所有 21 个标准库类别。
+
+新增模块:
+- `std.core` (17 函数) — `len`, `str`, `int`, `print`, `abs`, `min`, `max`, `range`, `type`
+- `std.data` (28 函数) — `json_parse`, `yaml_parse`, `toml_parse`, `csv_parse`, `xml_parse`
+- `std.network` (9 函数) — `http_get`, `http_post`, `http_download`
+- `std.path` (6 函数) — `path_basename`, `path_dirname`, `path_exists`, `path_join`
+- `std.tools` (7 函数) — `shell_exec`, `calculate`, `web_search`, `web_fetch`
+- `std.debug` (11 函数) — `debug`, `trace_on`, `coverage_report`
+- `std.context` (29 函数) — `clear_context`, `compress_context`, `working_memory_set`
+- `std.transcript` (21 函数) — `get_session_id`, `replay_transcript`, `resume_session`
+- `std.media` (12 函数) — `media`, `media_base64`, `to_openai_parts`
+- `std.test` (23 函数) — `test_suite`, `assert_equal`, `expect`, `run_tests`
+- `std.quality` (4 函数) — `analyze_code`, `check_security`, `quality_score`
+- `std.llm` (3 函数) — `cancel_llm_call`, `current_llm_call_id`
+- `std.crypto` (17 函数) — `md5`, `sha256`, `random`, `uuid_generate`
+- `std.concurrency` (1 函数) — `mailbox_select`
+
+**实现**:
+- `helen/stdlib/modules/__init__.py` — 14 个新 Module 类
+- `helen/interpreter/import_mixin.py` — 注册 22 个模块
+- `helen/semantic/analyzer.py` — 语义分析器同步更新
+
+### 2. Parser 支持关键字模块名
+
+`std.tools`、`std.transcript`、`std.llm` 使用关键字作为模块名(`tools`、`transcript`、`llm` 是 formal keywords)。Parser 在 `std.` 之后特殊处理这些关键字 token,允许它们作为模块名。
+
+```python
+# helen/core/parser.py
+_KEYWORD_MODULE_NAMES = {
+    TokenType.TOOLS, TokenType.TRANSCRIPT, TokenType.LLM,
+}
+if self._check(TokenType.IDENTIFIER) or self._current().type in _KEYWORD_MODULE_NAMES:
+    module_tok = self._advance()
+```
+
+### 3. 核心代码库迁移
+
+将 `examples/`、`helen/agent/`、`helen/templates/`、`tests/runtime/fixtures/` 下 **39 个核心 .helen 文件**全部迁移至显式 `import std.xxx.*` 风格。
+
+迁移示例:
+```helen
+// Before (隐式全局 stdlib)
+agent ChatBot(user_input: str) {
+    main {
+        let reply = llm act user_input
+        print(reply)
+    }
+}
+
+// After (显式导入)
+import std.core.*
+import std.str.*
+agent ChatBot(user_input: str) {
+    main {
+        let reply = llm act user_input
+        print(reply)
+    }
+}
+```
+
+### 4. 测试与文档
+
+- 新增 `tests/runtime/test_stdlib_modules_extended.py` (20 tests)
+- 更新 `helen/skills/software-development/helen-stdlib/SKILL.md` — 完整模块表
+- 更新 `wiki/runtime/import.md` — 添加标准库模块导入章节
+- 全部 **3614 tests passing**, 无回归
 
 ---
 

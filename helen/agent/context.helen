@@ -9,6 +9,14 @@
 // 注：git / Helen 版本的检测函数已提取到 utils.helen（共享，避免与
 // context_manager.helen 各自重复实现）。
 
+import std.core.*
+import std.crypto.*
+import std.path.*
+import std.str.*
+import std.system.*
+import std.time.*
+import std.tools.*
+import std.transcript.*
 import "utils.helen"
 
 // ── 事实收集 ──

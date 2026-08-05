@@ -11,6 +11,8 @@
 // 避免循环依赖。
 
 // ── 会话统计 ──────────────────────────────────────────────────────
+import std.core.*
+import std.time.*
 shared store SessionStats {
     let start_time: int = 0
     let conversation_turns: int = 0

@@ -4,6 +4,8 @@
 // ── Sample code to analyze ───────────────────────────────────
 
 // A simple calculator with good practices
+import std.core.*
+import std.quality.*
 fn add(a, b) {
     // Add two numbers
     return a + b

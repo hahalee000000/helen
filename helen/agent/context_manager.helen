@@ -12,6 +12,15 @@
 // 所有 v1.19 API 均用 try-catch 包裹，旧版 Helen 静默降级。
 //
 
+import std.context.*
+import std.core.*
+import std.debug.*
+import std.io.*
+import std.path.*
+import std.str.*
+import std.time.*
+import std.tools.*
+import std.transcript.*
 import "output.helen"
 import "session_stats.helen"
 import "utils.helen"

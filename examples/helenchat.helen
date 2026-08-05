@@ -1,6 +1,7 @@
 // HelenChat - 循环对话式 AI 助手
 // 持续回答用户问题，直到收到 exit 命令退出
 
+import std.core.*
 agent HelenChat(user_input: str) {
     description "友好的对话式 AI 助手"
     model "qwen3.7-max"

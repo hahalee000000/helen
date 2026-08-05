@@ -1,6 +1,9 @@
 // 测试: chat_session_actor.helen 的工具函数
 // v1.0: 合并 specialist agents 后的工具函数测试
 
+import std.context.*
+import std.core.*
+import std.str.*
 import "../chat_session_actor.helen"
 import "../commands.helen"
 import "../output.helen"

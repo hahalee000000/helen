@@ -15,6 +15,18 @@
 // 启动时显式 resume 传入的 session_id，继承历史上下文。
 // 后续对话在同一个 session 中累积，无需再次 resume。
 
+import std.context.*
+import std.core.*
+import std.data.*
+import std.debug.*
+import std.file.*
+import std.io.*
+import std.llm.*
+import std.media.*
+import std.path.*
+import std.str.*
+import std.tools.*
+import std.transcript.*
 import "task_manager.helen"
 import "commands.helen"
 import "context_manager.helen"

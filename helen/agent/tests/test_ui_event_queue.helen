@@ -9,6 +9,7 @@
 // - 跨模块 shared let 状态可见性（Helen Issue #35 回归防护）
 //
 
+import std.core.*
 import "../ui_event_queue.helen"
 
 // ── 测试辅助函数 ────────────────────────────────────────────────

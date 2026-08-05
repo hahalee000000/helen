@@ -10,6 +10,8 @@
 // - /help 包含 working-memory 条目
 //
 
+import std.core.*
+import std.str.*
 import "../commands.helen"
 import "../output.helen"
 

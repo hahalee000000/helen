@@ -3,6 +3,11 @@
 // v1.0 架构简化：移除非 actor 路径，只保留 actor 生命周期管理。
 // 所有对话和斜杠命令都通过 ChatSessionActor 处理。
 
+import std.core.*
+import std.data.*
+import std.debug.*
+import std.path.*
+import std.transcript.*
 import "chat_session_actor.helen"
 import "output.helen"
 import "utils.helen"

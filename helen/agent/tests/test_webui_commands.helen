@@ -8,6 +8,8 @@
 // 格式化文本（而非依赖 stdout/UIEventQueue 副作用）。
 //
 
+import std.core.*
+import std.str.*
 import "../commands.helen"
 import "../output.helen"
 import "../context_manager.helen"
