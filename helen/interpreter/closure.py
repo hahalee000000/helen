@@ -5,6 +5,9 @@ Extracted from interpreter.py to improve code organization.
 
 from __future__ import annotations
 
+import weakref
+from typing import Any
+
 from helen.core.ast import LambdaNode
 from helen.interpreter.environment import Environment
 
@@ -15,6 +18,11 @@ class Closure:
     A closure captures the lexical environment where it was defined,
     allowing it to access variables from that environment even when
     called from a different scope.
+
+    v1.32: Closures are now Python callable via __call__, allowing them
+    to be used directly in Python contexts (e.g., as callbacks for hooks).
+    The interpreter reference is stored as a weak reference to avoid
+    circular references.
     """
     def __init__(self, lambda_node: LambdaNode, captured_env: Environment):
         self.lambda_node = lambda_node
@@ -24,9 +32,55 @@ class Closure:
         # here so that _call_closure can inject the closure back into the
         # call environment under that name, enabling self-recursion.
         self._self_name: str | None = None
+        # v1.32: Weak reference to interpreter for Python callable support
+        self._interpreter_ref: weakref.ref | None = None
+
+    def bind(self, interpreter: Any) -> 'Closure':
+        """Bind interpreter reference (weak reference to avoid circular refs).
+
+        Args:
+            interpreter: The interpreter instance to bind
+
+        Returns:
+            self for method chaining
+        """
+        self._interpreter_ref = weakref.ref(interpreter)
+        return self
+
+    def __call__(self, *args) -> Any:
+        """Make Closure callable from Python code.
+
+        This allows closures to be used as callbacks in Python contexts,
+        such as hook functions (on_compression, on_chunk, etc.).
+
+        Args:
+            *args: Arguments to pass to the closure
+
+        Returns:
+            The result of executing the closure
+
+        Raises:
+            RuntimeError: If the closure is not bound to an interpreter,
+                         or if the interpreter has been garbage collected
+        """
+        if self._interpreter_ref is None:
+            raise RuntimeError(
+                "Closure not bound to interpreter. "
+                "Call bind(interpreter) before invoking."
+            )
+
+        interpreter = self._interpreter_ref()
+        if interpreter is None:
+            raise RuntimeError(
+                "Interpreter has been garbage collected. "
+                "Cannot invoke closure."
+            )
+
+        return interpreter._call_closure(self, list(args))
 
     def __repr__(self):
-        return f"<closure with {len(self.lambda_node.params)} params>"
+        bound = "bound" if self._interpreter_ref is not None else "unbound"
+        return f"<closure {bound} with {len(self.lambda_node.params)} params>"
 
 
 def _compute_free_variables(lambda_node: LambdaNode) -> set[str]:

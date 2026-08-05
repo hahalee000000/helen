@@ -548,6 +548,18 @@ agent StreamingWriter(topic: str) {
 }
 ```
 
+**v1.32**: Closures are first-class callable objects, so you can use anonymous closures directly:
+
+```helen
+agent StreamingWriter(topic: str) {
+    main {
+        llm act "Write article about " + topic
+            on_chunk fn(c) { stream_print(c) }
+            on_complete fn() { print("\n\n✅ Done") }
+    }
+}
+```
+
 #### Streaming Interrupt (v1.18)
 
 `on_chunk` returning `false` terminates streaming early. `spawn` + `Channel.cancel()` interrupts background agent streaming:

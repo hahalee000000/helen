@@ -4,6 +4,53 @@
 
 ---
 
+## [2026-08-05] feat | 闭包成为一等可调用对象（v1.32）
+
+**操作**: 实现闭包的 Python callable 支持，使用弱引用避免循环引用  
+**状态**: ✅ 完成
+
+### 变更内容
+
+**核心实现**:
+1. **修改 `helen/interpreter/closure.py`** — 添加 `bind()` 方法和 `__call__()` 支持
+   - 闭包现在可以存储解释器的弱引用
+   - 实现 `__call__()` 使闭包在 Python 层面可调用
+   - 未绑定的闭包调用会抛出清晰的错误信息
+
+2. **修改 `helen/interpreter/interpreter.py`** — 自动绑定和简化桥接
+   - `visit_lambda()`: 创建闭包时自动绑定解释器
+   - `visit_variable()`: 从环境获取闭包时重新绑定（如需要）
+   - 移除 stdlib 桥接代码中的闭包包装逻辑（闭包现在是原生 callable）
+
+**测试**:
+3. **新增 `tests/interpreter/test_closure_callable.py`** — 7 个单元测试
+   - 测试闭包的绑定、调用、弱引用、repr 等
+4. **新增 `tests/interpreter/test_closure_integration.py`** — 5 个集成测试
+   - 测试闭包在 map/filter/reduce 中的使用
+   - 测试闭包捕获环境变量
+   - 测试递归闭包
+
+**文档更新**:
+5. **更新 `wiki/tutorial/03-functions.md`** — 新增"Closures as First-Class Callable Objects (v1.32)"章节
+   - 闭包在 hooks 中的使用示例
+   - 闭包在 higher-order functions 中的使用
+   - 弱引用实现细节说明
+6. **更新 `helen/skills/software-development/helen-syntax/SKILL.md`** — 添加闭包作为一等公民的示例
+7. **更新 `helen/skills/software-development/helen-agent-patterns/SKILL.md`** — 流式 agent 中使用匿名闭包
+8. **同步 `.claude/skills/`** — 保持与 `helen/skills/` 一致
+
+### 测试结果
+- 全部 3502 个测试通过
+- 新增 12 个测试（7 单元 + 5 集成）
+- 无破坏性变更
+
+### 设计决策
+- **弱引用**: 使用 `weakref` 避免闭包和解释器之间的循环引用
+- **自动绑定**: 在创建和获取闭包时自动绑定，对调用方透明
+- **向后兼容**: 所有现有代码继续工作，新增功能可选使用
+
+---
+
 ## [2026-07-29] docs | Wiki 文档大规模补齐（P0/P1/P2/P3）
 
 **操作**: Wiki 文档全面更新，覆盖 v1.29.17 之前的所有文档缺口  

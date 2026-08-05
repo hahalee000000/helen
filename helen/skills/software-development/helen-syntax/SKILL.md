@@ -734,10 +734,17 @@ main {
     let counter = make_counter()
     print(counter())  // 1
     print(counter())  // 2
+
+    // Closures as first-class callable objects (v1.32+)
+    let nums = [1, 2, 3]
+    let doubled = map(nums, fn(x) { return x * 2 })  // [2, 4, 6]
+    
+    // Anonymous closures in hooks
+    llm act "test" on_chunk fn(c) { print(c) }
 }
 ```
 
-> Closures capture a deep copy of reference-type variables (snapshot semantics, immune to subsequent modifications).
+> Closures capture a deep copy of reference-type variables (snapshot semantics, immune to subsequent modifications). Closures are first-class callable objects that can be passed as callbacks to hooks and higher-order functions. They use weak references to avoid circular references.
 
 ### Protocols
 ```helen

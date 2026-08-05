@@ -270,6 +270,79 @@ main {
 - Anonymous functions can access all outer variables at the point of definition
 - Closures can be used to create factory functions, callback functions, and other patterns
 
+### Closures as First-Class Callable Objects (v1.32)
+
+Starting from v1.32, closures are **first-class callable objects** that can be used anywhere a callable is expected, including Python callbacks and hooks.
+
+#### Closures in Hooks
+
+You can now pass anonymous closures directly to hooks like `on_chunk` and `on_complete`:
+
+```helen
+main {
+    // Anonymous closures work as callbacks
+    let response = llm act "Count from 1 to 5"
+        on_chunk fn(chunk) {
+            print("[stream]", chunk)
+        }
+        on_complete fn() {
+            print("[complete] Done!")
+        }
+    
+    print("Response:", response)
+}
+```
+
+#### Closures in Higher-Order Functions
+
+Closures work seamlessly with stdlib higher-order functions:
+
+```helen
+main {
+    let nums = [1, 2, 3, 4, 5]
+    
+    // Pass closures directly
+    let doubled = map(nums, fn(x) { return x * 2 })
+    let evens = filter(nums, fn(x) { return x % 2 == 0 })
+    let total = reduce(nums, fn(acc, x) { return acc + x }, 0)
+    
+    print(doubled)  // [2, 4, 6, 8, 10]
+    print(evens)    // [2, 4]
+    print(total)    // 15
+}
+```
+
+#### Implementation Details
+
+Closures use **weak references** to the interpreter to avoid circular references:
+
+- Each closure maintains a weak reference to its interpreter
+- This allows closures to be safely stored and passed around without memory leaks
+- When the interpreter is garbage collected, the closure's reference becomes invalid
+- Attempting to call an unbound closure raises a clear error
+
+```helen
+main {
+    // Closure captures environment
+    let multiplier = 10
+    let multiply = fn(x) { return x * multiplier }
+    
+    // Can be stored in variables
+    let fn_ref = multiply
+    
+    // Can be passed as arguments
+    fn apply(f, val) {
+        return f(val)
+    }
+    print(apply(fn_ref, 5))  // 50
+    
+    // Works with map/filter/reduce
+    let nums = [1, 2, 3]
+    let result = map(nums, fn_ref)
+    print(result)  // [10, 20, 30]
+}
+```
+
 ## Function Aliases (v1.10)
 
 The `alias` statement can create additional names for existing functions (stdlib or user-defined).

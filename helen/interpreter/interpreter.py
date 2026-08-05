@@ -424,7 +424,12 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         3. User-defined agents (agent declarations) — returns callable wrapper
         """
         try:
-            return self.environment.lookup(node.name)
+            value = self.environment.lookup(node.name)
+            # v1.32: Rebind closures to current interpreter when retrieved
+            # This ensures closures stored in variables are callable from Python
+            if isinstance(value, Closure) and value._interpreter_ref is None:
+                value.bind(self)
+            return value
         except NameError:
             # Fallback: check if it's a user-defined function name
             if node.name in self._functions:
@@ -691,19 +696,9 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
 
             case _ if callable(callee):
                 # stdlib builtin function (HLD M15)
-                # Wrap Closure arguments as Python callables for stdlib functions
-                wrapped_args = []
-                for arg in args:
-                    match arg:
-                        case Closure() as closure_obj:
-                            # Create a Python wrapper that calls the closure
-                            def wrapper(*py_args, _c=closure_obj):
-                                return self._call_closure(_c, list(py_args))
-                            wrapped_args.append(wrapper)
-                        case _:
-                            wrapped_args.append(arg)
+                # v1.32: Closure is now Python callable, no need to wrap
                 try:
-                    return callee(*wrapped_args)
+                    return callee(*args)
                 except HelenRuntimeError:
                     raise  # Already a Helen exception, propagate as-is
                 except Exception as e:
@@ -1100,7 +1095,10 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
                 # (will be caught at call time if actually used)
                 pass
 
-        return Closure(lambda_node=node, captured_env=captured_env)
+        # v1.32: Automatically bind interpreter to closure for Python callable support
+        closure = Closure(lambda_node=node, captured_env=captured_env)
+        closure.bind(self)
+        return closure
 
     def visit_protocol_decl(self, node: ProtocolDeclNode) -> object:
         """Register a protocol declaration (do not execute).
