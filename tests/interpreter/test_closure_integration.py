@@ -9,6 +9,9 @@ from helen.core.lexer import Scanner
 from helen.core.parser import Parser
 
 
+def _inject(source):
+    """v1.39: inject stdlib imports (no longer globally available)."""
+    return "import std.core.*\nimport std.str.*\nimport std.list.*\nimport std.dict.*\nimport std.math.*\nimport std.debug.*\n" + source
 def test_anonymous_closure_as_callback():
     """Anonymous closures should work as callbacks in higher-order functions."""
     source = """
@@ -22,6 +25,7 @@ def test_anonymous_closure_as_callback():
     }
     """
 
+    source = _inject(source)
     scanner = Scanner(source=source, file='<test>')
     tokens = scanner.scan_all()
     parser = Parser(tokens)
@@ -51,6 +55,7 @@ def test_closure_in_map_filter_reduce():
     }
     """
 
+    source = _inject(source)
     scanner = Scanner(source=source, file="<test>")
     tokens = scanner.scan_all()
     
@@ -76,6 +81,7 @@ def test_closure_captures_environment():
     }
     """
 
+    source = _inject(source)
     scanner = Scanner(source=source, file="<test>")
     tokens = scanner.scan_all()
     
@@ -102,6 +108,7 @@ def test_closure_recursive():
     }
     """
 
+    source = _inject(source)
     scanner = Scanner(source=source, file="<test>")
     tokens = scanner.scan_all()
     
@@ -129,6 +136,7 @@ def test_named_function_as_callback():
     }
     """
 
+    source = _inject(source)
     scanner = Scanner(source=source, file="<test>")
     tokens = scanner.scan_all()
     

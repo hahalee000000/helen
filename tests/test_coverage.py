@@ -10,6 +10,11 @@ from helen.runtime.coverage import CoverageTracker, CoverageCount
 from helen.core.source import SourceSpan
 
 
+def _inject(source):
+    """v1.39: inject stdlib imports (no longer globally available)."""
+    return "import std.core.*\nimport std.str.*\nimport std.list.*\nimport std.dict.*\nimport std.math.*\nimport std.debug.*\nimport std.test.*\n" + source
+
+
 class TestCoverageCount:
     """Tests for CoverageCount dataclass."""
 
@@ -258,6 +263,7 @@ fn test_add() {
 test_add()
 '''
         errors = ErrorReporter()
+        source = _inject(source)
         scanner = Scanner(source=source, file="test.helen")
         tokens = scanner.scan_all()
         parser = Parser(tokens, errors=errors)
@@ -304,6 +310,7 @@ test_positive()
 test_negative()
 '''
         errors = ErrorReporter()
+        source = _inject(source)
         scanner = Scanner(source=source, file="test.helen")
         tokens = scanner.scan_all()
         parser = Parser(tokens, errors=errors)
@@ -329,6 +336,7 @@ test_negative()
 
         source = "fn foo() { return 1 }\nfoo()"
         errors = ErrorReporter()
+        source = _inject(source)
         scanner = Scanner(source=source, file="test.helen")
         tokens = scanner.scan_all()
         parser = Parser(tokens, errors=errors)

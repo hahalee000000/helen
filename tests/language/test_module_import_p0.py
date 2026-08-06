@@ -42,6 +42,12 @@ class TestModuleImport:
         # Create math module
         math_file = temp_dir / "math_utils.helen"
         math_file.write_text("""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 fn add(a: int, b: int): int {
     return a + b
 }
@@ -54,6 +60,12 @@ fn multiply(a: int, b: int): int {
         # Create main file that imports
         main_file = temp_dir / "main.helen"
         main_file.write_text(f"""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 import "math_utils.helen"
 
 main {{
@@ -73,6 +85,12 @@ main {{
         # Create math module
         math_file = temp_dir / "math_utils.helen"
         math_file.write_text("""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 fn add(a: int, b: int): int {
     return a + b
 }
@@ -81,6 +99,12 @@ fn add(a: int, b: int): int {
         # Create main file with alias
         main_file = temp_dir / "main.helen"
         main_file.write_text(f"""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 import "math_utils.helen" as math
 
 main {{
@@ -100,6 +124,12 @@ main {{
         # Create math module
         math_file = temp_dir / "math.helen"
         math_file.write_text("""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 fn add_nums(a: int, b: int): int {
     return a + b
 }
@@ -108,6 +138,12 @@ fn add_nums(a: int, b: int): int {
         # Create string module
         string_file = temp_dir / "string_utils.helen"
         string_file.write_text("""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 fn greet(name: str): str {
     return "Hello, " + name
 }
@@ -116,6 +152,12 @@ fn greet(name: str): str {
         # Create main file
         main_file = temp_dir / "main.helen"
         main_file.write_text(f"""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 import "math.helen"
 import "string_utils.helen"
 
@@ -138,6 +180,12 @@ main {{
         # Create config module
         config_file = temp_dir / "config.helen"
         config_file.write_text("""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 const MAX_SIZE = 100
 const DEFAULT_NAME = "World"
 """)
@@ -145,6 +193,12 @@ const DEFAULT_NAME = "World"
         # Create main file
         main_file = temp_dir / "main.helen"
         main_file.write_text(f"""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 import "config.helen"
 
 main {{
@@ -163,6 +217,12 @@ main {{
         """Should report error for nonexistent import file."""
         main_file = temp_dir / "main.helen"
         main_file.write_text("""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 import "nonexistent.helen"
 
 main {
@@ -182,6 +242,12 @@ main {
         # Create module
         module_file = temp_dir / "utils.helen"
         module_file.write_text("""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 fn compute(a: int, b: int, c: int): int {
     return a + b * c
 }
@@ -190,6 +256,12 @@ fn compute(a: int, b: int, c: int): int {
         # Create main file
         main_file = temp_dir / "main.helen"
         main_file.write_text(f"""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 import "utils.helen"
 
 main {{
@@ -208,6 +280,12 @@ main {{
         # Create agent module
         agent_file = temp_dir / "agents.helen"
         agent_file.write_text("""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 agent Greeter(name: str) {
     description "A simple greeter agent"
     model "test"
@@ -227,6 +305,12 @@ agent Greeter(name: str) {
         # Create main file
         main_file = temp_dir / "main.helen"
         main_file.write_text(f"""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 import "agents.helen"
 
 main {{
@@ -249,6 +333,12 @@ class TestImportEdgeCases:
         # Create module
         module_file = temp_dir / "utils.helen"
         module_file.write_text("""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 fn add(a: int, b: int): int {
     return a + b
 }
@@ -257,6 +347,12 @@ fn add(a: int, b: int): int {
         # Create main file that imports twice
         main_file = temp_dir / "main.helen"
         main_file.write_text(f"""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 import "utils.helen"
 import "utils.helen"
 
@@ -277,6 +373,12 @@ main {{
         # Create base module
         base_file = temp_dir / "base.helen"
         base_file.write_text("""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 fn double(x: int): int {
     return x * 2
 }
@@ -285,6 +387,12 @@ fn double(x: int): int {
         # Create wrapper module
         wrapper_file = temp_dir / "wrapper.helen"
         wrapper_file.write_text(f"""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 import "base.helen"
 
 fn quadruple(x: int): int {{
@@ -295,6 +403,12 @@ fn quadruple(x: int): int {{
         # Create main file
         main_file = temp_dir / "main.helen"
         main_file.write_text(f"""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 import "wrapper.helen"
 
 main {{

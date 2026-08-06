@@ -13,6 +13,16 @@ from helen.interpreter.interpreter import Interpreter
 
 def _run(code: str) -> list:
     """Run Helen code and return captured prints."""
+    # v1.39: inject stdlib imports (no longer globally available)
+    _imports = """import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
+"""
+    code = _imports + code
+
     errors = ErrorReporter()
     scanner = Scanner(source=code, file="test.helen")
     tokens = scanner.scan_all()

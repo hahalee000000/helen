@@ -22,6 +22,11 @@ from helen.interpreter.interpreter import Interpreter
 from helen.interpreter.environment import Environment
 
 
+def _inject(source):
+    """v1.39: inject stdlib imports (no longer globally available)."""
+    # Only inject std.core (print, len, etc.) - avoid std.math which has `sum`
+    # that conflicts with common loop variable names in benchmarks
+    return "import std.core.*\n" + source
 # ============================================================================
 # Lexer Benchmarks
 # ============================================================================
@@ -98,6 +103,7 @@ class TestParserPerformance:
     def test_simple_program(self):
         """测试简单程序解析速度"""
         source = "let x = 1; let y = 2; let z = x + y;" * 200
+        source = _inject(source)
         tokens = Scanner(source).scan_all()
         
         start = time.perf_counter()
@@ -113,6 +119,7 @@ class TestParserPerformance:
     def test_function_declarations(self):
         """测试函数声明解析"""
         source = "fn add(a, b) { return a + b; }" * 100
+        source = _inject(source)
         tokens = Scanner(source).scan_all()
         
         start = time.perf_counter()
@@ -131,6 +138,7 @@ class TestParserPerformance:
         for i in range(50):
             expr = f"({expr} + {i})"
         source = f"let x = {expr};"
+        source = _inject(source)
         tokens = Scanner(source).scan_all()
         
         start = time.perf_counter()
@@ -160,6 +168,7 @@ class TestInterpreterPerformance:
             i = i + 1;
         }
         """
+        source = _inject(source)
         tokens = Scanner(source).scan_all()
         ast = Parser(tokens).parse()
         interpreter = Interpreter()
@@ -188,6 +197,7 @@ class TestInterpreterPerformance:
             i = i + 1;
         }
         """
+        source = _inject(source)
         tokens = Scanner(source).scan_all()
         ast = Parser(tokens).parse()
         interpreter = Interpreter()
@@ -208,6 +218,7 @@ class TestInterpreterPerformance:
         let z = 3;
         let result = x + y + z;
         """
+        source = _inject(source)
         tokens = Scanner(source).scan_all()
         ast = Parser(tokens).parse()
         interpreter = Interpreter()
@@ -310,6 +321,7 @@ class TestMemoryUsage:
         tracemalloc.start()
         
         source = "let x = 1; let y = 2;" * 500
+        source = _inject(source)
         tokens = Scanner(source).scan_all()
         parser = Parser(tokens)
         ast = parser.parse()
@@ -336,6 +348,7 @@ class TestMemoryUsage:
             i = i + 1;
         }
         """
+        source = _inject(source)
         tokens = Scanner(source).scan_all()
         ast = Parser(tokens).parse()
         interpreter = Interpreter()
@@ -376,6 +389,7 @@ class TestIntegrationPerformance:
         start = time.perf_counter()
         
         # Lexing
+        source = _inject(source)
         tokens = Scanner(source).scan_all()
         lex_time = time.perf_counter() - start
         
@@ -410,6 +424,7 @@ class TestIntegrationPerformance:
         """
         
         start = time.perf_counter()
+        source = _inject(source)
         tokens = Scanner(source).scan_all()
         ast = Parser(tokens).parse()
         interpreter = Interpreter()
@@ -451,6 +466,7 @@ class TestPerformanceRegression:
     def test_parser_speed_baseline(self):
         """解析器速度基线"""
         source = "let x = 1; let y = 2;" * 300
+        source = _inject(source)
         tokens = Scanner(source).scan_all()
 
         # 预热

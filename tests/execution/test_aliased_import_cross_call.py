@@ -33,6 +33,11 @@ from helen.runtime.import_resolver import ImportResolver
 def _run_file(main_source: str, module_files: dict[str, str],
               main_filename: str = "main.helen") -> tuple:
     """Run a Helen program with helper modules."""
+    # v1.39: inject stdlib imports (no longer globally available)
+    _imports = "import std.core.*\nimport std.str.*\nimport std.list.*\nimport std.dict.*\nimport std.math.*\nimport std.debug.*\n"
+    main_source = _imports + main_source
+    module_files = {k: _imports + v for k, v in module_files.items()}
+
     tmpdir = tempfile.mkdtemp()
     try:
         for fname, source in module_files.items():

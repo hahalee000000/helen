@@ -18,6 +18,17 @@ from helen.stdlib import stdlib
 
 def _run(source: str, filename: str = "<test>") -> object:
     """Run a Helen program and return the result of main block."""
+    # v1.39: inject stdlib imports (no longer globally available)
+    _imports = """import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.data.*
+import std.debug.*
+"""
+    source = _imports + source
+
     errors = ErrorReporter()
     scanner = Scanner(source=source, file=filename)
     tokens = scanner.scan_all()

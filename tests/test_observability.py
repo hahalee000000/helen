@@ -30,6 +30,11 @@ from helen.runtime.observability import (
 )
 
 
+def _inject(source):
+    """v1.39: inject stdlib imports (no longer globally available)."""
+    return "import std.core.*\nimport std.str.*\nimport std.list.*\nimport std.dict.*\nimport std.math.*\nimport std.debug.*\n" + source
+
+
 # ---------------------------------------------------------------------------
 # P0: Observability Module Tests
 # ---------------------------------------------------------------------------
@@ -238,6 +243,7 @@ class TestAssertStatement:
 
     def _parse_and_run(self, source: str):
         """Helper to parse and run Helen source code."""
+        source = _inject(source)
         errors = ErrorReporter()
         scanner = Scanner(source, "test.helen")
         tokens = scanner.scan_all()
@@ -322,6 +328,7 @@ class TestDebugBuiltin:
 
     def _parse_and_run(self, source: str):
         """Helper to parse and run Helen source code."""
+        source = _inject(source)
         errors = ErrorReporter()
         scanner = Scanner(source, "test.helen")
         tokens = scanner.scan_all()

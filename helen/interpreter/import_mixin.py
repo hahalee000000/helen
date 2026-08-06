@@ -350,6 +350,11 @@ class ImportMixin:
             # Import all functions directly into current scope
             for name, func in exports.items():
                 self.environment.define(name, func, is_const=True)
+            # v1.39: Also import aliases (e.g. Chinese 长度 for len)
+            from helen.stdlib import stdlib as _stdlib  # noqa: PLC0415
+            for alias, canonical in _stdlib.aliases.items():
+                if canonical in exports:
+                    self.environment.define(alias, exports[canonical], is_const=True)
         elif node.imported_names:
             # Selective import: import std.str.{len, upper}
             # Import only specified functions
@@ -366,5 +371,10 @@ class ImportMixin:
             # Default: import all (same as wildcard)
             for name, func in exports.items():
                 self.environment.define(name, func, is_const=True)
+            # v1.39: Also import aliases
+            from helen.stdlib import stdlib as _stdlib  # noqa: PLC0415
+            for alias, canonical in _stdlib.aliases.items():
+                if canonical in exports:
+                    self.environment.define(alias, exports[canonical], is_const=True)
 
         return None

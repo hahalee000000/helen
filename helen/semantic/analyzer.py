@@ -136,12 +136,14 @@ class SemanticAnalyzer(Visitor[None]):
         self._register_stdlib()
 
     def _register_stdlib(self) -> None:
-        """Inject stdlib function names into the global symbol table."""
-        from helen.stdlib import stdlib  # noqa: PLC0415
+        """Register pre-defined const variables (v1.39).
+
+        stdlib function names are no longer auto-registered into the global
+        symbol table. Users must explicitly `import std.xxx.*` to make stdlib
+        functions visible to semantic analysis. This method only registers
+        pre-defined const variables like `argv`.
+        """
         from helen.semantic.symbols import Symbol  # noqa: PLC0415
-        for name in stdlib.names:
-            sym = Symbol(name, kind="builtin", is_const=True)
-            self.symbols.define(name, sym)
         # Pre-defined const variable: argv (CLI arguments after the filename)
         argv_sym = Symbol("argv", kind="const", is_const=True)
         self.symbols.define("argv", argv_sym)
@@ -181,14 +183,26 @@ class SemanticAnalyzer(Visitor[None]):
         # Fields and methods live under `Store.name`, not in global resolution.
         if not self._in_store_scope():
             existing = self.symbols.resolve(name)
-            if existing is not None and existing.kind == "builtin":
-                self.errors.error(
-                    ErrorCode.BUILTIN_SHADOWED,
-                    f"cannot shadow builtin '{name}'; choose a different name "
-                    f"(hint: try '{name}s', 'my_{name}', or another non-builtin name)",
-                    span,
-                )
-                return existing
+            if existing is not None:
+                # Case 1: Existing is builtin, new is not builtin → shadowing
+                if existing.kind == "builtin" and symbol.kind != "builtin":
+                    self.errors.error(
+                        ErrorCode.BUILTIN_SHADOWED,
+                        f"cannot shadow builtin '{name}'; choose a different name "
+                        f"(hint: try '{name}s', 'my_{name}', or another non-builtin name)",
+                        span,
+                    )
+                    return existing
+                # Case 2: Existing is not builtin, new is builtin → also shadowing (v1.39)
+                # This handles the case where a function/variable is declared before an import
+                elif existing.kind != "builtin" and symbol.kind == "builtin":
+                    self.errors.error(
+                        ErrorCode.BUILTIN_SHADOWED,
+                        f"cannot shadow builtin '{name}'; choose a different name "
+                        f"(hint: try '{name}s', 'my_{name}', or another non-builtin name)",
+                        span,
+                    )
+                    return existing
 
         return self.symbols.define(name, symbol)
 
@@ -1601,11 +1615,22 @@ class SemanticAnalyzer(Visitor[None]):
             self._define_user_symbol(node.namespace, sym, node.span)
         elif node.imported_names and "*" in node.imported_names:
             # Wildcard import: import std.str.*
-            # All names are already available as builtins, nothing to do
-            pass
+            # Register all exported names in the symbol table (v1.39: no longer global)
+            # Use kind="builtin" to preserve v1.23 builtin shadowing protection
+            from helen.semantic.symbols import Symbol
+            for name in exports.keys():
+                sym = Symbol(name, kind="builtin", is_const=True)
+                self._define_user_symbol(name, sym, node.span)
+            # v1.39: Also register aliases (e.g. Chinese 长度 for len)
+            from helen.stdlib import stdlib as _stdlib  # noqa: PLC0415
+            for alias, canonical in _stdlib.aliases.items():
+                if canonical in exports:
+                    sym = Symbol(alias, kind="builtin", is_const=True)
+                    self._define_user_symbol(alias, sym, node.span)
         elif node.imported_names:
             # Selective import: import std.str.{len, upper}
-            # Validate that all requested names exist
+            # Validate that all requested names exist and register them
+            from helen.semantic.symbols import Symbol
             for name in node.imported_names:
                 if name not in exports:
                     self.errors.error(
@@ -1615,7 +1640,10 @@ class SemanticAnalyzer(Visitor[None]):
                         node.span,
                     )
                     return
-            # Names are already available as builtins, nothing to define
+                # Register the imported name in the symbol table (v1.39: no longer global)
+                # Use kind="builtin" to preserve v1.23 builtin shadowing protection
+                sym = Symbol(name, kind="builtin", is_const=True)
+                self._define_user_symbol(name, sym, node.span)
 
     # ------------------------------------------------------------------
     # Alias statement

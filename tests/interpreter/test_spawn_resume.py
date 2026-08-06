@@ -49,6 +49,8 @@ def _parse_spawn(source: str) -> SpawnExprNode | None:
 
 def run_helen(source: str) -> Tuple[List[str], List[str], Any]:
     """Run Helen source, returning (stdout_lines, errors, result)."""
+    # v1.39: inject stdlib imports (no longer globally available)
+    source = "import std.core.*\nimport std.str.*\nimport std.list.*\nimport std.dict.*\nimport std.math.*\nimport std.debug.*\n" + source
     import io
     import sys
 
@@ -83,6 +85,9 @@ def run_helen_with_session(source: str, session_id: str | None = None,
     """
     import io
     import sys
+
+    # v1.39: inject stdlib imports (no longer globally available)
+    source = "import std.core.*\nimport std.str.*\nimport std.list.*\nimport std.dict.*\nimport std.math.*\nimport std.debug.*\n" + source
 
     errors = ErrorReporter()
     tokens = Scanner(source=source, file='<test>').scan_all()

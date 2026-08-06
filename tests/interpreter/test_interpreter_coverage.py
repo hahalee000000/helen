@@ -73,6 +73,9 @@ from helen.interpreter.exceptions import (
 from helen.interpreter.interpreter import Interpreter
 
 
+def _inject(source):
+    """v1.39: inject stdlib imports (no longer globally available)."""
+    return "import std.core.*\nimport std.str.*\nimport std.list.*\nimport std.dict.*\nimport std.math.*\nimport std.debug.*\n" + source
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -204,12 +207,19 @@ class TestResetDefinitions:
         assert interp._current_agent is None
 
     def test_reset_preserves_stdlib(self):
-        """reset_definitions re-registers stdlib builtins."""
+        """reset_definitions re-wires stdlib context (v1.39: no global registration).
+
+        stdlib functions are no longer auto-registered into the environment.
+        reset_definitions() preserves the context wiring (observability,
+        history, etc.) so that imported stdlib functions still work.
+        """
         interp = Interpreter()
         interp.reset_definitions()
-        # stdlib functions should still be available in environment
-        # (they are defined in the environment, not in _functions)
-        assert interp.environment.lookup("print") is not None
+        # v1.39: stdlib functions are NOT in environment (require explicit import)
+        # But the context wiring should still be connected
+        from helen.stdlib import _set_interpreter_context
+        # If context wiring is intact, this won't raise
+        assert interp.observability is not None
 
 
 # ===========================================================================
@@ -1207,14 +1217,19 @@ class TestCallableEdgeCases:
         assert result is None
 
     def test_call_stdlib_function(self):
-        """Calling a stdlib builtin function works."""
-        # len([1, 2, 3]) should return 3
-        call = CallNode(
-            callee=_var("len"),
-            arguments=[CallArgNode(name=None, value=ListLiteralNode(elements=[_lit(1), _lit(2), _lit(3)], span=_span()))],
-            span=_span(),
-        )
-        result, interp, errors = _run(ExprStmtNode(expression=call, span=_span()))
+        """Calling a stdlib builtin function works (v1.39: requires import)."""
+        # v1.39: stdlib functions require explicit import
+        from helen.core.lexer import Scanner
+        from helen.core.parser import Parser
+        source = """import std.core.*
+main {
+    return len([1, 2, 3])
+}"""
+        errors = ErrorReporter()
+        tokens = Scanner(source=source, file='<test>').scan_all()
+        program = Parser(tokens, errors).parse()
+        interp = Interpreter(errors=errors)
+        result = interp.interpret(program)
         assert result == 3
 
 

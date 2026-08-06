@@ -303,15 +303,17 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
             self.environment = old_env
 
     def _register_stdlib(self) -> None:
-        """Inject all stdlib functions into the global environment.
-        
-        Loads the Helen stdlib module and registers all builtin functions
-        (e.g., print, len, type, debug_*) into the global environment.
-        Also connects the observability manager to stdlib debug functions.
+        """Wire interpreter context to stdlib functions (v1.39).
+
+        stdlib functions are no longer auto-registered into the global
+        environment. Users must explicitly `import std.xxx.*` to access
+        them. This method only connects the interpreter's internal state
+        (observability, history, agent_context, etc.) to the stdlib
+        module, so that imported stdlib functions can access these
+        contexts when called.
 
         Called during initialization and after reset_definitions().
         """
-        from helen.stdlib import stdlib  # noqa: PLC0415
         from helen.stdlib import _set_interpreter_observability  # noqa: PLC0415
         from helen.stdlib import _set_interpreter_context  # noqa: PLC0415
         from helen.stdlib.transcript import _set_transcript_context  # noqa: PLC0415
@@ -325,10 +327,6 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         _set_transcript_context(self._agent_context)
         # Phase 5: Connect interpreter ref to LLM control stdlib functions
         _set_interpreter_ref(self)
-        for name in stdlib.names:
-            builtin = stdlib.lookup(name)
-            if builtin is not None:
-                self.environment.define(name, builtin.fn)
 
     # ------------------------------------------------------------------
     # REPL management helpers
@@ -2004,6 +2002,9 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
                     # Only write back if the variable exists in the caller's scope chain
                     try:
                         old_env.lookup(_name)
+                        # v1.39: Also skip if const in caller scope (imported stdlib)
+                        if old_env.is_const(_name):
+                            continue
                         # Variable exists in caller — write back
                         if _is_mutable_type(_value):
                             _value = copy.deepcopy(_value)

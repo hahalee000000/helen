@@ -11,6 +11,9 @@ from helen.interpreter.interpreter import Interpreter
 from helen.semantic.analyzer import SemanticAnalyzer
 
 
+def _inject(source):
+    """v1.39: inject stdlib imports (no longer globally available)."""
+    return "import std.core.*\nimport std.str.*\nimport std.list.*\nimport std.dict.*\nimport std.math.*\nimport std.debug.*\n" + source
 class TestHelenPythonFFI:
     """Test Python FFI integration with Helen interpreter."""
     
@@ -26,6 +29,7 @@ class TestHelenPythonFFI:
         '''
         
         errors = ErrorReporter()
+        source = _inject(source)
         scanner = Scanner(source=source, file="<test>")
         tokens = scanner.scan_all()
         parser = Parser(tokens, errors=errors)
@@ -57,6 +61,7 @@ class TestHelenPythonFFI:
         '''
         
         errors = ErrorReporter()
+        source = _inject(source)
         scanner = Scanner(source=source, file="<test>")
         tokens = scanner.scan_all()
         parser = Parser(tokens, errors=errors)
@@ -83,6 +88,7 @@ class TestHelenPythonFFI:
         '''
         
         errors = ErrorReporter()
+        source = _inject(source)
         scanner = Scanner(source=source, file="<test>")
         tokens = scanner.scan_all()
         parser = Parser(tokens, errors=errors)
@@ -108,6 +114,7 @@ class TestHelenPythonFFI:
         '''
         
         errors = ErrorReporter()
+        source = _inject(source)
         scanner = Scanner(source=source, file="<test>")
         tokens = scanner.scan_all()
         parser = Parser(tokens, errors=errors)
@@ -133,6 +140,7 @@ class TestHelenPythonFFI:
         '''
         
         errors = ErrorReporter()
+        source = _inject(source)
         scanner = Scanner(source=source, file="<test>")
         tokens = scanner.scan_all()
         parser = Parser(tokens, errors=errors)

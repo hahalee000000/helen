@@ -40,6 +40,12 @@ class TestRegexParameterOrder:
         """regex_search should be regex_search(string, pattern)."""
         test_file = temp_dir / "test.helen"
         test_file.write_text("""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 main {
     let text = "hello world"
     let result = regex_search(text, "world")
@@ -58,6 +64,12 @@ main {
         """regex_match should be regex_match(string, pattern)."""
         test_file = temp_dir / "test.helen"
         test_file.write_text("""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 main {
     let text = "hello world"
     let result = regex_match(text, "hello")
@@ -76,6 +88,12 @@ main {
         """regex_replace should be regex_replace(pattern, string, replacement)."""
         test_file = temp_dir / "test.helen"
         test_file.write_text("""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 main {
     let text = "hello world"
     let result = regex_replace("world", text, "universe")
@@ -94,6 +112,12 @@ class TestRegexTestFunction:
         """regex_test should return true when pattern matches."""
         test_file = temp_dir / "test.helen"
         test_file.write_text("""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 main {
     let text = "hello world"
     if regex_test("world", text) {
@@ -111,6 +135,12 @@ main {
         """regex_test should return false when pattern doesn't match."""
         test_file = temp_dir / "test.helen"
         test_file.write_text("""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 main {
     let text = "hello world"
     if regex_test("xyz", text) {
@@ -128,6 +158,12 @@ main {
         """regex_test should work well in loops and conditions."""
         test_file = temp_dir / "test.helen"
         test_file.write_text("""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 main {
     let words = ["apple", "banana", "cherry", "date"]
     let total = 0
@@ -151,6 +187,12 @@ class TestRegexSplitFindall:
         """regex_split should be regex_split(pattern, string)."""
         test_file = temp_dir / "test.helen"
         test_file.write_text("""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 main {
     let text = "a,b,c,d"
     let parts = regex_split(",", text)
@@ -170,6 +212,12 @@ main {
         """regex_findall should be regex_findall(pattern, string)."""
         test_file = temp_dir / "test.helen"
         test_file.write_text("""
+import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
 main {
     let text = "cat bat rat hat"
     let matches = regex_findall("[a-z]at", text)

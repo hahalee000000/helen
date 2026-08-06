@@ -17,6 +17,16 @@ from helen.interpreter.exceptions import (
 
 def _run(code: str):
     """Helper to run Helen code and return (result, errors)."""
+    # v1.39: inject stdlib imports (no longer globally available)
+    _imports = """import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
+"""
+    code = _imports + code
+
     scanner = Scanner(code)
     tokens = scanner.scan_all()
     

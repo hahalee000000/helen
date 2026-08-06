@@ -24,6 +24,8 @@ from helen.runtime.llm_runtime import MockLLMRuntime
 
 def _run(source: str) -> Interpreter:
     """Parse, analyze, and interpret a Helen program."""
+    # v1.39: inject stdlib imports (no longer globally available)
+    source = "import std.core.*\nimport std.str.*\nimport std.list.*\nimport std.dict.*\nimport std.math.*\nimport std.debug.*\n" + source
     errors = ErrorReporter()
     scanner = Scanner(source=source, file="<test>")
     tokens = scanner.scan_all()

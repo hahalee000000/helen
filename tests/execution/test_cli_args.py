@@ -25,6 +25,24 @@ from helen.runtime.llm_runtime import MockLLMRuntime
 from helen.cli.__main__ import run_command, main
 
 
+def inject_stdlib_imports(source: str) -> str:
+    """Inject common stdlib imports at the top of source code."""
+    imports = """import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.time.*
+import std.file.*
+import std.io.*
+import std.math.*
+import std.data.*
+import std.system.*
+import std.context.*
+import std.crypto.*
+"""
+    return imports + source
+
+
 # ─── Helpers ────────────────────────────────────────────────────────────────────
 
 
@@ -47,6 +65,9 @@ def parse_and_run(source: str, program_args: list[str] | None = None,
         # Check if first arg already looks like a program name (starts with '<' or ends with .helen)
         if not (first_arg.startswith('<') or first_arg.endswith('.helen')):
             program_args = [filename] + program_args
+    # Inject stdlib imports so test code can use stdlib functions
+    source = inject_stdlib_imports(source)
+
     interpreter = Interpreter(
         errors=errors,
         llm_runtime=MockLLMRuntime(),

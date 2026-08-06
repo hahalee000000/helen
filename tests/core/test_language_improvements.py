@@ -19,7 +19,17 @@ def run_helen(source: str) -> Tuple[List[str], List[str]]:
     """Run Helen source code and return (stdout_lines, errors)."""
     import io
     import sys
-    
+
+    # v1.39: inject stdlib imports (no longer globally available)
+    _imports = """import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
+"""
+    source = _imports + source
+
     errors = ErrorReporter()
     scanner = Scanner(source=source, file='<test>')
     tokens = scanner.scan_all()

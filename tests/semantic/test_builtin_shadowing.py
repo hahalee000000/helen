@@ -33,6 +33,16 @@ from helen.semantic.analyzer import SemanticAnalyzer
 
 def _analyze(source: str) -> list:
     """Run semantic analysis and return the list of errors."""
+    # Inject common stdlib imports for testing (v1.39: no global builtins)
+    imports = """
+import std.core.*
+import std.math.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.debug.*
+"""
+    source = imports + source
     errors = ErrorReporter()
     scanner = Scanner(source=source, file="<test>")
     tokens = scanner.scan_all()

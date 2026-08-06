@@ -16,7 +16,9 @@ def temp_helen_file(tmp_path):
     """Create a temporary .helen file for testing."""
     def _create(content: str, name: str = "test.helen") -> Path:
         file_path = tmp_path / name
-        file_path.write_text(content)
+        # v1.39: inject stdlib imports (no longer globally available)
+        _imports = "import std.core.*\nimport std.str.*\nimport std.list.*\nimport std.dict.*\nimport std.math.*\nimport std.debug.*\n"
+        file_path.write_text(_imports + content)
         return file_path
     return _create
 

@@ -54,6 +54,10 @@ class TestChatSessionActorToolSyntax(unittest.TestCase):
     def test_emit_debug_syntax(self):
         """emit_debug wrapper function has correct syntax."""
         code = """
+import std.core.*
+import std.debug.*
+import std.data.*
+
 agent TestAgent {
     description "test"
     functions {
@@ -76,6 +80,10 @@ agent TestAgent {
     def test_search_session_transcript_syntax(self):
         """search_session_transcript wrapper has correct syntax."""
         code = """
+import std.core.*
+import std.data.*
+import std.transcript.*
+
 agent TestAgent {
     description "test"
     functions {
@@ -95,6 +103,9 @@ agent TestAgent {
     def test_get_context_stats_syntax(self):
         """get_context_stats wrapper has correct syntax."""
         code = """
+import std.core.*
+import std.context.*
+
 agent TestAgent {
     description "test"
     functions {
@@ -113,6 +124,9 @@ agent TestAgent {
     def test_tracing_tools_syntax(self):
         """enable_tracing and get_execution_trace wrappers have correct syntax."""
         code = """
+import std.core.*
+import std.debug.*
+
 agent TestAgent {
     description "test"
     functions {

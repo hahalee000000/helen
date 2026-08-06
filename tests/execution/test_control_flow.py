@@ -241,6 +241,16 @@ from helen.core.parser import Parser
 
 def _run_source(source: str):
     """Run Helen source, return (stdout_lines, errors)."""
+    # v1.39: inject stdlib imports (no longer globally available)
+    _imports = """import std.core.*
+import std.str.*
+import std.list.*
+import std.dict.*
+import std.math.*
+import std.debug.*
+"""
+    source = _imports + source
+
     errors = ErrorReporter()
     scanner = Scanner(source=source, file="<test>")
     tokens = scanner.scan_all()

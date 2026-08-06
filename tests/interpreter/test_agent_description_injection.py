@@ -16,8 +16,15 @@ from helen.interpreter.interpreter import Interpreter
 from helen.runtime.llm_runtime import MockLLMRuntime
 
 
+def _inject(source):
+    """v1.39: inject stdlib imports (no longer globally available)."""
+    return "import std.core.*\nimport std.str.*\nimport std.list.*\nimport std.dict.*\nimport std.math.*\nimport std.debug.*\n" + source
+
+
 def _run(source: str, mock: MockLLMRuntime | None = None) -> MockLLMRuntime:
     """Parse + interpret ``source``; return the mock runtime capturing calls."""
+    # v1.39: inject stdlib imports (no longer globally available)
+    source = "import std.core.*\nimport std.str.*\nimport std.list.*\nimport std.dict.*\nimport std.math.*\nimport std.debug.*\n" + source
     errors = ErrorReporter()
     tokens = Scanner(source=source, file='<test>').scan_all()
     program = Parser(tokens, errors).parse()
@@ -88,6 +95,7 @@ class TestAgentDescriptionInjection:
         }
         '''
         errors = ErrorReporter()
+        source = _inject(source)
         tokens = Scanner(source=source, file='<test>').scan_all()
         program = Parser(tokens, errors).parse()
         assert not errors.has_errors

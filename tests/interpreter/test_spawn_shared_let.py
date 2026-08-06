@@ -16,6 +16,8 @@ from helen.runtime.llm_runtime import MockLLMRuntime
 
 def run_helen(source: str) -> Tuple[List[str], List[str]]:
     """Run Helen source code and return (stdout_lines, errors)."""
+    # v1.39: inject stdlib imports (no longer globally available)
+    source = "import std.core.*\nimport std.str.*\nimport std.list.*\nimport std.dict.*\nimport std.math.*\nimport std.debug.*\n" + source
     import io
     import sys
 

@@ -24,6 +24,7 @@ import std.io.*
 import std.llm.*
 import std.media.*
 import std.path.*
+import std.quality.*
 import std.str.*
 import std.tools.*
 import std.transcript.*
