@@ -776,7 +776,11 @@ class LlmMixin:
                             f"Streaming error: {error_msg}",
                             node.span,
                         )
-                        break
+                        # v1.38.1: Propagate streaming errors so callers
+                        # (e.g., chat_session_actor) can surface them to
+                        # the user instead of silently returning "".
+                        from helen.interpreter.exceptions import RuntimeError as HelenRuntimeError
+                        raise HelenRuntimeError(f"LLM streaming error: {error_msg}")
 
             except KeyboardInterrupt:
                 # Ctrl+C during streaming — captured here, REPL won't see it

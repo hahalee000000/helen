@@ -391,6 +391,12 @@ class HelenBridge:
                     if event_type == "llm_chunk":
                         full_response += content
                         yield {"type": "llm_chunk", "content": content}
+                    elif event_type == "error":
+                        # v1.38.1: Surface LLM errors to the frontend instead of
+                        # silently dropping them. Previously the error events from
+                        # chat_session_actor were swallowed here, leaving the user
+                        # with no feedback when the LLM call failed.
+                        yield {"type": "error", "content": content}
                     elif event_type in ("agent_start", "agent_end", "phase_start",
                                         "processing_start", "processing_complete",
                                         "llm_complete", "hint_injected", "status_update",
@@ -407,7 +413,7 @@ class HelenBridge:
                                 evt_type = evt.get("type", "")
                                 if evt_type in ("processing_complete", "llm_complete",
                                                 "agent_end", "status_update", "hint_injected",
-                                                "processing_start", "agent_start"):
+                                                "processing_start", "agent_start", "error"):
                                     yield {"type": evt_type, "content": evt.get("content", "")}
                             except asyncio.QueueEmpty:
                                 break

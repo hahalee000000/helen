@@ -280,8 +280,12 @@ class ImportResolver:
                 # imports (e.g. helper.helen importing 'json') were only
                 # validated but never executed, causing the Python module
                 # name to resolve to None at runtime.
+                # v1.38 fix: Skip stdlib module imports (import std.xxx.*).
+                # Their module_path is "" (not used); treating them as Python
+                # imports would cause `importlib.import_module("")` to raise
+                # ValueError("Empty module name").
                 from helen.core import is_helen_data_file  # noqa: PLC0415
-                if not is_helen_data_file(import_path):
+                if not is_helen_data_file(import_path) and not stmt.is_stdlib_module:
                     module_name = import_path
                     if module_name.endswith('.py'):
                         module_name = module_name[:-3]

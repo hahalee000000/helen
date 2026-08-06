@@ -45,10 +45,80 @@ def terminate_process_tree(proc: subprocess.Popen | None) -> None:
         pass
 
 
+def _wait_for_proc(proc: subprocess.Popen | None, timeout: float = 0.5) -> None:
+    """Wait up to `timeout` seconds for a process to die.
+
+    If it doesn't die within the timeout, escalate to SIGKILL and wait
+    briefly more. We MUST wait because dying children (notably uvicorn)
+    emit ANSI escape sequences (e.g. \033[32m for green "INFO") that
+    clobber the terminal reset below if we reset before they're dead.
+    """
+    if proc is None or proc.poll() is not None:
+        return
+    try:
+        proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            if not IS_WINDOWS:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            proc.wait(timeout=1.0)
+        except Exception:
+            pass
+
+
+def _restore_terminal() -> None:
+    """Reset terminal state so the shell prompt is usable.
+
+    Vite/npm/uvicorn manipulate terminal state while running (cursor,
+    colors). If any of them are killed, the terminal may be left with
+    the cursor hidden or text attributes changed. Reset here so the
+    shell prompt is visible immediately, without the user needing to
+    press Enter.
+
+    MUST be called AFTER all children have actually exited (see
+    _wait_for_proc). Otherwise, their shutdown output (which includes
+    ANSI escapes — uvicorn prints \033[32m for green "INFO" etc.)
+    clobbers our reset and the user is back to pressing Enter.
+    """
+    if not sys.stdout.isatty():
+        return
+    try:
+        # \033[?25h — show cursor (DEC private mode 25)
+        # \033[0m   — reset all text attributes (SGR 0)
+        # \r\n      — move cursor to start of a fresh line
+        sys.stdout.write("\033[?25h\033[0m\r\n")
+        sys.stdout.flush()
+    except Exception:
+        pass
+
+
+# Flag to ensure cleanup only runs once (signal handler + atexit both call it).
+_cleanup_done = False
+
+
 def cleanup_all() -> None:
-    """Clean up all child processes."""
+    """Clean up all child processes and restore terminal state.
+
+    Idempotent: the second and subsequent calls are no-ops. Both the
+    SIGTERM signal handler and the atexit hook call this, so without
+    the guard we'd reset the terminal twice.
+    """
+    global _cleanup_done
+    if _cleanup_done:
+        return
+    _cleanup_done = True
+
+    # 1. Ask children to terminate.
     terminate_process_tree(_backend_proc)
     terminate_process_tree(_frontend_proc)
+    # 2. Wait for them to actually exit. Uvicorn's shutdown output
+    #    includes ANSI color escapes (e.g. \033[32m for green "INFO");
+    #    if we reset the terminal before they die, that output clobbers
+    #    the reset and the user has to press Enter again.
+    _wait_for_proc(_frontend_proc)
+    _wait_for_proc(_backend_proc)
+    # 3. Reset terminal state now that no child is writing to it.
+    _restore_terminal()
 
 
 def find_helen_python() -> str:

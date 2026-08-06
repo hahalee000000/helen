@@ -56,7 +56,7 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
     description "Helen AI 编程助手 — 长驻 Actor 编排器 (v1.0)"
     temperature 0.3
     max-turns 100
-    max-tokens 131072  // 128k tokens for long-form responses
+    max-tokens 8192  // Safe default: chat responses don't need 128k; avoids Volcengine's 128000 max_tokens limit
     tools = CHAT_TOOLS
     // v1.29+ 必须显式声明 persistent，否则默认 none 会导致：
     //   - Web UI 刷新丢消息（transcript_to_messages 读不到 transcript）
