@@ -129,6 +129,16 @@ class ImportMixin:
                         if not hasattr(self, '_function_module_envs'):
                             self._function_module_envs: dict[str, Environment] = {}
                         self._function_module_envs[name] = module_env
+                # v1.39: Process stdlib imports in the imported file so that
+                # its functions can access stdlib when called via parent_env.
+                # The import resolver skips stdlib imports (module_path=""),
+                # so we must process them here by visiting the file's AST.
+                from helen.core.ast import ImportStmtNode as _ImpNode  # noqa: PLC0415
+                if hasattr(result, 'content') and result.content is not None:
+                    with self._push_scope(module_env):
+                        for stmt in result.content.statements:
+                            if isinstance(stmt, _ImpNode) and stmt.is_stdlib_module:
+                                self._import_stdlib_module(stmt)
                 # Register constants and shared let
                 self._register_imported_consts_and_shared(module_env)
         else:

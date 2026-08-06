@@ -684,7 +684,11 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         from helen.ffi.python_object import WrappedPythonObject
         match callee:
             case FunctionDeclNode():
-                return self._call_function(callee, args)
+                # v1.39: Pass the function's module environment so imported
+                # functions can access their own module's stdlib imports.
+                # Local functions won't be in _function_module_envs (None -> use current env).
+                _mod_env = getattr(self, '_function_module_envs', {}).get(callee.name)
+                return self._call_function(callee, args, parent_env=_mod_env)
 
             case Closure():
                 return self._call_closure(callee, args)
@@ -1219,7 +1223,8 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
 
             def _make_alias_callable(fn_node):
                 def alias_callable(*args, **kwargs):
-                    return self._call_function(fn_node, list(args))
+                    _mod_env = getattr(self, '_function_module_envs', {}).get(fn_node.name)
+                    return self._call_function(fn_node, list(args), parent_env=_mod_env)
                 return alias_callable
 
             value = _make_alias_callable(func_node)
@@ -1517,8 +1522,7 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         the function body.
 
         Args:
-            func: The function declaration node.
-            args: The positional arguments.
+            func: The function declaration node.            args: The positional arguments.
             parent_env: Optional parent environment for the call scope.
                 If None, uses the current environment. Module functions
                 pass their module's environment here so they can access

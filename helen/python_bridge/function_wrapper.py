@@ -123,7 +123,12 @@ class HelenFunctionWrapper:
                 call_args.append(None)
             call_args[param_index] = value
 
-        result = self.interpreter._call_function(self.func_decl, call_args)
+        result = self.interpreter._call_function(
+            self.func_decl, call_args,
+            # v1.39: Pass the function's module environment so imported functions
+            # can access their own module's stdlib imports.
+            parent_env=getattr(self.interpreter, '_function_module_envs', {}).get(self.func_name),
+        )
         return helen_to_python(result)
 
     def __repr__(self) -> str:
