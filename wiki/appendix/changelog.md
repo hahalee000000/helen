@@ -1,6 +1,82 @@
 # 版本历史
 
-> Helen v1.38 | Extended stdlib modules + codebase migration to explicit imports
+> Helen v1.39.4 | 位运算 stdlib 函数 + Web UI hint 注入修复
+
+---
+
+## v1.39.4: 位运算 stdlib 函数 + Web UI hint 注入修复
+
+**发布日期**: 2026-08-06
+**核心特性**: 6 个位运算函数、Web UI hint 注入 bug 修复
+
+### 1. 位运算 stdlib 函数 (6 个新函数)
+
+新增位运算函数到 `std.math` 模块,用于底层数据处理和性能优化场景。
+
+**新增函数**:
+- `bit_and(a, b)` — 位与 (AND),返回两个整数对应位都为 1 的结果
+- `bit_or(a, b)` — 位或 (OR),返回两个整数对应位至少一个为 1 的结果
+- `bit_xor(a, b)` — 位异或 (XOR),返回两个整数对应位不同的结果
+- `bit_not(a)` — 位取反 (NOT),翻转所有位 (返回 ~a)
+- `bit_shift_left(a, n)` — 左移,将位向左移动 n 位 (等价于 a * 2^n)
+- `bit_shift_right(a, n)` — 右移,将位向右移动 n 位 (等价于 a / 2^n)
+
+**使用示例**:
+```helen
+import std.math.*
+import std.core.*
+
+main {
+    // 基础位运算
+    let and_result = bit_and(5, 3)          // 1 (101 & 011 = 001)
+    let or_result = bit_or(5, 3)            // 7 (101 | 011 = 111)
+    let xor_result = bit_xor(5, 3)          // 6 (101 ^ 011 = 110)
+    
+    // 判断奇偶
+    let n = 42
+    let is_even = bit_and(n, 1) == 0        // true
+    
+    // 快速乘除 2 的幂
+    let times_8 = bit_shift_left(7, 3)      // 56 (7 * 8)
+    let div_4 = bit_shift_right(20, 2)      // 5 (20 / 4)
+}
+```
+
+**设计决策**:
+- 为什么用 stdlib 函数而不是运算符?Helen 是 AI-native DSL,位运算使用频率低,添加运算符需要修改 lexer/parser,成本高。stdlib 函数方式更灵活,保持语言语法简洁。
+- 归类到 `std.math` 模块,与其他数学函数一起通过 `import std.math.*` 导入。
+
+**实现**:
+- `helen/stdlib/math_stats.py` — 添加 6 个位运算函数实现
+- `helen/stdlib/__init__.py` — 导入并注册到 math 类别
+- 类型检查:参数必须是整数,移位位数必须非负
+
+**测试**:
+- `tests/stdlib/test_math_stats.py` — 新增 47 个测试(基础功能、边界条件、类型错误、集成测试)
+- 全部 **3673 tests passing** (3626 原有 + 47 新增)
+
+### 2. Web UI Hint 注入修复
+
+**问题**: 用户在 Web UI 推理过程中发送的 hint(💡 提示)无法注入到 LLM 对话中,LLM 看不到用户的追加指令。
+
+**根因**: HintQueue 使用 per-session 字典,但生产者和消费者使用不同的 session_id:
+- 生产者(`chat.py`):使用 `cwd_to_session_id(cwd)` = SHA256(cwd)[:16]
+- 消费者(`chat_session_actor.helen`):使用 `get_session_id()` = Helen UUID
+
+两个完全不同的 ID scheme,导致 `pop_all_hints()` 永远返回空列表。
+
+**修复**: 将 HintQueue 简化为单例模式(每个 webui 进程只有一个 active actor):
+- `helen/agent/ui/hint_queue.py` — 移除 per-session 字典,改为单一列表;`session_id` 参数保留但被忽略(向后兼容)
+- `helen/agent/chat_session_actor.helen` — `_actor_tool_end_cb` 移除 `get_session_id()` 依赖,直接 `pop_all_hints("")`
+- `helen/agent/webui/backend/app/routers/chat.py` — 保持 `cwd_to_session_id(cwd)` 不变(其他组件仍需要)
+
+**测试**: 全部 **50 webui backend tests passing**,无回归
+
+### 3. 文档更新
+
+- `helen/skills/software-development/helen-stdlib/SKILL.md` — Math 章节添加位运算示例
+- `wiki/tutorial/10-stdlib.md` — 添加完整的 Math Functions 章节(21 个函数)
+- `wiki/index.md` — 更新 stdlib 函数计数(339 builtins, 298 built-in functions)
 
 ---
 

@@ -292,6 +292,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
     v6.1:单会话架构,所有连接共享当前工作目录。session_id 内部保留
     (供 helen_bridge 流式回调索引和 hint_injector 队列索引),不用于 WS 路由。
+
+    v1.39.4:hint queue 已简化为单例模式（忽略 session_id 参数），
+    修复了 hint 注入失败的 bug（chat.py 用 cwd hash，actor 用 UUID，不匹配）。
     """
     manager = websocket.app.state.websocket_manager
     await manager.connect(websocket)

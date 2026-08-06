@@ -430,3 +430,118 @@ def _sqrt_basic(x: float) -> float:
     if x < 0:
         raise ValueError("Square root requires non-negative number")
     return math.sqrt(x)
+
+
+# === Bitwise Operations (v1.39.4) ===
+
+
+def _bit_and(a: int, b: int) -> int:
+    """Bitwise AND operation.
+
+    Args:
+        a: First integer
+        b: Second integer
+
+    Returns:
+        a & b
+
+    Example:
+        bit_and(5, 3)  // 5 & 3 = 1
+    """
+    if not isinstance(a, int) or not isinstance(b, int):
+        raise TypeError("bit_and requires integer arguments")
+    return a & b
+
+
+def _bit_or(a: int, b: int) -> int:
+    """Bitwise OR operation.
+
+    Args:
+        a: First integer
+        b: Second integer
+
+    Returns:
+        a | b
+
+    Example:
+        bit_or(5, 3)  // 5 | 3 = 7
+    """
+    if not isinstance(a, int) or not isinstance(b, int):
+        raise TypeError("bit_or requires integer arguments")
+    return a | b
+
+
+def _bit_xor(a: int, b: int) -> int:
+    """Bitwise XOR (exclusive OR) operation.
+
+    Args:
+        a: First integer
+        b: Second integer
+
+    Returns:
+        a ^ b
+
+    Example:
+        bit_xor(5, 3)  // 5 ^ 3 = 6
+    """
+    if not isinstance(a, int) or not isinstance(b, int):
+        raise TypeError("bit_xor requires integer arguments")
+    return a ^ b
+
+
+def _bit_not(a: int) -> int:
+    """Bitwise NOT (complement) operation.
+
+    Args:
+        a: Integer
+
+    Returns:
+        ~a (equivalent to -a - 1)
+
+    Example:
+        bit_not(5)  // ~5 = -6
+    """
+    if not isinstance(a, int):
+        raise TypeError("bit_not requires integer argument")
+    return ~a
+
+
+def _bit_shift_left(a: int, n: int) -> int:
+    """Bitwise left shift operation.
+
+    Args:
+        a: Integer to shift
+        n: Number of positions to shift (non-negative)
+
+    Returns:
+        a << n
+
+    Example:
+        bit_shift_left(5, 2)  // 5 << 2 = 20
+    """
+    if not isinstance(a, int) or not isinstance(n, int):
+        raise TypeError("bit_shift_left requires integer arguments")
+    if n < 0:
+        raise ValueError("Shift amount must be non-negative")
+    return a << n
+
+
+def _bit_shift_right(a: int, n: int) -> int:
+    """Bitwise right shift operation (arithmetic shift).
+
+    Args:
+        a: Integer to shift
+        n: Number of positions to shift (non-negative)
+
+    Returns:
+        a >> n (preserves sign for negative numbers)
+
+    Example:
+        bit_shift_right(20, 2)  // 20 >> 2 = 5
+    """
+    if not isinstance(a, int) or not isinstance(n, int):
+        raise TypeError("bit_shift_right requires integer arguments")
+    if n < 0:
+        raise ValueError("Shift amount must be non-negative")
+    return a >> n
+

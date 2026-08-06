@@ -74,6 +74,8 @@ from helen.stdlib.math_stats import (
     _cos, _sin, _tan, _acos, _asin, _atan, _atan2,
     # Power and logarithmic
     _pow, _log, _log2, _log10, _exp, _sqrt_basic,
+    # Bitwise operations (v1.39.4)
+    _bit_and, _bit_or, _bit_xor, _bit_not, _bit_shift_left, _bit_shift_right,
 )
 
 # Import file advanced functions
@@ -1151,6 +1153,13 @@ def _register_math() -> list[BuiltinFunction]:
         BuiltinFunction("log2", "Base-2 logarithm", "log2(x)", _log2, "math"),
         BuiltinFunction("log10", "Base-10 logarithm", "log10(x)", _log10, "math"),
         BuiltinFunction("exp", "Exponential (e^x)", "exp(x)", _exp, "math"),
+        # Bitwise operations (v1.39.4)
+        BuiltinFunction("bit_and", "Bitwise AND", "bit_and(a, b)", _bit_and, "math"),
+        BuiltinFunction("bit_or", "Bitwise OR", "bit_or(a, b)", _bit_or, "math"),
+        BuiltinFunction("bit_xor", "Bitwise XOR", "bit_xor(a, b)", _bit_xor, "math"),
+        BuiltinFunction("bit_not", "Bitwise NOT", "bit_not(a)", _bit_not, "math"),
+        BuiltinFunction("bit_shift_left", "Bitwise left shift", "bit_shift_left(a, n)", _bit_shift_left, "math"),
+        BuiltinFunction("bit_shift_right", "Bitwise right shift", "bit_shift_right(a, n)", _bit_shift_right, "math"),
     ]
 
 

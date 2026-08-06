@@ -369,6 +369,21 @@ main {
     let total = sum([1, 2, 3, 4, 5])  // 15
     let prod = product([1, 2, 3, 4])  // 24
 
+    // Bitwise operations (v1.39.4)
+    let and_result = bit_and(5, 3)         // 1 (101 & 011 = 001)
+    let or_result = bit_or(5, 3)           // 7 (101 | 011 = 111)
+    let xor_result = bit_xor(5, 3)         // 6 (101 ^ 011 = 110)
+    let not_result = bit_not(5)            // -6 (~5 = -6)
+    let left_shift = bit_shift_left(5, 2)  // 20 (5 << 2 = 20)
+    let right_shift = bit_shift_right(20, 2) // 5 (20 >> 2 = 5)
+    
+    // Practical: check if even
+    let is_even = bit_and(42, 1) == 0      // true
+    
+    // Practical: multiply/divide by power of 2
+    let times_8 = bit_shift_left(7, 3)     // 56 (7 * 8)
+    let div_4 = bit_shift_right(20, 2)     // 5 (20 / 4)
+
     // Random numbers
     let rand = random()               // Random float between 0 and 1
     let rand_int = randint(1, 100)    // Random integer between 1 and 100

@@ -51,7 +51,7 @@
 - [[toolchain/quality|Quality Assessment]] — 7-dimension framework, security scoring, CI integration
 - [[toolchain/lsp|Language Server]] — `helen lsp`, JSON-RPC 2.0, diagnostics/completion/go-to-definition
 - [[toolchain/vscode|VS Code Extension]] — Syntax highlighting, LSP integration, code completion, go-to-definition
-- [[toolchain/stdlib|Standard Library]] — 333 builtins (333 Chinese aliases) (core/string/data/collection/network/time/math/file/system/crypto/io/test/quality/context/transcript/media)
+- [[toolchain/stdlib|Standard Library]] — 339 builtins (339 Chinese aliases) (core/string/data/collection/network/time/math/file/system/crypto/io/test/quality/context/transcript/media)
 - [[toolchain/templates|Built-in Template Library]] — `helen template`, complete examples for common agent patterns
 - [[toolchain/error-format|Error Formatting]] — HLD 3.11.2 diagnostic output (with smart fix suggestions)
 
@@ -65,7 +65,7 @@
 - [[tutorial/07-spawn|Concurrent Programming]] — spawn, Channel message queue, mailbox_select, explicit sharing
 - [[tutorial/08-modules|Modules and Imports]] — import, cross-file reuse
 - [[tutorial/09-python-ffi|Python FFI]] — Python library imports, type conversion
-- [[tutorial/10-stdlib|Standard Library Reference]] — 292 built-in functions (292 Chinese aliases)
+- [[tutorial/10-stdlib|Standard Library Reference]] — 298 built-in functions (298 Chinese aliases)
 - [[tutorial/11-building-agents|Building Multi-Agent Systems]] — Complete case study
 - [[tutorial/12-testing|Testing Framework and TDD]] — Assertion API, expect chains, `--watch` mode
 - [[tutorial/13-skills|Skill System]] — Three-layer search, two-layer disclosure, LLM-aware

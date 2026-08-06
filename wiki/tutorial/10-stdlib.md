@@ -14,7 +14,7 @@ The Helen standard library provides 285 built-in functions organized into 17 cat
 | **Collection** | 26 | List, dict, set operations (v1.33 added `remove_key`, `get`, `set_key`, `has_key`) |
 | **Network** | 9 | HTTP requests, URL handling |
 | **Time** | 13 | Date/time, formatting, arithmetic |
-| **Math** | 15 | Math operations, statistical analysis |
+| **Math** | 21 | Math operations, statistical analysis, bitwise operations (v1.39.4) |
 | **File** | 18 | File read/write, directory operations, temp files, file search |
 | **System** | 18 | Environment variables, CLI args, process management, logging |
 | **Crypto** | 11 | Hashing, random numbers |
@@ -597,6 +597,144 @@ main {
     }
 }
 ```
+
+## Math Functions (21)
+
+Math functions cover basic arithmetic, statistics, trigonometry, and bitwise operations (v1.39.4).
+
+### Basic Math Operations
+
+```helen
+import std.core.*
+import std.math.*
+main {
+    // Rounding
+    let rounded = round(3.14159, 2)     // 3.14
+    let ceiling = ceil(3.2)             // 4
+    let flooring = floor(3.8)           // 3
+    
+    // Powers and roots
+    let power = pow(2, 10)              // 1024
+    let root = sqrt(16)                 // 4.0
+    
+    // Logarithms
+    let natural = log(2.718)            // Natural log (ln)
+    let base2 = log2(8)                 // 3 (2^3 = 8)
+    let base10 = log10(100)             // 2 (10^2 = 100)
+    let exponential = exp(1)            // 2.718... (e^1)
+}
+```
+
+### Trigonometric Functions
+
+```helen
+import std.math.*
+main {
+    // Basic trig (radians)
+    let cosine = cos(0)                 // 1
+    let sine = sin(3.14159 / 2)         // 1
+    let tangent = tan(0)                // 0
+    
+    // Inverse trig (returns radians)
+    let angle = acos(0.5)               // 1.047... (60°)
+    let angle2 = asin(0.5)              // 0.523... (30°)
+    let angle3 = atan(1)                // 0.785... (45°)
+    let angle4 = atan2(1, 1)            // 0.785... (45°, y/x)
+}
+```
+
+### Statistical Functions
+
+```helen
+import std.core.*
+import std.math.*
+main {
+    let numbers = [1, 2, 3, 4, 5]
+    
+    // Central tendency
+    let avg = mean(numbers)             // 3.0
+    let mid = median(numbers)           // 3
+    let mode_val = mode([1, 2, 2, 3])   // [2]
+    
+    // Dispersion
+    let v = variance(numbers)           // 2.0
+    let std = stddev(numbers)           // 1.414...
+    
+    // Aggregation
+    let total = sum(numbers)            // 15
+    let prod = product([1, 2, 3, 4])    // 24
+    let min_val = stats_min(numbers)    // 1
+    let max_val = stats_max(numbers)    // 5
+    
+    // Correlation and percentiles
+    let corr = correlation([1, 2, 3], [2, 4, 6])  // 1.0 (perfect correlation)
+    let p90 = percentile(numbers, 90)   // 4.6
+}
+```
+
+### Bitwise Operations (v1.39.4)
+
+Bitwise operations manipulate individual bits of integer values. These are useful for low-level data processing, encoding algorithms, and performance-critical calculations.
+
+```helen
+import std.core.*
+import std.math.*
+main {
+    // Basic bitwise operations
+    let and_result = bit_and(5, 3)          // 1 (101 & 011 = 001)
+    let or_result = bit_or(5, 3)            // 7 (101 | 011 = 111)
+    let xor_result = bit_xor(5, 3)          // 6 (101 ^ 011 = 110)
+    let not_result = bit_not(5)             // -6 (~5 = -6)
+    
+    // Bit shifting
+    let left_shift = bit_shift_left(5, 2)   // 20 (5 << 2 = 20)
+    let right_shift = bit_shift_right(20, 2) // 5 (20 >> 2 = 5)
+    
+    // Practical example 1: Check if a number is even
+    let n = 42
+    let is_even = bit_and(n, 1) == 0        // true
+    // Explanation: bit_and(n, 1) extracts the least significant bit
+    // If it's 0, the number is even; if it's 1, the number is odd
+    
+    // Practical example 2: Fast multiplication/division by powers of 2
+    let x = 7
+    let times_8 = bit_shift_left(x, 3)      // 56 (7 * 8 = 7 * 2^3)
+    let div_4 = bit_shift_right(20, 2)      // 5 (20 / 4 = 20 / 2^2)
+    // Shifting left by n is equivalent to multiplying by 2^n
+    // Shifting right by n is equivalent to dividing by 2^n (integer division)
+    
+    // Practical example 3: Extract specific bits (masking)
+    let value = 0b11010110                  // 214 in binary
+    let mask = 0b00001111                   // 15 (extract lower 4 bits)
+    let lower_4_bits = bit_and(value, mask) // 6 (0b0110)
+    
+    // Practical example 4: Set specific bits
+    let base = 0b10100000                   // 160
+    let flags = 0b00001111                  // 15 (set lower 4 bits)
+    let result = bit_or(base, flags)        // 175 (0b10101111)
+    
+    // Practical example 5: Toggle bits with XOR
+    let original = 0b1010                   // 10
+    let toggle_mask = 0b1100                // 12
+    let toggled = bit_xor(original, toggle_mask) // 6 (0b0110)
+    // XOR with 1 flips the bit, XOR with 0 keeps it unchanged
+}
+```
+
+**Bitwise function reference**:
+- `bit_and(a, b)`: Bitwise AND — returns 1 where both bits are 1
+- `bit_or(a, b)`: Bitwise OR — returns 1 where at least one bit is 1
+- `bit_xor(a, b)`: Bitwise XOR — returns 1 where bits differ
+- `bit_not(a)`: Bitwise NOT — flips all bits (returns ~a)
+- `bit_shift_left(a, n)`: Left shift — shifts bits left by n positions (equivalent to a * 2^n)
+- `bit_shift_right(a, n)`: Right shift — shifts bits right by n positions (equivalent to a / 2^n)
+
+**Common use cases**:
+- **Performance optimization**: Bit shifts are faster than multiplication/division by powers of 2
+- **Flag manipulation**: Store multiple boolean flags in a single integer
+- **Masking**: Extract or modify specific bits in a value
+- **Encoding algorithms**: Many compression and encryption algorithms use bitwise operations
+- **Hardware interfacing**: Working with registers and low-level protocols
 
 ## CLI Arguments (System Module)
 
