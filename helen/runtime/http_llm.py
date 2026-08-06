@@ -1161,6 +1161,12 @@ class HttpLLMRuntime(LLMRuntime):
                 reasoning_effort=reasoning_effort,
             )
 
+            # Debug: log request payload
+            logger.info(
+                "LLM request: model=%s max_tokens=%s thinking_enabled=%s payload_keys=%s",
+                use_model, payload.get("max_tokens"), thinking_enabled, list(payload.keys())
+            )
+
             try:
                 # Collect streamed chunks with health checking
                 # Use list+join (O(n)) instead of += (O(n²)) for long responses
@@ -1281,6 +1287,13 @@ class HttpLLMRuntime(LLMRuntime):
 
                 # Build full_content from chunks (O(n) join instead of O(n²) +=)
                 full_content = "".join(full_chunks)
+
+                # Debug: log streaming summary
+                logger.info(
+                    "LLM stream summary: full_chunks=%d reasoning_chunks=%d tool_calls=%d finish_reason=%s full_content_len=%d reasoning_len=%d",
+                    len(full_chunks), len(reasoning_chunks), len(tool_calls_acc), finish_reason,
+                    len(full_content), sum(len(r) for r in reasoning_chunks)
+                )
 
                 # v1.34.1: OpenAI protocol compatibility
                 # If no content was streamed (GLM/DeepSeek may only produce
