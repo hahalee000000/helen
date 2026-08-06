@@ -1299,7 +1299,9 @@ class HttpLLMRuntime(LLMRuntime):
                 # If no content was streamed (GLM/DeepSeek may only produce
                 # reasoning_content when max_tokens is too small), fall back
                 # to reasoning_content so the user gets a visible response.
-                if not full_content and reasoning_chunks:
+                # However, if we got tool calls, that's a valid response pattern
+                # and we shouldn't warn.
+                if not full_content and reasoning_chunks and not tool_calls_acc:
                     full_content = "".join(reasoning_chunks)
                     yield {"type": "content", "content": full_content}
                     logger.warning(
