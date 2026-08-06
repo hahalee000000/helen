@@ -1162,7 +1162,7 @@ class HttpLLMRuntime(LLMRuntime):
             )
 
             # Debug: log request payload
-            logger.info(
+            logger.debug(
                 "LLM request: model=%s max_tokens=%s thinking_enabled=%s payload_keys=%s",
                 use_model, payload.get("max_tokens"), thinking_enabled, list(payload.keys())
             )
@@ -1289,7 +1289,7 @@ class HttpLLMRuntime(LLMRuntime):
                 full_content = "".join(full_chunks)
 
                 # Debug: log streaming summary
-                logger.info(
+                logger.debug(
                     "LLM stream summary: full_chunks=%d reasoning_chunks=%d tool_calls=%d finish_reason=%s full_content_len=%d reasoning_len=%d",
                     len(full_chunks), len(reasoning_chunks), len(tool_calls_acc), finish_reason,
                     len(full_content), sum(len(r) for r in reasoning_chunks)
