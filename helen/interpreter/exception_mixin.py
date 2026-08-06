@@ -74,9 +74,10 @@ class ExceptionMixin:
                         self.environment.define(clause.error_name, exc)
                         catch_result = self._execute_stmts(clause.body)
                         if isinstance(catch_result, ReturnSentinel):
-                            result = catch_result.value
+                            # Mark as caught before returning to prevent re-raise in finally
                             caught = False
-                            return result
+                            # Propagate ReturnSentinel unchanged to preserve control flow
+                            return catch_result
                         result = catch_result
                     caught = False
                     break
@@ -86,9 +87,10 @@ class ExceptionMixin:
                 with self._push_scope():
                     catch_result = self._execute_stmts(node.catch_all.body)
                     if isinstance(catch_result, ReturnSentinel):
-                        result = catch_result.value
+                        # Mark as caught before returning to prevent re-raise in finally
                         caught = False
-                        return result
+                        # Propagate ReturnSentinel unchanged to preserve control flow
+                        return catch_result
                     result = catch_result
                 caught = False
 
