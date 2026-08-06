@@ -52,6 +52,8 @@ class CodeMetrics:
     avg_complexity: float = 1.0
     max_complexity: int = 1
     dead_code_lines: int = 0  # Lines with pass/TODO/unreachable
+    stub_code_lines: int = 0  # Lines flagged as stub/placeholder (subset of dead code)
+    stub_functions: list[str] = field(default_factory=list)  # Names of detected stub functions
 
 
 @dataclass
@@ -129,8 +131,9 @@ class HelenCodeAnalyzer:
         # Analyze agents
         metrics.agent_count = self._count_agents()
 
-        # Detect dead code
+        # Detect dead code and stub/placeholder implementations
         metrics.dead_code_lines = self._count_dead_code()
+        metrics.stub_code_lines, metrics.stub_functions = self._count_stub_functions()
 
         # Calculate aggregates
         if metrics.functions:
@@ -232,19 +235,32 @@ class HelenCodeAnalyzer:
 
                 brace_count = 0
                 j = start_line
+                found_body = False
                 while j < search_limit:
-                    brace_count += self._count_braces_outside_strings(self.lines[j])
-                    if brace_count > 0:
+                    line_text = self.lines[j]
+                    brace_count += self._count_braces_outside_strings(line_text)
+                    # v1.39.2: Break when an opening brace is found. This
+                    # catches both multi-line bodies (``brace_count > 0``)
+                    # AND single-line empty bodies like ``fn foo() {}``
+                    # where ``{`` and ``}`` are on the same line (net = 0).
+                    # Without this, the loop would skip over ``fn foo() {}``
+                    # and swallow subsequent sibling declarations into the
+                    # current function's span.
+                    if brace_count > 0 or ('{' in line_text and '}' in line_text):
+                        found_body = True
                         break
                     j += 1
 
-                if brace_count <= 0:
+                if not found_body:
                     # No opening brace found near the signature — this is a
                     # declaration without a body (e.g. protocol method
                     # signature). Treat the single declaration line as the
                     # whole "function".
                     end_line = start_line
                     j = start_line  # advance past this line only
+                elif brace_count <= 0:
+                    # Body opened and closed on the same line (empty body).
+                    end_line = j
                 else:
                     # Now find matching closing brace
                     while j < len(self.lines) and brace_count > 0:
@@ -460,13 +476,24 @@ class HelenCodeAnalyzer:
         return count
 
     def _count_dead_code(self) -> int:
-        """Count lines that appear to be dead code."""
+        """Count lines that appear to be dead code.
+
+        v1.39.2: Expanded to detect Chinese stub markers (待实现/占位/临时/
+        未实现/桩/空实现/未完成), bare stub returns, and debug-only
+        implementations in addition to the original TODO/FIXME/HACK/pass
+        patterns.
+        """
         dead_patterns = [
             r'^\s*pass\s*$',
             r'^\s*TODO\b',
             r'^\s*FIXME\b',
             r'^\s*HACK\b',
-            r'^\s*return\s+null\s*;\s*//\s*(?:stub|placeholder|not implemented)',
+            r'^\s*XXX\b',
+            # Stub return (with or without explanatory comment)
+            r'^\s*return\s+null\s*;',
+            # Explicit stub comments (English or Chinese)
+            r'//\s*(?:stub|placeholder|not\s+implemented|todo|fixme)\b',
+            r'//\s*(?:待实现|占位|临时|未实现|桩代码?|空实现|未完成|待开发|占位符)',
         ]
         count = 0
         for line in self.lines:
@@ -475,6 +502,116 @@ class HelenCodeAnalyzer:
                     count += 1
                     break
         return count
+
+    def _count_stub_functions(self) -> tuple[int, list[str]]:
+        """Detect functions that appear to be stubs/placeholders.
+
+        Returns (stub_line_count, [function_names]).
+
+        v1.39.2: Uses function boundaries from _analyze_functions to identify:
+        - Empty function bodies (``fn foo() {}``)
+        - Function bodies with only comments or whitespace
+        - Single-line bodies that return only a bare literal (0/"'/false/null/[]/{})
+          — these are often placeholder implementations.
+
+        Excludes legitimate single-line bodies (constructor-style one-liners
+        with parameters) to reduce false positives.
+        """
+        functions = self._analyze_functions()
+        stub_names: list[str] = []
+        stub_line_count = 0
+
+        # Patterns for a body that is "just a literal return" — a strong stub signal
+        literal_return_re = re.compile(
+            r'^\s*return\s+(?:null|0|""|false|true|\[\]|\{\})\s*;\s*$'
+        )
+
+        for fn in functions:
+            # Get the function body. FunctionMetrics stores 1-indexed line
+            # numbers, so subtract 1 when slicing self.lines (which is 0-indexed).
+            body_lines = self.lines[fn.line_start - 1:fn.line_end]
+            # Extract lines AFTER the opening brace up to the closing brace
+            body_content_lines = self._extract_body_lines(body_lines)
+
+            if not body_content_lines:
+                # Empty body: fn foo() {} — definitely a stub
+                stub_names.append(fn.name)
+                stub_line_count += 1
+                continue
+
+            # Check if body is only whitespace/comments
+            non_trivial = [
+                ln for ln in body_content_lines
+                if ln.strip() and not ln.strip().startswith("//")
+            ]
+            if not non_trivial:
+                # Only comments / whitespace in body
+                stub_names.append(fn.name)
+                stub_line_count += len(body_content_lines)
+                continue
+
+            # Check if body is a single literal return (strong stub signal)
+            # Only flag if the function is small (≤5 lines) to avoid false
+            # positives on real one-liner helpers.
+            if (
+                len(non_trivial) == 1
+                and fn.line_count <= 5
+                and literal_return_re.match(non_trivial[0])
+            ):
+                stub_names.append(fn.name)
+                stub_line_count += len(body_content_lines)
+                continue
+
+        return stub_line_count, stub_names
+
+    def _extract_body_lines(self, function_lines: list[str]) -> list[str]:
+        """Extract lines inside a function body (between { and }).
+
+        Returns an empty list for single-line function declarations like
+        ``fn foo() {}`` (empty body).
+        """
+        if not function_lines:
+            return []
+
+        # Find the first line with '{' and the last line with the matching '}'
+        start_idx = None
+        for idx, line in enumerate(function_lines):
+            if '{' in line:
+                start_idx = idx
+                break
+        if start_idx is None:
+            return []
+
+        # Check for single-line body: ``fn foo() {}`` or ``fn foo() { stmt; }``
+        # If the first line has both { and }, the body is contained on this line.
+        first_line = function_lines[start_idx]
+        if '{' in first_line and '}' in first_line:
+            # Extract content between first { and last }
+            open_pos = first_line.index('{')
+            close_pos = first_line.rindex('}')
+            inner = first_line[open_pos + 1:close_pos].strip()
+            if not inner:
+                return []  # Empty body: ``fn foo() {}``
+            # Non-empty single-line body: return the inner content as a single
+            # "line" so callers can analyze it uniformly.
+            return [inner]
+
+        # Find matching closing brace
+        brace_count = 0
+        end_idx = start_idx
+        for idx in range(start_idx, len(function_lines)):
+            brace_count += self._count_braces_outside_strings(function_lines[idx])
+            if brace_count <= 0:
+                end_idx = idx
+                break
+        else:
+            end_idx = len(function_lines) - 1
+
+        # Body lines are between the opening and closing braces (exclusive)
+        body = function_lines[start_idx + 1:end_idx]
+        # If opening brace was on a line with other content, include trailing content
+        # (usually nothing for Helen style, but be safe)
+        return body
 
 
 # ── Security Analyzer ─────────────────────────────────────────
@@ -857,9 +994,12 @@ class QualityScorer:
         elif metrics.avg_complexity > 5:
             score -= 1.0
 
-        # Penalize dead code
-        if metrics.dead_code_lines > 5:
+        # Penalize dead code and stub/placeholder implementations
+        issue_lines = metrics.dead_code_lines + metrics.stub_code_lines
+        if issue_lines > 5:
             score -= 1.0
+        elif len(metrics.stub_functions) > 0:
+            score -= 0.5
 
         return max(0.0, min(10.0, score))
 
@@ -1029,9 +1169,12 @@ class QualityScorer:
         if metrics.avg_function_length < 20:
             score += 1.0
 
-        # Penalize dead code
+        # Penalize dead code and stub/placeholder implementations
         if metrics.dead_code_lines > 0:
             score -= min(2.0, metrics.dead_code_lines * 0.3)
+        if metrics.stub_functions:
+            # Each stub function costs 0.5, capped at 2.0
+            score -= min(2.0, len(metrics.stub_functions) * 0.5)
 
         return max(0.0, min(10.0, score))
 
@@ -1110,6 +1253,8 @@ def _analyze_code(source: str, filename: str = "<unknown>") -> dict[str, Any]:
         "avg_complexity": round(metrics.avg_complexity, 1),
         "max_complexity": metrics.max_complexity,
         "dead_code_lines": metrics.dead_code_lines,
+        "stub_code_lines": metrics.stub_code_lines,
+        "stub_functions": metrics.stub_functions,
         "functions": [
             {
                 "name": f.name,
@@ -1250,7 +1395,13 @@ def _quality_report(source: str, filename: str = "<unknown>", file_path: str = "
         recommendations.append(f"Add docstrings to {len(undocumented)} undocumented functions")
 
     if metrics.dead_code_lines > 0:
-        recommendations.append(f"Remove {metrics.dead_code_lines} lines of dead code (pass/TODO/FIXME)")
+        recommendations.append(f"Remove {metrics.dead_code_lines} lines of dead code (pass/TODO/FIXME/stub markers)")
+    if metrics.stub_functions:
+        stub_names = ", ".join(metrics.stub_functions[:5])
+        more = f" and {len(metrics.stub_functions) - 5} more" if len(metrics.stub_functions) > 5 else ""
+        recommendations.append(
+            f"Implement {len(metrics.stub_functions)} stub function(s): {stub_names}{more}"
+        )
 
     # Check naming violations
     naming_violations = [f for f in metrics.functions if not re.match(r'^[a-z_][a-z0-9_]*$', f.name)]
@@ -1279,6 +1430,12 @@ def _quality_report(source: str, filename: str = "<unknown>", file_path: str = "
     lines.append(f"    Max complexity: {metrics.max_complexity}")
     if metrics.dead_code_lines > 0:
         lines.append(f"    Dead code lines: {metrics.dead_code_lines}")
+    if metrics.stub_code_lines > 0:
+        lines.append(f"    Stub/placeholder lines: {metrics.stub_code_lines}")
+    if metrics.stub_functions:
+        names = ", ".join(metrics.stub_functions[:5])
+        more = f", ... ({len(metrics.stub_functions) - 5} more)" if len(metrics.stub_functions) > 5 else ""
+        lines.append(f"    Stub functions ({len(metrics.stub_functions)}): {names}{more}")
     lines.append("")
 
     lines.append("  Quality Scores (0-10):")
