@@ -132,6 +132,16 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         self.environment = Environment()
         self._functions: dict[str, FunctionDeclNode] = {}
         self._agents: dict[str, AgentDeclNode] = {}
+        # v1.39.2: Per-file module environments.
+        # _module_envs caches the module_env built for each loaded .helen file
+        # (keyed by abs path) so every function runs in its own file's
+        # environment (with that file's stdlib/Python imports) instead of a
+        # shared env that conflates files. _get_file_module_env is idempotent.
+        self._module_envs: dict[str, Environment] = {}
+        # v1.39.1: Maps imported function name -> its defining file's module_env.
+        # v1.39.2: Populated per-file so transitive functions map to their OWN
+        # file's env, not the directly-imported file's env.
+        self._function_module_envs: dict[str, Environment] = {}
         # v1.17: Lazy-load HttpLLMRuntime as default instead of MockLLMRuntime.
         # MockLLMRuntime is for deterministic testing only — production code
         # (CLI, REPL, Python Bridge) needs real LLM calls. The runtime is
@@ -780,8 +790,10 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
                     prop = node.property
                     if prop in target.get("__functions__", {}):
                         func_node = target["__functions__"][prop]
-                        # Return a callable wrapper for the function
-                        return self._create_module_function_wrapper(func_node, target)
+                        # Return a callable wrapper for the function.
+                        # v1.39.2: __functions__ holds only the direct module's
+                        # functions, so use the module's env (target.__env__).
+                        return self._create_module_function_wrapper(func_node, target.get("__env__"))
                     elif prop in target.get("__agents__", {}):
                         agent_node = target["__agents__"][prop]
                         # Return a callable wrapper for the agent
@@ -826,14 +838,15 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
             self._runtime_error(node.span, f"Property '{node.property}' not found")
             return None
 
-    def _create_module_function_wrapper(self, func_node, module: dict):
+    def _create_module_function_wrapper(self, func_node, module_env: Environment):
         """Create a callable wrapper for a module function (v1.6).
 
         v1.10: The wrapper passes the module's environment as parent scope,
         so module functions can access their own module's consts and shared let.
+        v1.39.2: ``module_env`` is the function's OWN file's env (passed in),
+        not necessarily the aliased module's env - so transitive functions run
+        in their defining file's environment.
         """
-        module_env = module.get("__env__")
-
         def wrapper(*args, **kwargs):
             return self._call_function(func_node, list(args), parent_env=module_env)
         return wrapper

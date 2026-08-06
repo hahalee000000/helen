@@ -79,6 +79,22 @@ class ImportResolver:
         # dependencies are available when the imported module's functions
         # are called.
         self._python_imports: list[tuple[str, str | None]] = []
+        # v1.39.2: Per-file registries keyed by absolute file path. The flat
+        # registries above accumulate across ALL imports, so the interpreter
+        # could not tell which file a function/const came from - a function
+        # from a transitively-imported file got mapped to the directly-imported
+        # file's module_env, breaking its access to its own file's stdlib
+        # imports. Per-file tracking lets each function run in its own file's
+        # environment. Flat registries are kept for backward compatibility
+        # (tests and the public properties rely on them).
+        self._file_agents: dict[str, dict[str, Any]] = {}
+        self._file_functions: dict[str, dict[str, Any]] = {}
+        self._file_data: dict[str, dict[str, Any]] = {}
+        self._file_python_imports: dict[str, list[tuple[str, str | None]]] = {}
+        # Load order of helen files (absolute paths) so the interpreter can
+        # process them deterministically, including transitively-loaded files
+        # that never get a direct visit_import_stmt call.
+        self._file_load_order: list[str] = []
 
     def resolve(
         self, import_path: str, from_file: str | None = None
@@ -254,15 +270,29 @@ class ImportResolver:
             SharedStoreDeclNode,
         )
 
+        # v1.39.2: Per-file registries keyed by absolute path. Falls back to
+        # the alias when file_path is unavailable (defensive; resolve() always
+        # passes a concrete path).
+        abs_path = os.path.abspath(file_path) if file_path else alias
+        file_agents = self._file_agents.setdefault(abs_path, {})
+        file_functions = self._file_functions.setdefault(abs_path, {})
+        file_data = self._file_data.setdefault(abs_path, {})
+        file_python = self._file_python_imports.setdefault(abs_path, [])
+        if abs_path not in self._file_load_order:
+            self._file_load_order.append(abs_path)
+
         for stmt in program.statements:
             if isinstance(stmt, AgentDeclNode):
                 self._agents[stmt.name] = stmt
+                file_agents[stmt.name] = stmt
             elif isinstance(stmt, FunctionDeclNode):
                 self._functions[stmt.name] = stmt
+                file_functions[stmt.name] = stmt
             elif isinstance(stmt, VarDeclNode) and (not stmt.mutable or stmt.shared):
                 # Register const declarations and shared let (v1.10)
                 # Store the VarDeclNode so we can evaluate it later
                 self._data[stmt.name] = stmt
+                file_data[stmt.name] = stmt
             elif isinstance(stmt, SharedStoreDeclNode):
                 # v1.17 (Issue #35): Register shared store declarations
                 # so they can be executed and made visible cross-module.
@@ -270,6 +300,7 @@ class ImportResolver:
                 # making the container name resolve to None when the module's
                 # functions were called from another module.
                 self._data[stmt.name] = stmt
+                file_data[stmt.name] = stmt
             elif isinstance(stmt, ImportStmtNode):
                 # Recursively process imports in the imported file
                 # Resolve the import path relative to the current file's directory
@@ -297,6 +328,8 @@ class ImportResolver:
                     entry = (module_name, import_alias)
                     if entry not in self._python_imports:
                         self._python_imports.append(entry)
+                    if entry not in file_python:
+                        file_python.append(entry)
                 # Pass the current file's path so nested imports can be resolved correctly
                 nested = self.resolve(import_path, file_path)
                 # v1.18.2: A nested Helen/data-file import that fails to
@@ -339,6 +372,38 @@ class ImportResolver:
         """Registered imported data (text/json/yaml content by alias)."""
         return self._data
 
+    # ------------------------------------------------------------------
+    # v1.39.2: Per-file accessors (keyed by absolute path)
+    # ------------------------------------------------------------------
+
+    def file_agents(self, path: str) -> dict[str, Any]:
+        """Agents defined in the .helen file at ``path`` (abs path)."""
+        return self._file_agents.get(os.path.abspath(path), {})
+
+    def file_functions(self, path: str) -> dict[str, Any]:
+        """Functions defined in the .helen file at ``path`` (abs path)."""
+        return self._file_functions.get(os.path.abspath(path), {})
+
+    def file_data(self, path: str) -> dict[str, Any]:
+        """Const/shared-let/shared-store declarations defined in ``path``."""
+        return self._file_data.get(os.path.abspath(path), {})
+
+    def file_python_imports(self, path: str) -> list[tuple[str, str | None]]:
+        """Python module imports declared in the .helen file at ``path``."""
+        return self._file_python_imports.get(os.path.abspath(path), [])
+
+    def file_result(self, path: str) -> ImportResult | None:
+        """Cached ImportResult for a loaded .helen file (abs path), or None."""
+        return self._cached_results.get(os.path.abspath(path))
+
+    def loaded_helen_paths(self) -> list[str]:
+        """Absolute paths of all loaded .helen files, in load order.
+
+        Includes transitively-loaded files (loaded via _register_helen
+        recursion) that never receive a direct visit_import_stmt call.
+        """
+        return list(self._file_load_order)
+
     def reset(self) -> None:
         """Clear all loaded paths and registered content."""
         self._loaded.clear()
@@ -346,3 +411,9 @@ class ImportResolver:
         self._agents.clear()
         self._functions.clear()
         self._data.clear()
+        self._python_imports.clear()
+        self._file_agents.clear()
+        self._file_functions.clear()
+        self._file_data.clear()
+        self._file_python_imports.clear()
+        self._file_load_order.clear()
