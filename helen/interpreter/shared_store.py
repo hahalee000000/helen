@@ -6,8 +6,28 @@ Extracted from interpreter.py to improve code organization.
 from __future__ import annotations
 
 import threading
+from typing import Any
 
 from helen.interpreter.exceptions import ReturnSentinel
+
+
+# Thread-local current interpreter reference.
+# Set by Interpreter.visit_call before invoking a SharedStoreMethod so that
+# the method runs against the CALLING interpreter (not the one that created
+# the store). This is critical for spawn: the spawned interpreter's env
+# chain differs from the parent's, and method bodies must resolve names
+# (stdlib functions, consts, etc.) via the caller's env.
+_current_interpreter: threading.local = threading.local()
+
+
+def set_current_interpreter(interp: Any) -> None:
+    """Set the current interpreter for this thread (called by visit_call)."""
+    _current_interpreter.value = interp
+
+
+def get_current_interpreter() -> Any | None:
+    """Get the current interpreter for this thread, or None if unset."""
+    return getattr(_current_interpreter, 'value', None)
 
 
 class SharedStore:
@@ -152,8 +172,24 @@ class SharedStoreMethod:
         object.__setattr__(self, '_interpreter', interpreter)
 
     def __call__(self, *args):
-        """Call the method with the given arguments (serialized via store lock)."""
-        interp = self._interpreter
+        """Call the method with the given arguments (serialized via store lock).
+
+        v1.39.3 fix: Use the thread-local current interpreter (set by visit_call)
+        instead of the interpreter captured at creation time. This ensures that
+        when a shared store is deep-copied during spawn, the spawned interpreter
+        calls the method in ITS OWN env chain — so stdlib functions, consts, etc.
+        are resolved correctly. Previously the method always ran in the creating
+        (parent) interpreter's env, causing "'context_stats' is not callable"
+        and similar errors when the spawned interpreter called shared store
+        methods that referenced stdlib names not present in the parent's env.
+        """
+        # v1.39.3: Prefer the thread-local current interpreter (set by
+        # visit_call before dispatching) so the method runs against the
+        # CALLING interpreter, not the creating one. Falls back to the
+        # captured interpreter when no thread-local is set (e.g. Python-side
+        # calls or tests that bypass visit_call).
+        calling_interp = get_current_interpreter()
+        interp = calling_interp if calling_interp is not None else self._interpreter
         m_node = object.__getattribute__(self, '_method_node')
         store_inst = object.__getattribute__(self, '_store')
         lock = object.__getattribute__(store_inst, '_lock')

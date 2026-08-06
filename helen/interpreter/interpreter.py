@@ -692,6 +692,9 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
 
         # Function/Closure/FFI/builtin dispatch
         from helen.ffi.python_object import WrappedPythonObject
+        from helen.interpreter.shared_store import (  # noqa: PLC0415
+            SharedStoreMethod, set_current_interpreter, get_current_interpreter,
+        )
         match callee:
             case FunctionDeclNode():
                 # v1.39: Pass the function's module environment so imported
@@ -705,6 +708,20 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
 
             case WrappedPythonObject():
                 return callee.call(*args)
+
+            case SharedStoreMethod():
+                # v1.39.3: Set the thread-local current interpreter so the
+                # shared store method runs against the CALLING interpreter's
+                # env chain (not the interpreter that created the store).
+                # This is critical for spawn: the spawned interpreter has its
+                # own env chain, and the method body must resolve names via it.
+                prev_interp = get_current_interpreter()
+                set_current_interpreter(self)
+                try:
+                    return callee(*args)
+                finally:
+                    if prev_interp is not None:
+                        set_current_interpreter(prev_interp)
 
             case _ if callable(callee):
                 # stdlib builtin function (HLD M15)
