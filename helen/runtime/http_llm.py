@@ -992,6 +992,7 @@ class HttpLLMRuntime(LLMRuntime):
                 # v1.35: Use platform protocol to parse response
                 parsed = self.platform_protocol.parse_response(result)
                 message = {
+                    "role": "assistant",  # v1.39.6: Include role to prevent 400 error
                     "content": parsed.get("content", ""),
                     "reasoning_content": parsed.get("reasoning_content", ""),
                     "tool_calls": parsed.get("tool_calls", []),
