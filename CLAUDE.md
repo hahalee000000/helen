@@ -7,10 +7,11 @@ For the broader multi-project layout, see `../CLAUDE.md`.
 
 **Helen** — a prompt-first Agent programming language (AI-native DSL). Combines deterministic constructs (variables, functions, control flow) with first-class LLM primitives (`llm act`, `llm if`). 
 
-- **Version**: 1.30.11
-- **Keywords**: 91 bilingual (45 English + 46 Chinese)
-- **Built-in functions**: 333 stdlib functions (21 categories)
-- **Tests**: ~3300 passing (Python pytest)
+- **Version**: 1.39.6
+- **Keywords**: 99 bilingual (48 English + 51 Chinese)
+- **Built-in functions**: 351 stdlib functions (21 categories), 689 total names (with locale aliases)
+- **Stdlib modules**: 22 modules (std.core, std.str, std.math, std.list, ...)
+- **Tests**: 3679 passing (Python pytest)
 - **Python**: 3.12+ required
 
 ## Development Commands
@@ -66,7 +67,7 @@ Available tools (in priority order):
 - `get_architecture` — High-level architecture overview
 - `search_code` — Graph-augmented code search (text pattern + structural ranking)
 
-Project name: `C-Users-rxx-helen`
+Project name: `home-rxx-helen`
 
 ## Architecture (3-layer pipeline)
 
@@ -102,7 +103,7 @@ helen/
 ├── runtime/       # llm_runtime.py, http_llm.py, tools.py, config.py, import_resolver.py
 │                  # prompt_builder.py, history.py, observability.py, fuzzy_match.py
 │                  # transcript_store.py, session_manager.py, channel.py
-├── stdlib/        # 333 built-in functions (21 categories)
+├── stdlib/        # 351 built-in functions (21 categories), 22 modules
 │                  # locales/zh.py (Chinese aliases), mailbox.py (v1.18: mailbox_select)
 ├── ffi/           # Python FFI
 ├── cli/           # __main__.py, repl.py, ask_assistant.py, formatter.py, docgen.py
@@ -137,11 +138,13 @@ helen/
 
 - **Exception hierarchy**: `AnyError → LLMError → TimeoutError/ModelError/AgentError`, `ToolError`, `RuntimeError`, `AssertionError`, `AggregateError`, `ScopeViolationError`.
 
-- **Chinese support**: 91 bilingual keywords (45 English + 46 Chinese). Full bilingual support: CJK identifiers, fullwidth punctuation, Chinese quotes.
+- **Chinese support**: 99 bilingual keywords (48 English + 51 Chinese). Full bilingual support: CJK identifiers, fullwidth punctuation, Chinese quotes.
 
 - **Context management (v1.12, v1.19)**: `clear_context()`, `compress_context(strategy)`. v1.19 adds 24 stdlib functions: working memory, fine-grained mutation, runtime config, query, multi-agent transfer, lifecycle hooks.
 
 - **TranscriptStore SSOT (v1.16)**: Single Source of Truth for all messages. Persistent sessions in `~/.helen/sessions/<session_id>/`. Dual backends (JSONL/SQLite). UUID addressing. Session scope: project (`.helen/sessions/`) or global (`~/.helen/sessions/`).
+
+- **Explicit stdlib import (v1.39)**: Stdlib functions are NOT auto-registered — must `import std.xxx.*` explicitly. Three forms: wildcard (`import std.core.*`), selective (`import std.str.{len, upper}`), namespace (`import std.str as S`). Each function runs in its declaring file's module environment (per-file module_env).
 
 ## Configuration
 
@@ -180,8 +183,8 @@ To add or update a skill: edit `helen/skills/<category>/<name>/SKILL.md`, then r
 Claude Code auto-loads relevant skills based on task context:
 
 **Helen-Specific Skills** (for Helen development):
-- `helen-syntax` — Complete language syntax reference (91 keywords, types, expressions)
-- `helen-stdlib` — 333 built-in functions reference with examples
+- `helen-syntax` — Complete language syntax reference (99 keywords, types, expressions)
+- `helen-stdlib` — 351 built-in functions reference with examples
 - `helen-testing` — Test framework usage, TDD workflow, agent testing
 - `helen-quality` — 7-dimension quality assessment guide
 - `helen-agent-patterns` — Single agent design patterns (7 patterns)

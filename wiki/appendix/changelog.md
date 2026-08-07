@@ -1,6 +1,72 @@
 # 版本历史
 
-> Helen v1.39.4 | 位运算 stdlib 函数 + Web UI hint 注入修复
+> Helen v1.39.7 | 修复 Web UI 停止按钮在工具执行期间无响应
+
+---
+
+## v1.39.7: 修复 Web UI 停止按钮在工具执行期间无响应
+
+**发布日期**: 2026-08-07
+**核心特性**: 工具执行期间的 cancel 检查点,停止按钮全阶段响应
+
+### 1. 问题
+
+Helen agent Web UI 的停止按钮只在 LLM 流式文本输出时有效。当 agent 在执行工具(`shell_exec`、`read_file` 等)时,取消标志 `_cancel_requested` 被设置但无人轮询,导致停止按钮"无反应"。Agent 的大部分墙钟时间花在工具执行上,这是核心 UX 缺陷。
+
+### 2. 根因
+
+`cancel_event` 只在以下位置检查:
+- LLM SSE chunk 循环(`http_llm.py` L1188)
+- LLM turn 间(`http_llm.py` L1128)
+- `on_chunk` 回调(actor 端)
+
+**工具执行循环中从未检查** — 这是断裂点。
+
+### 3. 修复
+
+**Runtime 层** (`helen/runtime/http_llm.py`):
+- `_execute_tools_concurrent` 新增 `cancel_event` 参数,`as_completed` 循环中检查 cancel 并 `f.cancel()` 取消剩余 futures
+- 顺序工具 dispatch 前检查 `cancel_event.is_set()`,命中则 break
+- 并发工具调用点传递 `cancel_event`
+- 工具结果 yield 前检查 cancel
+
+**Actor 层** (`helen/agent/chat_session_actor.helen`):
+- `_actor_tool_end_cb` 开头加 cancel 检查(FFI 轮询 `stream_emitter.is_cancel_requested()`)
+
+### 4. 修复后的 cancel 检查点
+
+| 阶段 | 检查点 | 状态 |
+|---|---|---|
+| LLM SSE 流式输出 | `on_chunk` 回调 + `cancel_event` | 原有 |
+| LLM turn 间 | `cancel_event` | 原有 |
+| 顺序工具 dispatch 前 | `cancel_event` | **新增** |
+| 并发工具 `as_completed` | `cancel_event` + 取消剩余 futures | **新增** |
+| 工具结果 yield 前 | `cancel_event` | **新增** |
+| `on_tool_end` 回调 | FFI 轮询 `stream_emitter` | **新增** |
+
+### 5. 测试
+
+- `tests/runtime/test_http_llm_cancel.py` — 新增 6 个测试(顺序/并发 cancel、yield cancel、向后兼容)
+- 全部 **3678 tests passing**,7 skipped,0 failed
+
+---
+
+## v1.39.6: 修复非流式 API 响应缺少 role 字段
+
+**发布日期**: 2026-08-07
+
+**问题**: 当 LLM 返回 `tool_calls` 时,assistant 消息缺少 `"role": "assistant"`,导致下一轮 API 调用 400 错误。
+**修复**: `helen/runtime/http_llm.py` 消息构造补上缺失的 role 字段。
+
+---
+
+## v1.39.5: 修复 catch 块内 return 被忽略
+
+**发布日期**: 2026-08-07
+
+**问题**: `try-catch` 后跟代码时,catch 块内的 `return` 被静默忽略,执行流继续到 catch 之后的语句。
+**根因**: `visit_try_stmt` 将 `ReturnSentinel` 解包为普通值返回,导致 `_execute_stmts` 不知道需要返回。
+**修复**: 保留 `ReturnSentinel` 原样传播,设置 `caught = False` 防止 finally 块重抛异常。
 
 ---
 

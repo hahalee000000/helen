@@ -503,6 +503,8 @@ main {
 
 看是 LLM 没继续返回，还是 callback 返回了 false 主动停止。
 
+**v1.39.7 Web UI 停止按钮修复**：停止按钮现在在工具执行期间也能响应。cancel 检查点覆盖 LLM 流式输出、turn 间、工具 dispatch 前后、`on_tool_end` 回调。如果停止按钮仍然无反应，检查是否卡在单个长时间工具调用中（如 `shell_exec` timeout=120s）— cancel 在当前工具完成后才检测。
+
 #### 场景 7：多 Agent 协作数据错乱
 
 **症状**：Agent A 把数据发给 Agent B，B 收到的数据不对。

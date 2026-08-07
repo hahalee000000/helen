@@ -595,7 +595,7 @@ agent StreamingWriter(topic: str) {
 }
 ```
 
-#### Streaming Interrupt (v1.18)
+#### Streaming Interrupt (v1.18, v1.39.7)
 
 `on_chunk` returning `false` terminates streaming early. `spawn` + `Channel.cancel()` interrupts background agent streaming:
 
@@ -613,6 +613,8 @@ mailbox.cancel()  // Interrupt background streaming
 cancel_llm_call(call_id)
 取消大模型调用(call_id)  // Chinese alias
 ```
+
+**Cancel during tool execution (v1.39.7)**: The stop button in the Web UI now works during tool execution, not just during LLM text streaming. Cancel checks are placed before each sequential tool dispatch, between concurrent tool completions, before yielding tool results, and in the `on_tool_end` callback. This ensures the agent responds to stop requests throughout the entire agentic loop.
 
 ### Pattern 5B: Injecting Hints After Tool Execution (on_tool_end, v1.21)
 

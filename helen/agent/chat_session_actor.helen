@@ -273,6 +273,16 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
         }
 
         fn _actor_tool_end_cb(tool_name, tool_result) {
+            // v1.39.7: Check cancel at tool completion — closes the gap
+            // where stop button was unresponsive during tool execution
+            try {
+                import "ui.stream_emitter" as _CancelCheck
+                if _CancelCheck.is_cancel_requested() {
+                    cancel_all_llm_calls()
+                    _CancelCheck.clear_cancel()
+                    return null
+                }
+            } catch {}
             _actor_emit_statusline()
             try {
                 import "ui.hint_queue" as _HintQueueMod

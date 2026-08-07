@@ -302,6 +302,7 @@ def _execute_tools_concurrent(
     tool_calls: list[dict[str, Any]],
     dispatch_fn,
     executor: ThreadPoolExecutor | None = None,
+    cancel_event: Any = None,
 ) -> list[tuple[dict[str, Any], str]]:
     """Execute multiple tool calls concurrently using a thread pool.
 
@@ -309,6 +310,7 @@ def _execute_tools_concurrent(
         tool_calls: List of tool call dicts from LLM response.
         dispatch_fn: Function(name, args) -> str result.
         executor: Optional persistent ThreadPoolExecutor to reuse.
+        cancel_event: Optional threading.Event; when set, skip remaining tools.
 
     Returns:
         List of (tool_call, result) tuples in original order.
@@ -317,6 +319,9 @@ def _execute_tools_concurrent(
         # Single tool call — no need for threading
         results = []
         for tc in tool_calls:
+            # v1.39.7: Check cancel before dispatch
+            if cancel_event is not None and cancel_event.is_set():
+                break
             fn_name = tc["function"]["name"]
             try:
                 fn_args = json.loads(tc["function"].get("arguments", "{}"))
@@ -349,6 +354,13 @@ def _execute_tools_concurrent(
             future_to_idx[future] = idx
 
         for future in as_completed(future_to_idx):
+            # v1.39.7: Check cancel between tool completions
+            if cancel_event is not None and cancel_event.is_set():
+                # Cancel remaining futures to avoid wasted work
+                for f in future_to_idx:
+                    if not f.done():
+                        f.cancel()
+                break
             idx = future_to_idx[future]
             try:
                 result = future.result(timeout=300)  # 5 min per tool
@@ -1353,11 +1365,15 @@ class HttpLLMRuntime(LLMRuntime):
                     if self.enable_concurrent_tools and len(tool_call_list) > 1:
                         tool_results = _execute_tools_concurrent(
                             tool_call_list, _dispatch, executor=self._tool_pool,
+                            cancel_event=cancel_event,
                         )
                     else:
                         # Sequential execution
                         tool_results = []
                         for tc in tool_call_list:
+                            # v1.39.7: Check cancel before each tool dispatch
+                            if cancel_event is not None and cancel_event.is_set():
+                                break
                             fn_name = tc["function"]["name"]
                             try:
                                 fn_args = json.loads(tc["function"].get("arguments", "{}"))
@@ -1368,6 +1384,9 @@ class HttpLLMRuntime(LLMRuntime):
 
                     # Yield events and append results
                     for tc, result in tool_results:
+                        # v1.39.7: Check cancel before yielding each tool result
+                        if cancel_event is not None and cancel_event.is_set():
+                            break
                         fn_name = tc["function"]["name"]
                         try:
                             fn_args = json.loads(tc["function"].get("arguments", "{}"))

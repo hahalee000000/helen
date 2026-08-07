@@ -533,6 +533,20 @@ Features:
 - **Responsive** — works on desktop and mobile
 - **Agent status** — live indicator of what the agent is doing (thinking, tool call, etc.)
 
+### Stop Button
+
+The stop button sends a cancel signal via WebSocket. Since v1.39.7, cancel checks are placed at all key points in the agentic loop:
+
+| Phase | Cancel responsive? |
+|---|---|
+| LLM streaming (text tokens) | ✅ Immediate |
+| Between LLM turns | ✅ Immediate |
+| Between tool calls (sequential) | ✅ At next tool boundary |
+| Between tool completions (concurrent) | ✅ Cancels remaining futures |
+| During a single long tool call | ⚠️ After current tool completes |
+
+The cancel signal propagates: `stream_emitter.request_cancel()` → actor `on_chunk`/`on_tool_end` polls via FFI → `cancel_all_llm_calls()` → interpreter `cancel_event` → HTTP SSE loop breaks.
+
 ### Backend ↔ Helen Bridge
 
 The backend doesn't call the LLM directly — it spawns `chat_tui.helen` as an actor and communicates via a Channel. This keeps the "Helen code in Helen" invariant: the Python side only does I/O bridging, not agent logic.
