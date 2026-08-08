@@ -126,7 +126,7 @@ The annotation path supports both absolute and relative paths (relative to the s
 
 ## Engineering Dimension — Naming Convention
 
-The engineering dimension (weight 10%) penalizes **shadowing builtins**. Helen has 333 stdlib functions and 91 keywords — never use them as variable names. Use **suffix-qualified names**:
+The engineering dimension (weight 10%) penalizes **shadowing builtins**. Helen has 364 stdlib functions and 99 keywords — never use them as variable names. Use **suffix-qualified names**:
 
 | ❌ Penalized | ✅ Preferred |
 |-------------|-------------|

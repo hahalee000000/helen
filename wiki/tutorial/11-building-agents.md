@@ -89,6 +89,15 @@ agent MyAgent {
 | `max-tokens` | Control response length | 100 (short), 4096 (default), 131072 (long-form) |
 | `transcript` | Control conversation persistence | "none" (ephemeral), "memory" (session), "persistent" (disk) |
 
+**Runtime adjustment (v1.39.8)**: Use stdlib functions to override these settings at runtime without changing prompt content (preserves cache):
+
+```helen
+import std.llm.*
+set_temperature(0.3)       // Override agent's default
+set_max_turns(10)
+set_thinking_mode(true)
+```
+
 ---
 
 ## Case Study: Intelligent Customer Service System

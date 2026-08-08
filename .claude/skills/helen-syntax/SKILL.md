@@ -287,7 +287,7 @@ main {
 
 ### Variable Naming Convention — Avoid Shadowing Builtins
 
-Helen has 333 stdlib functions (e.g. `len`, `find`, `format`, `map`, `list`, `count`, `str`, `print`, `sort`, `keys`, `values`, `contains`, `split`, `join`, `strip`, `replace`, `substring`) and 91 reserved keywords. **Never use these as variable names.** The interpreter may raise `ShadowBuiltinError`, and the code becomes confusing.
+Helen has 364 stdlib functions (e.g. `len`, `find`, `format`, `map`, `list`, `count`, `str`, `print`, `sort`, `keys`, `values`, `contains`, `split`, `join`, `strip`, `replace`, `substring`) and 99 reserved keywords. **Never use these as variable names.** The interpreter may raise `ShadowBuiltinError`, and the code becomes confusing.
 
 **Rule: use suffix-qualified names — short names must carry a role suffix.**
 

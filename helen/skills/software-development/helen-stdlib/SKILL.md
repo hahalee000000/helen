@@ -11,7 +11,7 @@ metadata:
 
 # Helen Standard Library Reference
 
-Helen's standard library provides **333 built-in functions**, covering all core needs for AI application development.
+Helen's standard library provides **364 built-in functions**, covering all core needs for AI application development.
 
 ## Category Overview
 
@@ -67,7 +67,7 @@ Helen's stdlib supports multilingual function names. Every stdlib function has a
 
 ### Chinese stdlib Aliases
 
-Helen has 333 built-in Chinese aliases covering all stdlib categories. Common examples:
+Helen has 351 built-in Chinese aliases covering all stdlib categories. Common examples:
 
 | 英文 | 中文 | 类别 |
 |------|------|------|
