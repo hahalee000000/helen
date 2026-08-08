@@ -58,6 +58,49 @@ main {
 }
 ```
 
+### Runtime Parameter Adjustment (v1.39.8)
+
+Agent declarations set default values for operational parameters. Use stdlib functions to override them at runtime without changing the prompt (preserves prompt cache):
+
+```helen
+import std.core.*
+import std.llm.*
+
+agent AdaptiveAgent {
+    temperature 0.5
+    max-turns 1
+
+    main {
+        // Simple task: low temperature, few turns
+        set_temperature(0.2)
+        set_max_turns(1)
+        llm act "Quick answer"
+
+        // Complex task: high temperature, deep reasoning
+        set_temperature(0.8)
+        set_max_turns(10)
+        set_thinking_mode(true)
+        set_reasoning_effort("high")
+        set_max_tokens(8000)
+        llm act "Deep analysis"
+    }
+}
+```
+
+**Writable parameters** (5 set/get pairs):
+- `set_temperature(t)` / `get_temperature()` — output randomness (0.0-2.0)
+- `set_max_turns(n)` / `get_max_turns()` — max tool-calling rounds
+- `set_max_tokens(n)` / `get_max_tokens()` — max output tokens
+- `set_thinking_mode(bool)` / `get_thinking_mode()` — enable reasoning mode
+- `set_reasoning_effort(str)` / `get_reasoning_effort()` — "low" / "medium" / "high"
+
+**Read-only identity parameters** (3 get):
+- `get_model()` / `get_description()` / `get_provider()` — set at declaration time
+
+**Priority**: `set_*()` override > agent declaration > built-in default.
+
+**Design rationale**: Parameters are passed as API fields, not embedded in the prompt. This preserves prompt prefix cache hit rate across turns — changing `temperature` via `set_temperature()` does not invalidate the prompt cache, while embedding it in the prompt text would.
+
 ### With Dynamic Prompts
 
 You can pass expressions after `llm act` to dynamically build prompts:

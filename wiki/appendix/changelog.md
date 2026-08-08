@@ -1,6 +1,75 @@
 # 版本历史
 
-> Helen v1.39.7 | 修复 Web UI 停止按钮在工具执行期间无响应
+> Helen v1.39.8 | stdlib 函数运行时调整 LLM 参数
+
+---
+
+## v1.39.8: stdlib 函数运行时调整 LLM 参数
+
+**发布日期**: 2026-08-07
+**核心特性**: 13 个新 stdlib 函数,运行时动态调整 temperature/max-turns/max-tokens/thinking-mode/reasoning-effort
+
+### 1. 问题
+
+Agent 声明级配置（`temperature 0.7`、`max-turns 5` 等）是静态字面量,无法在运行时根据任务复杂度动态调整。
+
+### 2. 解决方案
+
+新增 13 个 stdlib 函数,通过 `set_*()`/`get_*()` 接口在 agent 的 `main {}` 中运行时调整参数:
+
+**可写操作参数** (5 对 set/get):
+- `set_temperature(t)` / `get_temperature()` — 控制输出随机性
+- `set_max_turns(n)` / `get_max_turns()` — 控制工具调用轮数
+- `set_max_tokens(n)` / `get_max_tokens()` — 控制输出长度
+- `set_thinking_mode(bool)` / `get_thinking_mode()` — 控制思考模式
+- `set_reasoning_effort(str)` / `get_reasoning_effort()` — 控制推理强度
+
+**只读身份参数** (3 个 get):
+- `get_model()` / `get_description()` / `get_provider()` — 读取 agent 声明
+
+### 3. 设计原则
+
+- **零 breaking change**: 无 `set_*()` 调用时行为完全不变
+- **per-interpreter 作用域**: 每个 interpreter 独立,_runtime_overrides dict 互不影响
+- **优先级**: stdlib set > agent 声明 > 内置默认
+- **不污染 prompt cache**: 参数通过 API 字段传递,不嵌入 prompt,prefix cache 命中率不受影响
+- **身份参数只读**: model/description/provider 在声明时确定,不可运行时改变
+
+### 4. 使用示例
+
+```helen
+import std.llm.*
+
+agent AdaptiveAgent {
+    temperature 0.5
+
+    main {
+        // 简单任务: 低温度,少轮次
+        set_temperature(0.2)
+        set_max_turns(1)
+        llm act "快速回答"
+
+        // 复杂任务: 高温度,多轮次,深度推理
+        set_temperature(0.8)
+        set_max_turns(10)
+        set_thinking_mode(true)
+        set_reasoning_effort("high")
+        llm act "深度分析"
+    }
+}
+```
+
+### 5. 实现
+
+- `helen/interpreter/interpreter.py` — 新增 `_runtime_overrides: dict`
+- `helen/interpreter/llm_mixin.py` — `visit_llm_act_expr` 查 override
+- `helen/stdlib/llm_control.py` — 13 个新函数实现
+- `helen/stdlib/locales/zh.py` — 13 个中文别名
+
+### 6. 测试
+
+- `tests/stdlib/test_llm_runtime_params.py` — 13 个新测试
+- 全部 **3671 tests passing**,7 skipped,0 failed
 
 ---
 

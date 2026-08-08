@@ -210,6 +210,10 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         # Phase 3: Streaming call registry for cancel/KeyboardInterrupt support
         self._streaming_calls: dict[str, _StreamingHandle] = {}
         self._streaming_lock = threading.Lock()
+        # v1.39.8: Runtime LLM parameter overrides (set via stdlib functions).
+        # Per-interpreter dict — takes precedence over agent declaration defaults.
+        # Keys: "temperature", "max_turns", "max_tokens", "thinking_mode", "reasoning_effort"
+        self._runtime_overrides: dict[str, Any] = {}
         # Register stdlib builtins in global environment (HLD M15)
         self._register_stdlib()
         # Set CLI args in the stdlib module (for get_cli_args/parse_cli_args)

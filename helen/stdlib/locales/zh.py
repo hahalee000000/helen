@@ -426,4 +426,18 @@ ALIASES: dict[str, str] = {
     "取消大模型调用": "cancel_llm_call",
     "当前大模型调用id": "current_llm_call_id",
     "取消所有大模型调用": "cancel_all_llm_calls",
+    # ── LLM Runtime Parameters (v1.39.8: 运行时参数调整) ───────────────────
+    "设置温度": "set_temperature",
+    "获取温度": "get_temperature",
+    "设置最大轮次": "set_max_turns",
+    "获取最大轮次": "get_max_turns",
+    "设置最大tokens": "set_max_tokens",
+    "获取最大tokens": "get_max_tokens",
+    "设置思考模式": "set_thinking_mode",
+    "获取思考模式": "get_thinking_mode",
+    "设置推理强度": "set_reasoning_effort",
+    "获取推理强度": "get_reasoning_effort",
+    "获取模型": "get_model",
+    "获取描述": "get_description",
+    "获取提供商": "get_provider",
 }

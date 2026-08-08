@@ -203,6 +203,10 @@ from helen.stdlib.mailbox import _mailbox_select
 # Import LLM control utilities (streaming interrupt Phase 5)
 from helen.stdlib.llm_control import (
     _cancel_llm_call, _current_llm_call_id, _cancel_all_llm_calls, _set_interpreter_ref,
+    _set_temperature, _get_temperature, _set_max_turns, _get_max_turns,
+    _set_max_tokens, _get_max_tokens, _set_thinking_mode, _get_thinking_mode,
+    _set_reasoning_effort, _get_reasoning_effort,
+    _get_model, _get_description, _get_provider,
 )
 
 
@@ -1575,8 +1579,22 @@ def _register_llm() -> list[BuiltinFunction]:
     return [
         # LLM call control utilities (streaming interrupt Phase 5)
         BuiltinFunction("cancel_llm_call", "Cancel an in-flight streaming LLM call", "cancel_llm_call(call_id)", _cancel_llm_call, "llm"),
-        BuiltinFunction("current_llm_call_id", "Get the current active streaming LLM call ID", "current_llm_call_id()", _current_llm_call_id, "llm"),
+        BuiltinFunction("current_llm_call_id", "Get the current active streaming call ID", "current_llm_call_id()", _current_llm_call_id, "llm"),
         BuiltinFunction("cancel_all_llm_calls", "Cancel all active streaming LLM calls", "cancel_all_llm_calls()", _cancel_all_llm_calls, "llm"),
+        # v1.39.8: Runtime LLM parameter overrides
+        BuiltinFunction("set_temperature", "Set temperature for subsequent llm act calls", "set_temperature(0.7)", _set_temperature, "llm"),
+        BuiltinFunction("get_temperature", "Get effective temperature", "get_temperature()", _get_temperature, "llm"),
+        BuiltinFunction("set_max_turns", "Set max tool-calling turns", "set_max_turns(5)", _set_max_turns, "llm"),
+        BuiltinFunction("get_max_turns", "Get effective max-turns", "get_max_turns()", _get_max_turns, "llm"),
+        BuiltinFunction("set_max_tokens", "Set max output tokens", "set_max_tokens(4000)", _set_max_tokens, "llm"),
+        BuiltinFunction("get_max_tokens", "Get effective max-tokens", "get_max_tokens()", _get_max_tokens, "llm"),
+        BuiltinFunction("set_thinking_mode", "Enable/disable thinking mode", "set_thinking_mode(true)", _set_thinking_mode, "llm"),
+        BuiltinFunction("get_thinking_mode", "Get effective thinking-mode", "get_thinking_mode()", _get_thinking_mode, "llm"),
+        BuiltinFunction("set_reasoning_effort", "Set reasoning effort level", 'set_reasoning_effort("high")', _set_reasoning_effort, "llm"),
+        BuiltinFunction("get_reasoning_effort", "Get effective reasoning-effort", "get_reasoning_effort()", _get_reasoning_effort, "llm"),
+        BuiltinFunction("get_model", "Get current model (read-only)", "get_model()", _get_model, "llm"),
+        BuiltinFunction("get_description", "Get agent description (read-only)", "get_description()", _get_description, "llm"),
+        BuiltinFunction("get_provider", "Get current provider (read-only)", "get_provider()", _get_provider, "llm"),
     ]
 
 

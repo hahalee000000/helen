@@ -674,6 +674,43 @@ llm act "task"
     工具结束 fn(name, result) { return "hint" }
 ```
 
+### Pattern 5C: Adaptive Parameters (v1.39.8)
+
+**Scenario**: Adjust LLM parameters at runtime based on task characteristics.
+
+Agent declarations set defaults; stdlib functions override per-invocation without affecting prompt cache:
+
+```helen
+import std.core.*
+import std.llm.*
+
+agent AdaptiveAgent {
+    temperature 0.5
+    max-turns 3
+
+    main {
+        // Quick factual answer
+        set_temperature(0.1)
+        set_max_turns(1)
+        let answer = llm act "What is 2+2?"
+
+        // Creative exploration
+        set_temperature(0.9)
+        set_max_turns(10)
+        set_thinking_mode(true)
+        let ideas = llm act "Brainstorm solutions"
+
+        // Code generation
+        set_temperature(0.3)
+        set_reasoning_effort("high")
+        set_max_tokens(8000)
+        let code = llm act "Generate implementation"
+    }
+}
+```
+
+**Key principle**: Parameters are API fields, not prompt text. `set_temperature(0.3)` does NOT change the prompt content, so prefix cache hit rate is preserved across turns.
+
 ### Pattern 6: Tool-Using Agent
 
 **Scenario**: Agent uses tools to accomplish complex tasks

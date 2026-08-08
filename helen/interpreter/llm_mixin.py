@@ -321,6 +321,20 @@ class LlmMixin:
         thinking_mode = self._get_agent_setting("thinking-mode")  # bool or None
         reasoning_effort = self._get_agent_setting("reasoning-effort")  # str or None
 
+        # v1.39.8: Apply runtime overrides (set via stdlib functions).
+        # Priority: stdlib set_*() > agent declaration > built-in default
+        overrides = getattr(self, '_runtime_overrides', {})
+        if "temperature" in overrides:
+            temperature = float(overrides["temperature"])
+        if "max_turns" in overrides:
+            max_turns = int(overrides["max_turns"])
+        if "max_tokens" in overrides:
+            max_tokens = overrides["max_tokens"]
+        if "thinking_mode" in overrides:
+            thinking_mode = overrides["thinking_mode"]
+        if "reasoning_effort" in overrides:
+            reasoning_effort = overrides["reasoning_effort"]
+
         # Phase 7: Apply context config if agent has one
         if self._current_agent is not None and hasattr(self._current_agent, 'context_config'):
             ctx_config = self._current_agent.context_config

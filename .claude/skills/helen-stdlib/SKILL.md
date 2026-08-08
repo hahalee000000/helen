@@ -36,7 +36,7 @@ Helen's standard library provides **333 built-in functions**, covering all core 
 | **Media** | 12 | `media`, `media_base64`, `is_media`, `media_type`, `to_openai_parts`, `to_claude_parts`, `to_gemini_parts`, `media_to_base64`, `save_media`, `is_image`, `is_video`, `is_audio` |
 | **Test** | 23 | `test_suite`, `test_case`, `test_case_skip`, `test_end_suite`, `set_test_timeout`, `run_tests`, `run_tests_json`, `test_count`, `test_reset`, `before_all`, `after_all`, `before_each`, `after_each`, `assert_equal`, `assert_not_equal`, `assert_true`, `assert_contains`, `assert_throws`, `describe`, `expect`, `it`, `it_skip`, `fail` |
 | **Quality** | 4 | `analyze_code`, `check_security`, `quality_score`, `quality_report` |
-| **LLM** | 3 | `cancel_llm_call`, `current_llm_call_id`, `cancel_all_llm_calls` |
+| **LLM** | 16 | `cancel_llm_call`, `current_llm_call_id`, `cancel_all_llm_calls`, `set_temperature`, `get_temperature`, `set_max_turns`, `get_max_turns`, `set_max_tokens`, `get_max_tokens`, `set_thinking_mode`, `get_thinking_mode`, `set_reasoning_effort`, `get_reasoning_effort`, `get_model`, `get_description`, `get_provider` |
 | **Concurrency** | 1 | `mailbox_select` |
 
 ## Multilingual stdlib (v1.10)
