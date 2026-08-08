@@ -197,7 +197,8 @@ def start_backend(backend_dir: Path, env: dict) -> subprocess.Popen:
         "    except OSError:\n"
         "        pass\n"
         "import uvicorn\n"
-        "uvicorn.run('app.main:app', host='0.0.0.0', port=8000, reload=False)\n"
+        "from app.config import settings\n"
+        "uvicorn.run('app.main:app', host=settings.HOST, port=settings.PORT, reload=False)\n"
     )
 
     creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if IS_WINDOWS else 0

@@ -40,8 +40,8 @@ class Settings(BaseSettings):
     # 应用配置
     APP_NAME: str = "Helen Web UI"
     VERSION: str = "1.0"
-    DEBUG: bool = True
-    HOST: str = "0.0.0.0"
+    DEBUG: bool = False
+    HOST: str = "127.0.0.1"
     PORT: int = 8000
 
     # Helen 配置（默认自动推断，可通过环境变量或 .env 覆盖）

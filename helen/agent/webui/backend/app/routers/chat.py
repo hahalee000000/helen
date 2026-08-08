@@ -278,7 +278,14 @@ async def get_session_media(session_id: str, filename: str):
     transcript_path = get_transcript_path(session_id)
     if not transcript_path:
         raise HTTPException(404, "Session not found")
-    media_path = transcript_path.parent / "media" / filename
+    media_dir = transcript_path.parent / "media"
+    media_path = media_dir / filename
+    # v1.39.7: realpath 校验，确保文件在 media 目录内（防符号链接逃逸）
+    import os
+    real_media = os.path.realpath(media_path)
+    real_media_dir = os.path.realpath(media_dir)
+    if not real_media.startswith(real_media_dir + os.sep) and real_media != real_media_dir:
+        raise HTTPException(403, "Access denied")
     if not media_path.exists() or not media_path.is_file():
         raise HTTPException(404, "Media file not found")
     import mimetypes
@@ -654,6 +661,13 @@ async def get_upload_file(upload_id: str):
     cwd = directory_manager.get_current_cwd()
     upload_dir = Path(cwd) / ".helen" / "uploads" / upload_id
     file_path = upload_dir / "file"
+
+    # v1.39.7: realpath 校验，确保文件在 uploads 目录内（防符号链接逃逸）
+    import os
+    real_file = os.path.realpath(file_path)
+    real_upload_dir = os.path.realpath(upload_dir)
+    if not real_file.startswith(real_upload_dir + os.sep) and real_file != real_upload_dir:
+        raise HTTPException(403, "Access denied")
 
     if not file_path.exists():
         raise HTTPException(404, "File not found")
