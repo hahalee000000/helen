@@ -1,6 +1,38 @@
 # 版本历史
 
-> Helen v1.39.8 | stdlib 函数运行时调整 LLM 参数
+> Helen v1.39.9 | 修复 working memory 清空响应导致空白回答
+
+---
+
+## v1.39.9: 修复 working memory 清空响应导致空白回答
+
+**发布日期**: 2026-08-10
+**核心修复**: 解决 agent 执行若干工具调用后返回空白、前端无错误显示的问题
+
+### 1. 问题
+
+`ChatSessionActor`（Web UI agent）启用 working memory 后,system prompt 会指示 LLM 在任务结束时附加 `<working_memory>...</working_memory>` 块。部分模型（尤其是 glm-5.2）在工具调用后偶尔**只输出该块**,不含给用户的回答文本。
+
+`_apply_working_memory_update` 用正则删除整个块后,响应变为空字符串。由于 `llm act` 正常返回 `""`（不抛异常）,actor 发送 `status: "success"` + 空 content,前端显示**空白且无错误**。
+
+### 2. 根因
+
+- `_apply_working_memory_update`（`llm_mixin.py`）删除 `<working_memory>` 块后未检查结果是否为空
+- `_build_working_memory_instructions` 的 Example 只展示了块本身,可能误导 LLM 只输出块
+
+### 3. 解决方案
+
+**双重修复**:
+
+1. **空响应回退保护**（`_apply_working_memory_update`）: 清除块后若结果为空,回退返回原始响应,并输出 stderr 警告。仍正常提取 working memory 更新,不丢失记忆。
+2. **强化指令**（`_build_working_memory_instructions`）: 开头明确要求"必须先给完整回答,working_memory 块只能追加在末尾,不能作为响应的唯一内容";Example 改为"回答 + 块"完整示例。
+
+### 4. 设计原则
+
+- **永不返回空响应**: 两害相权取其轻——回退原始响应（含块标签）优于空白
+- **不丢失记忆**: 回退路径仍提取并应用 working memory 更新
+- **可追踪**: stderr 警告便于定位此类 LLM 行为
+- **零 breaking change**: 正常"回答 + 块"的响应行为不变
 
 ---
 

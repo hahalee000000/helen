@@ -133,5 +133,84 @@ active_files: [test.py]
         assert "Response." in cleaned
 
 
+class TestWorkingMemoryBlockOnlyFallback:
+    """v1.39.9 fix: when the LLM wraps its ENTIRE response in a
+    <working_memory> block (no user-facing answer), stripping the block
+    must NOT return an empty string. The original response is returned
+    as a fallback so the UI shows content instead of going blank.
+
+    Reproduces the glm-5.2 pattern where, after a few tool calls, the
+    model emits only the working-memory block and the agent returns ""
+    -> blank UI with no error.
+    """
+
+    def test_block_only_returns_original_not_empty(self, capsys):
+        """Response containing only a <working_memory> block falls back
+        to the original response instead of returning empty."""
+        interp = Interpreter(llm_runtime=MockLLMRuntime())
+        interp._agent_context = AgentContextManager()
+
+        response = """<working_memory>
+active_files: [main.py]
+decisions: [Use async pattern]
+</working_memory>"""
+
+        cleaned = interp._apply_working_memory_update(response)
+
+        # Must NOT be empty - fallback to original
+        assert cleaned != ""
+        assert cleaned is not None
+        # Fallback returns the original response verbatim
+        assert cleaned == response
+
+        # A warning should be printed to stderr
+        captured = capsys.readouterr()
+        assert "emptied the response" in captured.err
+
+    def test_block_only_still_updates_memory(self, capsys):
+        """Even when falling back, the working memory store is still
+        updated from the block content."""
+        interp = Interpreter(llm_runtime=MockLLMRuntime())
+        interp._agent_context = AgentContextManager()
+
+        response = """<working_memory>
+active_files: [auth.py]
+decisions: [Use JWT]
+</working_memory>"""
+
+        interp._apply_working_memory_update(response)
+
+        wm = interp._agent_context.working_memory
+        assert "auth.py" in wm.active_files
+        assert "Use JWT" in wm.recent_decisions
+
+    def test_block_only_whitespace_outside_falls_back(self, capsys):
+        """If the only non-block content is whitespace, still fall back."""
+        interp = Interpreter(llm_runtime=MockLLMRuntime())
+        interp._agent_context = AgentContextManager()
+
+        response = "\n\n<working_memory>\nactive_files: [x.py]\n</working_memory>\n\n"
+
+        cleaned = interp._apply_working_memory_update(response)
+
+        # Whitespace-only after strip -> fall back to original
+        assert cleaned == response
+
+    def test_block_only_disabled_memory_still_falls_back(self, capsys):
+        """Fallback applies even when working memory is disabled - the
+        point is to never return an empty response to the user."""
+        interp = Interpreter(llm_runtime=MockLLMRuntime())
+        interp._agent_context = AgentContextManager(working_memory_enabled=False)
+
+        response = """<working_memory>
+active_files: [test.py]
+</working_memory>"""
+
+        cleaned = interp._apply_working_memory_update(response)
+
+        # Must not be empty
+        assert cleaned == response
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

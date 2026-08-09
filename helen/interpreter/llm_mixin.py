@@ -1331,7 +1331,9 @@ class LlmMixin:
 
         return """## Working Memory Maintenance
 
-At the end of each task, include a working memory update in your response using this format:
+IMPORTANT: Always provide your complete response to the user FIRST. The working memory block is an OPTIONAL appendix that appears AFTER your full answer - it must NEVER be the only content of your response. If you have nothing else to say, still provide a brief summary or status to the user before the block.
+
+At the end of each task, you MAY include a working memory update using this format:
 
 <working_memory>
 active_files: [list of FILE PATHS you modified or referenced]
@@ -1341,13 +1343,17 @@ errors: [errors encountered and how you resolved them]
 </working_memory>
 
 Guidelines:
+- ALWAYS write your complete answer to the user BEFORE the <working_memory> block
+- NEVER make <working_memory> the only content of your response
 - `active_files` must contain ONLY file paths (e.g. "src/auth.py", "lib/utils.js"), NOT descriptions or analysis text
 - Only include fields that have meaningful updates
 - Keep each item concise (one line per item)
 - Focus on information that would help you continue the work in the next invocation
 - Omit the working memory block if there are no meaningful updates
 
-Example:
+Example response:
+I've updated the authentication module to use JWT tokens. The main changes are in `src/auth.py`, and I've added corresponding tests in `tests/test_auth.py`. Token expiration handling now includes refresh logic.
+
 <working_memory>
 active_files: [src/auth.py, tests/test_auth.py]
 decisions: [Use JWT tokens instead of sessions for cross-device support]
@@ -1451,6 +1457,28 @@ errors: [Fixed token expiration handling - was missing refresh logic]
             response,
             flags=re.DOTALL | re.IGNORECASE,
         )
+
+        # v1.39.9 fix: Guard against LLMs that wrap their ENTIRE response
+        # in a <working_memory> block (observed with glm-5.2 after tool
+        # calls: the model treats the working-memory instruction as the
+        # whole task and emits only the block, with no user-facing answer).
+        # Stripping the block would yield an empty response -> blank UI
+        # with no error. Fall back to the original response so the user
+        # still sees content, and warn so the pattern is traceable.
+        if not cleaned_response.strip():
+            import sys
+            print(
+                "⚠ Working memory strip emptied the response - LLM wrapped "
+                "its entire output in <working_memory>. Falling back to "
+                "original response.",
+                file=sys.stderr,
+            )
+            agent_ctx = getattr(self, '_agent_context', None)
+            if agent_ctx is not None and agent_ctx.working_memory_enabled:
+                wm_update = self._extract_working_memory_update(response)
+                if wm_update:
+                    agent_ctx.update_from_llm_summary(wm_update)
+            return response
 
         agent_ctx = getattr(self, '_agent_context', None)
         if agent_ctx is None or not agent_ctx.working_memory_enabled:
