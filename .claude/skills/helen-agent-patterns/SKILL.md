@@ -67,24 +67,75 @@ let result = Translator("Hello", "Chinese")
 
 ### Agent Configuration Options
 
+**Configuration syntax:** Agent configuration elements support **two equivalent syntaxes** — with or without `=`. Both forms are valid and equivalent:
+
+```helen
+agent Assistant {
+    // Without = (traditional)
+    description "Helpful assistant"
+    model "gpt-4"
+    temperature 0.7
+    max-turns 5
+    
+    // With = (also valid)
+    description = "Helpful assistant"
+    model = "gpt-4"
+    temperature = 0.7
+    tools = ["web_search", "read_file"]
+}
+```
+
+**Note:** `prompt` always uses `prompt "..."` (no `=`), because it requires a literal string template for `{{variable}}` interpolation.
+
+**Full configuration example:**
+
 ```helen
 agent ConfiguredAgent {
+    // === Identity ===
     description "Agent with full configuration"
     prompt "You are an expert assistant."
+    
+    // === Model & Behavior ===
     model "gpt-4"              # LLM model
     temperature 0.7            # Creativity (0.0-1.0)
     max-turns 10               # Maximum tool call rounds
     max-tokens 4096            # Max output tokens (v1.31.2)
+    
+    // === Advanced Features ===
     streaming true             # Enable streaming response
     thinking-mode true         # Enable thinking/reasoning (v1.36)
     reasoning-effort "high"    # low/medium/high/max (v1.36)
+    provider "openai"          # Explicit provider override (v1.36)
+    
+    // === Tools & Authorization ===
     tools = ["web_search", "read_file", "write_file"]
-
+    
+    // === Transcript Control (v1.29) ===
+    transcript "persistent"    # "none" (default), "memory", or "persistent"
+    
     main {
         return llm act "Do something complex"
     }
 }
 ```
+
+**Configuration elements reference:**
+
+| Element | Type | Purpose | Example |
+|---------|------|---------|---------|
+| `description` | string | Agent role description for LLM | "Senior code reviewer" |
+| `model` | string | LLM model selection | "gpt-4", "qwen3.7-plus" |
+| `temperature` | float | Control creativity (0.0-2.0) | 0.1 (precise), 0.7 (balanced), 1.2 (creative) |
+| `max-turns` | int | Limit tool-calling iterations | 1, 10, 50 |
+| `max-tokens` | int | Max output tokens | 100, 4096, 131072 |
+| `streaming` | bool | Enable streaming response | true, false |
+| `transcript` | string | Conversation persistence | "none", "memory", "persistent" |
+| `tools` | list | LLM-visible tool whitelist | ["read_file", "web_search"] |
+| `thinking-mode` | bool | Enable reasoning mode (v1.36) | true, false |
+| `reasoning-effort` | string | Reasoning depth (v1.36) | "low", "medium", "high", "max" |
+| `provider` | string | Explicit provider (v1.36) | "openai", "anthropic" |
+
+**Note**: All elements support optional `=` syntax except `prompt` (requires literal string for template interpolation).
 
 **Thinking mode (v1.36):** When enabled, the model produces chain-of-thought reasoning before the final answer. The reasoning is captured separately (not streamed to frontend) and mapped to provider-specific parameters automatically:
 

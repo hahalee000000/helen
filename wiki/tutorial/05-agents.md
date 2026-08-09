@@ -112,6 +112,119 @@ agent Translator {
 
 ## Agent Configuration
 
+### Configuration Syntax: Optional `=`
+
+Agent configuration elements support **two equivalent syntaxes** — with or without `=`:
+
+```helen
+agent Assistant {
+    // Without = (traditional)
+    description "Helpful assistant"
+    model "gpt-4"
+    temperature 0.7
+    max-turns 5
+    
+    // With = (also valid)
+    description = "Helpful assistant"
+    model = "gpt-4"
+    temperature = 0.7
+    max-turns = 5
+    tools = ["web_search", "read_file"]
+}
+```
+
+**Both forms are equivalent** — the parser accepts either style. The `=` is optional for all agent configuration elements except `prompt`, which requires a string literal and does not accept `=`.
+
+**Supported elements with optional `=`:**
+- `description` / `description =`
+- `model` / `model =`
+- `temperature` / `temperature =`
+- `max-turns` / `max-turns =`
+- `max-tokens` / `max-tokens =`
+- `tools` / `tools =`
+- `thinking-mode` / `thinking-mode =`
+- `reasoning-effort` / `reasoning-effort =`
+
+**Note:** `prompt` always uses the form `prompt "..."` (no `=`), because it requires a literal string template for `{{variable}}` interpolation.
+
+### description — Agent Description
+
+The `description` field provides context to the LLM about the agent's role and purpose. It's included in the system prompt sent to the LLM.
+
+```helen
+agent CodeReviewer {
+    description "You are a senior software engineer with 10 years of experience in code review."
+    main { return llm act "Review this code..." }
+}
+```
+
+**Best practices**:
+- Be specific about the agent's role and expertise
+- Include relevant context that helps the LLM understand its purpose
+- Keep it concise but informative
+
+### streaming — Enable Streaming Response (v1.21)
+
+The `streaming` configuration enables streaming response from the agent. When enabled, the agent returns a `StreamingResponse` object instead of a complete string.
+
+```helen
+agent StreamAgent {
+    description "Agent with streaming output"
+    streaming true    // Enable streaming
+    main { return llm act "Generate a long response" }
+}
+
+main {
+    let agent = StreamAgent()
+    let response = call agent
+    // response is a StreamingResponse object
+    for chunk in response {
+        print(chunk, end="")
+    }
+}
+```
+
+**When to use**:
+- Long-form content generation (articles, stories)
+- Real-time feedback to users
+- Progress indicators for long operations
+
+### transcript — Control Conversation Persistence (v1.29)
+
+The `transcript` configuration controls whether agent conversations are persisted to disk. This is crucial for session management and debugging.
+
+**Three levels**:
+
+```helen
+// Level 1: "none" (default) — No persistence, zero overhead
+agent QuickTask {
+    transcript "none"
+    main { llm act "Quick calculation" }
+}
+
+// Level 2: "memory" — In-memory only, no disk files
+agent DebugAgent {
+    transcript "memory"
+    main { 
+        let session_id = get_session_id()
+        llm act "Debug issue"
+    }
+}
+
+// Level 3: "persistent" — Full disk persistence
+agent AuditAgent {
+    transcript "persistent"
+    main { llm act "Perform security audit" }
+}
+```
+
+**When to use each level**:
+- `none`: Batch processing, performance-critical tasks, one-shot operations
+- `memory`: Development, debugging, when you need `get_session_id()` but don't want disk files
+- `persistent`: Long-running services, audit requirements, session resumption, conversation history
+
+**Chinese aliases**: `记录 "无"` / `记录 "内存"` / `记录 "持久"`
+
 ### model — Specify Model
 
 ```helen

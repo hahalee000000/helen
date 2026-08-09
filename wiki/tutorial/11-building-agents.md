@@ -35,7 +35,9 @@ When designing multi-agent systems, start by drawing a **context flow diagram**:
 
 ## Agent Configuration Reference
 
-Before building agents, understand the configuration options available in agent declarations:
+Before building agents, understand the configuration options available in agent declarations.
+
+**Note:** Configuration elements support two equivalent syntaxes — with or without `=`. Both `description "..."` and `description = "..."` are valid. The `=` is optional for all configuration elements except `prompt`, which always uses `prompt "..."` (literal string template).
 
 ```helen
 agent MyAgent {
@@ -82,12 +84,21 @@ agent MyAgent {
 
 ### Configuration Guidelines
 
-| Setting | When to Use | Example Values |
-|---------|-------------|----------------|
-| `temperature` | Control creativity vs determinism | 0.1 (factual), 0.7 (balanced), 1.2 (creative) |
-| `max-turns` | Limit tool-calling iterations | 1 (single response), 10 (moderate), 50 (complex tasks) |
-| `max-tokens` | Control response length | 100 (short), 4096 (default), 131072 (long-form) |
-| `transcript` | Control conversation persistence | "none" (ephemeral), "memory" (session), "persistent" (disk) |
+| Setting | Purpose | When to Use | Example Values |
+|---------|---------|-------------|----------------|
+| `description` | Agent role description | Always provide context to LLM | "Senior code reviewer" |
+| `model` | LLM model selection | Override default model | "gpt-4", "qwen3.7-plus" |
+| `temperature` | Control creativity vs determinism | Balance creativity/precision | 0.1 (factual), 0.7 (balanced), 1.2 (creative) |
+| `max-turns` | Limit tool-calling iterations | Prevent infinite loops | 1 (single response), 10 (moderate), 50 (complex tasks) |
+| `max-tokens` | Control response length | Limit output size | 100 (short), 4096 (default), 131072 (long-form) |
+| `streaming` | Enable streaming response | Real-time output, long content | true, false |
+| `transcript` | Control conversation persistence | Session management, debugging | "none" (ephemeral), "memory" (session), "persistent" (disk) |
+| `tools` | LLM-visible tool whitelist | Control agent capabilities | ["read_file", "web_search"] |
+| `thinking-mode` | Enable reasoning mode | Complex reasoning tasks | true, false |
+| `reasoning-effort` | Control reasoning depth | Balance speed/quality | "low", "medium", "high", "max" |
+| `provider` | Explicit provider override | Multi-provider setups | "openai", "anthropic" |
+
+**Note**: All configuration elements support optional `=` syntax (e.g., both `description "..."` and `description = "..."` are valid), except `prompt` which always uses `prompt "..."` for template interpolation.
 
 **Runtime adjustment (v1.39.8)**: Use stdlib functions to override these settings at runtime without changing prompt content (preserves cache):
 
