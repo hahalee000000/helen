@@ -37,3 +37,6 @@ verify.py
 
 # codebase-memory-mcp index artifact (regenerated per-machine, not for git)
 .codebase-memory/
+
+# Local threat model draft (not for git)
+THREAT_MODEL.md
