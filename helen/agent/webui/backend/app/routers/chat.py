@@ -2,18 +2,19 @@
 import asyncio
 import json
 from pathlib import Path
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Body, UploadFile, File, Form
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPException, Body, UploadFile, File, Form, Query
 from fastapi.responses import FileResponse
 from typing import List, Optional
 import uuid
 from datetime import datetime
 
+from app.auth import require_auth, verify_ws_token
 from app.services.helen_bridge import helen_bridge
 from app.services import hint_injector
 from app.services import directory_manager
 from app.services.stream_registry import stream_registry
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_auth)])
 
 # ── 文件上传常量 ──────────────────────────────────────────
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
@@ -294,7 +295,7 @@ async def get_session_media(session_id: str, filename: str):
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(default=None)):
     """WebSocket 聊天接口(广播模式,无 session_id)
 
     v6.1:单会话架构,所有连接共享当前工作目录。session_id 内部保留
@@ -303,6 +304,8 @@ async def websocket_endpoint(websocket: WebSocket):
     v1.39.4:hint queue 已简化为单例模式（忽略 session_id 参数），
     修复了 hint 注入失败的 bug（chat.py 用 cwd hash，actor 用 UUID，不匹配）。
     """
+    # 鉴权：WebSocket 握手前校验 token（来自 ?token= 查询参数）
+    verify_ws_token(token)
     manager = websocket.app.state.websocket_manager
     await manager.connect(websocket)
 

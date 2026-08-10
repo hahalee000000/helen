@@ -12,11 +12,10 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    host: '0.0.0.0',
-    // 把 /api 请求代理到 WSL 内的 uvicorn 后端（8000 端口）。
-    // 好处：前端代码不再需要硬编码 localhost:8000，
-    // 通过 WSL IP (172.x.x.x:5173) 或 Windows localhost:5173 访问都能通，
-    // 彻底绕开 WSL2 localhost 转发失效的问题。
+    // 仅绑定 loopback,防止局域网可达。
+    // WSL2 跨命名空间访问请用 `wsl --exec curl` 或 `netsh interface portproxy`,
+    // 不要把 dev server 暴露给 0.0.0.0(否则同网段任意主机可直接执行 Helen 程序)。
+    host: '127.0.0.1',
     proxy: {
       '/api': {
         target: 'http://localhost:8000',

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
+import secrets
 import shutil
 import time
 from pathlib import Path
@@ -28,7 +29,7 @@ class SessionManager:
     """Manages transcript sessions and persistence.
 
     Each session has:
-    - A unique session_id (e.g., "session_1720435200_a1b2c3d4")
+    - A unique session_id (e.g., "session_1720435200_a1b2c3d4_e5f6g7h8")
     - A directory under ~/.helen/sessions/<session_id>/
     - A transcript.jsonl file containing the message log
 
@@ -62,13 +63,17 @@ class SessionManager:
         Example:
             manager = SessionManager()
             session_id = manager.create_session()
-            # Returns: "session_1720435200_a1b2c3d4"
+            # Returns: "session_1720435200_a1b2c3d4_e5f6g7h8"
         """
         if session_id is None:
-            # Generate session ID: timestamp + short UUID
+            # Generate session ID: timestamp + random salt + short UUID
+            # salt (8 hex chars / 32 bit) defeats offline prediction even if the
+            # timestamp is guessable; the trailing uuid4 segment keeps legacy
+            # collision resistance for code that parses the suffix.
             timestamp = int(time.time())
+            salt = secrets.token_hex(4)
             short_uuid = uuid4().hex[:8]
-            session_id = f"session_{timestamp}_{short_uuid}"
+            session_id = f"session_{timestamp}_{salt}_{short_uuid}"
 
         # Create session directory
         session_dir = self.base_dir / session_id
@@ -87,8 +92,8 @@ class SessionManager:
             Path to transcript.jsonl file
 
         Example:
-            path = manager.get_session_path("session_1720435200_a1b2c3d4")
-            # Returns: ~/.helen/sessions/session_1720435200_a1b2c3d4/transcript.jsonl
+            path = manager.get_session_path("session_1720435200_a1b2c3d4_e5f6g7h8")
+            # Returns: ~/.helen/sessions/session_1720435200_a1b2c3d4_e5f6g7h8/transcript.jsonl
         """
         return self.base_dir / session_id / "transcript.jsonl"
 
@@ -263,7 +268,7 @@ class SessionManager:
             True if session was deleted, False if it didn't exist
 
         Example:
-            success = manager.delete_session("session_1720435200_a1b2c3d4")
+            success = manager.delete_session("session_1720435200_a1b2c3d4_e5f6g7h8")
         """
         session_dir = self.base_dir / session_id
 

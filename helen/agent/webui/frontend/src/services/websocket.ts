@@ -2,6 +2,18 @@
 // 这样无论用户通过 localhost:5173 还是 WSL IP (172.x.x.x:5173) 访问，WS 都能通。
 const WS_BASE_URL = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/chat/ws`
 
+// Token 通过 ?token= query param 传递给后端（WebSocket 无法在握手后设置 header）。
+// 与 api.ts 共享同一 localStorage key。
+const TOKEN_STORAGE_KEY = 'helen-webui-token'
+
+function getWsToken(): string {
+  try {
+    return localStorage.getItem(TOKEN_STORAGE_KEY) || ''
+  } catch {
+    return ''
+  }
+}
+
 /**
  * WebSocket 管理器（支持断线重连）
  */
@@ -42,7 +54,9 @@ export class WebSocketManager {
   }
 
   private createConnection() {
-    this.ws = new WebSocket(WS_BASE_URL)
+    const token = getWsToken()
+    const url = token ? `${WS_BASE_URL}?token=${encodeURIComponent(token)}` : WS_BASE_URL
+    this.ws = new WebSocket(url)
 
     this.ws.onopen = () => {
       console.log('WebSocket connected')

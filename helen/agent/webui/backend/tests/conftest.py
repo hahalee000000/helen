@@ -9,6 +9,21 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 @pytest.fixture(autouse=True)
+def _disable_webui_auth_for_tests():
+    """测试期间禁用 Web UI token 鉴权。
+
+    测试用 TestClient 直接调 FastAPI，不带 X-Helen-Token header。
+    将 settings.HELEN_WEBUI_TOKEN 强制置空后，auth.require_auth 会直接放行。
+    测试结束后恢复原值。
+    """
+    from app.config import settings
+    original = settings.HELEN_WEBUI_TOKEN
+    settings.HELEN_WEBUI_TOKEN = ""
+    yield
+    settings.HELEN_WEBUI_TOKEN = original
+
+
+@pytest.fixture(autouse=True)
 def _isolate_cwd_and_directory_manager():
     """隔离每个测试的 cwd 和 directory_manager 状态
 

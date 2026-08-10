@@ -1,9 +1,10 @@
 """Helen Web UI - FastAPI 后端主入口"""
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app.config import settings
+from app.auth import require_auth
 from app.routers import chat, agents
 from app.websocket.manager import WebSocketManager
 
@@ -24,6 +25,17 @@ async def lifespan(app: FastAPI):
     print(f"📂 会话目录: {get_current_cwd()}")
     app.state.websocket_manager = WebSocketManager()
     print(f"🌐 Helen path: {settings.HELEN_PATH}")
+
+    # ── 鉴权初始化 ───────────────────────────────────────────
+    token = settings.ensure_token()
+    if token:
+        print(f"🔐 Auth enabled. Token (copy to frontend):")
+        print(f"   {token}")
+        print(f"   (also persisted to ~/.helen/webui_token)")
+    else:
+        print("⚠️  Auth DISABLED (HELEN_WEBUI_TOKEN='' explicitly). "
+              "Set HELEN_WEBUI_TOKEN or remove it from .env to enable.")
+
     yield
     # 关闭时清理
     print("🛑 Shutting down...")
@@ -46,12 +58,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 注册路由
+# 注册路由（chat/agents 已在各自模块中挂载 require_auth）
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(agents.router, prefix="/api/agents", tags=["agents"])
 
 @app.get("/")
-async def root():
+async def root(_token: str = Depends(require_auth)):
     """根路由"""
     return {
         "message": "Helen Web UI API",
@@ -61,14 +73,14 @@ async def root():
 
 @app.get("/health")
 async def health():
-    """健康检查"""
+    """健康检查（无鉴权，供启动脚本/监控探测）"""
     return {
         "status": "ok",
         "app": settings.APP_NAME
     }
 
 @app.get("/api/status")
-async def api_status():
+async def api_status(_token: str = Depends(require_auth)):
     """API 状态"""
     manager = app.state.websocket_manager
     return {

@@ -1,6 +1,7 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
 from pathlib import Path
+import secrets
 
 
 def _default_helen_path() -> str:
@@ -48,6 +49,12 @@ class Settings(BaseSettings):
     HELEN_PATH: str = _default_helen_path()
     HELEN_TIMEOUT: int = 300
 
+    # ── 鉴权 ──────────────────────────────────────────────────────
+    # Web UI 访问 token。为空串 "" 时禁用鉴权（仅用于开发/测试，日志会警告）。
+    # 默认：首次启动时自动生成并持久化到 ~/.helen/webui_token，后续启动复用。
+    # 用户可通过 .env 中 HELEN_WEBUI_TOKEN=xxx 覆盖。
+    HELEN_WEBUI_TOKEN: str = ""
+
     # CORS 配置（允许 vite 常用端口 5173-5180）
     CORS_ORIGINS: list[str] = [
         "http://localhost:5173", "http://127.0.0.1:5173",
@@ -66,5 +73,38 @@ class Settings(BaseSettings):
         # v6.1 移除了 SQLite（transcript 作为 SSOT），保留 extra="ignore" 防止未来
         # .env 中的陈旧字段（如 DATABASE_URL）打断启动。
         extra = "ignore"
+
+    def ensure_token(self) -> str:
+        """解析 token：优先 .env / 环境变量；为空则加载持久化文件；都不存在则生成。
+
+        Returns: 解析后的 token（空串表示禁用鉴权）。
+        """
+        if self.HELEN_WEBUI_TOKEN:
+            return self.HELEN_WEBUI_TOKEN
+
+        # 持久化路径：~/.helen/webui_token
+        token_path = Path.home() / ".helen" / "webui_token"
+        try:
+            token_path.parent.mkdir(parents=True, exist_ok=True)
+            if token_path.exists():
+                stored = token_path.read_text(encoding="utf-8").strip()
+                if stored:
+                    self.HELEN_WEBUI_TOKEN = stored
+                    return stored
+            # 生成新 token 并落盘
+            new_token = secrets.token_urlsafe(32)
+            token_path.write_text(new_token, encoding="utf-8")
+            try:
+                token_path.chmod(0o600)
+            except OSError:
+                pass
+            self.HELEN_WEBUI_TOKEN = new_token
+            return new_token
+        except OSError:
+            # 落盘失败就退化为每次启动生成新 token（内存中有效）
+            new_token = secrets.token_urlsafe(32)
+            self.HELEN_WEBUI_TOKEN = new_token
+            return new_token
+
 
 settings = Settings()

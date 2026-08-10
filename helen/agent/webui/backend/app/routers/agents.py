@@ -1,8 +1,10 @@
 """Agent 管理 API 路由"""
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from typing import List, Dict
 
-router = APIRouter()
+from app.auth import require_auth
+
+router = APIRouter(dependencies=[Depends(require_auth)])
 
 # 模拟的 Agent 状态数据
 # 实际实现中应该从 Helen 运行时获取

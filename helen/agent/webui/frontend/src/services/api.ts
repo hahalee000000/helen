@@ -2,6 +2,58 @@
 // 这样无论用户通过 localhost:5173 还是 WSL IP 访问，API 都能通。
 const API_BASE_URL = '/api'
 
+// ── Token 管理 ──────────────────────────────────────────────
+// 后端对所有 /api/* 端点要求 X-Helen-Token header。Token 来自:
+//   1. localStorage['helen-webui-token'] (用户在前端设置页输入)
+//   2. 如未设置，fetch 会收到 401，触发前端显示 token 输入 UI。
+const TOKEN_STORAGE_KEY = 'helen-webui-token'
+
+export function getStoredToken(): string {
+  try {
+    return localStorage.getItem(TOKEN_STORAGE_KEY) || ''
+  } catch {
+    return ''
+  }
+}
+
+export function setStoredToken(token: string): void {
+  try {
+    if (token) {
+      localStorage.setItem(TOKEN_STORAGE_KEY, token)
+    } else {
+      localStorage.removeItem(TOKEN_STORAGE_KEY)
+    }
+  } catch {
+    // localStorage 不可用（隐私模式等），降级为内存态：仅当前会话有效
+  }
+}
+
+export function clearStoredToken(): void {
+  setStoredToken('')
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getStoredToken()
+  return token ? { 'X-Helen-Token': token } : {}
+}
+
+// 401 监听器：供 App 层挂回调，弹 token 输入框
+type AuthListener = () => void
+const authListeners: Set<AuthListener> = new Set()
+
+export function onAuthRequired(listener: AuthListener): () => void {
+  authListeners.add(listener)
+  return () => {
+    authListeners.delete(listener)
+  }
+}
+
+function notifyAuthRequired(): void {
+  authListeners.forEach((l) => {
+    try { l() } catch { /* 监听器错误不影响主流程 */ }
+  })
+}
+
 /**
  * 带重试的 fetch 请求
  */
@@ -12,9 +64,23 @@ async function fetchWithRetry(
 ): Promise<Response> {
   let lastError: Error | null = null
 
+  // 注入 auth header（不覆盖用户显式传入的同名 header）
+  const headers = new Headers(options.headers || {})
+  const auth = authHeaders()
+  for (const [k, v] of Object.entries(auth)) {
+    if (!headers.has(k)) headers.set(k, v)
+  }
+  options = { ...options, headers }
+
   for (let i = 0; i < maxRetries; i++) {
     try {
       const response = await fetch(url, options)
+
+      // 401/403: 鉴权失败，不重试，通知上层弹 token 输入框
+      if (response.status === 401 || response.status === 403) {
+        notifyAuthRequired()
+        return response
+      }
 
       // 如果是服务器错误（5xx），重试
       if (response.status >= 500 && i < maxRetries - 1) {
@@ -132,8 +198,12 @@ export const api = {
       formData.append('file', file)
       const response = await fetch(`${API_BASE_URL}/chat/upload`, {
         method: 'POST',
-        body: formData
+        body: formData,
+        headers: authHeaders(),
       })
+      if (response.status === 401 || response.status === 403) {
+        notifyAuthRequired()
+      }
       if (!response.ok) {
         const error = await response.json().catch(() => ({ detail: response.statusText }))
         throw new Error(error.detail || 'Upload failed')

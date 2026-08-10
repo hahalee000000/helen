@@ -7,7 +7,7 @@ For the broader multi-project layout, see `../CLAUDE.md`.
 
 **Helen** — a prompt-first Agent programming language (AI-native DSL). Combines deterministic constructs (variables, functions, control flow) with first-class LLM primitives (`llm act`, `llm if`). 
 
-- **Version**: 1.39.9
+- **Version**: 1.39.10
 - **Keywords**: 99 bilingual (48 English + 51 Chinese)
 - **Built-in functions**: 364 stdlib functions (21 categories), 715 total names (with locale aliases)
 - **Stdlib modules**: 22 modules (std.core, std.str, std.math, std.list, ...)
@@ -40,11 +40,13 @@ helen doc <file.helen>              # Generate documentation
 helen lsp                           # Start Language Server (JSON-RPC over stdio)
 ```
 
-## Code Intelligence with codebase-memory-mcp
+## Code Intelligence with codebase-memory-mcp-helen
 
-**MUST use codebase-memory-mcp tools FIRST** for code exploration, debugging, and maintenance. Only fall back to manual grep/glob/read when MCP tools cannot answer the question or when you already know the exact file and line.
+**MUST use codebase-memory-mcp MCP tools for ALL code queries** — Python AND Helen (`.helen`) code. Do NOT fall back to grep/glob/read for code exploration.
 
-### When to use MCP tools (default):
+The locally-compiled binary integrates Helen language support (tree-sitter grammar + AST specs for `agent` declarations, `llm act` expressions, imports, etc.). 1760+ Helen nodes are indexed alongside Python code.
+
+### Mandatory MCP tools:
 - Finding function/class definitions → `search_graph`
 - Understanding who calls a function → `trace_path` (mode=calls, direction=inbound)
 - Understanding what a function calls → `trace_path` (mode=calls, direction=outbound)
@@ -53,16 +55,15 @@ helen lsp                           # Start Language Server (JSON-RPC over stdio
 - High-level architecture overview → `get_architecture`
 - Text search with structural ranking → `search_code`
 
-### When grep/read is acceptable:
-- Simple one-off text search ("find all occurrences of string literal X")
-- Already know exact file path and line number
-- Searching non-Python files (markdown, yaml, etc.) that aren't indexed
+### When grep/read is acceptable (rare):
+- Reading non-code files (markdown, yaml, config, etc.) that aren't indexed
+- You already know the EXACT file path AND line number
 - MCP server is unavailable or unresponsive
 
 Available tools (in priority order):
-- `search_graph` — Find functions, classes, variables (use instead of Grep for definitions)
+- `search_graph` — Find functions, classes, variables, agents (Python + Helen)
 - `trace_path` — Trace callers/callees, data flow, cross-service paths
-- `get_code_snippet` — Read specific function/class source (use instead of Read for targeted code)
+- `get_code_snippet` — Read specific function/class source
 - `query_graph` — Cypher queries for complex patterns (call chains, dependencies, hot paths)
 - `get_architecture` — High-level architecture overview
 - `search_code` — Graph-augmented code search (text pattern + structural ranking)
