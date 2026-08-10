@@ -3,24 +3,30 @@
 [![PyPI version](https://img.shields.io/pypi/v/helen-lang.svg)](https://pypi.org/project/helen-lang/)
 [![Python](https://img.shields.io/pypi/pyversions/helen-lang.svg)](https://pypi.org/project/helen-lang/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-2946%20passed-green.svg)](https://github.com/hahalee000000/helen)
+[![Tests](https://img.shields.io/badge/tests-3694%20passed-green.svg)](https://github.com/hahalee000000/helen)
 
-**Helen** is an AI-native DSL (Domain-Specific Language) designed specifically for AI Agent development. It fuses deterministic constructs (variables, functions, control flow) with first-class LLM primitives (`llm act`, `llm if`) into a single language.
+**Helen** is an AI-native programming language.
+
+*Of the AI, By the AI, For the AI.*
+
+> **Prompts are first-class.** Prompts can freely invoke tools, functions, and other agents.
+
+In traditional programming languages, code is the program's core and AI is just an external service being called. In Helen, **the prompt itself is the core logic** - you describe tasks in natural language, and the prompt invokes tools to read/write files, run commands, search the web, or call other agents to collaborate. Deterministic constructs (variables, functions, control flow) fuse with first-class LLM primitives (`llm act`, `llm if`) into a single language.
 
 ## ✨ Why Helen?
 
-- **Prompt-first**: `agent` is a first-class citizen — agents are language constructs, not library patterns
-- **287 built-in stdlib functions**: 287 bilingual (Chinese/English) functions covering the full AI application development pipeline
-- **5-layer graduated compression + working memory**: Long-conversation agents automatically manage context, no manual tuning required
-- **Transcript SSOT**: Conversation records persisted as SQLite/JSONL, supporting audit and replay
-- **Multi-agent concurrency**: `spawn` + Channel message queues, with built-in mailbox_select multi-select
+- **Prompt-first**: `agent` is a first-class language construct - not a library pattern
+- **364 stdlib functions** across 22 modules - covering the full AI application pipeline
+- **5-layer graduated compression + working memory**: Long-conversation agents manage context automatically, no manual tuning
+- **Transcript SSOT**: Conversations persisted as SQLite/JSONL, supporting audit and replay
+- **Multi-agent concurrency**: `spawn` + Channel message queues, with built-in `mailbox_select`
 - **Python bidirectional integration**: Helen → Python FFI + Python → Helen Bridge
-- **89 bilingual keywords**: 44.5 English + 44.5 Chinese, native Chinese programming support
+- **99 bilingual keywords** (48 English + 51 Chinese) - write every construct in either language
 
 ## 🎯 When to Use Helen?
 
 ### ✅ Choose Helen if you need:
-- **Agents as language constructs**: Not library patterns — agents are first-class citizens
+- **Prompt-first**: `agent` is a first-class language construct - not a library pattern
 - **Bilingual support**: Native Chinese and English programming, lowering the learning curve for teams
 - **Automatic context management**: Long-conversation agents with automatic compression, no manual tuning
 - **Complete DSL**: Variables, functions, control flow + LLM primitives fused into one language
