@@ -150,6 +150,5 @@ helen quality src/*.helen --threshold 7.0 --json > quality.json
 
 ## Related Documentation
 
-- [Tutorial](../../docs/tutorial.md#质量评估)
 - [Wiki](../../../wiki/helen/toolchain/quality.md)
 - [Example](../../examples/quality_example.helen)

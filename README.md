@@ -300,9 +300,15 @@ MIT License
 
 ## 📚 Documentation
 
-- [Wiki Documentation](wiki/index.md) - Complete technical documentation
-- [Tutorial](reports/tutorial.md) - Learn Helen from scratch
-- [Python Bridge Tutorial](wiki/tutorial/15-python-bridge.md) - Python integration guide
+**Start here** — the Beginner Guide teaches Helen's "prompts are first-class" philosophy with an agent-first narrative:
+
+- [📖 Beginner Guide](wiki/guide/README.md) - Agent-first tutorial (11 chapters + appendix). Learn Helen from scratch.
+- [📘 Language Reference](wiki/reference/01-getting-started.md) - Comprehensive, topic-indexed reference (18 chapters)
+
+**By topic:**
+
+- [Wiki Index](wiki/index.md) - Complete technical documentation
+- [Python Bridge](wiki/reference/15-python-bridge.md) - Python integration guide
 - [Context Management](wiki/runtime/context-management.md) - Intelligent context handling (v1.20)
 - [Skill System](wiki/runtime/skills.md) - Skill loading and usage
 

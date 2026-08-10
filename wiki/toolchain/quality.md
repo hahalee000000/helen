@@ -97,6 +97,5 @@ print(quality_report(source, "my_program.helen"))
 
 ## 相关文档
 
-- [教程](../../docs/tutorial.md#质量评估)
 - [测试框架](testing.md)
 - [CLI 工具](cli.md)

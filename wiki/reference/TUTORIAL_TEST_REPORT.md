@@ -13,23 +13,23 @@ Successfully created a test system that extracts and validates 235 code blocks f
 
 ## Files Created
 
-1. **`wiki/tutorial/generate_tests.py`** (273 lines)
+1. **`wiki/reference/generate_tests.py`** (273 lines)
    - Extracts `helen` code blocks from markdown
    - Classifies blocks (complete/fragment/error/skip)
    - Auto-prepends context for fragments
-   - Generates 235 test files in `wiki/tutorial/tests/`
+   - Generates 235 test files in `wiki/reference/tests/`
 
-2. **`wiki/tutorial/run_tests.sh`** (80 lines)
+2. **`wiki/reference/run_tests.sh`** (80 lines)
    - Runs `helen check` on all test files
    - Interprets results based on metadata markers
    - Reports color-coded summary
 
-3. **`wiki/tutorial/tests/README.md`**
+3. **`wiki/reference/tests/README.md`**
    - Complete documentation of the test system
    - Usage instructions
    - Known issues catalog
 
-4. **`wiki/tutorial/tests/`** (235 test files)
+4. **`wiki/reference/tests/`** (235 test files)
    - 17 subdirectories (one per tutorial file)
    - Each file links back to source (file:line)
    - Metadata: `@should_fail`, `@skip: <reason>`
@@ -162,13 +162,13 @@ main {
 
 ```bash
 # Generate tests
-python wiki/tutorial/generate_tests.py
+python wiki/reference/generate_tests.py
 
 # Run tests
-bash wiki/tutorial/run_tests.sh
+bash wiki/reference/run_tests.sh
 
 # View results
-bash wiki/tutorial/run_tests.sh | tee tutorial_test_results.txt
+bash wiki/reference/run_tests.sh | tee tutorial_test_results.txt
 ```
 
 ## Conclusion

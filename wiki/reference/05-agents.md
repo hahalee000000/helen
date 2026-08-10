@@ -1214,4 +1214,4 @@ All templates follow the **"caller decides context"** principle — all informat
 
 ---
 
-> **Next**: [[tutorial/06-llm-statements|LLM Statements in Practice]]
+> **Next**: [[reference/06-llm-statements|LLM Statements in Practice]]

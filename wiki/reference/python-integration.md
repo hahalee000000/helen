@@ -26,8 +26,8 @@
 
 | 方向 | 名称 | 用途 | 详细文档 |
 |------|------|------|----------|
-| Helen → Python | **Python FFI** | 在 Helen 中使用 Python 库 | [[tutorial/09-python-ffi]] |
-| Python → Helen | **Python Bridge** | 在 Python 中使用 Helen Agent | [[tutorial/15-python-bridge]] |
+| Helen → Python | **Python FFI** | 在 Helen 中使用 Python 库 | [[reference/09-python-ffi]] |
+| Python → Helen | **Python Bridge** | 在 Python 中使用 Helen Agent | [[reference/15-python-bridge]] |
 
 ---
 
@@ -84,7 +84,7 @@ main { init() }    // ✅ PyRenderer 在 bridge 中可用
 
 ### 详细文档
 
-→ [[tutorial/09-python-ffi|Python FFI 完整教程]]
+→ [[reference/09-python-ffi|Python FFI 完整教程]]
 
 ---
 
@@ -180,7 +180,7 @@ async def chat(user_id: str, message: str, session_id: str | None = None):
 
 ### 详细文档
 
-→ [[tutorial/15-python-bridge|Python Bridge 完整教程]]
+→ [[reference/15-python-bridge|Python Bridge 完整教程]]
 
 ---
 
@@ -269,7 +269,7 @@ main.py (Python)
 
 ## 相关文档
 
-- [[tutorial/09-python-ffi|Python FFI 详细教程]]（Helen → Python）
-- [[tutorial/15-python-bridge|Python Bridge 详细教程]]（Python → Helen）
+- [[reference/09-python-ffi|Python FFI 详细教程]]（Helen → Python）
+- [[reference/15-python-bridge|Python Bridge 详细教程]]（Python → Helen）
 - [[syntax/grammar|Helen 语法参考]]
 - [[toolchain/stdlib|标准库参考]]

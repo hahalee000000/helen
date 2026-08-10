@@ -8,7 +8,7 @@ The Helen Python Bridge allows Python developers to import and use Helen Agents 
 
 > **Bidirectional Integration Panorama**: See [[reference/python-integration]] (covers FFI + Bridge + mixed usage patterns)
 >
-> **Reverse direction (Helen -> Python)**: See [[tutorial/09-python-ffi|Python FFI Tutorial]]
+> **Reverse direction (Helen -> Python)**: See [[reference/09-python-ffi|Python FFI Tutorial]]
 
 ## Quick Start
 
@@ -432,4 +432,4 @@ The Helen Python Bridge makes Helen a "native extension" of Python. Python devel
 
 > **Related Documentation**:
 > - [[reference/python-integration|Helen <-> Python Bidirectional Integration Panorama]] — mixed usage examples + selection guide
-> - [[tutorial/09-python-ffi|Python FFI]] — the reverse direction: calling Python libraries from Helen
+> - [[reference/09-python-ffi|Python FFI]] — the reverse direction: calling Python libraries from Helen

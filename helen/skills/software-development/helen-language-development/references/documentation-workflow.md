@@ -57,12 +57,7 @@ Helen documentation exists in two locations that must stay synchronized:
    ...
    ```
 
-2. **Update Git Repo Tutorial** (`~/helen/docs/tutorial.md`):
-   - Find section starting with `# 教程 10: 标准库参考`
-   - Replace entire section with updated content
-   - Update table of contents entry at top of file
-
-3. **Update Wiki Technical Docs** (`~/wiki/helen/toolchain/stdlib.md`):
+2. **Update Wiki Technical Docs** (`~/wiki/helen/toolchain/stdlib.md`):
    ```markdown
    # 标准库 (Stdlib)
    
@@ -182,17 +177,12 @@ String: 36 functions
    - String section: Add 10 new functions with examples
    - Category table: Update String count to 36
 
-2. `~/helen/docs/tutorial.md`:
-   - Section header: `> 200 个内置函数`
-   - String section: Same content as wiki
-   - TOC entry: Update description
-
-3. `~/wiki/helen/toolchain/stdlib.md`:
+2. `~/wiki/helen/toolchain/stdlib.md`:
    - Header: `**200 builtins**`
    - String table: Add 10 new rows
    - Category stats: Update String count
 
-4. `~/wiki/helen/index.md`:
+3. `~/wiki/helen/index.md`:
    - Entry: `185 builtins (core/string/...)`
 
 ## Verification Checklist
@@ -201,7 +191,6 @@ After updating documentation:
 
 - [ ] Wiki tutorial header shows correct total count
 - [ ] Wiki tutorial category table shows correct per-category counts
-- [ ] Git repo tutorial section matches wiki tutorial
 - [ ] Wiki technical docs header shows correct total count
 - [ ] Wiki technical docs function tables are complete
 - [ ] Wiki index entry shows correct total count
@@ -211,29 +200,15 @@ After updating documentation:
 
 ## Automation Opportunities
 
-### Future: Sync Script
-```bash
-#!/bin/bash
-# Sync wiki tutorial to git repo tutorial
-
-WIKI_TUTORIAL=~/wiki/helen/tutorial/10-stdlib.md
-GIT_TUTORAL=~/helen/docs/tutorial.md
-
-# Extract section from wiki
-# Insert into git repo at correct location
-# Commit and push
-```
-
 ### Future: Count Validation
 ```python
 # Validate function counts across all docs
 def validate_counts():
     wiki_tutorial = count_functions("~/wiki/helen/tutorial/10-stdlib.md")
-    git_tutorial = count_functions("~/helen/docs/tutorial.md")
     wiki_tech = count_functions("~/wiki/helen/toolchain/stdlib.md")
     actual = count_registered_functions()
     
-    assert wiki_tutorial == git_tutorial == wiki_tech == actual
+    assert wiki_tutorial == wiki_tech == actual
 ```
 
 ## Summary

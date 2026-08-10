@@ -46,7 +46,7 @@ let result2 = encoder.call("encode", {"x": 1})  // Call by method name (dynamic 
 - Method calls: prefer `obj.method()`; use `obj.call("method")` for dynamic method names
 - Nested imports: Python imports in imported `.helen` modules are fully available
 
-→ Detailed tutorial: `wiki/tutorial/09-python-ffi.md`
+→ Detailed tutorial: `wiki/reference/09-python-ffi.md`
 
 ## Quick Start
 
@@ -519,9 +519,9 @@ uninstall_import_hook()
 
 ## Related Resources
 
-- Full tutorial: [[tutorial/15-python-bridge]]
+- Full tutorial: [[reference/15-python-bridge]]
 - Example code: `examples/python_bridge/`
-- Python FFI tutorial: [[tutorial/09-python-ffi]]
+- Python FFI tutorial: [[reference/09-python-ffi]]
 
 ## Best Practices
 

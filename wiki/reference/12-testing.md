@@ -384,4 +384,4 @@ main {
 
 ---
 
-> **相关文档**: [[toolchain/testing|测试框架 API 参考]] | [[tutorial/01-getting-started|入门指南]]
+> **相关文档**: [[toolchain/testing|测试框架 API 参考]] | [[reference/01-getting-started|入门指南]]

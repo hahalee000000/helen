@@ -49,4 +49,4 @@ helen> :template simple_agent       # 查看模板
 
 - `helen-agent-collaboration` skill — Agent 协作模式详解
 - `helen-programming-methodology` skill §5 — 上下文接力模式
-- `wiki/tutorial/05-agents.md` — Agent 编程教程
+- `wiki/reference/05-agents.md` — Agent 编程教程

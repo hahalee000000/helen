@@ -459,4 +459,4 @@ main {
 
 ---
 
-> **Next**: Learn [[tutorial/15-python-bridge|Python Bridge]] — let Python directly use Helen Agents
+> **Next**: Learn [[reference/15-python-bridge|Python Bridge]] — let Python directly use Helen Agents

@@ -2,7 +2,7 @@
 """
 Tutorial Test Generator
 
-Extracts ```helen code blocks from wiki/tutorial/*.md and generates
+Extracts ```helen code blocks from wiki/reference/*.md and generates
 .helen test files for validation with `helen check`.
 
 Usage:

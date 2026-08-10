@@ -56,7 +56,7 @@ docs_path = module_dir.parent / "docs" / "tutorial.md"
 
 # Inject absolute path into Helen source before execution
 modified_source = source.replace(
-    'let docs_path = "docs/tutorial.md"',
+    'let docs_path = "wiki/reference/01-getting-started.md"',
     f'let docs_path = "{docs_path}"'
 )
 ```

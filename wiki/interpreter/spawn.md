@@ -332,7 +332,7 @@ def mailbox_select(channels, timeout=None):
 
 ## 相关页面
 
-- [[tutorial/07-spawn|并发编程教程]]
+- [[reference/07-spawn|并发编程教程]]
 - [[interpreter/execution|执行引擎]]
 - [[syntax/keywords|关键字参考]]
 

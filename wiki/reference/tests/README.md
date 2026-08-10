@@ -4,7 +4,7 @@ This directory contains automatically generated test files extracted from the He
 
 ## Overview
 
-The test system extracts `helen` code blocks from `wiki/tutorial/*.md` files and generates `.helen` test files that can be validated using `helen check` (syntax + semantic analysis).
+The test system extracts `helen` code blocks from `wiki/reference/*.md` files and generates `.helen` test files that can be validated using `helen check` (syntax + semantic analysis).
 
 **Statistics:**
 - 235 code blocks extracted from 17 tutorial files
@@ -44,14 +44,14 @@ Each generated `.helen` file contains:
 
 ### Generate Tests
 ```bash
-python wiki/tutorial/generate_tests.py
+python wiki/reference/generate_tests.py
 ```
 
-This extracts all `helen` code blocks from tutorial files and generates test files in `wiki/tutorial/tests/`.
+This extracts all `helen` code blocks from tutorial files and generates test files in `wiki/reference/tests/`.
 
 ### Run Tests
 ```bash
-bash wiki/tutorial/run_tests.sh
+bash wiki/reference/run_tests.sh
 ```
 
 This runs `helen check` on each test file and reports:
@@ -187,8 +187,8 @@ To improve test pass rates:
 ## Maintenance
 
 When tutorial files are updated:
-1. Re-run `python wiki/tutorial/generate_tests.py`
-2. Re-run `bash wiki/tutorial/run_tests.sh`
+1. Re-run `python wiki/reference/generate_tests.py`
+2. Re-run `bash wiki/reference/run_tests.sh`
 3. Review new failures or changes in pass/fail status
 4. Fix tutorial issues or update generator logic as needed
 

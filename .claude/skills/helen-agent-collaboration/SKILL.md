@@ -45,7 +45,7 @@ main { Greeter("Alice") }
 | Resume a saved child session (true continuation) | `spawn A(...) resume("sid")` (v1.27) |
 | Import another session's history into current | `resume_session(sid)` |
 
-> **v1.27 spawn resume**: `spawn Agent(...) resume("<session_id>")` (Chinese `恢复会话(...)`) makes the spawned agent continue a previously saved child-session transcript instead of starting fresh. This is **true resumption** - the spawned interpreter appends to that session's transcript. Use it to pause/resume long-running multi-agent workflows: persist the child session_id, then on the next run `spawn ... resume(saved_sid)`. Resuming restores LLM conversation memory, not runtime variable state; persist critical state separately. A cross-process lock prevents two processes from corrupting the same transcript. See [Tutorial 07: spawn › Resuming a Spawned Session](../../../../wiki/tutorial/07-spawn.md#resuming-a-spawned-session-v127).
+> **v1.27 spawn resume**: `spawn Agent(...) resume("<session_id>")` (Chinese `恢复会话(...)`) makes the spawned agent continue a previously saved child-session transcript instead of starting fresh. This is **true resumption** - the spawned interpreter appends to that session's transcript. Use it to pause/resume long-running multi-agent workflows: persist the child session_id, then on the next run `spawn ... resume(saved_sid)`. Resuming restores LLM conversation memory, not runtime variable state; persist critical state separately. A cross-process lock prevents two processes from corrupting the same transcript. See [Tutorial 07: spawn › Resuming a Spawned Session](../../../../wiki/reference/07-spawn.md#resuming-a-spawned-session-v127).
 
 ## Collaboration Patterns
 

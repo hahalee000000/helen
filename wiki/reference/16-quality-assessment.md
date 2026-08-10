@@ -178,4 +178,4 @@ Generates a formatted full report string.
 
 ---
 
-> **Related Documentation**: [[toolchain/quality|Quality Assessment Tool Reference]] | [[tutorial/12-testing|Testing Framework and TDD]]
+> **Related Documentation**: [[toolchain/quality|Quality Assessment Tool Reference]] | [[reference/12-testing|Testing Framework and TDD]]

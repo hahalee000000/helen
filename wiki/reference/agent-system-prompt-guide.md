@@ -13,7 +13,7 @@
 
 This guide answers one question: **How do you write high-quality `prompt` and `description` fields for Helen agents?**
 
-It does not teach Helen syntax (see [[syntax/grammar]] and [[tutorial/05-agents]]); instead, it focuses on the **design philosophy, structural layout, writing principles, and common anti-patterns** of agent prompts — the "soft knowledge" beyond syntax that determines agent quality.
+It does not teach Helen syntax (see [[syntax/grammar]] and [[reference/05-agents]]); instead, it focuses on the **design philosophy, structural layout, writing principles, and common anti-patterns** of agent prompts — the "soft knowledge" beyond syntax that determines agent quality.
 
 Core insights come from reverse engineering Claude Code's system prompt. Claude Code itself is a complex agent, and its system prompt has been extensively battle-tested by Anthropic. We **translate these lessons into Helen's context** — Helen's `agent {}` blocks, `prompt`/`description` fields, `tools` lists, and `context {}` configurations are the "system prompt" for Helen agents.
 
@@ -644,8 +644,8 @@ Our recommendations (and the original author's):
 
 ## Related Helen Documentation
 
-- [[tutorial/05-agents]] — Helen agent syntax introduction
-- [[tutorial/11-building-agents]] — Building multi-agent systems
+- [[reference/05-agents]] — Helen agent syntax introduction
+- [[reference/11-building-agents]] — Building multi-agent systems
 - [[runtime/prompt-builder]] — Helen prompt builder system implementation
 - [[runtime/context-management]] — Context management architecture (authoritative reference)
 - `helen-agent-patterns` skill — Design patterns and best practices

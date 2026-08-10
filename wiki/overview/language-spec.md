@@ -482,8 +482,8 @@ main {
 - [[compiler/ast|AST Node Definitions]]
 - [[interpreter/execution|Execution Engine]]
 - [[interpreter/spawn|Concurrency and spawn]]
-- [[tutorial/05-agents|Agent Programming Tutorial]]
-- [[tutorial/07-spawn|Concurrency Programming Tutorial]]
+- [[reference/05-agents|Agent Programming Tutorial]]
+- [[reference/07-spawn|Concurrency Programming Tutorial]]
 
 ---
 

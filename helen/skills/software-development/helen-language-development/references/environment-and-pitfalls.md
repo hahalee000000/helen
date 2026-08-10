@@ -1085,12 +1085,11 @@ When adding a new statement/expression type to Helen, follow this exact sequence
      - `overview/architecture.md` — new modules in Runtime layer, CLI commands, quality metrics
      - `toolchain/cli.md` — new subcommands (e.g. `helen init`)
      - `runtime/llm-runtime.md` — new runtime features (config, tools, skill system)
-     - `tutorial/01-getting-started.md` — setup/config changes
-     - `tutorial/XX-*.md` — the specific tutorial for the feature
+     - `reference/01-getting-started.md` — setup/config changes
+     - `reference/XX-*.md` — the specific reference chapter for the feature
    - **Project** (`~/helen/`, git repo):
      - `README.md` — CLI table, Language Features, Status table, test count, project structure
-     - `docs/tutorial.md` — consolidated tutorial (mirror wiki tutorial changes)
-   - **Rule of thumb**: if you added a CLI command, update cli.md + architecture.md + README. If you added a runtime module, update llm-runtime.md + architecture.md + hld-compliance.md. If you changed test count, update index.md + changelog.md + README + tutorial.md header.
+   - **Rule of thumb**: if you added a CLI command, update cli.md + architecture.md + README. If you added a runtime module, update llm-runtime.md + architecture.md + hld-compliance.md. If you changed test count, update index.md + changelog.md + README.
 8. **Run**: `pytest` (all pass) + `run_tutorial_tests.py` (0 fail) + git commit (helen repo) + push. Wiki is NOT a git repo — changes are local only.
 
 **Pitfall**: Forgetting to add `visit_xxx` to `ASTPrinter` causes all AST printer tests to fail with `TypeError: Can't instantiate abstract class MockVisitor with abstract method visit_xxx`. Forgetting to update `MockVisitor` in `test_ast.py` causes the same error. Always update both.
@@ -1115,7 +1114,6 @@ When removing a statement/keyword/expression type from Helen (e.g., `llm choose`
 6. **Runtime** (`runtime/*.py`): Remove corresponding methods from `LLMRuntime` abstract base + all subclasses (`HttpLLMRuntime`, `HermesCLILLMRuntime`, `MockLLMRuntime`) + remove mock fields (e.g., `choose_return`, `choose_history`)
 7. **Tests**: Delete feature-specific test files + remove test classes + update keyword count assertions + update method-presence assertions
 8. **Docs** — update ALL affected files (same locations as adding features):
-   - `docs/tutorial.md` — remove feature sections, update comparison tables
    - `~/wiki/helen/tutorial/*.md` — mirror changes
    - `README.md` — update feature lists if mentioned
 9. **Run**: `pytest` (all pass) + git commit + push
@@ -1339,7 +1337,7 @@ agent SimpleAgent(text: str) {
 3. **Update related syntax**: If other syntax uses the keyword (e.g., `async call`), update to not require it
 4. **Update bare form detection**: Remove `TokenType.XXX` from any token lists that detect statement boundaries
 5. **Update tests**: Replace all `call Agent(...)` with `Agent(...)` in test code
-6. **Update documentation**: Both `docs/tutorial.md` AND `~/wiki/helen/tutorial/*.md`
+6. **Update documentation**: `~/wiki/helen/tutorial/*.md`
 7. **Commit**: Clear message like "refactor: deprecate 'call' keyword, use function-style AgentName(args)"
 
 **Important**: Don't emit deprecation warnings — just remove the syntax. Helen is pre-1.0, so breaking changes are acceptable. This keeps the parser simple and avoids maintaining deprecated code paths.
@@ -1615,8 +1613,7 @@ cd ~/helen
 
 ## Consolidated Tutorial
 
-Complete 10-chapter tutorial consolidated at `~/helen/docs/tutorial.md` (pushed to GitHub).
-Original source files at `~/wiki/helen/tutorial/*.md` (NOT a git repo).
+Tutorial source files at `~/wiki/helen/tutorial/*.md` (NOT a git repo).
 See `references/tutorial-testing.md` for test runner details, skip categories, and pitfall patterns.
 
 ## Implementation Status (HLD v1.2.1)
@@ -1737,5 +1734,5 @@ See `references/streaming-implementation.md` for complete implementation guide.
 - **Commit AND push immediately after each fix/change** — do NOT wait for the user to ask "did you commit?" or "did you push?". When the user says "提交git", "提交", or "远程推送", they mean `git commit` + `git push`. Always do both in one step: `git add -A && git commit -m "..." && git push origin master`.
 - **Always run `pytest` before committing** — full test suite is fast (~2s)
 - Commit message format: `fix: ...`, `refactor: ...`, `chore: ...`
-- **After code changes, always update docs** — see step 7 above for the full doc update checklist. At minimum: `docs/tutorial.md` + `README.md` (test count, status). For runtime/CLI changes: also update wiki (`index.md`, `changelog.md`, `hld-compliance.md`, `architecture.md`, relevant topic page). Wiki is NOT a git repo — only helen project gets committed/pushed.
+- **After code changes, always update docs** — see step 7 above for the full doc update checklist. At minimum: `README.md` (test count, status). For runtime/CLI changes: also update wiki (`index.md`, `changelog.md`, `hld-compliance.md`, `architecture.md`, relevant topic page). Wiki is NOT a git repo — only helen project gets committed/pushed.
 - **Wiki updates must be explicit and visible**: When updating `~/wiki/helen/tutorial/*.md`, list the updated files in your response so the user can verify. Wiki is a separate directory (not git-tracked), so updates are easy to miss. After updating wiki files, say "Updated wiki tutorials: 05-agents.md, 06-llm-statements.md, ..." to make the changes visible.

@@ -664,7 +664,7 @@ interp.import_resolver._loaded.clear()
 ### Related Documentation
 
 - `wiki/runtime/import.md` — Full cache mechanism documentation
-- `wiki/tutorial/08-modules.md` — Development-time considerations
+- `wiki/reference/08-modules.md` — Development-time considerations
 - GitHub Issue #15 — Problem diagnosis report
 
 ---

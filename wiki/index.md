@@ -55,39 +55,60 @@
 - [[toolchain/templates|Built-in Template Library]] — `helen template`, complete examples for common agent patterns
 - [[toolchain/error-format|Error Formatting]] — HLD 3.11.2 diagnostic output (with smart fix suggestions)
 
-### 7. Tutorials
-- [[tutorial/01-getting-started|Getting Started]] — Installation, configuration, Hello World, REPL
-- [[tutorial/02-variables-and-types|Variables and Types]] — let/const, type annotations
-- [[tutorial/03-functions|Functions]] — fn declarations, parameters, return values
-- [[tutorial/04-control-flow|Control Flow]] — if/for/while/match/try-catch
-- [[tutorial/05-agents|Agent Programming]] — agent declarations, description, prompt
-- [[tutorial/06-llm-statements|LLM Statements]] — act/if in practice
-- [[tutorial/07-spawn|Concurrent Programming]] — spawn, Channel message queue, mailbox_select, explicit sharing
-- [[tutorial/08-modules|Modules and Imports]] — import, cross-file reuse
-- [[tutorial/09-python-ffi|Python FFI]] — Python library imports, type conversion
-- [[tutorial/10-stdlib|Standard Library Reference]] — 364 built-in functions (351 Chinese aliases)
-- [[tutorial/11-building-agents|Building Multi-Agent Systems]] — Complete case study
-- [[tutorial/12-testing|Testing Framework and TDD]] — Assertion API, expect chains, `--watch` mode
-- [[tutorial/13-skills|Skill System]] — Three-layer search, two-layer disclosure, LLM-aware
-- [[tutorial/14-observability|AI-Native Observability]] — assert, debug(), trace, LLM audit
-- [[tutorial/15-python-bridge|Python Bridge]] — Let Python directly use Helen Agents
-- [[tutorial/16-quality-assessment|Quality Assessment]] — 7-dimension framework, security scoring, CI integration
-- [[tutorial/17-multimodal|Multimodal Support]] — MediaPart, on_media/on_generate callbacks, media adaptation (**v1.17 new feature**)
-- [[tutorial/18-helen-agent|Helen Agent Programming Assistant]] — Interactive self-evolving coding assistant, Web UI, ChatSessionActor architecture, skill/memory evolution loop (**v1.26+ new**)
+### 7. Beginner Guide (Agent-First)
 
-### 8. References
+> **Start here** — pedagogical, linear narrative. Learn Helen's philosophy ("prompts are first-class") before diving into language mechanics.
+
+- [[guide/README|Guide Overview]] — What is Helen, who is this for, skill-driven development
+- [[guide/01-hello-agent|Chapter 1: Your First Agent]] — What agents are, how to create and run one
+- [[guide/02-prompt|Chapter 2: Prompts — The Soul of Agents]] — Purpose of prompts, template variables, Ground Truth Injection
+- [[guide/03-llm-statements|Chapter 3: Talking to LLMs]] — `llm act`, `llm if`, streaming output
+- [[guide/04-tools|Chapter 4: Equipping Agents with Tools]] — Tool declarations, callbacks, read/write files
+- [[guide/05-basics|Chapter 5: Variables and Data Types]] — Basic types, lists, maps, constants
+- [[guide/06-control-flow|Chapter 6: Control Flow]] — if/for/while/match/try-catch
+- [[guide/07-functions|Chapter 7: Functions and Closures]] — Function definitions, closures, pipe operator
+- [[guide/08-collaboration|Chapter 8: Agent Collaboration]] — Sequential chains, parallel, pipelines, spawn and Channel
+- [[guide/09-stdlib|Chapter 9: Standard Library Tour]] — 364 built-in functions categorized
+- [[guide/10-testing|Chapter 10: Testing and Debugging]] — Testing framework, assertions, debugging techniques
+- [[guide/11-advanced|Chapter 11: Advanced Topics]] — Scope isolation, multimodal, protocols, MCP
+- [[guide/appendix|Appendix: Keywords and Quick Reference]] — 99 keywords, error codes, naming conventions
+
+### 8. Language Reference (By Topic)
+
+> **Look things up** — comprehensive, topic-indexed. For when you know what you're looking for.
+
+- [[reference/01-getting-started|Getting Started]] — Installation, configuration, Hello World, REPL
+- [[reference/02-variables-and-types|Variables and Types]] — let/const, type annotations
+- [[reference/03-functions|Functions]] — fn declarations, parameters, return values
+- [[reference/04-control-flow|Control Flow]] — if/for/while/match/try-catch
+- [[reference/05-agents|Agent Programming]] — agent declarations, description, prompt
+- [[reference/06-llm-statements|LLM Statements]] — act/if in practice
+- [[reference/07-spawn|Concurrent Programming]] — spawn, Channel message queue, mailbox_select, explicit sharing
+- [[reference/08-modules|Modules and Imports]] — import, cross-file reuse
+- [[reference/09-python-ffi|Python FFI]] — Python library imports, type conversion
+- [[reference/10-stdlib|Standard Library Reference]] — 364 built-in functions (351 Chinese aliases)
+- [[reference/11-building-agents|Building Multi-Agent Systems]] — Complete case study
+- [[reference/12-testing|Testing Framework and TDD]] — Assertion API, expect chains, `--watch` mode
+- [[reference/13-skills|Skill System]] — Three-layer search, two-layer disclosure, LLM-aware
+- [[reference/14-observability|AI-Native Observability]] — assert, debug(), trace, LLM audit
+- [[reference/15-python-bridge|Python Bridge]] — Let Python directly use Helen Agents
+- [[reference/16-quality-assessment|Quality Assessment]] — 7-dimension framework, security scoring, CI integration
+- [[reference/17-multimodal|Multimodal Support]] — MediaPart, on_media/on_generate callbacks, media adaptation (**v1.17 new feature**)
+- [[reference/18-helen-agent|Helen Agent Programming Assistant]] — Interactive self-evolving coding assistant, Web UI, ChatSessionActor architecture, skill/memory evolution loop (**v1.26+ new**)
+
+### 9. Extended References
 - [[reference/python-integration|Helen ↔ Python Bidirectional Integration]] ⭐ — Full picture: FFI (Helen → Python) + Bridge (Python → Helen) + hybrid usage patterns
 - [[reference/claude-code-context-management|Claude Code Context Management Deep Dive]] — 5-layer graduated compression pipeline, TranscriptStore SSOT, cache-aware
 - [[reference/claude-code-budget-reduction-and-context-collapse|Claude Code Budget Reduction and Context Collapse]] — Layer 1-4 zero-cost compression strategies
 - [[reference/agent-system-prompt-guide|Agent Prompt Engineering Complete Guide]] ⭐ — Insights from Claude Code reverse engineering: structure layout, writing principles, anti-patterns, Token budget, cache design, mid-stream injection (**v1.17 new**)
 
-### 9. Appendix
+### 10. Appendix
 - [[appendix/error-codes|Error Code Reference]] — Full list of 42 ErrorCodes
 - [[appendix/exceptions|Exception Hierarchy]] — Exception class inheritance tree
 - [[appendix/changelog|Version History]] — Changelog from v1.0 to v1.20
 - [[appendix/hld-compliance|HLD Compliance]] — 17-module implementation status
 
-### 10. Installation and Publishing
+### 11. Installation and Publishing
 - [PyPI Project Page](https://pypi.org/project/helen-lang/) — `pip install helen-lang`
 - [GitHub Repository](https://github.com/hahalee000000/helen) — Source code, issues, discussions
-- [[tutorial/01-getting-started|Getting Started]] — Installation + your first program
+- [[reference/01-getting-started|Getting Started]] — Installation + your first program

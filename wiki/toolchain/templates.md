@@ -122,7 +122,7 @@ helen template pipeline --copy my_flow.helen
 
 ## 相关文档
 
-- [[tutorial/05-agents]] — Agent 编程教程（包含模板库使用指南）
+- [[reference/05-agents]] — Agent 编程教程（包含模板库使用指南）
 - **`helen-agent-collaboration` skill** — Agent 协作模式详解
 - **`helen-programming-methodology` skill §5** — 上下文接力模式
 - **`helen-agent-patterns` skill** — Agent 设计模式

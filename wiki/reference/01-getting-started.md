@@ -432,7 +432,7 @@ exit              Exit the REPL
 The REPL includes a built-in AI language assistant (located at `helen/agent/helen_assistant.helen`) that can answer Helen language questions, help write code, and debug programs.
 
 The assistant loads:
-- **Helen documentation** (`docs/tutorial.md`, auto-generated from `wiki/tutorial/*.md`) — syntax, semantics, examples
+- **Helen documentation** (`wiki/reference/` and `wiki/syntax/`) — syntax, semantics, examples
 - **Helen source code** (`helen/` directory) — parser, interpreter, AST, lexer
 
 This means the assistant can not only answer syntax questions but also explain implementation details and internal mechanisms.

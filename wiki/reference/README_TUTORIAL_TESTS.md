@@ -10,10 +10,10 @@ A complete test system that extracts code blocks from tutorial documentation and
 
 ```bash
 # Generate test files
-python wiki/tutorial/generate_tests.py
+python wiki/reference/generate_tests.py
 
 # Run tests
-bash wiki/tutorial/run_tests.sh
+bash wiki/reference/run_tests.sh
 ```
 
 ## Test Results
@@ -29,11 +29,11 @@ bash wiki/tutorial/run_tests.sh
 
 ## Files
 
-- `wiki/tutorial/generate_tests.py` — Test generator (273 lines)
-- `wiki/tutorial/run_tests.sh` — Test runner (80 lines)
-- `wiki/tutorial/TUTORIAL_TEST_REPORT.md` — Detailed report
-- `wiki/tutorial/tests/` — 235 generated test files in 17 subdirectories
-- `wiki/tutorial/tests/README.md` — Test system documentation
+- `wiki/reference/generate_tests.py` — Test generator (273 lines)
+- `wiki/reference/run_tests.sh` — Test runner (80 lines)
+- `wiki/reference/TUTORIAL_TEST_REPORT.md` — Detailed report
+- `wiki/reference/tests/` — 235 generated test files in 17 subdirectories
+- `wiki/reference/tests/README.md` — Test system documentation
 
 ## Tutorial Issues Found
 
