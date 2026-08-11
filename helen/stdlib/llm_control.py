@@ -62,7 +62,7 @@ def _cancel_all_llm_calls() -> int:
 # identity params (model/description/provider) are get-only.
 
 def _get_effective(key: str, default: Any = None) -> Any:
-    """Resolve effective value: runtime override > agent setting > default."""
+    """Resolve effective value: runtime override > agent setting > runtime default > default."""
     if _interpreter_ref is None:
         return default
     overrides = getattr(_interpreter_ref, '_runtime_overrides', {})
@@ -84,6 +84,13 @@ def _get_effective(key: str, default: Any = None) -> Any:
         val = _interpreter_ref._get_agent_setting(setting_name)
         if val is not None:
             return val
+    # v1.40.1 fix: For model, also check LLM runtime's default_model (from config.yaml)
+    if key == "model":
+        llm_runtime = getattr(_interpreter_ref, 'llm_runtime', None)
+        if llm_runtime is not None:
+            runtime_model = getattr(llm_runtime, 'default_model', None)
+            if runtime_model:
+                return runtime_model
     return default
 
 
