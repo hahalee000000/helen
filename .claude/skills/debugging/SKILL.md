@@ -1,13 +1,13 @@
 ---
 name: debugging
-description: "Debugging methodology and language-specific debugger tools. Covers systematic root-cause investigation, Python (pdb/debugpy), Node.js (--inspect/CDP), and Helen AI-native observability (debug/trace_on/:last_error/:llm_log) with cookbook workflows for Helen application development."
-version: 1.1.0
+description: "Debugging methodology and language-specific debugger tools. Covers systematic root-cause investigation, Python (pdb/debugpy), Node.js (--inspect/CDP), and Helen AI-native observability (debug/trace_on/:last_error/:llm_log) with cookbook workflows for Helen application development. v1.40 adds advanced AI-native debugging: structured error diagnostics, output contracts, transcript queries, LLM recording/replay, data lineage tracking, and interactive transcript replay."
+version: 1.40.0
 author: Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
 metadata:
   hermes:
-    tags: [debugging, troubleshooting, root-cause, python, pdb, debugpy, nodejs, inspect, CDP, helen, observability, debug, trace, llm_log]
+    tags: [debugging, troubleshooting, root-cause, python, pdb, debugpy, nodejs, inspect, CDP, helen, observability, debug, trace, llm_log, error-diagnostics, output-contract, transcript-query, recording, replay, data-lineage]
 ---
 
 # Debugging — Methodology & Tools
@@ -643,6 +643,495 @@ agent Translator(text: str, target: str) {
 //   如果出错，进 REPL 用 :last_error 看结构化错误
 //   想看 LLM 调用，用 :llm_log -v
 //   想看执行流程，看 debug 输出
+```
+
+---
+
+## 6. Helen v1.40 AI-Native 高级调试工具集
+
+> **v1.40 新增**：六个阶段的高级调试功能，让 AI 调试者能够：
+> 1. 从结构化错误诊断中直接获取根因分析
+> 2. 使用 output contract 确保 LLM 输出格式正确
+> 3. 高效查询大型 transcript
+> 4. 录制和重放 LLM 交互，实现确定性调试
+> 5. 追踪跨 agent 的数据流动
+> 6. 交互式回放 transcript 会话
+
+### 6.1 结构化错误诊断（Structured Error Diagnostics）
+
+**问题**：传统错误信息只告诉你"出错了"，不告诉你"为什么错"和"怎么修"。
+
+**解决方案**：v1.40 为所有 11 种异常类型提供结构化诊断信息。
+
+```helen
+import std.debug.*
+main {
+    // 发生错误后，获取详细诊断信息
+    let err = last_error_detail()
+    if err != null {
+        debug("错误类别", error_category(err))
+        debug("修复建议", error_suggestion(err))
+        debug("数据流", error_data_flow(err))
+    }
+}
+```
+
+**错误快照新增字段**：
+- `diagnostic_category`: 语义分类（如 "LLMTimeout", "AgentCallFailed"）
+- `suggestion`: 具体的修复建议（基于规则引擎生成，零 LLM 调用）
+- `data_flow`: 数据流追踪信息（显示值从哪里来）
+
+**REPL 命令**：
+```
+:last_error        # 现在包含 Suggestion 和 Data Flow 字段
+```
+
+**支持的异常类型**（11 种）：
+- AnyError, LLMError, TimeoutError, ModelError
+- PromptTooLongError, AgentError, LLMOutputContractError (v1.40)
+- ToolError, RuntimeError, AssertionError, AggregateError
+
+**RuntimeError 规则匹配**：
+- 除零错误 → "在除法前检查分母是否为 0"
+- 类型错误 → "检查函数返回值类型是否符合预期"
+- 未定义变量 → "检查变量是否已声明，或作用域是否正确"
+- 索引越界 → "检查数组/列表长度，确保索引在有效范围内"
+- 键不存在 → "检查键名是否正确，或用 get() 方法提供默认值"
+
+### 6.2 Output Contract 验证
+
+**问题**：LLM 输出格式不符合预期，导致下游代码崩溃。
+
+**解决方案**：在 agent 声明中定义 output contract，运行时自动验证。
+
+```helen
+agent Reviewer {
+    model: "qwen3.7-plus"
+    
+    // 简单 contract：期望合法 JSON
+    output_contract: "json"
+    
+    main {
+        llm act "Review this code and return JSON"
+    }
+}
+
+agent Validator {
+    // 详细 schema contract
+    output_contract: {
+        type: "object",
+        required: ["verdict", "confidence"],
+        properties: {
+            verdict: {type: "string", enum: ["pass", "fail"]},
+            confidence: {type: "number", min: 0, max: 1}
+        }
+    }
+    main {
+        llm act "Validate this input"
+    }
+}
+```
+
+**验证失败时**：
+- 抛出 `LLMOutputContractError`（继承自 `LLMError`）
+- 错误信息包含具体的 violation 描述
+- 可通过 `last_error_detail()` 获取诊断信息
+
+**手动验证**：
+```helen
+import std.debug.*
+main {
+    let output = llm act "Return JSON"
+    let result = validate_output(output, "json")
+    if !result.valid {
+        debug("验证失败", result.violation)
+    }
+}
+```
+
+**支持的 contract 类型**：
+- `"json"`: 验证是否为合法 JSON
+- `"text"`: 总是通过（用于明确标记）
+- Schema dict: 验证类型、必需字段、属性约束
+  - `type`: "string", "number", "integer", "boolean", "array", "object"
+  - `required`: 必需字段列表
+  - `properties`: 属性 schema（支持 type, enum, min/max, minLength/maxLength）
+
+### 6.3 增量 Transcript 查询
+
+**问题**：`replay_transcript()` 加载整个 transcript，大型会话会爆内存。
+
+**解决方案**：`query_transcript()` 支持过滤和分页，高效查询大型 transcript。
+
+```helen
+import std.debug.*
+main {
+    // 查询当前会话的所有 assistant 消息
+    let msgs = query_transcript(role="assistant")
+    
+    // 查询特定 agent 的消息
+    let coder_msgs = query_transcript(agent="Coder")
+    
+    // 分页查询
+    let page1 = query_transcript(limit=100, offset=0)
+    let page2 = query_transcript(limit=100, offset=100)
+    
+    // 正则搜索
+    let errors = query_transcript(content_regex="Error:")
+    
+    // 时间范围查询
+    let recent = query_transcript(since=now() - 3600)  // 最近1小时
+    
+    // 组合查询
+    let filtered = query_transcript(
+        role="assistant",
+        agent="Reviewer",
+        content_regex="verdict",
+        limit=50
+    )
+}
+```
+
+**查询参数**：
+- `session_id`: 会话 ID（空=当前会话）
+- `role`: 角色过滤（"user", "assistant", "tool"）
+- `agent`: Agent 名称过滤
+- `invocation_id`: 调用 ID 过滤
+- `since`, `until`: 时间戳范围
+- `content_regex`: 内容正则匹配
+- `message_type`: 消息类型过滤
+- `limit`, `offset`: 分页控制
+
+**后端优化**：
+- JSONL 后端：流式过滤 + 10 万条上限（防止 OOM）
+- SQLite 后端：SQL WHERE 下推（O(log n) 查询）
+
+### 6.4 LLM 录制/重放
+
+**问题**：LLM 是非确定性的，同一个 bug 无法复现。
+
+**解决方案**：录制 LLM 交互到 cassette 文件，后续可以确定性重放。
+
+```helen
+import std.debug.*
+main {
+    // 开始录制
+    let result = record_session("debug/session.jsonl")
+    // result: {"status": "recording", "cassette_path": "debug/session.jsonl"}
+    
+    // 运行 agent（所有 LLM 调用都会被录制）
+    agent Reviewer {
+        main {
+            llm act "Review this code..."
+        }
+    }
+    
+    // 停止录制
+    let result = stop_recording()
+    // result: {"status": "stopped"}
+}
+
+// 后续可以重放
+main {
+    let result = replay_session("debug/session.jsonl")
+    // result: {"status": "replaying", "entry_count": 5}
+    
+    // 现在所有 LLM 调用都使用录制的响应
+    agent Reviewer {
+        main {
+            llm act "Review this code..."  // 返回录制的响应
+        }
+    }
+}
+```
+
+**Cassette 文件格式**（JSONL）：
+```json
+{
+  "type": "llm_call",
+  "seq": 0,
+  "timestamp": 1234567890.123,
+  "agent_name": "Reviewer",
+  "model": "qwen3.7-plus",
+  "request": {"messages": [...], "tools": [...]},
+  "response": {"content": "...", "tool_calls": [...]},
+  "usage": {"prompt_tokens": 100, "completion_tokens": 50},
+  "duration_ms": 1234.5
+}
+```
+
+**使用场景**：
+1. **Bug 复现**：录制出现 bug 的会话，重放确认问题
+2. **Prompt 回归测试**：修改 prompt 后重放，对比行为变化
+3. **CI 测试**：在 CI 中重放录制的会话，避免依赖真实 LLM
+4. **性能分析**：分析录制的 duration_ms 和 token 使用
+
+**注意事项**：
+- 录制会捕获完整的 messages 数组和 response
+- 重放时按顺序返回录制的响应
+- Cassette 文件可以手动编辑（JSONL 格式）
+- 性能开销：< 1ms per LLM call
+
+### 6.5 跨 Agent 数据血缘追踪
+
+**问题**：多 agent 系统中，数据在 agent 之间流动，出问题后难以追踪来源。
+
+**解决方案**：使用 data lineage tracker 记录数据流动，支持查询起源和消费者。
+
+```helen
+import std.debug.*
+main {
+    // 手动记录数据流（自动追踪将在后续版本实现）
+    record_data_flow(
+        "msg_abc",           // 生产者 UUID
+        "msg_xyz",           // 消费者 UUID
+        "agent_call",        // 流类型
+        {"arg": "input"}     // 元数据
+    )
+    
+    // 查询数据起源
+    let origins = trace_value_origin("msg_xyz")
+    // origins: [
+    //   {"producer_uuid": "msg_abc", "flow_type": "agent_call", ...}
+    // ]
+    
+    // 查询数据消费者
+    let consumers = trace_value_consumers("msg_abc")
+    // consumers: [
+    //   {"consumer_uuid": "msg_xyz", "flow_type": "agent_call", ...}
+    // ]
+    
+    // 获取完整血缘图
+    let lineage = get_data_lineage()
+    // lineage: {
+    //   "nodes": ["msg_abc", "msg_xyz", ...],
+    //   "edges": [
+    //     {"source": "msg_abc", "target": "msg_xyz", "flow_type": "agent_call", ...}
+    //   ]
+    // }
+}
+```
+
+**数据存储**：
+- 使用独立的 SQLite sidecar 文件（`<session_id>_lineage.db`）
+- 与 transcript backend（JSONL/SQLite）解耦
+- 支持 JOIN 查询和索引优化
+
+**流类型**：
+- `"channel"`: 通过 Channel 传递
+- `"agent_call"`: 通过 agent 调用参数
+- `"prompt"`: 通过 prompt 注入
+- 自定义类型
+
+**使用场景**：
+1. **错误追踪**：找到错误值的原始来源
+2. **依赖分析**：理解 agent 之间的数据依赖
+3. **影响分析**：修改一个 agent 后，看哪些 agent 会受影响
+
+**注意事项**：
+- 数据血缘追踪是 opt-in，默认不启用
+- 需要手动调用 `record_data_flow()` 记录
+- 自动追踪（Channel send/receive）将在后续版本实现
+
+### 6.6 Transcript 事后回放
+
+**问题**：需要逐步查看 transcript 会话，理解 agent 交互过程。
+
+**解决方案**：使用 `helen replay` CLI 命令进行交互式回放。
+
+**CLI 使用**：
+```bash
+# 查看 session 摘要
+$ helen replay abc123 --summary
+Session: abc123
+Total messages: 150
+Roles: {'user': 50, 'assistant': 100}
+Agents: {'Reviewer': 30, 'Coder': 70}
+
+# 交互式回放
+$ helen replay abc123
+Transcript Replay - Session: abc123
+Total messages: 150
+
+Commands:
+  n, next      - Next message
+  p, prev      - Previous message
+  j <n>        - Jump to message n
+  f, first     - First message
+  l, last      - Last message
+  s <query>    - Search for query
+  summary      - Show summary
+  q, quit      - Exit replay mode
+
+[0/150] user: Hello, please review this code...
+
+replay> n
+[1/150] [Reviewer] assistant: I'll review the code...
+
+replay> s error
+Found 3 matches at indices: [15, 42, 89]
+
+replay> j 42
+[42/150] [Reviewer] assistant: I found an error in line 10...
+```
+
+**Python API**：
+```python
+from helen.runtime.transcript_replay import TranscriptReplay
+
+with TranscriptReplay("abc123") as replay:
+    # 导航
+    replay.next()
+    replay.prev()
+    replay.jump(42)
+    replay.first()
+    replay.last()
+    
+    # 搜索
+    results = replay.search("error")
+    
+    # 获取摘要
+    summary = replay.get_summary()
+    
+    # 获取当前消息
+    msg = replay.current_message
+    formatted = replay.format_message(msg)
+```
+
+**使用场景**：
+1. **事后分析**：理解复杂的多 agent 交互
+2. **教学演示**：逐步展示 agent 行为
+3. **问题复现**：配合 recording/replay 使用
+
+### 6.7 v1.40 调试工作流 Cookbook
+
+#### 场景 1：LLM 输出格式错误
+
+**症状**：Agent 返回的 JSON 解析失败。
+
+```helen
+import std.debug.*
+agent Parser {
+    output_contract: "json"  // 自动验证
+    main {
+        llm act "Return JSON"
+    }
+}
+
+main {
+    try {
+        let result = Parser()
+    } catch LLMOutputContractError e {
+        let err = last_error_detail()
+        debug("Contract 违反", error_suggestion(err))
+        // 输出：LLM 返回纯文本而非 JSON。在 agent prompt 里显式要求 '返回严格的 JSON 格式'。
+    }
+}
+```
+
+#### 场景 2：非确定性 Bug 复现
+
+**症状**：同一个输入，有时成功有时失败。
+
+```helen
+import std.debug.*
+main {
+    // 第一次运行：录制
+    record_session("debug/bug_session.jsonl")
+    let result = MyAgent()  // 这次失败了
+    stop_recording()
+    
+    // 后续运行：重放
+    replay_session("debug/bug_session.jsonl")
+    let result = MyAgent()  // 确定性复现失败
+}
+```
+
+#### 场景 3：多 Agent 数据流追踪
+
+**症状**：Agent B 收到了错误的数据，不知道是哪里来的。
+
+```helen
+import std.debug.*
+main {
+    // 假设已经记录了数据流
+    let origins = trace_value_origin("msg_error")
+    for origin in origins {
+        debug("错误数据来源", {
+            "producer": origin.producer_uuid,
+            "flow_type": origin.flow_type
+        })
+    }
+    
+    // 获取完整血缘图
+    let lineage = get_data_lineage()
+    debug("血缘图", {
+        "nodes": len(lineage.nodes),
+        "edges": len(lineage.edges)
+    })
+}
+```
+
+#### 场景 4：大型 Transcript 分析
+
+**症状**：Session 有 10000+ 条消息，需要找到特定的 LLM 调用。
+
+```helen
+import std.debug.*
+main {
+    // 使用 query_transcript 高效查询
+    let llm_calls = query_transcript(
+        role="assistant",
+        content_regex="verdict",
+        limit=50
+    )
+    
+    for msg in llm_calls {
+        debug("找到 verdict", {
+            "uuid": msg.uuid,
+            "agent": msg.agent_name,
+            "preview": substring(msg.content, 0, 100)
+        })
+    }
+}
+```
+
+#### 场景 5：交互式 Transcript 回放
+
+**症状**：需要逐步查看 150 条消息的交互过程。
+
+```bash
+$ helen replay session_abc
+# 使用 n/p/j/s 命令导航
+# 使用 summary 查看统计信息
+# 使用 search 搜索关键字
+```
+
+### 6.8 v1.40 调试工具决策树
+
+```
+Helen 程序出问题了吗？
+│
+├─ 报错/异常 → :last_error（现在包含 Suggestion）
+│     └─ 看 diagnostic_category + suggestion
+│           ├─ LLMOutputContractError → 检查 output_contract 定义
+│           ├─ LLMTimeout → 增加 timeout 或减小 prompt
+│           └─ AgentCallFailed → 检查 agent 参数和内部逻辑
+│
+├─ LLM 输出格式不对 → output_contract（自动验证）
+│     └─ 验证失败 → last_error_detail() 看具体 violation
+│
+├─ 非确定性 Bug → record_session() + replay_session()
+│     └─ 录制 → 重放 → 确定性复现
+│
+├─ 多 Agent 数据流问题 → trace_value_origin() / trace_value_consumers()
+│     └─ 追踪数据来源和消费者
+│
+├─ 需要分析大型 Transcript → query_transcript()
+│     └─ 使用过滤和分页高效查询
+│
+└─ 需要逐步查看交互 → helen replay <session_id>
+      └─ 交互式导航和搜索
 ```
 
 ---

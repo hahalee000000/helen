@@ -189,6 +189,27 @@ from helen.stdlib.transcript import (
     release_session_lock as _release_session_lock,  # v1.30.2: session lock release
 )
 
+# Import transcript query functions (v1.40: Phase 3 incremental queries)
+from helen.stdlib.transcript_query import (
+    query_transcript as _query_transcript,
+)
+
+# Import debug diagnostic functions (v1.40: AI-native debugging)
+from helen.stdlib.debug import (
+    last_error_detail as _last_error_detail,
+    error_category as _error_category,
+    error_suggestion as _error_suggestion,
+    error_data_flow as _error_data_flow,
+    validate_output as _validate_output,
+    record_session as _record_session,
+    stop_recording as _stop_recording,
+    replay_session as _replay_session,
+    trace_value_origin as _trace_value_origin,
+    trace_value_consumers as _trace_value_consumers,
+    get_data_lineage as _get_data_lineage,
+    record_data_flow as _record_data_flow,
+)
+
 # Import media functions (multimodal support)
 from helen.stdlib.media import (
     _media, _media_base64, _is_media, _media_type_fn,
@@ -1404,6 +1425,22 @@ def _register_debug() -> list[BuiltinFunction]:
         BuiltinFunction("get_llm_log", "Get recent LLM call audit log", "get_llm_log(n?)", _get_llm_log, "debug"),
         BuiltinFunction("get_last_error", "Get last error snapshot with context", "get_last_error()", _get_last_error, "debug"),
         BuiltinFunction("get_call_stack", "Get current call stack", "get_call_stack()", _get_call_stack, "debug"),
+        # v1.40: AI-native debugging diagnostics (structured error info)
+        BuiltinFunction("last_error_detail", "Get detailed error with diagnostic category and suggestion", "last_error_detail()", _last_error_detail, "debug"),
+        BuiltinFunction("error_category", "Extract diagnostic category from error dict", "error_category(err)", _error_category, "debug"),
+        BuiltinFunction("error_suggestion", "Extract suggestion from error dict", "error_suggestion(err)", _error_suggestion, "debug"),
+        BuiltinFunction("error_data_flow", "Extract data flow from error dict", "error_data_flow(err)", _error_data_flow, "debug"),
+        # v1.40: Output validation
+        BuiltinFunction("validate_output", "Validate output against contract (json/text/schema)", "validate_output(output, contract)", _validate_output, "debug"),
+        # v1.40: Recording/replay
+        BuiltinFunction("record_session", "Start recording LLM interactions to cassette", "record_session(cassette_path)", _record_session, "debug"),
+        BuiltinFunction("stop_recording", "Stop recording LLM interactions", "stop_recording()", _stop_recording, "debug"),
+        BuiltinFunction("replay_session", "Replay LLM interactions from cassette", "replay_session(cassette_path)", _replay_session, "debug"),
+        # v1.40: Data lineage tracking
+        BuiltinFunction("trace_value_origin", "Trace the origin of data consumed by a message", "trace_value_origin(message_uuid)", _trace_value_origin, "debug"),
+        BuiltinFunction("trace_value_consumers", "Trace the consumers of data produced by a message", "trace_value_consumers(message_uuid)", _trace_value_consumers, "debug"),
+        BuiltinFunction("get_data_lineage", "Get the complete data lineage graph", "get_data_lineage()", _get_data_lineage, "debug"),
+        BuiltinFunction("record_data_flow", "Manually record a data flow event", "record_data_flow(producer_uuid, consumer_uuid, flow_type, metadata?)", _record_data_flow, "debug"),
         # Coverage measurement
         BuiltinFunction("coverage_on", "Enable coverage tracking", "coverage_on()", _coverage_on, "debug"),
         BuiltinFunction("coverage_off", "Disable coverage tracking", "coverage_off()", _coverage_off, "debug"),
@@ -1541,6 +1578,8 @@ def _register_transcript() -> list[BuiltinFunction]:
         BuiltinFunction("cleanup_sessions", "Clean up old sessions (v1.23.7: cascade=true deletes spawned)", "cleanup_sessions(keep_count?, older_than_days?, cascade?)", _cleanup_sessions, "transcript"),
         # v1.30.2: Session lock release (prevent stale locks on actor exit)
         BuiltinFunction("release_session_lock", "Release cross-process session lock (called on actor exit to prevent stale locks)", "release_session_lock(session_id)", _release_session_lock, "transcript"),
+        # v1.40: Incremental transcript queries (Phase 3)
+        BuiltinFunction("query_transcript", "Query transcript with filtering and pagination (v1.40+)", "query_transcript(session_id?, role?, agent?, invocation_id?, since?, until?, content_regex?, message_type?, limit?, offset?)", _query_transcript, "transcript"),
     ]
 
 

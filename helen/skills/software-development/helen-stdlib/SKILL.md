@@ -1,7 +1,7 @@
 ---
 name: helen-stdlib
-description: "Helen Standard Library Guide — Categorized reference and examples for 200+ built-in functions"
-version: 1.16.0
+description: "Helen Standard Library Guide — Categorized reference and examples for 378+ built-in functions (v1.40 adds 14 AI-native debugging functions)"
+version: 1.40.0
 author: Helen Team
 license: MIT
 metadata:
@@ -11,7 +11,7 @@ metadata:
 
 # Helen Standard Library Reference
 
-Helen's standard library provides **364 built-in functions**, covering all core needs for AI application development.
+Helen's standard library provides **378 built-in functions**, covering all core needs for AI application development.
 
 ## Category Overview
 
@@ -30,7 +30,7 @@ Helen's standard library provides **364 built-in functions**, covering all core 
 | **IO** | 9 | `stream_print`, `stream_clear`, `progress_bar`, `mkdir`, `mkdir_p`, `append_file`, `stream_cursor_up`, `stream_cursor_down` |
 | **Path** | 6 | `path_basename`, `path_dirname`, `path_exists`, `path_is_dir`, `path_is_file`, `path_join` |
 | **Tools** | 7 | `shell_exec`, `calculate`, `patch_file`, `load_skill`, `list_skill_references`, `web_search`, `web_fetch` |
-| **Observability** | 8 | `debug`, `trace_on`, `trace_off`, `get_trace`, `coverage_on`, `coverage_off`, `coverage_report`, `coverage_summary` |
+| **Debug** (v1.40) | 22 | `debug`, `trace_on`, `trace_off`, `get_trace`, `coverage_on`, `coverage_off`, `coverage_report`, `coverage_summary`, `last_error_detail`, `error_category`, `error_suggestion`, `error_data_flow`, `validate_output`, `query_transcript`, `record_session`, `stop_recording`, `replay_session`, `trace_value_origin`, `trace_value_consumers`, `get_data_lineage`, `record_data_flow` |
 | **Context** | 29 | `clear_context`, `compress_context`, `compress_context_target`, `context_stats`, `context_usage`, `get_message`, `delete_message`, `pin_message`, `unpin_message`, `list_pinned_messages`, `insert_message`, `replace_message`, `working_memory_get`, `working_memory_set`, `working_memory_remove`, `working_memory_clear`, `set_compression_strategy`, `set_context_window`, `set_working_memory_enabled`, `set_cache_aware`, `get_context_config`, `search_context`, `context_slice`, `export_context`, `import_context`, `fork_context`, `restore_context`, `on_compression`, `on_context_overflow` |
 | **Transcript** | 22 | `get_session_id`, `get_session_meta`, `list_sessions`, `replay_transcript`, `replay_full_session`, `export_transcript`, `search_transcript`, `list_invocations`, `get_invocation`, `get_invocation_tree`, `invocation_path`, `get_compression_audit`, `resume_session`, `get_session_dir`, `set_session_dir`, `delete_session`, `delete_current_session`, `cleanup_sessions`, `get_spawned_sessions`, `get_spawn_tree` |
 | **Media** | 12 | `media`, `media_base64`, `is_media`, `media_type`, `to_openai_parts`, `to_claude_parts`, `to_gemini_parts`, `media_to_base64`, `save_media`, `is_image`, `is_video`, `is_audio` |
@@ -525,9 +525,11 @@ main {
 }
 ```
 
-## Observability
+## Debug (v1.40+)
 
-AI-native observability functions providing structured debugging context for AI agents.
+AI-native debugging functions providing structured error diagnostics, output validation, transcript querying, LLM recording/replay, and data lineage tracking.
+
+### Basic Observability
 
 ```helen
 import std.debug.*
@@ -555,6 +557,178 @@ main {
 ```
 
 **Design features**: Zero overhead by default (no impact when tracing is off), JSON structured output (AI-consumable), automatic call stack + scope variable capture on errors/assertions, `llm act` automatically records call details.
+
+### Structured Error Diagnostics (v1.40)
+
+All 11 exception types now provide structured diagnostic information:
+
+```helen
+import std.debug.*
+main {
+    // After an error occurs, get detailed diagnostics
+    let err = last_error_detail()
+    if err != null {
+        debug("Error category", error_category(err))
+        // "LLMTimeout", "AgentCallFailed", "RuntimeGenericError", etc.
+        
+        debug("Fix suggestion", error_suggestion(err))
+        // "LLM 调用超时。考虑：(1) 增加 timeout 配置..."
+        
+        let flows = error_data_flow(err)
+        for flow in flows {
+            debug("Data flow", flow)
+            // {"variable": "x", "source": "msg-123", "via": "Coder"}
+        }
+    }
+}
+```
+
+**Supported exception types** (11 types):
+- AnyError, LLMError, TimeoutError, ModelError, PromptTooLongError
+- AgentError, LLMOutputContractError (v1.40), ToolError
+- RuntimeError, AssertionError, AggregateError
+
+### Output Contract Validation (v1.40)
+
+Validate LLM outputs against contracts:
+
+```helen
+import std.debug.*
+main {
+    // Validate JSON
+    let result = validate_output('{"name": "Alice"}', "json")
+    if result.valid {
+        debug("Valid JSON", result.parsed)
+    }
+    
+    // Validate schema
+    let schema = {type: "object", required: ["name"]}
+    let result = validate_output('{"name": "Alice"}', schema)
+    if !result.valid {
+        debug("Validation failed", result.violation)
+    }
+}
+```
+
+**Supported contract types**:
+- `"json"`: Validate that output is valid JSON
+- `"text"`: Always passes (for explicit marking)
+- Schema dict: Validate type, required fields, properties, enum, min/max, etc.
+
+**Agent declaration with output contract**:
+```helen
+agent Reviewer {
+    output_contract: "json"  // or schema dict
+    main {
+        llm act "Review this code and return JSON"
+    }
+}
+```
+
+### Incremental Transcript Query (v1.40)
+
+Efficiently query large transcripts:
+
+```helen
+import std.debug.*
+main {
+    // Query all assistant messages
+    let msgs = query_transcript(role="assistant")
+    
+    // Query messages from specific agent
+    let coder_msgs = query_transcript(agent="Coder")
+    
+    // Paginated query
+    let page1 = query_transcript(limit=100, offset=0)
+    
+    // Regex search
+    let errors = query_transcript(content_regex="Error:")
+    
+    // Time range query
+    let recent = query_transcript(since=now() - 3600)
+    
+    // Combined query
+    let filtered = query_transcript(
+        role="assistant",
+        agent="Reviewer",
+        content_regex="verdict",
+        limit=50
+    )
+}
+```
+
+**Query parameters**: `session_id`, `role`, `agent`, `invocation_id`, `since`, `until`, `content_regex`, `message_type`, `limit`, `offset`
+
+**Backend optimization**:
+- JSONL backend: Streaming filter + 100k item limit (prevents OOM)
+- SQLite backend: SQL WHERE pushdown (O(log n) query)
+
+### LLM Recording/Replay (v1.40)
+
+Record and replay LLM interactions for deterministic debugging:
+
+```helen
+import std.debug.*
+main {
+    // Start recording
+    record_session("debug/session.jsonl")
+    
+    // Run agent (all LLM calls are recorded)
+    agent Reviewer {
+        main {
+            llm act "Review this code..."
+        }
+    }
+    
+    // Stop recording
+    stop_recording()
+    
+    // Later, replay the session
+    replay_session("debug/session.jsonl")
+    // Now all LLM calls use recorded responses
+}
+```
+
+**Use cases**:
+1. **Bug reproduction**: Record session with bug, replay to confirm
+2. **Prompt regression testing**: Modify prompt, replay to compare
+3. **CI testing**: Replay recorded sessions, avoid LLM dependency
+4. **Performance analysis**: Analyze recorded duration and token usage
+
+### Data Lineage Tracking (v1.40)
+
+Track data flow between agents:
+
+```helen
+import std.debug.*
+main {
+    // Manually record data flow
+    record_data_flow(
+        "msg_abc",           // Producer UUID
+        "msg_xyz",           // Consumer UUID
+        "agent_call",        // Flow type
+        {"arg": "input"}     // Metadata
+    )
+    
+    // Query data origin
+    let origins = trace_value_origin("msg_xyz")
+    // [{"producer_uuid": "msg_abc", "flow_type": "agent_call", ...}]
+    
+    // Query data consumers
+    let consumers = trace_value_consumers("msg_abc")
+    // [{"consumer_uuid": "msg_xyz", "flow_type": "agent_call", ...}]
+    
+    // Get complete lineage graph
+    let lineage = get_data_lineage()
+    // {"nodes": [...], "edges": [...]}
+}
+```
+
+**Flow types**: `"channel"`, `"agent_call"`, `"prompt"`, or custom types
+
+**Data storage**: Independent SQLite sidecar file (`<session_id>_lineage.db`), decoupled from transcript backend.
+
+**CLI tool**: `helen replay <session_id>` for interactive transcript replay.
 
 **Coverage CLI**: Use `helen coverage <test_files> [--source <dir>] [--html <dir>]` to run tests with coverage measurement. See `helen coverage --help` for options.
 

@@ -278,6 +278,8 @@ class ErrorSnapshot:
     - Call stack at error time
     - Local variables in scope
     - Recent execution trace
+    - Diagnostic category and suggestion (v1.40)
+    - Data flow tracing (v1.40)
     """
 
     error_type: str
@@ -287,6 +289,10 @@ class ErrorSnapshot:
     scope: dict[str, Any] = field(default_factory=dict)
     trace: list[dict[str, Any]] = field(default_factory=list)
     timestamp: float = field(default_factory=time.time)
+    # v1.40: AI-native debugging fields
+    diagnostic_category: str = ""
+    suggestion: str = ""
+    data_flow: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to JSON-serializable dict."""
@@ -300,6 +306,10 @@ class ErrorSnapshot:
             "scope": _safe_serialize(self.scope),
             "trace": self.trace[-20:],  # Last 20 trace entries
             "timestamp": self.timestamp,
+            # v1.40: diagnostic fields
+            "diagnostic_category": self.diagnostic_category,
+            "suggestion": self.suggestion,
+            "data_flow": self.data_flow,
         }
 
     def format_text(self, verbose: bool = False) -> str:
@@ -315,9 +325,16 @@ class ErrorSnapshot:
             f"Error: {self.error_type}: {self.message}",
             f"Location: {self.location}",
             f"Time: {ts}",
-            "",
-            "Call Stack:",
         ]
+
+        # v1.40: Add diagnostic category and suggestion
+        if self.diagnostic_category:
+            lines.append(f"Category: {self.diagnostic_category}")
+        if self.suggestion:
+            lines.append(f"Suggestion: {self.suggestion}")
+
+        lines.append("")
+        lines.append("Call Stack:")
 
         if self.call_stack:
             for i, frame in enumerate(reversed(self.call_stack)):
@@ -331,6 +348,19 @@ class ErrorSnapshot:
             lines.append("Variables in scope:")
             for name, value in self.scope.items():
                 lines.append(f"  {name} = {_format_value(value)}")
+
+        # v1.40: Add data flow
+        if self.data_flow:
+            lines.append("")
+            lines.append("Data Flow:")
+            for entry in self.data_flow:
+                var = entry.get("variable", "")
+                source = entry.get("source", "")
+                via = entry.get("via", "")
+                if var:
+                    lines.append(f"  {var} ← {source} (via {via})")
+                else:
+                    lines.append(f"  {source} → {via}")
 
         if verbose and self.trace:
             lines.append("")
@@ -488,7 +518,8 @@ class ObservabilityManager:
 
     def capture_error(self, error_type: str, message: str,
                       span: SourceSpan | None,
-                      scope: dict[str, Any] | None = None) -> ErrorSnapshot:
+                      scope: dict[str, Any] | None = None,
+                      exception: Exception | None = None) -> ErrorSnapshot:
         """Capture a structured error snapshot.
 
         Args:
@@ -496,17 +527,44 @@ class ObservabilityManager:
             message: Error message.
             span: Source location of the error.
             scope: Local variables in scope at error time.
+            exception: The actual exception object (for extracting attributes).
 
         Returns:
             The captured error snapshot.
         """
+        from helen.runtime.error_diagnostics import generate_diagnostics
+
+        call_stack_list = self.call_stack.to_list()
+        scope_dict = scope or {}
+
+        # Extract exception context for diagnostics
+        exception_context = {}
+        if exception is not None:
+            # Extract known attributes from exception types
+            for attr in ["tokens_used", "tokens_limit", "agent_name",
+                        "agent_args", "cause", "errors"]:
+                if hasattr(exception, attr):
+                    exception_context[attr] = getattr(exception, attr)
+
+        # Generate diagnostics
+        diagnostics = generate_diagnostics(
+            error_type=error_type,
+            message=message,
+            scope=scope_dict,
+            call_stack=call_stack_list,
+            exception_context=exception_context,
+        )
+
         snapshot = ErrorSnapshot(
             error_type=error_type,
             message=message,
             location=CallFrame.format_location(span),
-            call_stack=self.call_stack.to_list(),
-            scope=scope or {},
+            call_stack=call_stack_list,
+            scope=scope_dict,
             trace=self.tracer.to_list(),
+            diagnostic_category=diagnostics["diagnostic_category"],
+            suggestion=diagnostics["suggestion"],
+            data_flow=diagnostics["data_flow"],
         )
         self._last_error = snapshot
         return snapshot

@@ -346,12 +346,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return repl_command(session_id=session_id)
 
     # Check for known subcommands
-    subcommands = {"check", "repl", "doc", "init", "test", "quality", "lsp", "watch", "template", "agent", "coverage"}
+    subcommands = {"check", "repl", "doc", "init", "test", "quality", "lsp", "watch", "template", "agent", "coverage", "replay"}
     first = argv[0]
 
     if first in subcommands:
         # Allow-list: commands that don't need LLM config
-        no_config_commands = {"init", "check", "doc", "quality", "lsp", "template", "coverage"}
+        no_config_commands = {"init", "check", "doc", "quality", "lsp", "template", "coverage", "replay"}
 
         if first not in no_config_commands:
             _preflight_config_check()  # Check config before LLM-requiring commands
@@ -386,6 +386,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return launch_agent()
         elif first == "coverage":
             return coverage_command(argv[1:])
+        elif first == "replay":
+            return replay_command(argv[1:])
     elif first in ("-h", "--help", "help"):
         _print_help()
         return 0
@@ -1281,6 +1283,149 @@ def template_command(argv: list[str]) -> int:
     print(f"\n=== End of template ===")
     print()
     print(f"Copy this template with: helen template {template_name} --copy")
+
+    return 0
+
+
+def replay_command(argv: list[str]) -> int:
+    """Interactive transcript replay for debugging.
+
+    Usage:
+        helen replay <session_id> [options]
+
+    Options:
+        --summary         Show session summary and exit
+        --interactive     Start interactive replay mode (default)
+
+    Examples:
+        helen replay abc123
+        helen replay abc123 --summary
+    """
+    if not argv:
+        print("Error: 'replay' requires a session ID argument", file=sys.stderr)
+        print("Usage: helen replay <session_id> [--summary]", file=sys.stderr)
+        return 1
+
+    session_id = argv[0]
+    show_summary = "--summary" in argv
+
+    try:
+        from helen.runtime.transcript_replay import TranscriptReplay
+
+        with TranscriptReplay(session_id) as replay:
+            if show_summary:
+                # Show summary and exit
+                summary = replay.get_summary()
+                print(f"Session: {summary['session_id']}")
+                print(f"Total messages: {summary['total_messages']}")
+                print(f"Roles: {summary['roles']}")
+                if summary['agents']:
+                    print(f"Agents: {summary['agents']}")
+                return 0
+            else:
+                # Interactive mode
+                return _interactive_replay(replay)
+
+    except FileNotFoundError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+
+
+def _interactive_replay(replay) -> int:
+    """Run interactive replay mode.
+
+    Args:
+        replay: TranscriptReplay instance
+
+    Returns:
+        Exit code (0 for success)
+    """
+    print(f"Transcript Replay - Session: {replay.session_id}")
+    print(f"Total messages: {len(replay)}")
+    print()
+    print("Commands:")
+    print("  n, next      - Next message")
+    print("  p, prev      - Previous message")
+    print("  j <n>        - Jump to message n")
+    print("  f, first     - First message")
+    print("  l, last      - Last message")
+    print("  s <query>    - Search for query")
+    print("  summary      - Show summary")
+    print("  q, quit      - Exit replay mode")
+    print()
+
+    # Show first message
+    replay.print_current()
+
+    while True:
+        try:
+            cmd = input("\nreplay> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+
+        if not cmd:
+            continue
+
+        parts = cmd.split(maxsplit=1)
+        command = parts[0].lower()
+        arg = parts[1] if len(parts) > 1 else ""
+
+        if command in ("q", "quit", "exit"):
+            break
+        elif command in ("n", "next"):
+            msg = replay.next()
+            if msg:
+                replay.print_current()
+            else:
+                print("Already at last message")
+        elif command in ("p", "prev", "previous"):
+            msg = replay.prev()
+            if msg:
+                replay.print_current()
+            else:
+                print("Already at first message")
+        elif command in ("j", "jump"):
+            try:
+                index = int(arg)
+                msg = replay.jump(index)
+                if msg:
+                    replay.print_current()
+                else:
+                    print(f"Invalid index: {index}")
+            except ValueError:
+                print("Usage: j <index>")
+        elif command in ("f", "first"):
+            replay.first()
+            replay.print_current()
+        elif command in ("l", "last"):
+            replay.last()
+            replay.print_current()
+        elif command in ("s", "search"):
+            if not arg:
+                print("Usage: s <query>")
+            else:
+                results = replay.search(arg)
+                if results:
+                    print(f"Found {len(results)} matches at indices: {results[:10]}")
+                    if len(results) > 10:
+                        print(f"  ... and {len(results) - 10} more")
+                else:
+                    print("No matches found")
+        elif command == "summary":
+            summary = replay.get_summary()
+            print(f"Session: {summary['session_id']}")
+            print(f"Total messages: {summary['total_messages']}")
+            print(f"Roles: {summary['roles']}")
+            if summary['agents']:
+                print(f"Agents: {summary['agents']}")
+            print(f"Current position: {summary['current_index']}/{len(replay)}")
+        else:
+            print(f"Unknown command: {command}")
+            print("Type 'q' to quit")
 
     return 0
 

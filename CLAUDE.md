@@ -46,13 +46,24 @@ helen lsp                           # Start Language Server (JSON-RPC over stdio
 
 The locally-compiled binary integrates Helen language support (tree-sitter grammar + AST specs for `agent` declarations, `llm act` expressions, imports, etc.). 1760+ Helen nodes are indexed alongside Python code.
 
+### ⚠️ CRITICAL: Always pass `format: "json"` to MCP tools
+
+The MCP server's default output format (TOON tree text) puts data in `content[0].text` with an empty `structuredContent: {}`. Claude Code only reads `structuredContent`, so **all default-format calls return `{}`**. Always pass `format: "json"` to get actual results:
+
+```
+search_graph(project="home-rxx-helen", name_pattern="foo", format="json")
+trace_path(project="home-rxx-helen", function_name="foo", format="json")
+query_graph(project="home-rxx-helen", query="MATCH ...", format="json")
+get_architecture(project="home-rxx-helen", format="json")
+```
+
 ### Mandatory MCP tools:
-- Finding function/class definitions → `search_graph`
-- Understanding who calls a function → `trace_path` (mode=calls, direction=inbound)
-- Understanding what a function calls → `trace_path` (mode=calls, direction=outbound)
+- Finding function/class definitions → `search_graph` (pass `format: "json"`)
+- Understanding who calls a function → `trace_path` (mode=calls, direction=inbound, `format: "json"`)
+- Understanding what a function calls → `trace_path` (mode=calls, direction=outbound, `format: "json"`)
 - Reading specific function/class source → `get_code_snippet`
-- Complex multi-hop queries (call chains, dependencies) → `query_graph`
-- High-level architecture overview → `get_architecture`
+- Complex multi-hop queries (call chains, dependencies) → `query_graph` (pass `format: "json"`)
+- High-level architecture overview → `get_architecture` (pass `format: "json"`)
 - Text search with structural ranking → `search_code`
 
 ### When grep/read is acceptable (rare):

@@ -1630,7 +1630,7 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
                         pass
                 self.observability.capture_error(
                     type(e).__name__, str(e), func.span,
-                    scope=scope_vars
+                    scope=scope_vars, exception=e
                 )
                 raise
             finally:
@@ -1970,7 +1970,7 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
                         return self.llm_runtime.act(rendered_prompt, tools=sandbox_tools)
                 return None
             return None
-        except AgentError:
+        except AgentError as e:
             # Already wrapped (e.g. from a nested agent call) — re-raise as-is.
             # Still capture observability for the outer call frame.
             scope_vars = {}
@@ -1981,7 +1981,7 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
                     pass
             self.observability.capture_error(
                 "AgentError", f"Agent '{agent.name}' propagated failure", agent.span,
-                scope=scope_vars,
+                scope=scope_vars, exception=e,
             )
             raise
         except Exception as e:
@@ -1994,7 +1994,7 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
                     pass
             self.observability.capture_error(
                 type(e).__name__, str(e), agent.span,
-                scope=scope_vars
+                scope=scope_vars, exception=e
             )
             # Wrap as AgentError with agent context for try-catch handling
             raise AgentError(

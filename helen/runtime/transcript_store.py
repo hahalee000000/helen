@@ -299,6 +299,138 @@ class TranscriptStoreBackend(ABC):
         """
         pass
 
+    def query(
+        self,
+        *,
+        roles: list[str] | None = None,
+        agent_names: list[str] | None = None,
+        invocation_ids: list[str] | None = None,
+        since: float | None = None,
+        until: float | None = None,
+        content_regex: str | None = None,
+        message_types: list[str] | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[Message | BoundaryMarker]:
+        """Query items with filtering and pagination.
+
+        Default implementation loads all items and filters in Python.
+        Backends should override for indexed query optimization.
+
+        v1.40: Added for incremental transcript queries (Phase 3).
+
+        Args:
+            roles: Filter by message role (e.g., ["user", "assistant"])
+            agent_names: Filter by agent name
+            invocation_ids: Filter by invocation ID
+            since: Filter by timestamp >= since
+            until: Filter by timestamp <= until
+            content_regex: Filter by content matching regex pattern
+            message_types: Filter by message type
+            limit: Maximum number of results to return
+            offset: Number of results to skip (for pagination)
+
+        Returns:
+            List of matching Message and BoundaryMarker objects
+        """
+        # Default implementation: load all and filter in Python
+        items = self.load_all()
+        return _apply_filters(
+            items,
+            roles=roles,
+            agent_names=agent_names,
+            invocation_ids=invocation_ids,
+            since=since,
+            until=until,
+            content_regex=content_regex,
+            message_types=message_types,
+            limit=limit,
+            offset=offset,
+        )
+
+
+def _apply_filters(
+    items: list[Message | BoundaryMarker],
+    *,
+    roles: list[str] | None = None,
+    agent_names: list[str] | None = None,
+    invocation_ids: list[str] | None = None,
+    since: float | None = None,
+    until: float | None = None,
+    content_regex: str | None = None,
+    message_types: list[str] | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[Message | BoundaryMarker]:
+    """Apply filters to a list of items (used by default query implementation).
+
+    Args:
+        items: List of items to filter
+        roles: Filter by message role
+        agent_names: Filter by agent name
+        invocation_ids: Filter by invocation ID
+        since: Filter by timestamp >= since
+        until: Filter by timestamp <= until
+        content_regex: Filter by content matching regex
+        message_types: Filter by message type
+        limit: Maximum results to return
+        offset: Results to skip
+
+    Returns:
+        Filtered list of items
+    """
+    import re
+
+    result = []
+    skipped = 0
+
+    for item in items:
+        # Skip boundary markers for most filters
+        if isinstance(item, BoundaryMarker):
+            # Boundary markers only pass through if no filters specified
+            if not any([roles, agent_names, invocation_ids, since, until, content_regex, message_types]):
+                if skipped >= offset:
+                    result.append(item)
+                    if limit and len(result) >= limit:
+                        break
+                skipped += 1
+            continue
+
+        # Apply filters to messages
+        msg = item
+
+        if roles and msg.role not in roles:
+            continue
+        if agent_names and getattr(msg, "agent_name", None) not in agent_names:
+            continue
+        if invocation_ids and getattr(msg, "invocation_id", None) not in invocation_ids:
+            continue
+        # Note: timestamp filtering is not supported in default implementation
+        # as Message objects don't have timestamp attribute
+        # Use SQLite backend for timestamp-based queries
+        if content_regex:
+            try:
+                if not re.search(content_regex, msg.content):
+                    continue
+            except re.error:
+                # Invalid regex, skip this filter
+                pass
+        if message_types and getattr(msg, "message_type", None) not in message_types:
+            continue
+
+        # Apply offset
+        if skipped < offset:
+            skipped += 1
+            continue
+
+        result.append(msg)
+
+        # Apply limit
+        if limit and len(result) >= limit:
+            break
+
+    return result
+
 
 class JSONLBackend(TranscriptStoreBackend):
     """JSONL file backend for transcript persistence.
@@ -485,6 +617,135 @@ class JSONLBackend(TranscriptStoreBackend):
 
         except OSError as e:
             logger.warning("JSONLBackend: failed to update pinned for %s: %s", uuid, e)
+
+    def query(
+        self,
+        *,
+        roles: list[str] | None = None,
+        agent_names: list[str] | None = None,
+        invocation_ids: list[str] | None = None,
+        since: float | None = None,
+        until: float | None = None,
+        content_regex: str | None = None,
+        message_types: list[str] | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[Message | BoundaryMarker]:
+        """Query items with streaming filter and 100k item limit.
+
+        v1.40: Optimized query implementation for JSONL backend.
+        Streams the file line-by-line to avoid loading everything into memory.
+        Enforces a hard limit of 100,000 items to prevent OOM.
+
+        Args:
+            roles: Filter by message role
+            agent_names: Filter by agent name
+            invocation_ids: Filter by invocation ID
+            since: Filter by timestamp >= since
+            until: Filter by timestamp <= until
+            content_regex: Filter by content matching regex
+            message_types: Filter by message type
+            limit: Maximum results to return
+            offset: Results to skip
+
+        Returns:
+            List of matching items
+
+        Raises:
+            RuntimeError: If file exceeds 100k items
+        """
+        import re
+
+        if not self.path.exists():
+            return []
+
+        # Pre-compile regex if provided
+        regex_pattern = None
+        if content_regex:
+            try:
+                regex_pattern = re.compile(content_regex)
+            except re.error:
+                logger.warning("JSONLBackend: invalid regex pattern: %s", content_regex)
+                regex_pattern = None
+
+        MAX_ITEMS = 100_000
+        result = []
+        skipped = 0
+        total_items = 0
+
+        try:
+            with open(self.path, encoding="utf-8") as f:
+                for line_num, line in enumerate(f, start=1):
+                    line = line.strip()
+                    if not line:
+                        continue
+
+                    total_items += 1
+                    if total_items > MAX_ITEMS:
+                        raise RuntimeError(
+                            f"JSONL file exceeds {MAX_ITEMS} items. "
+                            f"Consider using SQLite backend or splitting the file."
+                        )
+
+                    try:
+                        data = json.loads(line)
+                        item = _item_from_dict(data)
+                        if item is None:
+                            continue
+
+                        # Boundary markers only pass through if no filters
+                        if isinstance(item, BoundaryMarker):
+                            if not any([roles, agent_names, invocation_ids,
+                                      since, until, content_regex, message_types]):
+                                if skipped >= offset:
+                                    result.append(item)
+                                    if limit and len(result) >= limit:
+                                        break
+                                skipped += 1
+                            continue
+
+                        # Apply filters to messages
+                        msg = item
+
+                        if roles and msg.role not in roles:
+                            continue
+                        if agent_names and getattr(msg, "agent_name", None) not in agent_names:
+                            continue
+                        if invocation_ids and getattr(msg, "invocation_id", None) not in invocation_ids:
+                            continue
+                        # Timestamp filtering: use line number as proxy for order in JSONL
+                        # (JSONL doesn't store timestamps separately, so we use insertion order)
+                        # For JSONL backend, timestamp filtering is not supported
+                        # Users should use SQLite backend for timestamp-based queries
+                        if regex_pattern and not regex_pattern.search(msg.content):
+                            continue
+                        if message_types and getattr(msg, "message_type", None) not in message_types:
+                            continue
+
+                        # Apply offset
+                        if skipped < offset:
+                            skipped += 1
+                            continue
+
+                        result.append(msg)
+
+                        # Apply limit
+                        if limit and len(result) >= limit:
+                            break
+
+                    except json.JSONDecodeError as e:
+                        logger.warning(
+                            "JSONLBackend: corrupted line %d in %s: %s",
+                            line_num, self.path, e,
+                        )
+                        continue
+
+        except OSError as e:
+            logger.warning("JSONLBackend: query failed on %s: %s", self.path, e)
+        except RuntimeError:
+            raise
+
+        return result
 
 
 class SQLiteBackend(TranscriptStoreBackend):
@@ -701,6 +962,131 @@ class SQLiteBackend(TranscriptStoreBackend):
             self.conn.commit()
         except Exception as e:
             logger.warning("SQLiteBackend: failed to update pinned for %s: %s", uuid, e)
+
+    def query(
+        self,
+        *,
+        roles: list[str] | None = None,
+        agent_names: list[str] | None = None,
+        invocation_ids: list[str] | None = None,
+        since: float | None = None,
+        until: float | None = None,
+        content_regex: str | None = None,
+        message_types: list[str] | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[Message | BoundaryMarker]:
+        """Query items using SQL WHERE clause pushdown.
+
+        v1.40: Optimized query implementation for SQLite backend.
+        Uses JSON_EXTRACT for filtering on JSON fields.
+
+        Args:
+            roles: Filter by message role
+            agent_names: Filter by agent name
+            invocation_ids: Filter by invocation ID
+            since: Filter by timestamp >= since
+            until: Filter by timestamp <= until
+            content_regex: Filter by content matching regex
+            message_types: Filter by message type
+            limit: Maximum results to return
+            offset: Results to skip
+
+        Returns:
+            List of matching items
+        """
+        try:
+            # Build WHERE clause
+            where_clauses = []
+            params = []
+
+            # Filter by timestamp (direct column, fast)
+            if since is not None:
+                where_clauses.append("timestamp >= ?")
+                params.append(since)
+            if until is not None:
+                where_clauses.append("timestamp <= ?")
+                params.append(until)
+
+            # Filter by JSON fields using JSON_EXTRACT
+            if roles:
+                placeholders = ",".join(["?" for _ in roles])
+                where_clauses.append(f"json_extract(data, '$.role') IN ({placeholders})")
+                params.extend(roles)
+
+            if agent_names:
+                placeholders = ",".join(["?" for _ in agent_names])
+                where_clauses.append(f"json_extract(data, '$.agent_name') IN ({placeholders})")
+                params.extend(agent_names)
+
+            if invocation_ids:
+                placeholders = ",".join(["?" for _ in invocation_ids])
+                where_clauses.append(f"json_extract(data, '$.invocation_id') IN ({placeholders})")
+                params.extend(invocation_ids)
+
+            if message_types:
+                placeholders = ",".join(["?" for _ in message_types])
+                where_clauses.append(f"json_extract(data, '$.message_type') IN ({placeholders})")
+                params.extend(message_types)
+
+            # Content regex filtering (done in Python after SQL query)
+            # SQLite doesn't have native regex support, so we filter in post-processing
+
+            # Build SQL query
+            sql = "SELECT data, timestamp FROM transcript"
+            if where_clauses:
+                sql += " WHERE " + " AND ".join(where_clauses)
+            sql += " ORDER BY timestamp ASC"
+
+            # Execute query
+            cursor = self.conn.execute(sql, params)
+
+            # Process results
+            result = []
+            for row in cursor:
+                data_json = row[0]
+                try:
+                    data = json.loads(data_json)
+                    item = _item_from_dict(data)
+                    if item is None:
+                        continue
+
+                    # Apply content regex filter in Python
+                    if content_regex and isinstance(item, Message):
+                        import re
+                        try:
+                            if not re.search(content_regex, item.content):
+                                continue
+                        except re.error:
+                            pass  # Invalid regex, skip filter
+
+                    result.append(item)
+                except json.JSONDecodeError as e:
+                    logger.warning("SQLiteBackend: corrupted data in query: %s", e)
+                    continue
+
+            # Apply offset and limit in Python
+            if offset > 0:
+                result = result[offset:]
+            if limit is not None:
+                result = result[:limit]
+
+            return result
+
+        except Exception as e:
+            logger.warning("SQLiteBackend: query failed: %s", e)
+            # Fall back to default implementation
+            return super().query(
+                roles=roles,
+                agent_names=agent_names,
+                invocation_ids=invocation_ids,
+                since=since,
+                until=until,
+                content_regex=content_regex,
+                message_types=message_types,
+                limit=limit,
+                offset=offset,
+            )
 
 
 def _item_to_dict(item: Message | BoundaryMarker) -> dict[str, Any]:
@@ -1205,6 +1591,72 @@ class TranscriptStore:
                 restored_messages.append(msg)
 
         return restored_messages
+
+    def query(
+        self,
+        *,
+        roles: list[str] | None = None,
+        agent_names: list[str] | None = None,
+        invocation_ids: list[str] | None = None,
+        since: float | None = None,
+        until: float | None = None,
+        content_regex: str | None = None,
+        message_types: list[str] | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[Message]:
+        """Query messages with filtering and pagination.
+
+        v1.40: Added for incremental transcript queries (Phase 3).
+
+        Delegates to backend's query() method if available, otherwise
+        filters the in-memory transcript. Only returns Message objects
+        (excludes BoundaryMarkers).
+
+        Args:
+            roles: Filter by message role (e.g., ["user", "assistant"])
+            agent_names: Filter by agent name
+            invocation_ids: Filter by invocation ID
+            since: Filter by timestamp >= since
+            until: Filter by timestamp <= until
+            content_regex: Filter by content matching regex pattern
+            message_types: Filter by message type
+            limit: Maximum number of results to return
+            offset: Number of results to skip (for pagination)
+
+        Returns:
+            List of matching Message objects (excludes BoundaryMarkers)
+        """
+        # Try backend query first (more efficient)
+        if self._backend is not None:
+            items = self._backend.query(
+                roles=roles,
+                agent_names=agent_names,
+                invocation_ids=invocation_ids,
+                since=since,
+                until=until,
+                content_regex=content_regex,
+                message_types=message_types,
+                limit=limit,
+                offset=offset,
+            )
+            # Filter out BoundaryMarkers, only return Messages
+            return [item for item in items if isinstance(item, Message)]
+
+        # Fall back to in-memory filtering
+        items = _apply_filters(
+            self.transcript,
+            roles=roles,
+            agent_names=agent_names,
+            invocation_ids=invocation_ids,
+            since=since,
+            until=until,
+            content_regex=content_regex,
+            message_types=message_types,
+            limit=limit,
+            offset=offset,
+        )
+        return [item for item in items if isinstance(item, Message)]
 
     def get_transcript_size(self) -> int:
         """Get the total number of items in the transcript."""

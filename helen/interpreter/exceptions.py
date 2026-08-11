@@ -203,6 +203,50 @@ class AgentError(LLMError):
 
 
 @dataclass
+class LLMOutputContractError(LLMError):
+    """LLM output does not match agent's output_contract.
+
+    v1.40: Raised when an agent has an output_contract declaration and the
+    LLM's response fails to validate against it.
+
+    Inherits from LLMError so that ``catch LLMError`` also catches contract
+    violations.
+
+    Attributes:
+        agent_name: Name of the agent with the contract.
+        contract: The output_contract specification (string or dict).
+        actual_output: The actual LLM output that failed validation.
+        violation: Description of what constraint was violated.
+    """
+
+    agent_name: str = ""
+    contract: Any = None
+    actual_output: str = ""
+    violation: str = ""
+
+    def __init__(
+        self,
+        agent_name: str = "",
+        contract: Any = None,
+        actual_output: str = "",
+        violation: str = "",
+        message: str | None = None,
+        span: SourceSpan | None = None,
+    ) -> None:
+        self.agent_name = agent_name
+        self.contract = contract
+        self.actual_output = actual_output
+        self.violation = violation
+        if message is None:
+            message = f"Agent '{agent_name}' output does not match contract: {violation}"
+        super().__init__(message, span)
+
+    def __str__(self) -> str:
+        loc = f" at {self.span}" if self.span else ""
+        return f"LLMOutputContractError:{loc} {self.message}"
+
+
+@dataclass
 class ToolError(AnyError):
     """Tool call failed."""
 
@@ -261,6 +305,7 @@ _PREDEFINED_EXCEPTIONS: dict[str, type[HelenRuntimeError]] = {
     "ModelError": ModelError,
     "PromptTooLongError": PromptTooLongError,
     "AgentError": AgentError,
+    "LLMOutputContractError": LLMOutputContractError,  # v1.40
     "ToolError": ToolError,
     "RuntimeError": RuntimeError,
     "AssertionError": AssertionError,

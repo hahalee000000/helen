@@ -451,6 +451,8 @@ class HttpLLMRuntime(LLMRuntime):
     # v1.35: Platform protocol for provider-specific handling
     # Initialized in __post_init__, but has default for test compatibility
     _platform_protocol: Any = field(default=None, repr=False, init=False)
+    # v1.40: Recording support
+    _recording_cassette: Any = field(default=None, repr=False, init=False)
 
     def __post_init__(self):
         """Auto-load configuration from Helen config."""
@@ -524,6 +526,24 @@ class HttpLLMRuntime(LLMRuntime):
                 pass
         if self._tool_pool is not None:
             self._tool_pool.shutdown(wait=False)
+
+    # v1.40: Recording support methods
+
+    def enable_recording(self, cassette_path: str | Path) -> None:
+        """Enable recording of LLM interactions to a cassette file.
+
+        Args:
+            cassette_path: Path to cassette file (JSONL format).
+        """
+        from helen.runtime.recording import CassetteWriter
+        self._recording_cassette = CassetteWriter(cassette_path)
+        self._recording_cassette.__enter__()
+
+    def disable_recording(self) -> None:
+        """Disable recording and close the cassette file."""
+        if self._recording_cassette is not None:
+            self._recording_cassette.__exit__(None, None, None)
+            self._recording_cassette = None
 
     def route(
         self,
@@ -634,6 +654,19 @@ class HttpLLMRuntime(LLMRuntime):
                 if repaired:
                     logger.debug("Repaired %d role-alternation violations", repaired)
 
+            # v1.40: Record request if recording is enabled
+            recording_start_time = time.time()
+            if self._recording_cassette is not None:
+                request_payload = {
+                    "model": use_model,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "tools": tools,
+                    "max_tokens": max_tokens,
+                }
+                # Note: We record the request before the call, but the response
+                # will be recorded after the call completes
+
             # API call with retry
             response_msg = self._chat_with_messages_retry(
                 messages, model=use_model, temperature=temperature, tools=tools, max_tokens=max_tokens,
@@ -643,6 +676,19 @@ class HttpLLMRuntime(LLMRuntime):
                 # API call failed — raise error instead of silently returning empty
                 error_msg = self._last_error or "Unknown API error"
                 raise RuntimeError(f"LLM API call failed: {error_msg}")
+
+            # v1.40: Record response if recording is enabled
+            if self._recording_cassette is not None:
+                recording_duration_ms = (time.time() - recording_start_time) * 1000
+                self._recording_cassette.write_entry(
+                    messages=messages,
+                    payload=request_payload,
+                    response=response_msg,
+                    usage=response_msg.get("usage", {}),
+                    duration_ms=recording_duration_ms,
+                    agent_name=None,  # Will be set by caller if needed
+                    model=use_model,
+                )
 
             # Check if LLM wants tool calls
             tool_calls = response_msg.get("tool_calls")

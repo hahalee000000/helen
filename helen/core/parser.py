@@ -839,6 +839,7 @@ class Parser:
         agent_function_vars: list = []
         context_config: "ContextConfigNode | None" = None  # Phase 7
         transcript_level: str = "none"  # v1.29: default is "none"
+        output_contract = None  # v1.40: output contract for LLM responses
         while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF):
             if self._match(TokenType.PROMPT):
                 if self._match(TokenType.STRING, TokenType.TRIPLE_QUOTE_STRING):
@@ -858,6 +859,21 @@ class Parser:
                     transcript_level = level
                 else:
                     self._error("Expected string after 'transcript'.")
+            elif self._current().lexeme == "output_contract" or self._current().lexeme == "输出契约":
+                # v1.40: Parse output_contract: "json" or { ... }
+                self._advance()  # consume 'output_contract' or '输出契约'
+                self._consume(TokenType.COLON, "Expected ':' after 'output_contract'.")
+                if self._match(TokenType.STRING):
+                    # Simple string contract like "json"
+                    contract_value = self._previous().literal
+                    if contract_value not in ("json", "text"):
+                        self._error(f"Invalid output_contract: {contract_value}. Must be 'json' or 'text'.")
+                    output_contract = contract_value
+                elif self._match(TokenType.LEFT_BRACE):
+                    # Dict contract like {type: "object", required: [...]}
+                    output_contract = self._parse_output_contract_dict()
+                else:
+                    self._error("Expected string or dict after 'output_contract:'.")
             elif self._match(TokenType.FN):
                 self._function_decl()
             elif self._match(TokenType.FUNCTIONS):
@@ -933,7 +949,52 @@ class Parser:
                              function_vars=agent_function_vars,
                              has_streaming=has_streaming,
                              context_config=context_config,
-                             transcript=transcript_level)
+                             transcript=transcript_level,
+                             output_contract=output_contract)
+
+    def _parse_output_contract_dict(self) -> dict:
+        """Parse output_contract dict: {type: "object", required: [...], properties: {...}}."""
+        contract = {}
+        while not self._check(TokenType.RIGHT_BRACE, TokenType.EOF):
+            # Parse key
+            if not self._check(TokenType.IDENTIFIER, TokenType.STRING):
+                self._error("Expected key in output_contract dict.")
+            key = self._advance().literal or self._current().lexeme
+            self._consume(TokenType.COLON, "Expected ':' after key in output_contract dict.")
+
+            # Parse value
+            if self._match(TokenType.STRING):
+                contract[key] = self._previous().literal
+            elif self._match(TokenType.LEFT_BRACKET):
+                # Parse array
+                arr = []
+                while not self._check(TokenType.RIGHT_BRACKET, TokenType.EOF):
+                    if self._match(TokenType.STRING):
+                        arr.append(self._previous().literal)
+                    elif self._match(TokenType.NUMBER):
+                        arr.append(self._previous().literal)
+                    else:
+                        self._error("Expected string or number in array.")
+                    if not self._check(TokenType.RIGHT_BRACKET):
+                        self._consume(TokenType.COMMA, "Expected ',' in array.")
+                self._consume(TokenType.RIGHT_BRACKET, "Expected ']' after array.")
+                contract[key] = arr
+            elif self._match(TokenType.LEFT_BRACE):
+                # Parse nested dict (for properties)
+                contract[key] = self._parse_output_contract_dict()
+            elif self._match(TokenType.NUMBER):
+                contract[key] = self._previous().literal
+            elif self._current().lexeme in ("true", "false", "是", "否"):
+                contract[key] = self._current().lexeme in ("true", "是")
+                self._advance()
+            else:
+                self._error(f"Unexpected value type in output_contract dict.")
+
+            if not self._check(TokenType.RIGHT_BRACE):
+                self._consume(TokenType.COMMA, "Expected ',' in output_contract dict.")
+
+        self._consume(TokenType.RIGHT_BRACE, "Expected '}' after output_contract dict.")
+        return contract
 
     def _shared_container_decl(self, kind: str) -> object:
         """Parse a shared store declaration.

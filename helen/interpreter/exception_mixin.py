@@ -167,13 +167,17 @@ class ExceptionMixin:
             else:
                 message = "Assertion failed"
 
+            # Raise AssertionError first so we have the exception object
+            exc = HelenAssertionError(message, node.span)
+
             # Capture structured error context
             self.observability.capture_error(
                 "AssertionError", message, node.span,
-                scope={}  # Could capture local vars here if needed
+                scope={},  # Could capture local vars here if needed
+                exception=exc
             )
 
-            # Raise AssertionError
-            raise HelenAssertionError(message, node.span)
+            # Re-raise the exception
+            raise exc
 
         return None

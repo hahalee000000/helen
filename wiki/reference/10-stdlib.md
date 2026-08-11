@@ -1498,6 +1498,362 @@ transcript:
 
 **Detailed docs**: see [[runtime/transcript-store]]
 
+## Debug Functions (v1.40+)
+
+Debug functions provide AI-native debugging capabilities, including structured error diagnostics, output validation, transcript querying, LLM recording/replay, and data lineage tracking.
+
+### Structured Error Diagnostics (4)
+
+#### last_error_detail — Get detailed error information
+
+```helen
+import std.debug.*
+main {
+    // After an error occurs, get detailed diagnostics
+    let err = last_error_detail()
+    if err != null {
+        debug("Error category", error_category(err))
+        debug("Fix suggestion", error_suggestion(err))
+        debug("Data flow", error_data_flow(err))
+    }
+}
+```
+
+**Returns**: `dict | null`
+- `error_type`: str - The type of error (e.g., "RuntimeError", "LLMError")
+- `message`: str - The error message
+- `location`: str - Source location (file:line:col)
+- `call_stack`: list - Call stack at error time
+- `scope`: dict - Local variables in scope
+- `trace`: list - Recent execution trace
+- `timestamp`: float - When the error occurred
+- `diagnostic_category`: str - Semantic classification (e.g., "LLMTimeout")
+- `suggestion`: str - Actionable suggestion for fixing the error
+- `data_flow`: list - Data flow tracing information
+
+Returns `null` if no error has occurred yet.
+
+#### error_category — Extract diagnostic category
+
+```helen
+import std.debug.*
+main {
+    let err = last_error_detail()
+    if err != null {
+        let category = error_category(err)
+        debug("Error category", category)
+        // category: "LLMTimeout", "AgentCallFailed", "RuntimeGenericError", etc.
+    }
+}
+```
+
+**Parameters**:
+- `error`: `dict` - Error dictionary from `last_error_detail()`
+
+**Returns**: `str` - The diagnostic category, or "Unknown" if not available.
+
+#### error_suggestion — Extract fix suggestion
+
+```helen
+import std.debug.*
+main {
+    let err = last_error_detail()
+    if err != null {
+        let suggestion = error_suggestion(err)
+        debug("Fix suggestion", suggestion)
+        // suggestion: "LLM 调用超时。考虑：(1) 增加 timeout 配置..."
+    }
+}
+```
+
+**Parameters**:
+- `error`: `dict` - Error dictionary from `last_error_detail()`
+
+**Returns**: `str` - The suggestion string, or empty string if not available.
+
+#### error_data_flow — Extract data flow information
+
+```helen
+import std.debug.*
+main {
+    let err = last_error_detail()
+    if err != null {
+        let flows = error_data_flow(err)
+        for flow in flows {
+            debug("Data flow", flow)
+            // flow: {"variable": "x", "source": "msg-123", "via": "Coder"}
+        }
+    }
+}
+```
+
+**Parameters**:
+- `error`: `dict` - Error dictionary from `last_error_detail()`
+
+**Returns**: `list` - List of data flow entries (each a dict with variable/source/via fields).
+
+### Output Validation (1)
+
+#### validate_output — Validate output against contract
+
+```helen
+import std.debug.*
+main {
+    // Validate JSON
+    let result = validate_output('{"name": "Alice"}', "json")
+    if result.valid {
+        debug("Valid JSON", result.parsed)
+    }
+    
+    // Validate schema
+    let schema = {type: "object", required: ["name"]}
+    let result = validate_output('{"name": "Alice"}', schema)
+    if !result.valid {
+        debug("Validation failed", result.violation)
+    }
+}
+```
+
+**Parameters**:
+- `output`: `str` - The output string to validate
+- `contract`: `str | dict | null` - Contract specification ("json", "text", or schema dict)
+
+**Returns**: `dict`
+- `valid`: `bool` - Whether output matches contract
+- `violation`: `str` - Description of violation (empty if valid)
+- `parsed`: `Any` - Parsed output if applicable (e.g., parsed JSON)
+
+**Supported contract types**:
+- `"json"`: Validate that output is valid JSON
+- `"text"`: Always passes (for explicit marking)
+- `null`: Always passes
+- Schema dict: Validate against JSON Schema-like specification
+  - `type`: "string", "number", "integer", "boolean", "array", "object"
+  - `required`: List of required field names
+  - `properties`: Dict of property schemas
+  - `enum`: List of allowed values
+  - `min`, `max`: Number constraints
+  - `minLength`, `maxLength`: String length constraints
+
+### Transcript Query (1)
+
+#### query_transcript — Query transcript with filtering and pagination
+
+```helen
+import std.debug.*
+main {
+    // Query all assistant messages
+    let msgs = query_transcript(role="assistant")
+    
+    // Query messages from specific agent
+    let coder_msgs = query_transcript(agent="Coder")
+    
+    // Paginated query
+    let page1 = query_transcript(limit=100, offset=0)
+    let page2 = query_transcript(limit=100, offset=100)
+    
+    // Regex search
+    let errors = query_transcript(content_regex="Error:")
+    
+    // Time range query
+    let recent = query_transcript(since=now() - 3600)  // Last hour
+    
+    // Combined query
+    let filtered = query_transcript(
+        role="assistant",
+        agent="Reviewer",
+        content_regex="verdict",
+        limit=50
+    )
+}
+```
+
+**Parameters**:
+- `session_id`: `str` - Session ID (empty = current session)
+- `role`: `str` - Role filter ("user", "assistant", "tool")
+- `agent`: `str` - Agent name filter
+- `invocation_id`: `str` - Invocation ID filter
+- `since`: `float` - Timestamp lower bound
+- `until`: `float` - Timestamp upper bound
+- `content_regex`: `str` - Content regex match
+- `message_type`: `str` - Message type filter
+- `limit`: `int` - Maximum results to return (default: 1000)
+- `offset`: `int` - Results to skip for pagination (default: 0)
+
+**Returns**: `list[dict]` - List of message dictionaries matching the filters.
+
+**Backend optimization**:
+- JSONL backend: Streaming filter + 100k item limit (prevents OOM)
+- SQLite backend: SQL WHERE pushdown (O(log n) query)
+
+### Recording/Replay (3)
+
+#### record_session — Start recording LLM interactions
+
+```helen
+import std.debug.*
+main {
+    let result = record_session("debug/session.jsonl")
+    // result: {"status": "recording", "cassette_path": "debug/session.jsonl"}
+    
+    // Run agent (all LLM calls are recorded)
+    agent Reviewer {
+        main {
+            llm act "Review this code..."
+        }
+    }
+    
+    stop_recording()
+}
+```
+
+**Parameters**:
+- `cassette_path`: `str` - Path to save the cassette file (JSONL format)
+
+**Returns**: `dict`
+- `status`: `"recording"` or `"error"`
+- `cassette_path`: Path to the cassette file
+- `message`: Status message
+
+#### stop_recording — Stop recording LLM interactions
+
+```helen
+import std.debug.*
+main {
+    record_session("debug/session.jsonl")
+    // ... run agent ...
+    let result = stop_recording()
+    // result: {"status": "stopped", "message": "Recording stopped"}
+}
+```
+
+**Returns**: `dict`
+- `status`: `"stopped"` or `"error"`
+- `message`: Status message
+
+#### replay_session — Replay LLM interactions from cassette
+
+```helen
+import std.debug.*
+main {
+    let result = replay_session("debug/session.jsonl")
+    // result: {"status": "replaying", "entry_count": 5}
+    
+    // Now all LLM calls use recorded responses
+    agent Reviewer {
+        main {
+            llm act "Review this code..."  // Returns recorded response
+        }
+    }
+}
+```
+
+**Parameters**:
+- `cassette_path`: `str` - Path to the cassette file to replay from
+
+**Returns**: `dict`
+- `status`: `"replaying"` or `"error"`
+- `cassette_path`: Path to the cassette file
+- `entry_count`: Number of recorded interactions
+- `message`: Status message
+
+**Cassette file format** (JSONL):
+```json
+{
+  "type": "llm_call",
+  "seq": 0,
+  "timestamp": 1234567890.123,
+  "agent_name": "Reviewer",
+  "model": "qwen3.7-plus",
+  "request": {"messages": [...], "tools": [...]},
+  "response": {"content": "...", "tool_calls": [...]},
+  "usage": {"prompt_tokens": 100, "completion_tokens": 50},
+  "duration_ms": 1234.5
+}
+```
+
+### Data Lineage Tracking (4)
+
+#### trace_value_origin — Trace data origin
+
+```helen
+import std.debug.*
+main {
+    let origins = trace_value_origin("msg_xyz")
+    // origins: [
+    //   {"producer_uuid": "msg_abc", "flow_type": "agent_call", ...}
+    // ]
+}
+```
+
+**Parameters**:
+- `message_uuid`: `str` - UUID of the message to trace
+
+**Returns**: `list[dict]` - List of data flow entries showing where the data came from.
+
+#### trace_value_consumers — Trace data consumers
+
+```helen
+import std.debug.*
+main {
+    let consumers = trace_value_consumers("msg_abc")
+    // consumers: [
+    //   {"consumer_uuid": "msg_xyz", "flow_type": "agent_call", ...}
+    // ]
+}
+```
+
+**Parameters**:
+- `message_uuid`: `str` - UUID of the message to trace
+
+**Returns**: `list[dict]` - List of data flow entries showing which messages consumed the data.
+
+#### get_data_lineage — Get complete data lineage graph
+
+```helen
+import std.debug.*
+main {
+    let lineage = get_data_lineage()
+    // lineage: {
+    //   "nodes": ["msg_abc", "msg_xyz", ...],
+    //   "edges": [
+    //     {"source": "msg_abc", "target": "msg_xyz", "flow_type": "agent_call", ...}
+    //   ]
+    // }
+}
+```
+
+**Returns**: `dict`
+- `nodes`: List of message UUIDs
+- `edges`: List of data flow edges
+
+#### record_data_flow — Manually record a data flow event
+
+```helen
+import std.debug.*
+main {
+    let result = record_data_flow(
+        "msg_abc",           // Producer UUID
+        "msg_xyz",           // Consumer UUID
+        "agent_call",        // Flow type
+        {"arg": "input"}     // Metadata
+    )
+    // result: {"status": "recorded", "message": "Recorded agent_call flow..."}
+}
+```
+
+**Parameters**:
+- `producer_uuid`: `str` - UUID of the message that produced the data
+- `consumer_uuid`: `str` - UUID of the message that consumed the data
+- `flow_type`: `str` - Type of flow ("channel", "agent_call", "prompt", or custom)
+- `metadata`: `dict | null` - Optional metadata dict
+
+**Returns**: `dict`
+- `status`: `"recorded"` or `"error"`
+- `message`: Status message
+
+---
+
 ## File Functions (18)
 
 File operation functions are organized into three groups: basic I/O, directory operations, and file search.

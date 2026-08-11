@@ -697,6 +697,7 @@ class AgentDeclNode(StatementNode):
         isolation_level: v1.12 isolation level - "standard" (L1), "open" (L0), "strict" (L2), "sandbox" (L3).
         context_config: Phase 7 context configuration (compression, cache-aware, working memory).
         transcript: v1.29 transcript control - "none" (default), "memory", or "persistent".
+        output_contract: v1.40 output contract for LLM responses - None, "json", or schema dict.
     """
     name: str
     params: list[AgentParamNode]
@@ -710,6 +711,7 @@ class AgentDeclNode(StatementNode):
     isolation_level: str = "standard"  # v1.12: "open", "standard", "strict", "sandbox"
     context_config: "ContextConfigNode | None" = None  # Phase 7: context configuration
     transcript: str = "none"  # v1.29: "none", "memory", or "persistent"
+    output_contract: "str | dict | None" = None  # v1.40: output contract for LLM responses
 
     def accept(self, visitor: Visitor[R]) -> R:
         """Dispatch to the visitor."""

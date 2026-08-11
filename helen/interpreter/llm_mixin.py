@@ -573,6 +573,22 @@ class LlmMixin:
                 self._record_llm_response_to_history(response)
 
             response_text = response.text if response else None
+
+            # v1.40: Validate output against agent's output_contract
+            if response_text and self._current_agent and self._current_agent.output_contract:
+                from helen.runtime.output_validator import validate_output
+                from helen.interpreter.exceptions import LLMOutputContractError
+
+                validation_result = validate_output(response_text, self._current_agent.output_contract)
+                if not validation_result["valid"]:
+                    raise LLMOutputContractError(
+                        agent_name=self._current_agent.name,
+                        contract=self._current_agent.output_contract,
+                        actual_output=response_text,
+                        violation=validation_result["violation"],
+                        span=node.span,
+                    )
+
             return response_text
         except RuntimeError as e:
             # Python RuntimeError from LLM runtime (e.g. API errors like

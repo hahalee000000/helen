@@ -143,7 +143,7 @@ def _execute_input(
         if interp.observability.last_error is None:
             span = getattr(e, 'span', None)
             interp.observability.capture_error(
-                type(e).__name__, str(e), span, scope={}
+                type(e).__name__, str(e), span, scope={}, exception=e
             )
         err_text = f"RuntimeError: {e}"
         if repl_state is not None:
