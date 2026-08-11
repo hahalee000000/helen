@@ -2,7 +2,7 @@
 
 > **Helen** — A Prompt-first Agent Programming Language
 > [![PyPI version](https://img.shields.io/pypi/v/helen-lang.svg)](https://pypi.org/project/helen-lang/)
-> Version: v1.39.8 | Status: Published on PyPI (`pip install helen-lang`) | Explicit stdlib import + Runtime LLM params + Stop button fix + Thinking mode + 22 stdlib modules + Chinese Syntax | Tests: 3671+ passed
+> Version: v1.40.1 | Status: Published on PyPI (`pip install helen-lang`) | Provider auto-detection + connectivity probing + AI-native debugging toolkit + Explicit stdlib import + 22 stdlib modules + Chinese Syntax | Tests: 3806+ passed
 
 ---
 
@@ -29,7 +29,7 @@
 - [[interpreter/spawn|Concurrency and spawn]] — `spawn`, Channel message queue, mailbox_select
 
 ### 5. Runtime Systems
-- [[runtime/llm-runtime|LLM Runtime]] — route/act interface, cancellation mechanism, platform protocol abstraction (v1.35), thinking mode support (v1.36)
+- [[runtime/llm-runtime|LLM Runtime]] — route/act interface, cancellation mechanism, platform protocol abstraction (v1.35), thinking mode support (v1.36), provider auto-detection & connectivity probing (v1.40.1)
 - [[runtime/prompt-builder|Prompt Building]] — Two-layer progressive disclosure, template rendering
 - [[runtime/memory|Memory System]] — FileMemoryProvider, InMemoryProvider
 - [[runtime/transcript-store|TranscriptStore SSOT]] — Single source of truth for messages, SQLite/JSONL backends, LRU cache, UUID addressing, non-destructive compression (**v1.16 new feature**); `search_transcript()` content search (**v1.22 new feature**); `session_meta` session metadata — argv, startup time, version info (**v1.23.3 new feature**)
@@ -41,12 +41,12 @@
 - [[runtime/skills|Skill System]] — Three-layer search architecture, two-layer disclosure mechanism
 - [[runtime/working_memory|Working Memory]] — v1.25 system prompt-based approach: LLM proactively maintains context via `<working_memory>` block (**v1.25 new feature**)
 - [[runtime/mcp-integration|MCP Integration]] — Model Context Protocol client support, external tool discovery and invocation, multi-server management (**v1.33 new feature**)
-- [[runtime/llm-provider-protocol-reference|LLM Provider Protocol Reference]] ⭐ — Complete OpenAI-compatible protocol across 6 providers: Qwen, Zhipu, DeepSeek, Minimax, Kimi, Doubao. Full conversation lifecycle: auth → request → streaming → tool calling → reasoning → multi-turn → error handling
+- [[runtime/llm-provider-protocol-reference|LLM Provider Protocol Reference]] ⭐ — Complete OpenAI-compatible protocol across 6 providers: Qwen, Zhipu, DeepSeek, Minimax, Kimi, Doubao. Full conversation lifecycle: auth → request → streaming → tool calling → reasoning → multi-turn → error handling. Provider auto-detection & custom adapters (v1.40.1)
 
 > Note: Content from `runtime/graduated_compression`, `runtime/cache_aware_compression`, and `runtime/agent_context` has been merged into `runtime/context-management`. Old pages archived to `_archive/`. `working_memory` has been rewritten with the v1.25 approach.
 
 ### 6. Toolchain
-- [[toolchain/cli|Command-Line Tools]] — `helen <file>/check/test/quality/repl/doc/init/lsp/template`
+- [[toolchain/cli|Command-Line Tools]] — `helen <file>/check/test/quality/repl/doc/init/provider/lsp/template`
 - [[toolchain/testing|Testing Framework]] — TDD support, assertion API, `--watch` mode
 - [[toolchain/quality|Quality Assessment]] — 7-dimension framework, security scoring, CI integration
 - [[toolchain/lsp|Language Server]] — `helen lsp`, JSON-RPC 2.0, diagnostics/completion/go-to-definition

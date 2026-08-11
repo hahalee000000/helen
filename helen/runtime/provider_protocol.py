@@ -400,22 +400,45 @@ _PLATFORM_PATTERNS = [
     ("api.moonshot.ai", KimiProtocol),
 ]
 
+# Name → Protocol class lookup (includes "openai" fallback)
+_PROTOCOL_NAME_MAP: dict[str, type[PlatformProtocol]] = {
+    cls.name: cls for _, cls in _PLATFORM_PATTERNS
+}
+_PROTOCOL_NAME_MAP["openai"] = OpenAIProtocol
 
-def detect_protocol(base_url: str) -> PlatformProtocol:
-    """Detect platform protocol from base_url.
+
+def detect_protocol(base_url: str, protocol_name: str | None = None) -> PlatformProtocol:
+    """Detect platform protocol from base_url or explicit name.
+
+    Detection priority:
+    1. Explicit protocol_name (from config.yaml) — highest priority
+    2. URL pattern matching (_PLATFORM_PATTERNS)
+    3. Fallback to OpenAIProtocol
 
     Protocol is determined by the PLATFORM, not the model.
     - DashScope: ALL models use same protocol (Qwen + DeepSeek unified)
     - Volcengine Ark: ALL models use same protocol (Doubao + third-party unified)
     - Direct APIs: each provider has its own protocol
 
-    Falls back to OpenAIProtocol if no match.
+    Args:
+        base_url: Provider API base URL for pattern matching
+        protocol_name: Explicit protocol name from config (e.g. "deepseek")
 
     Examples:
-    - base_url="dashscope.aliyuncs.com" + model="deepseek-v4" → DashScopeProtocol
-    - base_url="ark.cn-beijing.volces.com" + model="deepseek" → VolcengineProtocol
-    - base_url="api.deepseek.com" + model="deepseek-v4" → DeepSeekProtocol
+    - detect_protocol("dashscope.aliyuncs.com") → DashScopeProtocol
+    - detect_protocol("unknown.com", protocol_name="deepseek") → DeepSeekProtocol
+    - detect_protocol("unknown.com") → OpenAIProtocol (fallback)
     """
+    # Step 1: Check explicit protocol name from config
+    if protocol_name:
+        protocol_class = _PROTOCOL_NAME_MAP.get(protocol_name)
+        if protocol_class:
+            logger.debug(f"Using protocol from config: {protocol_name}")
+            return protocol_class()
+        else:
+            logger.debug(f"Unknown protocol name {protocol_name!r}, falling back to URL detection")
+
+    # Step 2: URL pattern matching
     for pattern, protocol_class in _PLATFORM_PATTERNS:
         if pattern in base_url:
             logger.debug(f"Detected platform protocol: {protocol_class.name} (from {pattern})")

@@ -1,10 +1,69 @@
 # 版本历史
 
-> Helen v1.39.9 | 修复 working memory 清空响应导致空白回答
+> Helen v1.40.1 | Provider 自动检测 + 连通性探测 + 自定义 Provider 支持
 
 ---
 
-## v1.39.9: 修复 working memory 清空响应导致空白回答
+## v1.40.1: Provider 自动检测与连通性验证
+
+**发布日期**: 2026-08-11
+**核心功能**: `helen init` 增强 — provider 匹配、连通性探测、协议变体检测、自定义 provider 生成
+
+### 1. 问题
+
+v1.40 的 `helen init` 只收集 base_url/api_key/model 直接保存 config.yaml，不做任何验证。未知 provider 静默 fallback 到 `OpenAIProtocol`，导致运行时出现难以理解的协议不兼容错误。
+
+### 2. 解决方案
+
+**三层探测架构** (`helen/runtime/probe.py`):
+
+- **Layer 1**: 基础连通性 — 发送极简 chat completion 请求，分类错误（连接/认证/模型/协议）
+- **Layer 2**: 协议变体探测 — 尝试各已知协议的 thinking 格式，首个匹配即为正确协议
+- **Layer 3**: 能力探测 — 测试 vision（1×1 PNG）和 tool_choice "required"
+
+**Config-aware detect_protocol()**:
+- `detect_protocol(base_url, protocol_name=None)` — 支持显式协议名（从 config 读取）
+- 优先级：显式名称 > URL pattern 匹配 > OpenAI fallback
+- 完全向后兼容
+
+**config.yaml 扩展**:
+- 新增可选字段 `protocol`（协议名）和 `capabilities`（能力检测结果）
+
+**Wizard 增强**:
+- 已知 provider → 直接保存（含协议名）
+- 未知 URL → Layer 1 探测
+  - 硬错误（连接/认证/模型）→ 双语错误提示，不保存
+  - 成功 → 保存
+  - 协议不兼容 → 询问深度探测
+- 深度探测成功 → 保存协议 + 能力信息
+- 深度探测失败 → 保存默认协议 + 双语提示使用 helen agent 创建自定义 adapter
+
+**自定义 Provider 支持**:
+- 用户可通过 `helen agent` 创建 PlatformProtocol 子类，保存到 `~/.helen/providers/`
+- `helen provider list` 列出已安装的自定义 provider
+- detect_protocol() 支持自动加载自定义 provider
+
+### 3. 新增/修改文件
+
+| 文件 | 变化 |
+|------|------|
+| `helen/runtime/probe.py` | **新增** — 三层探测架构 |
+| `helen/runtime/config.py` | 增强 save/load + 重写 wizard |
+| `helen/runtime/provider_protocol.py` | config-aware detect_protocol() |
+| `helen/runtime/http_llm.py` | __post_init__ 读取 config protocol |
+| `helen/cli/__main__.py` | provider list 子命令（引导用户通过 helen agent 创建自定义 adapter） |
+| `tests/runtime/test_provider_probe.py` | **新增** — 29 个测试 |
+| `tests/test_config_simplification.py` | 新增 7 个测试 |
+| `tests/runtime/test_provider_protocol.py` | 新增 8 个测试 |
+
+### 4. 测试结果
+
+- **3806 passed**, 8 skipped, 0 failures
+- 新增 44 个测试（29 probe + 7 config + 8 protocol）
+
+---
+
+## v1.40: AI-Native Advanced Debugging Toolkit
 
 **发布日期**: 2026-08-10
 **核心修复**: 解决 agent 执行若干工具调用后返回空白、前端无错误显示的问题

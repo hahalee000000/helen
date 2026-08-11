@@ -72,6 +72,49 @@ class TestProtocolDetection:
         assert isinstance(protocol, OpenAIProtocol)
 
 
+class TestProtocolDetectionByName:
+    """Test config-aware protocol detection by explicit name."""
+
+    def test_detect_by_name_deepseek(self):
+        """Explicit protocol_name should override URL detection."""
+        protocol = detect_protocol("https://unknown.com/v1", protocol_name="deepseek")
+        assert isinstance(protocol, DeepSeekProtocol)
+        assert protocol.name == "deepseek"
+
+    def test_detect_by_name_dashscope(self):
+        """Name takes priority over URL pattern."""
+        protocol = detect_protocol("https://api.deepseek.com", protocol_name="dashscope")
+        assert isinstance(protocol, DashScopeProtocol)
+
+    def test_detect_by_name_openai(self):
+        """Explicit 'openai' name returns OpenAIProtocol."""
+        protocol = detect_protocol("https://unknown.com/v1", protocol_name="openai")
+        assert isinstance(protocol, OpenAIProtocol)
+
+    def test_detect_by_unknown_name_fallback(self):
+        """Unknown protocol_name falls back to URL detection."""
+        protocol = detect_protocol("https://api.deepseek.com", protocol_name="nonexistent")
+        assert isinstance(protocol, DeepSeekProtocol)  # URL match still works
+
+    def test_detect_by_unknown_name_unknown_url(self):
+        """Both name and URL unknown → OpenAI fallback."""
+        protocol = detect_protocol("https://unknown.com", protocol_name="nonexistent")
+        assert isinstance(protocol, OpenAIProtocol)
+
+    def test_detect_no_name_url_match(self):
+        """No name + matching URL → URL-based detection."""
+        protocol = detect_protocol("https://api.moonshot.ai/v1")
+        assert isinstance(protocol, KimiProtocol)
+
+    def test_detect_all_known_names(self):
+        """All known protocol names can be resolved."""
+        from helen.runtime.provider_protocol import _PROTOCOL_NAME_MAP
+        for name in ["dashscope", "volcengine", "zhipu", "deepseek", "minimax", "kimi", "openai"]:
+            assert name in _PROTOCOL_NAME_MAP, f"Missing: {name}"
+            protocol = detect_protocol("https://x.com", protocol_name=name)
+            assert protocol.name == name
+
+
 class TestDashScopeProtocol:
     """Test DashScope protocol specifics."""
 

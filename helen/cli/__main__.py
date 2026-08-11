@@ -346,12 +346,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return repl_command(session_id=session_id)
 
     # Check for known subcommands
-    subcommands = {"check", "repl", "doc", "init", "test", "quality", "lsp", "watch", "template", "agent", "coverage", "replay"}
+    subcommands = {"check", "repl", "doc", "init", "test", "quality", "lsp", "watch", "template", "agent", "coverage", "replay", "provider"}
     first = argv[0]
 
     if first in subcommands:
         # Allow-list: commands that don't need LLM config
-        no_config_commands = {"init", "check", "doc", "quality", "lsp", "template", "coverage", "replay"}
+        no_config_commands = {"init", "check", "doc", "quality", "lsp", "template", "coverage", "replay", "provider"}
 
         if first not in no_config_commands:
             _preflight_config_check()  # Check config before LLM-requiring commands
@@ -388,6 +388,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return coverage_command(argv[1:])
         elif first == "replay":
             return replay_command(argv[1:])
+        elif first == "provider":
+            return provider_command(argv[1:])
     elif first in ("-h", "--help", "help"):
         _print_help()
         return 0
@@ -437,6 +439,73 @@ def init_command() -> int:
     print()
     success = run_setup_wizard()
     return 0 if success else 1
+
+
+def provider_command(argv: list[str]) -> int:
+    """Manage custom provider adapters.
+
+    Usage:
+        helen provider list
+    """
+    if not argv:
+        print("Usage: helen provider <subcommand>")
+        print()
+        print("Subcommands:")
+        print("  list    List installed custom providers")
+        return 2
+
+    subcmd = argv[0]
+
+    if subcmd == "list":
+        return _provider_list()
+    else:
+        print(f"Unknown subcommand: {subcmd}")
+        print("Available: list")
+        return 2
+
+
+def _provider_list() -> int:
+    """List installed custom providers."""
+    from helen.runtime.config import get_helen_home
+
+    providers_dir = get_helen_home() / "providers"
+    if not providers_dir.exists():
+        _print_no_providers_hint()
+        return 0
+
+    adapters = sorted(providers_dir.glob("*.py"))
+    if not adapters:
+        _print_no_providers_hint()
+        return 0
+
+    print(f"Installed providers ({len(adapters)}):")
+    for adapter in adapters:
+        name = adapter.stem
+        print(f"  • {name}  ({adapter})")
+    return 0
+
+
+def _print_no_providers_hint() -> None:
+    """Print bilingual hint about creating custom providers via helen agent."""
+    print("No custom providers installed / 未安装自定义 Provider")
+    print()
+    print("To create a custom provider adapter:")
+    print("创建自定义 Provider 适配器：")
+    print()
+    print("  1. 先确保已配置一个可用的 Helen 环境 / Ensure a working Helen environment is configured")
+    print("  2. 运行 / Run:")
+    print("     helen agent")
+    print()
+    print("  3. 告诉 agent 生成 PlatformProtocol 子类并保存到 ~/.helen/providers/<name>.py")
+    print("     Ask the agent to generate a PlatformProtocol subclass")
+    print("     and save it to ~/.helen/providers/<name>.py")
+    print()
+    print("  Example prompt for the agent / Agent 提示词示例：")
+    print('  """')
+    print("  请为 Anthropic API 生成一个 Helen provider adapter。")
+    print("  继承 OpenAIProtocol，覆写不同之处。")
+    print("  保存到 ~/.helen/providers/anthropic.py")
+    print('  """')
 
 
 def coverage_command(argv: list[str]) -> int:
@@ -1137,6 +1206,7 @@ Usage:
   helen quality <file>           Run 7-dimension quality assessment
   helen doc [files]              Generate API documentation
   helen init                     Initialize Helen configuration
+  helen provider <cmd> [opts]    Manage custom LLM provider adapters
   helen lsp                      Start Language Server (LSP) for IDE support
   helen agent                    Launch Helen programming assistant (Web UI)
   helen --version                Show version number
@@ -1165,6 +1235,14 @@ Quality Options:
   --json                    Output results as JSON
   --dimension <name>        Assess only one dimension
   --threshold <n>           Fail if total score below threshold
+
+Provider Commands:
+  helen provider list       List installed custom provider adapters
+
+  Custom providers are created via `helen agent`:
+    helen agent
+    # Ask the agent to generate a PlatformProtocol subclass
+    # and save it to ~/.helen/providers/<name>.py
 
 Options:
   -h, --help                 Show this help message""")

@@ -7,11 +7,11 @@ For the broader multi-project layout, see `../CLAUDE.md`.
 
 **Helen** — a prompt-first Agent programming language (AI-native DSL). Combines deterministic constructs (variables, functions, control flow) with first-class LLM primitives (`llm act`, `llm if`). 
 
-- **Version**: 1.39.10
+- **Version**: 1.40.0
 - **Keywords**: 99 bilingual (48 English + 51 Chinese)
-- **Built-in functions**: 364 stdlib functions (21 categories), 715 total names (with locale aliases)
+- **Built-in functions**: 377 stdlib functions (22 categories), 728 total names (with locale aliases)
 - **Stdlib modules**: 22 modules (std.core, std.str, std.math, std.list, ...)
-- **Tests**: 3694 passing (Python pytest)
+- **Tests**: 3806 passing (Python pytest)
 - **Python**: 3.12+ required
 
 ## Development Commands
@@ -115,6 +115,7 @@ helen/
 ├── runtime/       # llm_runtime.py, http_llm.py, tools.py, config.py, import_resolver.py
 │                  # prompt_builder.py, history.py, observability.py, fuzzy_match.py
 │                  # transcript_store.py, session_manager.py, channel.py
+│                  # provider_protocol.py, model_capabilities.py, probe.py (v1.40.1)
 ├── stdlib/        # 364 built-in functions (21 categories), 22 modules
 │                  # locales/zh.py (Chinese aliases), mailbox.py (v1.18: mailbox_select)
 ├── ffi/           # Python FFI

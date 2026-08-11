@@ -712,7 +712,64 @@ llm:
 
 ---
 
-## 15. Sources
+## 15. Provider Auto-Detection & Custom Adapters (v1.40.1)
+
+### Automatic Protocol Detection
+
+Helen automatically detects the correct protocol for your provider during `helen init`:
+
+| Step | What Happens | When |
+|------|-------------|------|
+| 1. URL match | Check base_url against `_PLATFORM_PATTERNS` (substring match) | Always |
+| 2. Layer 1 probe | Send minimal `chat/completions` request | Unknown URL |
+| 3. Layer 2 probe | Try each protocol's thinking format | User opts in |
+| 4. Layer 3 probe | Test vision (1×1 PNG) + tool_choice | User opts in |
+
+The detected protocol is saved in `config.yaml` as the `protocol` field, so subsequent runs use it directly without re-detection.
+
+### Error Classification
+
+| Error Type | HTTP Status | Message |
+|-----------|-------------|---------|
+| Connection failure | (no response) | ❌ Cannot connect to {url} |
+| Authentication | 401, 403 | ❌ Invalid API Key |
+| Model not found | 404 (model in message) | ❌ Model not found |
+| Protocol mismatch | 200 (unparseable) | ⚠️ Protocol not compatible |
+
+Hard errors (connection, auth, model) prevent config save. Protocol mismatches trigger the deep probe option.
+
+### Custom Provider Generation
+
+For providers not in the built-in list, use `helen agent` to create a custom adapter:
+
+```bash
+# Prerequisites: A working Helen environment (configured with any known provider)
+helen agent
+```
+
+Ask the agent to analyze the provider's API documentation and generate a `PlatformProtocol` subclass. The agent will:
+1. Use `web_fetch` to read the provider's API docs
+2. Use `web_search` to find additional information
+3. Generate a Python adapter class
+4. Save it to `~/.helen/providers/<name>.py`
+
+```
+# Example agent prompt:
+Please generate a Helen provider adapter for the Anthropic API.
+Inherit from OpenAIProtocol and override methods that differ.
+Save to ~/.helen/providers/anthropic.py
+```
+
+Generated adapters inherit from `OpenAIProtocol` and override only the methods that differ. Always review generated code before production use.
+
+```bash
+# List installed custom providers
+helen provider list
+```
+
+---
+
+## 16. Sources
 
 ### Official Documentation Links
 

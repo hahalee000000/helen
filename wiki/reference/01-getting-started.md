@@ -51,7 +51,7 @@ helen --version
 
 ### Post-Installation Configuration
 
-Helen automatically checks for LLM configuration on first run. If not configured, it will prompt you with an interactive setup wizard:
+Helen automatically checks for LLM configuration on first run. If not configured, it will prompt you with an interactive setup wizard that validates connectivity and detects the provider:
 
 ```bash
 $ helen
@@ -70,11 +70,18 @@ API Key: ********
 
 Model [gpt-4]: qwen3.7-plus
 
+✅ Detected provider: dashscope
 ✅ Configuration saved to: /home/user/.helen/config.yaml
 
 You can now run Helen programs:
   helen <file.helen>
 ```
+
+The wizard automatically:
+1. **Matches known providers** by URL pattern (DashScope, Volcengine, Zhipu, DeepSeek, Minimax, Kimi, OpenAI)
+2. **Probes connectivity** for unknown URLs (sends a minimal API request)
+3. **Classifies errors** — connection failures, invalid API keys, and unknown models are reported separately (config is NOT saved for hard errors)
+4. **Offers deep probe** for protocol variant detection when basic connectivity succeeds but protocol doesn't match standard OpenAI format
 
 Alternatively, you can run the setup wizard explicitly:
 
@@ -83,17 +90,34 @@ $ helen init
 Helen home: /home/user/.helen
 Skills directory: /home/user/.helen/skills
 
-[Interactive wizard starts...]
+[Interactive wizard with auto-detection starts...]
 ```
 
 Or configure manually by editing `~/.helen/config.yaml` directly.
+
+### Custom Provider Support (v1.40.1)
+
+If your provider is not in the built-in list and connectivity probing fails to match a known protocol, use `helen agent` to create a custom adapter:
+
+1. First configure Helen with any supported provider (e.g., DashScope or DeepSeek)
+2. Run `helen agent` and ask the agent to generate a `PlatformProtocol` subclass
+3. The agent will save the adapter to `~/.helen/providers/<name>.py`
+
+```bash
+$ helen agent
+# Example prompt:
+# "Please generate a Helen provider adapter for the Anthropic API.
+#  Inherit from OpenAIProtocol and override methods that differ.
+#  Save to ~/.helen/providers/anthropic.py"
+```
 
 ### Directory Structure
 
 ```
 ~/.helen/
 ├── config.yaml    # LLM API configuration
-└── skills/        # Helen native skill directory
+├── skills/        # Helen native skill directory
+└── providers/     # Custom provider adapters (v1.40.1)
 ```
 
 ### Configuration File
@@ -109,6 +133,10 @@ llm:
   model: "qwen3.7-plus"
   temperature: 0.7
   timeout: 60
+  protocol: "dashscope"           # optional — auto-detected during init (v1.40.1)
+  capabilities:                   # optional — detected via deep probe (v1.40.1)
+    thinking: true
+    streaming: true
 
 transcript:
   enabled: true

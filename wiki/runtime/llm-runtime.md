@@ -271,6 +271,60 @@ if not model_id.startswith("ep-"):
     logger.debug("Using model name instead of Endpoint ID - recommended for production")
 ```
 
+### Provider Auto-Detection (v1.40.1)
+
+The `detect_protocol()` function supports **config-aware detection** with a three-tier priority:
+
+```python
+# Priority: explicit name (from config) > URL pattern match > OpenAI fallback
+protocol = detect_protocol(base_url, protocol_name="deepseek")  # → DeepSeekProtocol
+protocol = detect_protocol("https://api.deepseek.com")          # → DeepSeekProtocol (URL match)
+protocol = detect_protocol("https://unknown.com")               # → OpenAIProtocol (fallback)
+```
+
+When `helen init` detects a provider, it saves the `protocol` field in config.yaml:
+
+```yaml
+llm:
+  protocol: "deepseek"
+  capabilities:
+    thinking: true
+    streaming: true
+    vision: false
+```
+
+At runtime, `HttpLLMRuntime.__post_init__()` reads this field and passes it to `detect_protocol()`, avoiding re-detection on every startup.
+
+**Connectivity probing** (in `helen/runtime/probe.py`) uses a three-layer architecture:
+
+| Layer | Purpose | Cost | When |
+|-------|---------|------|------|
+| Layer 1 | Basic connectivity | 1 API call | Always for unknown URLs |
+| Layer 2 | Protocol variant detection | 2-6 API calls | Optional (user prompted) |
+| Layer 3 | Capability detection (vision, tool_choice) | 1-2 API calls | Optional (user prompted) |
+
+Layer 1 sends a minimal `{"content": "hi"}` request and classifies errors:
+- Connection/timeout → `error_type: "connection"`
+- HTTP 401/403 → `error_type: "auth"`
+- HTTP 404 with "model" → `error_type: "model_not_found"`
+- HTTP 200 but unparseable → `error_type: "protocol"` (triggers deep probe offer)
+
+Layer 2 tries each known protocol's `build_request_payload()` with `thinking_enabled=True`, checking if the response contains `reasoning_content`. First match wins.
+
+### Custom Provider Adapters (v1.40.1)
+
+For providers not in the built-in list, use `helen agent` to create a `PlatformProtocol` subclass:
+
+```bash
+helen agent
+# Ask the agent to generate a PlatformProtocol subclass
+# and save it to ~/.helen/providers/<name>.py
+```
+
+The agent has `web_search`, `web_fetch`, `write_file` and other tools to research the provider's API and generate the adapter interactively.
+
+Generated adapters are saved to `~/.helen/providers/<name>.py` and loaded dynamically by `detect_protocol()` at runtime.
+
 > **See also**: [[runtime/llm-provider-protocol-reference|LLM Provider Protocol Reference]] for full protocol details across all 6 providers.
 
 ---

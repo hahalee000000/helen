@@ -61,9 +61,11 @@ Skills directory: /home/user/.helen/skills
 Configure your LLM API settings:
 
 API Base URL [https://api.openai.com/v1]: 
+Your API key will be masked (input not visible):
 API Key: ********
 Model [gpt-4]: 
 
+✅ Detected provider: dashscope
 ✅ Configuration saved to: /home/user/.helen/config.yaml
 ```
 
@@ -77,6 +79,66 @@ Initializes the Helen standalone config directory `~/.helen/`:
 
 If already configured, `helen init` will show the current config path and exit.
 
+### Provider Auto-Detection (v1.40.1)
+
+The setup wizard automatically validates connectivity and detects the provider:
+
+1. **Known provider match**: If `base_url` matches a known provider pattern (DashScope, Volcengine, Zhipu, DeepSeek, Minimax, Kimi, OpenAI), the protocol is saved immediately.
+2. **Connectivity probe**: For unknown URLs, a minimal chat completion request is sent to verify connectivity.
+3. **Deep probe** (optional): If basic connectivity succeeds but protocol doesn't match, the wizard offers to try known protocol variants (thinking format, streaming format, etc.) to detect the right protocol.
+6. **Error classification**: Connection failures, auth errors, and model-not-found errors are reported with bilingual (Chinese/English) messages — config is NOT saved for hard errors.
+
+```
+# Example: Known provider → auto-detected
+API Base URL: https://dashscope.aliyuncs.com/compatible-mode/v1
+✅ Detected provider: dashscope
+✅ Configuration saved
+
+# Example: Unknown provider → probe
+API Base URL: https://custom-proxy.example.com/v1
+⏳ Testing connectivity...
+✅ Connectivity OK
+✅ Configuration saved
+
+# Example: Connection failure → error
+API Base URL: https://bad-url.com/v1
+❌ Cannot connect to https://bad-url.com/v1
+   (config not saved)
+
+# Example: Protocol mismatch → deep probe option
+⚠️ Provider protocol not fully compatible
+Deep probe for protocol variants? (y/N): y
+⏳ Deep probing...
+✅ Detected provider: deepseek
+```
+
+### Custom Provider Support (v1.40.1)
+
+For providers not in the built-in list, use `helen agent` to create a custom adapter:
+
+```bash
+# Prerequisites: A working Helen environment (configured with any known provider)
+$ helen agent
+```
+
+Ask the agent to generate a `PlatformProtocol` subclass and save it to `~/.helen/providers/<name>.py`:
+
+```
+Please generate a Helen provider adapter for the Anthropic API.
+Inherit from OpenAIProtocol and override methods that differ.
+Save to ~/.helen/providers/anthropic.py
+```
+
+The agent has `web_search`, `web_fetch`, `write_file` and other tools to research the API and generate the adapter interactively.
+
+List installed custom providers:
+
+```bash
+$ helen provider list
+Installed providers (1):
+  • anthropic  (~/.helen/providers/anthropic.py)
+```
+
 ### Configuration File Format
 
 YAML format (`~/.helen/config.yaml`):
@@ -88,7 +150,14 @@ llm:
   model: "qwen3.7-plus"
   temperature: 0.7
   timeout: 60
+  protocol: "dashscope"           # optional — detected during init (v1.40.1)
+  capabilities:                   # optional — detected during deep probe (v1.40.1)
+    thinking: true
+    streaming: true
+    vision: false
 ```
+
+The `protocol` and `capabilities` fields are optional. When present, they allow `detect_protocol()` to skip URL pattern matching and use the saved protocol directly.
 
 ### Environment Variables
 

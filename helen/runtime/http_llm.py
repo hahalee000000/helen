@@ -456,6 +456,7 @@ class HttpLLMRuntime(LLMRuntime):
 
     def __post_init__(self):
         """Auto-load configuration from Helen config."""
+        config_protocol_name = None
         if not self.base_url or not self.api_key:
             from helen.runtime.config import load_config
             config = load_config()
@@ -465,10 +466,18 @@ class HttpLLMRuntime(LLMRuntime):
                 self.api_key = config.get("api_key", "")
             if not self.default_model:
                 self.default_model = config.get("model", "qwen3.7-plus")
+            config_protocol_name = config.get("protocol")
+        else:
+            # base_url/api_key provided directly — still check config for protocol name
+            try:
+                from helen.runtime.config import load_config
+                config_protocol_name = load_config().get("protocol")
+            except Exception:
+                pass
 
-        # v1.35: Detect platform protocol from base_url
+        # v1.35: Detect platform protocol from config name or base_url
         from helen.runtime.provider_protocol import detect_protocol
-        self._platform_protocol = detect_protocol(self.base_url)
+        self._platform_protocol = detect_protocol(self.base_url, protocol_name=config_protocol_name)
         logger.debug(f"Using platform protocol: {self._platform_protocol.name}")
 
         # Initialize reactive compactor for mid-turn compression

@@ -378,6 +378,12 @@ def _load_yaml_config(path: Path) -> dict[str, Any]:
                 config["temperature"] = float(llm["temperature"])
             if "timeout" in llm:
                 config["timeout"] = int(llm["timeout"])
+            if "protocol" in llm:
+                config["protocol"] = str(llm["protocol"])
+            if "capabilities" in llm:
+                caps = llm["capabilities"]
+                if isinstance(caps, dict):
+                    config["capabilities"] = {str(k): bool(v) for k, v in caps.items()}
         # Transcript configuration
         if "transcript" in data:
             transcript = data["transcript"]
@@ -425,6 +431,7 @@ def _load_yaml_config(path: Path) -> dict[str, Any]:
 
     return config
 
+
 def save_config(config: dict[str, Any]) -> Path:
     """Save configuration to ~/.helen/config.yaml.
 
@@ -453,6 +460,12 @@ def save_config(config: dict[str, Any]) -> Path:
             lines.append(f"  temperature: {config['temperature']}")
         if "timeout" in config:
             lines.append(f"  timeout: {config['timeout']}")
+        if "protocol" in config:
+            lines.append(f'  protocol: "{config["protocol"]}"')
+        if "capabilities" in config and isinstance(config["capabilities"], dict):
+            lines.append("  capabilities:")
+            for key, val in config["capabilities"].items():
+                lines.append(f"    {key}: {str(val).lower()}")
 
     with open(config_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
@@ -490,24 +503,56 @@ def is_configured() -> bool:
         return False
 
 
-def run_setup_wizard() -> bool:
-    """Interactive setup wizard for initial configuration.
+def _print_supported_providers() -> None:
+    """Print bilingual list of supported providers."""
+    print("  支持的 Provider / Supported providers:")
+    print("  • 通义千问 (DashScope)")
+    print("  • 火山引擎 (Volcengine)")
+    print("  • 智谱 (Zhipu/GLM)")
+    print("  • DeepSeek")
+    print("  • MiniMax")
+    print("  • Kimi (Moonshot)")
+    print("  • OpenAI 及兼容平台 / OpenAI compatible platforms")
 
-    Prompts user for:
-    - base_url (with default: https://api.openai.com/v1)
-    - api_key (masked input using getpass)
-    - model (with default: gpt-4)
+
+def _print_custom_provider_hint() -> None:
+    """Print bilingual hint about creating custom providers via helen agent."""
+    print()
+    print("  如需支持此 Provider / To add support for this provider:")
+    print("  1. 先配置一个可用的 Helen 环境 / First set up a working Helen environment")
+    print("  2. 运行 / Run: helen agent")
+    print("  3. 让 agent 生成 PlatformProtocol 子类，保存到 ~/.helen/providers/<name>.py")
+    print("     Ask the agent to generate a PlatformProtocol subclass")
+    print("     and save it to ~/.helen/providers/<name>.py")
+
+
+def run_setup_wizard() -> bool:
+    """Interactive setup wizard with connectivity probing.
+
+    Flow:
+    1. Collect base_url / api_key / model from user
+    2. Match against known provider URL patterns
+    3. If matched → save config with protocol name → success
+    4. If not matched → Layer 1 connectivity probe
+       - Hard error (connection/auth/model) → print error, don't save, fail
+       - Success → save config, success
+       - Protocol mismatch → ask for deep probe
+    5. Deep probe (Layer 2+3) if user agrees
+    6. Save config with detected protocol/capabilities
 
     Returns:
         True if configuration was saved successfully, False otherwise
     """
     import getpass
 
+    from helen.runtime.provider_protocol import _PLATFORM_PATTERNS, detect_protocol
+
     print("=" * 60)
     print("🚀 Helen Setup Wizard")
     print("=" * 60)
     print()
     print("Configure your LLM API settings:")
+    print("配置 LLM API 设置：")
     print()
 
     try:
@@ -520,9 +565,10 @@ def run_setup_wizard() -> bool:
         # Prompt for api_key (masked)
         print()
         print("Your API key will be masked (input not visible):")
+        print("API Key（输入不可见）:")
         api_key = getpass.getpass("API Key: ").strip()
         if not api_key:
-            print("❌ Error: API key is required")
+            print("❌ Error / 错误: API key is required / API key 不能为空")
             return False
 
         # Prompt for model
@@ -531,26 +577,167 @@ def run_setup_wizard() -> bool:
         if not model:
             model = default_model
 
-        # Save configuration
+        # Step 1: Match known provider by URL pattern
+        protocol = detect_protocol(base_url)
+        is_known = False
+        for pattern, _ in _PLATFORM_PATTERNS:
+            if pattern in base_url:
+                is_known = True
+                break
+
+        if is_known:
+            config = {
+                "base_url": base_url,
+                "api_key": api_key,
+                "model": model,
+                "protocol": protocol.name,
+            }
+            config_path = save_config(config)
+            print()
+            print(f"✅ Detected provider / 检测到 Provider: {protocol.name}")
+            print(f"✅ Configuration saved to / 配置已保存: {config_path}")
+            print()
+            print("You can now run Helen programs:")
+            print("现在可以运行 Helen 程序：")
+            print("  helen <file.helen>")
+            print()
+            return True
+
+        # Step 2: Unknown provider — Layer 1 connectivity probe
+        print()
+        print("⏳ Testing connectivity / 正在测试连通性...")
+
+        from helen.runtime.probe import probe_connectivity
+
+        result = probe_connectivity(base_url, api_key, model)
+
+        if not result.success:
+            if result.error_type == "connection":
+                print()
+                print(f"❌ 无法连接到 {base_url}")
+                print(f"   Cannot connect to {base_url}")
+                print(f"   {result.error_message}")
+                print()
+                print("   请检查 URL 是否正确，网络是否通畅")
+                print("   Please check the URL and your network connection")
+                return False
+
+            elif result.error_type == "auth":
+                print()
+                print("❌ API Key 无效 / Invalid API Key")
+                print(f"   {result.error_message}")
+                print()
+                print("   请检查 API Key 是否正确")
+                print("   Please check your API key")
+                return False
+
+            elif result.error_type == "model_not_found":
+                print()
+                print(f"❌ 模型 '{model}' 不存在 / Model '{model}' not found")
+                print(f"   {result.error_message}")
+                print()
+                print("   请检查模型名称是否正确")
+                print("   Please check the model name")
+                return False
+
+            else:
+                # Protocol mismatch — Layer 1 failed but connection is OK
+                print()
+                print("⚠️ Provider 协议不完全兼容 / Provider protocol not fully compatible")
+                print(f"   {result.error_message}")
+
+                # Ask for deep probe
+                print()
+                try:
+                    deep = input(
+                        "是否进行深度探测以检测协议变体？(会消耗少量 API tokens) / "
+                        "Deep probe for protocol variants? (costs a few API tokens) [y/N]: "
+                    ).strip().lower()
+                except (KeyboardInterrupt, EOFError):
+                    deep = "n"
+
+                if deep in ("y", "yes", "是"):
+                    from helen.runtime.probe import run_full_probe
+
+                    print("⏳ Deep probing / 深度探测中...")
+                    deep_result = run_full_probe(base_url, api_key, model, deep=True)
+
+                    if deep_result.success:
+                        config = {
+                            "base_url": base_url,
+                            "api_key": api_key,
+                            "model": model,
+                            "protocol": deep_result.protocol_name,
+                            "capabilities": deep_result.capabilities,
+                        }
+                        config_path = save_config(config)
+                        print()
+                        print(f"✅ Detected provider / 检测到 Provider: {deep_result.protocol_name}")
+                        caps = deep_result.capabilities
+                        if caps:
+                            cap_strs = [f"{k}={v}" for k, v in caps.items()]
+                            print(f"   Capabilities / 能力: {', '.join(cap_strs)}")
+                        print(f"✅ Configuration saved / 配置已保存: {config_path}")
+                        print()
+                        return True
+
+                    # Deep probe failed — save with fallback + guidance
+                    config = {
+                        "base_url": base_url,
+                        "api_key": api_key,
+                        "model": model,
+                    }
+                    config_path = save_config(config)
+                    print()
+                    print("⚠️ No matching protocol found. Saved with default protocol.")
+                    print("   未找到匹配的协议。已使用默认协议保存。")
+                    print(f"   Config saved / 配置已保存: {config_path}")
+                    print()
+                    _print_supported_providers()
+                    _print_custom_provider_hint()
+                    print()
+                    return True
+
+                # User declined deep probe — save with default
+                config = {
+                    "base_url": base_url,
+                    "api_key": api_key,
+                    "model": model,
+                }
+                config_path = save_config(config)
+                print()
+                print(f"✅ Configuration saved (default protocol) / 配置已保存（默认协议）: {config_path}")
+                print()
+                print("If you encounter issues, try deep probe or create a custom adapter:")
+                print("如果遇到问题，可尝试深度探测或创建自定义适配器：")
+                print("  helen agent")
+                print("  # Ask the agent to generate a PlatformProtocol subclass")
+                print()
+                return True
+
+        # Layer 1 succeeded — save config
         config = {
             "base_url": base_url,
             "api_key": api_key,
             "model": model,
+            "protocol": result.protocol_name or "openai",
         }
-
         config_path = save_config(config)
         print()
-        print(f"✅ Configuration saved to: {config_path}")
+        print("✅ Connectivity OK / 连通性正常")
+        print(f"✅ Configuration saved to / 配置已保存: {config_path}")
         print()
         print("You can now run Helen programs:")
+        print("现在可以运行 Helen 程序：")
         print(f"  helen <file.helen>")
         print()
         return True
 
     except KeyboardInterrupt:
-        print("\n\n⚠️  Setup cancelled by user")
+        print("\n\n⚠️  Setup cancelled by user / 设置已被用户取消")
         return False
     except EOFError:
         # Non-interactive environment
-        print("\n❌ Error: Cannot run interactive wizard in non-interactive mode")
+        print("\n❌ Error / 错误: Cannot run interactive wizard in non-interactive mode")
+        print("   无法在非交互模式下运行设置向导")
         return False
