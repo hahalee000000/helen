@@ -231,7 +231,8 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
                 import "ui.status_emitter" as _StatusMod
                 let stats = context_stats()
                 let ratio = stats["usage_ratio"]
-                _StatusMod.emit_status(ratio, "qwen3.7-max")
+                let model_name = get_model() || "unknown"
+                _StatusMod.emit_status(ratio, model_name)
             } catch {}
         }
 
