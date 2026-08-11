@@ -58,9 +58,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 注册路由（chat/agents 已在各自模块中挂载 require_auth）
-app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
-app.include_router(agents.router, prefix="/api/agents", tags=["agents"])
+# 注册路由（chat 分 http_router/ws_router，避免 router 级鉴权波及 WebSocket）
+# agents 目前只有 HTTP 路由，用 http_router 做 router 级鉴权
+app.include_router(chat.http_router, prefix="/api/chat", tags=["chat"])
+app.include_router(chat.ws_router, prefix="/api/chat", tags=["chat"])
+app.include_router(agents.http_router, prefix="/api/agents", tags=["agents"])
 
 @app.get("/")
 async def root(_token: str = Depends(require_auth)):

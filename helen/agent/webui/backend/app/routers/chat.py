@@ -14,7 +14,17 @@ from app.services import hint_injector
 from app.services import directory_manager
 from app.services.stream_registry import stream_registry
 
-router = APIRouter(dependencies=[Depends(require_auth)])
+# ⚠️ 架构说明：
+# FastAPI 0.109 + Starlette 0.35 下，router 级 HTTP 依赖（如 Depends(require_auth)）
+# 会波及同 router 下的 WebSocket 路由，导致 WS 握手失败（500）。
+# 解决方案：HTTP 路由用 http_router（router 级鉴权），WebSocket 用 ws_router（无 router 级依赖）。
+# WebSocket 鉴权在 handler 内通过 verify_ws_token(token) 完成。
+
+# HTTP 路由（带 router 级鉴权）
+http_router = APIRouter(dependencies=[Depends(require_auth)])
+
+# WebSocket 路由（无 router 级依赖，handler 内鉴权）
+ws_router = APIRouter()
 
 # ── 文件上传常量 ──────────────────────────────────────────
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
@@ -30,7 +40,7 @@ ALLOWED_MIME_TYPES = {
 
 # === 流式状态查询（前端 re-sync 用）===
 
-@router.get("/status")
+@http_router.get("/status")
 async def get_chat_status():
     """检查后端是否正在处理请求（前端 re-sync 用）
 
@@ -42,7 +52,7 @@ async def get_chat_status():
 
 # === 目录管理 API（单会话模式） ===
 
-@router.get("/dir")
+@http_router.get("/dir")
 async def get_directory():
     """获取当前工作目录信息
 
@@ -68,7 +78,7 @@ async def get_directory():
     }
 
 
-@router.post("/dir")
+@http_router.post("/dir")
 async def change_directory(body: dict = Body(...)):
     """切换工作目录
 
@@ -111,7 +121,7 @@ async def change_directory(body: dict = Body(...)):
     return result
 
 
-@router.get("/dir/messages")
+@http_router.get("/dir/messages")
 def get_directory_messages(limit: int = 100, offset: int = 0):
     """获取当前工作目录的消息历史(从 Helen transcript 读取)
 
@@ -129,7 +139,7 @@ def get_directory_messages(limit: int = 100, offset: int = 0):
 
 # === 会话管理 API ===
 
-@router.get("/sessions")
+@http_router.get("/sessions")
 def list_sessions():
     """获取会话列表(从 Helen transcript 目录读取)
 
@@ -138,7 +148,7 @@ def list_sessions():
     """
     return helen_bridge.list_sessions_sync()
 
-@router.delete("/sessions/{session_id}")
+@http_router.delete("/sessions/{session_id}")
 async def delete_session(session_id: str):
     """删除指定 Helen session 的 transcript(级联删除)
 
@@ -163,7 +173,7 @@ async def delete_session(session_id: str):
         return {"status": "error", "message": str(e)}
     return {"status": "ok", "message": "Session deleted"}
 
-@router.get("/sessions/{session_id}/messages")
+@http_router.get("/sessions/{session_id}/messages")
 def get_messages(session_id: str):
     """获取会话消息(从 Helen transcript 读取)
 
@@ -173,7 +183,7 @@ def get_messages(session_id: str):
     from app.services.session_index import transcript_to_messages
     return transcript_to_messages()
 
-@router.get("/sessions/{session_id}/transcript")
+@http_router.get("/sessions/{session_id}/transcript")
 async def get_transcript(session_id: str):
     """获取 Helen transcript（LLM 上下文的完整记录）
 
@@ -264,7 +274,7 @@ async def get_transcript(session_id: str):
     }
 
 
-@router.get("/sessions/{session_id}/media/{filename}")
+@http_router.get("/sessions/{session_id}/media/{filename}")
 async def get_session_media(session_id: str, filename: str):
     """获取 session 的 media 文件(图片/音频等)
 
@@ -294,7 +304,7 @@ async def get_session_media(session_id: str, filename: str):
     return FileResponse(media_path, media_type=mime)
 
 
-@router.websocket("/ws")
+@ws_router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(default=None)):
     """WebSocket 聊天接口(广播模式,无 session_id)
 
@@ -573,7 +583,7 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
                 pass
 
 
-@router.post("/reload")
+@http_router.post("/reload")
 async def reload_helen():
     """手动触发 Helen 代码热重载
 
@@ -589,7 +599,7 @@ async def reload_helen():
 
 # === 文件上传 API（多模态支持） ===
 
-@router.post("/upload")
+@http_router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
     session_id: str = Form(None),
@@ -651,7 +661,7 @@ async def upload_file(
     }
 
 
-@router.get("/uploads/{upload_id}/file")
+@http_router.get("/uploads/{upload_id}/file")
 async def get_upload_file(upload_id: str):
     """获取已上传的文件
 
