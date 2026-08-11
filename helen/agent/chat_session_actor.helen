@@ -231,7 +231,13 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
                 import "ui.status_emitter" as _StatusMod
                 let stats = context_stats()
                 let ratio = stats["usage_ratio"]
-                let model_name = get_model() || "unknown"
+                let model_name
+                let m = get_model()
+                if m == null || m == "" {
+                    model_name = "unknown"
+                } else {
+                    model_name = m
+                }
                 _StatusMod.emit_status(ratio, model_name)
             } catch {}
         }
