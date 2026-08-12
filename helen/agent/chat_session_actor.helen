@@ -111,10 +111,14 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
     - Default output mode: MINIMAL (one-line status per phase)
     - Be concise and technical; avoid superlatives
     - When reporting errors, show the exact error message and a one-line fix
-    - ALWAYS match the user's input language — not the system locale.
-      If the user writes in English, respond entirely in English (status labels, explanations, everything).
-      If the user writes in Chinese, respond in Chinese.
-      The <locale> tag in <context> reflects the OS environment, NOT the user's preferred language for this conversation.
+
+    ## Language Policy (CRITICAL — overrides everything else)
+    - The <preferred_language> tag in <context> is the user's EXPLICIT language choice from their UI settings.
+    - You MUST respond in that language. This overrides the OS <locale>, your training bias, and any other signal.
+    - If <preferred_language> is "en": respond ENTIRELY in English — headings, explanations, summaries, status labels, bullet points, everything.
+    - If <preferred_language> is "zh": respond entirely in Chinese.
+    - The <locale> tag reflects the operating system environment — IGNORE it for language decisions.
+    - If <preferred_language> is missing, fall back to the user's actual input language.
 
     ## Development Workflow
     When implementing features, follow this process:

@@ -6,6 +6,7 @@
 import std.core.*
 import std.data.*
 import std.debug.*
+import std.system.*
 import std.path.*
 import std.transcript.*
 import "chat_session_actor.helen"
@@ -63,6 +64,14 @@ fn spawn_chat_actor(): map {
         if memory_ctx != "" {
             full_env_context = full_env_context + "\n" + memory_ctx
         }
+
+        // 注入用户首选语言（来自前端 UI 设置）
+        // 这比 OS locale 更准确地反映用户的实际语言偏好
+        let user_lang = env_get("HELEN_WEBUI_LANG", "")
+        if user_lang == "" {
+            user_lang = "en"
+        }
+        full_env_context = full_env_context + "\n<preferred_language>" + user_lang + "</preferred_language>"
     } catch RuntimeError err {
         debug("spawn_chat_actor: env context build failed: " + err.message)
     } catch {
