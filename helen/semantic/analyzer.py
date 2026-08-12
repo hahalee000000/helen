@@ -965,6 +965,58 @@ class SemanticAnalyzer(Visitor[None]):
                             call_arg_names.add(arg.name)
                     # Soft check: required params without defaults — Helen allows partial args
 
+        # v1.42: AGENT function static call: AgentName.function_name(args)
+        # Validate that the function exists in the agent's functions{} block
+        # and that argument count/types match.
+        if (isinstance(node.callee, AccessNode) and
+                isinstance(node.callee.target, VariableNode)):
+            agent_name = node.callee.target.name
+            fn_name = node.callee.property
+            if agent_name in self._agent_names:
+                agent_node = self._agent_names[agent_name]
+                fn_node = next(
+                    (f for f in agent_node.functions if f.name == fn_name), None
+                )
+                if fn_node is None:
+                    self.errors.error(
+                        ErrorCode.UNDECLARED_AGENT_FUNCTION,
+                        f"Agent '{agent_name}' has no function '{fn_name}' "
+                        f"in its functions{{}} block",
+                        node.span,
+                    )
+                else:
+                    # Argument count check
+                    n_params = len(fn_node.params)
+                    n_args = len(node.arguments)
+                    # Count params with defaults (these are optional)
+                    n_required = sum(1 for p in fn_node.params if p.default_value is None)
+                    if n_args < n_required or n_args > n_params:
+                        if n_required == n_params:
+                            expected = f"{n_params}"
+                        else:
+                            expected = f"{n_required}..{n_params}"
+                        self.errors.error(
+                            ErrorCode.AGENT_FUNCTION_ARG_MISMATCH,
+                            f"agent function '{agent_name}.{fn_name}' expects "
+                            f"{expected} argument(s), got {n_args}",
+                            node.span,
+                        )
+                    else:
+                        # Literal type check (same pattern as function calls above)
+                        for i, arg in enumerate(node.arguments):
+                            if i < len(fn_node.params) and fn_node.params[i].type_annotation is not None:
+                                expected_type = self._type_from_typenode(fn_node.params[i].type_annotation)
+                                if isinstance(arg.value, LiteralNode):
+                                    actual_type = type_of_literal(arg.value.value)
+                                    if not type_compatible(actual_type, expected_type):
+                                        self.errors.error(
+                                            ErrorCode.TYPE_MISMATCH,
+                                            f"argument {i+1} type '{actual_type.name}' "
+                                            f"is not compatible with parameter type "
+                                            f"'{expected_type.name}'",
+                                            arg.value.span,
+                                        )
+
     def visit_call_arg(self, node: CallArgNode) -> None:
         node.value.accept(self)
 

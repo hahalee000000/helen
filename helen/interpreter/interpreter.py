@@ -786,6 +786,24 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
 
     def visit_access(self, node: AccessNode) -> object:
         """Evaluate member access: target.property."""
+        # v1.42: Static agent function call: AgentName.function_name
+        # Detect before evaluating target so we can return a function wrapper
+        # instead of the agent wrapper (which has no such attribute).
+        if isinstance(node.target, VariableNode) and node.target.name in self._agents:
+            agent = self._agents[node.target.name]
+            fn = next((f for f in agent.functions if f.name == node.property), None)
+            if fn is not None:
+                return self._create_agent_function_wrapper(fn, agent)
+            # Known agent but unknown function — produce a clear error
+            # instead of falling through to regular access (which gives a
+            # confusing "'function' has no property" message).
+            self._runtime_error(
+                node.span,
+                f"Agent '{agent.name}' has no function '{node.property}' "
+                f"in its functions{{}} block"
+            )
+            return None
+
         target = node.target.accept(self)
         try:
             # v1.12 fix: ReadOnlyView wrapping a dict — delegate to __getitem__
@@ -870,6 +888,109 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         """
         def wrapper(*args, **kwargs):
             return self._call_function(func_node, list(args), parent_env=module_env)
+        return wrapper
+
+    def _create_agent_function_wrapper(self, func_node, agent_node):
+        """Create a callable wrapper for a static agent function call (v1.42).
+
+        ``AgentName.function_name(args)`` invokes a function from an agent's
+        ``functions {}`` block WITHOUT instantiating the agent. The function
+        runs in a detached environment that provides:
+          - stdlib functions
+          - module-level consts (visible via scope chain walk)
+          - shared let / shared store (cross-agent shared state)
+          - OTHER functions in the same agent's ``functions {}`` block
+          - ``function_vars`` (let/const inside the functions block)
+
+        Deliberately NOT provided:
+          - agent instance state (context, working memory, transcript)
+          - agent parameters (no instance = no params)
+          - LLM streaming / invocation tracking
+
+        If the function body references agent-instance-only state, a NameError
+        is raised at runtime — this is expected behavior.
+        """
+        def wrapper(*args, **kwargs):
+            # Build a detached environment for the function call.
+            detached_env = Environment()
+
+            # 1. Inject stdlib (reuse the pre-cached stdlib for performance)
+            stdlib_cache = _get_stdlib_cache()
+            for _name, _fn in stdlib_cache.items():
+                detached_env.define(_name, _fn)
+
+            # 2. Inject the agent's defining module env.
+            # Agent functions{} body can reference names from the agent's file:
+            # - imported functions (e.g., generate_task_id from task_manager.helen)
+            # - module-level consts and let
+            # - shared let / shared store
+            # Use _get_file_module_env to get the agent's file env.
+            agent_source = getattr(agent_node.span, 'file', None)
+            if agent_source is not None:
+                try:
+                    agent_module_env = self._get_file_module_env(agent_source)
+                    if agent_module_env is not None:
+                        # Walk the module env chain and inject all names.
+                        current = agent_module_env
+                        while current is not None:
+                            for _name, _value in current._store.items():
+                                try:
+                                    detached_env.lookup(_name)
+                                except NameError:
+                                    is_const = current.is_const(_name)
+                                    detached_env.define(_name, _value, is_const=is_const)
+                            current = current.parent
+                except Exception:
+                    pass  # Best-effort: if module env unavailable, continue
+
+            # 3. Inject module-level consts from current scope chain
+            # (the calling context may have additional consts)
+            current_env = self.environment
+            while current_env is not None:
+                for _name, _value in current_env._store.items():
+                    if current_env.is_const(_name):
+                        try:
+                            detached_env.lookup(_name)
+                        except NameError:
+                            detached_env.define(_name, _value, is_const=True)
+                current_env = current_env.parent
+
+            # 4. Inject shared let variables (cross-agent shared state)
+            for _name in getattr(self, '_shared_vars', set()):
+                try:
+                    _value = self.environment.lookup(_name)
+                    if _is_mutable_type(_value):
+                        _value = copy.deepcopy(_value)
+                    detached_env.define(_name, _value, is_const=False)
+                except NameError:
+                    pass
+
+            # 5. Register OTHER functions from the same agent's functions{} block
+            # so the called function can invoke its siblings.
+            prev_functions = {}
+            for sibling in agent_node.functions:
+                prev_functions[sibling.name] = self._functions.get(sibling.name)
+                self._functions[sibling.name] = sibling
+
+            # 6. Evaluate function_vars (let/const inside functions{} block)
+            # in the detached environment.
+            for var_node in agent_node.function_vars:
+                value = None
+                if var_node.initializer is not None:
+                    value = var_node.initializer.accept(self)
+                is_const = not var_node.mutable
+                detached_env.define(var_node.name, value, is_const=is_const)
+
+            try:
+                return self._call_function(func_node, list(args), parent_env=detached_env)
+            finally:
+                # Restore previous function registrations to avoid leaking.
+                for name, prev in prev_functions.items():
+                    if prev is None:
+                        self._functions.pop(name, None)
+                    else:
+                        self._functions[name] = prev
+
         return wrapper
 
     def _create_module_agent_wrapper(self, agent_node, module: dict):
