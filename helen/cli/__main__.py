@@ -1242,6 +1242,8 @@ Quality Options:
 Replay Options:
   helen replay <session_id>               Interactive replay (default)
   helen replay <session_id> --summary     Show summary and exit
+  helen replay <session_id> --dir <path>  Explicit sessions directory
+  helen replay /full/path/to/session      Pass absolute path instead of ID
 
   Interactive commands: n/p (next/prev), j <n> (jump), f/l (first/last),
                         s <query> (search), summary, q (quit)
@@ -1389,29 +1391,82 @@ def replay_command(argv: list[str]) -> int:
 
     Usage:
         helen replay <session_id> [options]
+        helen replay <path-to-session> [options]
+        helen replay <session_id> --dir <sessions-dir>
 
     Options:
-        --summary         Show session summary and exit
-        --interactive     Start interactive replay mode (default)
+        --summary             Show session summary and exit
+        --interactive         Start interactive replay mode (default)
+        --dir <path>          Session parent directory (default: auto-detect)
 
     Examples:
         helen replay abc123
         helen replay abc123 --summary
+        helen replay ~/.helen/sessions/session_xxx
+        helen replay abc123 --dir /path/to/project/.helen/sessions
     """
     if not argv:
         print("Error: 'replay' requires a session ID argument", file=sys.stderr)
-        print("Usage: helen replay <session_id> [--summary]", file=sys.stderr)
+        print("Usage: helen replay <session_id> [--summary] [--dir <path>]", file=sys.stderr)
         return 1
 
-    session_id = argv[0]
-    show_summary = "--summary" in argv
+    # Parse args
+    session_id = None
+    session_dir = None
+    show_summary = False
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg == "--summary":
+            show_summary = True
+        elif arg == "--dir" and i + 1 < len(argv):
+            session_dir = argv[i + 1]
+            i += 1
+        elif arg.startswith("--"):
+            print(f"Unknown option: {arg}", file=sys.stderr)
+            return 1
+        elif session_id is None:
+            session_id = arg
+        else:
+            print(f"Unexpected argument: {arg}", file=sys.stderr)
+            return 1
+        i += 1
+
+    if session_id is None:
+        print("Error: 'replay' requires a session ID argument", file=sys.stderr)
+        return 1
+
+    # If session_id looks like a path, split into dir + id
+    if session_dir is None and ("/" in session_id or session_id.startswith(".")):
+        from pathlib import Path as _P
+        p = _P(session_id).resolve()
+        if p.is_dir():
+            session_dir = str(p.parent)
+            session_id = p.name
+        else:
+            # Maybe user passed parent dir directly, or a typo — keep as-is and let it fail naturally
+            pass
 
     try:
         from helen.runtime.transcript_replay import TranscriptReplay
 
-        with TranscriptReplay(session_id) as replay:
+        try:
+            replay_ctx = TranscriptReplay(session_id, session_dir=session_dir)
+        except FileNotFoundError:
+            # Auto-search fallback: try ~/.helen/sessions if default resolution failed
+            if session_dir is None:
+                from pathlib import Path as _P
+                global_sessions = _P.home() / ".helen" / "sessions"
+                candidate = global_sessions / session_id
+                if candidate.is_dir():
+                    replay_ctx = TranscriptReplay(session_id, session_dir=str(global_sessions))
+                else:
+                    raise
+            else:
+                raise
+
+        with replay_ctx as replay:
             if show_summary:
-                # Show summary and exit
                 summary = replay.get_summary()
                 print(f"Session: {summary['session_id']}")
                 print(f"Total messages: {summary['total_messages']}")
@@ -1420,11 +1475,11 @@ def replay_command(argv: list[str]) -> int:
                     print(f"Agents: {summary['agents']}")
                 return 0
             else:
-                # Interactive mode
                 return _interactive_replay(replay)
 
     except FileNotFoundError as e:
         print(f"Error: {e}", file=sys.stderr)
+        print("Hint: use --dir <sessions-dir> or pass the full session path", file=sys.stderr)
         return 1
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)

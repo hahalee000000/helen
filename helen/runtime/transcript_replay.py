@@ -47,8 +47,8 @@ class TranscriptReplay:
 
         # Determine session directory
         if session_dir is None:
-            from helen.runtime.config import get_session_dir
-            session_dir = get_session_dir()
+            from helen.runtime.config import resolve_session_dir
+            session_dir, _scope = resolve_session_dir()
         self.session_dir = Path(session_dir)
 
         # Load transcript
