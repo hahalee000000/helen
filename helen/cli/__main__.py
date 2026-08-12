@@ -1201,12 +1201,15 @@ Usage:
   helen                          Interactive REPL (default)
   helen <file> [args...]         Run a Helen program (args become `argv`)
   helen check <file> [args...]   Check without executing
+  helen watch <file> [args...]   Watch a file and re-run on changes
   helen test <file> [opts]       Run Helen test file(s)
   helen coverage <file> [opts]   Run tests with coverage measurement
   helen quality <file>           Run 7-dimension quality assessment
   helen doc [files]              Generate API documentation
   helen init                     Initialize Helen configuration
   helen provider <cmd> [opts]    Manage custom LLM provider adapters
+  helen replay <session_id>      Interactively replay a transcript (debugging)
+  helen template [name]          View / copy built-in Helen templates
   helen lsp                      Start Language Server (LSP) for IDE support
   helen agent                    Launch Helen programming assistant (Web UI)
   helen --version                Show version number
@@ -1235,6 +1238,22 @@ Quality Options:
   --json                    Output results as JSON
   --dimension <name>        Assess only one dimension
   --threshold <n>           Fail if total score below threshold
+
+Replay Options:
+  helen replay <session_id>               Interactive replay (default)
+  helen replay <session_id> --summary     Show summary and exit
+
+  Interactive commands: n/p (next/prev), j <n> (jump), f/l (first/last),
+                        s <query> (search), summary, q (quit)
+
+Template Commands:
+  helen template                          List all available templates
+  helen template <name>                   Show template content
+  helen template <name> --copy            Copy template to current directory
+  helen template <name> --copy <out>      Copy to specific output file
+
+  Built-in templates: simple_agent, spawn_channel, spawn_with_transcript,
+                      shared_store, context_object, pipeline
 
 Provider Commands:
   helen provider list       List installed custom provider adapters
