@@ -1,4 +1,5 @@
 """Helen Web UI - FastAPI 后端主入口"""
+from pathlib import Path
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -29,9 +30,12 @@ async def lifespan(app: FastAPI):
     # ── 鉴权初始化 ───────────────────────────────────────────
     token = settings.ensure_token()
     if token:
+        import os
+        project_cwd = os.environ.get("HELEN_WEBUI_CWD") or str(Path.cwd())
+        token_path = Path(project_cwd) / ".helen" / "webui_token"
         print(f"🔐 Auth enabled. Token (copy to frontend):")
         print(f"   {token}")
-        print(f"   (also persisted to ~/.helen/webui_token)")
+        print(f"   (persisted to {token_path})")
     else:
         print("⚠️  Auth DISABLED (HELEN_WEBUI_TOKEN='' explicitly). "
               "Set HELEN_WEBUI_TOKEN or remove it from .env to enable.")
