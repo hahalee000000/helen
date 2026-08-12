@@ -61,6 +61,9 @@ export const translations = {
     'message.injectedInline': '💡 Hint injected into LLM context',
     'message.processing': 'Processing...',
     'message.processingInline': '⎿ Processing...',
+    'message.executing': '⎿ {content} running...',
+    'message.completed': '⎿ ✓ {content}',
+    'message.phase': '[{content}]',
 
     // === Directory bar ===
     'dir.cwd': 'Working directory',
@@ -135,6 +138,17 @@ export const translations = {
     'error.retry': 'Retry',
     'error.unknownMessage': 'An unknown error occurred',
     'error.settingsFailed': 'Settings page failed to load',
+    'error.llmError': 'LLM error: {message}',
+    'error.llmUnknown': 'LLM error: unknown error',
+    'error.actorInternal': 'Actor internal error: {message}',
+    'error.actorExited': 'Error: Actor has exited',
+    'error.actorException': 'Error: Actor returned exception: {message}',
+    'error.actorInvalidResponse': 'Error: Actor returned invalid response',
+    'error.actorStatus': 'Actor status: {status}',
+    'error.generic': 'Error: {message}',
+    'error.unknownResponseType': 'Unknown response type: {type}',
+    'error.actorExecution': 'Helen actor execution error: {message}',
+    'error.llmProcessing': 'LLM is still processing - use 💡 Hint to append instructions',
 
     // === Common ===
     'common.cancel': 'Cancel',
@@ -209,6 +223,9 @@ export const translations = {
     'message.injectedInline': '💡 提示已注入 LLM 上下文',
     'message.processing': '处理中...',
     'message.processingInline': '⎿ 处理中...',
+    'message.executing': '⎿ {content} 执行中...',
+    'message.completed': '⎿ ✓ {content}',
+    'message.phase': '[{content}]',
 
     // === Directory bar ===
     'dir.cwd': '工作目录',
@@ -283,6 +300,17 @@ export const translations = {
     'error.retry': '重试',
     'error.unknownMessage': '应用遇到了未知错误',
     'error.settingsFailed': '设置页面加载失败',
+    'error.llmError': 'LLM 错误: {message}',
+    'error.llmUnknown': 'LLM 错误: 未知错误',
+    'error.actorInternal': 'Actor 内部错误: {message}',
+    'error.actorExited': '错误: Actor 已退出',
+    'error.actorException': '错误: Actor 返回异常: {message}',
+    'error.actorInvalidResponse': '错误: Actor 返回异常响应',
+    'error.actorStatus': 'Actor 状态: {status}',
+    'error.generic': '错误: {message}',
+    'error.unknownResponseType': '未知响应类型: {type}',
+    'error.actorExecution': 'Helen actor 执行错误: {message}',
+    'error.llmProcessing': 'LLM 正在处理中，请使用 💡 提示 功能追加指令',
 
     // === Common ===
     'common.cancel': '取消',

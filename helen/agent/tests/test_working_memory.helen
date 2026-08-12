@@ -64,13 +64,13 @@ fn test_working_memory_execution() {
     // /working-memory 无参数 → 列出所有条目或显示"空"
     let result1 = execute_command(parse_command("/working-memory"))
     _assert(result1 != "", "/working-memory 返回非空字符串")
-    _assert(contains(result1, "工作记忆") || contains(result1, "空") || contains(result1, "不可用"),
+    _assert(contains(result1, "工作记忆") || contains(result1, "Working Memory") || contains(result1, "working-memory") || contains(result1, "空") || contains(result1, "empty") || contains(result1, "不可用") || contains(result1, "unavailable"),
             "/working-memory 输出包含预期关键字")
 
     // /working-memory stats → 显示统计
     let result2 = execute_command(parse_command("/working-memory stats"))
     _assert(result2 != "", "/working-memory stats 返回非空字符串")
-    _assert(contains(result2, "统计") || contains(result2, "条目") || contains(result2, "不可用"),
+    _assert(contains(result2, "统计") || contains(result2, "Statistics") || contains(result2, "Stats") || contains(result2, "条目") || contains(result2, "entries") || contains(result2, "fields") || contains(result2, "不可用") || contains(result2, "unavailable"),
             "/working-memory stats 输出包含统计关键字")
 
     // /working-memory get <key> → 查询指定 key
@@ -97,7 +97,7 @@ fn test_help_includes_working_memory() {
 
     let help_text = execute_command(parse_command("/help"))
     _assert(contains(help_text, "working-memory"), "/help 输出包含 working-memory")
-    _assert(contains(help_text, "工作记忆"), "/help 输出包含中文说明 '工作记忆'")
+    _assert(contains(help_text, "working-memory") && (contains(help_text, "工作记忆") || contains(help_text, "Working Memory") || contains(help_text, "working memory")), "/help 输出包含 working-memory 说明")
 }
 
 // ── 主测试 ───────────────────────────────────────────────────────

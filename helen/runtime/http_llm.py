@@ -1564,75 +1564,94 @@ class HttpLLMRuntime(LLMRuntime):
                     break
 
             except httpx.HTTPStatusError as e:
-                # Read the error body for structured API error messages
+                # Read the error body for structured API error messages.
+                # JSON parse failure must NOT bypass retry logic — so we
+                # catch parse errors separately and fall back to status code.
+                error_msg = str(e)
+                error_code = ""
+                full_error = f"HTTP error {e.response.status_code}: {e.response.reason_phrase}"
                 try:
                     error_data = e.response.json()
                     api_error = error_data.get("error", {})
                     error_msg = api_error.get("message", str(e))
                     error_code = api_error.get("code", "")
                     full_error = f"API error ({e.response.status_code} {error_code}): {error_msg}"
+                except Exception:
+                    pass  # Non-JSON body — status code + reason phrase suffice
 
-                    # P1: Context overflow auto-recovery for streaming (multi-step cascade)
-                    if _is_context_length_error(error_msg) and len(messages) > 2:
-                        logger.warning(
-                            "Context length exceeded in stream (%s) — starting recovery cascade",
-                            error_msg[:100],
-                        )
-                        from helen.runtime.context_recovery import PromptTooLongRecovery
-                        use_model = model or self.default_model
-                        from helen.runtime.history import get_model_context_window
-                        max_tokens = get_model_context_window(use_model)
-                        recovery = PromptTooLongRecovery(max_tokens=max_tokens)
-                        recovery_result = recovery.recover(messages, max_tokens=max_tokens)
-                        if recovery_result.success:
-                            messages[:] = recovery_result.messages
-                            logger.info(
-                                "Stream recovery succeeded via %s (reduced ~%d tokens)",
-                                recovery_result.strategy, recovery_result.tokens_reduced,
-                            )
-                            # Reset tool call accumulation for retry
-                            tool_calls_acc.clear()
-                            full_chunks.clear()
-                            reasoning_chunks.clear()
-                            stream_retry = 0  # Reset stream retry counter
-                            continue  # Retry with recovered messages
-                        else:
-                            logger.error(
-                                "All stream recovery strategies exhausted — yielding error"
-                            )
-                            yield {"type": "error", "message": full_error}
-
-                    # P2: Retry on 5xx and 429 rate limit errors
-                    is_retryable_status = (
-                        e.response.status_code >= 500
-                        or e.response.status_code == 429
+                # P1: Context overflow auto-recovery for streaming (multi-step cascade)
+                if _is_context_length_error(error_msg) and len(messages) > 2:
+                    logger.warning(
+                        "Context length exceeded in stream (%s) — starting recovery cascade",
+                        error_msg[:100],
                     )
-                    if is_retryable_status and stream_retry < max_stream_retries:
-                        wait_time = min(2 ** stream_retry, 10)
+                    from helen.runtime.context_recovery import PromptTooLongRecovery
+                    use_model = model or self.default_model
+                    from helen.runtime.history import get_model_context_window
+                    max_tokens = get_model_context_window(use_model)
+                    recovery = PromptTooLongRecovery(max_tokens=max_tokens)
+                    recovery_result = recovery.recover(messages, max_tokens=max_tokens)
+                    if recovery_result.success:
+                        messages[:] = recovery_result.messages
                         logger.info(
-                            "Stream API error (%s) — retrying in %ds (%d/%d)",
-                            full_error[:80], wait_time, stream_retry + 1, max_stream_retries,
+                            "Stream recovery succeeded via %s (reduced ~%d tokens)",
+                            recovery_result.strategy, recovery_result.tokens_reduced,
                         )
-                        time.sleep(wait_time)
-                        stream_retry += 1
                         tool_calls_acc.clear()
                         full_chunks.clear()
                         reasoning_chunks.clear()
+                        stream_retry = 0
                         continue
+                    else:
+                        logger.error(
+                            "All stream recovery strategies exhausted — yielding error"
+                        )
+                        yield {"type": "error", "message": full_error}
+                        break
 
-                    yield {"type": "error", "message": full_error}
-                except Exception:
-                    yield {"type": "error", "message": f"HTTP error {e.response.status_code}: {e.response.reason_phrase}"}
+                # P2: Retry on 5xx and 429 rate limit errors
+                stream_status_code = e.response.status_code
+                stream_retry_after = parse_retry_after(
+                    e.response.headers.get("retry-after")
+                )
+                category = classify_error(
+                    stream_status_code,
+                    error_msg,
+                    context_overflow_fn=_is_context_length_error,
+                )
+                if stream_retry < max_stream_retries and is_retryable(category):
+                    wait_time = compute_backoff(
+                        category, stream_retry, retry_after=stream_retry_after,
+                    )
+                    wait_time = min(wait_time, 120.0)
+                    logger.info(
+                        "Stream API error (%s, %s) — retrying in %.1fs (%d/%d)",
+                        full_error[:80], category.value, wait_time,
+                        stream_retry + 1, max_stream_retries,
+                    )
+                    if wait_time > 0:
+                        time.sleep(wait_time)
+                    stream_retry += 1
+                    tool_calls_acc.clear()
+                    full_chunks.clear()
+                    reasoning_chunks.clear()
+                    continue
+
+                yield {"type": "error", "message": full_error}
                 break
             except (httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError) as e:
                 # P2: Retry on transient network errors
-                if stream_retry < max_stream_retries:
-                    wait_time = min(2 ** stream_retry, 10)
+                net_category = classify_error(None, str(e))
+                if stream_retry < max_stream_retries and is_retryable(net_category):
+                    wait_time = compute_backoff(net_category, stream_retry)
+                    wait_time = min(wait_time, 120.0)
                     logger.info(
-                        "Stream network error (%s) — retrying in %ds (%d/%d)",
-                        str(e)[:80], wait_time, stream_retry + 1, max_stream_retries,
+                        "Stream network error (%s, %s) — retrying in %.1fs (%d/%d)",
+                        str(e)[:80], net_category.value, wait_time,
+                        stream_retry + 1, max_stream_retries,
                     )
-                    time.sleep(wait_time)
+                    if wait_time > 0:
+                        time.sleep(wait_time)
                     stream_retry += 1
                     tool_calls_acc.clear()
                     full_chunks.clear()
@@ -1642,13 +1661,17 @@ class HttpLLMRuntime(LLMRuntime):
                 break
             except httpx.TimeoutException:
                 # P2: Retry on timeout
-                if stream_retry < max_stream_retries:
-                    wait_time = min(2 ** stream_retry, 10)
+                to_category = classify_error(None, "timeout")
+                if stream_retry < max_stream_retries and is_retryable(to_category):
+                    wait_time = compute_backoff(to_category, stream_retry)
+                    wait_time = min(wait_time, 120.0)
                     logger.info(
-                        "Stream timeout — retrying in %ds (%d/%d)",
-                        wait_time, stream_retry + 1, max_stream_retries,
+                        "Stream timeout (%s) — retrying in %.1fs (%d/%d)",
+                        to_category.value, wait_time,
+                        stream_retry + 1, max_stream_retries,
                     )
-                    time.sleep(wait_time)
+                    if wait_time > 0:
+                        time.sleep(wait_time)
                     stream_retry += 1
                     tool_calls_acc.clear()
                     full_chunks.clear()

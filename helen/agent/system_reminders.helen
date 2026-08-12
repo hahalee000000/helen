@@ -29,11 +29,12 @@ fn inject_system_reminders(user_input: str): str {
         let reminder = """
 
 <system-reminder>
-这是第 """ + str(_turn_counter) + """ 轮对话（当前上下文占用 """ + str(usage_pct) + """%）。请回顾以下关键规则：
-1. 不要假设环境事实（日期、目录、git 状态等），使用工具查询
-2. 修改 .helen 文件后必须运行 helen check 验证
-3. 不要修改 ~/helen/（Helen 语言源代码）
-4. 发现 Helen 语言问题时提交 GitHub issue 到 https://github.com/hahalee000000/helen/issues
+Turn """ + str(_turn_counter) + """ (context usage: """ + str(usage_pct) + """%). Key rules reminder:
+1. Never assume environmental facts (date, cwd, git state, etc.) — query with tools.
+2. After modifying .helen files, always run helen check to verify.
+3. Never modify ~/helen/ (Helen language source code).
+4. Report Helen language issues at https://github.com/hahalee000000/helen/issues
+5. ALWAYS respond in the same language the user is using.
 </system-reminder>
 
 """

@@ -1,6 +1,7 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
 from pathlib import Path
+import os
 import secrets
 
 
@@ -51,8 +52,8 @@ class Settings(BaseSettings):
 
     # ── 鉴权 ──────────────────────────────────────────────────────
     # Web UI 访问 token。为空串 "" 时禁用鉴权（仅用于开发/测试，日志会警告）。
-    # 默认：首次启动时自动生成并持久化到 ~/.helen/webui_token，后续启动复用。
-    # 用户可通过 .env 中 HELEN_WEBUI_TOKEN=xxx 覆盖。
+    # 默认：首次启动时自动生成并持久化到 <cwd>/.helen/webui_token（项目级），
+    # 后续启动复用。用户可通过 .env 中 HELEN_WEBUI_TOKEN=xxx 覆盖。
     HELEN_WEBUI_TOKEN: str = ""
 
     # CORS 配置（允许 vite 常用端口 5173-5180）
@@ -77,13 +78,26 @@ class Settings(BaseSettings):
     def ensure_token(self) -> str:
         """解析 token：优先 .env / 环境变量；为空则加载持久化文件；都不存在则生成。
 
+        Token 存储在项目目录 <cwd>/.helen/webui_token 中，每个项目独立。
+        如果存在旧的全局 ~/.helen/webui_token，自动迁移并删除。
+
         Returns: 解析后的 token（空串表示禁用鉴权）。
         """
         if self.HELEN_WEBUI_TOKEN:
             return self.HELEN_WEBUI_TOKEN
 
-        # 持久化路径：~/.helen/webui_token
-        token_path = Path.home() / ".helen" / "webui_token"
+        # 项目目录：<cwd>/.helen/webui_token
+        project_cwd = os.environ.get("HELEN_WEBUI_CWD") or str(Path.cwd())
+        token_path = Path(project_cwd) / ".helen" / "webui_token"
+
+        # 迁移：删除旧的全局 token（如果存在）
+        global_token_path = Path.home() / ".helen" / "webui_token"
+        if global_token_path.exists():
+            try:
+                global_token_path.unlink()
+            except OSError:
+                pass
+
         try:
             token_path.parent.mkdir(parents=True, exist_ok=True)
             if token_path.exists():

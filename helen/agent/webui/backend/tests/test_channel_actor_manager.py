@@ -183,6 +183,46 @@ class TestChannelActorManager:
         time.sleep(0.1)
         assert manager._heartbeat_thread is None
 
+    def test_heartbeat_loop_exception_breaks(self, manager, mock_chat_tui_web):
+        """Heartbeat loop exits when send_heartbeat raises."""
+        import time
+        # Make send_heartbeat raise on first call
+        mock_chat_tui_web.send_heartbeat.side_effect = RuntimeError("heartbeat failed")
+
+        manager._start_heartbeat()
+        # The heartbeat loop uses wait(HEARTBEAT_INTERVAL=120), but on exception
+        # it breaks. We need to trigger the loop iteration. Since interval is 120s,
+        # we patch HEARTBEAT_INTERVAL to be very short for this test.
+        import app.services.channel_actor_manager as cam
+        original_interval = cam.HEARTBEAT_INTERVAL
+        cam.HEARTBEAT_INTERVAL = 0.05
+        try:
+            # Restart with short interval
+            manager._stop_heartbeat()
+            manager._start_heartbeat()
+            # Wait for the heartbeat loop to run and hit the exception
+            time.sleep(0.3)
+            # Thread should have exited (broken out of loop)
+            assert not manager._heartbeat_thread.is_alive()
+        finally:
+            cam.HEARTBEAT_INTERVAL = original_interval
+            manager._stop_heartbeat()
+
+    def test_heartbeat_loop_success_path(self, manager, mock_chat_tui_web):
+        """Heartbeat loop sends heartbeats and stops cleanly."""
+        import time
+        import app.services.channel_actor_manager as cam
+        original_interval = cam.HEARTBEAT_INTERVAL
+        cam.HEARTBEAT_INTERVAL = 0.05
+        try:
+            manager._start_heartbeat()
+            time.sleep(0.2)
+            # Should have sent at least one heartbeat
+            assert mock_chat_tui_web.send_heartbeat.called
+            manager._stop_heartbeat()
+        finally:
+            cam.HEARTBEAT_INTERVAL = original_interval
+
 
 class TestGlobalSingleton:
     def test_singleton_exists(self):

@@ -1,6 +1,7 @@
 """聊天相关 API 路由"""
 import asyncio
 import json
+import os
 from pathlib import Path
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPException, Body, UploadFile, File, Form, Query
 from fastapi.responses import FileResponse
@@ -174,7 +175,7 @@ async def delete_session(session_id: str):
                 "Helen transcript 清理可能失败 (helen_sid=%s, response=%r)",
                 session_id, response
             )
-            return {"status": "warning", "message": "transcript 清理可能失败", "response": response}
+            return {"status": "warning", "message": "transcript cleanup may have failed", "response": response}
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(
@@ -248,7 +249,7 @@ async def get_transcript(session_id: str):
                         "raw": line[:200]
                     })
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"读取 transcript 失败: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to read transcript: {e}")
 
     # 过滤测试消息（以 [TEST] 开头的集成测试消息）
     from app.services.session_index import filter_test_messages
@@ -315,7 +316,7 @@ async def get_session_media(session_id: str, filename: str):
 
 
 @ws_router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(default=None)):
+async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(default=None), lang: str = Query(default="en")):
     """WebSocket 聊天接口(广播模式,无 session_id)
 
     v6.1:单会话架构,所有连接共享当前工作目录。session_id 内部保留
@@ -323,9 +324,13 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
 
     v1.39.4:hint queue 已简化为单例模式（忽略 session_id 参数），
     修复了 hint 注入失败的 bug（chat.py 用 cwd hash，actor 用 UUID，不匹配）。
+
+    v1.42:读取 lang 查询参数,通过环境变量传递给 Helen actor 用于 i18n。
     """
     # 鉴权：WebSocket 握手前校验 token（来自 ?token= 查询参数）
     verify_ws_token(token)
+    # 存储 lang 供 Helen actor 读取（i18n 语言选择）
+    os.environ["HELEN_WEBUI_LANG"] = lang
     manager = websocket.app.state.websocket_manager
     await manager.connect(websocket)
 
@@ -384,10 +389,23 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
                     except Exception:
                         pass
                 elif chunk_type == "error":
+                    # Error may carry i18n_key directly (from helen_bridge
+                    # exception), as JSON string in content (from Helen
+                    # actor), or as plain text fallback
+                    if "i18n_key" in chunk:
+                        error_data = {"i18n_key": chunk["i18n_key"], "params": chunk.get("params", {})}
+                    else:
+                        error_data = {"content": content}
+                        try:
+                            parsed = json.loads(content) if isinstance(content, str) else None
+                            if isinstance(parsed, dict) and "i18n_key" in parsed:
+                                error_data = {"i18n_key": parsed["i18n_key"], "params": parsed.get("params", {})}
+                        except (json.JSONDecodeError, TypeError):
+                            pass
                     try:
                         await manager.broadcast({
                             "type": "error",
-                            "data": {"content": content}
+                            "data": error_data
                         })
                     except Exception:
                         pass
@@ -413,7 +431,7 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
                 if stream_task and not stream_task.done():
                     await manager.broadcast({
                         "type": "error",
-                        "data": {"content": "LLM 正在处理中，请使用 💡 提示 功能追加指令"}
+                        "data": {"i18n_key": "error.llmProcessing"}
                     })
                     continue
 

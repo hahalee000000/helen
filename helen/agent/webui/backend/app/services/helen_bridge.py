@@ -430,7 +430,8 @@ class HelenBridge:
         except Exception as e:
             yield {
                 "type": "error",
-                "content": f"Helen actor 执行错误: {str(e)}"
+                "i18n_key": "error.actorExecution",
+                "params": {"message": str(e)}
             }
         finally:
             unregister_stream_callback(session_id)

@@ -139,6 +139,37 @@ fn test_inject_multiple_reminders() {
     _assert(reminder_count >= 2, "at least 2 reminders in 25 turns")
 }
 
+// ── _dynamic_interval ────────────────────────────────────────
+
+fn test_dynamic_interval_returns_positive_int() {
+    print("\n=== _dynamic_interval basic behavior ===")
+    let interval = _dynamic_interval()
+    _assert(type(interval) == "int", "_dynamic_interval returns int")
+    _assert(interval > 0, "_dynamic_interval returns positive value")
+}
+
+fn test_dynamic_interval_valid_values() {
+    print("\n=== _dynamic_interval valid value set ===")
+    let interval = _dynamic_interval()
+    let valid = interval == 3 || interval == 5 || interval == 10
+    _assert(valid, "_dynamic_interval returns 3, 5, or 10 (got " + str(interval) + ")")
+}
+
+fn test_dynamic_interval_low_usage_default() {
+    print("\n=== _dynamic_interval low-usage default ===")
+    // In test env, context_usage() returns a low value (< 0.5),
+    // so _dynamic_interval should return REMINDER_INTERVAL (10)
+    let interval = _dynamic_interval()
+    _assert_equal(interval, 10, "low-usage context -> interval = 10")
+}
+
+fn test_dynamic_interval_consistent() {
+    print("\n=== _dynamic_interval consistent across calls ===")
+    let a = _dynamic_interval()
+    let b = _dynamic_interval()
+    _assert_equal(a, b, "repeated calls return same value (stable context)")
+}
+
 // ── Run all tests ────────────────────────────────────────────
 
 main {
@@ -155,6 +186,10 @@ main {
     test_inject_preserves_original_message()
     test_inject_turn_counter_keeps_incrementing()
     test_inject_multiple_reminders()
+    test_dynamic_interval_returns_positive_int()
+    test_dynamic_interval_valid_values()
+    test_dynamic_interval_low_usage_default()
+    test_dynamic_interval_consistent()
 
     print("\n═══════════════════════════════════════════")
     print("  全部 system_reminders 测试完成")

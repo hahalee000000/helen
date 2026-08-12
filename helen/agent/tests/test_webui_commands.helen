@@ -13,6 +13,7 @@ import std.str.*
 import "../commands.helen"
 import "../output.helen"
 import "../context_manager.helen"
+import "../lang.helen"
 
 fn _assert(condition: bool, test_name: str) {
     if condition {
@@ -77,7 +78,7 @@ fn test_clear_response() {
 
     let response = execute_command(parse_command("/clear"))
     _assert_not_empty(response, "/clear 返回非空响应")
-    _assert_contains(response, "清空", "/clear 包含 '清空'")
+    _assert_contains(response, _t("cleared", "清空"), "/clear 包含 '清空/cleared'")
 }
 
 // ── /compress 响应测试 ───────────────────────────────────────
@@ -87,7 +88,7 @@ fn test_compress_response() {
 
     let response = execute_command(parse_command("/compress"))
     _assert_not_empty(response, "/compress 返回非空响应")
-    _assert_contains(response, "压缩", "/compress 包含 '压缩'")
+    _assert_contains(response, _t("compress", "压缩"), "/compress 包含 '压缩/compress'")
 }
 
 // ── /mode 响应测试 ──────────────────────────────────────────
@@ -106,7 +107,7 @@ fn test_mode_response() {
 
     // /mode unknown → 错误提示
     let response3 = execute_command(parse_command("/mode unknown_mode"))
-    _assert_contains(response3, "未知", "未知模式提示错误")
+    _assert_contains(response3, _t("Unknown", "未知"), "未知模式提示错误")
 }
 
 // ── /stats 响应测试 ─────────────────────────────────────────
@@ -116,7 +117,7 @@ fn test_stats_response() {
 
     let response = execute_command(parse_command("/stats"))
     _assert_not_empty(response, "/stats 返回非空响应")
-    _assert_contains(response, "统计", "/stats 包含 '统计'")
+    _assert_contains(response, _t("Statistics", "统计"), "/stats 包含 '统计/Statistics'")
     _assert_contains(response, "Helen", "/stats 包含 Helen 版本")
 }
 
@@ -127,7 +128,7 @@ fn test_memory_response() {
 
     let response = execute_command(parse_command("/memory"))
     _assert_not_empty(response, "/memory 返回非空响应")
-    _assert_contains(response, "记忆", "/memory 包含 '记忆'")
+    _assert_contains(response, _t("Memory", "记忆"), "/memory 包含 '记忆/Memory'")
 }
 
 // ── /context 响应测试 ───────────────────────────────────────
@@ -137,7 +138,7 @@ fn test_context_response() {
 
     let response = execute_command(parse_command("/context"))
     _assert_not_empty(response, "/context 返回非空响应")
-    _assert_contains(response, "上下文", "/context 包含 '上下文'")
+    _assert_contains(response, _t("Context", "上下文"), "/context 包含 '上下文/Context'")
 }
 
 // ── /version 响应测试 ───────────────────────────────────────
@@ -157,7 +158,7 @@ fn test_session_response() {
 
     let response = execute_command(parse_command("/session"))
     _assert_not_empty(response, "/session 返回非空响应")
-    _assert_contains(response, "会话", "/session 包含 '会话'")
+    _assert_contains(response, _t("Session", "会话"), "/session 包含 '会话/Session'")
 }
 
 // ── /pin, /unpin 响应测试 ──────────────────────────────────
@@ -186,7 +187,7 @@ fn test_search_response() {
     // /search 无参数 → 显示用法
     let response = execute_command(parse_command("/search"))
     _assert_not_empty(response, "/search 无参数返回非空")
-    _assert_contains(response, "用法", "/search 显示用法")
+    _assert_contains(response, _t("Usage", "用法"), "/search 显示用法")
 
     // /search hello → 搜索（可能没结果）
     let response2 = execute_command(parse_command("/search hello"))
@@ -200,7 +201,7 @@ fn test_unknown_command_response() {
 
     let response = execute_command(parse_command("/nonexistent"))
     _assert_not_empty(response, "未知命令返回非空")
-    _assert_contains(response, "未知", "未知命令包含 '未知'")
+    _assert_contains(response, _t("Unknown", "未知"), "未知命令包含 '未知/Unknown'")
     _assert_contains(response, "/help", "未知命令建议查看帮助")
 }
 

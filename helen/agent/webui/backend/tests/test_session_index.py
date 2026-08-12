@@ -243,3 +243,124 @@ class TestReadSessionPreview:
         ])
         preview = session_index.read_session_preview(sid)
         assert preview == ""
+
+
+# ── get_current_helen_session_id ───────────────────────────────
+
+class TestGetCurrentHelenSessionId:
+    def test_no_memento_returns_empty(self, session_index, temp_agent_dir):
+        """memento 不存在 -> 返回空字符串"""
+        result = session_index.get_current_helen_session_id()
+        assert result == ""
+
+    def test_json_memento_with_child(self, session_index, temp_agent_dir):
+        """JSON memento 返回 child session ID（当 transcript 存在时）"""
+        sid = "child-session-123"
+        _write_transcript(temp_agent_dir, sid, [
+            json.dumps({"type": "session_meta", "timestamp": 1.0}),
+        ])
+        memento_path = temp_agent_dir / ".helen" / "current_session_id"
+        memento_path.write_text(json.dumps({"main": "main-sid", "child": sid}))
+
+        result = session_index.get_current_helen_session_id()
+        assert result == sid
+
+    def test_json_memento_child_no_transcript(self, session_index, temp_agent_dir):
+        """JSON memento 的 child session 无 transcript -> 返回空"""
+        memento_path = temp_agent_dir / ".helen" / "current_session_id"
+        memento_path.write_text(json.dumps({"main": "main-sid", "child": "nonexistent"}))
+
+        result = session_index.get_current_helen_session_id()
+        assert result == ""
+
+    def test_json_memento_empty_child(self, session_index, temp_agent_dir):
+        """JSON memento child 为空 -> 返回空"""
+        memento_path = temp_agent_dir / ".helen" / "current_session_id"
+        memento_path.write_text(json.dumps({"main": "main-sid", "child": ""}))
+
+        result = session_index.get_current_helen_session_id()
+        assert result == ""
+
+    def test_plain_text_memento(self, session_index, temp_agent_dir):
+        """纯文本 memento（旧格式兼容）"""
+        sid = "plain-text-session"
+        _write_transcript(temp_agent_dir, sid, [
+            json.dumps({"type": "session_meta", "timestamp": 1.0}),
+        ])
+        memento_path = temp_agent_dir / ".helen" / "current_session_id"
+        memento_path.write_text(sid)
+
+        result = session_index.get_current_helen_session_id()
+        assert result == sid
+
+    def test_plain_text_memento_no_transcript(self, session_index, temp_agent_dir):
+        """纯文本 memento 但 transcript 不存在 -> 返回空"""
+        memento_path = temp_agent_dir / ".helen" / "current_session_id"
+        memento_path.write_text("nonexistent-session")
+
+        result = session_index.get_current_helen_session_id()
+        assert result == ""
+
+    def test_memento_invalid_json(self, session_index, temp_agent_dir):
+        """memento 以 { 开头但不是有效 JSON -> 返回空"""
+        memento_path = temp_agent_dir / ".helen" / "current_session_id"
+        memento_path.write_text("{invalid json")
+
+        result = session_index.get_current_helen_session_id()
+        assert result == ""
+
+    def test_memento_empty_file(self, session_index, temp_agent_dir):
+        """memento 文件为空 -> 返回空"""
+        memento_path = temp_agent_dir / ".helen" / "current_session_id"
+        memento_path.write_text("")
+
+        result = session_index.get_current_helen_session_id()
+        assert result == ""
+
+
+# ── _attachment_from_data_url ──────────────────────────────────
+
+class TestAttachmentFromDataUrl:
+    def test_image_data_url(self, session_index):
+        """image data URL -> kind=image, 正确的 mime_type"""
+        data_url = "data:image/png;base64,iVBORw0KGgo="
+        att = session_index._attachment_from_data_url(data_url, 1)
+        assert att["id"] == "att-1"
+        assert att["filename"] == "image-1.png"
+        assert att["mime_type"] == "image/png"
+        assert att["url"] == data_url
+        assert att["size"] > 0
+
+    def test_audio_data_url(self, session_index):
+        """audio data URL -> kind=audio"""
+        data_url = "data:audio/wav;base64,UklGR"
+        att = session_index._attachment_from_data_url(data_url, 2)
+        assert att["filename"] == "audio-2.wav"
+        assert att["mime_type"] == "audio/wav"
+
+    def test_video_data_url(self, session_index):
+        """video data URL -> kind=video"""
+        data_url = "data:video/mp4;base64,AAAA"
+        att = session_index._attachment_from_data_url(data_url, 3)
+        assert att["filename"] == "video-3.mp4"
+        assert att["mime_type"] == "video/mp4"
+
+    def test_other_mime_data_url(self, session_index):
+        """非 image/audio/video -> kind=file"""
+        data_url = "data:application/pdf;base64,JSVD"
+        att = session_index._attachment_from_data_url(data_url, 4)
+        assert att["filename"] == "file-4.pdf"
+        assert att["mime_type"] == "application/pdf"
+
+    def test_no_comma_in_data_url(self, session_index):
+        """无逗号的 data URL -> b64_data 为空"""
+        data_url = "data:image/png;base64"
+        att = session_index._attachment_from_data_url(data_url, 5)
+        assert att["size"] == 0
+
+    def test_no_base64_prefix(self, session_index):
+        """不匹配的 data URL -> 默认 mime"""
+        data_url = "something-without-proper-prefix"
+        att = session_index._attachment_from_data_url(data_url, 6)
+        assert att["mime_type"] == "application/octet-stream"
+        assert att["filename"] == "file-6.bin"

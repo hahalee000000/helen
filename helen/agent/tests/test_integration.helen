@@ -129,7 +129,7 @@ fn _test_system_reminder_chain() {
     // 第 10 轮注入提醒
     let enriched10 = inject_system_reminders("user msg 9")
     _int_assert_true(contains(enriched10, "<system-reminder>"), "第 10 轮注入 system-reminder")
-    _int_assert_true(contains(enriched10, "不要假设环境事实"), "提醒含关键规则")
+    _int_assert_true(contains(enriched10, "Never assume") || contains(enriched10, "不要假设环境事实"), "提醒含关键规则")
 
     reset_turn_counter()
 }

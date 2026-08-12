@@ -35,6 +35,7 @@ import "memory_utils.helen"
 import "output.helen"
 import "context.helen"
 import "utils.helen"
+import "lang.helen"
 import "contracts/contracts.helen"
 import "session_stats.helen"
 
@@ -110,7 +111,10 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
     - Default output mode: MINIMAL (one-line status per phase)
     - Be concise and technical; avoid superlatives
     - When reporting errors, show the exact error message and a one-line fix
-    - Match user's language (Chinese input → Chinese output, English → English)
+    - ALWAYS match the user's input language — not the system locale.
+      If the user writes in English, respond entirely in English (status labels, explanations, everything).
+      If the user writes in Chinese, respond in Chinese.
+      The <locale> tag in <context> reflects the OS environment, NOT the user's preferred language for this conversation.
 
     ## Development Workflow
     When implementing features, follow this process:
@@ -349,6 +353,23 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
 
             // /clear-session：嵌入标记 + actor 退出，等 Python 重启
             if cmd["command"] == "clear-session" {
+                // _cmd_clear_session 只删除 actor 的当前会话（子会话），
+                // 主会话（session_id 参数，由 Python bridge set_session_id 设置）不会被删除。
+                // 不显式删除会导致每次 /clear-session 后主会话残留 + 新子会话创建，
+                // transcript 文件数持续增长。这里补删主会话。
+                if session_id != "" {
+                    try {
+                        let main_sid = session_id
+                        let cur_sid = ""
+                        try { cur_sid = get_session_id() } catch {}
+                        // 仅当主会话与当前会话不同时才补删（避免重复删除已清的会话）
+                        if main_sid != cur_sid && main_sid != "" {
+                            delete_session(main_sid, cascade=true)
+                        }
+                    } catch {
+                        // 主会话删除失败不阻断流程（子会话已删，actor 仍会重启）
+                    }
+                }
                 cmd_response = cmd_response + "\n__HELEN_RESTART_ACTOR__"
             }
 
@@ -425,7 +446,9 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
                 debug("ChatSessionActor: LLM act complete (request=" + request_id + ", response_len=" + str(len(full_response)) + ")")
             } catch RuntimeError err {
                 debug("ChatSessionActor: LLM error: " + err.message)
-                _emit_actor_stream_event("error", "LLM 错误: " + err.message)
+                let _llm_err_params = {"message": err.message}
+                let _llm_err_payload = {"i18n_key": "error.llmError", "params": _llm_err_params}
+                _emit_actor_stream_event("error", json_stringify(_llm_err_payload))
                 // 先 emit processing_complete，再 reply.send（避免竞态：reply.send 会让 Python 端 helen_task.done()=True，
                 // 之后 polling loop 可能立即退出，若 emit 在 send 之后则事件被丢弃）
                 _emit_actor_stream_event("processing_complete", "")
@@ -438,7 +461,8 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
                 return new_count
             } catch {
                 debug("ChatSessionActor: LLM error (unknown)")
-                _emit_actor_stream_event("error", "LLM 错误: 未知错误")
+                let _llm_unknown_payload = {"i18n_key": "error.llmUnknown", "params": dict()}
+                _emit_actor_stream_event("error", json_stringify(_llm_unknown_payload))
                 _emit_actor_stream_event("processing_complete", "")
                 reply.send({
                     "type": "error",
@@ -554,7 +578,7 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
                 let check_result = shell_exec("helen check " + path)
                 let valid = contains(check_result, "OK")
                 if !valid {
-                    warning("⚠️ helen check 失败: " + path)
+                    warning("⚠️ helen check failed: " + path)
                     return {"status": "written", "check_passed": false, "check_output": check_result}
                 }
                 return {"status": "written", "check_passed": true, "check_output": check_result}
@@ -576,7 +600,7 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
                 let check_result = shell_exec("helen check " + path)
                 let valid = contains(check_result, "OK")
                 if !valid {
-                    warning("⚠️ helen check 失败: " + path)
+                    warning("⚠️ helen check failed: " + path)
                     return {"status": "patched", "check_passed": false, "check_output": check_result}
                 }
                 return {"status": "patched", "check_passed": true, "check_output": check_result}
@@ -592,14 +616,14 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
             try {
                 let mem_size = len(read_file(".helen/MEMORY.md"))
                 if mem_size > 5120 {
-                    warnings = warnings + [".helen/MEMORY.md 超过 5KB，请整理并归档到 .helen/archive/"]
+                    warnings = warnings + [".helen/MEMORY.md exceeds 5KB — please organize and archive to .helen/archive/"]
                     memory_status["memory_md_ok"] = false
                 }
             } catch {}
             try {
                 let user_size = len(read_file(".helen/USER.md"))
                 if user_size > 2048 {
-                    warnings = warnings + [".helen/USER.md 超过 2KB，请精简用户偏好"]
+                    warnings = warnings + [".helen/USER.md exceeds 2KB — please simplify user preferences"]
                     memory_status["user_md_ok"] = false
                 }
             } catch {}
@@ -795,6 +819,7 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
 
         // ── 初始化 ──
         _init_actor_output()
+        try { init_lang() } catch {}
         try { ContextManager.init(cwd) } catch {}
         // v1.30.3: 显式重建 pinned UUIDs
         // ContextManager 是 shared store，可能与主 interpreter 共享。
@@ -890,10 +915,12 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
                     let req_id = ""
                     try { req_id = request_msg["request_id"] } catch {}
                     if req_id != "" {
+                        let _internal_params = {"message": err.message}
+                        let _internal_payload = {"i18n_key": "error.actorInternal", "params": _internal_params}
                         reply.send({
                             "type": "error",
                             "request_id": req_id,
-                            "error_msg": "Actor 内部错误: " + err.message,
+                            "error_msg": json_stringify(_internal_payload),
                             "error_type": "internal_error"
                         })
                     }

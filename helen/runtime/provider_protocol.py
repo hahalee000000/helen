@@ -445,8 +445,13 @@ def _get_providers_dir() -> Path:
 def _snapshot_providers_dir(providers_dir: Path) -> tuple | None:
     """Build a hashable snapshot of the providers directory.
 
-    Returns ``(dir_mtime, sorted_file_mtimes)`` or ``None`` if the directory
-    does not exist / is inaccessible.
+    Returns a sorted tuple of ``(filename, mtime)`` pairs, or ``None`` if the
+    directory does not exist / is inaccessible.
+
+    Note: we deliberately do NOT include the directory's own mtime.  Importing
+    provider files via ``exec_module`` creates ``__pycache__/`` inside the
+    directory, which changes ``dir_mtime`` and would cause a false cache miss
+    on every second call.
     """
     if not providers_dir.is_dir():
         return None
@@ -460,8 +465,7 @@ def _snapshot_providers_dir(providers_dir: Path) -> tuple | None:
                 file_mtimes.append((py_file.name, py_file.stat().st_mtime))
             except OSError:
                 continue
-        dir_mtime = providers_dir.stat().st_mtime
-        return (dir_mtime, tuple(sorted(file_mtimes)))
+        return tuple(sorted(file_mtimes))
     except OSError:
         return None
 
@@ -551,8 +555,7 @@ def _load_custom_providers() -> None:
         state["snapshot"] = None
         return
 
-    _dir_mtime, file_mtimes = snapshot
-    for filename, _mtime in file_mtimes:
+    for filename, _mtime in snapshot:
         filepath = providers_dir / filename
         try:
             added = _load_one_provider_file(filepath)

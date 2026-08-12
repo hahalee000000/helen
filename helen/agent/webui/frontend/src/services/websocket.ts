@@ -55,7 +55,9 @@ export class WebSocketManager {
 
   private createConnection() {
     const token = getWsToken()
-    const url = token ? `${WS_BASE_URL}?token=${encodeURIComponent(token)}` : WS_BASE_URL
+    const lang = localStorage.getItem('helen-webui-lang') || 'en'
+    const params = `token=${encodeURIComponent(token)}&lang=${lang}`
+    const url = `${WS_BASE_URL}?${params}`
     this.ws = new WebSocket(url)
 
     this.ws.onopen = () => {

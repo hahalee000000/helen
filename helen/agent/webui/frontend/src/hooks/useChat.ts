@@ -87,15 +87,15 @@ export function useChat(sessionId: string | null) {
           }
 
           case 'agent_start':
-            appendThinking(`⎿ ${content} 执行中...`)
+            appendThinking(t('message.executing', { content }))
             break
 
           case 'agent_end':
-            appendThinking(`⎿ ✓ ${content}`)
+            appendThinking(t('message.completed', { content }))
             break
 
           case 'phase_start':
-            appendThinking(`[${content}]`)
+            appendThinking(t('message.phase', { content }))
             break
 
           case 'processing_start':
@@ -104,9 +104,9 @@ export function useChat(sessionId: string | null) {
 
           case 'processing_complete': {
             removeThinking(t('message.processingInline'))
-            // 斜杠命令响应：chat.py 同步执行后通过此事件返回
-            const respContent = data.data?.content
-            const isSlash = data.data?.is_slash_response
+            const respData = data.data || {}
+            const isSlash = respData.is_slash_response
+            const respContent = respData.i18n_key ? t(respData.i18n_key, respData.params || {}) : respData.content
             if (isSlash && respContent) {
               setMessages((prev) => [
                 ...prev,
@@ -119,7 +119,7 @@ export function useChat(sessionId: string | null) {
                 }
               ])
             }
-            setIsLoading(false)  // 处理完成，重置加载状态
+            setIsLoading(false)
             break
           }
 
@@ -199,10 +199,13 @@ export function useChat(sessionId: string | null) {
             break
           }
 
-          case 'error':
-            appendThinking(`⚠️ ${content}`)
+          case 'error': {
+            const d = data.data || {}
+            const text = d.i18n_key ? t(d.i18n_key, d.params || {}) : (d.content || content)
+            appendThinking(`⚠️ ${text}`)
             setIsLoading(false)
             break
+          }
         }
       },
       {

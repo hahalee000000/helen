@@ -24,6 +24,7 @@ import std.llm.*
 import std.str.*
 import std.system.*
 import std.time.*
+import "ui_event_queue.helen"
 
 // ═══════════════════════════════════════════════════════════════════
 // 第 1 部分：输出级别常量 + 状态管理
@@ -33,11 +34,13 @@ import std.time.*
 const OUTPUT_MINIMAL = 0   // 简洁：每阶段单行 ⎿ 状态，LLM 流式最后一行覆盖
 const OUTPUT_NORMAL = 1    // 正常：agent 框 + 流式输出 + 工具详情
 const OUTPUT_VERBOSE = 2   // 详细：NORMAL + debug 日志 + 完整 LLM 响应
+const OUTPUT_RICH = 3      // 富模式：NORMAL + UI 事件发射（供 Rich CLI / Web UI 消费）
 
 // 中文模式名（供 set_output_mode 使用）
 const MODE_MINIMAL = "minimal"
 const MODE_NORMAL = "normal"
 const MODE_VERBOSE = "verbose"
+const MODE_RICH = "rich"
 
 // ── 输出状态管理（使用 shared store 聚合状态） ────────────────
 // 注：Helen v1.17+ 已修复 Issue #35，shared store 可跨模块使用。
@@ -198,7 +201,7 @@ fn set_output_level(level: int) {
     OutputState.set_level(level)
 }
 
-/** 设置输出模式（字符串："minimal" / "normal" / "verbose"）。
+/** 设置输出模式（字符串："minimal" / "normal" / "verbose" / "rich"）。
  *  返回: true 表示切换成功，false 表示未知模式名。 */
 fn set_output_mode(new_mode: str): bool {
     if new_mode == MODE_MINIMAL {
@@ -213,6 +216,10 @@ fn set_output_mode(new_mode: str): bool {
         OutputState.set_level(OUTPUT_VERBOSE)
         return true
     }
+    if new_mode == MODE_RICH {
+        OutputState.set_level(OUTPUT_RICH)
+        return true
+    }
     return false
 }
 
@@ -223,9 +230,11 @@ fn get_output_level(): int {
 
 /** 获取当前输出模式名称 */
 fn get_output_mode(): str {
-    if OutputState.get_level() <= OUTPUT_MINIMAL { return MODE_MINIMAL }
-    if OutputState.get_level() == OUTPUT_NORMAL { return MODE_NORMAL }
-    if OutputState.get_level() == OUTPUT_VERBOSE { return MODE_VERBOSE }
+    let level = OutputState.get_level()
+    if level <= OUTPUT_MINIMAL { return MODE_MINIMAL }
+    if level == OUTPUT_NORMAL { return MODE_NORMAL }
+    if level == OUTPUT_VERBOSE { return MODE_VERBOSE }
+    if level >= OUTPUT_RICH { return MODE_RICH }
     return MODE_MINIMAL
 }
 
@@ -235,6 +244,7 @@ fn get_output_mode(): str {
 fn status(msg: str) {
     if _should_output(OUTPUT_NORMAL) {
         stream_print(_colorize("⚙️  ", COLOR_CYAN) + msg + "\n")
+        ui_emit_status(msg, "info")
     }
 }
 
@@ -290,6 +300,7 @@ fn agent_start(agent_name: str) {
         stream_print("\n" + _colorize("┌─ ", COLOR_BLUE) + _colorize(agent_name, COLOR_BOLD) + " ")
         let line = "────────────────────────────────────────\n"
         stream_print(_colorize(line, COLOR_DIM))
+        ui_emit_agent_start(agent_name)
     }
 }
 
@@ -311,6 +322,7 @@ fn agent_end(agent_name: str) {
     if _should_output(OUTPUT_NORMAL) {
         let line = "└────────────────────────────────────────\n\n"
         stream_print(_colorize(line, COLOR_DIM))
+        ui_emit_agent_end(agent_name, 0)
     }
 }
 

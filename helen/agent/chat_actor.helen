@@ -134,22 +134,28 @@ fn tui_chat_handler_actor(user_input: str, file_paths: list = []): str {
     while true {
         let response = _chat_actor_mailbox.receive()
         if response == null {
-            return "错误: Actor 已退出"
+            let _p = {"i18n_key": "error.actorExited", "params": dict()}
+            return json_stringify(_p)
         }
 
         let resp_type = ""
         try { resp_type = response["type"] } catch RuntimeError err {
             // 收到错误 map（如 {'__error__': ..., 'message': ...}）
-            return "错误: Actor 返回异常: " + err.message
+            let _params = {"message": err.message}
+            let _payload = {"i18n_key": "error.actorException", "params": _params}
+            return json_stringify(_payload)
         } catch {
-            return "错误: Actor 返回异常响应"
+            let _p = {"i18n_key": "error.actorInvalidResponse", "params": dict()}
+            return json_stringify(_p)
         }
         let resp_id = ""
         try { resp_id = response["request_id"] } catch {}
 
         // actor_status（如 exit 确认）无 request_id，直接处理
         if resp_type == "actor_status" {
-            return "Actor 状态: " + response["status"]
+            let _params = {"status": response["status"]}
+            let _payload = {"i18n_key": "error.actorStatus", "params": _params}
+            return json_stringify(_payload)
         }
 
         // 按 request_id 匹配；不匹配的是过时响应，丢弃
@@ -162,10 +168,14 @@ fn tui_chat_handler_actor(user_input: str, file_paths: list = []): str {
             return response["content"]
         }
         if resp_type == "error" {
-            return "错误: " + response["error_msg"]
+            let _params = {"message": response["error_msg"]}
+            let _payload = {"i18n_key": "error.generic", "params": _params}
+            return json_stringify(_payload)
         }
 
-        return "未知响应类型: " + resp_type
+        let _params = {"type": resp_type}
+        let _payload = {"i18n_key": "error.unknownResponseType", "params": _params}
+        return json_stringify(_payload)
     }
 }
 

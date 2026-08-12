@@ -71,7 +71,7 @@ fn update_memory(category: str, key: str, value: str): map {
         content = content + "\n" + section_header + "\n\n"
     }
 
-    let entry_marker = "### " + key
+    let entry_marker = "**" + key + "**"
     if contains(content, entry_marker) {
         content = content + "\n- **" + key + "** (更新): " + value + "\n"
     } else {

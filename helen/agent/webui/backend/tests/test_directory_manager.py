@@ -4,9 +4,11 @@
 
 运行: cd webui/backend && pytest tests/test_directory_manager.py -v
 """
+import os
 import pytest
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 from app.services.directory_manager import (
     get_current_cwd,
     set_current_cwd,
@@ -16,7 +18,9 @@ from app.services.directory_manager import (
     get_project_memory_path,
     get_project_user_path,
     cwd_to_session_id,
+    _init_cwd,
 )
+from app.services import directory_manager
 
 
 class TestDirectoryManager:
@@ -140,3 +144,93 @@ class TestDirectoryManager:
         sid1 = cwd_to_session_id("/home/user/project-a")
         sid2 = cwd_to_session_id("/home/user/project-b")
         assert sid1 != sid2
+
+
+class TestInitCwd:
+    """_init_cwd() 环境变量和回退路径测试"""
+
+    def test_env_var_valid_dir(self, tmp_path):
+        """HELEN_WEBUI_CWD 指向有效目录 -> 返回该目录"""
+        target = str(tmp_path / "myproject")
+        os.makedirs(target, exist_ok=True)
+        with patch.dict(os.environ, {"HELEN_WEBUI_CWD": target}):
+            result = _init_cwd()
+        assert result == str(Path(target).resolve())
+
+    def test_env_var_nonexistent_dir_fallback(self, tmp_path, capsys):
+        """HELEN_WEBUI_CWD 指向不存在目录 -> 回退到 os.getcwd()"""
+        with patch.dict(os.environ, {"HELEN_WEBUI_CWD": "/nonexistent/path/xyz123"}):
+            result = _init_cwd()
+        # Should fall back to os.getcwd()
+        assert Path(result).is_dir()
+        captured = capsys.readouterr()
+        assert "不是有效目录" in captured.out
+
+    def test_env_var_empty(self):
+        """HELEN_WEBUI_CWD 为空 -> 使用 os.getcwd()"""
+        with patch.dict(os.environ, {"HELEN_WEBUI_CWD": ""}):
+            result = _init_cwd()
+        assert result == str(Path(os.getcwd()).resolve())
+
+    def test_env_var_not_set(self):
+        """HELEN_WEBUI_CWD 未设置 -> 使用 os.getcwd()"""
+        env = os.environ.copy()
+        env.pop("HELEN_WEBUI_CWD", None)
+        with patch.dict(os.environ, env, clear=True):
+            result = _init_cwd()
+        assert Path(result).is_dir()
+
+
+class TestGetCurrentCwdFallback:
+    """get_current_cwd() 回退路径测试"""
+
+    def test_fallback_to_home_when_cwd_deleted(self, tmp_path):
+        """逻辑 cwd 和进程 cwd 都失效 -> 回退到 HOME"""
+        # Create a temp dir, set it as logical cwd, then delete it
+        deleted_dir = str(tmp_path / "will_be_deleted")
+        os.makedirs(deleted_dir)
+        original_cwd = directory_manager._current_cwd
+        original_proc_cwd = os.getcwd()
+
+        try:
+            directory_manager._current_cwd = deleted_dir
+            os.chdir(deleted_dir)
+            # Now delete the directory
+            os.chdir(str(tmp_path))
+            os.rmdir(deleted_dir)
+
+            # Also make os.getcwd() fail by patching
+            with patch("os.getcwd", side_effect=FileNotFoundError("cwd deleted")):
+                result = get_current_cwd()
+
+            # Should fall back to HOME
+            assert result == str(Path.home())
+        finally:
+            directory_manager._current_cwd = original_cwd
+            try:
+                os.chdir(original_proc_cwd)
+            except (FileNotFoundError, OSError):
+                os.chdir(str(Path.home()))
+
+    def test_fallback_to_proc_cwd_when_logical_deleted(self, tmp_path):
+        """逻辑 cwd 失效但进程 cwd 有效 -> 回退到进程 cwd"""
+        deleted_dir = str(tmp_path / "will_be_deleted")
+        os.makedirs(deleted_dir)
+        original_cwd = directory_manager._current_cwd
+        proc_cwd = os.getcwd()
+
+        try:
+            directory_manager._current_cwd = deleted_dir
+            # Actually delete the directory so is_dir() returns False
+            os.rmdir(deleted_dir)
+            result = get_current_cwd()
+            # Should fall back to process cwd
+            assert result == str(Path(proc_cwd).resolve())
+        finally:
+            directory_manager._current_cwd = original_cwd
+
+    def test_get_display_name_default_cwd(self):
+        """get_display_name() 无参数 -> 使用 get_current_cwd()"""
+        name = get_display_name()
+        assert isinstance(name, str)
+        assert len(name) > 0
