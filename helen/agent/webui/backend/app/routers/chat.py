@@ -42,12 +42,22 @@ ALLOWED_MIME_TYPES = {
 
 @http_router.get("/status")
 async def get_chat_status():
-    """检查后端是否正在处理请求（前端 re-sync 用）
+    """检查后端是否正在处理请求（前端 re-sync 用）+ 返回系统信息
 
     前端在初始挂载和 WS 重连时调用此端点，恢复 isLoading 状态，
     让 stop/hint 按钮在页面刷新后能正确显示。
+
+    同时返回 version 和 helen_path 供 Settings 页面展示。
     """
-    return {"is_processing": stream_registry.is_processing()}
+    import helen
+    helen_path = str(Path(helen.__file__).parent)
+    return {
+        "is_processing": stream_registry.is_processing(),
+        "version": helen.__version__,
+        "config": {
+            "helen_path": helen_path,
+        },
+    }
 
 
 # === 目录管理 API（单会话模式） ===

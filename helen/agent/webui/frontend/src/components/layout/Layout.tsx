@@ -2,6 +2,7 @@ import { ReactNode, useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { MessageSquare, Settings } from 'lucide-react'
 import { cn } from '@/utils/cn'
+import { useT, LanguageSwitcher } from '@/i18n'
 
 interface LayoutProps {
   children: ReactNode
@@ -10,6 +11,7 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
   const location = useLocation()
   const [version, setVersion] = useState('')
+  const t = useT()
 
   useEffect(() => {
     fetch('/api/status')
@@ -19,13 +21,13 @@ export function Layout({ children }: LayoutProps) {
   }, [])
 
   const navItems = [
-    { path: '/', label: '聊天', icon: MessageSquare },
-    { path: '/settings', label: '设置', icon: Settings },
+    { path: '/', label: t('nav.chat'), icon: MessageSquare },
+    { path: '/settings', label: t('nav.settings'), icon: Settings },
   ]
 
   return (
     <div className="flex h-screen bg-background">
-      {/* 侧边栏 */}
+      {/* Sidebar */}
       <aside className="w-64 border-r bg-card" style={{ backgroundColor: '#EAE9E5' }}>
         <div className="flex flex-col h-full">
           {/* Logo */}
@@ -37,7 +39,7 @@ export function Layout({ children }: LayoutProps) {
             </div>
           </div>
 
-          {/* 导航 */}
+          {/* Navigation */}
           <nav className="flex-1 p-4">
             <ul className="space-y-2">
               {navItems.map((item) => {
@@ -64,16 +66,19 @@ export function Layout({ children }: LayoutProps) {
             </ul>
           </nav>
 
-          {/* 底部 */}
-          <div className="p-4 border-t">
+          {/* Footer */}
+          <div className="p-4 border-t space-y-2">
             <p className="text-xs text-muted-foreground text-center">
               Helen Programming Agent{version ? ` v${version}` : ''}
             </p>
+            <div className="flex justify-center">
+              <LanguageSwitcher />
+            </div>
           </div>
         </div>
       </aside>
 
-      {/* 主内容 */}
+      {/* Main content */}
       <main className="flex-1 overflow-hidden">
         {children}
       </main>

@@ -3,17 +3,19 @@ import { Message } from '@/types'
 import { formatTime } from '@/utils/format'
 import { User, Wrench, CheckCircle2 } from 'lucide-react'
 import { AttachmentView } from './AttachmentView'
+import { useT } from '@/i18n'
 
 interface MessageListProps {
   messages: Message[]
 }
 
 export function MessageList({ messages }: MessageListProps) {
+  const t = useT()
   if (messages.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-4">
         <img src="/helen-logo-128.png" alt="Helen" className="w-24 h-24 rounded-2xl opacity-50" />
-        <p>开始对话吧！</p>
+        <p>{t('chat.empty')}</p>
       </div>
     )
   }
@@ -268,10 +270,11 @@ function parseKwargs(s: string): Record<string, string> {
 }
 
 function ToolCallView({ raw }: { raw: string }) {
+  const t = useT()
   const firstLine = raw.split('\n')[0]
   const info = parseToolCallLine(firstLine)
   if (!info) {
-    // 解析失败，回退到原样显示（dim 样式）
+    // Parse failed, fall back to raw display (dim style)
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono my-1">
         <Wrench className="w-3 h-3 flex-shrink-0" />
@@ -280,7 +283,7 @@ function ToolCallView({ raw }: { raw: string }) {
     )
   }
 
-  const { label, detail } = formatToolCall(info)
+  const { label, detail } = formatToolCall(info, t)
 
   return (
     <div className="flex items-start gap-2 rounded border border-border/50 bg-muted/30 px-3 py-2 my-2 text-xs">
@@ -300,9 +303,10 @@ function ToolCallView({ raw }: { raw: string }) {
 // ── 工具结果视图 ──
 
 function ToolResultView({ raw }: { raw: string }) {
+  const t = useT()
   const returnedPos = raw.indexOf(' returned: ')
   if (returnedPos < 0) {
-    // 没有 JSON 部分，只显示状态
+    // No JSON part, just show status
     return (
       <div className="flex items-center gap-2 text-xs text-green-600 my-1">
         <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
@@ -327,7 +331,7 @@ function ToolResultView({ raw }: { raw: string }) {
     )
   }
 
-  const summary = formatToolResult(prefix, parsed)
+  const summary = formatToolResult(prefix, parsed, t)
 
   return (
     <div className="flex items-start gap-2 text-xs text-green-700 dark:text-green-400 my-1">
@@ -337,64 +341,72 @@ function ToolResultView({ raw }: { raw: string }) {
   )
 }
 
-// ── 工具特定格式化 ──
+// ── Tool-specific formatting ──
 
-function formatToolCall(info: ToolCallInfo): { label: string; detail: string } {
+type TFn = (key: any, params?: Record<string, string | number>) => string
+
+function formatToolCall(info: ToolCallInfo, t: TFn): { label: string; detail: string } {
   const { name, args } = info
   switch (name) {
     case 'write_file': {
       const path = args.path || ''
       const content = args.content || ''
       return {
-        label: `写入文件 ${shortPath(path)}`,
-        detail: `${formatBytes(content.length)} · ${countLines(content)} 行`
+        label: t('tool.write', { path: shortPath(path) }),
+        detail: t('tool.writeDetail', { size: formatBytes(content.length), n: countLines(content) })
       }
     }
     case 'read_file':
-      return { label: `读取文件`, detail: shortPath(args.path || '') }
+      return { label: t('tool.read'), detail: shortPath(args.path || '') }
     case 'patch_code_file':
-      return { label: `修改文件`, detail: shortPath(args.path || '') }
+      return { label: t('tool.patch'), detail: shortPath(args.path || '') }
     case 'shell_exec':
-      return { label: `执行命令`, detail: truncate(args.command || '', 80) }
+      return { label: t('tool.shell'), detail: truncate(args.command || '', 80) }
     case 'list_dir':
-      return { label: `列出目录`, detail: shortPath(args.path || '.') }
+      return { label: t('tool.listDir'), detail: shortPath(args.path || '.') }
     case 'run_helen_check':
-      return { label: `Helen 语法检查`, detail: shortPath(args.path || '') }
+      return { label: t('tool.helenCheck'), detail: shortPath(args.path || '') }
     case 'run_helen_tests':
-      return { label: `运行测试`, detail: shortPath(args.path || '') }
+      return { label: t('tool.helenTests'), detail: shortPath(args.path || '') }
     case 'quality_score':
-      return { label: `质量评估`, detail: shortPath(args.path || args.filename || '') }
+      return { label: t('tool.quality'), detail: shortPath(args.path || args.filename || '') }
     case 'web_search':
-      return { label: `网络搜索`, detail: truncate(args.query || '', 60) }
+      return { label: t('tool.webSearch'), detail: truncate(args.query || '', 60) }
     case 'web_fetch':
-      return { label: `获取网页`, detail: truncate(args.url || '', 60) }
+      return { label: t('tool.webFetch'), detail: truncate(args.url || '', 60) }
     default:
       return { label: name, detail: Object.keys(args).join(', ') }
   }
 }
 
-function formatToolResult(toolName: string, data: any): string {
+function formatToolResult(toolName: string, data: any, t: TFn): string {
   if (!data || typeof data !== 'object') return `${toolName}: ${String(data)}`
   switch (toolName) {
     case 'write_file':
-      return `✓ 已写入 ${shortPath(data.path || '')}${data.bytes_written ? ` (${formatBytes(data.bytes_written)})` : ''}`
+      return data.bytes_written
+        ? t('msg.writtenWithSize', { path: shortPath(data.path || ''), size: formatBytes(data.bytes_written) })
+        : t('msg.written', { path: shortPath(data.path || '') })
     case 'read_file': {
       const content = data.content || ''
       const lines = countLines(content)
-      return `✓ ${shortPath(data.path || '')} · ${lines} 行`
+      return `✓ ${shortPath(data.path || '')} · ${t('msg.lines', { n: lines })}`
     }
     case 'shell_exec':
-      return `✓ 命令完成${data.exit_code !== undefined ? ` (exit ${data.exit_code})` : ''}`
+      return data.exit_code !== undefined
+        ? t('msg.commandDoneWithExit', { code: data.exit_code })
+        : t('msg.commandDone')
     case 'run_helen_check':
-      return data.status === 'success' ? '✓ 语法检查通过' : `✗ 语法错误: ${data.error || '未知'}`
+      return data.status === 'success'
+        ? t('msg.syntaxPassed')
+        : t('msg.syntaxError', { error: data.error || t('msg.unknown') })
     case 'run_helen_tests':
       return data.status === 'success'
-        ? `✓ 测试通过${data.passed ? ` (${data.passed}/${data.total})` : ''}`
-        : `✗ 测试失败${data.failed ? ` (${data.failed}/${data.total})` : ''}`
+        ? (data.passed ? t('msg.testsPassedCount', { passed: data.passed, total: data.total }) : t('msg.testsPassed'))
+        : (data.failed ? t('msg.testsFailedCount', { failed: data.failed, total: data.total }) : t('msg.testsFailed'))
     case 'quality_score':
-      return data.score !== undefined ? `质量分: ${data.score}` : '✓ 评估完成'
+      return data.score !== undefined ? t('msg.qualityScore', { score: data.score }) : t('msg.evalComplete')
     default:
-      return `✓ ${toolName}: ${data.status || '完成'}`
+      return `✓ ${toolName}: ${data.status || t('msg.done')}`
   }
 }
 
@@ -450,6 +462,7 @@ function generateMermaidId() {
 function MermaidDiagram({ chart }: { chart: string }) {
   const [svg, setSvg] = useState<string>('')
   const [error, setError] = useState<string>('')
+  const t = useT()
 
   useEffect(() => {
     let cancelled = false
@@ -467,7 +480,7 @@ function MermaidDiagram({ chart }: { chart: string }) {
         })
         .catch((err) => {
           if (!cancelled) {
-            const msg = typeof err === 'string' ? err : (err.message || 'Mermaid 渲染失败')
+            const msg = typeof err === 'string' ? err : (err.message || t('msg.mermaidFailed'))
             setError(msg)
             setSvg('')
           }

@@ -1,17 +1,20 @@
 import { useEffect, useState, useCallback, type ReactNode } from 'react'
 import { getStoredToken, setStoredToken, onAuthRequired } from '@/services/api'
+import { useT } from '@/i18n'
 
 interface Props {
   children: ReactNode
 }
 
 /**
- * Auth gate: 在首次 401 或 token 缺失时弹出输入框。
- * 一旦用户输入正确 token 并存入 localStorage，子组件即可正常渲染。
+ * Auth gate: shows a token prompt on first 401 or missing token.
+ * Once the user enters a correct token and stores it in localStorage,
+ * child components render normally.
  */
 export function AuthGate({ children }: Props) {
   const [token, setToken] = useState<string>(() => getStoredToken())
   const [prompting, setPrompting] = useState(false)
+  const t = useT()
 
   const askForToken = useCallback(() => {
     setPrompting(true)
@@ -22,9 +25,9 @@ export function AuthGate({ children }: Props) {
     return unsub
   }, [askForToken])
 
-  // 初次启动：主动探测一次 /api/status，若 401 则立即弹框
+  // Initial startup: probe /api/status, if 401 prompt immediately
   useEffect(() => {
-    if (token) return // 已有 token，跳过探测
+    if (token) return // already have token, skip probe
     const probe = async () => {
       try {
         const resp = await fetch('/api/status')
@@ -32,7 +35,7 @@ export function AuthGate({ children }: Props) {
           setPrompting(true)
         }
       } catch {
-        // 网络错误（后端未启动）：不弹，让用户看到正常的连接错误
+        // Network error (backend not running): don't prompt, let user see normal connection error
       }
     }
     probe()
@@ -44,7 +47,7 @@ export function AuthGate({ children }: Props) {
     setStoredToken(trimmed)
     setToken(trimmed)
     setPrompting(false)
-    // 触发页面重载以便所有已缓存的请求带上 token
+    // Reload page so all cached requests carry the token
     window.location.reload()
   }
 
@@ -54,7 +57,7 @@ export function AuthGate({ children }: Props) {
     setPrompting(false)
   }
 
-  // 没 token 且不在弹框状态：等 probe 决定
+  // No token and not prompting: wait for probe to decide
   if (!token && !prompting) {
     return null
   }
@@ -70,15 +73,15 @@ export function AuthGate({ children }: Props) {
             handleSubmit(input)
           }}
         >
-          <h2 className="text-lg font-semibold">需要访问 Token</h2>
+          <h2 className="text-lg font-semibold">{t('auth.title')}</h2>
           <p className="text-sm text-muted-foreground">
-            后端要求 X-Helen-Token。请输入启动日志中打印的 token，或 <code className="font-mono">~/.helen/webui_token</code> 文件中的值。
+            {t('auth.description')} <code className="font-mono">~/.helen/webui_token</code> {t('auth.descriptionFile')}
           </p>
           <input
             name="token"
             type="password"
             autoFocus
-            placeholder="粘贴 token"
+            placeholder={t('auth.placeholder')}
             className="w-full px-3 py-2 border rounded font-mono text-sm"
           />
           <div className="flex gap-2 justify-end">
@@ -88,14 +91,14 @@ export function AuthGate({ children }: Props) {
                 onClick={handleClear}
                 className="px-3 py-1.5 text-sm border rounded hover:bg-destructive/10"
               >
-                清除
+                {t('auth.clear')}
               </button>
             )}
             <button
               type="submit"
               className="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90"
             >
-              确认
+              {t('auth.submit')}
             </button>
           </div>
         </form>

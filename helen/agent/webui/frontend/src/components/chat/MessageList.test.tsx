@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen } from '@/test/test-utils'
 import { MessageList } from './MessageList'
 import { Message } from '@/types'
 
 describe('MessageList', () => {
   it('renders empty state', () => {
     render(<MessageList messages={[]} />)
-    expect(screen.getByText('开始对话吧！')).toBeInTheDocument()
+    expect(screen.getByText('Start a conversation!')).toBeInTheDocument()
   })
 
   it('renders messages', () => {

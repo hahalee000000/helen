@@ -3,6 +3,7 @@ import { MessageList } from './MessageList'
 import { MessageInput } from './MessageInput'
 import { StatusLine } from './StatusLine'
 import { useChat } from '@/hooks/useChat'
+import { useT } from '@/i18n'
 import { ArrowDown } from 'lucide-react'
 
 interface ChatWindowProps {
@@ -15,7 +16,8 @@ const BOTTOM_THRESHOLD = 50
 export function ChatWindow({ sessionId }: ChatWindowProps) {
   const { messages, sendMessage, stopGeneration, isLoading, isConnected, statusline } = useChat(sessionId)
   const containerRef = useRef<HTMLDivElement>(null)
-  // isAtBottomRef:用户是否在底部(由 scroll 事件维护,不受 DOM 内容增长影响)
+  const t = useT()
+  // isAtBottomRef: user is at bottom (maintained by scroll events, unaffected by content growth)
   const isAtBottomRef = useRef(true)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
 
@@ -73,8 +75,8 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground">
         <div className="text-center">
-          <p className="text-xl mb-2">选择一个会话开始聊天</p>
-          <p className="text-sm">或创建新会话</p>
+          <p className="text-xl mb-2">{t('chat.selectSession')}</p>
+          <p className="text-sm">{t('chat.orCreate')}</p>
         </div>
       </div>
     )
@@ -88,13 +90,13 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
         <div className="flex items-center gap-2 flex-1">
           <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
           <span className="text-sm text-muted-foreground">
-            {isConnected ? '已连接' : '未连接'}
+            {isConnected ? t('status.connected') : t('status.disconnected')}
           </span>
         </div>
         {isLoading && (
           <span className="flex items-center gap-2 text-sm text-muted-foreground">
             <img src="/helen-logo-64.png" alt="" className="w-4 h-4 rounded-full animate-pulse" />
-            Helen 思考中...
+            {t('chat.thinking')}
           </span>
         )}
       </div>
@@ -117,10 +119,10 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
           <button
             onClick={() => scrollToBottom()}
             className="absolute bottom-4 right-4 z-10 flex items-center gap-1 rounded-full bg-primary text-primary-foreground shadow-lg px-3 py-2 text-sm hover:opacity-90 transition-opacity"
-            title="滚动到底部"
+            title={t('chat.scrollBottom')}
           >
             <ArrowDown className="w-4 h-4" />
-            <span>回到底部</span>
+            <span>{t('chat.atBottom')}</span>
           </button>
         )}
       </div>

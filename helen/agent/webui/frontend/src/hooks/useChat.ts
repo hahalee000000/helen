@@ -3,6 +3,7 @@ import { Message, StatuslineData, Attachment } from '@/types'
 import { WebSocketManager } from '@/services/websocket'
 import { api } from '@/services/api'
 import { useChatStore } from '@/stores/chatStore'
+import { useT } from '@/i18n'
 
 /**
  * v6.0 单会话架构：移除了 Helen session ID 的 localStorage 追踪
@@ -15,6 +16,7 @@ export function useChat(sessionId: string | null) {
   const [isConnected, setIsConnected] = useState(false)
   const [statusline, setStatusline] = useState<StatuslineData>({ usageRatio: 0 })
   const wsManagerRef = useRef<WebSocketManager | null>(null)
+  const t = useT()
 
   // 加载历史消息
   useEffect(() => {
@@ -97,11 +99,11 @@ export function useChat(sessionId: string | null) {
             break
 
           case 'processing_start':
-            appendThinking('⎿ 处理中...')
+            appendThinking(t('message.processingInline'))
             break
 
           case 'processing_complete': {
-            removeThinking('⎿ 处理中...')
+            removeThinking(t('message.processingInline'))
             // 斜杠命令响应：chat.py 同步执行后通过此事件返回
             const respContent = data.data?.content
             const isSlash = data.data?.is_slash_response
@@ -127,7 +129,7 @@ export function useChat(sessionId: string | null) {
 
           case 'cancelled':
             setIsLoading(false)
-            appendThinking('⚠️ 已停止生成')
+            appendThinking(t('message.stoppedInline'))
             break
 
           case 'hint_queued': {
@@ -139,18 +141,18 @@ export function useChat(sessionId: string | null) {
                   : m
               ))
             }
-            appendThinking('💡 提示已排队，待当前工具结束后注入 LLM')
+            appendThinking(t('message.queuedInline'))
             break
           }
 
           case 'hint_injected': {
-            removeThinking('💡 提示已排队，待当前工具结束后注入 LLM')
-            appendThinking('💡 提示已注入 LLM 上下文')
+            removeThinking(t('message.queuedInline'))
+            appendThinking(t('message.injectedInline'))
             setMessages(prev => prev.map(m =>
               m.hintStatus === 'queued' ? { ...m, hintStatus: 'injected' as const } : m
             ))
             setTimeout(() => {
-              removeThinking('💡 提示已注入 LLM 上下文')
+              removeThinking(t('message.injectedInline'))
             }, 2000)
             break
           }
