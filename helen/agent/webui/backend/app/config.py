@@ -7,20 +7,20 @@ import secrets
 def _default_helen_path() -> str:
     """自动推断 helenagent 项目根目录
 
-    查找策略：从 webui 目录向上遍历，找到包含 chat_tui.helen 的目录。
+    查找策略：从 webui 目录向上遍历，找到包含 chat_actor.helen 的目录。
     如果找不到，默认返回 webui 的父目录（通常是 helenagent/）。
     """
     # 从本文件向上查找（webui/backend/app/config.py → helenagent/）
     here = Path(__file__).resolve()
     # parents[3] = helenagent/（webui 的父目录）
     candidate = here.parents[3]
-    if (candidate / "chat_tui.helen").exists():
+    if (candidate / "chat_actor.helen").exists():
         return str(candidate)
 
     # 兜底：从当前工作目录向上查找
     cwd = Path.cwd()
     for parent in [cwd] + list(cwd.parents):
-        if (parent / "chat_tui.helen").exists():
+        if (parent / "chat_actor.helen").exists():
             return str(parent)
 
     # 最后兜底：webui 的父目录

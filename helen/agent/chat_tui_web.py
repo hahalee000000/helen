@@ -49,8 +49,8 @@ if _memento_path.exists():
     except Exception as e:
         print(f"[Session] memento 读取失败（忽略）: {e}", file=sys.stderr)
 
-# 导入 actor 接口（从 chat_tui.helen）
-from chat_tui import (
+# 导入 actor 接口（从 chat_actor.helen）
+from chat_actor import (
     spawn_chat_actor,
     tui_chat_handler_actor,
     TUIChatAgent,
@@ -61,7 +61,7 @@ from chat_tui import (
 
 
 def get_saved_child_sid() -> str:
-    """返回 memento 中保存的子 session_id（供 chat_tui.helen 读取）"""
+    """返回 memento 中保存的子 session_id（供 chat_actor.helen 读取）"""
     return _saved_child_sid
 
 

@@ -15,10 +15,8 @@
 //   MINIMAL (0): 简洁模式（默认）— 每阶段单行 ⎿ 状态
 //   NORMAL  (1): 正常模式 — agent 框 + 流式输出 + 工具详情
 //   VERBOSE (2): 详细模式 — NORMAL + debug 日志 + 完整 LLM 响应
-//   RICH    (3): Rich UI 模式 — 事件驱动，Markdown 渲染
 //
 
-// 导入 UI 事件队列（用于 OUTPUT_RICH 模式）
 import std.core.*
 import std.data.*
 import std.io.*
@@ -26,25 +24,20 @@ import std.llm.*
 import std.str.*
 import std.system.*
 import std.time.*
-import "ui_event_queue.helen"
-// 导入 UI 桥接（用于实时事件渲染）
-import "ui_bridge.helen"
 
 // ═══════════════════════════════════════════════════════════════════
 // 第 1 部分：输出级别常量 + 状态管理
 // ═══════════════════════════════════════════════════════════════════
 
-// 四档输出模式（Claude Code 风格）
+// 三档输出模式（Claude Code 风格）
 const OUTPUT_MINIMAL = 0   // 简洁：每阶段单行 ⎿ 状态，LLM 流式最后一行覆盖
 const OUTPUT_NORMAL = 1    // 正常：agent 框 + 流式输出 + 工具详情
 const OUTPUT_VERBOSE = 2   // 详细：NORMAL + debug 日志 + 完整 LLM 响应
-const OUTPUT_RICH = 3      // 丰富：Rich UI（事件驱动，Markdown 渲染）
 
 // 中文模式名（供 set_output_mode 使用）
 const MODE_MINIMAL = "minimal"
 const MODE_NORMAL = "normal"
 const MODE_VERBOSE = "verbose"
-const MODE_RICH = "rich"
 
 // ── 输出状态管理（使用 shared store 聚合状态） ────────────────
 // 注：Helen v1.17+ 已修复 Issue #35，shared store 可跨模块使用。
@@ -196,14 +189,6 @@ fn _should_output(required_level: int): bool {
     return OutputState.get_level() >= required_level
 }
 
-/** RICH 模式实时渲染辅助：立即 flush 事件队列并重绘。 */
-fn _rich_render_now() {
-    if OutputState.get_level() == OUTPUT_RICH && ui_is_initialized() {
-        let events = flush_ui_events()
-        ui_render_events(events)
-    }
-}
-
 // ═══════════════════════════════════════════════════════════════════
 // 第 2 部分：输出级别控制 + 基础输出函数
 // ═══════════════════════════════════════════════════════════════════
@@ -213,7 +198,7 @@ fn set_output_level(level: int) {
     OutputState.set_level(level)
 }
 
-/** 设置输出模式（字符串："minimal" / "normal" / "verbose" / "rich"）。
+/** 设置输出模式（字符串："minimal" / "normal" / "verbose"）。
  *  返回: true 表示切换成功，false 表示未知模式名。 */
 fn set_output_mode(new_mode: str): bool {
     if new_mode == MODE_MINIMAL {
@@ -226,10 +211,6 @@ fn set_output_mode(new_mode: str): bool {
     }
     if new_mode == MODE_VERBOSE {
         OutputState.set_level(OUTPUT_VERBOSE)
-        return true
-    }
-    if new_mode == MODE_RICH {
-        OutputState.set_level(OUTPUT_RICH)
         return true
     }
     return false
@@ -245,7 +226,6 @@ fn get_output_mode(): str {
     if OutputState.get_level() <= OUTPUT_MINIMAL { return MODE_MINIMAL }
     if OutputState.get_level() == OUTPUT_NORMAL { return MODE_NORMAL }
     if OutputState.get_level() == OUTPUT_VERBOSE { return MODE_VERBOSE }
-    if OutputState.get_level() == OUTPUT_RICH { return MODE_RICH }
     return MODE_MINIMAL
 }
 
@@ -253,11 +233,6 @@ fn get_output_mode(): str {
 
 /** 系统状态消息（NORMAL 级别） */
 fn status(msg: str) {
-    if OutputState.get_level() == OUTPUT_RICH {
-        ui_emit_status(msg, "info")
-        _rich_render_now()
-        return
-    }
     if _should_output(OUTPUT_NORMAL) {
         stream_print(_colorize("⚙️  ", COLOR_CYAN) + msg + "\n")
     }
@@ -265,11 +240,6 @@ fn status(msg: str) {
 
 /** 成功消息（NORMAL 级别） */
 fn success(msg: str) {
-    if OutputState.get_level() == OUTPUT_RICH {
-        ui_emit_status(msg, "success")
-        _rich_render_now()
-        return
-    }
     if _should_output(OUTPUT_NORMAL) {
         stream_print(_colorize("✅ ", COLOR_GREEN) + _colorize(msg, COLOR_BOLD) + "\n")
     }
@@ -277,11 +247,6 @@ fn success(msg: str) {
 
 /** 错误消息（MINIMAL 级别 - 总是显示） */
 fn error(msg: str) {
-    if OutputState.get_level() == OUTPUT_RICH {
-        ui_emit_status(msg, "error")
-        _rich_render_now()
-        return
-    }
     if _should_output(OUTPUT_MINIMAL) {
         stream_print(_colorize("❌ ", COLOR_RED) + _colorize(msg, COLOR_BOLD) + "\n")
     }
@@ -289,11 +254,6 @@ fn error(msg: str) {
 
 /** 警告消息（NORMAL 级别） */
 fn warning(msg: str) {
-    if OutputState.get_level() == OUTPUT_RICH {
-        ui_emit_status(msg, "warning")
-        _rich_render_now()
-        return
-    }
     if _should_output(OUTPUT_NORMAL) {
         stream_print(_colorize("⚠️  ", COLOR_YELLOW) + msg + "\n")
     }
@@ -319,11 +279,6 @@ fn phase_start(phase_name: str) {
 
 /** Agent 输出开始。 */
 fn agent_start(agent_name: str) {
-    if OutputState.get_level() == OUTPUT_RICH {
-        ui_emit_agent_start(agent_name)
-        _rich_render_now()
-        return
-    }
     if OutputState.get_level() <= OUTPUT_MINIMAL {
         MinimalModeState.set_thinking_active(true)
         MinimalModeState.set_thinking_agent(agent_name)
@@ -340,18 +295,6 @@ fn agent_start(agent_name: str) {
 
 /** Agent 输出结束。 */
 fn agent_end(agent_name: str) {
-    if OutputState.get_level() == OUTPUT_RICH {
-        let duration_ms = 0
-        if MinimalModeState.get_thinking_start() > 0 {
-            try {
-                let ts_now = int(time())  // 跨平台：用 stdlib time()
-                duration_ms = (ts_now - MinimalModeState.get_thinking_start()) * 1000
-            } catch {}
-        }
-        ui_emit_agent_end(agent_name, duration_ms)
-        _rich_render_now()
-        return
-    }
     if OutputState.get_level() <= OUTPUT_MINIMAL {
         let elapsed = ""
         try {
@@ -444,11 +387,6 @@ fn smart_llm_chunk(text: str) {
     LLMStreamState.append_chunk(text)
     LLMStreamState.increment_chunk_count()
 
-    // OUTPUT_RICH：发射事件
-    if OutputState.get_level() == OUTPUT_RICH {
-        ui_emit_llm_chunk(MinimalModeState.get_thinking_agent(), text)
-        return
-    }
 
     let display_chunk = replace(text, "\\n", "\n")
 
@@ -646,9 +584,6 @@ fn chat_llm_chunk(text: str) {
         return
     }
 
-    if OutputState.get_level() == OUTPUT_RICH {
-        return
-    }
 
     let display_chunk = replace(text, "\\n", "\n")
     stream_print(display_chunk)

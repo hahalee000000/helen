@@ -39,7 +39,7 @@ def get_status_snapshot(usage_ratio: float = -1.0, model: str = "") -> dict:
     Args:
         usage_ratio: 上下文占用率（0.0 - 1.0+，由 Helen context_stats()["usage_ratio"] 提供）。
                      负数表示未知，前端显示为 0。
-        model: LLM 模型名（由 Helen 侧传入，与 chat_tui.helen agent 定义一致）
+        model: LLM 模型名（由 Helen 侧传入，与 chat_actor.helen agent 定义一致）
     """
     global _static_cache
     with _static_lock:

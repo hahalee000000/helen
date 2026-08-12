@@ -68,7 +68,6 @@ fn _test_output_level() {
     _test_assert_true(OUTPUT_MINIMAL == 0, "OUTPUT_MINIMAL = 0")
     _test_assert_true(OUTPUT_NORMAL == 1, "OUTPUT_NORMAL = 1")
     _test_assert_true(OUTPUT_VERBOSE == 2, "OUTPUT_VERBOSE = 2")
-    _test_assert_true(OUTPUT_RICH == 3, "OUTPUT_RICH = 3")
 
     // 测试 set_output_level
     set_output_level(OUTPUT_VERBOSE)

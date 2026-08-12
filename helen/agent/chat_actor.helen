@@ -1,4 +1,4 @@
-// chat_tui.helen — Web UI 的 Helen 侧接口（Actor 模式）
+// chat_actor.helen — Web UI 的 Helen 侧接口（Actor 模式）
 //
 // v1.0 架构简化：移除非 actor 路径，只保留 actor 生命周期管理。
 // 所有对话和斜杠命令都通过 ChatSessionActor 处理。
@@ -41,7 +41,7 @@ fn spawn_chat_actor(): map {
     try {
         // 初始化输出和上下文管理器（主线程侧）
         init_output()
-        set_output_level(OUTPUT_RICH)
+        set_output_level(OUTPUT_MINIMAL)
         try { ContextManager.init() } catch {}
 
         // 环境事实

@@ -8,7 +8,7 @@ Helen 端通过 Python FFI 调用 emit_stream_event()，
 import sys
 from typing import Callable, Optional
 
-# 全局回调函数（由 chat_tui.py 注册）
+# 全局回调函数（由 chat_actor.helen 注册）
 _stream_callback: Optional[Callable[[str, str], None]] = None
 
 

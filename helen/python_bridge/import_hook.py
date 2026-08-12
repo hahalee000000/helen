@@ -37,7 +37,7 @@ def set_session_id(session_id: str | None) -> None:
     Example:
         from helen.python_bridge import set_session_id
         set_session_id("session_1784706227_daa6c8d4")
-        from chat_tui import TUIChatAgent  # 复用指定 session
+        from chat_actor import TUIChatAgent  # 复用指定 session
     """
     global _session_id_override
     _session_id_override = session_id
