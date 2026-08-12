@@ -385,3 +385,290 @@ class TestVolcengineEndpointIdValidation:
             model_id="",
         )
         assert payload["model"] == ""
+
+
+# ---------------------------------------------------------------------------
+# Custom Provider Dynamic Loading
+# ---------------------------------------------------------------------------
+
+
+import copy
+
+from helen.runtime import provider_protocol as pp
+
+
+@pytest.fixture
+def isolated_custom_providers(monkeypatch, tmp_path):
+    """Isolate custom provider state + redirect providers dir to tmp_path."""
+    # Save original state
+    original_state = copy.deepcopy(pp._CUSTOM_PROVIDERS_STATE)
+    original_map_snapshot = dict(pp._PROTOCOL_NAME_MAP)
+
+    # Reset state for the test
+    pp._CUSTOM_PROVIDERS_STATE["loaded"] = False
+    pp._CUSTOM_PROVIDERS_STATE["snapshot"] = None
+    pp._CUSTOM_PROVIDERS_STATE["loaded_names"] = set()
+
+    # Redirect get_helen_home() so providers dir is under tmp_path
+    monkeypatch.setattr(
+        "helen.runtime.provider_protocol._get_providers_dir",
+        lambda: tmp_path / "providers",
+    )
+
+    yield tmp_path / "providers"
+
+    # Restore
+    pp._CUSTOM_PROVIDERS_STATE.clear()
+    pp._CUSTOM_PROVIDERS_STATE.update(original_state)
+    pp._PROTOCOL_NAME_MAP.clear()
+    pp._PROTOCOL_NAME_MAP.update(original_map_snapshot)
+
+
+_VALID_PROVIDER_SOURCE = '''
+from helen.runtime.provider_protocol import PlatformProtocol
+
+
+class FooProtocol(PlatformProtocol):
+    name = "foo"
+
+    def build_request_payload(self, base_payload, *, model_id,
+                              thinking_enabled=False, reasoning_effort=None):
+        base_payload["foo_marker"] = True
+        return base_payload
+'''
+
+
+class TestCustomProviderLoading:
+    """Test dynamic loading from ~/.helen/providers/."""
+
+    def test_no_providers_dir_is_noop(self, isolated_custom_providers, caplog):
+        """Non-existent providers dir should not error."""
+        import logging
+        with caplog.at_level(logging.WARNING, logger='helen.runtime.provider_protocol'):
+            pp._load_custom_providers()
+        assert not any("failed" in r.message.lower() for r in caplog.records)
+        assert pp._CUSTOM_PROVIDERS_STATE["loaded"] is True
+        assert pp._CUSTOM_PROVIDERS_STATE["loaded_names"] == set()
+
+    def test_empty_providers_dir_is_noop(self, isolated_custom_providers):
+        """Empty providers dir should not register anything."""
+        isolated_custom_providers.mkdir(parents=True)
+        pp._load_custom_providers()
+        assert pp._CUSTOM_PROVIDERS_STATE["loaded_names"] == set()
+
+    def test_loads_valid_provider_by_name(self, isolated_custom_providers):
+        """Custom provider is registered into _PROTOCOL_NAME_MAP by its `name`."""
+        providers_dir = isolated_custom_providers
+        providers_dir.mkdir(parents=True)
+        (providers_dir / "foo.py").write_text(_VALID_PROVIDER_SOURCE)
+
+        pp._load_custom_providers()
+
+        assert "foo" in pp._PROTOCOL_NAME_MAP
+        assert pp._PROTOCOL_NAME_MAP["foo"].name == "foo"
+        assert "foo" in pp._CUSTOM_PROVIDERS_STATE["loaded_names"]
+
+    def test_detect_protocol_resolves_custom_name(self, isolated_custom_providers):
+        """detect_protocol() with custom provider name should return the custom class."""
+        providers_dir = isolated_custom_providers
+        providers_dir.mkdir(parents=True)
+        (providers_dir / "foo.py").write_text(_VALID_PROVIDER_SOURCE)
+
+        protocol = pp.detect_protocol("https://unknown.api/v1", protocol_name="foo")
+        assert protocol.name == "foo"
+        # The override method should actually be called
+        payload = protocol.build_request_payload(
+            {"model": "m"}, model_id="m",
+        )
+        assert payload.get("foo_marker") is True
+
+    def test_builtin_name_not_overridden(self, isolated_custom_providers, caplog):
+        """Custom provider using a built-in name is skipped."""
+        import logging
+        providers_dir = isolated_custom_providers
+        providers_dir.mkdir(parents=True)
+        # Try to override the built-in "openai" name
+        (providers_dir / "evil.py").write_text('''
+from helen.runtime.provider_protocol import OpenAIProtocol
+
+
+class EvilProtocol(OpenAIProtocol):
+    name = "openai"
+''')
+
+        with caplog.at_level(logging.DEBUG, logger='helen.runtime.provider_protocol'):
+            pp._load_custom_providers()
+
+        # Still the original built-in class
+        assert pp._PROTOCOL_NAME_MAP["openai"] is pp.OpenAIProtocol
+        assert "openai" not in pp._CUSTOM_PROVIDERS_STATE["loaded_names"]
+        assert any("shadows built-in" in r.message for r in caplog.records)
+
+    def test_invalid_python_is_skipped(self, isolated_custom_providers, caplog):
+        """Syntactically invalid .py file is logged and skipped."""
+        import logging
+        providers_dir = isolated_custom_providers
+        providers_dir.mkdir(parents=True)
+        (providers_dir / "broken.py").write_text("def foo(:\n  this is not python\n")
+
+        # Also write a valid one next to it — should still load
+        (providers_dir / "good.py").write_text(_VALID_PROVIDER_SOURCE)
+
+        with caplog.at_level(logging.WARNING, logger='helen.runtime.provider_protocol'):
+            pp._load_custom_providers()
+
+        assert any("failed to load" in r.message for r in caplog.records)
+        # The good one is still loaded
+        assert "foo" in pp._PROTOCOL_NAME_MAP
+
+    def test_file_without_subclass_is_noop(self, isolated_custom_providers):
+        """A .py file with no PlatformProtocol subclass registers nothing."""
+        providers_dir = isolated_custom_providers
+        providers_dir.mkdir(parents=True)
+        (providers_dir / "helper.py").write_text("x = 1\ndef f(): pass\n")
+
+        pp._load_custom_providers()
+        assert pp._CUSTOM_PROVIDERS_STATE["loaded_names"] == set()
+
+    def test_class_without_name_is_skipped(self, isolated_custom_providers, caplog):
+        """Provider class missing the `name` attribute is skipped with warning."""
+        import logging
+        providers_dir = isolated_custom_providers
+        providers_dir.mkdir(parents=True)
+        (providers_dir / "noname.py").write_text('''
+from helen.runtime.provider_protocol import PlatformProtocol
+
+
+class NoNameProtocol(PlatformProtocol):
+    pass  # no `name` attribute
+''')
+
+        with caplog.at_level(logging.WARNING, logger='helen.runtime.provider_protocol'):
+            pp._load_custom_providers()
+
+        assert any("missing explicit `name`" in r.message for r in caplog.records)
+
+    def test_multiple_classes_in_one_file(self, isolated_custom_providers):
+        """All PlatformProtocol subclasses in one file are registered."""
+        providers_dir = isolated_custom_providers
+        providers_dir.mkdir(parents=True)
+        (providers_dir / "multi.py").write_text('''
+from helen.runtime.provider_protocol import PlatformProtocol
+
+
+class AlphaProtocol(PlatformProtocol):
+    name = "alpha"
+
+
+class BetaProtocol(PlatformProtocol):
+    name = "beta"
+''')
+
+        pp._load_custom_providers()
+        assert "alpha" in pp._PROTOCOL_NAME_MAP
+        assert "beta" in pp._PROTOCOL_NAME_MAP
+
+    def test_private_files_skipped(self, isolated_custom_providers):
+        """Files starting with `_` or `.` should not be loaded."""
+        providers_dir = isolated_custom_providers
+        providers_dir.mkdir(parents=True)
+        (providers_dir / "_private.py").write_text(_VALID_PROVIDER_SOURCE)
+        (providers_dir / ".hidden.py").write_text(_VALID_PROVIDER_SOURCE)
+        (providers_dir / "__init__.py").write_text("")
+
+        pp._load_custom_providers()
+        assert "foo" not in pp._PROTOCOL_NAME_MAP
+
+    def test_cache_hit_skips_rescan(self, isolated_custom_providers, monkeypatch):
+        """Second call with no changes should be a no-op (cache hit)."""
+        providers_dir = isolated_custom_providers
+        providers_dir.mkdir(parents=True)
+        (providers_dir / "foo.py").write_text(_VALID_PROVIDER_SOURCE)
+
+        pp._load_custom_providers()
+        snapshot_after_first = pp._CUSTOM_PROVIDERS_STATE["snapshot"]
+        assert "foo" in pp._PROTOCOL_NAME_MAP
+
+        # Replace the loader with a spy to verify _load_one_provider_file isn't called
+        spy_calls = []
+        original = pp._load_one_provider_file
+        def spy(fp):
+            spy_calls.append(fp)
+            return original(fp)
+        monkeypatch.setattr(pp, "_load_one_provider_file", spy)
+
+        pp._load_custom_providers()
+        assert spy_calls == [], "Cache hit should not re-scan files"
+        assert pp._CUSTOM_PROVIDERS_STATE["snapshot"] == snapshot_after_first
+
+    def test_added_file_triggers_reload(self, isolated_custom_providers):
+        """Adding a new file invalidates cache and registers new provider."""
+        providers_dir = isolated_custom_providers
+        providers_dir.mkdir(parents=True)
+
+        pp._load_custom_providers()
+        assert "foo" not in pp._PROTOCOL_NAME_MAP
+
+        (providers_dir / "foo.py").write_text(_VALID_PROVIDER_SOURCE)
+        pp._load_custom_providers()
+        assert "foo" in pp._PROTOCOL_NAME_MAP
+
+    def test_removed_file_unregisters_provider(self, isolated_custom_providers):
+        """Removing a file unregisters the custom protocol."""
+        providers_dir = isolated_custom_providers
+        providers_dir.mkdir(parents=True)
+        foo_file = providers_dir / "foo.py"
+        foo_file.write_text(_VALID_PROVIDER_SOURCE)
+
+        pp._load_custom_providers()
+        assert "foo" in pp._PROTOCOL_NAME_MAP
+
+        foo_file.unlink()
+        pp._load_custom_providers()
+        assert "foo" not in pp._PROTOCOL_NAME_MAP
+        assert "foo" not in pp._CUSTOM_PROVIDERS_STATE["loaded_names"]
+
+    def test_edited_file_applies_changes(self, isolated_custom_providers):
+        """Editing a file to add a new class registers the new class."""
+        providers_dir = isolated_custom_providers
+        providers_dir.mkdir(parents=True)
+        foo_file = providers_dir / "foo.py"
+        foo_file.write_text(_VALID_PROVIDER_SOURCE)
+
+        pp._load_custom_providers()
+        assert "bar" not in pp._PROTOCOL_NAME_MAP
+
+        # Edit the file to add a new class (mtime must change)
+        import os, time
+        time.sleep(0.05)
+        foo_file.write_text(_VALID_PROVIDER_SOURCE + '''
+
+class BarProtocol(PlatformProtocol):
+    name = "bar"
+''')
+        # Force mtime to differ on filesystems with coarse resolution
+        new_time = os.path.getmtime(foo_file) + 1
+        os.utime(foo_file, (new_time, new_time))
+
+        pp._load_custom_providers()
+        assert "bar" in pp._PROTOCOL_NAME_MAP
+        assert "foo" in pp._PROTOCOL_NAME_MAP  # Old class still present
+
+    def test_imported_subclass_not_double_registered(self, isolated_custom_providers):
+        """Classes imported into the provider file are not re-registered."""
+        providers_dir = isolated_custom_providers
+        providers_dir.mkdir(parents=True)
+        (providers_dir / "reexport.py").write_text('''
+# This file re-exports an existing protocol — should NOT register OpenAIProtocol again
+from helen.runtime.provider_protocol import OpenAIProtocol  # noqa: F401
+
+
+class CustomProtocol(OpenAIProtocol):
+    name = "custom_reexport"
+''')
+
+        pp._load_custom_providers()
+        assert "custom_reexport" in pp._PROTOCOL_NAME_MAP
+        # The built-in "openai" should remain the original class
+        assert pp._PROTOCOL_NAME_MAP["openai"] is pp.OpenAIProtocol
+

@@ -13,7 +13,10 @@ This module provides:
 
 from __future__ import annotations
 
+import importlib.util
 import logging
+import sys
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -406,14 +409,169 @@ _PROTOCOL_NAME_MAP: dict[str, type[PlatformProtocol]] = {
 }
 _PROTOCOL_NAME_MAP["openai"] = OpenAIProtocol
 
+# Snapshot of built-in names at import time — custom providers cannot override them.
+_BUILTIN_PROTOCOL_NAMES: frozenset[str] = frozenset(_PROTOCOL_NAME_MAP.keys())
+
+# ---------------------------------------------------------------------------
+# Custom Provider Dynamic Loading
+# ---------------------------------------------------------------------------
+#
+# Custom providers are Python files placed in ``~/.helen/providers/*.py`` that
+# define subclasses of :class:`PlatformProtocol`. They are auto-discovered and
+# registered into :data:`_PROTOCOL_NAME_MAP` so :func:`detect_protocol` can
+# resolve them by name or URL.
+#
+# Lifecycle:
+#   - Discovered lazily on first :func:`detect_protocol` call
+#   - Re-scanned only when the providers directory content changes
+#     (file added / removed / edited → mtime-based cache invalidation)
+#   - Built-in protocol names cannot be overridden (custom conflicts are skipped)
+#   - Errors in user files are logged and skipped — never crash the process
+
+
+_CUSTOM_PROVIDERS_STATE: dict = {
+    "loaded": False,
+    "snapshot": None,
+    "loaded_names": set(),
+}
+
+
+def _get_providers_dir() -> Path:
+    """Return ``~/.helen/providers`` (lazy import to avoid circular deps)."""
+    from helen.runtime.config import get_helen_home
+    return get_helen_home() / "providers"
+
+
+def _snapshot_providers_dir(providers_dir: Path) -> tuple | None:
+    """Build a hashable snapshot of the providers directory.
+
+    Returns ``(dir_mtime, sorted_file_mtimes)`` or ``None`` if the directory
+    does not exist / is inaccessible.
+    """
+    if not providers_dir.is_dir():
+        return None
+    try:
+        file_mtimes = []
+        for py_file in providers_dir.glob("*.py"):
+            # Skip private / init files
+            if py_file.name.startswith(("_", ".")) or py_file.name == "__init__.py":
+                continue
+            try:
+                file_mtimes.append((py_file.name, py_file.stat().st_mtime))
+            except OSError:
+                continue
+        dir_mtime = providers_dir.stat().st_mtime
+        return (dir_mtime, tuple(sorted(file_mtimes)))
+    except OSError:
+        return None
+
+
+def _load_one_provider_file(filepath: Path) -> set[str]:
+    """Load a single provider file and register its PlatformProtocol subclasses.
+
+    Returns the set of protocol names registered from this file.
+    Raises on load failure (caller catches and logs).
+    """
+    module_name = f"_helen_custom_provider_{filepath.stem}"
+
+    # Allow reload: remove from sys.modules if previously loaded
+    sys.modules.pop(module_name, None)
+
+    spec = importlib.util.spec_from_file_location(module_name, filepath)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Cannot create module spec for {filepath}")
+
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception:
+        sys.modules.pop(module_name, None)
+        raise
+
+    registered: set[str] = set()
+    for attr_name in dir(module):
+        attr = getattr(module, attr_name)
+        if not (
+            isinstance(attr, type)
+            and issubclass(attr, PlatformProtocol)
+            and attr is not PlatformProtocol
+            and getattr(attr, "__module__", None) == module_name
+        ):
+            continue
+
+        # Require `name` to be defined on the subclass itself (not inherited
+        # from PlatformProtocol, whose default is "openai"). Without this,
+        # a subclass that forgets to set `name` would silently shadow the
+        # built-in openai protocol.
+        protocol_name = attr.__dict__.get("name")
+        if not protocol_name:
+            logger.warning(
+                f"Custom provider class {attr_name} in {filepath.name} "
+                f"missing explicit `name` attribute; skipping"
+            )
+            continue
+
+        if protocol_name in _BUILTIN_PROTOCOL_NAMES:
+            logger.debug(
+                f"Custom provider {protocol_name!r} from {filepath.name} "
+                f"shadows built-in; skipping"
+            )
+            continue
+
+        _PROTOCOL_NAME_MAP[protocol_name] = attr
+        registered.add(protocol_name)
+        logger.debug(f"Registered custom provider {protocol_name!r} from {filepath}")
+
+    return registered
+
+
+def _load_custom_providers() -> None:
+    """Scan ``~/.helen/providers/`` and register custom protocols.
+
+    No-op when the directory content is unchanged (mtime-based cache).
+    Built-in names cannot be overridden. Errors in user files are logged
+    and skipped.
+    """
+    state = _CUSTOM_PROVIDERS_STATE
+    providers_dir = _get_providers_dir()
+    snapshot = _snapshot_providers_dir(providers_dir)
+
+    if state["loaded"] and state["snapshot"] == snapshot:
+        return  # Cache hit
+
+    # Remove previously-registered custom protocols so deletions/edits apply
+    for name in list(state["loaded_names"]):
+        _PROTOCOL_NAME_MAP.pop(name, None)
+    state["loaded_names"] = set()
+
+    if snapshot is None:
+        # Directory does not exist or is empty — nothing to load
+        state["loaded"] = True
+        state["snapshot"] = None
+        return
+
+    _dir_mtime, file_mtimes = snapshot
+    for filename, _mtime in file_mtimes:
+        filepath = providers_dir / filename
+        try:
+            added = _load_one_provider_file(filepath)
+            state["loaded_names"].update(added)
+        except Exception as e:
+            logger.warning(f"Custom provider {filepath} failed to load: {e}")
+
+    state["snapshot"] = snapshot
+    state["loaded"] = True
+
 
 def detect_protocol(base_url: str, protocol_name: str | None = None) -> PlatformProtocol:
     """Detect platform protocol from base_url or explicit name.
 
     Detection priority:
-    1. Explicit protocol_name (from config.yaml) — highest priority
-    2. URL pattern matching (_PLATFORM_PATTERNS)
-    3. Fallback to OpenAIProtocol
+    1. Custom providers from ``~/.helen/providers/*.py`` (see :func:`_load_custom_providers`)
+    2. Explicit protocol_name (from config.yaml) — highest built-in priority
+    3. URL pattern matching (_PLATFORM_PATTERNS)
+    4. Fallback to OpenAIProtocol
 
     Protocol is determined by the PLATFORM, not the model.
     - DashScope: ALL models use same protocol (Qwen + DeepSeek unified)
@@ -429,6 +587,8 @@ def detect_protocol(base_url: str, protocol_name: str | None = None) -> Platform
     - detect_protocol("unknown.com", protocol_name="deepseek") → DeepSeekProtocol
     - detect_protocol("unknown.com") → OpenAIProtocol (fallback)
     """
+    # Scan ~/.helen/providers/ for user-defined protocols (cached; no-op if unchanged)
+    _load_custom_providers()
     # Step 1: Check explicit protocol name from config
     if protocol_name:
         protocol_class = _PROTOCOL_NAME_MAP.get(protocol_name)

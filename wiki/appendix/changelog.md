@@ -1,6 +1,84 @@
 # 版本历史
 
-> Helen v1.40.1 | Provider 自动检测 + 连通性探测 + 自定义 Provider 支持
+> Helen v1.41.0 | 自定义 Provider 动态加载 + `helen-custom-provider` 内置 Skill
+
+---
+
+## v1.41.0: 自定义 Provider 动态加载
+
+**发布日期**: 2026-08-12
+**核心功能**: `~/.helen/providers/*.py` 中的 `PlatformProtocol` 子类被 `detect_protocol()` 自动发现并注册，无需修改源码
+
+### 1. 问题
+
+v1.40.1 的 wizard 和 CLI hint 引导用户把自定义 provider 文件保存到 `~/.helen/providers/<name>.py`，但 `detect_protocol()` 只查硬编码的 `_PROTOCOL_NAME_MAP`，不会读用户目录。文件放对了地方也不生效。
+
+### 2. 解决方案
+
+**动态加载** (`helen/runtime/provider_protocol.py`):
+- 新增 `_load_custom_providers()`：扫描 `~/.helen/providers/*.py`，用 `importlib.util.spec_from_file_location` 加载每个文件，找到 `PlatformProtocol` 子类，注册到 `_PROTOCOL_NAME_MAP`
+- `detect_protocol()` 入口处自动调用（缓存命中时 no-op）
+- **mtime-based 缓存**：文件增/删/改都触发重新扫描
+- **安全机制**：
+  - 内置协议名（`openai`, `dashscope`, `deepseek` 等）不可被覆盖
+  - 子类必须显式声明 `name` 属性（不能靠继承基类的 `"openai"`）
+  - 语法错误的用户文件被记录并跳过，不影响其他文件
+  - 以 `_` 或 `.` 开头的文件、`__init__.py` 被忽略
+
+### 3. 新增 Skill：`helen-custom-provider`
+
+- 端到端引导：从验证 provider 兼容性 → 写 adapter → 配置 → 验证
+- 决策树：根据 provider 特征判断需要 override 哪些方法
+- API 参考（`references/platform-protocol-api.md`）：完整方法签名 + 7 个内置协议的真实示例
+- 3 个工作示例（`references/examples/`）：`minimal.py`, `private_llm.py`, `streaming_usage.py`
+- 通过 `scripts/sync_skills.sh` 同步到 `.claude/skills/`
+
+### 4. 新增/修改文件
+
+| 文件 | 变化 |
+|------|------|
+| `helen/runtime/provider_protocol.py` | 新增 `_load_custom_providers` 系列函数 + `_BUILTIN_PROTOCOL_NAMES` + `_CUSTOM_PROVIDERS_STATE`；`detect_protocol()` 入口调用加载 |
+| `tests/runtime/test_provider_protocol.py` | 新增 `TestCustomProviderLoading`：14 个测试（加载/冲突/错误/缓存/重载） |
+| `helen/skills/software-development/helen-custom-provider/` | **新增** — SKILL.md + references/ |
+| `.claude/skills/helen-custom-provider/` | **新增** — 镜像同步 |
+| `CLAUDE.md` | Skill Index 15 → 16，新增 `helen-custom-provider` 条目 |
+| `wiki/runtime/llm-runtime.md` | 添加 skill 交叉引用 |
+| `wiki/appendix/changelog.md` | 添加 v1.41.0 条目 |
+| `helen/__init__.py` + `pyproject.toml` | 版本 1.40.0 → 1.41.0 |
+
+### 5. 测试结果
+
+- **3820 passed** (新增 14 个 custom provider 测试), 8 skipped, 0 failures
+
+### 6. 使用示例
+
+```python
+# ~/.helen/providers/my_llm.py
+from helen.runtime.provider_protocol import PlatformProtocol
+
+class MyLLMProtocol(PlatformProtocol):
+    name = "my_llm"
+
+    def build_request_payload(self, base_payload, *, model_id,
+                              thinking_enabled=False, reasoning_effort=None):
+        if thinking_enabled:
+            base_payload["x_thinking"] = True
+        return base_payload
+```
+
+```yaml
+# ~/.helen/config.yaml
+llm:
+  base_url: "https://my-llm.example.com/v1"
+  api_key: "sk-..."
+  model: "my-model"
+  protocol: "my_llm"   # 匹配上面的 `name`
+```
+
+```bash
+$ helen provider list
+• my_llm  (/home/you/.helen/providers/my_llm.py)
+```
 
 ---
 

@@ -325,7 +325,7 @@ The agent has `web_search`, `web_fetch`, `write_file` and other tools to researc
 
 Generated adapters are saved to `~/.helen/providers/<name>.py` and loaded dynamically by `detect_protocol()` at runtime.
 
-> **See also**: [[runtime/llm-provider-protocol-reference|LLM Provider Protocol Reference]] for full protocol details across all 6 providers.
+> **See also**: [[runtime/llm-provider-protocol-reference|LLM Provider Protocol Reference]] for full protocol details across all 6 providers; the `helen-custom-provider` skill (in `helen/skills/software-development/helen-custom-provider/`) for a guided walkthrough with decision tree, API reference, and worked examples.
 
 ---
 

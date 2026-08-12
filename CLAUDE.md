@@ -189,7 +189,7 @@ Helen also has built-in test framework (`helen/stdlib/test.py`) with `test()`, `
 
 ## Skill Index
 
-Helen has 15 built-in skills. **SSOT is `helen/skills/<category>/<name>/`** — this is what ships with the package and what `load_skill()` loads at runtime. `.claude/skills/<name>/` is a **generated mirror** (via `scripts/sync_skills.sh`) for Claude Code's auto-load; **never edit `.claude/skills/` directly** — changes will be overwritten on next sync.
+Helen has 16 built-in skills. **SSOT is `helen/skills/<category>/<name>/`** — this is what ships with the package and what `load_skill()` loads at runtime. `.claude/skills/<name>/` is a **generated mirror** (via `scripts/sync_skills.sh`) for Claude Code's auto-load; **never edit `.claude/skills/` directly** — changes will be overwritten on next sync.
 
 To add or update a skill: edit `helen/skills/<category>/<name>/SKILL.md`, then run `./scripts/sync_skills.sh` before committing.
 
@@ -202,6 +202,7 @@ Claude Code auto-loads relevant skills based on task context:
 - `helen-quality` — 7-dimension quality assessment guide
 - `helen-agent-patterns` — Single agent design patterns (7 patterns)
 - `helen-agent-collaboration` — Multi-agent collaboration patterns (6 patterns)
+- `helen-custom-provider` — Write custom LLM provider adapters (PlatformProtocol subclasses auto-loaded from `~/.helen/providers/`)
 - `helen-language-development` — Language implementation patterns (AST, parser, interpreter)
 - `helen-programming-methodology` — Contract-first + TDD + quality workflow
 - `helen-python-bridge` — Python ↔ Helen integration (FFI + Bridge)
@@ -219,5 +220,6 @@ Claude Code auto-loads relevant skills based on task context:
 - Debugging Helen programs → `debugging`, `helen-agent-patterns`
 - Testing → `helen-testing`, `test-driven-development`
 - Multi-agent systems → `helen-agent-collaboration`
+- Integrating a new LLM provider → `helen-custom-provider`
 - Language development → `helen-language-development`
 - Code review → `code-quality`, `helen-quality`
