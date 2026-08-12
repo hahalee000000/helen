@@ -633,8 +633,14 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
         fn read_skill_content(skill_name: str): str {
             let result = load_skill(skill_name)
             let parsed = json_parse(result)
-            if parsed["content"] != null {
-                return parsed["content"]
+            // Safe access: load_skill returns {"error": ...} when skill not found,
+            // so "content" key may be missing. Use try-catch to handle gracefully.
+            try {
+                if parsed["content"] != null {
+                    return parsed["content"]
+                }
+            } catch {
+                return ""
             }
             return ""
         }

@@ -7,6 +7,9 @@
 
 import std.core.*
 import std.str.*
+import std.path.*
+import std.tools.*
+import std.io.*
 import "../json_utils.helen"
 import "../memory_utils.helen"
 import "../context.helen"
@@ -105,6 +108,90 @@ fn test_load_memory_files() {
     _assert(len(prefs) >= 0, "load_user_preferences 返回字符串")
 }
 
+fn test_update_memory() {
+    print("\n=== update_memory ===")
+
+    // 准备：删除现有文件以测试新建
+    let path = ".helen/MEMORY.md"
+    let backup = ""
+    if path_exists(path) {
+        backup = read_file(path)
+    }
+
+    // 测试 1：首次创建
+    let r1 = update_memory("test_category", "test_key", "test value")
+    _assert_equal(r1["status"], "success", "update_memory returns success")
+    _assert(path_exists(path), "MEMORY.md created")
+
+    let content = read_file(path)
+    _assert(contains(content, "## test_category"), "contains category header")
+    _assert(contains(content, "test_key"), "contains key")
+    _assert(contains(content, "test value"), "contains value")
+
+    // 测试 2：更新同一 key
+    let r2 = update_memory("test_category", "test_key", "updated value")
+    _assert_equal(r2["status"], "success", "second update returns success")
+
+    let content2 = read_file(path)
+    _assert(contains(content2, "updated value"), "contains updated value")
+    _assert(contains(content2, "(更新)"), "contains update marker")
+
+    // 测试 3：添加不同 category
+    let r3 = update_memory("other_category", "other_key", "other value")
+    _assert_equal(r3["status"], "success", "new category returns success")
+    let content3 = read_file(path)
+    _assert(contains(content3, "## other_category"), "new category header added")
+
+    // 清理：恢复或删除
+    if backup != "" {
+        write_file(path, backup)
+    } else {
+        // 删除测试文件
+        try {
+            shell_exec("rm -f " + path)
+        } catch { }
+    }
+}
+
+fn test_update_user_preference() {
+    print("\n=== update_user_preference ===")
+
+    let path = ".helen/USER.md"
+    let backup = ""
+    if path_exists(path) {
+        backup = read_file(path)
+    }
+
+    // 测试 1：首次创建
+    let r1 = update_user_preference("coding_style", "prefer tabs")
+    _assert_equal(r1["status"], "success", "update_user_preference returns success")
+    _assert(path_exists(path), "USER.md created")
+
+    let content = read_file(path)
+    _assert(contains(content, "## coding_style"), "contains category header")
+    _assert(contains(content, "prefer tabs"), "contains preference")
+
+    // 测试 2：追加偏好
+    let r2 = update_user_preference("coding_style", "use semicolons")
+    _assert_equal(r2["status"], "success", "append returns success")
+
+    let content2 = read_file(path)
+    _assert(contains(content2, "use semicolons"), "contains appended preference")
+
+    // 测试 3：新类别
+    let r3 = update_user_preference("language", "prefer Chinese")
+    _assert_equal(r3["status"], "success", "new category returns success")
+
+    // 清理
+    if backup != "" {
+        write_file(path, backup)
+    } else {
+        try {
+            shell_exec("rm -f " + path)
+        } catch { }
+    }
+}
+
 // ── context.helen 测试 ────────────────────────────────────────
 
 fn test_collect_all_facts() {
@@ -159,6 +246,8 @@ main {
     test_safe_parse_complex_markdown()
     test_build_memory_context()
     test_load_memory_files()
+    test_update_memory()
+    test_update_user_preference()
     test_collect_all_facts()
     test_build_full_context_xml()
     test_collect_project_facts()

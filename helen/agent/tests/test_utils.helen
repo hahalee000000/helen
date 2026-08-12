@@ -6,6 +6,8 @@
 //
 
 import std.core.*
+import std.str.*
+import std.system.*
 import "../utils.helen"
 
 fn _assert(condition: bool, test_name: str) {
@@ -62,6 +64,62 @@ fn test_validate_path_edge_cases() {
     _assert_equal(validate_path("./src/../main.helen"), "./src/../main.helen", "含 .. 的路径")
 }
 
+// ── 环境工具函数 ─────────────────────────────────────────────
+
+fn test_get_cwd() {
+    print("\n=== get_cwd ===")
+    let cwd = get_cwd()
+    _assert(len(cwd) > 0, "get_cwd 返回非空字符串")
+    // 应该是绝对路径 (starts with "/" on Unix or "X:\" on Windows)
+    let first_char = substring(cwd, 0, 1)
+    let is_absolute = first_char == "/" || (len(cwd) > 2 && substring(cwd, 1, 2) == ":")
+    _assert(is_absolute, "cwd 是绝对路径")
+}
+
+fn test_get_home() {
+    print("\n=== get_home ===")
+    let home = get_home()
+    _assert(len(home) > 0, "get_home 返回非空字符串")
+    // 应该包含 "home" 或在 Windows 上是驱动器
+    _assert(contains(home, "home") || contains(home, ":\\") || contains(home, "Users"), "home 包含预期路径段")
+}
+
+fn test_detect_helen_version() {
+    print("\n=== detect_helen_version ===")
+    let ver = detect_helen_version()
+    _assert(len(ver) > 0, "detect_helen_version 返回非空")
+    // 应该是类似 "1.40.0" 格式
+    _assert(contains(ver, ".") || ver == "1.20", "版本号包含 . 或是默认 1.20")
+}
+
+fn test_safe_git_branch() {
+    print("\n=== safe_git_branch ===")
+    let b = safe_git_branch()
+    _assert(len(b) > 0, "safe_git_branch 返回非空")
+    _assert(b != "", "分支名不为空")
+}
+
+fn test_check_git_dirty() {
+    print("\n=== check_git_dirty ===")
+    let dirty = check_git_dirty()
+    _assert(dirty == "true" || dirty == "false" || dirty == "unknown", "check_git_dirty 返回有效值: " + dirty)
+}
+
+fn test_ensure_python_path() {
+    print("\n=== ensure_python_path ===")
+    // 调用不应崩溃
+    try {
+        ensure_python_path()
+        let pp = env_get("PYTHONPATH", "")
+        // PYTHONPATH 现在应该包含 cwd
+        let cwd = get_cwd()
+        _assert(contains(pp, cwd), "PYTHONPATH 包含 cwd")
+        _assert(true, "ensure_python_path 不崩溃")
+    } catch {
+        _assert(false, "ensure_python_path 不应抛出")
+    }
+}
+
 // ── 主测试 ──────────────────────────────────────────────────
 
 main {
@@ -72,6 +130,12 @@ main {
     test_validate_path_normal()
     test_validate_path_injection()
     test_validate_path_edge_cases()
+    test_get_cwd()
+    test_get_home()
+    test_detect_helen_version()
+    test_safe_git_branch()
+    test_check_git_dirty()
+    test_ensure_python_path()
 
     print("\n╔═══════════════════════════════════════════════════════════╗")
     print("║      utils.helen 测试完成                                ║")

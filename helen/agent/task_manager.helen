@@ -4,6 +4,7 @@
 import std.core.*
 import std.io.*
 import std.str.*
+import std.system.*
 import std.time.*
 import std.tools.*
 import "utils.helen"
