@@ -6,6 +6,18 @@ set -e
 
 echo "🚀 Starting Helen Web UI Frontend..."
 
+# 确定用户工作目录（优先 HELEN_WEBUI_CWD 环境变量，其次当前目录）
+USER_CWD="${HELEN_WEBUI_CWD:-$(pwd)}"
+
+# 读取 token 文件（如果存在），导出为环境变量供 vite 使用
+TOKEN_FILE="$USER_CWD/.helen/webui_token"
+if [ -f "$TOKEN_FILE" ]; then
+    export HELEN_WEBUI_TOKEN=$(cat "$TOKEN_FILE")
+    echo "🔑 Token loaded from $TOKEN_FILE"
+else
+    echo "ℹ️  No token file found at $TOKEN_FILE (auth may be disabled)"
+fi
+
 # 进入前端目录
 cd "$(dirname "$0")/frontend"
 

@@ -110,7 +110,8 @@ def set_current_cwd(path: str) -> dict:
 
     try:
         # 解析为绝对路径（此时 os.getcwd() 是上一个有效 cwd，相对路径能正确解析）
-        abs_path = str(Path(path).resolve())
+        # expanduser() 展开 ~ 和 ~user，resolve() 转为绝对路径并解析符号链接
+        abs_path = str(Path(path).expanduser().resolve())
 
         # 验证目录存在
         if not Path(abs_path).is_dir():

@@ -108,9 +108,16 @@ except Exception:
 os.chdir('$USER_CWD')
 # 让 uvicorn 能找到 app.main（PYTHONPATH 已包含 backend 目录）
 import uvicorn
+
+# 读取 HOST 配置（优先环境变量，其次 .env，默认 127.0.0.1）
+host = os.environ.get('HOST', '127.0.0.1')
+if host == '0.0.0.0':
+    print('⚠️  WARNING: Binding to 0.0.0.0 exposes WebUI to LAN.', file=sys.stderr)
+    print('   For local-only access, set HOST=127.0.0.1 in .env', file=sys.stderr)
+
 uvicorn.run(
     'app.main:app',
-    host='0.0.0.0',
+    host=host,
     port=8000,
     reload=False,
 )
