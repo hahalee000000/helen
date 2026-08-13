@@ -39,6 +39,8 @@ export const translations = {
     'chat.selectSession': 'Select a session to start chatting',
     'chat.orCreate': 'Or create a new session',
     'chat.thinking': 'Helen is thinking...',
+    'chat.pauseAutoScroll': 'Pause auto-scroll',
+    'chat.resumeAutoScroll': 'Resume auto-scroll',
 
     // === Message input ===
     'message.placeholder': 'Type a message... (Shift+Enter for newline)',
@@ -204,6 +206,8 @@ export const translations = {
     'chat.selectSession': '选择一个会话开始聊天',
     'chat.orCreate': '或创建新会话',
     'chat.thinking': 'Helen 思考中...',
+    'chat.pauseAutoScroll': '暂停自动滚动',
+    'chat.resumeAutoScroll': '恢复自动滚动',
 
     // === Message input ===
     'message.placeholder': '输入消息... (Shift+Enter 换行)',

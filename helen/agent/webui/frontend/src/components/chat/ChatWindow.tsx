@@ -203,15 +203,14 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
           {/* 暂停/启用 自动滚动切换按钮: 始终可见 */}
           <button
             onClick={() => autoScrollEnabled ? pauseAutoScroll() : enableAutoScroll()}
-            className={`flex items-center gap-1.5 rounded-full shadow-lg px-4 py-2.5 text-sm font-medium transition-colors ${
+            className={`flex items-center justify-center rounded-full shadow-lg w-10 h-10 transition-colors ${
               autoScrollEnabled
                 ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
                 : 'bg-amber-500 hover:bg-amber-600 text-white'
             }`}
-            title={autoScrollEnabled ? '暂停自动滚动' : '启用自动滚动'}
+            title={autoScrollEnabled ? t('chat.pauseAutoScroll') : t('chat.resumeAutoScroll')}
           >
-            {autoScrollEnabled ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-            <span>{autoScrollEnabled ? '暂停' : '跟随'}</span>
+            {autoScrollEnabled ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
           </button>
 
           {/* "回到底部" 浮动按钮：仅在用户上滚离开底部后出现 */}
