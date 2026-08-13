@@ -123,30 +123,54 @@ class TestApiStatusEndpoint:
 
 # ── Router registration ─────────────────────────────────────────────────────
 
+def _collect_paths(app):
+    """收集 app 中所有注册的路由 path。
+
+    兼容 Starlette ≥ 1.0 的 `_IncludedRouter` 包装器：它本身没有 `.path`，
+    需通过 `effective_candidates()` 拿到带 prefix 的完整路径（如 `/api/chat/status`）。
+    旧版 Route/Mount 直接有 `.path`，照常用。
+    """
+    paths = []
+    for route in app.routes:
+        if hasattr(route, "path"):
+            paths.append(route.path)
+        # Starlette ≥ 1.0: include_router 返回 _IncludedRouter，无 .path
+        effective = getattr(route, "effective_candidates", None)
+        if callable(effective):
+            try:
+                for ctx in effective():
+                    p = getattr(ctx, "path", None)
+                    if p:
+                        paths.append(p)
+            except Exception:
+                pass
+    return paths
+
+
 class TestRouterRegistration:
     def test_chat_routes_registered(self):
         """Chat routes should be mounted under /api/chat prefix."""
-        routes = [route.path for route in app.routes]
-        chat_routes = [r for r in routes if r.startswith("/api/chat")]
+        paths = _collect_paths(app)
+        chat_routes = [p for p in paths if p.startswith("/api/chat")]
         assert len(chat_routes) > 0
 
     def test_agents_routes_registered(self):
         """Agents routes should be mounted under /api/agents prefix."""
-        routes = [route.path for route in app.routes]
-        agents_routes = [r for r in routes if r.startswith("/api/agents")]
+        paths = _collect_paths(app)
+        agents_routes = [p for p in paths if p.startswith("/api/agents")]
         assert len(agents_routes) > 0
 
     def test_root_route_registered(self):
-        routes = [route.path for route in app.routes]
-        assert "/" in routes
+        paths = _collect_paths(app)
+        assert "/" in paths
 
     def test_health_route_registered(self):
-        routes = [route.path for route in app.routes]
-        assert "/health" in routes
+        paths = _collect_paths(app)
+        assert "/health" in paths
 
     def test_api_status_route_registered(self):
-        routes = [route.path for route in app.routes]
-        assert "/api/status" in routes
+        paths = _collect_paths(app)
+        assert "/api/status" in paths
 
 
 # ── App metadata ────────────────────────────────────────────────────────────

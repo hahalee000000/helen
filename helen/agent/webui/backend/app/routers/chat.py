@@ -444,57 +444,79 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
                 # ── 斜杠命令：同步执行，响应作为用户气泡返回 ──
                 # 斜杠命令（/help /compress /context 等）只修改 Helen 内部状态，
                 # 不产生对 LLM 的可见对话。chat.py 直接 run_silent 执行。
-                # /dir 命令特殊处理：切换工作目录
-                if user_message.startswith("/dir "):
-                    path = user_message[5:].strip()
+                # /dir 命令特殊处理：切换工作目录 或 查询当前目录
+                # - `/dir`          → 查询当前目录（无参数）
+                # - `/dir <path>`   → 切换到指定路径
+                if user_message == "/dir" or user_message.startswith("/dir "):
+                    path = user_message[4:].strip() if len(user_message) > 4 else ""
+                    current_cwd = directory_manager.get_current_cwd()
+
+                    if not path:
+                        # /dir 无参数 → 查询当前目录（不切换、不重启 actor）
+                        display_name = directory_manager.get_display_name(current_cwd)
+                        await manager.broadcast({
+                            "type": "processing_complete",
+                            "data": {
+                                "i18n_key": "dir.currentDir",
+                                "params": {"path": current_cwd, "name": display_name},
+                                "is_slash_response": True
+                            }
+                        })
+                        continue
+
                     result = directory_manager.set_current_cwd(path)
 
                     if result["status"] == "ok":
                         new_cwd = result["cwd"]
-                        new_session_id = directory_manager.cwd_to_session_id(new_cwd)
 
-                        # ── Actor 模式：目录切换 = session 切换，重启 actor ──
-                        # actor 在 spawn 时绑定了旧 session_id，切目录后必须重启，
-                        # 否则新目录的消息会写入旧 session 的 transcript。
-                        try:
-                            from app.services.channel_actor_manager import channel_actor_manager
-                            if channel_actor_manager._actor_spawned:
-                                channel_actor_manager.exit_actor()
-                        except Exception:
-                            pass
+                        # 实际目录变化才重启 actor（避免 /dir <当前目录> 的无谓重启）
+                        if new_cwd != current_cwd:
+                            new_session_id = directory_manager.cwd_to_session_id(new_cwd)
 
-                        # 获取新目录的 Helen session ID
-                        helen_sid = None
-                        try:
-                            helen_sid = await helen_bridge.get_session_id()
-                        except Exception:
-                            pass
+                            try:
+                                from app.services.channel_actor_manager import channel_actor_manager
+                                if channel_actor_manager._actor_spawned:
+                                    channel_actor_manager.exit_actor()
+                            except Exception:
+                                pass
 
-                        # 通知前端目录已切换（含新 session_id，前端据此重建 WebSocket）
-                        await manager.broadcast({
-                            "type": "directory_changed",
-                            "data": {
-                                "cwd": new_cwd,
-                                "display_name": result["display_name"],
-                                "session_id": new_session_id,
-                                "helen_session_id": helen_sid,
-                            }
-                        })
+                            # 获取新目录的 Helen session ID
+                            helen_sid = None
+                            try:
+                                helen_sid = await helen_bridge.get_session_id()
+                            except Exception as e:
+                                import logging
+                                logging.getLogger(__name__).warning(
+                                    f"get_session_id() failed after /dir: {e}"
+                                )
 
-                        # 发送成功响应
+                            # 通知前端目录已切换（含新 session_id，前端据此重建 WebSocket）
+                            await manager.broadcast({
+                                "type": "directory_changed",
+                                "data": {
+                                    "cwd": new_cwd,
+                                    "display_name": result["display_name"],
+                                    "session_id": new_session_id,
+                                    "helen_session_id": helen_sid,
+                                }
+                            })
+
+                        # 发送成功响应（i18n 化，前端按语言偏好翻译）
                         await manager.broadcast({
                             "type": "processing_complete",
                             "data": {
-                                "content": f"✅ 已切换到: {result['display_name']}",
+                                "i18n_key": "dir.switchedTo",
+                                "params": {"name": result["display_name"], "path": new_cwd},
                                 "is_slash_response": True
                             }
                         })
                     else:
-                        # 切换失败
+                        # 切换失败（i18n 化）
                         await manager.broadcast({
                             "type": "processing_complete",
                             "data": {
-                                "content": f"❌ {result['message']}",
+                                "i18n_key": "dir.switchFailed",
+                                "params": {"reason": result["message"]},
                                 "is_slash_response": True
                             }
                         })

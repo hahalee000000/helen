@@ -69,6 +69,9 @@ export const translations = {
     'dir.cwd': 'Working directory',
     'dir.switch': 'Switch working directory',
     'dir.switched': 'Single-session architecture: backend working directory switched',
+    'dir.currentDir': '📂 Current directory: **{name}** (`{path}`)',
+    'dir.switchedTo': '✅ Switched to: **{name}**',
+    'dir.switchFailed': '❌ Switch failed: {reason}',
 
     // === Status line ===
     'status.connected': 'Connected',
@@ -231,6 +234,9 @@ export const translations = {
     'dir.cwd': '工作目录',
     'dir.switch': '切换工作目录',
     'dir.switched': '单会话架构：后端工作目录已切换',
+    'dir.currentDir': '📂 当前目录: **{name}** (`{path}`)',
+    'dir.switchedTo': '✅ 已切换到: **{name}**',
+    'dir.switchFailed': '❌ 切换失败: {reason}',
 
     // === Status line ===
     'status.connected': '已连接',

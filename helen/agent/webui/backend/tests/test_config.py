@@ -53,48 +53,52 @@ class TestBackendEnvFile:
 
 class TestSettingsDefaults:
     def test_app_name(self):
-        s = Settings()
+        s = Settings(_env_file=None)
         assert s.APP_NAME == "Helen Web UI"
 
     def test_version(self):
-        s = Settings()
+        s = Settings(_env_file=None)
         assert s.VERSION == "1.0"
 
-    def test_debug_default_false(self):
-        s = Settings()
+    def test_debug_default_false(self, monkeypatch):
+        # 隔离：跳过 .env 文件 + 清除进程环境变量，确保断言命中代码默认值
+        monkeypatch.delenv("DEBUG", raising=False)
+        s = Settings(_env_file=None)
         assert s.DEBUG is False
 
-    def test_host_default(self):
-        s = Settings()
+    def test_host_default(self, monkeypatch):
+        monkeypatch.delenv("HOST", raising=False)
+        s = Settings(_env_file=None)
         assert s.HOST == "127.0.0.1"
 
     def test_port_default(self):
-        s = Settings()
+        s = Settings(_env_file=None)
         assert s.PORT == 8000
 
     def test_helen_timeout_default(self):
-        s = Settings()
+        s = Settings(_env_file=None)
         assert s.HELEN_TIMEOUT == 300
 
     def test_cors_origins_is_list(self):
-        s = Settings()
+        s = Settings(_env_file=None)
         assert isinstance(s.CORS_ORIGINS, list)
         assert len(s.CORS_ORIGINS) > 0
 
     def test_cors_origins_contain_localhost_5173(self):
-        s = Settings()
+        s = Settings(_env_file=None)
         assert "http://localhost:5173" in s.CORS_ORIGINS
 
     def test_cors_origins_contain_127_0_0_1_5173(self):
-        s = Settings()
+        s = Settings(_env_file=None)
         assert "http://127.0.0.1:5173" in s.CORS_ORIGINS
 
     def test_helen_path_is_string(self):
-        s = Settings()
+        s = Settings(_env_file=None)
         assert isinstance(s.HELEN_PATH, str)
 
-    def test_token_default_empty(self):
-        s = Settings()
+    def test_token_default_empty(self, monkeypatch):
+        monkeypatch.delenv("HELEN_WEBUI_TOKEN", raising=False)
+        s = Settings(_env_file=None)
         # Token may be overridden by env, but default is empty
         assert isinstance(s.HELEN_WEBUI_TOKEN, str)
 

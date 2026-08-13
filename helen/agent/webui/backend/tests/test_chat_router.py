@@ -647,7 +647,8 @@ class TestWebSocketSlashCommands:
 
     def test_ws_dir_command(self, client, mock_bridge, mock_dir_mgr, tmp_path):
         """/dir <path> switches directory and broadcasts directory_changed."""
-        mock_dir_mgr.get_current_cwd.return_value = str(tmp_path)
+        # current_cwd 必须与目标路径不同，才会触发 directory_changed + actor 重启
+        mock_dir_mgr.get_current_cwd.return_value = "/old/cwd"
         mock_dir_mgr.set_current_cwd.return_value = {
             "status": "ok", "cwd": str(tmp_path), "display_name": "newdir"
         }
@@ -660,13 +661,47 @@ class TestWebSocketSlashCommands:
                 data1 = ws.receive_json()
                 assert data1["type"] == "directory_changed"
                 assert data1["data"]["cwd"] == str(tmp_path)
-                # Then processing_complete
+                # Then processing_complete with i18n_key
                 data2 = ws.receive_json()
                 assert data2["type"] == "processing_complete"
                 assert data2["data"]["is_slash_response"] is True
+                assert data2["data"]["i18n_key"] == "dir.switchedTo"
+                assert data2["data"]["params"]["name"] == "newdir"
+
+    def test_ws_dir_command_query_current(self, client, mock_bridge, mock_dir_mgr, tmp_path):
+        """/dir (no args) queries current directory without switching or restarting actor."""
+        mock_dir_mgr.get_current_cwd.return_value = str(tmp_path)
+        mock_dir_mgr.get_display_name.return_value = "myproject"
+        with patch("app.routers.chat.hint_injector"):
+            with client.websocket_connect("/api/chat/ws") as ws:
+                ws.send_json({"type": "message", "content": "/dir"})
+                data = ws.receive_json()
+                assert data["type"] == "processing_complete"
+                assert data["data"]["is_slash_response"] is True
+                assert data["data"]["i18n_key"] == "dir.currentDir"
+                assert data["data"]["params"]["path"] == str(tmp_path)
+                assert data["data"]["params"]["name"] == "myproject"
+        # set_current_cwd should NOT be called for query mode
+        mock_dir_mgr.set_current_cwd.assert_not_called()
+
+    def test_ws_dir_command_same_cwd_skips_restart(self, client, mock_bridge, mock_dir_mgr, tmp_path):
+        """/dir to the same cwd succeeds but does NOT restart actor or broadcast directory_changed."""
+        mock_dir_mgr.get_current_cwd.return_value = str(tmp_path)
+        mock_dir_mgr.set_current_cwd.return_value = {
+            "status": "ok", "cwd": str(tmp_path), "display_name": "same"
+        }
+        with patch("app.routers.chat.hint_injector"):
+            with patch("app.services.channel_actor_manager.channel_actor_manager") as mock_actor_mgr:
+                with client.websocket_connect("/api/chat/ws") as ws:
+                    ws.send_json({"type": "message", "content": f"/dir {tmp_path}"})
+                    data = ws.receive_json()
+                    assert data["type"] == "processing_complete"
+                    assert data["data"]["i18n_key"] == "dir.switchedTo"
+                # 同 cwd 切换：actor 不应被重启
+                mock_actor_mgr.exit_actor.assert_not_called()
 
     def test_ws_dir_command_failure(self, client, mock_dir_mgr, tmp_path):
-        """/dir with invalid path sends error processing_complete."""
+        """/dir with invalid path sends error processing_complete with i18n_key."""
         mock_dir_mgr.get_current_cwd.return_value = str(tmp_path)
         mock_dir_mgr.set_current_cwd.return_value = {
             "status": "error", "message": "Not a directory"
@@ -676,11 +711,13 @@ class TestWebSocketSlashCommands:
                 ws.send_json({"type": "message", "content": "/dir /nonexistent"})
                 data = ws.receive_json()
                 assert data["type"] == "processing_complete"
-                assert "Not a directory" in data["data"]["content"]
+                assert data["data"]["i18n_key"] == "dir.switchFailed"
+                assert data["data"]["params"]["reason"] == "Not a directory"
 
     def test_ws_dir_command_bridge_exception(self, client, mock_dir_mgr, mock_bridge, tmp_path):
         """/dir succeeds but get_session_id raises → helen_session_id=None in broadcast."""
-        mock_dir_mgr.get_current_cwd.return_value = str(tmp_path)
+        # current_cwd 必须与目标路径不同，才会触发 directory_changed
+        mock_dir_mgr.get_current_cwd.return_value = "/old/cwd"
         mock_dir_mgr.set_current_cwd.return_value = {
             "status": "ok", "cwd": str(tmp_path), "display_name": "newdir"
         }
