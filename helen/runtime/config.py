@@ -244,6 +244,13 @@ def resolve_session_dir(
 
     config = get_transcript_config()
 
+    # Track whether caller passed an explicit scope. When None, the scope is
+    # derived from config, and HELEN_SESSION_DIR env override should apply
+    # (it redirects where the CURRENT session lives). But when the caller
+    # explicitly asks for "global" or "project", the env override must NOT
+    # hijack the resolution — otherwise list_sessions("global") would return
+    # the project dir whenever the agent has called set_session_dir().
+    explicit_scope = scope is not None
     if scope is None:
         scope = config.get("session_scope", "auto")
     if scope not in SESSION_SCOPES:
@@ -259,8 +266,9 @@ def resolve_session_dir(
     if env_override is None:
         env_override = os.environ.get("HELEN_SESSION_DIR")
 
-    # Env override takes absolute priority
-    if env_override:
+    # Env override applies to default/auto resolution only, NOT to explicit
+    # global/project scope requests (which must return their true directories).
+    if env_override and (not explicit_scope or scope == "auto"):
         return (str(Path(env_override).expanduser().resolve()), "env_override")
 
     # Resolve based on scope

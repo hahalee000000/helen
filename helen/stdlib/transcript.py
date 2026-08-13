@@ -211,6 +211,28 @@ def list_sessions(scope: str = "") -> list[dict[str, Any]]:
     """
     from helen.runtime.config import resolve_session_dir, HELEN_HOME
 
+    def _enrich(s, sessions_dir):
+        """Add dir + parent_session_id fields (read from transcript meta).
+
+        The agent commands (/session view/delete) rely on these fields to
+        resolve the session directory and walk the parent chain.
+        """
+        s["dir"] = sessions_dir
+        s["parent_session_id"] = ""
+        try:
+            from pathlib import Path as _P
+            meta_path = _P(sessions_dir) / s["session_id"] / "transcript.jsonl"
+            if meta_path.exists():
+                with open(meta_path, encoding="utf-8") as _f:
+                    first = _f.readline().strip()
+                if first:
+                    import json as _json
+                    meta = _json.loads(first)
+                    s["parent_session_id"] = meta.get("parent_session_id", "")
+        except Exception:
+            pass
+        return s
+
     results = []
 
     if scope == "global" or scope == "":
@@ -219,7 +241,7 @@ def list_sessions(scope: str = "") -> list[dict[str, Any]]:
         manager = SessionManager(base_dir=global_dir)
         for s in manager.list_sessions():
             s["scope"] = "global"
-            results.append(s)
+            results.append(_enrich(s, global_dir))
 
     if scope == "project":
         project_dir = resolve_session_dir(scope="project")[0]
@@ -227,7 +249,7 @@ def list_sessions(scope: str = "") -> list[dict[str, Any]]:
         manager = SessionManager(base_dir=project_dir)
         for s in manager.list_sessions():
             s["scope"] = "project"
-            results.append(s)
+            results.append(_enrich(s, project_dir))
 
     # Default (no scope specified): only current scope, not both
     if scope == "":

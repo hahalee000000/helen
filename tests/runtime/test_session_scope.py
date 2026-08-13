@@ -194,11 +194,39 @@ class TestResolveSessionDir:
             assert scope == "env_override"
             assert path == str(Path(env_path).resolve())
 
-    def test_env_override_beats_scope(self):
-        """Env override takes priority even when scope=global."""
+    def test_env_override_ignored_for_explicit_global(self):
+        """Explicit scope=global ignores env override (returns true global dir).
+
+        v1.43 fix: set_session_dir() sets HELEN_SESSION_DIR to relocate the
+        CURRENT session. But list_sessions("global") must still return the
+        real global directory (~/.helen/sessions), not the relocated project
+        dir. So env override only applies to default/auto resolution.
+        """
         with tempfile.TemporaryDirectory() as tmp:
             env_path = os.path.join(tmp, "custom")
+            # Explicit global scope → env override is ignored
             path, scope = resolve_session_dir(scope="global", env_override=env_path)
+            assert scope == "global"
+            assert "custom" not in path
+
+    def test_env_override_ignored_for_explicit_project(self):
+        """Explicit scope=project ignores env override."""
+        with tempfile.TemporaryDirectory() as tmp:
+            env_path = os.path.join(tmp, "custom")
+            path, scope = resolve_session_dir(scope="project", env_override=env_path)
+            assert scope == "project"
+            assert "custom" not in path
+
+    def test_env_override_applies_to_auto_and_default(self):
+        """Env override still applies to scope=auto and default (None) resolution."""
+        with tempfile.TemporaryDirectory() as tmp:
+            env_path = os.path.join(tmp, "custom")
+            # Explicit auto → env override wins
+            path, scope = resolve_session_dir(scope="auto", env_override=env_path)
+            assert scope == "env_override"
+            assert path == str(Path(env_path).resolve())
+            # Default (no scope) → env override wins
+            path, scope = resolve_session_dir(env_override=env_path)
             assert scope == "env_override"
             assert path == str(Path(env_path).resolve())
 

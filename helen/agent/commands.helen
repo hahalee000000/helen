@@ -751,74 +751,14 @@ fn _format_ts(ts): str {
 }
 
 /** /session list — 列出所有 session */
-/** 扫描一个 session 目录，返回 session 信息列表
- *  直接读 transcript.jsonl，不依赖 list_sessions()（后者在 agent 内 scope 解析有问题）
- *  返回: [{"session_id", "created_at", "message_count", "size_bytes", "scope", "parent_session_id", "dir"}, ...] */
-fn _scan_session_dir(dir_path: str, scope: str): list {
-    let result = []
-    if !path_exists(dir_path) {
-        return result
-    }
-    let dir_entries = []
-    try { dir_entries = list_dir(dir_path) } catch { return result }
-
-    for name in dir_entries {
-        if !startswith(name, "session_") {
-            continue
-        }
-        let transcript_path = path_join(dir_path, name, "transcript.jsonl")
-        if !path_exists(transcript_path) {
-            continue
-        }
-        try {
-            let content = read_file(transcript_path)
-            let lines = split(content, "\n")
-            let real_lines = []
-            for line in lines {
-                if strip(line) != "" {
-                    real_lines = real_lines + [line]
-                }
-            }
-            if len(real_lines) == 0 {
-                continue
-            }
-            let meta = json_parse(real_lines[0])
-            let sid = name
-            try { sid = meta["session_id"] } catch {}
-            let created_at = 0
-            try { created_at = meta["timestamp"] } catch {}
-            let parent = ""
-            try { parent = meta["parent_session_id"] } catch {}
-            result = result + [{
-                "session_id": sid,
-                "created_at": created_at,
-                "message_count": len(real_lines),
-                "size_bytes": len(content),
-                "scope": scope,
-                "parent_session_id": parent,
-                "dir": dir_path
-            }]
-        } catch {
-            // 跳过解析失败的 session
-        }
-    }
-    return result
-}
 
 /** 收集所有 session（project + global scope，去重） */
 fn _collect_all_sessions(): list {
-    let cwd = get_cwd()
-    let project_dir = path_join(cwd, ".helen", "sessions")
-    let home = env_get("HOME", "")
-    if home == "" { home = env_get("USERPROFILE", "") }
-    let global_dir = ""
-    if home != "" {
-        global_dir = path_join(home, ".helen", "sessions")
-    }
-
+    // 用 stdlib list_sessions() 收集（v1.43 修复了 HELEN_SESSION_DIR 覆盖
+    // 显式 scope 的问题，list_sessions("global") 现在返回真实全局 session）
     let seen_ids = {}
     let all = []
-    for s in _scan_session_dir(project_dir, "project") {
+    for s in list_sessions("global") {
         let sid = s["session_id"]
         let dup = false
         try { if seen_ids[sid] { dup = true } } catch {}
@@ -827,15 +767,13 @@ fn _collect_all_sessions(): list {
             seen_ids[sid] = true
         }
     }
-    if global_dir != "" {
-        for s in _scan_session_dir(global_dir, "global") {
-            let sid = s["session_id"]
-            let dup = false
-            try { if seen_ids[sid] { dup = true } } catch {}
-            if !dup {
-                all = all + [s]
-                seen_ids[sid] = true
-            }
+    for s in list_sessions("project") {
+        let sid = s["session_id"]
+        let dup = false
+        try { if seen_ids[sid] { dup = true } } catch {}
+        if !dup {
+            all = all + [s]
+            seen_ids[sid] = true
         }
     }
     return all
