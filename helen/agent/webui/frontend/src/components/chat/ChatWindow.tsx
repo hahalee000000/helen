@@ -29,10 +29,24 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
   //       4. 用户点击 "启用自动滚动" 按钮
   //   用 state 而不是 ref,因为按钮状态需要反映到 UI
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
-  // isProgrammaticScrollRef: 区分程序化滚动和用户滚动
-  //   scrollToBottom 设置 scrollTop 时会同步触发 scroll 事件,
-  //   用此标志屏蔽,避免程序化滚动被误判为用户滚动
-  const isProgrammaticScrollRef = useRef(false)
+  // ──────────────────────────────────────────────────────────────────────────
+  // 用户滚动检测策略 (v2 — 解决流式推理中滚动条拖拽无法暂停的问题)
+  //
+  // 之前的方案用 isProgrammaticScrollRef 标志区分程序化滚动和用户滚动,
+  // 但流式推理时 scrollToBottom 每帧都被调用,导致该标志几乎永远为 true,
+  // 用户的滚动事件全被当成"程序化滚动"忽略,autoScrollEnabled 永远无法变 false.
+  //
+  // 新方案:基于滚动方向检测用户意图
+  //   - 流式推理中,内容持续增长,scrollHeight 单调递增
+  //   - 程序化滚动 (scrollToBottom) 总是让 scrollTop 增加(向下)
+  //   - 用户向上滚动 (拖动滚动条/鼠标滚轮/键盘) 让 scrollTop 减少
+  //   - 因此 scrollTop 减少是用户滚动的明确信号
+  //
+  // 兜底方案:wheel 和 touchmove 事件是 100% 用户意图(程序化滚动不触发),
+  // 用于捕获 scrollTop 增加但仍为用户意图的罕见场景(例如用户在底部附近
+  // 轻微向下滚动).
+  // ──────────────────────────────────────────────────────────────────────────
+  const lastScrollTopRef = useRef(0)
 
   // 判断是否接近底部
   const isNearBottom = (): boolean => {
@@ -45,13 +59,9 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
   const scrollToBottom = useCallback(() => {
     const el = containerRef.current
     if (!el) return
-    isProgrammaticScrollRef.current = true
     el.scrollTop = el.scrollHeight
-    // 程序化滚动触发的 scroll 事件在同一帧内处理,
-    // 下一帧再解除标志
-    requestAnimationFrame(() => {
-      isProgrammaticScrollRef.current = false
-    })
+    // 记录实际滚动位置（浏览器会 clamp 到 scrollHeight - clientHeight）
+    lastScrollTopRef.current = el.scrollTop
     setShowScrollBtn(false)
   }, [])
 
@@ -61,56 +71,56 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
     scrollToBottom()
   }, [scrollToBottom])
 
-  // 暂停自动滚动 (用户任何形式的滚动/滚轮/触摸干预)
+  // 暂停自动滚动
   const pauseAutoScroll = useCallback(() => {
     setAutoScrollEnabled(false)
   }, [])
 
-  // scroll 事件:区分用户滚动 vs 程序化滚动.
-  // 只有用户滚动才会暂停自动跟随.
+  // ── 滚动/滚轮/触摸事件统一监听 ────────────────────────────────────────────
+  // 单 useEffect 注册所有事件,减少重复代码和清理逻辑
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
 
+    // 1. scroll 事件:基于滚动方向检测用户滚动
+    //    流式推理中,程序化滚动使 scrollTop 增加,用户向上滚动使 scrollTop 减少.
+    //    阈值 8px 用于吸收浏览器四舍五入抖动.
     const handleScroll = () => {
-      if (isProgrammaticScrollRef.current) {
-        // 程序化滚动 (scrollToBottom 触发),忽略
-        return
+      const current = el.scrollTop
+      const last = lastScrollTopRef.current
+      lastScrollTopRef.current = current
+
+      // scrollTop 减少 = 用户明确向上滚动(对抗程序化向下滚动)
+      if (current < last - 8) {
+        setAutoScrollEnabled(false)
+        setShowScrollBtn(!isNearBottom())
       }
-      // 用户主动滚动 — 无论滚动多少,都视为手动干预
-      // (不再使用 BOTTOM_THRESHOLD 判断,任何用户滚动都暂停)
+    }
+
+    // 2. wheel 事件:鼠标滚轮 — 100% 用户意图(程序化 scrollTop 赋值不触发 wheel)
+    //    无论向上/向下,都视为用户想控制滚动
+    const handleWheel = () => {
       setAutoScrollEnabled(false)
-      // 更新"回到底部"按钮显示状态
-      setShowScrollBtn(!isNearBottom())
+      requestAnimationFrame(() => {
+        lastScrollTopRef.current = el.scrollTop
+        setShowScrollBtn(!isNearBottom())
+      })
+    }
+
+    // 3. touchmove 事件:触摸滑动 — 同样 100% 用户意图
+    const handleTouchMove = () => {
+      setAutoScrollEnabled(false)
+      requestAnimationFrame(() => {
+        lastScrollTopRef.current = el.scrollTop
+        setShowScrollBtn(!isNearBottom())
+      })
     }
 
     el.addEventListener('scroll', handleScroll, { passive: true })
-    return () => el.removeEventListener('scroll', handleScroll)
-  }, [])
-
-  // wheel / touchmove 事件:某些浏览器/系统下,滚动条拖拽可能不触发 scroll 事件,
-  // 但 wheel (鼠标滚轮) 和 touchmove (触摸滑动) 一定会触发.
-  // 用这些事件作为兜底检测,确保用户意图被捕获.
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
-
-    const handleWheel = () => {
-      // 鼠标滚轮 — 用户意图明确,暂停自动滚动
-      setAutoScrollEnabled(false)
-      // 延迟更新按钮状态 (等 scroll 事件触发后再判断位置)
-      requestAnimationFrame(() => setShowScrollBtn(!isNearBottom()))
-    }
-
-    const handleTouchMove = () => {
-      // 触摸滑动 — 用户意图明确,暂停自动滚动
-      setAutoScrollEnabled(false)
-      requestAnimationFrame(() => setShowScrollBtn(!isNearBottom()))
-    }
-
     el.addEventListener('wheel', handleWheel, { passive: true })
     el.addEventListener('touchmove', handleTouchMove, { passive: true })
     return () => {
+      el.removeEventListener('scroll', handleScroll)
       el.removeEventListener('wheel', handleWheel)
       el.removeEventListener('touchmove', handleTouchMove)
     }
@@ -129,7 +139,10 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
     setShowScrollBtn(false)
     requestAnimationFrame(() => {
       const el = containerRef.current
-      if (el) el.scrollTop = el.scrollHeight
+      if (el) {
+        el.scrollTop = el.scrollHeight
+        lastScrollTopRef.current = el.scrollTop  // 使用实际值
+      }
     })
   }, [sessionId])
 
@@ -169,30 +182,33 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
         )}
       </div>
 
-      {/* 消息列表（relative 容器用于定位浮动按钮） */}
-      <div
-        ref={containerRef}
-        className="relative flex-1 overflow-y-auto p-4"
-        style={{
-          backgroundImage: "url('/wallpaper.png')",
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-        }}
-      >
-        <MessageList messages={messages} />
+      {/* 消息列表 + 浮动按钮（relative 容器用于定位） */}
+      <div className="relative flex-1 min-h-0">
+        {/* 可滚动消息区域 */}
+        <div
+          ref={containerRef}
+          className="h-full overflow-y-auto p-4"
+          style={{
+            backgroundImage: "url('/wallpaper.png')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+          }}
+        >
+          <MessageList messages={messages} />
+        </div>
 
-        {/* 浮动按钮区：右下角叠加 "回到底部" 和 "启用/暂停自动滚动" */}
+        {/* 浮动按钮区：定位在 relative 容器内，不受 overflow 影响 */}
         <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2">
-          {/* 暂停/启用 自动滚动切换按钮: 始终可见(用户可显式控制) */}
+          {/* 暂停/启用 自动滚动切换按钮: 始终可见 */}
           <button
             onClick={() => autoScrollEnabled ? pauseAutoScroll() : enableAutoScroll()}
-            className={`flex items-center gap-1 rounded-full shadow-lg px-3 py-2 text-sm transition-opacity ${
+            className={`flex items-center gap-1.5 rounded-full shadow-lg px-4 py-2.5 text-sm font-medium transition-colors ${
               autoScrollEnabled
                 ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
                 : 'bg-amber-500 hover:bg-amber-600 text-white'
             }`}
-            title={autoScrollEnabled ? '暂停自动滚动 (滚动/滚轮/触摸也会自动暂停)' : '启用自动滚动 (跟随最新消息)'}
+            title={autoScrollEnabled ? '暂停自动滚动' : '启用自动滚动'}
           >
             {autoScrollEnabled ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
             <span>{autoScrollEnabled ? '暂停' : '跟随'}</span>
@@ -202,7 +218,7 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
           {showScrollBtn && (
             <button
               onClick={() => enableAutoScroll()}
-              className="flex items-center gap-1 rounded-full bg-primary text-primary-foreground shadow-lg px-3 py-2 text-sm hover:opacity-90 transition-opacity"
+              className="flex items-center gap-1.5 rounded-full bg-blue-500 hover:bg-blue-600 text-white shadow-lg px-4 py-2.5 text-sm font-medium transition-colors"
               title={t('chat.scrollBottom')}
             >
               <ArrowDown className="w-4 h-4" />
