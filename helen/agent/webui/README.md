@@ -50,7 +50,7 @@ helenagent-web/
 ```bash
 # 从项目根目录运行
 cd ..
-./start-web.sh
+./helen agent
 ```
 
 这会同时启动后端和前端服务。
@@ -59,12 +59,12 @@ cd ..
 
 **启动后端**：
 ```bash
-./start-backend.sh
+./start_webui.py (backend)
 ```
 
 **启动前端**（新终端）：
 ```bash
-./start-frontend.sh
+./start_webui.py (frontend)
 ```
 
 ### 访问应用

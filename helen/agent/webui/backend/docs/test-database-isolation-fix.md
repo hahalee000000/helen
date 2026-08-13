@@ -2,7 +2,7 @@
 
 ## 问题描述
 
-每次重启 `start-web.sh` 后，Web UI 的所有会话数据丢失。
+每次重启 `helen agent` 后，Web UI 的所有会话数据丢失。
 
 ## 根本原因
 

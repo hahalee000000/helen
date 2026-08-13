@@ -31,7 +31,7 @@ def _default_helen_path() -> str:
 def _backend_env_file() -> str:
     """返回 backend/.env 的绝对路径
 
-    修复前 start-backend.sh 总是 cd 到 backend/ 目录，pydantic-settings 用相对路径 ".env" 能正确加载。
+    修复前启动脚本总是 cd 到 backend/ 目录，pydantic-settings 用相对路径 ".env" 能正确加载。
     修复后进程 cwd 是用户的真实工作目录，必须用绝对路径指向 backend/.env。
     """
     # 本文件位于 webui/backend/app/config.py，backend/ 是 parents[1]

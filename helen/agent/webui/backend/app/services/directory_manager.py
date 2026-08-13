@@ -16,16 +16,16 @@ from pathlib import Path
 #
 # 初始化策略：
 #   优先 HELEN_WEBUI_CWD 环境变量（显式覆盖）；
-#   否则用 os.getcwd()（start-backend.sh 已通过 os.chdir 切到用户真实目录）。
+#   否则用 os.getcwd()（start_webui.py 已通过 HELEN_WEBUI_CWD 环境变量传递工作目录）。
 #
 # 历史背景：
-#   旧版 start-backend.sh 总是 cd 到 backend/ 目录，导致 os.getcwd() 永远是
+#   旧版启动脚本总是 cd 到 backend/ 目录，导致 os.getcwd() 永远是
 #   ~/helenagent/webui/backend/，所有目录共享同一个 DB 和 Helen session。
-#   修复后 start-backend.sh 用 `python -c "os.chdir(USER_CWD); uvicorn.run(...)"`
-#   保持进程 cwd 为用户启动 start-web.sh 时的目录。
+#   修复后 start_webui.py 用 `python -c "os.chdir(USER_CWD); uvicorn.run(...)"`
+#   保持进程 cwd 为用户启动 helen agent 时的目录。
 #
 # 防御性设计：
-#   即使 start-backend.sh 的 chdir 失效，HELEN_WEBUI_CWD 环境变量仍可强制指定。
+#   即使工作目录切换失败，HELEN_WEBUI_CWD 环境变量仍可强制指定。
 #   两者都失败时退回 os.getcwd()。
 def _init_cwd() -> str:
     env_cwd = os.environ.get("HELEN_WEBUI_CWD", "")

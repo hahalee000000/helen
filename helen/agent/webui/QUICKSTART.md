@@ -4,7 +4,7 @@
 
 ```bash
 cd ~/helenagent
-./start-web.sh
+./helen agent
 ```
 
 访问：
@@ -19,20 +19,20 @@ cd ~/helenagent/webui
 ./stop-all.sh
 ```
 
-或在运行 `start-web.sh` 的终端按 `Ctrl+C`（会自动释放端口）。
+或在运行 `helen agent` 的终端按 `Ctrl+C`（会自动释放端口）。
 
 ## 📋 分别启动
 
 **后端**：
 ```bash
 cd ~/helenagent/webui
-./start-backend.sh
+./start_webui.py (backend)
 ```
 
 **前端**（新终端）：
 ```bash
 cd ~/helenagent/webui
-./start-frontend.sh
+./start_webui.py (frontend)
 ```
 
 ## 🔧 环境要求

@@ -125,8 +125,8 @@ def find_helen_python() -> str:
     """Find the Python executable where Helen is installed.
 
     Tries (in order):
-    1. HELEN_VENV environment variable (set by user or start-backend.sh)
-    2. ~/.venv (shared venv used by start-backend.sh)
+    1. HELEN_VENV environment variable (set by user or start_webui.py)
+    2. ~/.venv (shared venv used by start_webui.py)
     3. Current sys.executable (fallback)
     """
     import sys
@@ -188,6 +188,7 @@ def start_backend(backend_dir: Path, env: dict) -> subprocess.Popen:
 
     # Use inline Python to avoid separate launcher file
     # The key is to chdir via env var, not string interpolation (avoids path escaping issues)
+    # Read HOST from env (default 127.0.0.1), warn if binding to 0.0.0.0
     backend_code = (
         "import os, sys\n"
         "cwd = os.environ.get('HELEN_WEBUI_CWD')\n"
@@ -198,7 +199,11 @@ def start_backend(backend_dir: Path, env: dict) -> subprocess.Popen:
         "        pass\n"
         "import uvicorn\n"
         "from app.config import settings\n"
-        "uvicorn.run('app.main:app', host=settings.HOST, port=settings.PORT, reload=False)\n"
+        "host = settings.HOST\n"
+        "if host == '0.0.0.0':\n"
+        "    print('⚠️  WARNING: Binding to 0.0.0.0 exposes WebUI to LAN.', file=sys.stderr)\n"
+        "    print('   For local-only access, set HOST=127.0.0.1 in .env', file=sys.stderr)\n"
+        "uvicorn.run('app.main:app', host=host, port=settings.PORT, reload=False)\n"
     )
 
     creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if IS_WINDOWS else 0
@@ -239,6 +244,19 @@ def start_frontend(frontend_dir: Path, env: dict) -> subprocess.Popen:
         except (subprocess.CalledProcessError, OSError) as e:
             print(f"❌ npm install failed: {e}")
 
+    # Read token from user's cwd and pass to frontend via env var
+    frontend_env = env.copy()
+    user_cwd = env.get("HELEN_WEBUI_CWD", str(Path.cwd()))
+    token_file = Path(user_cwd) / ".helen" / "webui_token"
+    if token_file.exists():
+        try:
+            token = token_file.read_text().strip()
+            if token:
+                frontend_env["HELEN_WEBUI_TOKEN"] = token
+                print(f"🔑 Token loaded for frontend auto-injection")
+        except Exception:
+            pass  # Ignore read errors
+
     print("🎨 Starting frontend...")
     print("   Frontend: http://localhost:5173")
 
@@ -248,7 +266,7 @@ def start_frontend(frontend_dir: Path, env: dict) -> subprocess.Popen:
     _frontend_proc = subprocess.Popen(
         ["npm", "run", "dev"],
         cwd=str(frontend_dir),
-        env=env,
+        env=frontend_env,
         shell=IS_WINDOWS,  # npm is a .cmd on Windows
         creationflags=creationflags,
         preexec_fn=preexec_fn,

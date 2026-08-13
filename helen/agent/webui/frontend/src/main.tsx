@@ -7,15 +7,32 @@ import { setStoredToken } from './services/api'
 import App from './App'
 import './index.css'
 
-// ── URL token 自动注入 ──────────────────────────────────────
-// 启动时检测 URL 中的 ?token=xxx，自动存入 localStorage 并从 URL 移除
-// 这样 vite 的 o 快捷键可以直接打开带 token 的 URL，前端自动完成认证
-;(function bootstrapTokenFromURL() {
+// 类型声明：vite 插件注入的 token 全局变量
+declare global {
+  interface Window {
+    __HELEN_TOKEN__?: string
+  }
+}
+
+// ── Token 自动注入 ──────────────────────────────────────────
+// 优先级：
+//   1. window.__HELEN_TOKEN__ (由 vite 插件从服务端环境变量注入到 HTML)
+//   2. URL 中的 ?token=xxx (兼容旧的 URL 方式)
+// 自动存入 localStorage，前端后续请求自动带上 token
+;(function bootstrapToken() {
   try {
+    // 优先使用 vite 注入的 token
+    const injectedToken = window.__HELEN_TOKEN__
+    if (injectedToken) {
+      setStoredToken(injectedToken)
+      return
+    }
+
+    // 回退：检测 URL 中的 ?token=xxx
     const params = new URLSearchParams(window.location.search)
-    const token = params.get('token')
-    if (token) {
-      setStoredToken(token)
+    const urlToken = params.get('token')
+    if (urlToken) {
+      setStoredToken(urlToken)
       // 从 URL 移除 token 参数，保持 history 干净
       params.delete('token')
       const newUrl = params.toString()
