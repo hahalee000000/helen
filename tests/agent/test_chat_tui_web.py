@@ -161,10 +161,14 @@ class TestImportFailure:
     def test_exits_when_bridge_unavailable(self, tmp_path, monkeypatch):
         """When helen.python_bridge can't be imported, module calls sys.exit(1)."""
         _remove_chat_tui_web()
-        # Remove any fake helen modules
+        # Save and remove any fake helen modules — must restore on teardown
+        # so subsequent tests see the original import_hook module (otherwise
+        # the import_hook gets reloaded as a new module instance, creating a
+        # second HelenMetaPathFinder and breaking session_id override tests).
+        saved_bridge_modules = {}
         for key in list(sys.modules.keys()):
             if key.startswith("helen.python_bridge"):
-                del sys.modules[key]
+                saved_bridge_modules[key] = sys.modules.pop(key)
 
         # Make helen.python_bridge raise ImportError
         import builtins
@@ -180,8 +184,15 @@ class TestImportFailure:
         agent_dir = str(Path(__file__).resolve().parents[2] / "helen" / "agent")
         monkeypatch.syspath_prepend(agent_dir)
 
-        with pytest.raises(SystemExit) as exc_info:
-            import chat_tui_web  # noqa: F401
+        try:
+            with pytest.raises(SystemExit) as exc_info:
+                import chat_tui_web  # noqa: F401
 
-        assert exc_info.value.code == 1
-        _remove_chat_tui_web()
+            assert exc_info.value.code == 1
+        finally:
+            _remove_chat_tui_web()
+            # Restore the original helen.python_bridge* modules so the import
+            # hook's set_session_id() and the loader's _detect_session_id()
+            # continue to refer to the SAME module instance.
+            for key, mod in saved_bridge_modules.items():
+                sys.modules[key] = mod
