@@ -192,6 +192,10 @@ The agent understands Claude-Code-style slash commands. They are parsed in `hele
 | `/memory` | Show memory system state |
 | `/working-memory` | Show the `<working_memory>` block contents |
 | `/mode` | Switch output mode (e.g. streaming vs. batched) |
+| `/dir [path]` | Show or change the working directory (tilde `~` expansion supported) |
+| `/session list` | List all sessions across global + project scopes (v1.44) |
+| `/session delete <id>` | Delete a session by ID (fuzzy match; refuses if referenced by memento or has children) (v1.44) |
+| `/session view <id>` | Show the user messages of a session, walking up the parent chain (v1.44) |
 
 **Parsing details**: `parse_command()` strips whitespace, normalizes fullwidth slash `／` → `/`, and returns `{"is_command": bool, "command": str, "args": list<str>}`. Non-commands pass through to the LLM.
 

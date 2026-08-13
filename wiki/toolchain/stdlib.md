@@ -43,7 +43,7 @@ class BuiltinFunction:
 | **Data** | 26 | `data.py`, `data_formats.py` |
 | **Collection** | 22 | `collection.py` |
 | **Network** | 9 | `network.py` |
-| **Time** | 13 | `time.py` |
+| **Time** | 14 | `time.py` |
 | **Math** | 15 | `math_stats.py` |
 | **File** | 18 | `file_advanced.py` |
 | **System** | 18 | `system.py` |
@@ -275,14 +275,15 @@ class BuiltinFunction:
 
 ---
 
-## Time (13)
+## Time (14)
 
-### Time Retrieval (3)
+### Time Retrieval (4)
 
 | Function | Signature | Description |
 |---|---|---|
 | `now` | `now()` → str | Current date and time |
 | `time` | `time()` → float | Unix timestamp |
+| `fromtimestamp` | `fromtimestamp(timestamp)` → str | Unix timestamp to ISO datetime (v1.44) |
 | `sleep` | `sleep(seconds)` → None | Pause execution |
 
 ### Date Operations (10)

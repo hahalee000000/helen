@@ -34,6 +34,9 @@ verify.py
 
 # Helen sessions (transcript recordings)
 .helen/sessions/
+# Helen agent local runtime state (per-cwd memento + WebUI token)
+.helen/current_session_id
+.helen/webui_token
 
 # codebase-memory-mcp index artifact (regenerated per-machine, not for git)
 .codebase-memory/

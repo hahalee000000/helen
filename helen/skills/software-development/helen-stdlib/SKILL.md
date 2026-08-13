@@ -1,7 +1,7 @@
 ---
 name: helen-stdlib
-description: "Helen Standard Library Guide — Categorized reference and examples for 378+ built-in functions (v1.40 adds 14 AI-native debugging functions)"
-version: 1.40.0
+description: "Helen Standard Library Guide — Categorized reference and examples for 407 built-in functions across 21 categories (v1.44 adds fromtimestamp, enhanced list_sessions/delete_session)"
+version: 1.44.0
 author: Helen Team
 license: MIT
 metadata:
@@ -11,7 +11,7 @@ metadata:
 
 # Helen Standard Library Reference
 
-Helen's standard library provides **378 built-in functions**, covering all core needs for AI application development.
+Helen's standard library provides **407 built-in functions** across 21 categories, covering all core needs for AI application development.
 
 ## Category Overview
 
@@ -22,15 +22,15 @@ Helen's standard library provides **378 built-in functions**, covering all core 
 | **Data** | 28 | `json_parse`, `json_parse_lenient`, `json_stringify`, `yaml_parse`, `toml_parse`, `csv_parse`, `xml_parse`, `html_escape`, `html_parse`, `markdown_parse`, `markdown_to_html` |
 | **Collection** | 26 | `sort`, `reverse`, `unique`, `flatten`, `zip`, `map`, `filter`, `reduce`, `chunk`, `set_union`, `set_intersection`, `set_difference`, `remove_key`, `get`, `set_key`, `has_key` |
 | **Network** | 9 | `http_get`, `http_post`, `http_put`, `http_delete`, `http_download`, `url_parse`, `url_build`, `url_encode`, `url_decode` |
-| **Time** | 16 | `now`, `time`, `date`, `datetime`, `date_format`, `date_parse`, `date_add`, `date_diff`, `sleep`, `stopwatch_start`, `stopwatch_elapsed`, `stopwatch_lap` |
+| **Time** | 17 | `now`, `time`, `date`, `datetime`, `fromtimestamp`, `date_format`, `date_parse`, `date_add`, `date_diff`, `sleep`, `stopwatch_start`, `stopwatch_elapsed`, `stopwatch_lap` |
 | **Math** | 27 | `round`, `sqrt`, `floor`, `ceil`, `sum`, `product`, `mean`, `median`, `mode`, `stddev`, `variance`, `percentile`, `correlation`, `cos`, `sin`, `tan`, `pow`, `log`, `log2`, `log10`, `exp` |
 | **File** | 12 | `read_file`, `write_file`, `append_file`, `list_dir`, `mkdir`, `mkdir_p`, `copy_file`, `delete_file`, `file_size`, `glob_files`, `grep_files`, `temp_file` |
 | **System** | 24 | `env_get`, `env_set`, `env_delete`, `env_list`, `get_cli_args`, `parse_cli_args`, `shell_exec`, `exec`, `exec_async`, `pid`, `exit`, `kill`, `log_info`, `log_error`, `log_debug`, `platform`, `hostname`, `python_version`, `cpu_count`, `memory_info` |
-| **Crypto** | 20 | `md5`, `sha1`, `sha256`, `sha512`, `hmac_sha256`, `random`, `randint`, `choice`, `shuffle`, `sample`, `uuid_generate`, `uuid_from_string`, `uuid_nil`, `random_bytes`, `random_hex`, `random_base64` |
+| **Crypto** | 17 | `md5`, `sha1`, `sha256`, `sha512`, `hmac_sha256`, `random`, `randint`, `choice`, `shuffle`, `sample`, `uuid_generate`, `uuid_from_string`, `uuid_nil`, `random_bytes`, `random_hex`, `random_base64` |
 | **IO** | 9 | `stream_print`, `stream_clear`, `progress_bar`, `mkdir`, `mkdir_p`, `append_file`, `stream_cursor_up`, `stream_cursor_down` |
 | **Path** | 6 | `path_basename`, `path_dirname`, `path_exists`, `path_is_dir`, `path_is_file`, `path_join` |
 | **Tools** | 7 | `shell_exec`, `calculate`, `patch_file`, `load_skill`, `list_skill_references`, `web_search`, `web_fetch` |
-| **Debug** (v1.40) | 22 | `debug`, `trace_on`, `trace_off`, `get_trace`, `coverage_on`, `coverage_off`, `coverage_report`, `coverage_summary`, `last_error_detail`, `error_category`, `error_suggestion`, `error_data_flow`, `validate_output`, `query_transcript`, `record_session`, `stop_recording`, `replay_session`, `trace_value_origin`, `trace_value_consumers`, `get_data_lineage`, `record_data_flow` |
+| **Debug** (v1.40) | 23 | `debug`, `trace_on`, `trace_off`, `get_trace`, `coverage_on`, `coverage_off`, `coverage_report`, `coverage_summary`, `last_error_detail`, `error_category`, `error_suggestion`, `error_data_flow`, `validate_output`, `query_transcript`, `record_session`, `stop_recording`, `replay_session`, `trace_value_origin`, `trace_value_consumers`, `get_data_lineage`, `record_data_flow` |
 | **Context** | 29 | `clear_context`, `compress_context`, `compress_context_target`, `context_stats`, `context_usage`, `get_message`, `delete_message`, `pin_message`, `unpin_message`, `list_pinned_messages`, `insert_message`, `replace_message`, `working_memory_get`, `working_memory_set`, `working_memory_remove`, `working_memory_clear`, `set_compression_strategy`, `set_context_window`, `set_working_memory_enabled`, `set_cache_aware`, `get_context_config`, `search_context`, `context_slice`, `export_context`, `import_context`, `fork_context`, `restore_context`, `on_compression`, `on_context_overflow` |
 | **Transcript** | 22 | `get_session_id`, `get_session_meta`, `list_sessions`, `replay_transcript`, `replay_full_session`, `export_transcript`, `search_transcript`, `list_invocations`, `get_invocation`, `get_invocation_tree`, `invocation_path`, `get_compression_audit`, `resume_session`, `get_session_dir`, `set_session_dir`, `delete_session`, `delete_current_session`, `cleanup_sessions`, `get_spawned_sessions`, `get_spawn_tree` |
 | **Media** | 12 | `media`, `media_base64`, `is_media`, `media_type`, `to_openai_parts`, `to_claude_parts`, `to_gemini_parts`, `media_to_base64`, `save_media`, `is_image`, `is_video`, `is_audio` |
@@ -312,6 +312,9 @@ main {
     // Current time
     let now_ts = now()                    // Unix timestamp (seconds)
     let current = time()                  // Current time (datetime object)
+
+    // Unix timestamp → ISO datetime (v1.44)
+    let dt = fromtimestamp(1723534245)    // "2026-08-13T10:30:45"
 
     // Formatting
     let formatted = date_format(now(), "%Y-%m-%d %H:%M:%S")
@@ -902,7 +905,11 @@ main {
 
     // list_sessions(scope?) — List all sessions
     let sessions = list_sessions()
-    // [{session_id, created_at, modified_at, size_bytes, message_count, scope}, ...]
+    // [{session_id, created_at, modified_at, size_bytes, message_count, scope,
+    //   dir, parent_session_id}, ...]
+    //   scope: "global" | "project"
+    //   dir:   directory containing the session (absolute path)
+    //   parent_session_id: parent session's ID if this is a spawned child (v1.44)
     let global_sessions = list_sessions("global")
     let project_sessions = list_sessions("project")
 

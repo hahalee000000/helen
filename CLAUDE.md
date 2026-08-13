@@ -7,9 +7,9 @@ For the broader multi-project layout, see `../CLAUDE.md`.
 
 **Helen** — a prompt-first Agent programming language (AI-native DSL). Combines deterministic constructs (variables, functions, control flow) with first-class LLM primitives (`llm act`, `llm if`). 
 
-- **Version**: 1.43.0
+- **Version**: 1.44.0
 - **Keywords**: 99 bilingual (48 English + 51 Chinese)
-- **Built-in functions**: 377 stdlib functions (21 categories), 728 total names (with locale aliases)
+- **Built-in functions**: 407 stdlib functions (21 categories), 728 total names (with locale aliases)
 - **Stdlib modules**: 22 modules (std.core, std.str, std.math, std.list, ...)
 - **Tests**: 3959 passing (Python pytest)
 - **Python**: 3.12+ required
@@ -116,7 +116,7 @@ helen/
 │                  # prompt_builder.py, history.py, observability.py, fuzzy_match.py
 │                  # transcript_store.py, session_manager.py, channel.py
 │                  # provider_protocol.py, model_capabilities.py, probe.py (v1.40.1)
-├── stdlib/        # 377 built-in functions (21 categories), 22 modules
+├── stdlib/        # 407 built-in functions (21 categories), 22 modules
 │                  # locales/zh.py (Chinese aliases), mailbox.py (v1.18: mailbox_select)
 ├── ffi/           # Python FFI
 ├── cli/           # __main__.py, repl.py, ask_assistant.py, formatter.py, docgen.py
@@ -201,7 +201,7 @@ Claude Code auto-loads relevant skills based on task context:
 
 **Helen-Specific Skills** (for Helen development):
 - `helen-syntax` — Complete language syntax reference (99 keywords, types, expressions)
-- `helen-stdlib` — 377 built-in functions reference with examples
+- `helen-stdlib` — 407 built-in functions reference with examples
 - `helen-testing` — Test framework usage, TDD workflow, agent testing
 - `helen-quality` — 7-dimension quality assessment guide
 - `helen-agent-patterns` — Single agent design patterns (7 patterns)

@@ -223,6 +223,29 @@ main {
 }
 ```
 
+### Map Method Access (v1.44)
+
+Map literals support Python-style method access — `.get()`, `.keys()`, `.values()`, `.items()`. These methods are only recognized when the property name is **not already a key** in the map (key lookup takes precedence):
+
+```helen
+import std.core.*
+main {
+    let m = {"a": 1, "b": 2, "get": "literal"}
+
+    // Method access (property not a key)
+    m.get("a")            // 1
+    m.keys()              // ["a", "b", "get"]
+    m.values()            // [1, 2, "literal"]
+    m.items()             // [["a", 1], ["b", 2], ["get", "literal"]]
+
+    // Key lookup wins: "get" is a real key
+    m["get"]              // "literal"
+    m.get                 // "literal" (treated as key, not method)
+}
+```
+
+**Precedence rule**: If a Map contains a key named `get`/`keys`/`values`/`items`, that key shadows the method. Use `Dict.get(map, key)` (stdlib) for unambiguous access.
+
 ### Chinese Fullwidth Operators (v1.10)
 
 Chinese fullwidth punctuation marks are equivalent alternatives to ASCII operators — no need to switch input methods:

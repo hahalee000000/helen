@@ -1,5 +1,82 @@
 # 版本历史
 
+> Helen v1.44.0 | stdlib `fromtimestamp()` + 会话命令 + Map 方法访问 + WebUI 滚动/历史输入修复
+
+---
+
+## v1.44.0: stdlib 增强 + 会话命令 + WebUI 体验改进
+
+**发布日期**: 2026-08-13
+**核心功能**:
+- 新增 stdlib 函数 `fromtimestamp(timestamp)` — Unix 时间戳转 ISO datetime
+- 新增 `/session list|delete|view` 子命令,替代危险的 `/cleanup-sessions`
+- Map 字面量支持 `.get()/.keys()/.values()/.items()` 方法访问
+- WebUI: 滚动条拖拽冻结自动滚动、输入框 ↑/↓ 历史导航
+
+### 1. stdlib: `fromtimestamp()`
+
+新函数:把 Unix 时间戳(秒,整数或浮点)转为 ISO 8601 datetime 字符串。
+
+```helen
+import std.time.*
+main {
+    let dt = fromtimestamp(1723534245)  // "2026-08-13T10:30:45"
+}
+```
+
+位于 `helen/stdlib/time.py`,类别 `time`。Time 类别从 16 → 17 个函数,总 stdlib 函数数从 378 → 407。
+
+### 2. `list_sessions()` 返回值增强
+
+新增两个字段:
+- `dir`: session 所在的绝对路径目录
+- `parent_session_id`: 父 session 的 ID(用于 `/session view` 追溯父链)
+
+### 3. `resolve_session_dir` scope 修复 (核心 bug)
+
+**问题**:`list_sessions("global")` 在 agent 上下文中返回 0 条。
+**根因**:`set_session_dir()` 设置的 `HELEN_SESSION_DIR` 环境变量劫持了显式 `scope="global"` 的解析。
+**修复**:env_override 只作用于 default/auto 解析;显式 `scope="global"`/`scope="project"` 返回真实目录。
+
+### 4. `/session` 子命令
+
+| 子命令 | 行为 |
+|--------|------|
+| `/session list` | 合并 global + project scope 列出所有 session(去重,按 modified_at 降序) |
+| `/session delete <id>` | 按 ID 模糊匹配删除;三重安全检查(当前 session、被 memento 引用、有子 session) |
+| `/session view <id>` | 显示用户消息,沿 `parent_session_id` 追溯最多 5 跳 |
+
+删除了危险的 `/cleanup-sessions` 命令(曾误删非空 session)。
+
+### 5. Map 方法访问 (解释器增强)
+
+`helen/interpreter/interpreter.py` 的 `visit_access` 扩展:当访问 `.get`/`.keys`/`.values`/`.items` 且该属性**不是** Map 现有 key 时,返回对应方法。
+
+**优先级**:key 查找 > 方法查找。如果 Map 包含 key `"get"`,`m.get` 返回 value 而不是方法。需要明确调用方法时用 `Dict.get(map, key)`。
+
+### 6. WebUI 改进
+
+**滚动行为** (`ChatWindow.tsx`):
+- 拆分为 `userScrolledAwayRef`(冻结自动滚动)和 `showScrollBtn`(显示"回到底部"按钮)
+- 用户拖滚动条阅读 → 冻结自动滚动
+- 发送新消息 / 点击"回到底部" / 切换会话 → 恢复自动跟随
+- 解决流式 chunk 极快到达时 `scrollToBottom()` 抢占用户滚动的 race condition
+
+**输入历史** (`MessageInput.tsx`):
+- ↑/↓ 键浏览最近 100 条已发送消息(shell 风格)
+- 进入历史模式前保存当前草稿,↓ 回到底时恢复
+- 主动编辑(onChange)退出历史模式
+
+### 7. 其他修复
+
+- Map `.get()/.keys()/.values()/.items()` 不一致(解释器)
+- `delete_session()` 跨 scope 工作
+- `query_transcript` 缺失 `context_helpers` 模块 → 新增 `helen/stdlib/context_helpers.py`
+- `datetime()` 不接受 Unix 时间戳 → 用 `fromtimestamp()` 替代
+- `input` / `entries` 保留字文档补全
+
+---
+
 > Helen v1.41.0 | 自定义 Provider 动态加载 + `helen-custom-provider` 内置 Skill
 
 ---

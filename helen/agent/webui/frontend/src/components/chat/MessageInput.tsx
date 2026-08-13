@@ -11,16 +11,37 @@ interface MessageInputProps {
   isLoading?: boolean
 }
 
+// 历史输入最大保留条数
+const HISTORY_MAX = 100
+
 export function MessageInput({ onSend, onStop, disabled, isLoading }: MessageInputProps) {
   const [input, setInput] = useState('')
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const t = useT()
+  // ── 历史输入导航 ──
+  // history: 最近已发送的消息,最新在前 (history[0] = 最新)
+  const [history, setHistory] = useState<string[]>([])
+  // historyIndexRef: 当前在 history 中的位置,-1 表示不在导航模式
+  const historyIndexRef = useRef(-1)
+  // savedDraftRef: 进入导航模式前保存的当前输入草稿
+  //   用户按 ArrowDown 一路回到底时,恢复这个草稿
+  const savedDraftRef = useRef('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if ((!input.trim() && pendingFiles.length === 0) || disabled || isLoading) return
+
+    // 记录到历史(仅完整发送,不含 hint;保留去重:与最近一条相同则跳过)
+    if (input.trim()) {
+      setHistory(prev => {
+        const next = prev[0] === input ? prev : [input, ...prev]
+        return next.slice(0, HISTORY_MAX)
+      })
+    }
+    historyIndexRef.current = -1
+    savedDraftRef.current = ''
 
     // 上传附件（如果有）
     let attachments: Attachment[] = []
@@ -60,6 +81,41 @@ export function MessageInput({ onSend, onStop, disabled, isLoading }: MessageInp
       } else {
         handleSubmit(e)
       }
+      return
+    }
+
+    // ── 历史输入导航(↑/↓) ──
+    // 仅在非多行编辑时触发(输入内容不含换行,或光标在首/末行)。
+    // 为简化 UX,这里采用 shell 约定:无条件拦截 ↑/↓。
+    // 多行编辑用 Shift+Enter 插入换行。
+    if (e.key === 'ArrowUp') {
+      if (history.length === 0) return
+      e.preventDefault()
+      if (historyIndexRef.current === -1) {
+        // 进入导航模式:保存当前草稿
+        savedDraftRef.current = input
+        historyIndexRef.current = 0
+      } else if (historyIndexRef.current < history.length - 1) {
+        historyIndexRef.current++
+      }
+      setInput(history[historyIndexRef.current])
+      return
+    }
+
+    if (e.key === 'ArrowDown') {
+      if (historyIndexRef.current === -1) return
+      e.preventDefault()
+      const newIndex = historyIndexRef.current - 1
+      if (newIndex < 0) {
+        // 回到草稿
+        historyIndexRef.current = -1
+        setInput(savedDraftRef.current)
+        savedDraftRef.current = ''
+      } else {
+        historyIndexRef.current = newIndex
+        setInput(history[historyIndexRef.current])
+      }
+      return
     }
   }
 
@@ -146,7 +202,12 @@ export function MessageInput({ onSend, onStop, disabled, isLoading }: MessageInp
 
         <textarea
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            setInput(e.target.value)
+            // 用户主动编辑 → 退出历史导航模式(保留输入内容,下次 ↑ 从最新历史重新开始)
+            historyIndexRef.current = -1
+            savedDraftRef.current = ''
+          }}
           onKeyDown={handleKeyDown}
           placeholder={isLoading
             ? t('message.hintPlaceholder')
