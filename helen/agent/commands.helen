@@ -134,9 +134,6 @@ fn execute_command(cmd: map): str {
         case "working-memory" {
             return _cmd_working_memory(args)
         }
-        case "cleanup-sessions" {
-            return _cmd_cleanup_sessions()
-        }
         default {
             return build_unknown_command_text(command)
         }
@@ -171,7 +168,6 @@ fn build_help_text(): str {
     text = text + _t("| `/search <query>` | Full-text search messages in current context |\n", "| `/search <query>` | 在当前上下文中全文搜索消息 |\n")
     text = text + _t("| `/mode [name]` | View or switch output mode (minimal / normal / verbose / rich) |\n", "| `/mode [name]` | 查看或切换输出模式（minimal / normal / verbose / rich） |\n")
     text = text + _t("| `/working-memory` | View working memory content (`get <key>` / `stats`) |\n", "| `/working-memory` | 查看工作记忆内容（`get <key>` / `stats`） |\n")
-    text = text + _t("| `/cleanup-sessions` | Clean up empty sessions (meta-only, helen test byproducts) |\n", "| `/cleanup-sessions` | 清理空 session（只有 meta 无对话的 helen test 副产物） |\n")
     text = text + _t("\n> Tip: Type text directly to chat with AI, or use the slash commands above\n", "\n> 提示：直接输入文本与 AI 对话，或使用上述斜杠命令执行操作\n")
     return text
 }
@@ -659,93 +655,6 @@ fn _cmd_working_memory(args: list): str {
     return _t("Usage: /working-memory [get <key>|stats]", "用法: /working-memory [get <key>|stats]")
 }
 
-/** /cleanup-sessions - 清理空 session（无实际对话的 session）
- *  删除条件：transcript 只有 1 行（session_meta）+ 不是当前 session + 无 parent
- *  注：v1.43 之前仅清理 env_override scope（helen test 副产物），
- *  现在清理所有 scope 的空 session（用户手动 /clear-session 残留等） */
-fn _cmd_cleanup_sessions(): str {
-    let info = get_session_dir()
-    if info["status"] != "ok" {
-        let err_msg = "unknown"
-        try { err_msg = info["error"] } catch {}
-        return _t("❌ Cannot get session directory: ", "❌ 无法获取 session 目录: ") + err_msg
-    }
-    let session_dir = info["session_dir"]
-
-    // 获取当前 session id（用于跳过）
-    let current_sid = ""
-    try { current_sid = get_session_id() } catch {}
-
-    // 列出所有 session_* 子目录（session_dir 本身就是 .helen/sessions/）
-    let dir_list = list_dir(session_dir)
-
-    let deleted = 0
-    let kept = 0
-    let errors = 0
-
-    for name in dir_list {
-        if !startswith(name, "session_") {
-            continue
-        }
-        let full_path = path_join(session_dir, name, "transcript.jsonl")
-        if !path_exists(full_path) {
-            continue
-        }
-
-        try {
-            // 读第一行检查 session_meta
-            let content = read_file(full_path)
-            let lines = split(content, "\n")
-            // 过滤空行
-            let real_lines = []
-            for line in lines {
-                if strip(line) != "" {
-                    real_lines = real_lines + [line]
-                }
-            }
-
-            if len(real_lines) != 1 {
-                kept = kept + 1
-                continue
-            }
-
-            let meta = json_parse(real_lines[0])
-            // Helen map 不支持 .get()，用直接访问 + try-catch
-            let sid = ""
-            let parent = ""
-            try { sid = meta["session_id"] } catch {}
-            try { parent = meta["parent_session_id"] } catch {}
-
-            // 跳过当前 session（防止删除自己）
-            if sid == current_sid {
-                kept = kept + 1
-                continue
-            }
-
-            // 跳过有 parent 的 session（spawn 树的一部分，删除 parent 时再处理）
-            if parent != "" {
-                kept = kept + 1
-                continue
-            }
-
-            // 删除目录（跨平台：用 stdlib delete_dir）
-            let target_path = path_join(session_dir, name)
-            try {
-                delete_dir(target_path, recursive=true)
-            } catch {
-                // 删除失败，计数为错误
-                errors = errors + 1
-                continue
-            }
-            deleted = deleted + 1
-        } catch {
-            errors = errors + 1
-        }
-    }
-
-    return _t("✅ Cleanup complete\n\n- Deleted: ", "✅ 清理完成\n\n- 删除: ") + str(deleted) + _t(" empty sessions\n- Kept: ", " 个空 session\n- 保留: ") + str(kept) + _t(" sessions\n- Errors: ", " 个 session\n- 错误: ") + str(errors)
-}
-
 // ── /session 子命令 ────────────────────────────────────────────────
 
 /** 解析模糊 session ID（支持完整 ID、前缀、或含 "…" 的短 ID）
@@ -760,32 +669,8 @@ fn _resolve_session_id(partial: str): str {
     // 去掉反引号
     let cleaned = replace(partial, "`", "")
 
-    // 在 global + project scope 中查找匹配，按 session_id 去重
-    // （同一 session 可能同时出现在两个 scope 中）
-    let seen = {}
-    let candidates = []
-    try {
-        for s in list_sessions("global") {
-            let sid = s["session_id"]
-            let dup = false
-            try { if seen[sid] { dup = true } } catch {}
-            if !dup {
-                candidates = candidates + [s]
-                seen[sid] = true
-            }
-        }
-    } catch {}
-    try {
-        for s in list_sessions("project") {
-            let sid = s["session_id"]
-            let dup = false
-            try { if seen[sid] { dup = true } } catch {}
-            if !dup {
-                candidates = candidates + [s]
-                seen[sid] = true
-            }
-        }
-    } catch {}
+    // 用 _collect_all_sessions 直接读目录（list_sessions 在 agent 内 scope 解析有问题）
+    let candidates = _collect_all_sessions()
 
     // 判断是否为短 ID（含 "…"）
     if contains(cleaned, "…") {
@@ -858,7 +743,7 @@ fn _parse_pagination(args: list): map {
 /** 格式化 Unix 时间戳为 YYYY-MM-DD HH:MM */
 fn _format_ts(ts): str {
     try {
-        let dt = datetime(int(ts))
+        let dt = fromtimestamp(ts)
         return date_format(dt, "%Y-%m-%d %H:%M")
     } catch {
         return str(ts)
@@ -866,48 +751,158 @@ fn _format_ts(ts): str {
 }
 
 /** /session list — 列出所有 session */
+/** 扫描一个 session 目录，返回 session 信息列表
+ *  直接读 transcript.jsonl，不依赖 list_sessions()（后者在 agent 内 scope 解析有问题）
+ *  返回: [{"session_id", "created_at", "message_count", "size_bytes", "scope", "parent_session_id", "dir"}, ...] */
+fn _scan_session_dir(dir_path: str, scope: str): list {
+    let result = []
+    if !path_exists(dir_path) {
+        return result
+    }
+    let dir_entries = []
+    try { dir_entries = list_dir(dir_path) } catch { return result }
+
+    for name in dir_entries {
+        if !startswith(name, "session_") {
+            continue
+        }
+        let transcript_path = path_join(dir_path, name, "transcript.jsonl")
+        if !path_exists(transcript_path) {
+            continue
+        }
+        try {
+            let content = read_file(transcript_path)
+            let lines = split(content, "\n")
+            let real_lines = []
+            for line in lines {
+                if strip(line) != "" {
+                    real_lines = real_lines + [line]
+                }
+            }
+            if len(real_lines) == 0 {
+                continue
+            }
+            let meta = json_parse(real_lines[0])
+            let sid = name
+            try { sid = meta["session_id"] } catch {}
+            let created_at = 0
+            try { created_at = meta["timestamp"] } catch {}
+            let parent = ""
+            try { parent = meta["parent_session_id"] } catch {}
+            result = result + [{
+                "session_id": sid,
+                "created_at": created_at,
+                "message_count": len(real_lines),
+                "size_bytes": len(content),
+                "scope": scope,
+                "parent_session_id": parent,
+                "dir": dir_path
+            }]
+        } catch {
+            // 跳过解析失败的 session
+        }
+    }
+    return result
+}
+
+/** 收集所有 session（project + global scope，去重） */
+fn _collect_all_sessions(): list {
+    let cwd = get_cwd()
+    let project_dir = path_join(cwd, ".helen", "sessions")
+    let home = env_get("HOME", "")
+    if home == "" { home = env_get("USERPROFILE", "") }
+    let global_dir = ""
+    if home != "" {
+        global_dir = path_join(home, ".helen", "sessions")
+    }
+
+    let seen_ids = {}
+    let all = []
+    for s in _scan_session_dir(project_dir, "project") {
+        let sid = s["session_id"]
+        let dup = false
+        try { if seen_ids[sid] { dup = true } } catch {}
+        if !dup {
+            all = all + [s]
+            seen_ids[sid] = true
+        }
+    }
+    if global_dir != "" {
+        for s in _scan_session_dir(global_dir, "global") {
+            let sid = s["session_id"]
+            let dup = false
+            try { if seen_ids[sid] { dup = true } } catch {}
+            if !dup {
+                all = all + [s]
+                seen_ids[sid] = true
+            }
+        }
+    }
+    return all
+}
+
+/** 检查 target session 是否被任何 memento 引用
+ *  扫描 <cwd>/.helen/current_session_id（主 memento）
+ *  返回引用它的 memento 路径，未引用返回 "" */
+fn _find_memento_reference(target: str): str {
+    let cwd = get_cwd()
+    let home = env_get("HOME", "")
+    if home == "" { home = env_get("USERPROFILE", "") }
+
+    // 收集可能的 memento 路径（当前 cwd + home 下的 .helen）
+    let memento_paths = []
+    let cwd_memento = path_join(cwd, ".helen", "current_session_id")
+    if path_exists(cwd_memento) {
+        memento_paths = memento_paths + [cwd_memento]
+    }
+    if home != "" {
+        let home_memento = path_join(home, ".helen", "current_session_id")
+        if path_exists(home_memento) {
+            // 避免重复添加（当 cwd == home 时）
+            if home_memento != cwd_memento {
+                memento_paths = memento_paths + [home_memento]
+            }
+        }
+    }
+
+    for memento_path in memento_paths {
+        try {
+            let content = read_file(memento_path)
+            let trimmed = strip(content)
+            // JSON 格式: {"main": "sid1", "child": "sid2"}
+            if startswith(trimmed, "{") {
+                let data = json_parse(trimmed)
+                let main_sid = ""
+                let child_sid = ""
+                try { main_sid = data["main"] } catch {}
+                try { child_sid = data["child"] } catch {}
+                if main_sid == target || child_sid == target {
+                    return memento_path
+                }
+            } else if trimmed == target {
+                // 旧格式：纯文本 session_id
+                return memento_path
+            }
+        } catch {
+            // 读取失败，跳过
+        }
+    }
+    return ""
+}
+
 fn _cmd_session_list(args: list): str {
     let pg = _parse_pagination(args)
     let limit = pg["limit"]
     let offset = pg["offset"]
 
-    // 合并 global + project scope，按 session_id 去重
-    // list_sessions 返回的 dict 已含 scope 字段
-    let seen_ids = {}
-    let all = []
-    try {
-        for s in list_sessions("global") {
-            let sid = s["session_id"]
-            let already_seen = false
-            try { if seen_ids[sid] { already_seen = true } } catch {}
-            if !already_seen {
-                all = all + [s]
-                seen_ids[sid] = true
-            }
-        }
-    } catch {}
-    try {
-        for s in list_sessions("project") {
-            let sid = s["session_id"]
-            let already_seen = false
-            try { if seen_ids[sid] { already_seen = true } } catch {}
-            if !already_seen {
-                all = all + [s]
-                seen_ids[sid] = true
-            }
-        }
-    } catch {}
+    let all = _collect_all_sessions()
 
     if len(all) == 0 {
         return _t("No sessions found.", "没有找到会话。")
     }
 
-    // 获取当前 session id（用于标记）
     let current_sid = ""
     try { current_sid = get_session_id() } catch {}
-
-    // 按 modified_at 降序排序（list_sessions 默认已排序，但合并后需要重排）
-    // Helen 无内置 sort-by-field，直接显示（list_sessions 各 scope 内部已排序）
 
     let total = len(all)
     let text = _t("## Sessions\n\n", "## 会话列表\n\n")
@@ -916,8 +911,8 @@ fn _cmd_session_list(args: list): str {
         text = text + _t(" (showing ", "（显示 ") + str(offset + 1) + "-" + str(min(offset + limit, total)) + ")"
     }
     text = text + "\n\n"
-    text = text + _t("| # | Session ID | Created | Msgs | Size | Status |\n", "| # | 会话 ID | 创建时间 | 消息数 | 大小 | 状态 |\n")
-    text = text + "|---|-----------|---------|------|------|--------|\n"
+    text = text + _t("| # | Session ID | Created | Msgs | Size | Scope | Status |\n", "| # | 会话 ID | 创建时间 | 消息数 | 大小 | 范围 | 状态 |\n")
+    text = text + "|---|-----------|---------|------|------|-------|--------|\n"
 
     let i = offset
     let shown = 0
@@ -927,15 +922,15 @@ fn _cmd_session_list(args: list): str {
         let created = _format_ts(s["created_at"])
         let msg_count = s["message_count"]
         let size_bytes = s["size_bytes"]
+        let scope = s["scope"]
 
-        // 状态判定：current / empty / idle
         let status = ""
         if sid == current_sid {
             status = _t("🔵 current", "🔵 当前")
-        } else if msg_count <= 1 {
-            status = _t("⚪ empty", "⚪ 空")
+        } else if msg_count > 1 {
+            status = _t("💬 messages", "💬 有消息")
         } else {
-            status = _t("⚫ idle", "⚫ 闲置")
+            status = _t("⚪ empty", "⚪ 空")
         }
 
         // 大小格式化
@@ -954,7 +949,7 @@ fn _cmd_session_list(args: list): str {
             short_sid = substring(sid, 0, 12) + "…" + substring(sid, len(sid) - 8, len(sid))
         }
 
-        text = text + "| " + str(i + 1) + " | `" + short_sid + "` | " + created + " | " + str(msg_count) + " | " + size_str + " | " + status + " |\n"
+        text = text + "| " + str(i + 1) + " | `" + short_sid + "` | " + created + " | " + str(msg_count) + " | " + size_str + " | " + scope + " | " + status + " |\n"
         i = i + 1
         shown = shown + 1
     }
@@ -984,54 +979,58 @@ fn _cmd_session_delete(args: list): str {
         return _t("❌ Cannot delete the current session. Use `/clear-session` instead if you want to reset.", "❌ 不能删除当前会话。如需重置请使用 `/clear-session`。")
     }
 
-    // 检查 session 是否存在（通过 list_sessions 查找）
-    let found = false
-    let all = list_sessions("global")
-    try {
-        let proj = list_sessions("project")
-        for s in proj { all = all + [s] }
-    } catch {}
+    // 在所有 session 中查找（绕过 list_sessions scope bug）
+    let all = _collect_all_sessions()
+    let target_info = null
     for s in all {
         if s["session_id"] == target {
-            found = true
+            target_info = s
             break
         }
     }
-    if !found {
+    if target_info == null {
         return _t("❌ Session not found: ", "❌ 未找到会话: ") + target
     }
 
-    // 统计 spawn 树（用于输出信息）
-    let spawn_count = 0
-    try {
-        let spawns = get_spawned_sessions(target)
-        if spawns != null {
-            spawn_count = len(spawns)
-        }
-    } catch {}
+    // ── 安全检查 ─────────────────────────────────────────────
+    // 1. 禁止删除被任何 memento 引用的 session（main 或 child）
+    //    memento 位置：<cwd>/.helen/current_session_id 和 ~/<project>/.helen/current_session_id
+    //    但扫描所有可能目录成本高，只检查已知的 memento
+    let memento_ref = _find_memento_reference(target)
+    if memento_ref != "" {
+        return _t("❌ Cannot delete: session is referenced by memento at ", "❌ 无法删除: 会话被 memento 引用: ") + memento_ref + "\n" +
+               _t("   This session is part of the active parent-child architecture.", "   此会话是活跃的主子 session 架构的一部分。")
+    }
 
-    // 执行删除
-    let header = _t("## Session Deletion\n\n", "## 会话删除\n\n")
-    try {
-        let result = delete_session(target, cascade=true)
-        if result == null || result["status"] != "ok" {
-            let err_msg = _t("Unknown error", "未知错误")
-            try { err_msg = result["message"] } catch {}
-            return header + _t("- Session: ", "- 会话: ") + target + "\n" +
-                   _t("- Action: ❌ Deletion failed\n", "- 操作: ❌ 删除失败\n") +
-                   _t("- Error: ", "- 错误: ") + err_msg + "\n"
+    // 2. 禁止删除有子 session 的 parent session（会破坏 spawn 树）
+    let children = []
+    for s in all {
+        let parent = ""
+        try { parent = s["parent_session_id"] } catch {}
+        if parent == target {
+            children = children + [s["session_id"]]
         }
+    }
+    if len(children) > 0 {
+        return _t("❌ Cannot delete: session has ", "❌ 无法删除: 会话有 ") + str(len(children)) + _t(" child session(s):\n", " 个子会话:\n") +
+               _t("   ", "   ") + join(children, ", ") + "\n" +
+               _t("   Deleting parent would orphan child sessions with active transcripts.", "   删除父会话会使子会话孤立（它们有活跃的 transcript）。")
+    }
+
+    // 执行删除：直接删目录（delete_session 只查当前 scope，跨 scope 删不了）
+    let header = _t("## Session Deletion\n\n", "## 会话删除\n\n")
+    let session_dir = path_join(target_info["dir"], target)
+    try {
+        delete_dir(session_dir, recursive=true)
         let text = header
         text = text + _t("- Session: ", "- 会话: ") + target + "\n"
+        text = text + _t("- Directory: ", "- 目录: ") + session_dir + "\n"
         text = text + _t("- Action: ✅ Deleted\n", "- 操作: ✅ 已删除\n")
-        if spawn_count > 0 {
-            text = text + _t("- Cascade deleted: ", "- 级联删除: ") + str(spawn_count) + _t(" spawned sessions\n", " 个 spawn 会话\n")
-        }
         return text
     } catch RuntimeError err {
         return header + _t("- Action: ❌ Failed\n- Error: ", "- 操作: ❌ 失败\n- 错误: ") + err.message + "\n"
     } catch {
-        return header + _t("- Action: ❌ Failed (requires Helen v1.23.7+ cascade delete)\n", "- 操作: ❌ 失败（需要 Helen v1.23.7+ 的 cascade 删除支持）\n")
+        return header + _t("- Action: ❌ Failed\n", "- 操作: ❌ 失败\n")
     }
 }
 
@@ -1054,60 +1053,77 @@ fn _cmd_session_view(args: list): str {
                _t("Tip: copy full ID from `/session list` output, or use enough prefix to be unique", "提示: 从 `/session list` 输出复制完整 ID，或用足够长的唯一前缀")
     }
 
-    // 找到 session 目录（需要在 global 和 project scope 都查找）
-    let session_dir = ""
-    // 1. 先尝试 global scope：用 HOME 目录
-    let home = env_get("HOME", "")
-    if home == "" { home = env_get("USERPROFILE", "") }
-    if home != "" {
-        let global_dir = path_join(home, ".helen", "sessions")
-        let candidate = path_join(global_dir, target)
-        if path_exists(candidate) {
-            session_dir = candidate
+    // 在所有 session 中查找目标（_collect_all_sessions 直接读目录，含 dir 信息）
+    let all_sessions = _collect_all_sessions()
+    let target_info = null
+    for s in all_sessions {
+        if s["session_id"] == target {
+            target_info = s
+            break
         }
     }
-    // 2. 尝试 project scope：用 cwd 目录
-    if session_dir == "" {
-        let cwd = get_cwd()
-        let project_dir = path_join(cwd, ".helen", "sessions")
-        let candidate = path_join(project_dir, target)
-        if path_exists(candidate) {
-            session_dir = candidate
-        }
-    }
-    if session_dir == "" {
+    if target_info == null {
         return _t("❌ Session not found: ", "❌ 未找到会话: ") + target
     }
 
-    let transcript_path = path_join(session_dir, "transcript.jsonl")
-    if !path_exists(transcript_path) {
-        return _t("❌ Transcript file not found: ", "❌ Transcript 文件不存在: ") + transcript_path
-    }
-
     // 读取 transcript 并过滤 role=user
+    // 若当前 session 无用户消息，沿 parent_session_id 链向上找（主子 session 架构）
     let user_messages = []
-    try {
-        let content = read_file(transcript_path)
-        let lines = split(content, "\n")
-        for line in lines {
-            if strip(line) == "" {
-                continue
-            }
-            try {
-                let msg = json_parse(line)
-                if msg["role"] == "user" {
-                    user_messages = user_messages + [msg]
-                }
-            } catch {
-                // 跳过解析失败的行
+    let viewed_sid = target
+    let search_sid = target
+    let hops = 0
+    while search_sid != "" && hops < 5 {
+        let session_dir = ""
+        let parent_sid = ""
+        // 在 all_sessions 里找 search_sid 的目录和 parent
+        for s in all_sessions {
+            if s["session_id"] == search_sid {
+                session_dir = path_join(s["dir"], search_sid)
+                try { parent_sid = s["parent_session_id"] } catch {}
+                break
             }
         }
-    } catch RuntimeError err {
-        return _t("❌ Failed to read transcript: ", "❌ 读取 transcript 失败: ") + err.message
+        if session_dir == "" {
+            break
+        }
+        let transcript_path = path_join(session_dir, "transcript.jsonl")
+        if !path_exists(transcript_path) {
+            break
+        }
+        try {
+            let content = read_file(transcript_path)
+            let lines = split(content, "\n")
+            for line in lines {
+                if strip(line) == "" {
+                    continue
+                }
+                try {
+                    let msg = json_parse(line)
+                    if msg["role"] == "user" {
+                        user_messages = user_messages + [msg]
+                    }
+                } catch {
+                    // 跳过解析失败的行
+                }
+            }
+        } catch {
+            break
+        }
+        if len(user_messages) > 0 {
+            viewed_sid = search_sid
+            break
+        }
+        // 当前 session 无消息，沿 parent 链向上找
+        search_sid = parent_sid
+        hops = hops + 1
     }
 
     if len(user_messages) == 0 {
-        return _t("No user messages found in session: ", "该会话中没有用户消息: ") + target
+        let not_found_msg = _t("No user messages found in session: ", "该会话中没有用户消息: ") + target
+        if viewed_sid != target {
+            not_found_msg = not_found_msg + _t("\n(also checked parent chain)", "\n（已沿父链查找）")
+        }
+        return not_found_msg
     }
 
     // 分页输出
