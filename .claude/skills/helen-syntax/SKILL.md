@@ -297,6 +297,8 @@ Helen has 364 stdlib functions (e.g. `len`, `find`, `format`, `map`, `list`, `co
 | `let list = []` | `let item_list = []` | shadows `list` type/builtin |
 | `let count = 0` | `let total_count = 0` | shadows `count()` builtin |
 | `let str = "hi"` | `let raw_str = "hi"` | shadows `str()` builtin |
+| `fn foo(input)` | `fn foo(user_input)` | `input` is a builtin (reads stdin) |
+| `let entries = ...` | `let map_entries = ...` | `entries()` builtin (dict pairs) |
 | `let result = find()` | `let find_result = find()` | `result` too generic |
 | `let data = ...` | `let user_data = ...` | compound name |
 | `let file = ...` | `let log_file = ...` | compound name |

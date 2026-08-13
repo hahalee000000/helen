@@ -868,6 +868,28 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
                         # Fall back to regular dict access
                         return target[prop]
                 else:
+                    # v1.43: Support dict methods (get, keys, values, items) as
+                    # property access, falling back to key lookup otherwise.
+                    # This makes `map.get("key", default)` work naturally.
+                    # IMPORTANT: Only use dict methods when the property is NOT
+                    # already a key in the dict — so `Dict.keys` (namespace import
+                    # of stdlib module) correctly returns the stdlib function, not
+                    # Python's dict.keys method.
+                    prop = node.property
+                    if prop in ("get", "keys", "values", "items") and prop not in target:
+                        method = getattr(target, prop, None)
+                        if method is not None:
+                            if prop == "get":
+                                return method  # get() returns scalar, no wrapping needed
+                            # Wrap keys/values/items to convert Python views to lists
+                            def wrapped_view(m=method):
+                                result = m()
+                                try:
+                                    return list(result)
+                                except TypeError:
+                                    return result
+                            return wrapped_view
+                    # Regular key lookup
                     return target[node.property]
             if hasattr(target, node.property):
                 return getattr(target, node.property)

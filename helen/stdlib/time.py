@@ -92,6 +92,23 @@ def _datetime(year: int | None = None, month: int | None = None,
     return dt.isoformat(timespec="seconds")
 
 
+def _fromtimestamp(timestamp: float | int) -> str:
+    """Convert Unix timestamp to datetime string.
+
+    Args:
+        timestamp: Unix timestamp (seconds since epoch, int or float)
+
+    Returns:
+        Datetime string (YYYY-MM-DDTHH:MM:SS) in local timezone
+
+    Example:
+        let ts = time()  // Unix timestamp
+        let dt = fromtimestamp(ts)  // "2026-08-13T10:30:45"
+    """
+    dt = datetime.fromtimestamp(float(timestamp))
+    return dt.isoformat(timespec="seconds")
+
+
 def _date_format(date_str: str, format_str: str) -> str:
     """Format date string.
 

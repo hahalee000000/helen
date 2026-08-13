@@ -1701,17 +1701,25 @@ def delete_session(session_id: str, cascade: bool = True) -> dict:
         from helen.runtime.config import resolve_session_dir
         from helen.runtime.session_manager import SessionManager
 
-        # Resolve session directory
-        session_dir, _ = resolve_session_dir()
+        # Resolve session directory — try current scope first, fallback to other scope
+        # (session might be in global scope when we're in project scope, or vice versa)
+        session_dir, detected_scope = resolve_session_dir()
         manager = SessionManager(base_dir=session_dir)
 
-        # Check if session exists
         if not manager.session_exists(session_id):
-            return {
-                "status": "error",
-                "message": f"Session not found: {session_id}",
-                "session_id": session_id,
-            }
+            # Try the other scope
+            fallback_scope = "global" if detected_scope == "project" else "project"
+            fallback_dir, _ = resolve_session_dir(scope=fallback_scope)
+            fallback_manager = SessionManager(base_dir=fallback_dir)
+            if fallback_manager.session_exists(session_id):
+                manager = fallback_manager
+                session_dir = fallback_dir
+            else:
+                return {
+                    "status": "error",
+                    "message": f"Session not found: {session_id}",
+                    "session_id": session_id,
+                }
 
         # v1.23.7: Collect all sessions to delete (cascade)
         sessions_to_delete = [session_id]

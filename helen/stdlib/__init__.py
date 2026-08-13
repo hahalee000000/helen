@@ -59,7 +59,7 @@ from helen.stdlib.time import (
     # Time
     _now, _time_func, _sleep,
     # Date
-    _date, _datetime, _date_format, _date_parse,
+    _date, _datetime, _fromtimestamp, _date_format, _date_parse,
     _date_add, _date_diff, _date_year, _date_month, _date_day, _date_weekday,
     # Stopwatch
     _stopwatch_start, _stopwatch_elapsed, _stopwatch_lap,
@@ -1318,6 +1318,7 @@ def _register_time() -> list[BuiltinFunction]:
         BuiltinFunction("sleep", "Pause execution", "sleep(seconds)", _sleep, "time"),
         BuiltinFunction("date", "Create/get date", "date(year?, month?, day?)", _date, "time"),
         BuiltinFunction("datetime", "Create/get datetime", "datetime(year?, month?, day?, hour?, minute?, second?)", _datetime, "time"),
+        BuiltinFunction("fromtimestamp", "Unix timestamp to datetime", "fromtimestamp(timestamp)", _fromtimestamp, "time"),
         BuiltinFunction("date_format", "Format date", "date_format(date_str, format_str)", _date_format, "time"),
         BuiltinFunction("date_parse", "Parse date", "date_parse(date_str, format_str)", _date_parse, "time"),
         BuiltinFunction("date_add", "Add to date", "date_add(date_str, days?, hours?, minutes?, seconds?)", _date_add, "time"),

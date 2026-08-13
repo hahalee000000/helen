@@ -49,6 +49,16 @@ def _remove_chat_tui_web():
 def fake_env(tmp_path, monkeypatch):
     """Set up fake Helen environment for importing chat_tui_web."""
     _remove_chat_tui_web()
+
+    # Save original modules so we can restore them after the test.
+    # Without this, the fake helen.python_bridge leaks into sys.modules and
+    # breaks later tests that import the real module (e.g.
+    # tests/execution/test_python_bridge_session_id.py).
+    saved_modules = {}
+    for key in ("helen", "helen.python_bridge", "chat_actor"):
+        if key in sys.modules:
+            saved_modules[key] = sys.modules[key]
+
     mock_bridge, mock_actor = _install_fake_helen_modules()
 
     # Set HELEN_AGENT_DIR to the actual agent dir
@@ -58,6 +68,13 @@ def fake_env(tmp_path, monkeypatch):
     yield mock_bridge, mock_actor
 
     _remove_chat_tui_web()
+
+    # Restore original modules (or remove the fakes if originals never existed)
+    for key, mod in saved_modules.items():
+        sys.modules[key] = mod
+    for key in ("helen", "helen.python_bridge", "chat_actor"):
+        if key not in saved_modules and key in sys.modules:
+            del sys.modules[key]
 
 
 class TestModuleImport:
