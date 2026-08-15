@@ -6,12 +6,14 @@
 //
 // 支持的命令：
 // - /help              显示帮助信息
+// - /dir [path]        查看/切换工作目录（WebUI）
 // - /clear             清空对话上下文（保留会话实体，插入 BoundaryMarker）
 // - /clear-session [<sid>]  删除整个会话（级联删除 spawn transcripts）
 // - /compress          压缩上下文
 // - /stats             显示会话统计
 // - /memory            显示记忆系统状态
 // - /working-memory    显示工作记忆内容
+// - /goal <text>       自主 Pursue 目标（自动续传直到完成）
 //
 // 使用示例：
 //   let cmd = parse_command("/help")
@@ -95,6 +97,9 @@ fn execute_command(cmd: map): str {
         case "help" {
             return _cmd_help()
         }
+        case "dir" {
+            return _cmd_dir(args)
+        }
         case "clear" {
             return _cmd_clear()
         }
@@ -134,6 +139,9 @@ fn execute_command(cmd: map): str {
         case "working-memory" {
             return _cmd_working_memory(args)
         }
+        case "goal" {
+            return _cmd_goal(args)
+        }
         default {
             return build_unknown_command_text(command)
         }
@@ -152,6 +160,7 @@ fn build_help_text(): str {
     text = text + _t("| Command | Description |\n", "| 命令 | 说明 |\n")
     text = text + "|------|------|\n"
     text = text + _t("| `/help` | Show this help message |\n", "| `/help` | 显示本帮助信息 |\n")
+    text = text + _t("| `/dir [path]` | View or switch working directory (WebUI only) |\n", "| `/dir [path]` | 查看或切换工作目录（仅 WebUI） |\n")
     text = text + _t("| `/clear` | Clear conversation history and reset all state (keeps session entity, inserts BoundaryMarker) |\n", "| `/clear` | 清空对话历史并重置所有状态（保留会话实体，插入 BoundaryMarker） |\n")
     text = text + _t("| `/clear-session [<sid>]` | Delete entire session (cascade delete spawn transcripts); no arg deletes current session |\n", "| `/clear-session [<sid>]` | 删除整个会话（级联删除 spawn transcripts）；无参数则删当前会话 |\n")
     text = text + _t("| `/compress` | LLM semantic context compression (preserves semantics, frees token space) |\n", "| `/compress` | LLM 语义压缩上下文（保留语义，释放 token 空间） |\n")
@@ -168,6 +177,7 @@ fn build_help_text(): str {
     text = text + _t("| `/search <query>` | Full-text search messages in current context |\n", "| `/search <query>` | 在当前上下文中全文搜索消息 |\n")
     text = text + _t("| `/mode [name]` | View or switch output mode (minimal / normal / verbose / rich) |\n", "| `/mode [name]` | 查看或切换输出模式（minimal / normal / verbose / rich） |\n")
     text = text + _t("| `/working-memory` | View working memory content (`get <key>` / `stats`) |\n", "| `/working-memory` | 查看工作记忆内容（`get <key>` / `stats`） |\n")
+    text = text + _t("| `/goal <text>` | Autonomously pursue a goal (auto-continue until complete) |\n", "| `/goal <text>` | 自主 Pursue 目标（自动续传直到完成） |\n")
     text = text + _t("\n> Tip: Type text directly to chat with AI, or use the slash commands above\n", "\n> 提示：直接输入文本与 AI 对话，或使用上述斜杠命令执行操作\n")
     return text
 }
@@ -180,6 +190,24 @@ fn build_unknown_command_text(command: str): str {
 /** /help - 显示帮助信息 */
 fn _cmd_help(): str {
     return build_help_text()
+}
+
+/** /dir [path] — 查看/切换工作目录
+ *  WebUI 中由后端拦截并处理。
+ *  CLI/REPL 中此命令不可用。 */
+fn _cmd_dir(args: list): str {
+    if len(args) == 0 {
+        return _t(
+            "Usage: /dir [path]\nExample: /dir ~/projects/myapp\n\nNote: This command is only available in the WebUI. In CLI/REPL, use the `cd` command or start Helen from the desired directory.",
+            "用法: /dir [path]\n示例: /dir ~/projects/myapp\n\n注意: 此命令仅在 WebUI 中可用。在 CLI/REPL 中，请使用 `cd` 命令或从目标目录启动 Helen。"
+        )
+    }
+    // WebUI 中此命令不会到达这里（被 chat.py 拦截）
+    // CLI/REPL 中返回提示
+    return _t(
+        "⚠️ The /dir command is only available in the WebUI.\n\nIn CLI/REPL, please use the `cd` command or start Helen from the desired directory.",
+        "⚠️ /dir 命令仅在 WebUI 中可用。\n\n在 CLI/REPL 中，请使用 `cd` 命令或从目标目录启动 Helen。"
+    )
 }
 
 /** /clear - 清空对话上下文并重置所有状态
@@ -653,6 +681,24 @@ fn _cmd_working_memory(args: list): str {
     }
 
     return _t("Usage: /working-memory [get <key>|stats]", "用法: /working-memory [get <key>|stats]")
+}
+
+/** /goal <text> — 自主 Pursue 目标
+ *  WebUI 中由后端拦截并运行 goal loop。
+ *  CLI/REPL 中此命令不可用（需要 WebSocket 支持）。 */
+fn _cmd_goal(args: list): str {
+    if len(args) == 0 {
+        return _t(
+            "Usage: /goal <goal description>\nExample: /goal Write a Python calculator\n\nNote: This command is only available in the WebUI. In CLI/REPL, please describe your goal directly in the conversation.",
+            "用法: /goal <目标描述>\n示例: /goal 写一个 Python 计算器\n\n注意: 此命令仅在 WebUI 中可用。在 CLI/REPL 中，请直接在对话中描述你的目标。"
+        )
+    }
+    // WebUI 中此命令不会到达这里（被 chat.py 拦截）
+    // CLI/REPL 中返回提示
+    return _t(
+        "⚠️ The /goal command is only available in the WebUI.\n\nIn CLI/REPL, please describe your goal directly in the conversation, and the agent will work toward it.",
+        "⚠️ /goal 命令仅在 WebUI 中可用。\n\n在 CLI/REPL 中，请直接在对话中描述你的目标，agent 会朝它努力。"
+    )
 }
 
 // ── /session 子命令 ────────────────────────────────────────────────

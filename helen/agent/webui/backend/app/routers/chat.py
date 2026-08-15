@@ -14,6 +14,11 @@ from app.services.helen_bridge import helen_bridge
 from app.services import hint_injector
 from app.services import directory_manager
 from app.services.stream_registry import stream_registry
+from app.goal_handler import (
+    build_goal_prompt, build_continuation_prompt,
+    goal_appears_complete, parse_goal_status,
+    DEFAULT_MAX_ITERATIONS,
+)
 
 # ⚠️ 架构说明：
 # FastAPI 0.109 + Starlette 0.35 下，router 级 HTTP 依赖（如 Depends(require_auth)）
@@ -422,6 +427,118 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
         finally:
             stream_registry.unregister(session_id)
 
+    async def do_goal_streaming(goal_text: str, file_paths: Optional[List[str]] = None):
+        """Goal pursuit loop: stream multiple iterations until goal complete.
+
+        每次迭代调用 actor 的 act()，检查目标是否完成，未完成则续传。
+        通过 [GOAL_COMPLETE] / [GOAL_IN_PROGRESS] 标记判断完成状态。
+        """
+        stream_registry.register(session_id)
+        max_iterations = DEFAULT_MAX_ITERATIONS
+        current_prompt = build_goal_prompt(goal_text)
+        accumulated_text = ""
+
+        try:
+            for iteration in range(max_iterations):
+                # 发送进度通知
+                try:
+                    await manager.broadcast({
+                        "type": "goal_progress",
+                        "data": {
+                            "iteration": iteration + 1,
+                            "max_iterations": max_iterations,
+                            "goal": goal_text,
+                        }
+                    })
+                except Exception:
+                    pass
+
+                # 单次流式调用，同时收集响应文本
+                iteration_text = ""
+                async for chunk in helen_bridge.run_chat_streaming(
+                    current_prompt, session_id, file_paths=file_paths or []
+                ):
+                    chunk_type = chunk.get("type")
+                    content = chunk.get("content", "")
+
+                    if chunk_type == "llm_chunk":
+                        iteration_text += content
+                        # 转发给前端
+                        try:
+                            await manager.broadcast({
+                                "type": "llm_chunk",
+                                "data": {"content": content}
+                            })
+                        except Exception:
+                            pass
+                    elif chunk_type in ("status_update", "agent_start", "agent_end",
+                                       "phase_start", "processing_start",
+                                       "processing_complete", "hint_injected"):
+                        try:
+                            await manager.broadcast({
+                                "type": chunk_type,
+                                "data": {"content": content}
+                            })
+                        except Exception:
+                            pass
+                    elif chunk_type == "error":
+                        try:
+                            await manager.broadcast({
+                                "type": "error",
+                                "data": {"content": content}
+                            })
+                        except Exception:
+                            pass
+
+                accumulated_text += "\n\n" + iteration_text
+
+                # 检查目标是否完成
+                if goal_appears_complete(iteration_text):
+                    goal_status = parse_goal_status(iteration_text)
+                    summary = goal_status.get("summary", "")
+                    try:
+                        await manager.broadcast({
+                            "type": "goal_complete",
+                            "data": {
+                                "status": "complete",
+                                "message": "✅ 目标完成",
+                                "summary": summary,
+                                "iterations": iteration + 1,
+                            }
+                        })
+                    except Exception:
+                        pass
+                    break
+
+                # 未完成 — 准备续传
+                if iteration < max_iterations - 1:
+                    current_prompt = build_continuation_prompt(goal_text, iteration_text)
+                else:
+                    # 达到最大迭代
+                    try:
+                        await manager.broadcast({
+                            "type": "goal_complete",
+                            "data": {
+                                "status": "max_iterations",
+                                "message": f"⚠️ 达到最大迭代次数 ({max_iterations})",
+                                "summary": "",
+                                "iterations": max_iterations,
+                            }
+                        })
+                    except Exception:
+                        pass
+
+            # 正常完成
+            try:
+                await manager.broadcast({"type": "llm_complete"})
+            except Exception:
+                pass
+
+        except asyncio.CancelledError:
+            pass
+        finally:
+            stream_registry.unregister(session_id)
+
     try:
         while True:
             data = await websocket.receive_json()
@@ -520,6 +637,20 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
                                 "is_slash_response": True
                             }
                         })
+                    continue
+
+                # ── /goal 命令：目标驱动自动续传 ──
+                if user_message.startswith("/goal "):
+                    goal_text = user_message[6:].strip()
+                    if not goal_text:
+                        await manager.broadcast({
+                            "type": "processing_complete",
+                            "data": {"content": "用法: /goal <目标描述>\n例如: /goal 写一个 Python 计算器", "is_slash_response": True}
+                        })
+                        continue
+
+                    # 启动 goal 循环（后台任务，不阻塞 WS 接收）
+                    stream_task = asyncio.create_task(do_goal_streaming(goal_text, []))
                     continue
 
                 # ── 斜杠命令:同步执行,不持久化 ──

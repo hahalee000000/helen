@@ -127,6 +127,46 @@ export function useChat(sessionId: string | null) {
             setIsLoading(false)
             break
 
+          case 'goal_progress': {
+            // Goal 模式进度通知
+            const iteration = data.data?.iteration ?? 1
+            const maxIter = data.data?.max_iterations ?? 10
+            appendThinking(`🎯 目标 Pursue 中... 第 ${iteration}/${maxIter} 轮`)
+            break
+          }
+
+          case 'goal_complete': {
+            // Goal 模式完成通知
+            const message = data.data?.message ?? ''
+            const summary = data.data?.summary ?? ''
+            const iterations = data.data?.iterations ?? 0
+
+            // 移除进度提示
+            removeThinking(`🎯 目标 Pursue 中`)
+
+            // 添加完成消息
+            let completeContent = message
+            if (summary) {
+              completeContent += `\n\n${summary}`
+            }
+            if (iterations > 0) {
+              completeContent += `\n\n_共 ${iterations} 轮迭代_`
+            }
+
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: Date.now() + Math.random(),
+                session_id: sessionId || undefined,
+                role: 'assistant',
+                content: completeContent,
+                timestamp: new Date().toISOString()
+              }
+            ])
+            setIsLoading(false)
+            break
+          }
+
           case 'cancelled':
             setIsLoading(false)
             appendThinking(t('message.stoppedInline'))

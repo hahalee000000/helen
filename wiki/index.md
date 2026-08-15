@@ -95,6 +95,7 @@
 - [[reference/16-quality-assessment|Quality Assessment]] — 7-dimension framework, security scoring, CI integration
 - [[reference/17-multimodal|Multimodal Support]] — MediaPart, on_media/on_generate callbacks, media adaptation (**v1.17 new feature**)
 - [[reference/18-helen-agent|Helen Agent Programming Assistant]] — Interactive self-evolving coding assistant, Web UI, ChatSessionActor architecture, skill/memory evolution loop (**v1.26+ new**)
+- [[guide/goal-command|/goal Command]] — Autonomous goal pursuit in WebUI, auto-continue loop, LLM self-reporting completion (**v1.44.1 new**)
 
 ### 9. Extended References
 - [[reference/python-integration|Helen ↔ Python Bidirectional Integration]] ⭐ — Full picture: FFI (Helen → Python) + Bridge (Python → Helen) + hybrid usage patterns
