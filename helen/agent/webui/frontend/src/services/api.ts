@@ -131,11 +131,17 @@ export const api = {
     },
     /** 获取当前目录的消息历史(从 Helen transcript 读取) */
     getDirectoryMessages: async (limit: number = 100, offset: number = 0) => {
+      console.log('[API] getDirectoryMessages called with limit:', limit, 'offset:', offset)
       const response = await fetchWithRetry(
         `${API_BASE_URL}/chat/dir/messages?limit=${limit}&offset=${offset}`
       )
-      if (!response.ok) throw new Error('Failed to fetch directory messages')
-      return response.json()
+      if (!response.ok) {
+        console.error('[API] getDirectoryMessages failed with status:', response.status)
+        throw new Error('Failed to fetch directory messages')
+      }
+      const data = await response.json()
+      console.log('[API] getDirectoryMessages returned', data.length, 'messages')
+      return data
     },
     /** 检查后端是否正在处理请求（前端 re-sync isLoading 用） */
     getStatus: async () => {

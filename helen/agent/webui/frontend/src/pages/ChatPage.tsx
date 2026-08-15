@@ -16,16 +16,24 @@ export function ChatPage() {
 
   // 首次挂载：从后端获取当前目录信息，自动建立会话（目录 = 会话边界）
   useEffect(() => {
-    if (currentSessionId) return  // 已有会话（例如目录切换后）
+    if (currentSessionId) {
+      console.log('[ChatPage] Session already set:', currentSessionId)
+      return  // 已有会话（例如目录切换后）
+    }
 
+    console.log('[ChatPage] Initializing session from directory...')
     api.chat.getDirectory()
       .then((info) => {
+        console.log('[ChatPage] Got directory info:', info)
         if (info?.session_id) {
+          console.log('[ChatPage] Setting session ID:', info.session_id)
           setCurrentSession(info.session_id)
+        } else {
+          console.warn('[ChatPage] No session_id in directory info')
         }
       })
       .catch((err) => {
-        console.error('Failed to initialize session from directory:', err)
+        console.error('[ChatPage] Failed to initialize session from directory:', err)
       })
   }, [currentSessionId, setCurrentSession])
 
