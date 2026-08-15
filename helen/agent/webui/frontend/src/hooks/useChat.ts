@@ -29,7 +29,8 @@ export function useChat(sessionId: string | null) {
     const loadMessages = async () => {
       try {
         console.log('[useChat] Loading messages for sessionId:', sessionId)
-        const history = await api.chat.getDirectoryMessages()
+        // 加载所有消息（limit=10000），避免分页导致历史消息"丢失"
+        const history = await api.chat.getDirectoryMessages(10000, 0)
         console.log('[useChat] Loaded', history.length, 'messages')
         setMessages(history)
         // Re-sync: 检查后端是否正在处理请求（恢复 stop/hint 按钮状态）
