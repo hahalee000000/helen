@@ -648,6 +648,8 @@ class HttpLLMRuntime(LLMRuntime):
         budget = IterationBudget(max_total=max_turns + 2)  # +2 for nudge retries
         empty_response_retries = 0
         max_empty_retries = 2
+        # v1.44: Track tool-calling turns for budget warning injection
+        tool_turn_count = 0
 
         while budget.consume():
             # Phase 9B: Reset reactive compactor per-turn state
@@ -702,6 +704,7 @@ class HttpLLMRuntime(LLMRuntime):
             # Check if LLM wants tool calls
             tool_calls = response_msg.get("tool_calls")
             if tool_calls:
+                tool_turn_count += 1  # v1.44: track tool-calling turns
                 # P0: Enforce MAX_TOOL_RESULTS_PER_TURN to prevent context explosion
                 tool_calls = _enforce_tool_results_per_turn(tool_calls)
 
@@ -788,6 +791,9 @@ class HttpLLMRuntime(LLMRuntime):
                 # Phase 9A: Context awareness — inject usage warning if needed
                 self._inject_usage_warning_if_needed(messages)
 
+                # Phase 9C: Turn budget warning — alert LLM when approaching max_turns
+                self._inject_turn_budget_warning(messages, tool_turn_count, max_turns)
+
                 # Reset empty response counter after successful tool execution
                 empty_response_retries = 0
                 continue
@@ -826,6 +832,13 @@ class HttpLLMRuntime(LLMRuntime):
                 # Valid final response
                 final_text = content
                 break
+
+        # Phase 9D: Budget exhausted without final answer — force summarization
+        if not final_text:
+            final_text = self._force_final_summarization(
+                messages, use_model, temperature, max_tokens,
+                thinking_enabled, reasoning_effort,
+            )
 
         return LLMResponse(
             text=final_text,
@@ -972,6 +985,119 @@ class HttpLLMRuntime(LLMRuntime):
                 messages.append({"role": "system", "content": warning})
         except Exception as e:
             logger.debug("Usage warning injection failed (non-fatal): %s", e)
+
+    def _inject_turn_budget_warning(
+        self,
+        messages: list[dict[str, Any]],
+        tool_turn_count: int,
+        max_turns: int,
+    ) -> str | None:
+        """Phase 9C: Warn the LLM when approaching max_turns limit.
+
+        Injects a user-role message telling the LLM how many tool-calling
+        turns remain, urging it to stop calling tools and produce a final
+        answer.  This prevents the silent-truncation problem where the
+        iteration budget runs out mid-execution and the agent returns empty.
+
+        Args:
+            messages: Messages list (modified in-place).
+            tool_turn_count: Number of tool-calling turns used so far.
+            max_turns: The agent's max-turns setting.
+
+        Returns:
+            The warning text if injected, or None if not needed.
+        """
+        remaining = max_turns - tool_turn_count
+        if remaining > 2:
+            return None
+
+        # Avoid duplicate warnings — if the last user message is already a
+        # turn-budget warning, replace it instead of stacking.
+        if messages and messages[-1].get("role") == "user" and \
+           messages[-1].get("content", "").startswith("[System Warning — turn budget"):
+            messages.pop()
+
+        if remaining == 2:
+            warning = (
+                "[System Warning — turn budget] You have approximately 2 "
+                f"tool-calling turns remaining (max_turns={max_turns}). "
+                "Start wrapping up: prefer producing your final answer over "
+                "calling more tools. If you must call one more tool, do so "
+                "now and summarize on the next turn."
+            )
+        elif remaining == 1:
+            warning = (
+                "[System Warning — turn budget] This is your LAST turn "
+                f"(max_turns={max_turns}). You MUST NOT call any tools. "
+                "Produce your final answer now. Summarize what you have "
+                "accomplished so far."
+            )
+        else:
+            # remaining <= 0 — already over budget, handle defensively.
+            warning = (
+                "[System Warning — turn budget] Turn budget exhausted. "
+                "You MUST produce your final answer immediately. "
+                "Do NOT call any tools."
+            )
+
+        logger.info("Turn budget warning injected (tool_turns=%d/%d, remaining=%d)",
+                     tool_turn_count, max_turns, remaining)
+        messages.append({"role": "user", "content": warning})
+        return warning
+
+    def _force_final_summarization(
+        self,
+        messages: list[dict[str, Any]],
+        model: str,
+        temperature: float,
+        max_tokens: int | None,
+        thinking_enabled: bool,
+        reasoning_effort: str | None,
+    ) -> str:
+        """Phase 9D: Force a text-only API call to get a final answer.
+
+        Called when the iteration budget is exhausted without the LLM
+        producing a final text response.  Makes one last API call WITHOUT
+        tools so the LLM is forced to summarize.
+
+        Returns:
+            The final text response, or a fallback message if the call fails.
+        """
+        logger.warning(
+            "Turn budget exhausted without final answer — forcing summarization "
+            "(model=%s, messages=%d)",
+            model, len(messages),
+        )
+        # Inject an explicit instruction
+        messages.append({
+            "role": "user",
+            "content": (
+                "[System Warning — turn budget exhausted] Your turn budget has "
+                "been fully used. You CANNOT call any more tools. Produce your "
+                "final answer NOW. Summarize what you have accomplished with the "
+                "information gathered so far."
+            ),
+        })
+        try:
+            response_msg = self._chat_with_messages_retry(
+                messages, model=model, temperature=temperature,
+                tools=None,  # No tools — force text response
+                max_tokens=max_tokens,
+                thinking_enabled=thinking_enabled,
+                reasoning_effort=reasoning_effort,
+            )
+            if response_msg:
+                content = response_msg.get("content", "") or ""
+                if content.strip():
+                    return content
+        except Exception as e:
+            logger.debug("Forced summarization call failed: %s", e)
+
+        return (
+            "[System: The agent reached its turn limit (max_turns) without "
+            "producing a final answer. The execution was truncated. "
+            "Consider increasing max_turns for this agent.]"
+        )
 
     def _chat(
         self,
@@ -1185,6 +1311,8 @@ class HttpLLMRuntime(LLMRuntime):
         budget = IterationBudget(max_total=max_turns + 2)
         empty_response_retries = 0
         max_empty_retries = 2
+        # v1.44: Track tool-calling turns for budget warning injection
+        tool_turn_count = 0
         # P2: Stream network retry (separate from iteration budget)
         # Only retries transient errors BEFORE stream is established
         stream_retry = 0
@@ -1380,6 +1508,7 @@ class HttpLLMRuntime(LLMRuntime):
 
                 # After stream completes: check if we got tool calls
                 if tool_calls_acc:
+                    tool_turn_count += 1  # v1.44: track tool-calling turns
                     # v1.37: Preserve reasoning_content for multi-turn tool calls.
                     # DeepSeek requires reasoning_content to be passed back in tool-call
                     # multi-turn conversations (returns 400 error if missing).
@@ -1520,6 +1649,13 @@ class HttpLLMRuntime(LLMRuntime):
 
                     # Phase 9A: Context awareness — inject usage warning if needed
                     self._inject_usage_warning_if_needed(messages)
+
+                    # Phase 9C: Turn budget warning — alert LLM when approaching max_turns
+                    turn_warning = self._inject_turn_budget_warning(
+                        messages, tool_turn_count, max_turns,
+                    )
+                    if turn_warning:
+                        yield {"type": "warning", "message": turn_warning}
 
                     # Reset empty response counter after successful tool execution
                     empty_response_retries = 0
@@ -1682,6 +1818,26 @@ class HttpLLMRuntime(LLMRuntime):
             except Exception as e:
                 yield {"type": "error", "message": f"Unexpected error: {e}"}
                 break
+
+        # Phase 9D: Budget exhausted — yield warning if no final response was produced
+        # (In streaming mode, content was already yielded chunk-by-chunk. If the loop
+        # exits here without hitting the "Valid final response — break" path, it means
+        # the turn budget ran out during tool-calling.)
+        if budget.remaining == 0 and budget.used >= budget.max_total:
+            logger.warning(
+                "Stream turn budget exhausted (max_turns=%d, tool_turns=%d) "
+                "— yielding truncation warning",
+                max_turns, tool_turn_count,
+            )
+            yield {
+                "type": "warning",
+                "message": (
+                    f"[System Warning — turn budget exhausted] The agent reached its "
+                    f"turn limit (max_turns={max_turns}, tool_turns={tool_turn_count}) "
+                    f"without producing a final answer. Consider increasing max_turns "
+                    f"for this agent."
+                ),
+            }
 
     @property
     def last_error(self) -> str | None:
