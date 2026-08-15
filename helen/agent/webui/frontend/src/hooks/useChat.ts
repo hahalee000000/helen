@@ -21,17 +21,13 @@ export function useChat(sessionId: string | null) {
   // 加载历史消息
   useEffect(() => {
     if (!sessionId) {
-      console.log('[useChat] sessionId is null, clearing messages')
       setMessages([])
       return
     }
 
     const loadMessages = async () => {
       try {
-        console.log('[useChat] Loading messages for sessionId:', sessionId)
-        // 加载所有消息（limit=10000），避免分页导致历史消息"丢失"
         const history = await api.chat.getDirectoryMessages(10000, 0)
-        console.log('[useChat] Loaded', history.length, 'messages')
         setMessages(history)
         // Re-sync: 检查后端是否正在处理请求（恢复 stop/hint 按钮状态）
         try {
@@ -41,7 +37,7 @@ export function useChat(sessionId: string | null) {
           // 查询失败不阻塞正常消息加载
         }
       } catch (error) {
-        console.error('[useChat] Failed to load messages:', error)
+        console.error('Failed to load messages:', error)
       }
     }
 
