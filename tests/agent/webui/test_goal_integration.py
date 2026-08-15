@@ -2,6 +2,7 @@
 
 Tests the goal handler integration with chat router.
 """
+import os
 import unittest
 from unittest.mock import Mock, AsyncMock, patch
 import asyncio
@@ -17,6 +18,14 @@ from helen.agent.webui.backend.app.goal_handler import (
 
 class TestGoalCommandIntegration(unittest.TestCase):
     """Test /goal command integration."""
+
+    def setUp(self):
+        """Set language to Chinese for tests that use Chinese content."""
+        os.environ["HELEN_WEBUI_LANG"] = "zh"
+
+    def tearDown(self):
+        """Clean up environment variable."""
+        os.environ.pop("HELEN_WEBUI_LANG", None)
 
     def test_goal_prompt_includes_completion_instruction(self):
         """Initial goal prompt instructs LLM to use completion markers."""

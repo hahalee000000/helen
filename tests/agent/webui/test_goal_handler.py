@@ -1,12 +1,13 @@
 """Tests for goal_handler module."""
 
+import os
 import pytest
 from helen.agent.webui.backend.app.goal_handler import (
     parse_goal_status,
     goal_appears_complete,
     build_goal_prompt,
     build_continuation_prompt,
-    GOAL_SYSTEM_PROMPT_INJECTION,
+    _get_goal_system_prompt_injection,
 )
 
 
@@ -118,7 +119,8 @@ class TestBuildGoalPrompt:
     def test_includes_system_injection(self):
         """Prompt should include the goal system prompt injection."""
         prompt = build_goal_prompt("test goal")
-        assert GOAL_SYSTEM_PROMPT_INJECTION in prompt
+        injection = _get_goal_system_prompt_injection()
+        assert injection in prompt
 
     def test_includes_completion_instruction(self):
         """Prompt should instruct LLM to mark completion."""
@@ -154,3 +156,80 @@ class TestBuildContinuationPrompt:
         prompt = build_continuation_prompt("goal", "last")
         assert "[GOAL_COMPLETE]" in prompt
         assert "[GOAL_IN_PROGRESS]" in prompt
+
+
+class TestLanguageSupport:
+    """Test language-aware prompt generation."""
+
+    def test_english_prompts(self):
+        """When HELEN_WEBUI_LANG=en, prompts should be in English."""
+        os.environ["HELEN_WEBUI_LANG"] = "en"
+        try:
+            prompt = build_goal_prompt("test goal")
+            assert "Goal:" in prompt
+            assert "Start working" in prompt
+            assert "目标:" not in prompt
+        finally:
+            os.environ.pop("HELEN_WEBUI_LANG", None)
+
+    def test_chinese_prompts(self):
+        """When HELEN_WEBUI_LANG=zh, prompts should be in Chinese."""
+        os.environ["HELEN_WEBUI_LANG"] = "zh"
+        try:
+            prompt = build_goal_prompt("test goal")
+            assert "目标:" in prompt
+            assert "开始工作" in prompt
+            assert "Goal:" not in prompt
+        finally:
+            os.environ.pop("HELEN_WEBUI_LANG", None)
+
+    def test_default_to_english(self):
+        """When HELEN_WEBUI_LANG is not set, default to English."""
+        os.environ.pop("HELEN_WEBUI_LANG", None)
+        prompt = build_goal_prompt("test goal")
+        assert "Goal:" in prompt
+        assert "目标:" not in prompt
+
+    def test_continuation_prompt_english(self):
+        """Continuation prompt should respect language setting."""
+        os.environ["HELEN_WEBUI_LANG"] = "en"
+        try:
+            prompt = build_continuation_prompt("test goal", "last progress")
+            assert "Original goal:" in prompt
+            assert "Continue working" in prompt
+            assert "原始目标:" not in prompt
+        finally:
+            os.environ.pop("HELEN_WEBUI_LANG", None)
+
+    def test_continuation_prompt_chinese(self):
+        """Continuation prompt should respect language setting."""
+        os.environ["HELEN_WEBUI_LANG"] = "zh"
+        try:
+            prompt = build_continuation_prompt("test goal", "last progress")
+            assert "原始目标:" in prompt
+            assert "继续工作" in prompt
+            assert "Original goal:" not in prompt
+        finally:
+            os.environ.pop("HELEN_WEBUI_LANG", None)
+
+    def test_parse_english_markers(self):
+        """Should parse English markers correctly."""
+        response = """
+        Done with the task.
+
+        [GOAL_COMPLETE] Final summary: All features implemented.
+        """
+        result = parse_goal_status(response)
+        assert result["status"] == "complete"
+        assert "All features" in result["summary"]
+
+    def test_parse_english_in_progress(self):
+        """Should parse English in-progress markers correctly."""
+        response = """
+        Made some progress.
+
+        [GOAL_IN_PROGRESS] Remaining work: Need to add tests.
+        """
+        result = parse_goal_status(response)
+        assert result["status"] == "in_progress"
+        assert "tests" in result["summary"]
