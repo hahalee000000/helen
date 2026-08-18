@@ -189,14 +189,42 @@ def start_backend(backend_dir: Path, env: dict) -> subprocess.Popen:
     # Use inline Python to avoid separate launcher file
     # The key is to chdir via env var, not string interpolation (avoids path escaping issues)
     # Read HOST from env (default 127.0.0.1), warn if binding to 0.0.0.0
+    #
+    # IMPORTANT: cwd starts as backend_dir, where `import helen` resolves to the
+    # real installed package. We capture its location BEFORE os.chdir(user_cwd),
+    # because user_cwd may contain a local `helen/` directory (e.g. ~/helen-rust/helen/)
+    # that would shadow the real package via sys.path[0] = '' after chdir.
+    #
+    # Note: helen.__file__ = <pkg>/helen/__init__.py, so we need TWO dirname levels
+    # to get the parent directory that must sit on sys.path for `import helen` to work.
     backend_code = (
         "import os, sys\n"
+        "# Lock in the real helen package location BEFORE chdir (cwd is still backend_dir)\n"
+        "_real_helen_syspath = None\n"
+        "try:\n"
+        "    import helen as _h\n"
+        "    _hf = getattr(_h, '__file__', None)\n"
+        "    if _hf:\n"
+        "        # __file__ = <parent>/helen/__init__.py → need <parent> on sys.path\n"
+        "        _real_helen_syspath = os.path.dirname(os.path.dirname(os.path.abspath(_hf)))\n"
+        "    del _h\n"
+        "except Exception:\n"
+        "    pass\n"
         "cwd = os.environ.get('HELEN_WEBUI_CWD')\n"
         "if cwd:\n"
         "    try:\n"
         "        os.chdir(cwd)\n"
         "    except OSError:\n"
         "        pass\n"
+        "# After chdir, sys.path[0]='' resolves to user_cwd, which may contain a local\n"
+        "# `helen/` shadow directory. Prepend the real helen's parent so it wins.\n"
+        "if _real_helen_syspath:\n"
+        "    # Drop any stale namespace-package `helen` that might have been cached\n"
+        "    for _k in list(sys.modules):\n"
+        "        if _k == 'helen' or _k.startswith('helen.'):\n"
+        "            del sys.modules[_k]\n"
+        "    if _real_helen_syspath not in sys.path:\n"
+        "        sys.path.insert(0, _real_helen_syspath)\n"
         "import uvicorn\n"
         "from app.config import settings\n"
         "host = settings.HOST\n"

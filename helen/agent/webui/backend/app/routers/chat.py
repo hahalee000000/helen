@@ -56,10 +56,19 @@ async def get_chat_status():
     同时返回 version 和 helen_path 供 Settings 页面展示。
     """
     import helen
-    helen_path = str(Path(helen.__file__).parent)
+    # helen.__file__ may be None if `helen` resolved to a namespace package
+    # (e.g. when user cwd contains a local `helen/` shadow directory).
+    # Fall back to __path__[0] so the endpoint still returns a useful path.
+    _helen_file = getattr(helen, "__file__", None)
+    if _helen_file:
+        helen_path = str(Path(_helen_file).parent)
+    elif getattr(helen, "__path__", None):
+        helen_path = str(Path(helen.__path__[0]))
+    else:
+        helen_path = ""
     return {
         "is_processing": stream_registry.is_processing(),
-        "version": helen.__version__,
+        "version": getattr(helen, "__version__", "unknown"),
         "config": {
             "helen_path": helen_path,
         },
