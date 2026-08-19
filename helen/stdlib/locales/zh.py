@@ -90,6 +90,7 @@ ALIASES: dict[str, str] = {
     # ── Data formats (数据格式) ──────────────────────────────────
     # JSON
     "json解析": "json_parse",
+    "json宽松解析": "json_parse_lenient",
     "json序列化": "json_stringify",
     "json加载": "json_load",
     "json保存": "json_save",
@@ -166,6 +167,7 @@ ALIASES: dict[str, str] = {
     "日期解析": "date_parse",
     "日期相加": "date_add",
     "日期相减": "date_diff",
+    "时间戳转日期": "fromtimestamp",
     "年": "date_year",
     "月": "date_month",
     "日": "date_day",
@@ -205,6 +207,13 @@ ALIASES: dict[str, str] = {
     "对数二": "log2",
     "对数十": "log10",
     "指数": "exp",
+    # Bitwise (位运算)
+    "位与": "bit_and",
+    "位或": "bit_or",
+    "位异或": "bit_xor",
+    "位取反": "bit_not",
+    "位左移": "bit_shift_left",
+    "位右移": "bit_shift_right",
 
     # ── File I/O (文件读写) ──────────────────────────────────────
     "读文件": "read_file",
@@ -335,6 +344,30 @@ ALIASES: dict[str, str] = {
     "开启跟踪": "trace_on",
     "关闭跟踪": "trace_off",
     "获取跟踪": "get_trace",
+    # LLM log / error inspection (大模型日志/错误检查)
+    "获取大模型日志": "get_llm_log",
+    "获取最近错误": "get_last_error",
+    "最近错误详情": "last_error_detail",
+    "获取调用栈": "get_call_stack",
+    "错误类别": "error_category",
+    "错误建议": "error_suggestion",
+    "错误数据流": "error_data_flow",
+    # Output validation (输出验证)
+    "验证输出": "validate_output",
+    # Session recording (会话录制)
+    "录制会话": "record_session",
+    "停止录制": "stop_recording",
+    "回放录制": "replay_session",
+    # Data lineage / flow (数据血缘/数据流)
+    "追溯来源": "trace_value_origin",
+    "追溯消费者": "trace_value_consumers",
+    "获取数据血缘": "get_data_lineage",
+    "记录数据流": "record_data_flow",
+    # Coverage (覆盖率)
+    "开启覆盖率": "coverage_on",
+    "关闭覆盖率": "coverage_off",
+    "覆盖率报告": "coverage_report",
+    "覆盖率摘要": "coverage_summary",
 
     # ── Tools (工具) ─────────────────────────────────────────────
     "执行命令": "shell_exec",
@@ -383,6 +416,7 @@ ALIASES: dict[str, str] = {
     "回放完整会话": "replay_full_session",  # v1.23.7: aggregate spawn tree
     "导出会话": "export_transcript",
     "搜索会话": "search_transcript",
+    "查询会话": "query_transcript",
     "列出调用": "list_invocations",
     "获取调用": "get_invocation",
     "获取调用树": "get_invocation_tree",
