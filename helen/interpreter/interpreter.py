@@ -1534,7 +1534,15 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         program_args = self._program_args
         transcript_enabled = self._transcript_store_enabled
         # v1.23.7: Pass parent session_id for spawn tracking
-        parent_session_id = self._agent_context.session_id or ""
+        # v1.45.1: Don't access .session_id property unconditionally — it triggers
+        # lazy init and creates an empty session directory. Only read session_id
+        # if the transcript store has already been initialized (i.e., a session
+        # directory already exists). Otherwise use _pending_session_id (set at
+        # construction time) which doesn't trigger init.
+        if getattr(self._agent_context, '_transcript_store_initialized', False):
+            parent_session_id = self._agent_context.session_id or ""
+        else:
+            parent_session_id = getattr(self._agent_context, '_pending_session_id', None) or ""
 
         def run_spawned():
             try:
@@ -1876,9 +1884,16 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         # per-invocation isolation (v1.22) would filter them out and llm act
         # inside agent main {} would not see the prior conversation - only the
         # transcript file would be continued. This gives true context restore.
-        store = getattr(self._agent_context, 'transcript_store', None)
-        if store is not None and hasattr(store, 'expose_resumed_messages_to'):
-            store.expose_resumed_messages_to(new_id)
+        #
+        # v1.45.1: Don't trigger lazy initialization of transcript_store here.
+        # Accessing the property creates a session directory — even for agents
+        # with transcript "none", causing empty session dirs to accumulate.
+        # Only call expose_resumed_messages_to if the store is already initialized
+        # (e.g., via resume_session() which must init the store to load history).
+        if getattr(self._agent_context, '_transcript_store_initialized', False):
+            store = self._agent_context.transcript_store
+            if store is not None and hasattr(store, 'expose_resumed_messages_to'):
+                store.expose_resumed_messages_to(new_id)
 
         # Record metadata (used by list_invocations / get_invocation_tree)
         self._invocation_index[new_id] = {

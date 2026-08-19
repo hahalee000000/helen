@@ -55,20 +55,35 @@ async def get_chat_status():
 
     同时返回 version 和 helen_path 供 Settings 页面展示。
     """
-    import helen
-    # helen.__file__ may be None if `helen` resolved to a namespace package
-    # (e.g. when user cwd contains a local `helen/` shadow directory).
-    # Fall back to __path__[0] so the endpoint still returns a useful path.
-    _helen_file = getattr(helen, "__file__", None)
-    if _helen_file:
-        helen_path = str(Path(_helen_file).parent)
-    elif getattr(helen, "__path__", None):
-        helen_path = str(Path(helen.__path__[0]))
-    else:
-        helen_path = ""
+    import importlib.metadata
+    import sys as _sys
+
+    # Robust version: works even when a namespace package named "helen"
+    # (e.g. helen-rust/helen/) shadows the real Python package on sys.path.
+    try:
+        version = importlib.metadata.version("helen-lang")
+    except importlib.metadata.PackageNotFoundError:
+        try:
+            version = importlib.metadata.version("helen")
+        except importlib.metadata.PackageNotFoundError:
+            import helen as _h
+            version = getattr(_h, "__version__", "unknown")
+
+    # Find the real helen package directory (the one with __init__.py),
+    # skipping any namespace-package shadows that lack __init__.py.
+    helen_path = ""
+    for _p in _sys.path:
+        _candidate = Path(_p) / "helen"
+        if _candidate.is_dir() and (_candidate / "__init__.py").exists():
+            helen_path = str(_candidate)
+            break
+    if not helen_path:
+        # Fallback: use the webui's own location (helen/agent/webui/backend → helen/)
+        helen_path = str(Path(__file__).resolve().parents[4])
+
     return {
         "is_processing": stream_registry.is_processing(),
-        "version": getattr(helen, "__version__", "unknown"),
+        "version": version,
         "config": {
             "helen_path": helen_path,
         },
