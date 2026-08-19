@@ -1885,13 +1885,18 @@ class Interpreter(LlmMixin, StreamingMixin, PatternMixin, ExceptionMixin, Import
         # inside agent main {} would not see the prior conversation - only the
         # transcript file would be continued. This gives true context restore.
         #
-        # v1.45.1: Don't trigger lazy initialization of transcript_store here.
-        # Accessing the property creates a session directory — even for agents
-        # with transcript "none", causing empty session dirs to accumulate.
-        # Only call expose_resumed_messages_to if the store is already initialized
-        # (e.g., via resume_session() which must init the store to load history).
-        if getattr(self._agent_context, '_transcript_store_initialized', False):
-            store = self._agent_context.transcript_store
+        # v1.45.2: Decide whether to access transcript_store (which triggers
+        # lazy init + session dir creation) by two signals:
+        #   (a) transcript_level != "none" — the invocation writes transcript
+        #   (b) _pending_session_id is set — the interpreter is resuming a
+        #       prior session, so we MUST load its history regardless of the
+        #       invocation's own transcript level. transcript "none" means
+        #       "don't WRITE my messages", not "don't READ prior history".
+        # Skip only when both are false (top-level main with no resume) —
+        # that's the case that caused empty session dir pollution.
+        _has_resume = bool(getattr(self._agent_context, '_pending_session_id', None))
+        if transcript_level != "none" or _has_resume:
+            store = getattr(self._agent_context, 'transcript_store', None)
             if store is not None and hasattr(store, 'expose_resumed_messages_to'):
                 store.expose_resumed_messages_to(new_id)
 
