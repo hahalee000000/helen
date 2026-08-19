@@ -61,6 +61,16 @@ def clear_stream_callback():
 # 用于从 Python 端（Web UI / TUI）请求中断正在进行的 Helen LLM 流
 # Helen 端通过 FFI 调用 is_cancel_requested() 检查此 flag，
 # 若被设置则调用 Helen stdlib cancel_all_llm_calls() 中断流式 LLM
+#
+# ── 生命周期约定 ──
+# 1. request_cancel() 由 Python 端（WebUI cancel handler）设置
+# 2. clear_cancel() 由以下位置清理（至少一个必须触发）：
+#    a. Helen actor 的 _actor_chunks_cb / _actor_tool_end_cb 回调
+#    b. do_streaming() / do_goal_streaming() 的 finally 块
+#    c. WebUI cancel handler 中 stream_task.cancel() 之后
+#    d. /compress 命令执行前
+# 3. 如果所有清理路径都失败，flag 会永远卡在 True，导致后续 LLM 调用
+#    （如 /compress 的 LLMSummarizer）被静默取消。这是 v1.45 的已知 bug。
 
 _cancel_requested: bool = False
 
@@ -77,6 +87,13 @@ def request_cancel():
 
 
 def clear_cancel():
-    """清除中断标志（在新会话开始时调用，避免残留影响）"""
+    """清除中断标志。
+
+    调用时机：
+    - do_streaming / do_goal_streaming finally 块（兜底）
+    - WebUI cancel handler（cancel 后立即清理）
+    - /compress 命令执行前（防御性清理）
+    - Actor llm act 完成/出错后（防御性清理）
+    """
     global _cancel_requested
     _cancel_requested = False

@@ -411,6 +411,15 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
             let new_count = request_count + 1
             debug("ChatSessionActor: handling request " + request_id + " (#" + str(new_count) + ")")
 
+            // Fix: 每次处理新 user_input 时强制清理残留 cancel flag。
+            // 这是最关键的防线：即使上一轮 cancel 后所有清理路径都失败，
+            // 新一轮用户输入必须从干净状态开始。否则残留 flag 会干扰
+            // 下面的 auto-compress LLM 调用和后续的 llm act。
+            try {
+                import "ui.stream_emitter" as _CancelCleanup
+                _CancelCleanup.clear_cancel()
+            } catch {}
+
             // 统计轮次
             try { SessionStats.increment_turns() } catch {}
 
@@ -448,8 +457,20 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
                         on_tool_end _actor_tool_end_cb
                 }
                 debug("ChatSessionActor: LLM act complete (request=" + request_id + ", response_len=" + str(len(full_response)) + ")")
+                // Fix: llm act 正常完成后清理残留 cancel flag。
+                // 如果用户取消了上一轮但回调未触发 clear_cancel()，
+                // flag 会残留并干扰后续 /compress 等需要 LLM 调用的操作。
+                try {
+                    import "ui.stream_emitter" as _CancelCleanup
+                    _CancelCleanup.clear_cancel()
+                } catch {}
             } catch RuntimeError err {
                 debug("ChatSessionActor: LLM error: " + err.message)
+                // Fix: 错误路径也要清理 cancel flag
+                try {
+                    import "ui.stream_emitter" as _CancelCleanup
+                    _CancelCleanup.clear_cancel()
+                } catch {}
                 let _llm_err_params = {"message": err.message}
                 let _llm_err_payload = {"i18n_key": "error.llmError", "params": _llm_err_params}
                 _emit_actor_stream_event("error", json_stringify(_llm_err_payload))
@@ -465,6 +486,11 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
                 return new_count
             } catch {
                 debug("ChatSessionActor: LLM error (unknown)")
+                // Fix: 未知错误路径也要清理 cancel flag
+                try {
+                    import "ui.stream_emitter" as _CancelCleanup
+                    _CancelCleanup.clear_cancel()
+                } catch {}
                 let _llm_unknown_payload = {"i18n_key": "error.llmUnknown", "params": dict()}
                 _emit_actor_stream_event("error", json_stringify(_llm_unknown_payload))
                 _emit_actor_stream_event("processing_complete", "")

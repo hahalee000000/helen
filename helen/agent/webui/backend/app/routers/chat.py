@@ -435,6 +435,13 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
             pass
         finally:
             stream_registry.unregister(session_id)
+            # Fix: do_streaming 结束时清理 cancel flag（最后一道防线）。
+            # 如果 actor 回调因时序问题未能清理，这里兜底。
+            try:
+                from ui import stream_emitter
+                stream_emitter.clear_cancel()
+            except (ImportError, Exception):
+                pass
 
     async def do_goal_streaming(goal_text: str, file_paths: Optional[List[str]] = None):
         """Goal pursuit loop: stream multiple iterations until goal complete.
@@ -547,6 +554,12 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
             pass
         finally:
             stream_registry.unregister(session_id)
+            # Fix: do_goal_streaming 结束时也清理 cancel flag
+            try:
+                from ui import stream_emitter
+                stream_emitter.clear_cancel()
+            except (ImportError, Exception):
+                pass
 
     try:
         while True:
@@ -746,6 +759,15 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
                     except (asyncio.CancelledError, Exception):
                         pass
                     stream_task = None
+                    # Fix: 确保 cancel flag 被清理。
+                    # 之前 flag 仅由 actor 回调清理，如果 stream_task.cancel()
+                    # 在 actor 回调触发前打断了流，flag 会永远卡在 True，
+                    # 导致后续 /compress 等 LLM 调用被残留 cancel 状态干扰。
+                    try:
+                        from ui import stream_emitter
+                        stream_emitter.clear_cancel()
+                    except (ImportError, Exception):
+                        pass
                     await manager.broadcast({
                         "type": "cancelled",
                         "data": {"content": ""}

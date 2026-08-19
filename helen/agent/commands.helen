@@ -316,6 +316,14 @@ fn _cmd_clear_session(args: list): str {
  *  曾被 hahalee000000/helen#13 阻塞（TranscriptStore 路径忽略 strategy），已在上游修复。
  *  WORKAROUND: hahalee000000/helen#23 — compressed_tokens 返回值错误，改用 context_stats() */
 fn _cmd_compress(): str {
+    // Fix: 清理残留 cancel flag，防止之前取消操作干扰压缩的 LLM 调用。
+    // 如果用户先按了 cancel 再发 /compress，_cancel_requested 可能仍为 True，
+    // 导致 LLMSummarizer 的 llm_client 调用被静默取消。
+    try {
+        import "ui.stream_emitter" as _SE
+        _SE.clear_cancel()
+    } catch {}
+
     let before_stats = context_stats()
     let original_tokens = before_stats["total_tokens"]
 
