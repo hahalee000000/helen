@@ -110,6 +110,8 @@ class ChannelActorManager:
 
         崩溃恢复：若调用异常（actor 已死），标记 actor 为未启动，
         下次调用会自动重新 spawn。
+
+        v1.45.1: 异常时释放 session lock，防止 actor 崩溃导致锁残留。
         """
         self.ensure_actor()
         from chat_tui_web import tui_chat_handler_actor
@@ -118,6 +120,17 @@ class ChannelActorManager:
         except Exception as e:
             # actor 可能已崩溃（while 循环异常退出），标记为未启动以便下次重启
             logger.warning("send_message failed (actor may have crashed): %s", e)
+            # v1.45.1: 释放可能残留的 session lock
+            # 当 actor 在 llm act 中被中断（如用户按停止键），清理代码可能未执行，
+            # 导致 session.lock 残留。下次 resume 时会因锁被占用而失败。
+            # 这里在异常路径主动释放，确保下次能正常恢复会话。
+            if self._session_id:
+                try:
+                    from transcript import release_session_lock
+                    result = release_session_lock(self._session_id)
+                    logger.debug("Released session lock for %s: %s", self._session_id, result)
+                except Exception as lock_err:
+                    logger.warning("Failed to release session lock: %s", lock_err)
             with self._lock:
                 self._stop_heartbeat()
                 self._actor_spawned = False
