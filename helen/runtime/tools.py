@@ -273,10 +273,20 @@ def _shell_exec(command: str, timeout: int = 120, shell: bool = True) -> str:
 
     Note: When shell=True, be careful with user input to avoid shell injection.
     Use shell=False for commands with untrusted input.
+
+    v1.46: Added safety check to block commands that would kill the agent
+    process itself (pkill/killall/kill matching "helen agent" or own PID).
     """
+    import os
+    import re
     import shlex
     import subprocess
     import sys
+
+    # v1.46: Self-preservation — block commands that would kill the agent
+    blocked = _check_self_destruct(command)
+    if blocked:
+        return f"[blocked] {blocked}"
 
     try:
         cmd = command if shell else shlex.split(command)
@@ -301,6 +311,53 @@ def _shell_exec(command: str, timeout: int = 120, shell: bool = True) -> str:
         return f"[error] Exec failed: {e}"
 
 
+def _check_self_destruct(command: str) -> str | None:
+    """Check if a shell command would kill the agent process itself.
+
+    v1.46: Self-preservation guard. Blocks commands like:
+    - pkill -f "helen agent" (matches agent's own cmdline)
+    - killall -f "helen agent"
+    - kill <own_pid>
+    - Any kill command whose pattern matches "helen agent" / "helen" agent-like processes
+
+    Returns:
+        Error message string if blocked, None if safe.
+    """
+    import os
+    import re
+
+    own_pid = os.getpid()
+    cmd_lower = command.lower()
+
+    # Check for pkill/killall/kill patterns that would match the agent process
+    # The agent's cmdline contains "helen agent" — any pattern matching that is dangerous
+    # Patterns cover: quoted strings, unquoted strings with backslash-escaped space,
+    # and adjacent words.
+    dangerous_patterns = [
+        # pkill -f "helen agent" (with quotes or escaped space)
+        r'\bpkill\b.*-[a-z]*f[a-z]*\s+["\']?helen[\s\\]+agent',
+        # pkill -f helen.agent (dot matches any char including space/backslash)
+        r'\bpkill\b.*-[a-z]*f[a-z]*\s+["\']?helen.agent',
+        # killall -f "helen agent" or killall helen (any pattern matching helen processes)
+        r'\bkillall\b.*-[a-z]*f[a-z]*\s+["\']?helen[\s\\]+agent',
+        r'\bkillall\b.*-[a-z]*f[a-z]*\s+["\']?helen(?:\s|$|["\'])',
+        r'\bkillall\b\s+["\']?helen(?:\s|\\|$|["\'])',
+        # kill <own_pid>
+        r'\bkill\b.*\b' + str(own_pid) + r'\b',
+        # kill -9 helen (process name match)
+        r'\bkill\b\s+-\d+\s+["\']?helen',
+    ]
+    for pattern in dangerous_patterns:
+        if re.search(pattern, cmd_lower):
+            return (
+                f"Command would kill the agent process itself (matched: {pattern!r}). "
+                f"This is blocked for self-preservation. If you need to kill a previous "
+                f"helen agent, use a more specific pattern that excludes the current process."
+            )
+
+    return None
+
+
 def _shell_exec_full(command: str, timeout: int = 30, shell: bool = True) -> str:
     """Execute a shell command and return full result as JSON (Issue #25).
 
@@ -315,7 +372,14 @@ def _shell_exec_full(command: str, timeout: int = 30, shell: bool = True) -> str
 
     Note: When shell=True, be careful with user input to avoid shell injection.
     Use shell=False for commands with untrusted input.
+
+    v1.46: Self-preservation check (see _shell_exec).
     """
+    # v1.46: Self-preservation — block commands that would kill the agent
+    blocked = _check_self_destruct(command)
+    if blocked:
+        return json.dumps({"error": blocked, "blocked": True}, ensure_ascii=False)
+
     import shlex
     import subprocess
     import sys
