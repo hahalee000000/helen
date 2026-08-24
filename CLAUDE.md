@@ -7,11 +7,11 @@ For the broader multi-project layout, see `../CLAUDE.md`.
 
 **Helen** — a prompt-first Agent programming language (AI-native DSL). Combines deterministic constructs (variables, functions, control flow) with first-class LLM primitives (`llm act`, `llm if`). 
 
-- **Version**: 1.44.0
+- **Version**: 1.45.4
 - **Keywords**: 99 bilingual (48 English + 51 Chinese)
-- **Built-in functions**: 407 stdlib functions (21 categories), 728 total names (with locale aliases)
-- **Stdlib modules**: 22 modules (std.core, std.str, std.math, std.list, ...)
-- **Tests**: 3959 passing (Python pytest)
+- **Built-in functions**: 378 stdlib functions (21 categories), 379 Chinese aliases, 757 total names
+- **Stdlib modules**: 21 modules (std.core, std.str, std.math, std.list, ...)
+- **Tests**: 4014 passing (Python pytest)
 - **Python**: 3.12+ required
 
 ## Development Commands
@@ -116,14 +116,24 @@ helen/
 │                  # prompt_builder.py, history.py, observability.py, fuzzy_match.py
 │                  # transcript_store.py, session_manager.py, channel.py
 │                  # provider_protocol.py, model_capabilities.py, probe.py (v1.40.1)
-├── stdlib/        # 407 built-in functions (21 categories), 22 modules
-│                  # locales/zh.py (Chinese aliases), mailbox.py (v1.18: mailbox_select)
+├── stdlib/        # 378 built-in functions (21 categories), 21 modules, 379 Chinese aliases
+│                  # locales/zh.py (Chinese aliases, 100% coverage), mailbox.py (v1.18: mailbox_select)
 ├── ffi/           # Python FFI
 ├── cli/           # __main__.py, repl.py, ask_assistant.py, formatter.py, docgen.py
 ├── lsp/           # Language Server Protocol
 ├── agent/         # Helen agent components (chat_session_actor, chat_tui, task_manager, etc.)
 └── skills/        # 16 built-in skills (distributed with package)
 ```
+
+## Recent Changes (v1.44 → v1.45.4)
+
+- **v1.44.0**: `/session` subcommands (list/delete/view with fuzzy ID), HTML-based token injection for WebUI, secure uvicorn binding (127.0.0.1 default), `/dir` tilde expansion, 6 language bug fixes (query_transcript import, delete_session cross-scope, map methods, fromtimestamp, reserved-word docs, test isolation), resolve_session_dir scope hijack fix.
+- **v1.44.1**: Turn-budget warning (Phase 9C/9D) — injects graded warnings when `tool_turn_count` approaches `max_turns`, force-summarization on budget exhaustion. Prevents silent agent truncation.
+- **v1.45.0**: `/goal` command for autonomous goal pursuit — agent auto-continues until LLM self-reports `[GOAL_COMPLETE]`/`[GOAL_INCOMPLETE]`. Language-aware prompts via `HELEN_WEBUI_LANG`. Frontend `goalProgress`/`goalComplete` events.
+- **v1.45.1**: Cancel flag freeze fix — 5-layer defense against `stream_emitter._cancel_requested` sticking True when `stream_task.cancel()` interrupts before actor callbacks fire (actor appeared dead, `/compress` silently cancelled).
+- **v1.45.2**: spawn resume transcript loading restored — gates on `transcript_level != 'none'` + `_pending_session_id` (v1.45.1's `_transcript_store_initialized` gate broke ChatSessionActor resume). WebUI namespace package shadow handling for `helen/` directories in user cwd.
+- **v1.45.3**: 28 Chinese aliases补齐 → 100% stdlib coverage (378/378 canonical, 379 aliases). debug 类别 19 个、math 位运算 6 个、其他 3 个。
+- **v1.45.4**: Session lock release on actor crash in `send_message` (prevents stale lock blocking future resume). Cancel flag retention fix — let flag persist until actor callbacks detect it, so executor thread retry loop can exit cleanly.
 
 ## Core Language Concepts
 
@@ -201,7 +211,7 @@ Claude Code auto-loads relevant skills based on task context:
 
 **Helen-Specific Skills** (for Helen development):
 - `helen-syntax` — Complete language syntax reference (99 keywords, types, expressions)
-- `helen-stdlib` — 407 built-in functions reference with examples
+- `helen-stdlib` — 378 built-in functions reference with examples (379 Chinese aliases, 757 total names)
 - `helen-testing` — Test framework usage, TDD workflow, agent testing
 - `helen-quality` — 7-dimension quality assessment guide
 - `helen-agent-patterns` — Single agent design patterns (7 patterns)

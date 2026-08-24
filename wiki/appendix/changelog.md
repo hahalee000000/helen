@@ -1,6 +1,90 @@
 # 版本历史
 
-> Helen v1.44.0 | stdlib `fromtimestamp()` + 会话命令 + Map 方法访问 + WebUI 滚动/历史输入修复
+> Helen v1.45.4 | `/goal` 自主目标追求 + 中文别名 100% 覆盖 (378/378) + cancel flag / session lock 稳定性修复
+
+---
+
+## v1.45.4: Session lock 清理 + cancel flag 精细调整
+
+**发布日期**: 2026-08-23
+**核心修复**:
+- `send_message` 异常路径主动释放 session lock,防止 actor 崩溃后残留锁阻塞未来 resume
+- cancel flag 保留到 actor 回调检测,不再立即清理 — 让 executor 线程重试循环能检测到取消并干净退出
+
+问题背景: v1.45.1 的"立即清理"策略会干扰 `http_llm` 重试循环,导致页面无响应并报 "Stream timeout — retrying"。
+
+---
+
+## v1.45.3: 中文别名 100% 覆盖
+
+**发布日期**: 2026-08-23
+**补齐 28 个 stdlib 函数中文别名**:
+
+- **debug 类别 (19 个)**: `获取大模型日志`、`获取最近错误`、`最近错误详情`、`获取调用栈`、`错误类别`、`错误建议`、`错误数据流`、`验证输出`、`录制会话`、`停止录制`、`回放录制`、`追溯来源`、`追溯消费者`、`获取数据血缘`、`记录数据流`、`开启覆盖率`、`关闭覆盖率`、`覆盖率报告`、`覆盖率摘要`
+- **math 位运算 (6 个)**: `位与`、`位或`、`位异或`、`位取反`、`位左移`、`位右移`
+- **其他 (3 个)**: `时间戳转日期`、`json宽松解析`、`查询会话`
+
+覆盖率: 378/378 = 100% (379 别名,含 1 个重复映射)。
+
+---
+
+## v1.45.2: spawn resume 修复 + WebUI 命名空间阴影处理
+
+**发布日期**: 2026-08-20 (约)
+**核心修复**:
+- spawn resume transcript 加载恢复 — 改用 `transcript_level != 'none'` + `_pending_session_id` 双信号门控,v1.45.1 的 `_transcript_store_initialized` 门控破坏了 ChatSessionActor 的 resume
+- 避免空 session dir 污染 — `transcript = 'none'` 的 agent 不再触发 transcript_store 懒初始化
+- WebUI 命名空间包阴影处理 — 用户在含本地 `helen/` 子目录(如 Rust 重写项目)下运行 `helen agent` 时,`os.chdir(user_cwd)` 会 shadow 真实 helen 包;修复方案:chdir 前捕获真实 helen 包路径,prepend 到 sys.path,清理缓存的命名空间模块
+- `importlib.metadata` 取版本号(抗阴影)
+
+---
+
+## v1.45.1: Cancel flag 冻死 actor 修复
+
+**发布日期**: 2026-08-19
+**根因**: `stream_emitter._cancel_requested` 仅从 Helen actor 回调清理。若 `stream_task.cancel()` 在回调触发前中断流,标志永久停留 True。
+
+**症状**:
+- `/compress` LLM 总结静默取消
+- ChatSessionActor 对后续用户输入无响应
+- Actor 假死 (wchan=do_wait, is_processing=false)
+
+**5 层防御**:
+1. `chat.py` cancel handler: `stream_task.cancel()` 后 `clear_cancel()`
+2. `do_streaming()` / `do_goal_streaming()` finally 块: 兜底清理
+3. `chat_session_actor`: `llm act` 后清理 (成功 + 错误路径)
+4. `_handle_actor_user_input` 入口: 每次请求强制清理
+5. `/compress` 命令: LLM 总结前防御性清理
+
+---
+
+## v1.45.0: `/goal` 自主目标追求命令
+
+**发布日期**: 2026-08-15
+**核心功能**:
+- `/goal` 命令让 agent 自主追求复杂目标,自动持续直到完成
+- LLM 通过 `[GOAL_COMPLETE]` / `[GOAL_IN_PROGRESS]` 标记自我报告
+- `goal_handler.py` 实现完成检测 + prompt 构建
+- 前端支持 `goalProgress` 和 `goalComplete` 事件
+- `/goal` 和 `/dir` 加入 `/help` 列表
+- 语言感知 (`HELEN_WEBUI_LANG` 环境变量),中英文 prompt 和标记都支持
+
+**测试**: 33 个新测试 (单元 + 集成),wiki 用户指南 (`wiki/guide/goal-command.md`)。
+
+---
+
+## v1.44.1: Turn-budget warning 防止 agent 静默截断
+
+**发布日期**: 2026-08-15
+**问题**: `max_turns` 耗尽时,agent 静默返回空响应 — "突然停止" 现象。
+
+**解决方案**:
+- **Phase 9C** `_inject_turn_budget_warning()`: 当 `tool_turn_count` 逼近 `max_turns` (≤2 剩余)时,向消息注入分级警告,敦促 LLM 停止调用工具并产出最终答案
+- **Phase 9D** `_force_final_summarization()`: 预算耗尽仍无最终文本时,再做一次无工具的 API 调用强制总结,或返回明确的截断提示
+- `act()` 和 `act_stream()` 都显式跟踪 `tool_turn_count` 并注入警告
+- `act_stream()` 还 yield 警告事件给前端
+
+**测试**: 13 个新测试 (`tests/runtime/test_turn_budget_warning.py`)。
 
 ---
 
@@ -24,7 +108,7 @@ main {
 }
 ```
 
-位于 `helen/stdlib/time.py`,类别 `time`。Time 类别从 16 → 17 个函数,总 stdlib 函数数从 378 → 407。
+位于 `helen/stdlib/time.py`,类别 `time`。Time 类别从 16 → 17 个函数,总 stdlib 规范函数数从 377 → 378。
 
 ### 2. `list_sessions()` 返回值增强
 

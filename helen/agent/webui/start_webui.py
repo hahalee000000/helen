@@ -289,7 +289,18 @@ def start_frontend(frontend_dir: Path, env: dict) -> subprocess.Popen:
     print("   Frontend: http://localhost:5173")
 
     creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if IS_WINDOWS else 0
-    preexec_fn = None if IS_WINDOWS else os.setsid
+
+    # v1.45.5: Ignore SIGPIPE in frontend (node/vite) to prevent death when
+    # stdout pipe breaks (e.g., `helen agent | tee ...` + terminal disruption).
+    # Python backend already ignores SIGPIPE by default; node does not.
+    if IS_WINDOWS:
+        preexec_fn = None
+    else:
+        import signal as _signal
+        def _ignore_sigpipe_and_setsid():
+            _signal.signal(_signal.SIGPIPE, _signal.SIG_IGN)
+            os.setsid()
+        preexec_fn = _ignore_sigpipe_and_setsid
 
     _frontend_proc = subprocess.Popen(
         ["npm", "run", "dev"],
