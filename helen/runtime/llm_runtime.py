@@ -9,7 +9,7 @@ from __future__ import annotations
 import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 
 
 # ---------------------------------------------------------------------------
@@ -63,6 +63,7 @@ class LLMRuntime(ABC):
             hint_collector_fn: Any = None,
             thinking_enabled: bool = False,  # v1.36
             reasoning_effort: str | None = None,  # v1.36
+            transcript_fn: Callable[[str, Any], None] | None = None,  # v1.46: incremental transcript save
             ) -> LLMResponse:
         """Execute an autonomous LLM action (sync version).
 
@@ -76,6 +77,12 @@ class LLMRuntime(ABC):
             hint_collector_fn: Optional sink for hint messages produced during
                 the agentic loop (v1.21.1), so they get persisted to the
                 TranscriptStore.
+            transcript_fn: Optional callback invoked after each assistant message
+                (with tool_calls) and each tool result during the agentic loop
+                (v1.46). Signature: (role: str, content: Any, **kwargs) -> None.
+                kwargs may include tool_calls (list[dict]) for assistant messages
+                or tool_call_id (str) for tool results. Enables incremental
+                transcript persistence so tool call work survives crashes.
         """
         ...
 
@@ -85,7 +92,9 @@ class LLMRuntime(ABC):
                    max_turns: int = 5,
                    history: list[dict[str, Any]] | None = None,
                    dispatch_fn: Any = None,
-                   cancel_event: threading.Event | None = None) -> Iterator[dict[str, Any]]:
+                   cancel_event: threading.Event | None = None,
+                   transcript_fn: Callable[[str, Any], None] | None = None,  # v1.46
+                   ) -> Iterator[dict[str, Any]]:
         """Stream LLM response with tool-calling support.
 
         Default implementation calls act() and yields the full response as a single content event.
@@ -94,6 +103,8 @@ class LLMRuntime(ABC):
         Args:
             cancel_event: Optional threading.Event for cooperative cancellation.
                 When set, the stream should stop yielding and return.
+            transcript_fn: Optional callback for incremental transcript save
+                (v1.46). See act() for signature.
 
         Yields event dicts:
             {"type": "content", "content": "..."}     — text chunk
@@ -103,7 +114,7 @@ class LLMRuntime(ABC):
         """
         response = self.act(prompt, tools=tools, model=model, temperature=temperature,
                             max_turns=max_turns, system_prompt=system_prompt,
-                            dispatch_fn=dispatch_fn)
+                            dispatch_fn=dispatch_fn, transcript_fn=transcript_fn)
         if response and response.text:
             yield {"type": "content", "content": response.text}
 
@@ -155,6 +166,7 @@ class MockLLMRuntime(LLMRuntime):
             hint_collector_fn: Any = None,
             thinking_enabled: bool = False,  # v1.36
             reasoning_effort: str | None = None,  # v1.36
+            transcript_fn: Callable[[str, Any], None] | None = None,  # v1.46
             ) -> LLMResponse:
         """Return the preset act_return value.
 
@@ -163,6 +175,7 @@ class MockLLMRuntime(LLMRuntime):
                 but ignored (mock does not dispatch tool calls).
             on_tool_end_fn: Accepted for interface compatibility (v1.21), ignored.
             hint_collector_fn: Accepted for interface compatibility (v1.21.1), ignored.
+            transcript_fn: Accepted for interface compatibility (v1.46), ignored.
         """
         self.act_history.append({
             "prompt": prompt,

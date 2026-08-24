@@ -597,6 +597,7 @@ class HttpLLMRuntime(LLMRuntime):
         hint_collector_fn: Any = None,
         thinking_enabled: bool = False,  # v1.36
         reasoning_effort: str | None = None,  # v1.36
+        transcript_fn: Any = None,  # v1.46: incremental transcript save callback
     ) -> LLMResponse:
         """Execute an autonomous LLM action with enhanced reliability.
 
@@ -710,6 +711,16 @@ class HttpLLMRuntime(LLMRuntime):
 
                 # Append assistant message with tool_calls
                 messages.append(response_msg)
+                # v1.46: Persist assistant message with tool_calls to transcript incrementally
+                if transcript_fn is not None:
+                    try:
+                        transcript_fn(
+                            "assistant",
+                            response_msg.get("content") or "",
+                            tool_calls=response_msg.get("tool_calls", []),
+                        )
+                    except Exception:
+                        pass  # Transcript save failure must not break the agentic loop
 
                 # Execute tool calls (concurrently if enabled)
                 if self.enable_concurrent_tools and len(tool_calls) > 1:
@@ -737,6 +748,16 @@ class HttpLLMRuntime(LLMRuntime):
                         "tool_call_id": tc["id"],
                         "content": result,
                     })
+                    # v1.46: Persist tool result to transcript incrementally
+                    if transcript_fn is not None:
+                        try:
+                            transcript_fn(
+                                "tool",
+                                result,
+                                tool_call_id=tc["id"],
+                            )
+                        except Exception:
+                            pass
                     # P1: Log tool call for history recording by caller
                     tool_calls_log.append({
                         "name": tc["function"]["name"],
@@ -1262,6 +1283,7 @@ class HttpLLMRuntime(LLMRuntime):
         hint_collector_fn: Any = None,
         thinking_enabled: bool = False,  # v1.36
         reasoning_effort: str | None = None,  # v1.36
+        transcript_fn: Any = None,  # v1.46: incremental transcript save callback
     ):
         """Stream LLM response with enhanced reliability features.
 
@@ -1530,6 +1552,16 @@ class HttpLLMRuntime(LLMRuntime):
                         for i in sorted(tool_calls_acc.keys())
                     ]
                     messages.append(assistant_msg)
+                    # v1.46: Persist assistant message with tool_calls to transcript incrementally
+                    if transcript_fn is not None:
+                        try:
+                            transcript_fn(
+                                "assistant",
+                                assistant_msg.get("content") or "",
+                                tool_calls=assistant_msg.get("tool_calls", []),
+                            )
+                        except Exception:
+                            pass
 
                     # Execute tools concurrently if enabled
                     tool_call_list = [
@@ -1590,6 +1622,16 @@ class HttpLLMRuntime(LLMRuntime):
                             "tool_call_id": tc["id"],
                             "content": result,
                         })
+                        # v1.46: Persist tool result to transcript incrementally
+                        if transcript_fn is not None:
+                            try:
+                                transcript_fn(
+                                    "tool",
+                                    result,
+                                    tool_call_id=tc["id"],
+                                )
+                            except Exception:
+                                pass
 
                     # Phase 8C: on_tool_end callback — inject hints into messages
                     if on_tool_end_fn is not None:

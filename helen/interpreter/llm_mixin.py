@@ -544,6 +544,16 @@ class LlmMixin:
             def hint_collector(hint_msg):
                 self._add_to_history(hint_msg["role"], hint_msg["content"])
 
+            # v1.46: Transcript callback for incremental tool call persistence.
+            # Called by act()/act_stream() after each assistant message (with tool_calls)
+            # and each tool result, so tool call work survives mid-turn crashes.
+            def transcript_fn(role, content, **kwargs):
+                self._add_to_history(
+                    role, content,
+                    tool_calls=kwargs.get("tool_calls"),
+                    tool_call_id=kwargs.get("tool_call_id"),
+                )
+
             response = self.llm_runtime.act(
                 prompt, tools=tools, model=model,
                 temperature=temperature, max_turns=max_turns, max_tokens=max_tokens,
@@ -554,6 +564,7 @@ class LlmMixin:
                 hint_collector_fn=hint_collector,
                 thinking_enabled=bool(thinking_mode) if thinking_mode is not None else False,
                 reasoning_effort=reasoning_effort,
+                transcript_fn=transcript_fn,
             )
 
             # Log to audit trail
@@ -624,6 +635,14 @@ class LlmMixin:
             def fallback_hint_collector(hint_msg):
                 self._add_to_history(hint_msg["role"], hint_msg["content"])
 
+            # v1.46: Transcript callback for fallback path
+            def fallback_transcript_fn(role, content, **kwargs):
+                self._add_to_history(
+                    role, content,
+                    tool_calls=kwargs.get("tool_calls"),
+                    tool_call_id=kwargs.get("tool_call_id"),
+                )
+
             response = self.llm_runtime.act(
                 prompt, tools=tools, model=model, temperature=temperature,
                 system_prompt=system_prompt,
@@ -631,6 +650,7 @@ class LlmMixin:
                 dispatch_fn=self._create_dispatch_fn(),
                 on_tool_end_fn=fallback_on_tool_end_fn,
                 hint_collector_fn=fallback_hint_collector,
+                transcript_fn=fallback_transcript_fn,
             )
             if response and response.text:
                 if node.on_chunk is not None:
@@ -680,6 +700,14 @@ class LlmMixin:
         def hint_collector(hint_msg):
             self._add_to_history(hint_msg["role"], hint_msg["content"])
 
+        # v1.46: Transcript callback for incremental tool call persistence
+        def transcript_fn(role, content, **kwargs):
+            self._add_to_history(
+                role, content,
+                tool_calls=kwargs.get("tool_calls"),
+                tool_call_id=kwargs.get("tool_call_id"),
+            )
+
         # Audit log entry
         audit_start = time.time()
         agent_name = self._current_agent.name if self._current_agent else None
@@ -717,6 +745,7 @@ class LlmMixin:
                         hint_collector_fn=hint_collector,
                         thinking_enabled=bool(thinking_mode) if thinking_mode is not None else False,
                         reasoning_effort=reasoning_effort,
+                        transcript_fn=transcript_fn,
                     )
                 except TypeError:
                     # Fallback: custom LLMRuntime doesn't support cancel_event or thinking params
@@ -730,6 +759,7 @@ class LlmMixin:
                             cancel_event=stream_handle.cancelled,
                             on_tool_end_fn=on_tool_end_fn,
                             hint_collector_fn=hint_collector,
+                            transcript_fn=transcript_fn,
                         )
                     except TypeError:
                         # Fallback: custom LLMRuntime doesn't support cancel_event
@@ -741,6 +771,7 @@ class LlmMixin:
                             dispatch_fn=dispatch_fn,
                             on_tool_end_fn=on_tool_end_fn,
                             hint_collector_fn=hint_collector,
+                            transcript_fn=transcript_fn,
                         )
 
                 for event in stream_iter:
@@ -1569,7 +1600,9 @@ errors: [Fixed token expiration handling - was missing refresh logic]
             return None
         return self._history_manager.build_conversation_summary(self._history)
 
-    def _add_to_history(self: Any, role: str, content: str | list[dict]) -> None:
+    def _add_to_history(self: Any, role: str, content: str | list[dict],
+                        tool_calls: list[dict] | None = None,
+                        tool_call_id: str | None = None) -> None:
         """Add a message to the conversation history.
 
         Phase 2 SSOT: When TranscriptStore is enabled, write ONLY to it.
@@ -1581,6 +1614,8 @@ errors: [Fixed token expiration handling - was missing refresh logic]
         v1.17: content can be str (plain text) or list[dict] (multimodal content parts).
         v1.22: Fills agent_name / invocation_id / parent_invocation_id for
                invocation tree tracking (per-agent context isolation).
+        v1.46: Added tool_calls and tool_call_id parameters for incremental
+               transcript save of tool call messages.
         """
         agent_ctx = getattr(self, '_agent_context', None)
 
@@ -1601,6 +1636,8 @@ errors: [Fixed token expiration handling - was missing refresh logic]
             agent_name=agent_name,
             invocation_id=invocation_id,
             parent_invocation_id=parent_invocation_id,
+            tool_calls=tool_calls or [],
+            tool_call_id=tool_call_id,
         )
 
         # v1.29: Check transcript level BEFORE accessing transcript store
