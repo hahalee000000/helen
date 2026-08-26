@@ -114,6 +114,46 @@ def _merge_content(prev: Any, curr: Any) -> Any:
     return str(prev) + "\n\n" + str(curr)
 
 
+def _sanitize_tool_pairing(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Remove tool messages whose matching assistant tool_calls are absent.
+
+    v1.46.9: History truncation/compression can orphan tool results - the
+    assistant(tool_calls=X) message gets cut while tool(id=X) survives (or
+    compression drops the assistant but keeps the result). The OpenAI API
+    rejects such sequences with HTTP 400 ("invalid request").
+
+    Scans the message list and drops:
+    - Any leading tool messages (before the first assistant/user turn)
+    - Any tool message whose tool_call_id has no preceding assistant
+      tool_calls entry announcing it
+
+    Returns a new list; the input is not mutated.
+    """
+    if not messages:
+        return messages
+
+    result: list[dict[str, Any]] = []
+    announced_ids: set[str] = set()
+
+    for msg in messages:
+        role = msg.get("role", "")
+        if role == "assistant":
+            for tc in msg.get("tool_calls") or []:
+                tc_id = tc.get("id")
+                if tc_id:
+                    announced_ids.add(tc_id)
+            result.append(msg)
+        elif role == "tool":
+            tc_id = msg.get("tool_call_id")
+            if tc_id and tc_id in announced_ids:
+                result.append(msg)
+            # else: orphaned tool message - drop it
+        else:
+            result.append(msg)
+
+    return result
+
+
 def _repair_message_sequence(messages: list[dict[str, Any]]) -> int:
     """Repair role-alternation violations before API call.
 
@@ -1321,6 +1361,11 @@ class HttpLLMRuntime(LLMRuntime):
             messages.append({"role": "system", "content": system_prompt})
         if history:
             messages.extend(history)
+            # v1.46.9: Sanitize tool message pairing before sending.
+            # History truncation/compression may orphan tool results (their
+            # matching assistant tool_calls message was dropped) - the OpenAI
+            # API rejects those with HTTP 400.
+            messages = _sanitize_tool_pairing(messages)
         # P0 fix: Only append user message if not already the last message in history.
         # See act() for detailed rationale.
         # v1.17: Use helper for proper multimodal content comparison.
@@ -1384,6 +1429,19 @@ class HttpLLMRuntime(LLMRuntime):
                 "LLM request: model=%s max_tokens=%s thinking_enabled=%s payload_keys=%s",
                 use_model, payload.get("max_tokens"), thinking_enabled, list(payload.keys())
             )
+            # v1.46.9: Temporary debug - dump payload for 400 diagnosis (removable)
+            try:
+                import json as _json
+                with open("/tmp/helen_llm_payload_dump.json", "w") as _f:
+                    _json.dump(payload, _f, ensure_ascii=False, indent=2, default=str)
+                logger.warning(
+                    "Payload dumped (model=%s max_tokens=%s msgs=%d roles=%s)",
+                    use_model, payload.get("max_tokens"),
+                    len(payload.get("messages", [])),
+                    [m.get("role") for m in payload.get("messages", [])][:20],
+                )
+            except Exception:
+                pass
 
             try:
                 # Collect streamed chunks with health checking

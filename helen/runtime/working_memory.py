@@ -464,6 +464,13 @@ def build_three_channel_context(
         else:
             break  # Budget exhausted
 
+    # v1.46.9: Drop leading orphaned tool messages after truncation.
+    # If the budget cut falls between an assistant(tool_calls) message and
+    # its tool results, the tool messages at the head have no matching
+    # assistant tool_calls - the OpenAI API rejects them with HTTP 400.
+    while selected_history and getattr(selected_history[0], "role", "") == "tool":
+        selected_history.pop(0)
+
     for msg in selected_history:
         api_msg = {
             "role": msg.role,

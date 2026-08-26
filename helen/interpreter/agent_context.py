@@ -716,7 +716,17 @@ class AgentContextManager:
             if enhanced_system_prompt:
                 messages.append({"role": "system", "content": enhanced_system_prompt})
 
-            for msg in compressed_history:
+            # v1.46.9: Drop leading orphaned tool messages. Compression may
+            # remove an assistant(tool_calls) message while keeping its tool
+            # results - the OpenAI API rejects those with HTTP 400.
+            effective_history = list(compressed_history)
+            while (
+                effective_history
+                and getattr(effective_history[0], "role", "") == "tool"
+            ):
+                effective_history.pop(0)
+
+            for msg in effective_history:
                 api_msg = {
                     "role": msg.role,
                     "content": msg.content,

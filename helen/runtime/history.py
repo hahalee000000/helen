@@ -531,6 +531,16 @@ class HistoryManager:
             result.insert(0, msg)
             result_tokens.insert(0, tokens)
 
+        # v1.46.9: Drop leading orphaned tool messages after trimming.
+        # If the cut fell between an assistant(tool_calls) message and its
+        # tool results, those tool messages lack a matching assistant call -
+        # the OpenAI API rejects them with HTTP 400. System messages stay.
+        first_non_system = 0
+        while first_non_system < len(result) and result[first_non_system].role == "system":
+            first_non_system += 1
+        while first_non_system < len(result) and result[first_non_system].role == "tool":
+            result.pop(first_non_system)
+
         return result
 
     def enforce_limit(
