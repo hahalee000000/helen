@@ -886,14 +886,6 @@ class HttpLLMRuntime(LLMRuntime):
         3. Reactive Compaction — semantic (if llm_client available)
         4. Aggressive trim (last resort)
         """
-        # v1.46.4: Cap max_tokens to 65536 to avoid API 400 errors
-        if max_tokens is not None and max_tokens > 65536:
-            logger.warning(
-                "max_tokens=%d exceeds 65536, capping to avoid API 400 error",
-                max_tokens
-            )
-            max_tokens = 65536
-
         # Fail fast if the circuit breaker is open.
         if self._circuit_breaker is not None and not self._circuit_breaker.allow_request():
             logger.warning(
@@ -1367,15 +1359,6 @@ class HttpLLMRuntime(LLMRuntime):
                     logger.debug("Repaired %d role-alternation violations", repaired)
 
             # Build streaming request
-            # v1.46.4: Cap max_tokens to model's limit to avoid 400 errors
-            # qwen models typically support 65536, but let's be conservative
-            if max_tokens is not None and max_tokens > 65536:
-                logger.warning(
-                    "max_tokens=%d exceeds 65536, capping to avoid API 400 error",
-                    max_tokens
-                )
-                max_tokens = 65536
-
             payload: dict[str, Any] = {
                 "model": use_model,
                 "messages": messages,
