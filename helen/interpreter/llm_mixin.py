@@ -28,7 +28,7 @@ from helen.core.ast import (
     LiteralNode,
 )
 from helen.core.errors import ErrorCode
-from helen.interpreter.exceptions import HelenRuntimeError, ReturnSentinel
+from helen.interpreter.exceptions import HelenRuntimeError, ReturnSentinel, RuntimeError as HelenRuntimeErrorClass
 from helen.runtime.history import Message as HistoryMessage
 from helen.runtime.observability import LLMAuditEntry
 
@@ -840,8 +840,8 @@ class LlmMixin:
                         # v1.38.1: Propagate streaming errors so callers
                         # (e.g., chat_session_actor) can surface them to
                         # the user instead of silently returning "".
-                        from helen.interpreter.exceptions import RuntimeError as HelenRuntimeError
-                        raise HelenRuntimeError(f"LLM streaming error: {error_msg}")
+                        # v1.46.4: Use Helen's RuntimeError (catchable in Helen code)
+                        raise HelenRuntimeErrorClass(f"LLM streaming error: {error_msg}")
 
             except KeyboardInterrupt:
                 # Ctrl+C during streaming — captured here, REPL won't see it
@@ -900,7 +900,8 @@ class LlmMixin:
                 f"Streaming LLM call failed: {e}",
                 node.span,
             )
-            raise HelenRuntimeError(f"Streaming LLM call failed: {e}", node.span) from e
+            # v1.46.4: Use Helen's RuntimeError (catchable in Helen code)
+            raise HelenRuntimeErrorClass(f"Streaming LLM call failed: {e}", node.span) from e
 
     # ------------------------------------------------------------------
     # LLM Helper Methods

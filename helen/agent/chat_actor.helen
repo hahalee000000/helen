@@ -148,6 +148,14 @@ fn tui_chat_handler_actor(user_input: str, file_paths: list = []): str {
         }
 
         let resp_type = ""
+        // v1.46.3: Check for error map first (contains '__error__' key)
+        let is_error_map = false
+        try { is_error_map = response["__error__"] == true } catch {}
+        if is_error_map {
+            let _params = {"message": response["message"]}
+            let _payload = {"i18n_key": "error.actorException", "params": _params}
+            return json_stringify(_payload)
+        }
         try { resp_type = response["type"] } catch RuntimeError err {
             // 收到错误 map（如 {'__error__': ..., 'message': ...}）
             let _params = {"message": err.message}

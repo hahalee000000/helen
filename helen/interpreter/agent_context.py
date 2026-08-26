@@ -717,10 +717,16 @@ class AgentContextManager:
                 messages.append({"role": "system", "content": enhanced_system_prompt})
 
             for msg in compressed_history:
-                messages.append({
+                api_msg = {
                     "role": msg.role,
                     "content": msg.content,
-                })
+                }
+                # v1.46.3: Include tool fields to avoid API 400 errors
+                if msg.tool_calls:
+                    api_msg["tool_calls"] = msg.tool_calls
+                if msg.tool_call_id:
+                    api_msg["tool_call_id"] = msg.tool_call_id
+                messages.append(api_msg)
 
         return messages
 

@@ -886,6 +886,14 @@ class HttpLLMRuntime(LLMRuntime):
         3. Reactive Compaction — semantic (if llm_client available)
         4. Aggressive trim (last resort)
         """
+        # v1.46.4: Cap max_tokens to 65536 to avoid API 400 errors
+        if max_tokens is not None and max_tokens > 65536:
+            logger.warning(
+                "max_tokens=%d exceeds 65536, capping to avoid API 400 error",
+                max_tokens
+            )
+            max_tokens = 65536
+
         # Fail fast if the circuit breaker is open.
         if self._circuit_breaker is not None and not self._circuit_breaker.allow_request():
             logger.warning(
@@ -1359,6 +1367,15 @@ class HttpLLMRuntime(LLMRuntime):
                     logger.debug("Repaired %d role-alternation violations", repaired)
 
             # Build streaming request
+            # v1.46.4: Cap max_tokens to model's limit to avoid 400 errors
+            # qwen models typically support 65536, but let's be conservative
+            if max_tokens is not None and max_tokens > 65536:
+                logger.warning(
+                    "max_tokens=%d exceeds 65536, capping to avoid API 400 error",
+                    max_tokens
+                )
+                max_tokens = 65536
+
             payload: dict[str, Any] = {
                 "model": use_model,
                 "messages": messages,
@@ -1384,6 +1401,24 @@ class HttpLLMRuntime(LLMRuntime):
                 "LLM request: model=%s max_tokens=%s thinking_enabled=%s payload_keys=%s",
                 use_model, payload.get("max_tokens"), thinking_enabled, list(payload.keys())
             )
+            # v1.46.4: Dump full payload to file for debugging 400 errors
+            try:
+                import json as _json
+                _dump_path = "/tmp/helen_llm_payload_dump.json"
+                with open(_dump_path, "w") as _f:
+                    _json.dump(payload, _f, ensure_ascii=False, indent=2, default=str)
+                logger.warning("Payload dumped to %s (%d bytes)", _dump_path, len(_json.dumps(payload, default=str)))
+            except Exception as _dump_err:
+                logger.warning("Failed to dump payload: %s", _dump_err)
+            # v1.46.3: Debug log messages to catch API 400 errors
+            if "messages" in payload:
+                for i, msg in enumerate(payload["messages"]):
+                    content = str(msg.get("content", ""))
+                    logger.warning(
+                        "Message[%d]: role=%s keys=%s content_len=%d content_preview=%s",
+                        i, msg.get("role"), list(msg.keys()),
+                        len(content), content[:200]
+                    )
 
             try:
                 # Collect streamed chunks with health checking
@@ -1748,6 +1783,18 @@ class HttpLLMRuntime(LLMRuntime):
                 error_msg = str(e)
                 error_code = ""
                 full_error = f"HTTP error {e.response.status_code}: {e.response.reason_phrase}"
+                # v1.46.4: For streaming responses, must read() before accessing text/content
+                try:
+                    e.response.read()
+                    response_text = e.response.text[:500]
+                except Exception:
+                    response_text = "(unable to read response body)"
+                # v1.46.3: Log full response body for debugging 400 errors
+                logger.error(
+                    "HTTP %d error response body: %s",
+                    e.response.status_code,
+                    response_text
+                )
                 try:
                     error_data = e.response.json()
                     api_error = error_data.get("error", {})

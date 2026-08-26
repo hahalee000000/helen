@@ -271,6 +271,7 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
         // ── 流式回调 ──
 
         fn _actor_chunks_cb(text) {
+            debug("_actor_chunks_cb called with " + str(len(text)) + " chars")
             try {
                 import "ui.stream_emitter" as _CancelCheck
                 if _CancelCheck.is_cancel_requested() {
@@ -280,6 +281,7 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
                 }
             } catch {}
             _emit_actor_stream_event("llm_chunk", text)
+            debug("Emitted llm_chunk event")
         }
 
         fn _actor_complete_cb() {
