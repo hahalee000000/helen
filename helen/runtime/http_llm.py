@@ -1384,6 +1384,23 @@ class HttpLLMRuntime(LLMRuntime):
                 "LLM request: model=%s max_tokens=%s thinking_enabled=%s payload_keys=%s",
                 use_model, payload.get("max_tokens"), thinking_enabled, list(payload.keys())
             )
+            # v1.46.7: Temporary debug - dump payload to file for diagnosis
+            try:
+                import json as _json
+                _dump_path = "/tmp/helen_llm_payload_dump.json"
+                with open(_dump_path, "w") as _f:
+                    _json.dump(payload, _f, ensure_ascii=False, indent=2, default=str)
+                logger.warning("Payload dumped to %s (max_tokens=%s)", _dump_path, payload.get("max_tokens"))
+            except Exception as _dump_err:
+                logger.warning("Failed to dump payload: %s", _dump_err)
+            # v1.46.7: Temporary debug - log message details
+            if "messages" in payload:
+                for i, msg in enumerate(payload["messages"]):
+                    content = str(msg.get("content", ""))
+                    logger.warning(
+                        "Message[%d]: role=%s keys=%s content_len=%d",
+                        i, msg.get("role"), list(msg.keys()), len(content)
+                    )
 
             try:
                 # Collect streamed chunks with health checking
@@ -1752,6 +1769,8 @@ class HttpLLMRuntime(LLMRuntime):
                 try:
                     e.response.read()
                     response_text = e.response.text[:500]
+                    # v1.46.7: Log full error response for diagnosis
+                    logger.error("HTTP %d error response: %s", e.response.status_code, response_text)
                 except Exception:
                     response_text = "(unable to read response body)"
                 # v1.46.3: Log full response body for debugging 400 errors
