@@ -1401,24 +1401,6 @@ class HttpLLMRuntime(LLMRuntime):
                 "LLM request: model=%s max_tokens=%s thinking_enabled=%s payload_keys=%s",
                 use_model, payload.get("max_tokens"), thinking_enabled, list(payload.keys())
             )
-            # v1.46.4: Dump full payload to file for debugging 400 errors
-            try:
-                import json as _json
-                _dump_path = "/tmp/helen_llm_payload_dump.json"
-                with open(_dump_path, "w") as _f:
-                    _json.dump(payload, _f, ensure_ascii=False, indent=2, default=str)
-                logger.warning("Payload dumped to %s (%d bytes)", _dump_path, len(_json.dumps(payload, default=str)))
-            except Exception as _dump_err:
-                logger.warning("Failed to dump payload: %s", _dump_err)
-            # v1.46.3: Debug log messages to catch API 400 errors
-            if "messages" in payload:
-                for i, msg in enumerate(payload["messages"]):
-                    content = str(msg.get("content", ""))
-                    logger.warning(
-                        "Message[%d]: role=%s keys=%s content_len=%d content_preview=%s",
-                        i, msg.get("role"), list(msg.keys()),
-                        len(content), content[:200]
-                    )
 
             try:
                 # Collect streamed chunks with health checking

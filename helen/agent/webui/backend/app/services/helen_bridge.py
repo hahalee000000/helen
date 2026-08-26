@@ -365,7 +365,6 @@ class HelenBridge:
         event_queue: asyncio.Queue = asyncio.Queue()
 
         def stream_callback(event_type: str, data: str):
-            logger.debug(f"stream_callback: type={event_type}, data_len={len(data)}")
             loop.call_soon_threadsafe(
                 event_queue.put_nowait,
                 {"type": event_type, "content": data}
@@ -391,7 +390,6 @@ class HelenBridge:
 
                     if event_type == "llm_chunk":
                         full_response += content
-                        logger.debug(f"Yielding llm_chunk: {len(content)} chars")
                         yield {"type": "llm_chunk", "content": content}
                     elif event_type == "error":
                         # v1.38.1: Surface LLM errors to the frontend instead of

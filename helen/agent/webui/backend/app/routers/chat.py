@@ -386,8 +386,6 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
 
                 if chunk_type == "llm_chunk":
                     # 发送 chunk(WebSocket 可能已断开,捕获异常)
-                    import logging
-                    logging.getLogger(__name__).debug(f"Broadcasting llm_chunk: {len(content)} chars")
                     try:
                         await manager.broadcast({
                             "type": "llm_chunk",
