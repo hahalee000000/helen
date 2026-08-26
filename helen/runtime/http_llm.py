@@ -1772,7 +1772,10 @@ class HttpLLMRuntime(LLMRuntime):
                                 "Empty stream response — nudging to continue (%d/%d)",
                                 empty_response_retries, max_empty_retries,
                             )
-                            messages.append({"role": "assistant", "content": ""})
+                            # v1.46.9: Don't add empty assistant message — it breaks
+                            # the message sequence (tool results must be followed by
+                            # assistant with tool_calls or final assistant with content).
+                            # The user nudge alone is sufficient.
                             messages.append({
                                 "role": "user",
                                 "content": (
