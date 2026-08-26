@@ -1098,14 +1098,18 @@ def _item_to_dict(item: Message | BoundaryMarker) -> dict[str, Any]:
             "type": "message",
             "role": item.role,
             "content": item.content,
-            "tool_calls": item.tool_calls,
-            "tool_call_id": item.tool_call_id,
             "uuid": item.uuid,
             "message_type": item.message_type,
             "priority": item.priority,
             "compressed": item.compressed,
             "pinned": item.pinned,
         }
+        # v1.46: Only include tool fields if they have meaningful values
+        # (OpenAI API rejects user messages with tool_calls/tool_call_id fields)
+        if item.tool_calls:
+            d["tool_calls"] = item.tool_calls
+        if item.tool_call_id:
+            d["tool_call_id"] = item.tool_call_id
         # v1.22: Invocation tree fields (only include if set, for compactness)
         if item.agent_name is not None:
             d["agent_name"] = item.agent_name
