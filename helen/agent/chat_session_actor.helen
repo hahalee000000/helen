@@ -26,6 +26,7 @@ import std.media.*
 import std.path.*
 import std.quality.*
 import std.str.*
+import std.system.*
 import std.tools.*
 import std.transcript.*
 import "task_manager.helen"
@@ -862,13 +863,15 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
 
         // ── 保存主、子 session id 到 memento（供下次启动恢复）──
         // 主 session_id 是参数 session_id；子 session_id 是 Actor 自己的 get_session_id()
-        // memento 文件：<cwd>/.helen/current_session_id，JSON: {"main":"...", "child":"..."}
+        // memento 文件：<cwd>/.helen/current_session_id，JSON: {"main":"...", "child":"...", "pid": N}
+        // v1.46.12: 添加 pid 字段，用于多实例竞争检测——读取时验证 PID 是否属于
+        // 当前进程树，防止其他 helen 实例（如 Rust 版本）覆盖的 memento 被误读。
         try {
             let my_sid = get_session_id()
-            let memento_content = json_stringify({"main": session_id, "child": my_sid})
+            let memento_content = json_stringify({"main": session_id, "child": my_sid, "pid": pid()})
             let memento_path = cwd + "/.helen/current_session_id"
             write_file(memento_path, memento_content)
-            debug("ChatSessionActor: saved memento main=" + session_id + " child=" + my_sid)
+            debug("ChatSessionActor: saved memento main=" + session_id + " child=" + my_sid + " pid=" + str(pid()))
         } catch RuntimeError err {
             debug("ChatSessionActor: memento save failed: " + err.message)
         } catch {

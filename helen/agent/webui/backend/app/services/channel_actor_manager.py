@@ -50,14 +50,38 @@ class ChannelActorManager:
         except ImportError:
             return False
 
+    def _check_actor_alive(self) -> bool:
+        """Check if actor is actually alive via FFI ground truth.
+
+        v1.46.12: Used by ensure_actor() to detect stale _actor_spawned flag.
+        Returns False if we can't check (optimistic: assume dead → will re-spawn).
+        """
+        try:
+            from chat_tui_web import is_chat_actor_running
+            return bool(is_chat_actor_running())
+        except Exception:
+            return False
+
     def ensure_actor(self) -> dict:
         """确保 actor 已启动。
 
         返回 Helen spawn_chat_actor 的结果 map：
           {status: "started"|"already_running", session_id: "..."}
           {status: "error", error: "..."}
+
+        v1.46.12: 地面真相检查——_actor_spawned 可能是过期的（actor 静默死亡后
+        flag 未重置）。通过 is_chat_actor_running() FFI 验证实际状态。
         """
         with self._lock:
+            if self._actor_spawned:
+                # Ground-truth check: flag may be stale if actor died silently
+                if not self._check_actor_alive():
+                    logger.warning(
+                        "Actor flag says running but Helen says dead — resetting"
+                    )
+                    self._actor_spawned = False
+                    self._session_id = None
+                    self._stop_heartbeat()
             if self._actor_spawned:
                 return {"status": "already_running", "session_id": self._session_id}
             from chat_tui_web import spawn_chat_actor
@@ -89,7 +113,10 @@ class ChannelActorManager:
         self._heartbeat_thread = None
 
     def _heartbeat_loop(self):
-        """心跳循环：每 HEARTBEAT_INTERVAL 秒发送一次心跳"""
+        """心跳循环：每 HEARTBEAT_INTERVAL 秒发送一次心跳
+
+        v1.46.12: 心跳失败时重置 actor 状态，下次 send_message() 会自动重启。
+        """
         while not self._heartbeat_stop.is_set():
             # 使用 wait 代替 sleep，以便能快速响应停止信号
             if self._heartbeat_stop.wait(HEARTBEAT_INTERVAL):
@@ -99,8 +126,12 @@ class ChannelActorManager:
                 send_heartbeat()
                 logger.debug("Heartbeat sent to actor")
             except Exception as e:
-                logger.warning("Heartbeat failed: %s", e)
-                break  # 心跳失败说明 actor 可能已死，退出心跳线程
+                logger.warning("Heartbeat failed (actor likely dead): %s", e)
+                # Reset state so next message triggers auto-restart
+                with self._lock:
+                    self._actor_spawned = False
+                    self._session_id = None
+                break  # 心跳失败说明 actor 已死，退出心跳线程
 
     def send_message(self, user_input: str, file_paths: list | None = None) -> str:
         """发送消息到 actor，阻塞等待响应。

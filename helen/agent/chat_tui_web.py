@@ -32,20 +32,43 @@ except ImportError as e:
     sys.exit(1)
 
 # ── Session 恢复：读取 memento 文件，复用历史主 session_id ──
-# memento 文件格式：{"main": "<主session_id>", "child": "<子session_id>"}
+# memento 文件格式：{"main": "<主session_id>", "child": "<子session_id>", "pid": N}
+# v1.46.12: 添加 PID 验证——只信任当前进程树写入的 memento，防止多实例竞争。
 # 必须在 import chat_tui 之前调用 set_session_id，因为 import hook 在那一刻创建 Interpreter
 _saved_main_sid = ""
 _saved_child_sid = ""
+
+
+def _is_our_process(pid: int) -> bool:
+    """检查 pid 是否属于当前进程树（同进程 OR 同进程组）。"""
+    if pid <= 0:
+        return False
+    try:
+        if pid == os.getpid():
+            return True
+        return os.getpgid(pid) == os.getpgrp()
+    except (ProcessLookupError, PermissionError, OSError):
+        return False
+
+
 _memento_path = Path.cwd() / ".helen" / "current_session_id"
 if _memento_path.exists():
     try:
         _data = json.loads(_memento_path.read_text(encoding="utf-8"))
-        _saved_main_sid = _data.get("main", "")
-        _saved_child_sid = _data.get("child", "")
-        if _saved_main_sid:
-            from helen.python_bridge import set_session_id
-            set_session_id(_saved_main_sid)
-            print(f"[Session] 恢复主 session: {_saved_main_sid}", file=sys.stderr)
+        # v1.46.12: PID 验证——忽略来自其他进程的 memento
+        _memento_pid = _data.get("pid", 0)
+        if _memento_pid and not _is_our_process(_memento_pid):
+            print(
+                f"[Session] memento PID 不匹配 (memento={_memento_pid}, own={os.getpid()}) — 忽略",
+                file=sys.stderr,
+            )
+        else:
+            _saved_main_sid = _data.get("main", "")
+            _saved_child_sid = _data.get("child", "")
+            if _saved_main_sid:
+                from helen.python_bridge import set_session_id
+                set_session_id(_saved_main_sid)
+                print(f"[Session] 恢复主 session: {_saved_main_sid}", file=sys.stderr)
     except Exception as e:
         print(f"[Session] memento 读取失败（忽略）: {e}", file=sys.stderr)
 

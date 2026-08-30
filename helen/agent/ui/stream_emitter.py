@@ -69,21 +69,35 @@ def clear_stream_callback():
 #    b. do_streaming() / do_goal_streaming() 的 finally 块
 #    c. WebUI cancel handler 中 stream_task.cancel() 之后
 #    d. /compress 命令执行前
-# 3. 如果所有清理路径都失败，flag 会永远卡在 True，导致后续 LLM 调用
-#    （如 /compress 的 LLMSummarizer）被静默取消。这是 v1.45 的已知 bug。
+# 3. v1.46.12: 自动超时——如果 flag 设置后 30s 内未被处理（actor 崩溃导致
+#    所有清理路径都未触发），is_cancel_requested() 会自动清除 flag。
+#    这修复了 v1.45 的已知 bug：flag 永远卡在 True 导致后续 LLM 调用被静默取消。
+
+import time as _time
 
 _cancel_requested: bool = False
+_cancel_requested_at: float = 0.0
+_CANCEL_FLAG_TIMEOUT: float = 30.0  # 自动清除超时（秒）
 
 
 def is_cancel_requested() -> bool:
-    """检查是否已请求中断（由 Helen 端通过 FFI 调用）"""
+    """检查是否已请求中断（由 Helen 端通过 FFI 调用）
+
+    v1.46.12: 自动超时——如果 flag 设置超过 _CANCEL_FLAG_TIMEOUT 秒，
+    自动清除并返回 False。
+    """
+    global _cancel_requested, _cancel_requested_at
+    if _cancel_requested and (_time.monotonic() - _cancel_requested_at) > _CANCEL_FLAG_TIMEOUT:
+        _cancel_requested = False
+        _cancel_requested_at = 0.0
     return _cancel_requested
 
 
 def request_cancel():
     """请求中断当前 LLM 流（由 Python 端调用，如 Web UI 的 cancel 处理）"""
-    global _cancel_requested
+    global _cancel_requested, _cancel_requested_at
     _cancel_requested = True
+    _cancel_requested_at = _time.monotonic()
 
 
 def clear_cancel():
@@ -95,5 +109,6 @@ def clear_cancel():
     - /compress 命令执行前（防御性清理）
     - Actor llm act 完成/出错后（防御性清理）
     """
-    global _cancel_requested
+    global _cancel_requested, _cancel_requested_at
     _cancel_requested = False
+    _cancel_requested_at = 0.0

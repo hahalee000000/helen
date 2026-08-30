@@ -1429,19 +1429,6 @@ class HttpLLMRuntime(LLMRuntime):
                 "LLM request: model=%s max_tokens=%s thinking_enabled=%s payload_keys=%s",
                 use_model, payload.get("max_tokens"), thinking_enabled, list(payload.keys())
             )
-            # v1.46.9: Temporary debug - dump payload for 400 diagnosis (removable)
-            try:
-                import json as _json
-                with open("/tmp/helen_llm_payload_dump.json", "w") as _f:
-                    _json.dump(payload, _f, ensure_ascii=False, indent=2, default=str)
-                logger.warning(
-                    "Payload dumped (model=%s max_tokens=%s msgs=%d roles=%s)",
-                    use_model, payload.get("max_tokens"),
-                    len(payload.get("messages", [])),
-                    [m.get("role") for m in payload.get("messages", [])][:20],
-                )
-            except Exception:
-                pass
 
             try:
                 # Collect streamed chunks with health checking

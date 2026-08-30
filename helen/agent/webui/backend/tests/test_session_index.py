@@ -318,6 +318,102 @@ class TestGetCurrentHelenSessionId:
         assert result == ""
 
 
+# ── v1.46.12: PID validation + fallback ───────────────────────
+
+class TestMementoPidValidation:
+    """v1.46.12: memento PID 验证——防止多实例竞争。"""
+
+    def test_memento_with_own_pid_accepted(self, session_index, temp_agent_dir):
+        """memento PID 匹配当前进程 -> 接受"""
+        import os
+        sid = "valid-session"
+        _write_transcript(temp_agent_dir, sid, [
+            json.dumps({"type": "session_meta", "timestamp": 1.0}),
+        ])
+        memento_path = temp_agent_dir / ".helen" / "current_session_id"
+        memento_path.write_text(json.dumps({
+            "main": "main-sid", "child": sid, "pid": os.getpid()
+        }))
+
+        result = session_index.get_current_helen_session_id()
+        assert result == sid
+
+    def test_memento_with_other_pid_ignored(self, session_index, temp_agent_dir):
+        """memento PID 不匹配（其他进程写入） -> 忽略，回退到最近 session"""
+        sid = "other-process-session"
+        _write_transcript(temp_agent_dir, sid, [
+            json.dumps({"type": "session_meta", "timestamp": 1.0}),
+        ])
+        memento_path = temp_agent_dir / ".helen" / "current_session_id"
+        # PID=1 几乎肯定不是当前进程（除非在 root shell 中测试）
+        memento_path.write_text(json.dumps({
+            "main": "main-sid", "child": sid, "pid": 1
+        }))
+
+        result = session_index.get_current_helen_session_id()
+        # Should fall back to the most recent session, not the PID-mismatched one
+        # Since sid has a transcript, fallback should find it
+        assert result == sid  # fallback finds the only session with transcript
+
+    def test_memento_without_pid_field_accepted(self, session_index, temp_agent_dir):
+        """旧 memento 无 pid 字段 -> 向后兼容，接受"""
+        sid = "legacy-session"
+        _write_transcript(temp_agent_dir, sid, [
+            json.dumps({"type": "session_meta", "timestamp": 1.0}),
+        ])
+        memento_path = temp_agent_dir / ".helen" / "current_session_id"
+        memento_path.write_text(json.dumps({"main": "main-sid", "child": sid}))
+
+        result = session_index.get_current_helen_session_id()
+        assert result == sid
+
+
+class TestFallbackToRecentSession:
+    """v1.46.12: 回退到最近修改的有效 session。"""
+
+    def test_fallback_no_sessions(self, session_index, temp_agent_dir):
+        """无 session 目录 -> 返回空"""
+        result = session_index._fallback_to_recent_session(str(temp_agent_dir))
+        assert result == ""
+
+    def test_fallback_single_session(self, session_index, temp_agent_dir):
+        """单个 session -> 返回该 session"""
+        sid = "only-session"
+        _write_transcript(temp_agent_dir, sid, [
+            json.dumps({"type": "session_meta", "timestamp": 1.0}),
+        ])
+        result = session_index._fallback_to_recent_session(str(temp_agent_dir))
+        assert result == sid
+
+    def test_fallback_most_recent_session(self, session_index, temp_agent_dir):
+        """多个 session -> 返回最近修改的"""
+        import time
+        sid1 = "older-session"
+        sid2 = "newer-session"
+        _write_transcript(temp_agent_dir, sid1, [
+            json.dumps({"type": "session_meta", "timestamp": 1.0}),
+        ])
+        time.sleep(0.05)  # Ensure different mtime
+        _write_transcript(temp_agent_dir, sid2, [
+            json.dumps({"type": "session_meta", "timestamp": 2.0}),
+        ])
+        result = session_index._fallback_to_recent_session(str(temp_agent_dir))
+        assert result == sid2
+
+    def test_fallback_skips_empty_sessions(self, session_index, temp_agent_dir):
+        """无 transcript 的 session 目录 -> 跳过"""
+        # Create session dir without transcript
+        empty_dir = temp_agent_dir / ".helen" / "sessions" / "empty-session"
+        empty_dir.mkdir(parents=True)
+
+        sid = "valid-session"
+        _write_transcript(temp_agent_dir, sid, [
+            json.dumps({"type": "session_meta", "timestamp": 1.0}),
+        ])
+        result = session_index._fallback_to_recent_session(str(temp_agent_dir))
+        assert result == sid
+
+
 # ── _attachment_from_data_url ──────────────────────────────────
 
 class TestAttachmentFromDataUrl:

@@ -59,17 +59,25 @@ def get_current_helen_session_id() -> str:
     v6.1:只读 memento 文件(<cwd>/.helen/current_session_id,JSON {main, child}),
     这是 actor 实际用的 child session。memento 不存在 -> 返回空(首次启动,
     actor 会新建 session,无需回退找旧的——回退会读到非当前对话的 session)。
+
+    v1.46.12: PID 验证 + 回退逻辑——
+    - memento 中的 pid 字段不属于当前进程树时，忽略（防止多实例竞争）
+    - memento 无效时，回退到最近的有效 session（防止"无法加载 transcript"）
     """
     from app.services import directory_manager
     cwd = directory_manager.get_current_cwd()
     memento_path = Path(cwd) / ".helen" / "current_session_id"
     if not memento_path.exists():
-        return ""
+        return _fallback_to_recent_session(cwd)
     try:
         # v1.30.10: 显式指定 UTF-8 编码
         memento_content = memento_path.read_text(encoding="utf-8").strip()
         if memento_content.startswith("{"):
             data = json.loads(memento_content)
+            # v1.46.12: PID 验证——忽略来自其他进程的 memento
+            memento_pid = data.get("pid", 0)
+            if memento_pid and not _is_our_process(memento_pid):
+                return _fallback_to_recent_session(cwd)
             child_sid = data.get("child", "")
             if child_sid and get_transcript_path(child_sid) is not None:
                 return child_sid
@@ -78,7 +86,50 @@ def get_current_helen_session_id() -> str:
             return memento_content
     except Exception:
         pass
-    return ""
+    return _fallback_to_recent_session(cwd)
+
+
+def _is_our_process(pid: int) -> bool:
+    """检查 pid 是否属于当前进程树。
+
+    v1.46.12: 用于 memento PID 验证，防止多实例竞争。
+    检查逻辑：同一进程 OR 同一进程组（parent/child/sibling）。
+    """
+    import os
+    if pid <= 0:
+        return False
+    try:
+        if pid == os.getpid():
+            return True
+        return os.getpgid(pid) == os.getpgrp()
+    except (ProcessLookupError, PermissionError, OSError):
+        return False
+
+
+def _fallback_to_recent_session(cwd: str) -> str:
+    """回退到最近修改的有效 session。
+
+    v1.46.12: 当 memento 无效（PID 不匹配、文件损坏等）时，扫描项目作用域的
+    sessions 目录，找到最近有 transcript 更新的 session。防止"无法加载 transcript"。
+    """
+    sessions_dir = Path(cwd) / ".helen" / "sessions"
+    if not sessions_dir.exists():
+        return ""
+    best_sid = ""
+    best_mtime = 0.0
+    try:
+        for entry in sessions_dir.iterdir():
+            if not entry.is_dir():
+                continue
+            transcript = entry / "transcript.jsonl"
+            if transcript.exists():
+                mtime = transcript.stat().st_mtime
+                if mtime > best_mtime:
+                    best_mtime = mtime
+                    best_sid = entry.name
+    except OSError:
+        pass
+    return best_sid
 
 # ── 测试消息过滤 ──────────────────────────────────────────────
 

@@ -80,13 +80,27 @@ fn spawn_chat_actor(): map {
 
     // spawn ChatSessionActor（传入完整环境上下文）
     // v1.0 session 恢复：读取 memento 中的子 session_id，用 spawn resume() 复用历史子 session
+    // v1.46.12: PID 验证——只信任当前进程写入的 memento，防止多实例竞争导致
+    // 错误 resume 到其他进程的 session。旧 memento（无 pid 字段）仍然接受（向后兼容）。
     let child_sid = ""
     try {
         let memento_path = get_cwd() + "/.helen/current_session_id"
         if path_exists(memento_path) {
             let content = read_file(memento_path)
             let data = json_parse(content)
-            child_sid = data["child"]
+            // PID 验证：检查 memento 是否由当前进程写入
+            let memento_pid = 0
+            try {
+                memento_pid = data["pid"]
+            } catch {
+                // 旧 memento 无 pid 字段——接受（向后兼容）
+                memento_pid = pid()
+            }
+            if memento_pid == pid() {
+                child_sid = data["child"]
+            } else {
+                debug("spawn_chat_actor: memento PID mismatch (memento=" + str(memento_pid) + " own=" + str(pid()) + ") — starting fresh session")
+            }
         }
     } catch {
         debug("spawn_chat_actor: memento 读取失败（首次运行或格式错误）")

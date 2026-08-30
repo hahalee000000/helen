@@ -229,3 +229,68 @@ class TestGlobalSingleton:
         """Global channel_actor_manager singleton exists."""
         from app.services.channel_actor_manager import channel_actor_manager
         assert channel_actor_manager is not None
+
+
+class TestActorAutoRecovery:
+    """v1.46.12: Actor death auto-recovery tests."""
+
+    def test_ensure_actor_detects_dead_actor(self, manager, mock_chat_tui_web):
+        """ensure_actor re-spawns when flag says running but FFI says dead."""
+        manager._actor_spawned = True
+        manager._session_id = "stale-session"
+        # FFI ground truth says actor is dead
+        mock_chat_tui_web.is_chat_actor_running.return_value = False
+
+        result = manager.ensure_actor()
+
+        # Should have re-spawned
+        assert result["status"] == "started"
+        assert manager._actor_spawned is True
+        mock_chat_tui_web.spawn_chat_actor.assert_called_once()
+
+    def test_ensure_actor_import_error_assumes_dead(self, manager, mock_chat_tui_web):
+        """ensure_actor re-spawns when is_chat_actor_running raises."""
+        manager._actor_spawned = True
+        manager._session_id = "stale-session"
+        # FFI check itself fails → optimistic: assume dead
+        mock_chat_tui_web.is_chat_actor_running.side_effect = RuntimeError("FFI error")
+
+        result = manager.ensure_actor()
+
+        assert result["status"] == "started"
+        mock_chat_tui_web.spawn_chat_actor.assert_called_once()
+
+    def test_ensure_actor_alive_no_respawn(self, manager, mock_chat_tui_web):
+        """ensure_actor does NOT re-spawn when actor is actually alive."""
+        manager._actor_spawned = True
+        manager._session_id = "live-session"
+        mock_chat_tui_web.is_chat_actor_running.return_value = True
+
+        result = manager.ensure_actor()
+
+        assert result["status"] == "already_running"
+        assert result["session_id"] == "live-session"
+        mock_chat_tui_web.spawn_chat_actor.assert_not_called()
+
+    def test_heartbeat_failure_resets_state(self, manager, mock_chat_tui_web):
+        """Heartbeat failure resets _actor_spawned so next message triggers restart."""
+        import time
+        import app.services.channel_actor_manager as cam
+        original_interval = cam.HEARTBEAT_INTERVAL
+        cam.HEARTBEAT_INTERVAL = 0.05
+        try:
+            manager._actor_spawned = True
+            manager._session_id = "test-session"
+            mock_chat_tui_web.send_heartbeat.side_effect = RuntimeError("heartbeat failed")
+
+            manager._start_heartbeat()
+            time.sleep(0.3)
+
+            # Heartbeat thread should have exited AND reset the state
+            assert not manager._heartbeat_thread.is_alive()
+            assert manager._actor_spawned is False
+            assert manager._session_id is None
+        finally:
+            cam.HEARTBEAT_INTERVAL = original_interval
+            manager._stop_heartbeat()
+
