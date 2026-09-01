@@ -320,6 +320,10 @@ def _check_self_destruct(command: str) -> str | None:
     - kill <own_pid>
     - Any kill command whose pattern matches "helen agent" / "helen" agent-like processes
 
+    v1.46.14: Extended to detect indirect kill patterns:
+    - ps aux | grep "helen agent" | xargs kill (pipe-based indirect kill)
+    - Any command that combines grep for helen with xargs kill
+
     Returns:
         Error message string if blocked, None if safe.
     """
@@ -355,7 +359,52 @@ def _check_self_destruct(command: str) -> str | None:
                 f"helen agent, use a more specific pattern that excludes the current process."
             )
 
+    # v1.46.14: Detect indirect kill patterns (ps | grep | xargs kill)
+    # This catches commands like:
+    #   ps aux | grep "helen agent" | xargs kill
+    #   ps aux | grep -E "helen.*agent" | awk '{print $2}' | xargs kill -9
+    #   ps aux | grep helen | xargs kill -9
+    if _check_indirect_kill_pattern(cmd_lower):
+        return (
+            "Command would kill the agent process itself (indirect kill pattern: "
+            "grep for helen + xargs kill). This is blocked for self-preservation. "
+            "If you need to kill a previous helen agent, use a more specific pattern "
+            "that excludes the current process."
+        )
+
     return None
+
+
+def _check_indirect_kill_pattern(command: str) -> bool:
+    """Detect indirect kill patterns: grep for helen + xargs kill.
+
+    v1.46.14: Catches commands like:
+    - ps aux | grep "helen agent" | xargs kill
+    - ps aux | grep -E "helen.*agent" | awk '{print $2}' | xargs kill -9
+    - Any pipe chain that greps for helen-related processes and pipes to xargs kill
+
+    Returns:
+        True if the command appears to be an indirect self-destruct pattern.
+    """
+    import re
+
+    # Check if command has xargs kill (with optional -9 or other signals)
+    has_xargs_kill = bool(re.search(r'\bxargs\s+(sudo\s+)?kill\b', command))
+    if not has_xargs_kill:
+        return False
+
+    # Check if command greps for helen-related patterns
+    # Look for: grep "helen", grep 'helen', grep helen, grep -E "helen.*agent", etc.
+    helen_grep_patterns = [
+        r'\bgrep\b[^|]*\bhelen\b',  # grep ... helen (in same pipe segment)
+        r'\bgrep\b[^|]*["\']helen',  # grep ... "helen or 'helen
+    ]
+
+    for pattern in helen_grep_patterns:
+        if re.search(pattern, command):
+            return True
+
+    return False
 
 
 def _shell_exec_full(command: str, timeout: int = 30, shell: bool = True) -> str:

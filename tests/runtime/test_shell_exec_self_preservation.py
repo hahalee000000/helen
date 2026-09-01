@@ -68,6 +68,65 @@ class TestCheckSelfDestruct:
         assert _check_self_destruct('cd /home/rxx && pkill -f "helen agent"') is not None
         assert _check_self_destruct("echo bye ; killall helen") is not None
 
+    # v1.46.14: Indirect kill pattern tests
+    def test_xargs_kill_with_helen_grep_blocked(self):
+        """ps | grep helen | xargs kill patterns are blocked."""
+        # Basic pattern
+        assert _check_self_destruct(
+            'ps aux | grep "helen agent" | xargs kill'
+        ) is not None
+        # With single quotes
+        assert _check_self_destruct(
+            "ps aux | grep 'helen agent' | xargs kill"
+        ) is not None
+        # Without quotes
+        assert _check_self_destruct(
+            "ps aux | grep helen | xargs kill"
+        ) is not None
+
+    def test_xargs_kill_with_signal_blocked(self):
+        """xargs kill -9 patterns are blocked."""
+        assert _check_self_destruct(
+            'ps aux | grep "helen agent" | xargs kill -9'
+        ) is not None
+        assert _check_self_destruct(
+            'ps aux | grep helen | xargs kill -9'
+        ) is not None
+
+    def test_complex_indirect_kill_blocked(self):
+        """Complex pipe chains with grep helen + xargs kill are blocked."""
+        # With awk
+        assert _check_self_destruct(
+            'ps aux | grep "helen agent" | grep -v grep | awk \'{print $2}\' | xargs kill'
+        ) is not None
+        # With grep -E
+        assert _check_self_destruct(
+            'ps aux | grep -E "helen.*agent" | xargs kill'
+        ) is not None
+        # Real example from helen-rust transcript
+        assert _check_self_destruct(
+            'ps aux | grep "helen agent" | grep -v grep | grep -v "pts/1" | '
+            'awk \'{print $2}\' | xargs kill 2>/dev/null'
+        ) is not None
+
+    def test_indirect_kill_without_helen_allowed(self):
+        """xargs kill without helen grep is allowed."""
+        assert _check_self_destruct(
+            "ps aux | grep python | xargs kill"
+        ) is None
+        assert _check_self_destruct(
+            "echo 123 | xargs kill"
+        ) is None
+
+    def test_grep_helen_without_xargs_allowed(self):
+        """grep helen without xargs kill is allowed."""
+        assert _check_self_destruct(
+            'ps aux | grep "helen agent"'
+        ) is None
+        assert _check_self_destruct(
+            "grep -r helen ."
+        ) is None
+
 
 class TestShellExecBlocking:
     """Test that _shell_exec and _shell_exec_full respect the safety check."""
