@@ -503,10 +503,39 @@ fn _cmd_pin(args: list): str {
         if len(pinned) == 0 {
             return _t("No pinned messages.\nUsage: /pin <uuid> to pin a message, making it immune to compression", "当前没有钉住的消息。\n用法: /pin <uuid> 钉住消息，使其免疫压缩")
         }
+
+        // v1.46.14: Enhanced /pin to show UUID + message content
         let text = _t("Pinned messages (", "已钉住的消息（") + str(len(pinned)) + _t("):\n", " 条）:\n")
-        for uuid in pinned {
-            text = text + "  • " + str(uuid) + "\n"
+
+        // Get transcript messages to show content
+        let messages = query_transcript(limit=1000)
+        let uuid_to_msg = {}
+        for msg in messages {
+            uuid_to_msg[msg["uuid"]] = msg
         }
+
+        for uuid in pinned {
+            text = text + "\n**UUID**: " + str(uuid) + "\n"
+            if uuid_to_msg[uuid] != null {
+                let msg = uuid_to_msg[uuid]
+                let role = msg["role"]
+                let content = msg["content"]
+
+                // Truncate long content
+                let display_content = content
+                if len(content) > 200 {
+                    display_content = substring(content, 0, 200) + "..."
+                }
+
+                text = text + "**Role**: " + role + "\n"
+                text = text + "**Content**: " + display_content + "\n"
+            } else {
+                text = text + _t("**Content**: (message not found in transcript)\n", "**内容**: (消息不在transcript中)\n")
+            }
+            text = text + "---\n"
+        }
+
+        text = text + _t("\nUsage: /pin <uuid> to pin a message, /unpin <uuid> to unpin", "\n用法: /pin <uuid> 钉住消息, /unpin <uuid> 取消钉住")
         return text
     }
     let uuid = args[0]
@@ -523,11 +552,40 @@ fn _cmd_unpin(args: list): str {
         if len(pinned) == 0 {
             return _t("No pinned messages.\nUsage: /unpin <uuid> to unpin a message", "当前没有钉住的消息。\n用法: /unpin <uuid> 取消钉住指定消息")
         }
+
+        // v1.46.14: Enhanced /unpin to show UUID + message content
         let text = _t("Pinned messages (", "已钉住的消息（") + str(len(pinned)) + _t("):\n", " 条）:\n")
-        for uuid in pinned {
-            text = text + "  • " + str(uuid) + "\n"
+
+        // Get transcript messages to show content
+        let messages = query_transcript(limit=1000)
+        let uuid_to_msg = {}
+        for msg in messages {
+            uuid_to_msg[msg["uuid"]] = msg
         }
-        return text + _t("\nUsage: /unpin <uuid> to unpin a message", "\n用法: /unpin <uuid> 取消钉住指定消息")
+
+        for uuid in pinned {
+            text = text + "\n**UUID**: " + str(uuid) + "\n"
+            if uuid_to_msg[uuid] != null {
+                let msg = uuid_to_msg[uuid]
+                let role = msg["role"]
+                let content = msg["content"]
+
+                // Truncate long content
+                let display_content = content
+                if len(content) > 200 {
+                    display_content = substring(content, 0, 200) + "..."
+                }
+
+                text = text + "**Role**: " + role + "\n"
+                text = text + "**Content**: " + display_content + "\n"
+            } else {
+                text = text + _t("**Content**: (message not found in transcript)\n", "**内容**: (消息不在transcript中)\n")
+            }
+            text = text + "---\n"
+        }
+
+        text = text + _t("\nUsage: /unpin <uuid> to unpin a message", "\n用法: /unpin <uuid> 取消钉住指定消息")
+        return text
     }
     let uuid = args[0]
     if ContextManager.unpin(uuid) {
