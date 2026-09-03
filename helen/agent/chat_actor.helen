@@ -2,12 +2,15 @@
 //
 // v1.0 架构简化：移除非 actor 路径，只保留 actor 生命周期管理。
 // 所有对话和斜杠命令都通过 ChatSessionActor 处理。
+//
+// v1.46.15: 添加 ChatSessionActor 自动重启机制和健康检查
 
 import std.core.*
 import std.data.*
 import std.debug.*
 import std.system.*
 import std.path.*
+import std.time.*
 import std.transcript.*
 import "chat_session_actor.helen"
 import "output.helen"
@@ -21,6 +24,8 @@ import "memory_utils.helen"
 shared let _chat_actor_mailbox = null
 shared let _chat_actor_session_id = ""
 shared let _chat_actor_req_counter = 0
+shared let _chat_actor_last_heartbeat = 0.0  // v1.46.15: 心跳时间戳
+shared let _chat_actor_restart_count = 0      // v1.46.15: 重启次数
 
 /** 启动长驻 ChatSessionActor（如果尚未启动）
  *  计算完整环境上下文（env + project + memory）传给 actor。
@@ -129,6 +134,7 @@ fn spawn_chat_actor(): map {
 
     _chat_actor_mailbox = mailbox
     _chat_actor_session_id = sid
+    _chat_actor_last_heartbeat = time()  // v1.46.15: 记录启动时间
 
     return {
         "status": "started",
@@ -136,10 +142,60 @@ fn spawn_chat_actor(): map {
     }
 }
 
+/** v1.46.15: 检查 ChatSessionActor 是否存活
+ *  通过尝试发送心跳消息并检测 mailbox 状态来判断。
+ *  返回: true 如果 actor 存活，false 如果已退出 */
+fn _is_chat_actor_alive(): bool {
+    if _chat_actor_mailbox == null {
+        return false
+    }
+
+    // 尝试发送心跳消息
+    try {
+        _chat_actor_mailbox.send({"type": "heartbeat"})
+        // 如果能发送，认为 actor 还活着
+        // 实际的心跳响应由 actor 的主循环处理
+        return true
+    } catch RuntimeError err {
+        debug("ChatSessionActor health check failed: " + err.message)
+        return false
+    } catch {
+        debug("ChatSessionActor health check failed (unknown error)")
+        return false
+    }
+}
+
+/** v1.46.15: 确保 ChatSessionActor 存活，如果退出则自动重启
+ *  返回: true 如果 actor 存活或成功重启，false 如果失败 */
+fn _ensure_chat_actor_alive(): bool {
+    if _is_chat_actor_alive() {
+        return true
+    }
+
+    // Actor 已退出，记录日志
+    _chat_actor_restart_count = _chat_actor_restart_count + 1
+    debug("ChatSessionActor exited unexpectedly (restart_count=" + str(_chat_actor_restart_count) + "), attempting auto-restart...")
+
+    // 清理旧的 mailbox
+    _chat_actor_mailbox = null
+
+    // 重启
+    let result = spawn_chat_actor()
+    if result["status"] == "started" || result["status"] == "already_running" {
+        debug("ChatSessionActor auto-restart successful")
+        return true
+    } else {
+        debug("ChatSessionActor auto-restart failed: " + str(result.get("error", "unknown")))
+        return false
+    }
+}
+
 /** 通过 actor 处理用户输入（阻塞等待 actor 响应） */
 fn tui_chat_handler_actor(user_input: str, file_paths: list = []): str {
-    if _chat_actor_mailbox == null {
-        spawn_chat_actor()
+    // v1.46.15: 确保 ChatSessionActor 存活，如果退出则自动重启
+    if !_ensure_chat_actor_alive() {
+        let _p = {"i18n_key": "error.actorRestartFailed", "params": dict()}
+        return json_stringify(_p)
     }
 
     _chat_actor_req_counter = _chat_actor_req_counter + 1
@@ -151,14 +207,53 @@ fn tui_chat_handler_actor(user_input: str, file_paths: list = []): str {
         "request_id": request_id
     }
 
-    _chat_actor_mailbox.send(request)
+    try {
+        _chat_actor_mailbox.send(request)
+    } catch RuntimeError err {
+        // v1.46.15: 发送失败说明 actor 已退出，尝试重启后重试
+        debug("tui_chat_handler_actor: send failed, actor may have exited: " + err.message)
+        _chat_actor_mailbox = null
+        if !_ensure_chat_actor_alive() {
+            let _p = {"i18n_key": "error.actorRestartFailed", "params": dict()}
+            return json_stringify(_p)
+        }
+        // 重试发送
+        try {
+            _chat_actor_mailbox.send(request)
+        } catch {
+            let _p = {"i18n_key": "error.actorSendFailed", "params": dict()}
+            return json_stringify(_p)
+        }
+    } catch {
+        debug("tui_chat_handler_actor: send failed (unknown error)")
+        _chat_actor_mailbox = null
+        if !_ensure_chat_actor_alive() {
+            let _p = {"i18n_key": "error.actorRestartFailed", "params": dict()}
+            return json_stringify(_p)
+        }
+        try {
+            _chat_actor_mailbox.send(request)
+        } catch {
+            let _p = {"i18n_key": "error.actorSendFailed", "params": dict()}
+            return json_stringify(_p)
+        }
+    }
 
     // 等待响应，按 request_id 匹配，丢弃过时响应
     while true {
         let response = _chat_actor_mailbox.receive()
         if response == null {
-            let _p = {"i18n_key": "error.actorExited", "params": dict()}
-            return json_stringify(_p)
+            // v1.46.15: actor 退出，尝试重启
+            debug("tui_chat_handler_actor: actor exited during wait, attempting restart")
+            _chat_actor_mailbox = null
+            if _ensure_chat_actor_alive() {
+                // 重启成功，返回错误提示让用户重试
+                let _p = {"i18n_key": "error.actorRestarted", "params": dict()}
+                return json_stringify(_p)
+            } else {
+                let _p = {"i18n_key": "error.actorExited", "params": dict()}
+                return json_stringify(_p)
+            }
         }
 
         let resp_type = ""
@@ -238,6 +333,7 @@ fn send_heartbeat() {
     if _chat_actor_mailbox != null {
         try {
             _chat_actor_mailbox.send({"type": "heartbeat"})
+            _chat_actor_last_heartbeat = time()  // v1.46.15: 更新心跳时间
         } catch {
             // 心跳失败说明 actor 可能已死，忽略错误
         }
@@ -247,6 +343,50 @@ fn send_heartbeat() {
 /** 检查 actor 是否正在运行 */
 fn is_chat_actor_running(): bool {
     return _chat_actor_mailbox != null
+}
+
+/** v1.46.15: 获取 ChatSessionActor 的健康状态和诊断信息
+ *  返回: map 包含运行状态、重启次数、最后心跳时间等 */
+fn get_chat_actor_health(): map {
+    let is_alive = _is_chat_actor_alive()
+    let time_since_heartbeat = 0.0
+    if _chat_actor_last_heartbeat > 0 {
+        time_since_heartbeat = time() - _chat_actor_last_heartbeat
+    }
+
+    let status_str = "stopped"
+    if is_alive {
+        status_str = "running"
+    }
+
+    return {
+        "status": status_str,
+        "session_id": _chat_actor_session_id,
+        "restart_count": _chat_actor_restart_count,
+        "last_heartbeat": _chat_actor_last_heartbeat,
+        "time_since_heartbeat": time_since_heartbeat,
+        "request_counter": _chat_actor_req_counter
+    }
+}
+
+/** v1.46.15: 记录 ChatSessionActor 错误到日志文件
+ *  错误日志保存在 .helen/actor_errors.log */
+fn log_actor_error(error_type: str, message: str) {
+    let log_path = get_cwd() + "/.helen/actor_errors.log"
+    let timestamp_str = str(time())
+    let log_entry = "[" + timestamp_str + "] [" + error_type + "] " + message + "\n"
+
+    try {
+        // 追加写入
+        let existing = ""
+        if path_exists(log_path) {
+            existing = read_file(log_path)
+        }
+        write_file(log_path, existing + log_entry)
+    } catch {
+        // 日志写入失败不影响主流程
+        debug("Failed to write actor error log: " + error_type + " - " + message)
+    }
 }
 
 // 向后兼容：TUIChatAgent 函数别名
