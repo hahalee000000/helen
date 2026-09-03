@@ -27,6 +27,14 @@ shared let _chat_actor_req_counter = 0
 shared let _chat_actor_last_heartbeat = 0.0  // v1.46.15: 心跳时间戳
 shared let _chat_actor_restart_count = 0      // v1.46.15: 重启次数
 
+/** v1.46.16: 检查指定 PID 的进程是否存在
+ *  通过检查 /proc/{pid} 目录是否存在来判断（Linux 专用）
+ *  返回: true 如果进程存在，false 如果进程不存在 */
+fn _is_process_alive(check_pid: int): bool {
+    let proc_path = "/proc/" + str(check_pid)
+    return path_exists(proc_path)
+}
+
 /** 启动长驻 ChatSessionActor（如果尚未启动）
  *  计算完整环境上下文（env + project + memory）传给 actor。
  *  返回 mailbox（Channel），Python 端通过 mailbox.send/receive 通信。 */
@@ -85,15 +93,18 @@ fn spawn_chat_actor(): map {
 
     // spawn ChatSessionActor（传入完整环境上下文）
     // v1.0 session 恢复：读取 memento 中的子 session_id，用 spawn resume() 复用历史子 session
-    // v1.46.12: PID 验证——只信任当前进程写入的 memento，防止多实例竞争导致
-    // 错误 resume 到其他进程的 session。旧 memento（无 pid 字段）仍然接受（向后兼容）。
+    // v1.46.16: 改进 PID 验证逻辑——检查 memento PID 对应的进程是否存在
+    //   - 如果进程不存在（已退出），resume 历史 session（允许恢复）
+    //   - 如果进程存在但不是当前进程，忽略 memento（防止多实例冲突）
+    //   - 如果进程存在且是当前进程，正常 resume
+    // 旧 memento（无 pid 字段）仍然接受（向后兼容）。
     let child_sid = ""
     try {
         let memento_path = get_cwd() + "/.helen/current_session_id"
         if path_exists(memento_path) {
             let content = read_file(memento_path)
             let data = json_parse(content)
-            // PID 验证：检查 memento 是否由当前进程写入
+            // PID 验证：检查 memento PID 对应的进程是否存在
             let memento_pid = 0
             try {
                 memento_pid = data["pid"]
@@ -101,10 +112,21 @@ fn spawn_chat_actor(): map {
                 // 旧 memento 无 pid 字段——接受（向后兼容）
                 memento_pid = pid()
             }
-            if memento_pid == pid() {
+
+            let memento_process_alive = _is_process_alive(memento_pid)
+            let is_current_process = (memento_pid == pid())
+
+            if is_current_process {
+                // 场景 1: 同一进程 resume（正常情况）
                 child_sid = data["child"]
+                debug("spawn_chat_actor: resuming session from current process (pid=" + str(memento_pid) + ")")
+            } else if !memento_process_alive {
+                // 场景 2: memento 进程已退出，允许 resume 历史 session
+                child_sid = data["child"]
+                debug("spawn_chat_actor: memento process exited (pid=" + str(memento_pid) + "), resuming historical session")
             } else {
-                debug("spawn_chat_actor: memento PID mismatch (memento=" + str(memento_pid) + " own=" + str(pid()) + ") — starting fresh session")
+                // 场景 3: memento 进程存在但不是当前进程，忽略 memento（防止冲突）
+                debug("spawn_chat_actor: memento PID exists but is different process (memento=" + str(memento_pid) + " own=" + str(pid()) + ") — starting fresh session to avoid conflict")
             }
         }
     } catch {
