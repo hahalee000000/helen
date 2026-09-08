@@ -385,6 +385,10 @@ def transcript_to_messages(helen_session_id: str = "") -> list[dict]:
             else:
                 text_content = str(content)
 
+            # v1.46.20: Remove <thinking> tags from historical messages
+            # User requested to display thinking content directly without tags
+            text_content = text_content.replace("<thinking>", "").replace("</thinking>", "")
+
             # v1.46.18: 处理 tool_calls 字段，格式化为前端可解析的格式
             tool_calls = e.get("tool_calls", [])
             if tool_calls:

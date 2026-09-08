@@ -800,18 +800,16 @@ class LlmMixin:
                                         interrupted = True
                                         break
 
-                    # v1.46.19: Handle reasoning/thinking content
+                    # v1.46.20: Handle reasoning/thinking content
                     elif event_type == "reasoning":
                         reasoning_content = event.get("content", "")
                         if reasoning_content:
-                            # Store reasoning for transcript (if needed)
-                            # For now, we just pass it through to the callback
-                            # The callback can decide how to display it
+                            # v1.46.20: Directly append to content without <thinking> tags
+                            # User requested to remove thinking tags from output
+                            full_response.append(reasoning_content)
                             if on_chunk_fn is not None:
-                                # Prefix with special marker to distinguish from regular content
-                                # Frontend can parse this and render differently
-                                reasoning_msg = f"<thinking>{reasoning_content}</thinking>"
-                                chunk_result = on_chunk_fn(reasoning_msg)
+                                # Pass reasoning content directly (no tags)
+                                chunk_result = on_chunk_fn(reasoning_content)
                                 if chunk_result is False:
                                     interrupted = True
                                     break
