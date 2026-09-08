@@ -1495,18 +1495,18 @@ class HttpLLMRuntime(LLMRuntime):
                                 # v1.34.1: OpenAI protocol compatibility
                                 # Standard OpenAI: content field
                                 # GLM/DeepSeek: reasoning_content (thinking) then content (answer)
-                                # v1.46.17: Yield both content and reasoning_content separately
+                                # We collect both separately, only yield content to frontend.
+                                # If no content at stream end, fall back to reasoning_content.
                                 content = delta.get("content", "")
                                 if content:
                                     full_chunks.append(content)
                                     yield {"type": "content", "content": content}
 
-                                # v1.46.17: Yield reasoning_content as separate event
-                                # so frontend can display thinking process
+                                # Collect reasoning_content separately (not yielded to avoid
+                                # flooding frontend with thinking process)
                                 reasoning = delta.get("reasoning_content", "")
                                 if reasoning:
                                     reasoning_chunks.append(reasoning)
-                                    yield {"type": "reasoning", "content": reasoning}
 
                                 # Tool call deltas (streaming accumulation)
                                 tc_deltas = delta.get("tool_calls")

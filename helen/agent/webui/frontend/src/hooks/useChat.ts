@@ -64,62 +64,25 @@ export function useChat(sessionId: string | null) {
           case 'llm_chunk': {
             // 流式 LLM 内容：追加到当前 assistant 消息
             if (!content) break
-
-            // v1.46.17: Parse <thinking> tags and separate thinking content
-            const thinkingMatch = content.match(/<thinking>([\s\S]*?)<\/thinking>/)
-
-            if (thinkingMatch) {
-              // Extract thinking content
-              const thinkingContent = thinkingMatch[1]
-              // Extract regular content (remove thinking tags)
-              const regularContent = content.replace(/<thinking>[\s\S]*?<\/thinking>/g, '')
-
-              setMessages((prev) => {
-                const last = prev[prev.length - 1]
-                if (last && last.role === 'assistant') {
-                  return [
-                    ...prev.slice(0, -1),
-                    {
-                      ...last,
-                      content: last.content + regularContent,
-                      thinking_content: (last.thinking_content || '') + thinkingContent
-                    }
-                  ]
-                }
+            setMessages((prev) => {
+              const last = prev[prev.length - 1]
+              if (last && last.role === 'assistant') {
                 return [
-                  ...prev,
-                  {
-                    id: Date.now(),
-                    session_id: sessionId,
-                    role: 'assistant',
-                    content: regularContent,
-                    thinking_content: thinkingContent,
-                    timestamp: new Date().toISOString()
-                  }
+                  ...prev.slice(0, -1),
+                  { ...last, content: last.content + content }
                 ]
-              })
-            } else {
-              // No thinking tags, regular content
-              setMessages((prev) => {
-                const last = prev[prev.length - 1]
-                if (last && last.role === 'assistant') {
-                  return [
-                    ...prev.slice(0, -1),
-                    { ...last, content: last.content + content }
-                  ]
+              }
+              return [
+                ...prev,
+                {
+                  id: Date.now(),
+                  session_id: sessionId,
+                  role: 'assistant',
+                  content,
+                  timestamp: new Date().toISOString()
                 }
-                return [
-                  ...prev,
-                  {
-                    id: Date.now(),
-                    session_id: sessionId,
-                    role: 'assistant',
-                    content,
-                    timestamp: new Date().toISOString()
-                  }
-                ]
-              })
-            }
+              ]
+            })
             break
           }
 

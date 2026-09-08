@@ -30,8 +30,6 @@ export function MessageList({ messages }: MessageListProps) {
 }
 
 function MessageItem({ message }: { message: Message }) {
-  const t = useT()
-
   // Thinking 消息（中间过程）：单行灰色样式
   if (message.role === 'thinking') {
     return (
@@ -99,19 +97,6 @@ function MessageItem({ message }: { message: Message }) {
       </div>
       {/* 消息内容：flex-1 占满剩余空间，气泡 inline-block 贴左 */}
       <div className="flex-1 max-w-[80%]">
-        {/* v1.46.17: Thinking content (collapsible) */}
-        {message.thinking_content && (
-          <details className="mb-2 rounded-lg border border-border/50 bg-muted/30">
-            <summary className="px-3 py-2 cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-2">
-              <span className="text-xs">💭</span>
-              <span>{t('chat.thinkingContent')}</span>
-              <span className="text-xs opacity-60">({message.thinking_content.length} chars)</span>
-            </summary>
-            <div className="px-3 pb-3 pt-1 text-sm text-muted-foreground whitespace-pre-wrap border-t border-border/50 bg-muted/20">
-              {message.thinking_content}
-            </div>
-          </details>
-        )}
         {/* v6.2 多模态：渲染附件 */}
         {message.attachments && message.attachments.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-2">
