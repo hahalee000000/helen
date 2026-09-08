@@ -372,7 +372,7 @@ def transcript_to_messages(helen_session_id: str = "") -> list[dict]:
                 continue
             text_content = main_text
         else:
-            # assistant / 其他角色:content 原样
+            # assistant / 其他角色：content 原样 + tool_calls 格式化
             if isinstance(content, str):
                 text_content = content
             elif isinstance(content, list):
@@ -384,6 +384,36 @@ def transcript_to_messages(helen_session_id: str = "") -> list[dict]:
                 text_content = "\n".join(texts)
             else:
                 text_content = str(content)
+
+            # v1.46.18: 处理 tool_calls 字段，格式化为前端可解析的格式
+            tool_calls = e.get("tool_calls", [])
+            if tool_calls:
+                tool_lines = []
+                for tc in tool_calls:
+                    fn = tc.get("function", {})
+                    fn_name = fn.get("name", "unknown")
+                    fn_args = fn.get("arguments", "{}")
+                    # 解析 arguments JSON
+                    try:
+                        if isinstance(fn_args, str):
+                            args_dict = json.loads(fn_args)
+                        else:
+                            args_dict = fn_args
+                        # 格式化为 "🔧 Calling name(arg1='val1', arg2='val2')"
+                        args_str = ", ".join(f"{k}={v!r}" for k, v in args_dict.items())
+                        if len(args_str) > 200:
+                            args_str = args_str[:200] + "..."
+                        tool_lines.append(f"🔧 Calling {fn_name}({args_str})")
+                    except:
+                        tool_lines.append(f"🔧 Calling {fn_name}(...)")
+
+                # 将 tool calls 追加到 content
+                if tool_lines:
+                    if text_content:
+                        text_content = text_content + "\n\n" + "\n".join(tool_lines)
+                    else:
+                        text_content = "\n".join(tool_lines)
+
             attachments = []
 
         messages.append({
