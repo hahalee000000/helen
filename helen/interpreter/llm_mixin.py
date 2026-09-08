@@ -800,6 +800,22 @@ class LlmMixin:
                                         interrupted = True
                                         break
 
+                    # v1.46.19: Handle reasoning/thinking content
+                    elif event_type == "reasoning":
+                        reasoning_content = event.get("content", "")
+                        if reasoning_content:
+                            # Store reasoning for transcript (if needed)
+                            # For now, we just pass it through to the callback
+                            # The callback can decide how to display it
+                            if on_chunk_fn is not None:
+                                # Prefix with special marker to distinguish from regular content
+                                # Frontend can parse this and render differently
+                                reasoning_msg = f"<thinking>{reasoning_content}</thinking>"
+                                chunk_result = on_chunk_fn(reasoning_msg)
+                                if chunk_result is False:
+                                    interrupted = True
+                                    break
+
                     elif event_type == "tool_call":
                         fn_name = event.get("name", "")
                         fn_args = event.get("args", {})
