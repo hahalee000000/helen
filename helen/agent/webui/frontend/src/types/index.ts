@@ -18,6 +18,8 @@ export interface Message {
   role: 'user' | 'assistant' | 'system' | 'thinking';
   content: string;
   timestamp: string;
+  // v1.46.17: Thinking/reasoning content (LLM internal thought process)
+  thinking_content?: string;
   // 推理中提示注入 (hint injection)
   isHint?: boolean;                        // 用户消息是否为 hint（处理中发送）
   hintStatus?: 'queued' | 'injected' | 'processed';  // hint 生命周期
