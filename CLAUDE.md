@@ -7,11 +7,11 @@ For the broader multi-project layout, see `../CLAUDE.md`.
 
 **Helen** — a prompt-first Agent programming language (AI-native DSL). Combines deterministic constructs (variables, functions, control flow) with first-class LLM primitives (`llm act`, `llm if`). 
 
-- **Version**: 1.45.4
+- **Version**: 1.46.22
 - **Keywords**: 99 bilingual (48 English + 51 Chinese)
 - **Built-in functions**: 378 stdlib functions (21 categories), 379 Chinese aliases, 757 total names
 - **Stdlib modules**: 21 modules (std.core, std.str, std.math, std.list, ...)
-- **Tests**: 4014 passing (Python pytest)
+- **Tests**: 4046 passing (Python pytest)
 - **Python**: 3.12+ required
 
 ## Development Commands
@@ -124,6 +124,28 @@ helen/
 ├── agent/         # Helen agent components (chat_session_actor, chat_tui, task_manager, etc.)
 └── skills/        # 16 built-in skills (distributed with package)
 ```
+
+## Recent Changes (v1.45.4 → v1.46.22)
+
+- **v1.46.22**: Lower ChatSessionActor reasoning-effort from "high" to "medium" to prevent response truncation caused by reasoning_content consuming max_tokens budget. Add `finish_reason` tracking to transcript (`Message.finish_reason` field, `"finish"` streaming event in `http_llm.py`, propagation through `_record_llm_response_to_history` → `_add_to_history` → transcript serialization). Enables diagnosing truncation issues via `finish_reason: "length"` in transcript JSONL.
+- **v1.46.21**: Remove <thinking> tags from WebUI output (history + new messages) — cleaner UI while preserving reasoning transparency.
+- **v1.46.20**: Stream reasoning_content to frontend for thinking transparency — users can now see LLM reasoning process in real-time.
+- **v1.46.19**: Enable thinking-mode in ChatSessionActor for reasoning transparency — adds reasoning_content streaming to chat sessions.
+- **v1.46.18**: Fix missing tool calls in WebUI message display — ensures all tool invocations are properly shown in chat interface.
+- **v1.46.17**: Improve memento PID validation - resume on process exit — actor restart logic now checks if previous process has exited before resuming.
+- **v1.46.16**: ChatSessionActor auto-restart + health check + error logging — actors automatically recover from crashes with comprehensive error tracking.
+- **v1.46.15**: Enhance /pin and /unpin commands to show message content — pinned messages now display their content for better visibility.
+- **v1.46.14**: Block indirect kill patterns (ps | grep helen | xargs kill) — shell_exec self-preservation prevents agents from accidentally terminating the Helen process.
+- **v1.46.13**: Actor auto-recovery + memento multi-instance race fix — prevents multiple actor instances from racing during recovery.
+- **v1.46.11**: Add transcript repair script — fix_message_sequence.py repairs corrupted transcripts with invalid message ordering.
+- **v1.46.10**: Fix empty assistant nudge breaking message sequence — prevents HTTP 400 errors from malformed assistant messages.
+- **v1.46.9**: Fix orphaned tool messages causing HTTP 400 errors — ensures tool messages always have corresponding assistant messages.
+- **v1.46.8**: Fix max_tokens limit for qwen3.7-plus — proper token limit handling for Qwen models.
+- **v1.46.6**: Remove max_tokens cap - Qwen3.7-Plus supports higher limits — allows larger output tokens for capable models.
+- **v1.46.4**: Fix HTTP 400 errors and streaming issues in Web UI — improves reliability of web interface.
+- **v1.46.2**: Exclude empty tool fields from user messages — prevents API errors from malformed requests.
+- **v1.46.1**: shell_exec self-preservation blocks agent suicide (security fix) — prevents agents from executing commands that would terminate the Helen process.
+- **v1.46.0**: Incremental transcript save for tool calls — tool call results are now saved incrementally during execution, preventing data loss on crashes.
 
 ## Recent Changes (v1.44 → v1.45.4)
 

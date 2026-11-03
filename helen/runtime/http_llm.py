@@ -1548,6 +1548,12 @@ class HttpLLMRuntime(LLMRuntime):
                         "message": "Response truncated (max_tokens limit reached)"
                     }
 
+                # v1.46.22: Emit finish event with finish_reason for transcript diagnostics.
+                # Allows downstream to record whether response was truncated ("length"),
+                # completed normally ("stop"), or stopped for other reasons.
+                if finish_reason:
+                    yield {"type": "finish", "finish_reason": finish_reason}
+
                 # Build full_content from chunks (O(n) join instead of O(n²) +=)
                 full_content = "".join(full_chunks)
 

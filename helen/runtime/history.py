@@ -312,6 +312,12 @@ class Message:
     # caller while preserving the original invocation_id for call tree integrity.
     visible_to_invocation_ids: list[str] = field(default_factory=list, repr=False)
 
+    # v1.46.22: Track LLM finish_reason for diagnostics.
+    # Values: "stop" (normal), "length" (max_tokens truncated), "content_filter",
+    # or None (non-LLM messages like user/tool/system).
+    # Persisted in transcript to help diagnose response truncation issues.
+    finish_reason: str | None = field(default=None, repr=False)
+
     @property
     def token_count(self) -> int:
         """Lazily computed token count (model-aware when tiktoken available)."""

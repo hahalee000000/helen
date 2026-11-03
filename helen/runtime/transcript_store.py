@@ -1120,6 +1120,10 @@ def _item_to_dict(item: Message | BoundaryMarker) -> dict[str, Any]:
         # v1.24: Visibility tracking (only include if non-empty, for compactness)
         if item.visible_to_invocation_ids:
             d["visible_to_invocation_ids"] = item.visible_to_invocation_ids
+        # v1.46.22: finish_reason for truncation diagnostics
+        # (only include if set, for backward compatibility and compactness)
+        if item.finish_reason is not None:
+            d["finish_reason"] = item.finish_reason
         return d
     else:
         raise TypeError(f"Unknown item type: {type(item)}")
@@ -1145,6 +1149,8 @@ def _item_from_dict(data: dict[str, Any]) -> Message | BoundaryMarker | None:
             parent_invocation_id=data.get("parent_invocation_id", ""),
             # v1.24: Visibility tracking (default to empty list for backward compat)
             visible_to_invocation_ids=data.get("visible_to_invocation_ids", []),
+            # v1.46.22: finish_reason for truncation diagnostics (None for backward compat)
+            finish_reason=data.get("finish_reason"),
         )
     elif item_type == "boundary_marker":
         return BoundaryMarker.from_dict(data)

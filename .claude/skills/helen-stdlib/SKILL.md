@@ -1,7 +1,7 @@
 ---
 name: helen-stdlib
-description: "Helen Standard Library Guide — Categorized reference and examples for 407 built-in functions across 21 categories (v1.44 adds fromtimestamp, enhanced list_sessions/delete_session)"
-version: 1.44.0
+description: "Helen Standard Library Guide — Categorized reference and examples for 378 built-in functions across 21 categories (379 Chinese aliases, 757 total names)"
+version: 1.46.21
 author: Helen Team
 license: MIT
 metadata:
@@ -11,7 +11,7 @@ metadata:
 
 # Helen Standard Library Reference
 
-Helen's standard library provides **407 built-in functions** across 21 categories, covering all core needs for AI application development.
+Helen's standard library provides **378 built-in functions** across 21 categories, covering all core needs for AI application development. With 379 Chinese aliases, the total is 757 names.
 
 ## Category Overview
 

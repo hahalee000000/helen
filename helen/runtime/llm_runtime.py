@@ -25,11 +25,15 @@ class LLMResponse:
         text: The text content returned by the LLM.
         tool_calls: Optional tool call requests (function calling).
         model: The model that generated this response.
+        finish_reason: Why the LLM stopped generating (v1.46.22).
+            "stop" = normal completion, "length" = max_tokens truncated,
+            "content_filter" = content filtered, None = unknown/non-LLM.
     """
 
     text: str | None = None
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
     model: str | None = None
+    finish_reason: str | None = None
 
 
 # ---------------------------------------------------------------------------

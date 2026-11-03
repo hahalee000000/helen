@@ -64,7 +64,11 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
     // v1.46.18: Enable thinking mode for better reasoning transparency
     // This makes LLM output intermediate thinking text before tool calls
     thinking-mode true
-    reasoning-effort "high"
+    // v1.46.22: Lower reasoning-effort from "high" to "medium" to prevent
+    // response truncation. With "high", GLM-5's reasoning_content consumed
+    // most of the max_tokens budget, leaving insufficient tokens for the
+    // actual response, causing visible truncation in the WebUI.
+    reasoning-effort "medium"
     // v1.29+ 必须显式声明 persistent，否则默认 none 会导致：
     //   - Web UI 刷新丢消息（transcript_to_messages 读不到 transcript）
     //   - /search 永远返回空（search_transcript 走磁盘）

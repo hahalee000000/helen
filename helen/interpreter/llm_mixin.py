@@ -721,6 +721,7 @@ class LlmMixin:
             tool_calls_log = []
             stream_usage = {}  # accumulated token usage across turns
             interrupted = False
+            stream_finish_reason: str | None = None  # v1.46.22: capture LLM stop reason
 
             # Phase 3: Register streaming call for cancel/KeyboardInterrupt support
             stream_handle = self._register_streaming_call()
@@ -844,6 +845,10 @@ class LlmMixin:
                         stream_usage["prompt_tokens"] = stream_usage.get("prompt_tokens", 0) + u.get("prompt_tokens", 0)
                         stream_usage["completion_tokens"] = stream_usage.get("completion_tokens", 0) + u.get("completion_tokens", 0)
 
+                    # v1.46.22: Capture finish_reason for transcript diagnostics
+                    elif event_type == "finish":
+                        stream_finish_reason = event.get("finish_reason")
+
                     elif event_type == "error":
                         error_msg = event.get("message", "Unknown error")
                         self.errors.error(
@@ -884,6 +889,8 @@ class LlmMixin:
                 stream_resp = _StreamResponse()
                 stream_resp.text = full_text
                 stream_resp.tool_calls = tool_calls_log
+                # v1.46.22: Propagate finish_reason to transcript for truncation diagnostics
+                stream_resp.finish_reason = stream_finish_reason
                 # v1.31.2: Strip working memory tags BEFORE recording to history
                 # to prevent <working_memory> content from persisting in transcript
                 if stream_resp.text:
@@ -1617,7 +1624,8 @@ errors: [Fixed token expiration handling - was missing refresh logic]
 
     def _add_to_history(self: Any, role: str, content: str | list[dict],
                         tool_calls: list[dict] | None = None,
-                        tool_call_id: str | None = None) -> None:
+                        tool_call_id: str | None = None,
+                        finish_reason: str | None = None) -> None:
         """Add a message to the conversation history.
 
         Phase 2 SSOT: When TranscriptStore is enabled, write ONLY to it.
@@ -1631,6 +1639,8 @@ errors: [Fixed token expiration handling - was missing refresh logic]
                invocation tree tracking (per-agent context isolation).
         v1.46: Added tool_calls and tool_call_id parameters for incremental
                transcript save of tool call messages.
+        v1.46.22: Added finish_reason parameter to record LLM stop reason
+                  ("stop", "length", etc.) for truncation diagnostics.
         """
         agent_ctx = getattr(self, '_agent_context', None)
 
@@ -1653,6 +1663,7 @@ errors: [Fixed token expiration handling - was missing refresh logic]
             parent_invocation_id=parent_invocation_id,
             tool_calls=tool_calls or [],
             tool_call_id=tool_call_id,
+            finish_reason=finish_reason,
         )
 
         # v1.29: Check transcript level BEFORE accessing transcript store
@@ -1713,10 +1724,13 @@ errors: [Fixed token expiration handling - was missing refresh logic]
         Phase 7: Update working memory from tool calls.
 
         Args:
-            response: LLMResponse-like object with .text and .tool_calls attributes.
+            response: LLMResponse-like object with .text, .tool_calls, and
+                      optionally .finish_reason attributes.
         """
         tool_calls = getattr(response, 'tool_calls', None) or []
         text = getattr(response, 'text', None) or ""
+        # v1.46.22: Extract finish_reason for transcript diagnostics
+        finish_reason = getattr(response, 'finish_reason', None)
 
         if tool_calls:
             # Build a compact summary of tool calls for history
@@ -1761,7 +1775,10 @@ errors: [Fixed token expiration handling - was missing refresh logic]
 
         # Record the final text response
         if text:
-            self._add_to_history("assistant", text)
+            # v1.46.22: Pass finish_reason to transcript for truncation diagnostics.
+            # finish_reason is attached to the final text message (not the tool summary)
+            # since it reflects the stop reason for the overall response.
+            self._add_to_history("assistant", text, finish_reason=finish_reason)
 
     def _prepare_history_for_llm(
         self: Any,

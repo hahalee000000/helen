@@ -3,7 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/helen-lang.svg)](https://pypi.org/project/helen-lang/)
 [![Python](https://img.shields.io/pypi/pyversions/helen-lang.svg)](https://pypi.org/project/helen-lang/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-3694%20passed-green.svg)](https://github.com/hahalee000000/helen)
+[![Tests](https://img.shields.io/badge/tests-4046%20passed-green.svg)](https://github.com/hahalee000000/helen)
 
 **Helen** is an AI-native programming language.
 
@@ -16,7 +16,7 @@ In traditional programming languages, code is the program's core and AI is just 
 ## ✨ Why Helen?
 
 - **Prompt-first**: `agent` is a first-class language construct - not a library pattern
-- **364 stdlib functions** across 22 modules - covering the full AI application pipeline
+- **378 stdlib functions** across 21 modules - covering the full AI application pipeline
 - **5-layer graduated compression + working memory**: Long-conversation agents manage context automatically, no manual tuning
 - **Transcript SSOT**: Conversations persisted as SQLite/JSONL, supporting audit and replay
 - **Multi-agent concurrency**: `spawn` + Channel message queues, with built-in `mailbox_select`
