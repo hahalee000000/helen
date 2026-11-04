@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { MessageSquare, Settings } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { useT, LanguageSwitcher } from '@/i18n'
+import { api } from '@/services/api'
 
 interface LayoutProps {
   children: ReactNode
@@ -14,8 +15,7 @@ export function Layout({ children }: LayoutProps) {
   const t = useT()
 
   useEffect(() => {
-    fetch('/api/status')
-      .then(r => r.json())
+    api.system.getStatus()
       .then(data => setVersion(data.version || ''))
       .catch(() => {})
   }, [])

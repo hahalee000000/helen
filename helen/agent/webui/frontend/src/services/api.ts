@@ -111,6 +111,23 @@ async function fetchWithRetry(
  * transcript/all、transcript/unmapped、transcript/messages)。
  */
 export const api = {
+  // 系统状态
+  system: {
+    /** 获取系统状态（版本、路径等） */
+    getStatus: async () => {
+      const response = await fetchWithRetry(`${API_BASE_URL}/status`)
+      if (!response.ok) throw new Error('Failed to fetch system status')
+      return response.json() as Promise<{
+        status: string
+        version: string
+        active_connections: number
+        config: {
+          helen_path: string
+        }
+      }>
+    },
+  },
+
   // 聊天相关
   chat: {
     /** 获取当前工作目录信息 */

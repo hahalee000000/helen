@@ -87,15 +87,46 @@ async def health():
 
 @app.get("/api/status")
 async def api_status(_token: str = Depends(require_auth)):
-    """API 状态"""
+    """API 状态 + 系统信息
+
+    返回 Helen 版本和安装路径，供 Settings 页面展示。
+    使用与 /api/chat/status 相同的逻辑确保数据一致性。
+    """
+    import importlib.metadata
+    import sys as _sys
+    from pathlib import Path
+
+    # Robust version: works even when a namespace package named "helen"
+    # (e.g. helen-rust/helen/) shadows the real Python package on sys.path.
+    try:
+        version = importlib.metadata.version("helen-lang")
+    except importlib.metadata.PackageNotFoundError:
+        try:
+            version = importlib.metadata.version("helen")
+        except importlib.metadata.PackageNotFoundError:
+            import helen as _h
+            version = getattr(_h, "__version__", "unknown")
+
+    # Find the real helen package directory (the one with __init__.py),
+    # skipping any namespace-package shadows that lack __init__.py.
+    helen_path = ""
+    for _p in _sys.path:
+        _candidate = Path(_p) / "helen"
+        if _candidate.is_dir() and (_candidate / "__init__.py").exists():
+            helen_path = str(_candidate)
+            break
+    if not helen_path:
+        # Fallback: use the webui's own location (helen/agent/webui/backend → helen/)
+        helen_path = str(Path(__file__).resolve().parents[4])
+
     manager = app.state.websocket_manager
     return {
         "status": "ok",
-        "version": settings.VERSION,
+        "version": version,
         "active_connections": len(manager.active_connections),
         "config": {
-            "helen_path": settings.HELEN_PATH,
-        }
+            "helen_path": helen_path,
+        },
     }
 
 if __name__ == "__main__":

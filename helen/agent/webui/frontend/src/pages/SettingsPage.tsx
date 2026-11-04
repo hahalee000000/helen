@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getStoredToken, setStoredToken, clearStoredToken } from '@/services/api'
+import { getStoredToken, setStoredToken, clearStoredToken, api } from '@/services/api'
 import { useT } from '@/i18n'
 
 interface StatusInfo {
@@ -16,8 +16,7 @@ export function SettingsPage() {
 
   const loadStatus = async () => {
     try {
-      const response = await fetch('/api/status')
-      const data = await response.json()
+      const data = await api.system.getStatus()
       setStatusInfo({
         version: data.version || '',
         ...data.config,
