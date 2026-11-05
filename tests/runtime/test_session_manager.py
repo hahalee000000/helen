@@ -27,8 +27,16 @@ class TestSessionManager:
         assert session_id.startswith("session_")
         assert len(session_id) > 20  # session_ + timestamp + uuid
 
-        # Verify directory was created
+        # v1.46.23: Directory is NOT created by create_session() — it's
+        # created lazily by the backend on first write. This prevents
+        # empty session directories from accumulating.
         session_dir = tmp_path / session_id
+        assert not session_dir.exists()  # Directory not yet created
+
+        # When we write the transcript file, the directory is created
+        transcript_path = manager.get_session_path(session_id)
+        transcript_path.parent.mkdir(parents=True, exist_ok=True)
+        transcript_path.write_text("test", encoding="utf-8")
         assert session_dir.exists()
         assert session_dir.is_dir()
 
@@ -39,8 +47,14 @@ class TestSessionManager:
 
         assert session_id == "my_custom_session"
 
-        # Verify directory was created
+        # v1.46.23: Directory is NOT created until first write
         session_dir = tmp_path / session_id
+        assert not session_dir.exists()
+
+        # Write something to create the directory
+        transcript_path = manager.get_session_path(session_id)
+        transcript_path.parent.mkdir(parents=True, exist_ok=True)
+        transcript_path.write_text("test", encoding="utf-8")
         assert session_dir.exists()
 
     def test_get_session_path(self, tmp_path):
@@ -57,11 +71,12 @@ class TestSessionManager:
         manager = SessionManager(base_dir=tmp_path)
         session_id = manager.create_session()
 
-        # Initially exists (directory created)
-        assert manager.session_exists(session_id) is False  # No transcript file yet
+        # v1.46.23: Directory not created yet, so session doesn't exist
+        assert manager.session_exists(session_id) is False
 
-        # Create transcript file
+        # Create transcript file (creates parent directory)
         transcript_path = manager.get_session_path(session_id)
+        transcript_path.parent.mkdir(parents=True, exist_ok=True)
         transcript_path.write_text("test", encoding="utf-8")
 
         # Now should exist
@@ -88,6 +103,7 @@ class TestSessionManager:
         # Create transcript files with different sizes
         for i, session_id in enumerate([session1, session2, session3]):
             path = manager.get_session_path(session_id)
+            path.parent.mkdir(parents=True, exist_ok=True)  # Create directory
             path.write_text("x" * (i * 100), encoding="utf-8")
             # Small delay to ensure different modification times
             time.sleep(0.01)
@@ -113,8 +129,9 @@ class TestSessionManager:
         manager = SessionManager(base_dir=tmp_path)
         session_id = manager.create_session()
 
-        # Create transcript file
+        # Create transcript file (creates parent directory)
         path = manager.get_session_path(session_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("test", encoding="utf-8")
 
         # Delete session
@@ -133,11 +150,12 @@ class TestSessionManager:
         """Test cleaning up old sessions."""
         manager = SessionManager(base_dir=tmp_path)
 
-        # Create 10 sessions
+        # Create 10 sessions with transcript files
         session_ids = []
         for i in range(10):
             session_id = manager.create_session(f"session_{i}")
             path = manager.get_session_path(session_id)
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(f"test {i}", encoding="utf-8")
             session_ids.append(session_id)
             time.sleep(0.01)
@@ -161,10 +179,11 @@ class TestSessionManager:
         """Test cleanup does nothing when under limit."""
         manager = SessionManager(base_dir=tmp_path)
 
-        # Create 5 sessions
+        # Create 5 sessions with transcript files
         for i in range(5):
             session_id = manager.create_session(f"session_{i}")
             path = manager.get_session_path(session_id)
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(f"test {i}", encoding="utf-8")
 
         # Cleanup with limit of 10

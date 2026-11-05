@@ -64,6 +64,12 @@ class SessionManager:
             manager = SessionManager()
             session_id = manager.create_session()
             # Returns: "session_1720435200_a1b2c3d4_e5f6g7h8"
+
+        Note:
+            v1.46.23: Session directory is NOT created here — it's created
+            lazily by the backend on first write. This prevents empty session
+            directories from accumulating when sessions are created but never
+            used (e.g., spawned agents with transcript_level="none").
         """
         if session_id is None:
             # Generate session ID: timestamp + random salt + short UUID
@@ -75,11 +81,11 @@ class SessionManager:
             short_uuid = uuid4().hex[:8]
             session_id = f"session_{timestamp}_{salt}_{short_uuid}"
 
-        # Create session directory
-        session_dir = self.base_dir / session_id
-        session_dir.mkdir(parents=True, exist_ok=True)
+        # v1.46.23: Don't create the directory here — let the backend create
+        # it on first write (JSONLBackend.__init__ creates parent dirs).
+        # This prevents empty session directories from accumulating.
 
-        logger.debug("Created session: %s", session_id)
+        logger.debug("Created session ID: %s", session_id)
         return session_id
 
     def get_session_path(self, session_id: str) -> Path:
