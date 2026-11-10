@@ -26,21 +26,25 @@ class TestHistoryManagerBudget:
 
     def setup_method(self):
         self.hm = HistoryManager()
+        # Use the actual DEFAULT_CONTEXT_WINDOW from token_utils (single source of truth)
+        from helen.runtime.token_utils import DEFAULT_CONTEXT_WINDOW
+        self.max_tokens = DEFAULT_CONTEXT_WINDOW
 
     def test_basic_budget(self):
         """Budget = MAX - system - instruction - buffer."""
-        # MAX_TOKENS=128000, buffer=1000
+        # buffer=1000
         budget = self.hm.check_budget(1000, 500)
-        assert budget == 128000 - 1000 - 500 - 1000
+        assert budget == self.max_tokens - 1000 - 500 - 1000
 
     def test_budget_with_large_system(self):
         """Large system prompt reduces available budget."""
         budget = self.hm.check_budget(50000, 1000)
-        assert budget == 128000 - 50000 - 1000 - 1000
+        assert budget == self.max_tokens - 50000 - 1000 - 1000
 
     def test_budget_zero(self):
         """When system + instruction exceeds limit, budget is 0 or negative."""
-        budget = self.hm.check_budget(120000, 10000)
+        # Use a value that definitely exceeds max_tokens
+        budget = self.hm.check_budget(self.max_tokens + 10000, 10000)
         assert budget <= 0
 
 

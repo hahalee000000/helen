@@ -64,7 +64,8 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
 }
 
 # Default fallback context window when model is unknown
-DEFAULT_CONTEXT_WINDOW = 128000
+# Import from token_utils for single source of truth (v1.46.24)
+from helen.runtime.token_utils import DEFAULT_CONTEXT_WINDOW
 
 # Token estimation constants
 # Average tokens per character varies by language:

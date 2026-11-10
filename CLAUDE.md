@@ -7,7 +7,7 @@ For the broader multi-project layout, see `../CLAUDE.md`.
 
 **Helen** — a prompt-first Agent programming language (AI-native DSL). Combines deterministic constructs (variables, functions, control flow) with first-class LLM primitives (`llm act`, `llm if`). 
 
-- **Version**: 1.46.22
+- **Version**: 1.46.24
 - **Keywords**: 99 bilingual (48 English + 51 Chinese)
 - **Built-in functions**: 378 stdlib functions (21 categories), 379 Chinese aliases, 757 total names
 - **Stdlib modules**: 21 modules (std.core, std.str, std.math, std.list, ...)
@@ -125,8 +125,9 @@ helen/
 └── skills/        # 16 built-in skills (distributed with package)
 ```
 
-## Recent Changes (v1.45.4 → v1.46.22)
+## Recent Changes (v1.45.4 → v1.46.24)
 
+- **v1.46.24**: Fix context overflow exceeding 100% — add hard limit safety net to graduated compression pipeline. Unify `DEFAULT_CONTEXT_WINDOW` constant (single source of truth in `token_utils.py`, `history.py` now imports instead of defining separately). Add `_hard_limit_trim()` function as final safety net when all compression layers are insufficient. Fixes issue where agent context could reach 106%+ after large tool outputs.
 - **v1.46.22**: Lower ChatSessionActor reasoning-effort from "high" to "medium" to prevent response truncation caused by reasoning_content consuming max_tokens budget. Add `finish_reason` tracking to transcript (`Message.finish_reason` field, `"finish"` streaming event in `http_llm.py`, propagation through `_record_llm_response_to_history` → `_add_to_history` → transcript serialization). Enables diagnosing truncation issues via `finish_reason: "length"` in transcript JSONL.
 - **v1.46.21**: Remove <thinking> tags from WebUI output (history + new messages) — cleaner UI while preserving reasoning transparency.
 - **v1.46.20**: Stream reasoning_content to frontend for thinking transparency — users can now see LLM reasoning process in real-time.

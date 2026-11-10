@@ -151,6 +151,23 @@ def graduated_compress(
                 last_layer = LAYER_AUTO_COMPACT
                 logger.warning("Auto-Compact: aggressive snip (last resort)")
 
+    # v1.46.24: Hard limit enforcement at 100%
+    # If still over 100% after all layers, apply aggressive trim to prevent
+    # context overflow. This is a safety net for edge cases where compression
+    # layers weren't enough (e.g., single very large message).
+    current_ratio = _calculate_usage_ratio(current_history, max_tokens)
+    if current_ratio > 1.0:
+        new_history = _hard_limit_trim(current_history, max_tokens)
+        new_ratio = _calculate_usage_ratio(new_history, max_tokens)
+        if new_ratio < current_ratio:
+            current_history = new_history
+            current_ratio = new_ratio
+            last_layer = "hard_limit"
+            logger.warning(
+                "Hard limit trim applied: usage was %.1f%%, now %.1f%%",
+                current_ratio * 100, new_ratio * 100
+            )
+
     # Return the last layer that actually compressed something
     return current_history, last_layer
 
@@ -784,6 +801,86 @@ def _structural_auto_compact(
     logger.debug(
         "Auto-Compact (structural): Archived %d turns into summary, kept %d recent + %d pinned",
         len(old_msgs), len(recent_msgs), len(pinned_old)
+    )
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# v1.46.24: Hard limit enforcement (100% safety net)
+# ---------------------------------------------------------------------------
+
+def _hard_limit_trim(history: list[Message], max_tokens: int) -> list[Message]:
+    """Emergency trim to bring usage under 100%.
+
+    This is a safety net applied after all graduated compression layers
+    have been tried but usage is still over 100%. More aggressive than
+    Layer 5 auto-compact.
+
+    Strategy:
+    1. Preserve all system messages (critical for context)
+    2. Preserve pinned messages (user explicitly requested)
+    3. Keep only the last 2 conversation messages for continuity
+    4. If still over 100%, truncate content of remaining messages
+
+    Args:
+        history: Conversation history
+        max_tokens: Maximum context window tokens
+
+    Returns:
+        Aggressively trimmed history
+    """
+    if not history or max_tokens <= 0:
+        return history
+
+    # Separate by category
+    system_msgs = [m for m in history if m.role == "system"]
+    pinned_msgs = [m for m in history if getattr(m, 'pinned', False) and m.role != "system"]
+    conversation_msgs = [m for m in history
+                        if m.role != "system" and not getattr(m, 'pinned', False)]
+
+    # Keep only last 2 conversation messages
+    recent = conversation_msgs[-2:] if len(conversation_msgs) > 2 else conversation_msgs
+
+    result = system_msgs + pinned_msgs + recent
+
+    # Check if we're still over budget
+    current_tokens = sum(m.token_count for m in result)
+
+    # If still over, truncate message contents
+    if current_tokens > max_tokens and recent:
+        # Calculate how much we need to cut
+        excess = current_tokens - max_tokens
+        # Try truncating the oldest "recent" message first
+        for msg in recent:
+            if excess <= 0:
+                break
+            content_text = _message_text(msg.content)
+            if len(content_text) > 200:
+                # Truncate this message
+                truncated_content = content_text[:200] + f"... [truncated, was {len(content_text)} chars]"
+                msg_copy = Message(
+                    role=msg.role,
+                    content=truncated_content,
+                    tool_calls=msg.tool_calls,
+                    tool_call_id=msg.tool_call_id,
+                    _token_count=0,  # Will be recalculated
+                    _model=msg._model,
+                    message_type=msg.message_type,
+                    priority=msg.priority,
+                    compressed=True,
+                    pinned=getattr(msg, 'pinned', False),
+                )
+                # Replace in result
+                for i, r in enumerate(result):
+                    if r is msg:
+                        result[i] = msg_copy
+                        break
+                excess -= (msg.token_count - msg_copy.token_count)
+
+    logger.debug(
+        "Hard limit trim: %d -> %d messages (system=%d, pinned=%d, recent=%d)",
+        len(history), len(result), len(system_msgs), len(pinned_msgs), len(recent)
     )
 
     return result
