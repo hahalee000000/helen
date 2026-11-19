@@ -40,6 +40,15 @@ import "lang.helen"
 import "contracts/contracts.helen"
 import "session_stats.helen"
 
+// ── P0: FFI 模块缓存（避免每次回调重复 import）──
+// ui.stream_emitter / ui.hint_queue / ui.status_emitter 在热路径中被频繁引用，
+// 每次 import 虽命中 Python 缓存，仍需 environment.define + WrappedPythonModule
+// 创建，一次响应几百个 chunk 累积上千次 FFI 穿越。
+// 启动时 import 一次，后续回调直接使用缓存引用。
+shared let _ffi_stream_emitter = null
+shared let _ffi_hint_queue_mod = null
+shared let _ffi_status_emitter = null
+
 /** ChatSessionActor - 长驻聊天 actor（唯一编排器）
  *
  * 参数:
@@ -259,7 +268,44 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
             } catch {}
         }
 
+        // P0: 一次性缓存 FFI 模块引用，消除热路径中的重复 import
+        fn _init_ffi_modules() {
+            try {
+                ensure_python_path()
+                import "ui.stream_emitter" as _se
+                _ffi_stream_emitter = _se
+            } catch RuntimeError err {
+                debug("_init_ffi_modules: stream_emitter unavailable: " + err.message)
+            } catch {
+                debug("_init_ffi_modules: stream_emitter unavailable")
+            }
+            try {
+                import "ui.hint_queue" as _hq
+                _ffi_hint_queue_mod = _hq
+            } catch RuntimeError err {
+                debug("_init_ffi_modules: hint_queue unavailable: " + err.message)
+            } catch {
+                debug("_init_ffi_modules: hint_queue unavailable")
+            }
+            try {
+                import "ui.status_emitter" as _st
+                _ffi_status_emitter = _st
+            } catch RuntimeError err {
+                debug("_init_ffi_modules: status_emitter unavailable: " + err.message)
+            } catch {
+                debug("_init_ffi_modules: status_emitter unavailable")
+            }
+            debug("FFI modules cached: se=" + str(_ffi_stream_emitter != null) + " hq=" + str(_ffi_hint_queue_mod != null) + " st=" + str(_ffi_status_emitter != null))
+        }
+
         fn _emit_actor_stream_event(event_type: str, data: str) {
+            try {
+                if _ffi_stream_emitter != null {
+                    _ffi_stream_emitter.emit_stream_event(event_type, data)
+                    return
+                }
+            } catch {}
+            // 回退：缓存未就绪时尝试动态 import（仅首次）
             try {
                 ensure_python_path()
                 import "ui.stream_emitter" as ActorStreamEmitter
@@ -268,6 +314,22 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
         }
 
         fn _actor_emit_statusline() {
+            try {
+                if _ffi_status_emitter != null {
+                    let stats = context_stats()
+                    let ratio = stats["usage_ratio"]
+                    let model_name
+                    let m = get_model()
+                    if m == null || m == "" {
+                        model_name = "unknown"
+                    } else {
+                        model_name = m
+                    }
+                    _ffi_status_emitter.emit_status(ratio, model_name)
+                    return
+                }
+            } catch {}
+            // 回退
             try {
                 import "ui.status_emitter" as _StatusMod
                 let stats = context_stats()
@@ -304,12 +366,33 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
         // ── 流式回调 ──
 
         fn _actor_chunks_cb(text) {
+            // P0: 使用缓存的 FFI 引用，避免每 chunk 的 import 开销
             try {
-                import "ui.stream_emitter" as _CancelCheck
-                if _CancelCheck.is_cancel_requested() {
-                    cancel_all_llm_calls()
-                    _CancelCheck.clear_cancel()
-                    return
+                if _ffi_stream_emitter != null {
+                    if _ffi_stream_emitter.is_cancel_requested() {
+                        cancel_all_llm_calls()
+                        _ffi_stream_emitter.clear_cancel()
+                        return
+                    }
+                }
+            } catch {}
+            // P1: 在 chunk 回调中也检查 hint queue，减少纯文本生成期间的 hint 延迟
+            // 与 tool_end 的 hint 注入互补：tool_end 注入到 LLM 上下文，
+            // chunk 级检查通过事件通知前端（用户可见更快）
+            try {
+                if _ffi_hint_queue_mod != null {
+                    let q = _ffi_hint_queue_mod.get_hint_queue()
+                    if q.has_pending("") {
+                        let hints = q.pop_all_hints("")
+                        if len(hints) > 0 {
+                            let parts = []
+                            for h in hints {
+                                parts = parts + ["[用户追加提示] " + h.text]
+                            }
+                            let merged = join(parts, "\n\n")
+                            _emit_actor_stream_event("hint_injected", merged)
+                        }
+                    }
                 }
             } catch {}
             _emit_actor_stream_event("llm_chunk", text)
@@ -323,31 +406,36 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
         fn _actor_tool_end_cb(tool_name, tool_result) {
             // v1.39.7: Check cancel at tool completion — closes the gap
             // where stop button was unresponsive during tool execution
+            // P0: 使用缓存的 FFI 引用
             try {
-                import "ui.stream_emitter" as _CancelCheck
-                if _CancelCheck.is_cancel_requested() {
-                    cancel_all_llm_calls()
-                    _CancelCheck.clear_cancel()
-                    return null
+                if _ffi_stream_emitter != null {
+                    if _ffi_stream_emitter.is_cancel_requested() {
+                        cancel_all_llm_calls()
+                        _ffi_stream_emitter.clear_cancel()
+                        return null
+                    }
                 }
             } catch {}
             _actor_emit_statusline()
             try {
-                import "ui.hint_queue" as _HintQueueMod
-                let q = _HintQueueMod.get_hint_queue()
-                // v1.39.4: HintQueue 已简化为单例模式，session_id 参数被忽略
-                let hints = q.pop_all_hints("")
-                if len(hints) == 0 { return null }
-                let parts = []
-                for h in hints {
-                    parts = parts + ["[用户追加提示] " + h.text]
+                // P0: 使用缓存的 hint_queue 引用
+                if _ffi_hint_queue_mod != null {
+                    let q = _ffi_hint_queue_mod.get_hint_queue()
+                    // v1.39.4: HintQueue 已简化为单例模式，session_id 参数被忽略
+                    let hints = q.pop_all_hints("")
+                    if len(hints) == 0 { return null }
+                    let parts = []
+                    for h in hints {
+                        parts = parts + ["[用户追加提示] " + h.text]
+                    }
+                    let merged = join(parts, "\n\n")
+                    _emit_actor_stream_event("hint_injected", merged)
+                    return merged
                 }
-                let merged = join(parts, "\n\n")
-                _emit_actor_stream_event("hint_injected", merged)
-                return merged
             } catch {
                 return null
             }
+            return null
         }
 
         // ── 斜杠命令处理（在 actor 上下文中执行，可访问工作记忆）──
@@ -448,9 +536,11 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
             // 这是最关键的防线：即使上一轮 cancel 后所有清理路径都失败，
             // 新一轮用户输入必须从干净状态开始。否则残留 flag 会干扰
             // 下面的 auto-compress LLM 调用和后续的 llm act。
+            // P0: 使用缓存的 FFI 引用
             try {
-                import "ui.stream_emitter" as _CancelCleanup
-                _CancelCleanup.clear_cancel()
+                if _ffi_stream_emitter != null {
+                    _ffi_stream_emitter.clear_cancel()
+                }
             } catch {}
 
             // 统计轮次
@@ -493,16 +583,20 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
                 // Fix: llm act 正常完成后清理残留 cancel flag。
                 // 如果用户取消了上一轮但回调未触发 clear_cancel()，
                 // flag 会残留并干扰后续 /compress 等需要 LLM 调用的操作。
+                // P0: 使用缓存的 FFI 引用
                 try {
-                    import "ui.stream_emitter" as _CancelCleanup
-                    _CancelCleanup.clear_cancel()
+                    if _ffi_stream_emitter != null {
+                        _ffi_stream_emitter.clear_cancel()
+                    }
                 } catch {}
             } catch RuntimeError err {
                 debug("ChatSessionActor: LLM error: " + err.message)
                 // Fix: 错误路径也要清理 cancel flag
+                // P0: 使用缓存的 FFI 引用
                 try {
-                    import "ui.stream_emitter" as _CancelCleanup
-                    _CancelCleanup.clear_cancel()
+                    if _ffi_stream_emitter != null {
+                        _ffi_stream_emitter.clear_cancel()
+                    }
                 } catch {}
                 let _llm_err_params = {"message": err.message}
                 let _llm_err_payload = {"i18n_key": "error.llmError", "params": _llm_err_params}
@@ -520,9 +614,11 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
             } catch {
                 debug("ChatSessionActor: LLM error (unknown)")
                 // Fix: 未知错误路径也要清理 cancel flag
+                // P0: 使用缓存的 FFI 引用
                 try {
-                    import "ui.stream_emitter" as _CancelCleanup
-                    _CancelCleanup.clear_cancel()
+                    if _ffi_stream_emitter != null {
+                        _ffi_stream_emitter.clear_cancel()
+                    }
                 } catch {}
                 let _llm_unknown_payload = {"i18n_key": "error.llmUnknown", "params": dict()}
                 _emit_actor_stream_event("error", json_stringify(_llm_unknown_payload))
@@ -882,6 +978,7 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
 
         // ── 初始化 ──
         _init_actor_output()
+        _init_ffi_modules()
         try { init_lang() } catch {}
         try { ContextManager.init(cwd) } catch {}
         // v1.30.3: 显式重建 pinned UUIDs

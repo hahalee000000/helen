@@ -381,44 +381,60 @@ class HelenBridge:
 
             helen_task = loop.run_in_executor(None, run_sync)
 
+            # P1: 用 sentinel 事件替代 100ms 轮询。
+            # helen_task 完成后注入 sentinel 到 event_queue，
+            # 主循环用 queue.get() 无超时阻塞——事件到达时立即处理，
+            # 不再有空转的 timeout 检测延迟。
+            def _on_helen_task_done(fut):
+                loop.call_soon_threadsafe(
+                    event_queue.put_nowait,
+                    {"type": "__helen_task_done__", "content": ""}
+                )
+            helen_task.add_done_callback(_on_helen_task_done)
+
             full_response = ""
             while True:
-                try:
-                    event = await asyncio.wait_for(event_queue.get(), timeout=0.1)
-                    event_type = event.get("type", "")
-                    content = event.get("content", "")
+                event = await event_queue.get()
+                event_type = event.get("type", "")
+                content = event.get("content", "")
 
-                    if event_type == "llm_chunk":
-                        full_response += content
-                        yield {"type": "llm_chunk", "content": content}
-                    elif event_type == "error":
-                        # v1.38.1: Surface LLM errors to the frontend instead of
-                        # silently dropping them. Previously the error events from
-                        # chat_session_actor were swallowed here, leaving the user
-                        # with no feedback when the LLM call failed.
-                        yield {"type": "error", "content": content}
-                    elif event_type in ("agent_start", "agent_end", "phase_start",
-                                        "processing_start", "processing_complete",
-                                        "llm_complete", "hint_injected", "status_update",
-                                        "helen_session_id"):
-                        yield {"type": event_type, "content": content}
-                except asyncio.TimeoutError:
-                    if helen_task.done():
-                        # 防御性 drain：reply.send() 在 _emit_actor_stream_event("processing_complete")
-                        # 之前执行，helen_task.done() 变 True 时可能有事件正在 call_soon_threadsafe
-                        # 排队途中。非阻塞地把残留事件消费掉，避免 processing_complete 丢失。
-                        while True:
-                            try:
-                                evt = event_queue.get_nowait()
-                                evt_type = evt.get("type", "")
-                                if evt_type in ("processing_complete", "llm_complete",
-                                                "agent_end", "status_update", "hint_injected",
-                                                "processing_start", "agent_start", "error"):
-                                    yield {"type": evt_type, "content": evt.get("content", "")}
-                            except asyncio.QueueEmpty:
-                                break
-                        break
-                    continue
+                if event_type == "__helen_task_done__":
+                    # Helen executor 线程已返回。
+                    # FFI callback 和 done_callback 存在竞态——FFI 可能在
+                    # done_callback 之后仍在 call_soon_threadsafe。
+                    # 用短超时的 drain 确保残留事件不被丢弃。
+                    while True:
+                        try:
+                            evt = await asyncio.wait_for(
+                                event_queue.get(), timeout=0.1
+                            )
+                            evt_type = evt.get("type", "")
+                            if evt_type == "__helen_task_done__":
+                                continue
+                            if evt_type in ("processing_complete", "llm_complete",
+                                            "agent_end", "status_update", "hint_injected",
+                                            "processing_start", "agent_start", "error",
+                                            "llm_chunk"):
+                                if evt_type == "llm_chunk":
+                                    full_response += evt.get("content", "")
+                                yield {"type": evt_type, "content": evt.get("content", "")}
+                        except asyncio.TimeoutError:
+                            break
+                    break
+                elif event_type == "llm_chunk":
+                    full_response += content
+                    yield {"type": "llm_chunk", "content": content}
+                elif event_type == "error":
+                    # v1.38.1: Surface LLM errors to the frontend instead of
+                    # silently dropping them. Previously the error events from
+                    # chat_session_actor were swallowed here, leaving the user
+                    # with no feedback when the LLM call failed.
+                    yield {"type": "error", "content": content}
+                elif event_type in ("agent_start", "agent_end", "phase_start",
+                                    "processing_start", "processing_complete",
+                                    "llm_complete", "hint_injected", "status_update",
+                                    "helen_session_id"):
+                    yield {"type": event_type, "content": content}
 
             response = await helen_task
 
