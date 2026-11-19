@@ -37,6 +37,7 @@ from typing import Any
 import httpx
 
 from helen.runtime.llm_runtime import LLMResponse, LLMRuntime
+from helen.runtime.loop_detector import ToolCallLoopDetector
 from helen.runtime.resilience import (
     classify_error,
     compute_backoff,
@@ -691,6 +692,9 @@ class HttpLLMRuntime(LLMRuntime):
         max_empty_retries = 2
         # v1.44: Track tool-calling turns for budget warning injection
         tool_turn_count = 0
+        # v1.46.27: Loop detection for repetitive tool calls
+        loop_detector = ToolCallLoopDetector()
+        loop_warning_injected = False
 
         while budget.consume():
             # Phase 9B: Reset reactive compactor per-turn state
@@ -833,6 +837,49 @@ class HttpLLMRuntime(LLMRuntime):
                                             hint_collector_fn(hint_msg)
                         except Exception as e:
                             logger.debug("on_tool_end callback error (non-fatal): %s", e)
+
+                # Phase 8D: v1.46.27 Loop detection — detect repetitive tool calls
+                loop_detector.record(tool_calls)
+                loop_result = loop_detector.check()
+                if loop_result.is_looping:
+                    logger.warning(
+                        "Tool call loop detected: %s repeated %d times (%s)",
+                        loop_result.signature.name if loop_result.signature else "unknown",
+                        loop_result.repeated_count,
+                        loop_result.loop_type,
+                    )
+                    if not loop_warning_injected:
+                        # First detection: inject hint to help LLM break out
+                        loop_hint_msg = {
+                            "role": "user",
+                            "content": (
+                                f"[Loop Detection Warning]\n"
+                                f"{loop_result.hint_message}"
+                            ),
+                        }
+                        messages.append(loop_hint_msg)
+                        if hint_collector_fn is not None:
+                            hint_collector_fn(loop_hint_msg)
+                        loop_warning_injected = True
+                    else:
+                        # Already warned once: force break the loop
+                        logger.error(
+                            "Loop persists after warning — forcing termination. "
+                            "The agent appears stuck."
+                        )
+                        # Build a forced final response
+                        final_text = (
+                            f"[Agent terminated: detected repetitive tool calls]\n\n"
+                            f"The agent was stuck in a loop calling "
+                            f"`{loop_result.signature.name}` "
+                            f"({loop_result.repeated_count} times, {loop_result.loop_type} pattern).\n\n"
+                            "This usually means:\n"
+                            "1. The task was already completed but the agent didn't recognize it\n"
+                            "2. The tool arguments were incorrect and kept failing\n"
+                            "3. The agent couldn't determine task completion criteria\n\n"
+                            "Please review the transcript and try a different approach."
+                        )
+                        break
 
                 # Phase 9B: Reactive compaction check after tool results
                 if getattr(self, 'enable_reactive_compaction', False) and \
@@ -1380,6 +1427,9 @@ class HttpLLMRuntime(LLMRuntime):
         max_empty_retries = 2
         # v1.44: Track tool-calling turns for budget warning injection
         tool_turn_count = 0
+        # v1.46.27: Loop detection for repetitive tool calls
+        loop_detector = ToolCallLoopDetector()
+        loop_warning_injected = False
         # P2: Stream network retry (separate from iteration budget)
         # Only retries transient errors BEFORE stream is established
         stream_retry = 0
@@ -1723,6 +1773,52 @@ class HttpLLMRuntime(LLMRuntime):
                                 logger.debug(
                                     "on_tool_end callback error (non-fatal): %s", e
                                 )
+
+                    # Phase 8D: v1.46.27 Loop detection — detect repetitive tool calls
+                    loop_detector.record(tool_call_list)
+                    loop_result = loop_detector.check()
+                    if loop_result.is_looping:
+                        logger.warning(
+                            "Tool call loop detected (stream): %s repeated %d times (%s)",
+                            loop_result.signature.name if loop_result.signature else "unknown",
+                            loop_result.repeated_count,
+                            loop_result.loop_type,
+                        )
+                        if not loop_warning_injected:
+                            # First detection: inject hint to help LLM break out
+                            loop_hint_content = (
+                                f"[Loop Detection Warning]\n"
+                                f"{loop_result.hint_message}"
+                            )
+                            loop_hint_msg = {
+                                "role": "user",
+                                "content": loop_hint_content,
+                            }
+                            messages.append(loop_hint_msg)
+                            yield {"type": "hint", "content": loop_hint_content}
+                            if hint_collector_fn is not None:
+                                hint_collector_fn(loop_hint_msg)
+                            loop_warning_injected = True
+                        else:
+                            # Already warned once: force break the loop
+                            logger.error(
+                                "Loop persists after warning (stream) — forcing termination. "
+                                "The agent appears stuck."
+                            )
+                            # Yield error event and break
+                            error_content = (
+                                f"[Agent terminated: detected repetitive tool calls]\n\n"
+                                f"The agent was stuck in a loop calling "
+                                f"`{loop_result.signature.name}` "
+                                f"({loop_result.repeated_count} times, {loop_result.loop_type} pattern).\n\n"
+                                "This usually means:\n"
+                                "1. The task was already completed but the agent didn't recognize it\n"
+                                "2. The tool arguments were incorrect and kept failing\n"
+                                "3. The agent couldn't determine task completion criteria\n\n"
+                                "Please review the transcript and try a different approach."
+                            )
+                            yield {"type": "error", "message": error_content}
+                            return
 
                     # Phase 9B: Reactive compaction check after tool results (stream)
                     if getattr(self, 'enable_reactive_compaction', False) and \

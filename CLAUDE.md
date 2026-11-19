@@ -125,8 +125,9 @@ helen/
 └── skills/        # 16 built-in skills (distributed with package)
 ```
 
-## Recent Changes (v1.45.4 → v1.46.24)
+## Recent Changes (v1.45.4 → v1.46.27)
 
+- **v1.46.27**: Add tool call loop detection — detect and break agents stuck in repetitive tool call patterns. New `ToolCallLoopDetector` class (helen/runtime/loop_detector.py) with two detection strategies: exact repeat (same function + same arguments N times) and sliding window pattern (K duplicates in last M calls). On first detection, injects a hint message to help LLM break out; on second detection, forces termination with diagnostic message. Integrated into both `act()` and `act_stream()` in http_llm.py (Phase 8D). Fixes issue where agents could loop indefinitely on operations like `mv`, `git status`, or `ls` without making progress.
 - **v1.46.24**: Fix context overflow exceeding 100% — add hard limit safety net to graduated compression pipeline. Unify `DEFAULT_CONTEXT_WINDOW` constant (single source of truth in `token_utils.py`, `history.py` now imports instead of defining separately). Add `_hard_limit_trim()` function as final safety net when all compression layers are insufficient. Fixes issue where agent context could reach 106%+ after large tool outputs.
 - **v1.46.22**: Lower ChatSessionActor reasoning-effort from "high" to "medium" to prevent response truncation caused by reasoning_content consuming max_tokens budget. Add `finish_reason` tracking to transcript (`Message.finish_reason` field, `"finish"` streaming event in `http_llm.py`, propagation through `_record_llm_response_to_history` → `_add_to_history` → transcript serialization). Enables diagnosing truncation issues via `finish_reason: "length"` in transcript JSONL.
 - **v1.46.21**: Remove <thinking> tags from WebUI output (history + new messages) — cleaner UI while preserving reasoning transparency.
