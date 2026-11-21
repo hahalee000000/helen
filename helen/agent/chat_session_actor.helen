@@ -280,6 +280,7 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
                 debug("_init_ffi_modules: stream_emitter unavailable")
             }
             try {
+                ensure_python_path()
                 import "ui.hint_queue" as _hq
                 _ffi_hint_queue_mod = _hq
             } catch RuntimeError err {
@@ -376,22 +377,16 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
                     }
                 }
             } catch {}
-            // P1: 在 chunk 回调中也检查 hint queue，减少纯文本生成期间的 hint 延迟
-            // 与 tool_end 的 hint 注入互补：tool_end 注入到 LLM 上下文，
-            // chunk 级检查通过事件通知前端（用户可见更快）
+            // P1: 在 chunk 回调中也检查 hint queue，通知前端 hint 已排队
+            // 注意：这里只检查 has_pending()，不 pop！pop 操作留给 tool_end 回调，
+            // 因为只有 tool_end 回调能将 hint 注入 LLM 上下文。
+            // 如果这里 pop 了，后续 tool_end 回调就找不到 hint 了。
             try {
                 if _ffi_hint_queue_mod != null {
                     let q = _ffi_hint_queue_mod.get_hint_queue()
                     if q.has_pending("") {
-                        let hints = q.pop_all_hints("")
-                        if len(hints) > 0 {
-                            let parts = []
-                            for h in hints {
-                                parts = parts + ["[用户追加提示] " + h.text]
-                            }
-                            let merged = join(parts, "\n\n")
-                            _emit_actor_stream_event("hint_injected", merged)
-                        }
+                        // 只通知前端 hint 已排队，不 pop
+                        _emit_actor_stream_event("hint_queued", "hint pending in queue")
                     }
                 }
             } catch {}
@@ -419,8 +414,15 @@ agent ChatSessionActor(cwd: str, session_id: str, env_context: str, reply: Chann
             _actor_emit_statusline()
             try {
                 // P0: 使用缓存的 hint_queue 引用
-                if _ffi_hint_queue_mod != null {
-                    let q = _ffi_hint_queue_mod.get_hint_queue()
+                let hint_mod = _ffi_hint_queue_mod
+                if hint_mod == null {
+                    // 回退：缓存未就绪时尝试动态 import
+                    ensure_python_path()
+                    import "ui.hint_queue" as FallbackHintMod
+                    hint_mod = FallbackHintMod
+                }
+                if hint_mod != null {
+                    let q = hint_mod.get_hint_queue()
                     // v1.39.4: HintQueue 已简化为单例模式，session_id 参数被忽略
                     let hints = q.pop_all_hints("")
                     if len(hints) == 0 { return null }
