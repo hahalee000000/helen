@@ -7,7 +7,7 @@ For the broader multi-project layout, see `../CLAUDE.md`.
 
 **Helen** — a prompt-first Agent programming language (AI-native DSL). Combines deterministic constructs (variables, functions, control flow) with first-class LLM primitives (`llm act`, `llm if`). 
 
-- **Version**: 1.46.24
+- **Version**: 1.46.28
 - **Keywords**: 99 bilingual (48 English + 51 Chinese)
 - **Built-in functions**: 378 stdlib functions (21 categories), 379 Chinese aliases, 757 total names
 - **Stdlib modules**: 21 modules (std.core, std.str, std.math, std.list, ...)
@@ -125,8 +125,9 @@ helen/
 └── skills/        # 16 built-in skills (distributed with package)
 ```
 
-## Recent Changes (v1.45.4 → v1.46.27)
+## Recent Changes (v1.45.4 → v1.46.28)
 
+- **v1.46.28**: Fix tool call summary polluting transcript + improve loop detection warnings — tool call summary messages ("Tool calls: [...]") are now kept in-memory only (for LLM context) but not saved to transcript, preventing consecutive assistant messages that violate OpenAI API format. Added `persist` parameter to `_add_to_history()` in llm_mixin.py. Enhanced loop detection warning messages to be more explicit and forceful, using imperative language ("STOP IMMEDIATELY", "You MUST do ONE of the following NOW") to help LLMs understand they need to break repetitive patterns. Fixes issue where agents would loop on same tool call, and subsequent "Tool calls:" summary messages would corrupt transcript with invalid message sequences.
 - **v1.46.27**: Add tool call loop detection — detect and break agents stuck in repetitive tool call patterns. New `ToolCallLoopDetector` class (helen/runtime/loop_detector.py) with two detection strategies: exact repeat (same function + same arguments N times) and sliding window pattern (K duplicates in last M calls). On first detection, injects a hint message to help LLM break out; on second detection, forces termination with diagnostic message. Integrated into both `act()` and `act_stream()` in http_llm.py (Phase 8D). Fixes issue where agents could loop indefinitely on operations like `mv`, `git status`, or `ls` without making progress.
 - **v1.46.24**: Fix context overflow exceeding 100% — add hard limit safety net to graduated compression pipeline. Unify `DEFAULT_CONTEXT_WINDOW` constant (single source of truth in `token_utils.py`, `history.py` now imports instead of defining separately). Add `_hard_limit_trim()` function as final safety net when all compression layers are insufficient. Fixes issue where agent context could reach 106%+ after large tool outputs.
 - **v1.46.22**: Lower ChatSessionActor reasoning-effort from "high" to "medium" to prevent response truncation caused by reasoning_content consuming max_tokens budget. Add `finish_reason` tracking to transcript (`Message.finish_reason` field, `"finish"` streaming event in `http_llm.py`, propagation through `_record_llm_response_to_history` → `_add_to_history` → transcript serialization). Enables diagnosing truncation issues via `finish_reason: "length"` in transcript JSONL.

@@ -1625,7 +1625,8 @@ errors: [Fixed token expiration handling - was missing refresh logic]
     def _add_to_history(self: Any, role: str, content: str | list[dict],
                         tool_calls: list[dict] | None = None,
                         tool_call_id: str | None = None,
-                        finish_reason: str | None = None) -> None:
+                        finish_reason: str | None = None,
+                        persist: bool = True) -> None:
         """Add a message to the conversation history.
 
         Phase 2 SSOT: When TranscriptStore is enabled, write ONLY to it.
@@ -1641,6 +1642,9 @@ errors: [Fixed token expiration handling - was missing refresh logic]
                transcript save of tool call messages.
         v1.46.22: Added finish_reason parameter to record LLM stop reason
                   ("stop", "length", etc.) for truncation diagnostics.
+        v1.46.28: Added persist parameter to control whether message is saved
+                  to transcript. When False, message is only kept in memory
+                  for LLM context but not written to transcript store.
         """
         agent_ctx = getattr(self, '_agent_context', None)
 
@@ -1677,13 +1681,14 @@ errors: [Fixed token expiration handling - was missing refresh logic]
 
         # Phase 2 SSOT: Write to TranscriptStore when enabled (NO dual-write)
         # v1.29: Only access transcript_store if we're going to write to it
-        if agent_ctx is not None and transcript_level != "none":
+        # v1.46.28: Skip transcript write if persist=False (in-memory only)
+        if persist and agent_ctx is not None and transcript_level != "none":
             # Access transcript store (triggers lazy initialization if needed)
             if agent_ctx.transcript_store is not None:
                 # Write to TranscriptStore
                 # v1.29: "memory" mode = don't persist to disk
-                persist = (transcript_level == "persistent")
-                agent_ctx.transcript_store.append(msg, persist=persist)
+                persist_to_disk = (transcript_level == "persistent")
+                agent_ctx.transcript_store.append(msg, persist=persist_to_disk)
                 # Phase 7: Update working memory from message (must happen
                 # regardless of storage backend — early return would skip it)
                 # For multimodal content, extract text portion for working memory
@@ -1694,6 +1699,7 @@ errors: [Fixed token expiration handling - was missing refresh logic]
                 return
 
         # Fallback: write to _interpreter_history when TranscriptStore disabled or transcript_level="none"
+        # v1.46.28: Also write here when persist=False (in-memory only for LLM context)
         self._interpreter_history.append(msg)
 
         # Phase 7: Update working memory from message
@@ -1771,7 +1777,10 @@ errors: [Fixed token expiration handling - was missing refresh logic]
                 parts.append(f"[{name}({args_display}) → {result_display}]")
 
             tool_summary = "Tool calls: " + " | ".join(parts)
-            self._add_to_history("assistant", tool_summary)
+            # v1.46.28: persist=False — tool call summary is for LLM context only,
+            # not saved to transcript. This prevents consecutive assistant messages
+            # in transcript (which violates OpenAI API message format).
+            self._add_to_history("assistant", tool_summary, persist=False)
 
         # Record the final text response
         if text:

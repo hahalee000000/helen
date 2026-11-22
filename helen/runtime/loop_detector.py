@@ -153,12 +153,14 @@ class ToolCallLoopDetector:
                 signature=first,
                 repeated_count=count,
                 message=(
-                    f"You have called `{first.name}` with the same arguments "
-                    f"{count} times in a row without progress. "
-                    "This indicates the task may already be complete, "
-                    "the arguments are incorrect, or you need a different approach. "
-                    "Please verify the operation succeeded and provide a final summary, "
-                    "or try a different strategy if it failed."
+                    f"**STOP IMMEDIATELY**: You have called `{first.name}` with identical "
+                    f"arguments {count} times without making any progress.\n\n"
+                    "**You MUST do ONE of the following NOW:**\n"
+                    "1. If the task is complete: Provide a final summary of what was accomplished\n"
+                    "2. If the operation failed: Explain what went wrong and try a DIFFERENT approach\n"
+                    "3. If you need more information: Ask the user for clarification\n\n"
+                    "**DO NOT** call `{first.name}` again with the same arguments. "
+                    "This is your final warning before forced termination."
                 ),
             )
 
@@ -194,12 +196,15 @@ class ToolCallLoopDetector:
                 signature=sig,
                 repeated_count=count,
                 message=(
-                    f"Analysis of your last {len(window)} tool calls shows that "
-                    f"`{sig.name}` was called {count} times with similar arguments "
-                    "but without making progress. "
-                    "This pattern suggests you may be stuck in a loop. "
-                    "Please stop the current approach, verify what has been done, "
-                    "and provide a final answer or try a fundamentally different strategy."
+                    f"**STOP IMMEDIATELY**: Analysis of your last {len(window)} tool calls shows "
+                    f"`{sig.name}` was called {count} times with similar arguments but without "
+                    "making any progress. You are stuck in a repetitive pattern.\n\n"
+                    "**You MUST do ONE of the following NOW:**\n"
+                    "1. If the task is complete: Provide a final summary immediately\n"
+                    "2. If the current approach is failing: Switch to a COMPLETELY DIFFERENT strategy\n"
+                    "3. If you're uncertain: Ask the user for guidance\n\n"
+                    f"**DO NOT** call `{sig.name}` again with similar arguments. "
+                    "Continuing this pattern will result in forced termination."
                 ),
             )
 
@@ -230,7 +235,7 @@ class ToolCallLoopDetector:
         except (json.JSONDecodeError, TypeError):
             args_display = signature.args_key[:100]
 
-        header = f"[Loop Detection: {loop_type} repeat detected]"
+        header = f"[CRITICAL LOOP DETECTION: {loop_type} repeat detected]"
         detail = f"Tool: {signature.name}({args_display}) x{repeated_count}"
 
         return f"{header}\n{detail}\n\n{message}"
