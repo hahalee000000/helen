@@ -55,9 +55,15 @@ _memento_path = Path.cwd() / ".helen" / "current_session_id"
 if _memento_path.exists():
     try:
         _data = json.loads(_memento_path.read_text(encoding="utf-8"))
-        # v1.46.12: PID 验证——忽略来自其他进程的 memento
-        _memento_pid = _data.get("pid", 0)
-        if _memento_pid and not _is_our_process(_memento_pid):
+        # v1.46.29: PID 验证——无 pid 字段的旧 memento 不可信，直接忽略
+        # 修复：pid 缺失时 data.get("pid", 0) 返回 0，0 is falsy 导致验证被跳过
+        _memento_pid = _data.get("pid")
+        if _memento_pid is None:
+            print(
+                f"[Session] memento 无 pid 字段（旧格式）— 忽略",
+                file=sys.stderr,
+            )
+        elif not _is_our_process(_memento_pid):
             print(
                 f"[Session] memento PID 不匹配 (memento={_memento_pid}, own={os.getpid()}) — 忽略",
                 file=sys.stderr,

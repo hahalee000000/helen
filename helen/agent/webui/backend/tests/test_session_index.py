@@ -355,8 +355,12 @@ class TestMementoPidValidation:
         # Since sid has a transcript, fallback should find it
         assert result == sid  # fallback finds the only session with transcript
 
-    def test_memento_without_pid_field_accepted(self, session_index, temp_agent_dir):
-        """旧 memento 无 pid 字段 -> 向后兼容，接受"""
+    def test_memento_without_pid_field_rejected(self, session_index, temp_agent_dir):
+        """v1.46.29: 旧 memento 无 pid 字段 -> 不可信，回退到最近 session
+
+        修复：pid 缺失时 data.get("pid", 0) 返回 0，0 is falsy 导致 PID 验证被跳过，
+        损坏的 memento（如 child="test-session"）被无条件接受。
+        """
         sid = "legacy-session"
         _write_transcript(temp_agent_dir, sid, [
             json.dumps({"type": "session_meta", "timestamp": 1.0}),
@@ -365,7 +369,44 @@ class TestMementoPidValidation:
         memento_path.write_text(json.dumps({"main": "main-sid", "child": sid}))
 
         result = session_index.get_current_helen_session_id()
-        assert result == sid
+        # Without pid, memento is rejected -> fallback finds sid as the only valid session
+        assert result == sid  # fallback finds it, but via _fallback_to_recent_session
+
+    def test_memento_without_pid_ignores_stale_child(self, session_index, temp_agent_dir):
+        """v1.46.29: 无 pid memento 指向 stale session -> 回退到最近的有效 session
+
+        复现原始 bug：memento {"child": "test-session", "main": "test-session"}
+        无 pid，test-session transcript 只有 "Hello" 测试消息。
+        旧代码：PID 验证被跳过，直接使用 test-session。
+        新代码：无 pid → 拒绝 memento → 回退到最近修改的有效 session。
+        """
+        import time as _time
+        # stale "test-session"（旧 memento 指向它）
+        stale_sid = "test-session"
+        _write_transcript(temp_agent_dir, stale_sid, [
+            json.dumps({"type": "session_meta", "timestamp": 1.0}),
+            json.dumps({"type": "message", "role": "user", "content": "Hello", "uuid": "u1"}),
+        ])
+        # 有效的真实 session
+        real_sid = "session_1795399849_fa62203b"
+        _write_transcript(temp_agent_dir, real_sid, [
+            json.dumps({"type": "session_meta", "timestamp": 2.0}),
+            json.dumps({"type": "message", "role": "user", "content": "真实对话", "uuid": "u2"}),
+        ])
+        # 确保 real_sid 的 mtime 更新
+        real_transcript = temp_agent_dir / ".helen" / "sessions" / real_sid / "transcript.jsonl"
+        _time.sleep(0.05)
+        real_transcript.write_text(
+            real_transcript.read_text() + "\n", encoding="utf-8"
+        )
+
+        # 无 pid 的旧 memento 指向 stale session
+        memento_path = temp_agent_dir / ".helen" / "current_session_id"
+        memento_path.write_text(json.dumps({"main": stale_sid, "child": stale_sid}))
+
+        result = session_index.get_current_helen_session_id()
+        # 新代码：拒绝无 pid memento，回退到最近的有效 session
+        assert result == real_sid
 
 
 class TestFallbackToRecentSession:

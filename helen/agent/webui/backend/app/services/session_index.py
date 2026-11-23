@@ -74,9 +74,13 @@ def get_current_helen_session_id() -> str:
         memento_content = memento_path.read_text(encoding="utf-8").strip()
         if memento_content.startswith("{"):
             data = json.loads(memento_content)
-            # v1.46.12: PID 验证——忽略来自其他进程的 memento
-            memento_pid = data.get("pid", 0)
-            if memento_pid and not _is_our_process(memento_pid):
+            # v1.46.29: PID 验证——无 pid 字段的旧 memento 不可信，直接回退
+            # 修复：pid 缺失时 data.get("pid", 0) 返回 0，0 is falsy 导致验证被跳过
+            memento_pid = data.get("pid")
+            if memento_pid is None:
+                # 旧格式 memento（v1.46.13 之前），无 PID 验证，不可信
+                return _fallback_to_recent_session(cwd)
+            if not _is_our_process(memento_pid):
                 return _fallback_to_recent_session(cwd)
             child_sid = data.get("child", "")
             if child_sid and get_transcript_path(child_sid) is not None:
