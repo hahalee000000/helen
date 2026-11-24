@@ -77,6 +77,11 @@ class ToolCallLoopDetector:
         exact_repeat_threshold: Consecutive identical calls to trigger (default: 3)
         window_size: Sliding window for pattern detection (default: 10)
         window_repeat_threshold: Duplicates within window to trigger (default: 5)
+        tool_only_repeat_threshold: Consecutive calls to same tool (any args) to trigger (default: 15)
+
+    v1.46.30: Added tool-name-only repeat detection for cases where agent calls
+    the same tool (e.g., shell_exec with different sed commands) repeatedly without
+    making progress.
     """
 
     def __init__(
@@ -84,10 +89,12 @@ class ToolCallLoopDetector:
         exact_repeat_threshold: int = 3,
         window_size: int = 10,
         window_repeat_threshold: int = 5,
+        tool_only_repeat_threshold: int = 15,
     ):
         self.exact_repeat_threshold = exact_repeat_threshold
         self.window_size = window_size
         self.window_repeat_threshold = window_repeat_threshold
+        self.tool_only_repeat_threshold = tool_only_repeat_threshold
 
         # History of tool call signatures
         self._history: list[ToolCallSignature] = []
@@ -128,6 +135,13 @@ class ToolCallLoopDetector:
         if window_result.is_looping:
             return window_result
 
+        # Strategy 3 (v1.46.30): Check for consecutive calls to same tool (any args)
+        # This catches cases like agent repeatedly calling shell_exec with different
+        # sed commands to read different parts of a file without making progress
+        tool_only_result = self._check_tool_name_repeat()
+        if tool_only_result.is_looping:
+            return tool_only_result
+
         return LoopDetectionResult(is_looping=False)
 
     def _check_exact_repeats(self) -> LoopDetectionResult:
@@ -159,7 +173,7 @@ class ToolCallLoopDetector:
                     "1. If the task is complete: Provide a final summary of what was accomplished\n"
                     "2. If the operation failed: Explain what went wrong and try a DIFFERENT approach\n"
                     "3. If you need more information: Ask the user for clarification\n\n"
-                    "**DO NOT** call `{first.name}` again with the same arguments. "
+                    f"**DO NOT** call `{first.name}` again with the same arguments. "
                     "This is your final warning before forced termination."
                 ),
             )
@@ -217,6 +231,75 @@ class ToolCallLoopDetector:
             )
 
         return LoopDetectionResult(is_looping=False)
+
+    def _check_tool_name_repeat(self) -> LoopDetectionResult:
+        """Check if the last N calls all use the same tool (any arguments).
+
+        This catches patterns like agent repeatedly calling shell_exec with
+        different sed/grep/cat commands but not making progress.
+
+        v1.46.30: New detection strategy.
+        """
+        if len(self._history) < self.tool_only_repeat_threshold:
+            return LoopDetectionResult(is_looping=False)
+
+        # Check the last N tool names
+        recent = self._history[-self.tool_only_repeat_threshold:]
+        first_name = recent[0].name
+
+        # All must be the same tool name
+        if all(sig.name == first_name for sig in recent):
+            # Count how many consecutive (go back further)
+            count = self.tool_only_repeat_threshold
+            for i in range(len(self._history) - self.tool_only_repeat_threshold - 1, -1, -1):
+                if self._history[i].name == first_name:
+                    count += 1
+                else:
+                    break
+
+            # Create a synthetic signature for the hint
+            synthetic_sig = ToolCallSignature(
+                name=first_name,
+                args_key="(various arguments)"
+            )
+
+            hint = self._build_tool_name_hint(
+                tool_name=first_name,
+                repeated_count=count,
+            )
+
+            return LoopDetectionResult(
+                is_looping=True,
+                loop_type="tool-name-repeat",
+                repeated_count=count,
+                signature=synthetic_sig,
+                hint_message=hint,
+            )
+
+        return LoopDetectionResult(is_looping=False)
+
+    def _build_tool_name_hint(
+        self,
+        tool_name: str,
+        repeated_count: int,
+    ) -> str:
+        """Build a hint message for tool-name-only repeat detection."""
+        header = f"[CRITICAL LOOP DETECTION: tool-name-repeat detected]"
+        detail = f"Tool: {tool_name} called {repeated_count} times with varying arguments but no progress"
+
+        message = (
+            f"**STOP IMMEDIATELY**: You have called `{tool_name}` {repeated_count} times "
+            "with different arguments but without making any meaningful progress. "
+            "You are stuck in a repetitive pattern of reading code or running commands.\n\n"
+            "**You MUST do ONE of the following NOW:**\n"
+            "1. If you have gathered enough information: Provide your final answer or summary\n"
+            "2. If you're trying to fix something: Make the fix and stop investigating\n"
+            "3. If you're lost: Ask the user for clarification on what to do next\n\n"
+            f"**DO NOT** call `{tool_name}` again. "
+            "This is your final warning before forced termination."
+        )
+
+        return f"{header}\n{detail}\n\n{message}"
 
     def _build_hint(
         self,

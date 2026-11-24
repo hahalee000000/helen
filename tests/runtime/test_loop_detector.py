@@ -155,7 +155,7 @@ class TestToolCallLoopDetector:
         assert result.is_looping
         assert result.hint_message
         assert "read_file" in result.hint_message
-        assert "Loop Detection" in result.hint_message
+        assert "LOOP DETECTION" in result.hint_message
         assert "same arguments" in result.hint_message or "similar arguments" in result.hint_message
 
     def test_parallel_tool_calls_recorded(self):
@@ -243,3 +243,52 @@ class TestLoopDetectorIntegration:
 
         result = detector.check()
         assert not result.is_looping
+
+    def test_tool_name_repeat_sed_commands(self):
+        """Simulate agent repeatedly calling sed with different line ranges.
+
+        This is the exact scenario from v1.46.29 where agent was stuck reading
+        different parts of a file without making progress.
+        """
+        # Default threshold is 15, use a smaller one for testing
+        detector = ToolCallLoopDetector(tool_only_repeat_threshold=5)
+
+        # Agent calls sed with different line ranges (different arguments!)
+        sed_calls = [
+            {"function": {"name": "shell_exec", "arguments": '{"command": "sed -n \'10,20p\' file.py"}'}},
+            {"function": {"name": "shell_exec", "arguments": '{"command": "sed -n \'20,30p\' file.py"}'}},
+            {"function": {"name": "shell_exec", "arguments": '{"command": "sed -n \'30,40p\' file.py"}'}},
+            {"function": {"name": "shell_exec", "arguments": '{"command": "sed -n \'40,50p\' file.py"}'}},
+            {"function": {"name": "shell_exec", "arguments": '{"command": "sed -n \'50,60p\' file.py"}'}},
+        ]
+
+        for sed_call in sed_calls:
+            detector.record([sed_call])
+            # Check after each call — should not trigger yet (need 5)
+
+        # After 5 calls to shell_exec (even with different args), should detect
+        result = detector.check()
+        assert result.is_looping
+        assert result.loop_type == "tool-name-repeat"
+        assert result.repeated_count >= 5
+        assert "shell_exec" in result.hint_message
+        assert "different arguments" in result.hint_message or "varying arguments" in result.hint_message
+
+    def test_tool_name_repeat_does_not_trigger_on_mixed_tools(self):
+        """Verify tool-name-repeat doesn't trigger when tools are mixed."""
+        detector = ToolCallLoopDetector(tool_only_repeat_threshold=5)
+
+        # Mix of different tools
+        mixed_calls = [
+            {"function": {"name": "shell_exec", "arguments": '{"command": "ls"}'}},
+            {"function": {"name": "read_file", "arguments": '{"path": "test.py"}'}},
+            {"function": {"name": "shell_exec", "arguments": '{"command": "pwd"}'}},
+            {"function": {"name": "write_file", "arguments": '{"path": "out.txt"}'}},
+            {"function": {"name": "shell_exec", "arguments": '{"command": "cat out.txt"}'}},
+        ]
+
+        for call in mixed_calls:
+            detector.record([call])
+
+        result = detector.check()
+        assert not result.is_looping  # Mixed tools, no pattern
