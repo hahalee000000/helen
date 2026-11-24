@@ -170,7 +170,7 @@ fn build_help_text(): str {
     text = text + _t("| `/version` | View Helen language version |\n", "| `/version` | 查看 Helen 语言版本 |\n")
     text = text + _t("| `/session` | View current session info (ID, directory, transcript file count) |\n", "| `/session` | 查看当前会话信息（ID、目录、transcript 文件数） |\n")
     text = text + _t("| `/session list` | List all sessions (creation time, status, message count) |\n", "| `/session list` | 列出所有会话（创建时间、状态、消息数） |\n")
-    text = text + _t("| `/session delete <sid>` | Delete specified session (cascades to spawned) |\n", "| `/session delete <sid>` | 删除指定会话（级联删除 spawn 树） |\n")
+    text = text + _t("| `/session delete <sid>` | Delete specified session (cascades to spawned); if matches current session, delegates to /clear-session |\n", "| `/session delete <sid>` | 删除指定会话（级联删除 spawn 树）；若匹配当前会话则委托 /clear-session |\n")
     text = text + _t("| `/session view <sid>` | View user messages in specified session |\n", "| `/session view <sid>` | 查看指定会话的用户消息 |\n")
     text = text + _t("| `/pin <uuid>` | Pin a message so it is preserved under all compression strategies |\n", "| `/pin <uuid>` | 钉住指定消息，使其在所有压缩策略下均被保留 |\n")
     text = text + _t("| `/unpin <uuid>` | Unpin a message |\n", "| `/unpin <uuid>` | 取消钉住指定消息 |\n")
@@ -1008,10 +1008,12 @@ fn _cmd_session_list(args: list): str {
     return text
 }
 
-/** /session delete <sid> — 删除指定 session */
+/** /session delete <sid> — 删除指定 session
+ *  v1.46.31: 当 target 匹配当前 session 时，委托给 _cmd_clear_session 处理，
+ *  实现统一的删除入口（/session delete 和 /clear-session 行为一致）。 */
 fn _cmd_session_delete(args: list): str {
     if len(args) == 0 {
-        return _t("Usage: /session delete <session_id>\nDelete a session and its spawned sessions (cascade).\nAccepts full ID, prefix, or short ID with '…'.", "用法: /session delete <session_id>\n删除指定会话及其 spawn 树（级联）。\n支持完整 ID、前缀、或含 '…' 的短 ID。")
+        return _t("Usage: /session delete <session_id>\nDelete a session and its spawned sessions (cascade).\nAccepts full ID, prefix, or short ID with '…'.\nIf the target matches the current session, delegates to /clear-session.", "用法: /session delete <session_id>\n删除指定会话及其 spawn 树（级联）。\n支持完整 ID、前缀、或含 '…' 的短 ID。\n若目标匹配当前会话，则委托给 /clear-session 处理。")
     }
     let target_input = args[0]
 
@@ -1022,11 +1024,11 @@ fn _cmd_session_delete(args: list): str {
                _t("Tip: copy full ID from `/session list` output, or use enough prefix to be unique", "提示: 从 `/session list` 输出复制完整 ID，或用足够长的唯一前缀")
     }
 
-    // 禁止删除当前 session
+    // 当前 session：委托给 /clear-session 逻辑（级联删除 + memento 清理 + actor 重启）
     let current_sid = ""
     try { current_sid = get_session_id() } catch {}
     if target == current_sid {
-        return _t("❌ Cannot delete the current session. Use `/clear-session` instead if you want to reset.", "❌ 不能删除当前会话。如需重置请使用 `/clear-session`。")
+        return _cmd_clear_session([])
     }
 
     // 在所有 session 中查找（绕过 list_sessions scope bug）

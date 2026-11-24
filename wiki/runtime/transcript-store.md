@@ -324,7 +324,7 @@ let r = delete_session("session_1720435200_a1b2c3d4")
 // {"status": "ok", "session_id": "...", "freed_bytes": 10240, "message": "..."}
 ```
 
-**Safety restriction**: Cannot delete the current session; use `delete_current_session()` instead.
+**Note**: `delete_session()` cannot delete the current session (use `delete_current_session()` instead). However, the `/session delete <sid>` slash command accepts the current session ID and automatically delegates to `/clear-session` for proper cleanup (v1.46.31+).
 
 #### delete_current_session(confirm?)
 
