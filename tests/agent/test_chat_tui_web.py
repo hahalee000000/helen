@@ -117,10 +117,12 @@ class TestGetSavedChildSid:
 
     def test_returns_child_sid_from_memento(self, fake_env, tmp_path, monkeypatch):
         """Memento with child SID -> returns it."""
+        import os
         helen_dir = tmp_path / ".helen"
         helen_dir.mkdir()
         memento = helen_dir / "current_session_id"
-        memento.write_text(json.dumps({"main": "main-sid-123", "child": "child-sid-456"}))
+        # v1.46.29+: memento must include pid field
+        memento.write_text(json.dumps({"main": "main-sid-123", "child": "child-sid-456", "pid": os.getpid()}))
         monkeypatch.chdir(tmp_path)
 
         _remove_chat_tui_web()
@@ -144,10 +146,12 @@ class TestGetSavedChildSid:
 
     def test_handles_empty_main_sid(self, fake_env, tmp_path, monkeypatch):
         """Memento with empty main SID -> doesn't call set_session_id."""
+        import os
         helen_dir = tmp_path / ".helen"
         helen_dir.mkdir()
         memento = helen_dir / "current_session_id"
-        memento.write_text(json.dumps({"main": "", "child": "child-1"}))
+        # v1.46.29+: memento must include pid field
+        memento.write_text(json.dumps({"main": "", "child": "child-1", "pid": os.getpid()}))
         monkeypatch.chdir(tmp_path)
 
         _remove_chat_tui_web()
