@@ -196,6 +196,7 @@ The agent understands Claude-Code-style slash commands. They are parsed in `hele
 | `/session list` | List all sessions across global + project scopes (v1.44) |
 | `/session delete <id>` | Delete a session by ID (fuzzy match; if matches current session, delegates to `/clear-session`; refuses if referenced by memento or has children) (v1.44, v1.46.31 enhanced) |
 | `/session view <id>` | Show the user messages of a session, walking up the parent chain (v1.44) |
+| `/set-session <id>` | Switch to specified session (loads history, syncs context, updates memento, notifies frontend) (v1.46.33) |
 
 **Parsing details**: `parse_command()` strips whitespace, normalizes fullwidth slash `／` → `/`, and returns `{"is_command": bool, "command": str, "args": list<str>}`. Non-commands pass through to the LLM.
 

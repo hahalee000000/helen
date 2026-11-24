@@ -7,7 +7,7 @@ For the broader multi-project layout, see `../CLAUDE.md`.
 
 **Helen** — a prompt-first Agent programming language (AI-native DSL). Combines deterministic constructs (variables, functions, control flow) with first-class LLM primitives (`llm act`, `llm if`). 
 
-- **Version**: 1.46.32
+- **Version**: 1.46.33
 - **Keywords**: 99 bilingual (48 English + 51 Chinese)
 - **Built-in functions**: 378 stdlib functions (21 categories), 379 Chinese aliases, 757 total names
 - **Stdlib modules**: 21 modules (std.core, std.str, std.math, std.list, ...)
@@ -125,8 +125,9 @@ helen/
 └── skills/        # 16 built-in skills (distributed with package)
 ```
 
-## Recent Changes (v1.45.4 → v1.46.32)
+## Recent Changes (v1.45.4 → v1.46.33)
 
+- **v1.46.33**: Add `/set-session <sid>` command — switch to a specified session, loading its history and syncing all data. Implementation: clears current context, resumes target session's TranscriptStore, restores active context (so LLM sees history), updates memento file, and notifies frontend via `session_switched` WebSocket event for UI refresh. Supports fuzzy session ID matching like other session commands. Updated wiki documentation.
 - **v1.46.32**: Show full session_id in `/session list` output — removed the truncation that showed only prefix + "…" + suffix, now displays complete session IDs for easier copy/paste.
 - **v1.46.31**: Enhance `/session delete <sid>` to support deleting current session — when the target session ID matches the current session, the command now delegates to `/clear-session` logic (cascade delete spawn transcripts + clean up memento + restart actor) instead of refusing. This provides a unified deletion interface: users can use `/session delete <sid>` for both current and other sessions. Updated wiki documentation (changelog, agent reference, transcript-store).
 - **v1.46.28**: Fix tool call summary polluting transcript + improve loop detection warnings — tool call summary messages ("Tool calls: [...]") are now kept in-memory only (for LLM context) but not saved to transcript, preventing consecutive assistant messages that violate OpenAI API format. Added `persist` parameter to `_add_to_history()` in llm_mixin.py. Enhanced loop detection warning messages to be more explicit and forceful, using imperative language ("STOP IMMEDIATELY", "You MUST do ONE of the following NOW") to help LLMs understand they need to break repetitive patterns. Fixes issue where agents would loop on same tool call, and subsequent "Tool calls:" summary messages would corrupt transcript with invalid message sequences.

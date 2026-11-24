@@ -696,6 +696,17 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
                     if is_clear_session:
                         response = response.replace("__HELEN_CLEAR_SESSION_OK__", "").strip()
 
+                    # /set-session 的响应中嵌入静默标记 __HELEN_SET_SESSION_OK__<sid>__
+                    is_set_session = response and "__HELEN_SET_SESSION_OK__" in response
+                    new_session_id = ""
+                    if is_set_session:
+                        # 提取 session ID: __HELEN_SET_SESSION_OK__<sid>__
+                        import re
+                        match = re.search(r"__HELEN_SET_SESSION_OK__([^_]+)__", response)
+                        if match:
+                            new_session_id = match.group(1)
+                        response = re.sub(r"__HELEN_SET_SESSION_OK__[^_]+__", "", response).strip()
+
                     # /clear-session 后 actor 退出，需要重启
                     is_restart = response and "__HELEN_RESTART_ACTOR__" in response
                     if is_restart:
@@ -704,6 +715,17 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
                     if is_clear:
                         # /clear:transcript 已插入 BoundaryMarker,前端清空显示
                         await manager.broadcast({"type": "clear_messages", "data": {}})
+                    elif is_set_session and new_session_id:
+                        # /set-session: 通知前端切换 session，刷新消息和 session 列表
+                        await manager.broadcast({
+                            "type": "session_switched",
+                            "data": {"session_id": new_session_id}
+                        })
+                        if response:
+                            await manager.broadcast({
+                                "type": "processing_complete",
+                                "data": {"content": response, "is_slash_response": True}
+                            })
                     elif response:
                         await manager.broadcast({
                             "type": "processing_complete",

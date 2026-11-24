@@ -129,6 +129,7 @@ main {
 | `/session list` | 合并 global + project scope 列出所有 session(去重,按 modified_at 降序) |
 | `/session delete <id>` | 按 ID 模糊匹配删除;若匹配当前 session 则委托 `/clear-session`(级联删除+memento清理+actor重启);三重安全检查(被 memento 引用、有子 session) |
 | `/session view <id>` | 显示用户消息,沿 `parent_session_id` 追溯最多 5 跳 |
+| `/set-session <id>` | 切换到指定 session(清空上下文+恢复 TranscriptStore+加载活跃上下文+更新 memento+通知前端) (v1.46.33) |
 
 删除了危险的 `/cleanup-sessions` 命令(曾误删非空 session)。
 

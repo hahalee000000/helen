@@ -239,6 +239,30 @@ export function useChat(sessionId: string | null) {
             break
           }
 
+          case 'session_switched': {
+            // /set-session: 切换到新 session，重新加载消息
+            const switchedSid = data.data?.session_id
+            if (switchedSid) {
+              // 清空当前消息
+              setMessages([])
+              // 触发 session 列表刷新
+              window.dispatchEvent(new CustomEvent('helen-event', {
+                detail: { type: 'session_list_refresh', data: {} }
+              }))
+              // 从 transcript 加载新 session 的消息
+              try {
+                const resp = await api.chat.getTranscript(switchedSid)
+                if (resp && Array.isArray(resp)) {
+                  setMessages(resp)
+                }
+              } catch {
+                // 加载失败不阻断
+              }
+            }
+            setIsLoading(false)
+            break
+          }
+
           case 'error': {
             const d = data.data || {}
             const text = d.i18n_key ? t(d.i18n_key, d.params || {}) : (d.content || content)

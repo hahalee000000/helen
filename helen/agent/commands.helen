@@ -124,6 +124,9 @@ fn execute_command(cmd: map): str {
         case "session" {
             return _cmd_session(args)
         }
+        case "set-session" {
+            return _cmd_set_session(args)
+        }
         case "pin" {
             return _cmd_pin(args)
         }
@@ -172,6 +175,7 @@ fn build_help_text(): str {
     text = text + _t("| `/session list` | List all sessions (creation time, status, message count) |\n", "| `/session list` | 列出所有会话（创建时间、状态、消息数） |\n")
     text = text + _t("| `/session delete <sid>` | Delete specified session (cascades to spawned); if matches current session, delegates to /clear-session |\n", "| `/session delete <sid>` | 删除指定会话（级联删除 spawn 树）；若匹配当前会话则委托 /clear-session |\n")
     text = text + _t("| `/session view <sid>` | View user messages in specified session |\n", "| `/session view <sid>` | 查看指定会话的用户消息 |\n")
+    text = text + _t("| `/set-session <sid>` | Switch to specified session (loads history, syncs all data) |\n", "| `/set-session <sid>` | 切换到指定会话（加载历史，同步所有数据） |\n")
     text = text + _t("| `/pin <uuid>` | Pin a message so it is preserved under all compression strategies |\n", "| `/pin <uuid>` | 钉住指定消息，使其在所有压缩策略下均被保留 |\n")
     text = text + _t("| `/unpin <uuid>` | Unpin a message |\n", "| `/unpin <uuid>` | 取消钉住指定消息 |\n")
     text = text + _t("| `/search <query>` | Full-text search messages in current context |\n", "| `/search <query>` | 在当前上下文中全文搜索消息 |\n")
@@ -1230,4 +1234,103 @@ fn _cmd_session_view(args: list): str {
 
     text = text + _t("Tip: Use `--offset N` to paginate, `--limit N` to change page size", "提示: 用 `--offset N` 翻页, `--limit N` 调整每页大小")
     return text
+}
+
+/** /set-session <sid> — 切换到指定 session
+ *  v1.46.33: 完整切换 session，包括：
+ *  1. 清空当前上下文
+ *  2. 切换 TranscriptStore（resume_session）
+ *  3. 恢复活跃上下文（restore_context）
+ *  4. 更新 memento 文件
+ *  5. 返回 __HELEN_SET_SESSION_OK__ 标记供前端同步
+ *
+ *  与 /clear-session 的区别：
+ *  - /clear-session = 删除当前 session，开始新的
+ *  - /set-session   = 切换到已存在的 session，继续对话 */
+fn _cmd_set_session(args: list): str {
+    if len(args) == 0 {
+        return _t("Usage: /set-session <session_id>\nSwitch to specified session, loading its history and syncing all data.\nAccepts full ID, prefix, or short ID with '…'.", "用法: /set-session <session_id>\n切换到指定会话，加载其历史并同步所有数据。\n支持完整 ID、前缀、或含 '…' 的短 ID。")
+    }
+    let target_input = args[0]
+
+    // 解析模糊 session ID
+    let target = _resolve_session_id(target_input)
+    if target == "" {
+        return _t("❌ Cannot uniquely resolve session: ", "❌ 无法唯一确定会话: ") + target_input + "\n" +
+               _t("Tip: copy full ID from `/session list` output, or use enough prefix to be unique", "提示: 从 `/session list` 输出复制完整 ID，或用足够长的唯一前缀")
+    }
+
+    // 检查是否是当前 session
+    let current_sid = ""
+    try { current_sid = get_session_id() } catch {}
+    if target == current_sid {
+        return _t("ℹ️ Already on session: ", "ℹ️ 已在当前会话: ") + target
+    }
+
+    // 查找目标 session 信息
+    let all = _collect_all_sessions()
+    let target_info = null
+    for s in all {
+        if s["session_id"] == target {
+            target_info = s
+            break
+        }
+    }
+    if target_info == null {
+        return _t("❌ Session not found: ", "❌ 未找到会话: ") + target
+    }
+
+    // 执行切换
+    let header = _t("## Session Switch\n\n", "## 会话切换\n\n")
+    try {
+        // Step 1: 清空当前上下文
+        clear_context()
+
+        // Step 2: 切换到目标 session 的 TranscriptStore
+        let resume_result = resume_session(target)
+        if resume_result == null || resume_result["status"] != "ok" {
+            let err_msg = _t("Unknown error", "未知错误")
+            try { err_msg = resume_result["error"] } catch {}
+            return header + _t("- Action: ❌ Failed to resume session\n", "- 操作: ❌ 恢复会话失败\n") +
+                   _t("- Error: ", "- 错误: ") + err_msg + "\n"
+        }
+
+        // Step 3: 恢复活跃上下文（让 LLM 能看到历史）
+        let restore_result = restore_context(target)
+
+        // Step 4: 更新 memento 文件
+        let cwd = get_cwd()
+        try {
+            let memento_content = json_stringify({"main": target, "child": target, "pid": pid()})
+            let memento_path = cwd + "/.helen/current_session_id"
+            write_file(memento_path, memento_content)
+        } catch {
+            // memento 更新失败不阻断主流程
+        }
+
+        // 构建成功响应
+        let text = header
+        let from_sid = current_sid
+        if from_sid == "" {
+            from_sid = _t("(none)", "（无）")
+        }
+        text = text + _t("- From: ", "- 来源: ") + from_sid + "\n"
+        text = text + _t("- To: ", "- 目标: ") + target + "\n"
+        let imported = 0
+        try { imported = resume_result["imported_messages"] } catch {}
+        text = text + _t("- Messages loaded: ", "- 已加载消息: ") + str(imported) + "\n"
+
+        // 显示目标 session 统计
+        let msg_count = 0
+        try { msg_count = target_info["message_count"] } catch {}
+        text = text + _t("- Total messages in session: ", "- 会话总消息数: ") + str(msg_count) + "\n"
+        text = text + _t("- Action: ✅ Switched successfully\n", "- 操作: ✅ 切换成功\n")
+
+        // 返回带标记的响应（供前端同步）
+        return text + "\n__HELEN_SET_SESSION_OK__" + target + "__"
+    } catch RuntimeError err {
+        return header + _t("- Action: ❌ Failed\n- Error: ", "- 操作: ❌ 失败\n- 错误: ") + err.message + "\n"
+    } catch {
+        return header + _t("- Action: ❌ Failed\n", "- 操作: ❌ 失败\n")
+    }
 }
