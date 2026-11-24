@@ -702,20 +702,20 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
                     if is_set_session:
                         # 提取 session ID: __HELEN_SET_SESSION_OK__<sid>__
                         import re
-                        match = re.search(r"__HELEN_SET_SESSION_OK__([^_]+)__", response)
+                        match = re.search(r"__HELEN_SET_SESSION_OK__(.+?)__", response)
                         if match:
                             new_session_id = match.group(1)
-                        response = re.sub(r"__HELEN_SET_SESSION_OK__[^_]+__", "", response).strip()
+                        response = re.sub(r"__HELEN_SET_SESSION_OK__.+?__", "", response).strip()
 
                     # /session view 的响应中嵌入静默标记 __HELEN_VIEW_SESSION__<sid>__
                     is_view_session = response and "__HELEN_VIEW_SESSION__" in response
                     view_session_id = ""
                     if is_view_session:
                         import re
-                        match = re.search(r"__HELEN_VIEW_SESSION__([^_]+)__", response)
+                        match = re.search(r"__HELEN_VIEW_SESSION__(.+?)__", response)
                         if match:
                             view_session_id = match.group(1)
-                        response = re.sub(r"__HELEN_VIEW_SESSION__[^_]+__", "", response).strip()
+                        response = re.sub(r"__HELEN_VIEW_SESSION__.+?__", "", response).strip()
 
                     # /clear-session 后 actor 退出，需要重启
                     is_restart = response and "__HELEN_RESTART_ACTOR__" in response
