@@ -993,13 +993,8 @@ fn _cmd_session_list(args: list): str {
             size_str = str(int(size_bytes / (1024 * 1024))) + "MB"
         }
 
-        // 缩短 session id 显示（前 8 字符 + 后 8 字符）
-        let short_sid = sid
-        if len(sid) > 24 {
-            short_sid = substring(sid, 0, 12) + "…" + substring(sid, len(sid) - 8, len(sid))
-        }
-
-        text = text + "| " + str(i + 1) + " | `" + short_sid + "` | " + created + " | " + str(msg_count) + " | " + size_str + " | " + scope + " | " + status + " |\n"
+        // v1.46.32: 显示完整 session_id（不再截断）
+        text = text + "| " + str(i + 1) + " | `" + sid + "` | " + created + " | " + str(msg_count) + " | " + size_str + " | " + scope + " | " + status + " |\n"
         i = i + 1
         shown = shown + 1
     }
