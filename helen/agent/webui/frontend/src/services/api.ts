@@ -179,6 +179,13 @@ export const api = {
       if (!response.ok) throw new Error('Failed to delete session')
       return response.json()
     },
+
+    /** 获取指定 session 的完整 transcript */
+    getTranscript: async (sessionId: string) => {
+      const response = await fetchWithRetry(`${API_BASE_URL}/chat/sessions/${encodeURIComponent(sessionId)}/transcript`)
+      if (!response.ok) throw new Error('Failed to fetch transcript')
+      return response.json()
+    },
   },
 
   // Agent 相关

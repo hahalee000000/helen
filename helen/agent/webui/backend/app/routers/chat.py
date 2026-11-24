@@ -707,6 +707,16 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
                             new_session_id = match.group(1)
                         response = re.sub(r"__HELEN_SET_SESSION_OK__[^_]+__", "", response).strip()
 
+                    # /session view 的响应中嵌入静默标记 __HELEN_VIEW_SESSION__<sid>__
+                    is_view_session = response and "__HELEN_VIEW_SESSION__" in response
+                    view_session_id = ""
+                    if is_view_session:
+                        import re
+                        match = re.search(r"__HELEN_VIEW_SESSION__([^_]+)__", response)
+                        if match:
+                            view_session_id = match.group(1)
+                        response = re.sub(r"__HELEN_VIEW_SESSION__[^_]+__", "", response).strip()
+
                     # /clear-session 后 actor 退出，需要重启
                     is_restart = response and "__HELEN_RESTART_ACTOR__" in response
                     if is_restart:
@@ -715,6 +725,17 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
                     if is_clear:
                         # /clear:transcript 已插入 BoundaryMarker,前端清空显示
                         await manager.broadcast({"type": "clear_messages", "data": {}})
+                    elif is_view_session and view_session_id:
+                        # /session view: 通知前端打开 transcript 查看弹窗
+                        await manager.broadcast({
+                            "type": "view_transcript",
+                            "data": {"session_id": view_session_id}
+                        })
+                        if response:
+                            await manager.broadcast({
+                                "type": "processing_complete",
+                                "data": {"content": response, "is_slash_response": True}
+                            })
                     elif is_set_session and new_session_id:
                         # /set-session: 通知前端切换 session，刷新消息和 session 列表
                         await manager.broadcast({

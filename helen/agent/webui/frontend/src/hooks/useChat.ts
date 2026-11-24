@@ -263,6 +263,17 @@ export function useChat(sessionId: string | null) {
             break
           }
 
+          case 'view_transcript': {
+            // /session view: 打开 transcript 查看弹窗
+            const viewSid = data.data?.session_id
+            if (viewSid) {
+              window.dispatchEvent(new CustomEvent('helen-event', {
+                detail: { type: 'open_transcript_viewer', data: { session_id: viewSid } }
+              }))
+            }
+            break
+          }
+
           case 'error': {
             const d = data.data || {}
             const text = d.i18n_key ? t(d.i18n_key, d.params || {}) : (d.content || content)

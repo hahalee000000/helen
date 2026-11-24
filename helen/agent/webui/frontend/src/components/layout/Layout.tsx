@@ -4,6 +4,7 @@ import { MessageSquare, Settings } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { useT, LanguageSwitcher } from '@/i18n'
 import { api } from '@/services/api'
+import { TranscriptViewerModal } from '@/components/chat/TranscriptViewerModal'
 
 interface LayoutProps {
   children: ReactNode
@@ -12,12 +13,24 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
   const location = useLocation()
   const [version, setVersion] = useState('')
+  const [transcriptViewerSession, setTranscriptViewerSession] = useState<string | null>(null)
   const t = useT()
 
   useEffect(() => {
     api.system.getStatus()
       .then(data => setVersion(data.version || ''))
       .catch(() => {})
+  }, [])
+
+  // 监听 open_transcript_viewer 事件
+  useEffect(() => {
+    const handler = (event: CustomEvent) => {
+      if (event.detail?.type === 'open_transcript_viewer') {
+        setTranscriptViewerSession(event.detail.data.session_id)
+      }
+    }
+    window.addEventListener('helen-event', handler as EventListener)
+    return () => window.removeEventListener('helen-event', handler as EventListener)
   }, [])
 
   const navItems = [
@@ -82,6 +95,14 @@ export function Layout({ children }: LayoutProps) {
       <main className="flex-1 overflow-hidden">
         {children}
       </main>
+
+      {/* Transcript Viewer Modal */}
+      {transcriptViewerSession && (
+        <TranscriptViewerModal
+          sessionId={transcriptViewerSession}
+          onClose={() => setTranscriptViewerSession(null)}
+        />
+      )}
     </div>
   )
 }

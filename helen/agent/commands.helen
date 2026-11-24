@@ -174,7 +174,7 @@ fn build_help_text(): str {
     text = text + _t("| `/session` | View current session info (ID, directory, transcript file count) |\n", "| `/session` | 查看当前会话信息（ID、目录、transcript 文件数） |\n")
     text = text + _t("| `/session list` | List all sessions (creation time, status, message count) |\n", "| `/session list` | 列出所有会话（创建时间、状态、消息数） |\n")
     text = text + _t("| `/session delete <sid>` | Delete specified session (cascades to spawned); if matches current session, delegates to /clear-session |\n", "| `/session delete <sid>` | 删除指定会话（级联删除 spawn 树）；若匹配当前会话则委托 /clear-session |\n")
-    text = text + _t("| `/session view <sid>` | View user messages in specified session |\n", "| `/session view <sid>` | 查看指定会话的用户消息 |\n")
+    text = text + _t("| `/session view <sid>` | Open modal showing full transcript history for specified session |\n", "| `/session view <sid>` | 打开弹窗显示指定会话的完整历史记录 |\n")
     text = text + _t("| `/set-session <sid>` | Switch to specified session (loads history, syncs all data) |\n", "| `/set-session <sid>` | 切换到指定会话（加载历史，同步所有数据） |\n")
     text = text + _t("| `/pin <uuid>` | Pin a message so it is preserved under all compression strategies |\n", "| `/pin <uuid>` | 钉住指定消息，使其在所有压缩策略下均被保留 |\n")
     text = text + _t("| `/unpin <uuid>` | Unpin a message |\n", "| `/unpin <uuid>` | 取消钉住指定消息 |\n")
@@ -1085,15 +1085,15 @@ fn _cmd_session_delete(args: list): str {
     }
 }
 
-/** /session view <sid> — 显示指定 session 的用户消息 */
+/** /session view <sid> — 在弹窗中显示指定 session 的完整 transcript
+ *  v1.46.34: 改为打开前端 Modal 弹窗，显示完整历史消息（含搜索/过滤）
+ *  返回 __HELEN_VIEW_SESSION__<sid>__ 标记，前端检测后打开弹窗 */
 fn _cmd_session_view(args: list): str {
     let pg = _parse_pagination(args)
-    let limit = pg["limit"]
-    let offset = pg["offset"]
     let rest = pg["rest"]
 
     if len(rest) == 0 {
-        return _t("Usage: /session view <session_id> [--limit N] [--offset N]\nShow user messages in the specified session.\nAccepts full ID, prefix, or short ID with '…'.", "用法: /session view <session_id> [--limit N] [--offset N]\n显示指定会话的用户消息。\n支持完整 ID、前缀、或含 '…' 的短 ID。")
+        return _t("Usage: /session view <session_id>\nOpen a modal showing full transcript history for the specified session.\nAccepts full ID, prefix, or short ID with '…'.", "用法: /session view <session_id>\n打开弹窗显示指定会话的完整历史记录。\n支持完整 ID、前缀、或含 '…' 的短 ID。")
     }
     let target_input = rest[0]
 
@@ -1104,7 +1104,7 @@ fn _cmd_session_view(args: list): str {
                _t("Tip: copy full ID from `/session list` output, or use enough prefix to be unique", "提示: 从 `/session list` 输出复制完整 ID，或用足够长的唯一前缀")
     }
 
-    // 在所有 session 中查找目标（_collect_all_sessions 直接读目录，含 dir 信息）
+    // 在所有 session 中查找目标（验证存在性）
     let all_sessions = _collect_all_sessions()
     let target_info = null
     for s in all_sessions {
@@ -1117,123 +1117,12 @@ fn _cmd_session_view(args: list): str {
         return _t("❌ Session not found: ", "❌ 未找到会话: ") + target
     }
 
-    // 读取 transcript 并过滤 role=user
-    // 若当前 session 无用户消息，沿 parent_session_id 链向上找（主子 session 架构）
-    let user_messages = []
-    let viewed_sid = target
-    let search_sid = target
-    let hops = 0
-    while search_sid != "" && hops < 5 {
-        let session_dir = ""
-        let parent_sid = ""
-        // 在 all_sessions 里找 search_sid 的目录和 parent
-        for s in all_sessions {
-            if s["session_id"] == search_sid {
-                session_dir = path_join(s["dir"], search_sid)
-                try { parent_sid = s["parent_session_id"] } catch {}
-                break
-            }
-        }
-        if session_dir == "" {
-            break
-        }
-        let transcript_path = path_join(session_dir, "transcript.jsonl")
-        if !path_exists(transcript_path) {
-            break
-        }
-        try {
-            let content = read_file(transcript_path)
-            let lines = split(content, "\n")
-            for line in lines {
-                if strip(line) == "" {
-                    continue
-                }
-                try {
-                    let msg = json_parse(line)
-                    if msg["role"] == "user" {
-                        user_messages = user_messages + [msg]
-                    }
-                } catch {
-                    // 跳过解析失败的行
-                }
-            }
-        } catch {
-            break
-        }
-        if len(user_messages) > 0 {
-            viewed_sid = search_sid
-            break
-        }
-        // 当前 session 无消息，沿 parent 链向上找
-        search_sid = parent_sid
-        hops = hops + 1
-    }
-
-    if len(user_messages) == 0 {
-        let not_found_msg = _t("No user messages found in session: ", "该会话中没有用户消息: ") + target
-        if viewed_sid != target {
-            not_found_msg = not_found_msg + _t("\n(also checked parent chain)", "\n（已沿父链查找）")
-        }
-        return not_found_msg
-    }
-
-    // 分页输出
-    let total = len(user_messages)
-    let text = _t("## User messages in session\n\n", "## 会话中的用户消息\n\n")
-    text = text + _t("Session: ", "会话: ") + "`" + target + "`\n"
-    text = text + _t("Total user messages: ", "用户消息总数: ") + str(total)
-    if offset > 0 || limit < total {
-        text = text + _t(" (showing ", "（显示 ") + str(offset + 1) + "-" + str(min(offset + limit, total)) + ")"
-    }
-    text = text + "\n\n---\n\n"
-
-    let i = offset
-    let shown = 0
-    while i < len(user_messages) && shown < limit {
-        let msg = user_messages[i]
-        let msg_content = str(msg["content"])
-        let uuid = ""
-        try { uuid = msg["uuid"] } catch {}
-
-        // 提取用户实际输入：Helen agent prompt 通常以固定 reminder 段结尾，
-        // 用户输入在其后。用 split 取最后一段（按 "## Reminders" 切分）。
-        // 如果切分失败，显示最后 500 字符作为用户输入。
-        let user_input = msg_content
-        let chunks = split(msg_content, "## Reminders")
-        if len(chunks) > 1 {
-            let last_chunk = chunks[len(chunks) - 1]
-            // 再按双换行切，取最后一段（跳过 reminder 条目）
-            let paragraphs = split(last_chunk, "\n\n")
-            if len(paragraphs) > 1 {
-                user_input = strip(paragraphs[len(paragraphs) - 1])
-            } else {
-                user_input = strip(last_chunk)
-            }
-        }
-        // 兜底：如果提取结果为空或仍太长（> 800 字符），取最后 500 字符
-        if user_input == "" || len(user_input) > 800 {
-            if len(msg_content) > 500 {
-                user_input = "..." + substring(msg_content, len(msg_content) - 500, len(msg_content))
-            }
-        }
-
-        // 截短过长内容（超过 1000 字符显示省略）
-        if len(user_input) > 1000 {
-            user_input = substring(user_input, 0, 1000) + "\n... (" + _t("truncated", "已截断") + ")"
-        }
-
-        text = text + "**[" + str(i + 1) + "/" + str(total) + "]**"
-        if uuid != "" {
-            text = text + " `" + uuid + "`"
-        }
-        text = text + "\n\n" + user_input + "\n\n---\n\n"
-
-        i = i + 1
-        shown = shown + 1
-    }
-
-    text = text + _t("Tip: Use `--offset N` to paginate, `--limit N` to change page size", "提示: 用 `--offset N` 翻页, `--limit N` 调整每页大小")
-    return text
+    // 返回标记，前端检测后打开弹窗
+    let msg_count = 0
+    try { msg_count = target_info["message_count"] } catch {}
+    let text = _t("📖 Opening transcript viewer for session: ", "📖 正在打开会话记录查看器: ") + target + "\n"
+    text = text + _t("Messages: ", "消息数: ") + str(msg_count) + "\n"
+    return text + "\n__HELEN_VIEW_SESSION__" + target + "__"
 }
 
 /** /set-session <sid> — 切换到指定 session
