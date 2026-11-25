@@ -7,7 +7,7 @@ For the broader multi-project layout, see `../CLAUDE.md`.
 
 **Helen** — a prompt-first Agent programming language (AI-native DSL). Combines deterministic constructs (variables, functions, control flow) with first-class LLM primitives (`llm act`, `llm if`). 
 
-- **Version**: 1.46.34
+- **Version**: 1.46.35
 - **Keywords**: 99 bilingual (48 English + 51 Chinese)
 - **Built-in functions**: 378 stdlib functions (21 categories), 379 Chinese aliases, 757 total names
 - **Stdlib modules**: 21 modules (std.core, std.str, std.math, std.list, ...)
@@ -125,8 +125,9 @@ helen/
 └── skills/        # 16 built-in skills (distributed with package)
 ```
 
-## Recent Changes (v1.45.4 → v1.46.34)
+## Recent Changes (v1.45.4 → v1.46.35)
 
+- **v1.46.35**: Three-level graduated loop intervention — loop detection no longer terminates agent immediately. L1: First detection injects warning hint, allows LLM to self-correct. L2: If loop persists, injects force-summary prompt telling LLM to stop calling tools and produce final answer. L3: Only if LLM ignores force-summary and calls tools again, then terminates. Fixes issue where agents were terminated prematurely when they could have recovered. Updated both `act()` and `act_stream()` paths in http_llm.py. Updated hint messages in loop_detector.py to reflect non-terminal behavior.
 - **v1.46.34**: Transform `/session view <sid>` into modal-based transcript viewer — now opens a frontend modal popup showing complete transcript history (user/assistant/tool messages) with search functionality and role filtering. Added `TranscriptViewerModal.tsx` component with full message display, timestamps, tool call indicators, and detail view. Backend returns `__HELEN_VIEW_SESSION__` marker to trigger modal. Updated wiki documentation.
 - **v1.46.33**: Add `/set-session <sid>` command — switch to a specified session, loading its history and syncing all data. Implementation: clears current context, resumes target session's TranscriptStore, restores active context (so LLM sees history), updates memento file, and notifies frontend via `session_switched` WebSocket event for UI refresh. Supports fuzzy session ID matching like other session commands. Updated wiki documentation.
 - **v1.46.32**: Show full session_id in `/session list` output — removed the truncation that showed only prefix + "…" + suffix, now displays complete session IDs for easier copy/paste.

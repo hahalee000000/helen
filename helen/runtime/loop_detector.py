@@ -174,7 +174,7 @@ class ToolCallLoopDetector:
                     "2. If the operation failed: Explain what went wrong and try a DIFFERENT approach\n"
                     "3. If you need more information: Ask the user for clarification\n\n"
                     f"**DO NOT** call `{first.name}` again with the same arguments. "
-                    "This is your final warning before forced termination."
+                    "If you continue calling tools without progress, you will be required to produce your final answer immediately."
                 ),
             )
 
@@ -218,7 +218,7 @@ class ToolCallLoopDetector:
                     "2. If the current approach is failing: Switch to a COMPLETELY DIFFERENT strategy\n"
                     "3. If you're uncertain: Ask the user for guidance\n\n"
                     f"**DO NOT** call `{sig.name}` again with similar arguments. "
-                    "Continuing this pattern will result in forced termination."
+                    "If you continue calling tools without progress, you will be required to produce your final answer immediately."
                 ),
             )
 
@@ -296,7 +296,7 @@ class ToolCallLoopDetector:
             "2. If you're trying to fix something: Make the fix and stop investigating\n"
             "3. If you're lost: Ask the user for clarification on what to do next\n\n"
             f"**DO NOT** call `{tool_name}` again. "
-            "This is your final warning before forced termination."
+            "If you continue calling tools without progress, you will be required to produce your final answer immediately."
         )
 
         return f"{header}\n{detail}\n\n{message}"

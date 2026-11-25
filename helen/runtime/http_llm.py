@@ -695,6 +695,9 @@ class HttpLLMRuntime(LLMRuntime):
         # v1.46.27: Loop detection for repetitive tool calls
         loop_detector = ToolCallLoopDetector()
         loop_warning_injected = False
+        # v1.46.35: Three-level graduated intervention
+        loop_force_summary_injected = False
+        _tool_calls_after_force_summary = 0
 
         while budget.consume():
             # Phase 9B: Reset reactive compactor per-turn state
@@ -849,7 +852,7 @@ class HttpLLMRuntime(LLMRuntime):
                         loop_result.loop_type,
                     )
                     if not loop_warning_injected:
-                        # First detection: inject hint to help LLM break out
+                        # L1: First detection: inject hint to help LLM break out
                         loop_hint_msg = {
                             "role": "user",
                             "content": (
@@ -861,25 +864,55 @@ class HttpLLMRuntime(LLMRuntime):
                         if hint_collector_fn is not None:
                             hint_collector_fn(loop_hint_msg)
                         loop_warning_injected = True
+                    elif not loop_force_summary_injected:
+                        # L2: Second detection: force summary instead of termination
+                        # Give LLM one more chance but explicitly tell it to produce final answer
+                        logger.warning(
+                            "Loop persists after L1 warning — injecting force-summary prompt. "
+                            "Telling LLM to stop calling tools and produce final answer."
+                        )
+                        force_summary_msg = {
+                            "role": "user",
+                            "content": (
+                                f"[FINAL WARNING - FORCE SUMMARY MODE]\n\n"
+                                f"You have been warned about repetitive tool calls, but you "
+                                f"continued calling `{loop_result.signature.name}` anyway "
+                                f"({loop_result.repeated_count} times, {loop_result.loop_type} pattern).\n\n"
+                                "**YOU MUST NOW:**\n"
+                                "1. **STOP calling any tools immediately**\n"
+                                "2. **Provide your FINAL ANSWER based on what you have gathered so far**\n"
+                                "3. If you have no useful information, say so honestly\n\n"
+                                "Do NOT attempt any more tool calls. "
+                                "Your next response must be your final answer to the user's original request."
+                            ),
+                        }
+                        messages.append(force_summary_msg)
+                        if hint_collector_fn is not None:
+                            hint_collector_fn(force_summary_msg)
+                        loop_force_summary_injected = True
+                        # v1.46.35: Track tool calls after force-summary to implement L3
+                        _tool_calls_after_force_summary = 0
                     else:
-                        # Already warned once: force break the loop
-                        logger.error(
-                            "Loop persists after warning — forcing termination. "
-                            "The agent appears stuck."
-                        )
-                        # Build a forced final response
-                        final_text = (
-                            f"[Agent terminated: detected repetitive tool calls]\n\n"
-                            f"The agent was stuck in a loop calling "
-                            f"`{loop_result.signature.name}` "
-                            f"({loop_result.repeated_count} times, {loop_result.loop_type} pattern).\n\n"
-                            "This usually means:\n"
-                            "1. The task was already completed but the agent didn't recognize it\n"
-                            "2. The tool arguments were incorrect and kept failing\n"
-                            "3. The agent couldn't determine task completion criteria\n\n"
-                            "Please review the transcript and try a different approach."
-                        )
-                        break
+                        # L3: LLM ignored force-summary and called tools again — truly terminate
+                        _tool_calls_after_force_summary += 1
+                        if _tool_calls_after_force_summary >= 1:
+                            logger.error(
+                                "LLM ignored force-summary and called tools again — "
+                                "forcing termination. The agent is irrecoverably stuck."
+                            )
+                            # Build a forced final response
+                            final_text = (
+                                f"[Agent terminated: detected repetitive tool calls]\n\n"
+                                f"The agent was stuck in a loop calling "
+                                f"`{loop_result.signature.name}` "
+                                f"({loop_result.repeated_count} times, {loop_result.loop_type} pattern).\n\n"
+                                "This usually means:\n"
+                                "1. The task was already completed but the agent didn't recognize it\n"
+                                "2. The tool arguments were incorrect and kept failing\n"
+                                "3. The agent couldn't determine task completion criteria\n\n"
+                                "Please review the transcript and try a different approach."
+                            )
+                            break
 
                 # Phase 9B: Reactive compaction check after tool results
                 if getattr(self, 'enable_reactive_compaction', False) and \
@@ -1430,6 +1463,9 @@ class HttpLLMRuntime(LLMRuntime):
         # v1.46.27: Loop detection for repetitive tool calls
         loop_detector = ToolCallLoopDetector()
         loop_warning_injected = False
+        # v1.46.35: Three-level graduated intervention
+        loop_force_summary_injected = False
+        _tool_calls_after_force_summary = 0
         # P2: Stream network retry (separate from iteration budget)
         # Only retries transient errors BEFORE stream is established
         stream_retry = 0
@@ -1785,7 +1821,7 @@ class HttpLLMRuntime(LLMRuntime):
                             loop_result.loop_type,
                         )
                         if not loop_warning_injected:
-                            # First detection: inject hint to help LLM break out
+                            # L1: First detection: inject hint to help LLM break out
                             loop_hint_content = (
                                 f"[Loop Detection Warning]\n"
                                 f"{loop_result.hint_message}"
@@ -1799,26 +1835,53 @@ class HttpLLMRuntime(LLMRuntime):
                             if hint_collector_fn is not None:
                                 hint_collector_fn(loop_hint_msg)
                             loop_warning_injected = True
-                        else:
-                            # Already warned once: force break the loop
-                            logger.error(
-                                "Loop persists after warning (stream) — forcing termination. "
-                                "The agent appears stuck."
+                        elif not loop_force_summary_injected:
+                            # L2: Second detection: force summary instead of termination
+                            logger.warning(
+                                "Loop persists after L1 warning (stream) — injecting force-summary prompt."
                             )
-                            # Yield error event and break
-                            error_content = (
-                                f"[Agent terminated: detected repetitive tool calls]\n\n"
-                                f"The agent was stuck in a loop calling "
-                                f"`{loop_result.signature.name}` "
+                            force_summary_content = (
+                                f"[FINAL WARNING - FORCE SUMMARY MODE]\n\n"
+                                f"You have been warned about repetitive tool calls, but you "
+                                f"continued calling `{loop_result.signature.name}` anyway "
                                 f"({loop_result.repeated_count} times, {loop_result.loop_type} pattern).\n\n"
-                                "This usually means:\n"
-                                "1. The task was already completed but the agent didn't recognize it\n"
-                                "2. The tool arguments were incorrect and kept failing\n"
-                                "3. The agent couldn't determine task completion criteria\n\n"
-                                "Please review the transcript and try a different approach."
+                                "**YOU MUST NOW:**\n"
+                                "1. **STOP calling any tools immediately**\n"
+                                "2. **Provide your FINAL ANSWER based on what you have gathered so far**\n"
+                                "3. If you have no useful information, say so honestly\n\n"
+                                "Do NOT attempt any more tool calls. "
+                                "Your next response must be your final answer to the user's original request."
                             )
-                            yield {"type": "error", "message": error_content}
-                            return
+                            force_summary_msg = {
+                                "role": "user",
+                                "content": force_summary_content,
+                            }
+                            messages.append(force_summary_msg)
+                            yield {"type": "hint", "content": force_summary_content}
+                            if hint_collector_fn is not None:
+                                hint_collector_fn(force_summary_msg)
+                            loop_force_summary_injected = True
+                            _tool_calls_after_force_summary = 0
+                        else:
+                            # L3: LLM ignored force-summary and called tools again — truly terminate
+                            _tool_calls_after_force_summary += 1
+                            if _tool_calls_after_force_summary >= 1:
+                                logger.error(
+                                    "LLM ignored force-summary (stream) — forcing termination."
+                                )
+                                error_content = (
+                                    f"[Agent terminated: detected repetitive tool calls]\n\n"
+                                    f"The agent was stuck in a loop calling "
+                                    f"`{loop_result.signature.name}` "
+                                    f"({loop_result.repeated_count} times, {loop_result.loop_type} pattern).\n\n"
+                                    "This usually means:\n"
+                                    "1. The task was already completed but the agent didn't recognize it\n"
+                                    "2. The tool arguments were incorrect and kept failing\n"
+                                    "3. The agent couldn't determine task completion criteria\n\n"
+                                    "Please review the transcript and try a different approach."
+                                )
+                                yield {"type": "error", "message": error_content}
+                                return
 
                     # Phase 9B: Reactive compaction check after tool results (stream)
                     if getattr(self, 'enable_reactive_compaction', False) and \
