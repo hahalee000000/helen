@@ -75,22 +75,48 @@ fn validate_path(path: str): str {
     return path
 }
 
-/** 确保 PYTHONPATH 包含当前目录（用于 Python FFI 导入 ui 模块）。
- *  幂等：多次调用安全。 */
+/** 确保 PYTHONPATH 包含 ui 模块所在目录（用于 Python FFI 导入 ui 模块）。
+ *  幂等：多次调用安全。
+ *
+ *  v1.46.35: 修复在非 helen 项目目录（如 helen-rust）运行时，
+ *  PYTHONPATH 只包含 cwd 但不包含 ui 模块实际所在目录的问题。
+ *  现在通过 Python FFI 获取 chat_tui_web.HELEN_AGENT_DIR，
+ *  确保 ui 模块可以被正确导入。
+ */
 fn ensure_python_path() {
     let cwd = get_cwd()
     let python_path = env_get("PYTHONPATH", "")
+
+    // v1.46.35: 获取 ui 模块所在目录（chat_tui_web.HELEN_AGENT_DIR）
+    let agent_dir = ""
+    try {
+        import "chat_tui_web" as _ctw
+        agent_dir = _ctw.HELEN_AGENT_DIR
+    } catch {}
+
+    // 检查并添加 cwd
     if !contains(python_path, cwd) {
-        let new_path = cwd
         if len(python_path) > 0 {
             if platform() == "windows" {
-                new_path = cwd + ";" + python_path
+                python_path = cwd + ";" + python_path
             } else {
-                new_path = cwd + ":" + python_path
+                python_path = cwd + ":" + python_path
             }
+        } else {
+            python_path = cwd
         }
-        env_set("PYTHONPATH", new_path)
     }
+
+    // v1.46.35: 确保 agent_dir 也在 PYTHONPATH 中（ui 模块在此目录下）
+    if agent_dir != "" && !contains(python_path, agent_dir) {
+        if platform() == "windows" {
+            python_path = agent_dir + ";" + python_path
+        } else {
+            python_path = agent_dir + ":" + python_path
+        }
+    }
+
+    env_set("PYTHONPATH", python_path)
 }
 
 // ── 环境事实检测（共享，避免 context.helen / context_manager.helen 各自重复）──
