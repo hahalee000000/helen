@@ -865,25 +865,28 @@ class HttpLLMRuntime(LLMRuntime):
                             hint_collector_fn(loop_hint_msg)
                         loop_warning_injected = True
                     elif not loop_force_summary_injected:
-                        # L2: Second detection: force summary instead of termination
-                        # Give LLM one more chance but explicitly tell it to produce final answer
+                        # L2: Second detection: stronger warning, request summary
+                        # LLM had a chance after L1 but continued the pattern
                         logger.warning(
                             "Loop persists after L1 warning — injecting force-summary prompt. "
-                            "Telling LLM to stop calling tools and produce final answer."
+                            "Requesting LLM to provide final answer."
                         )
                         force_summary_msg = {
                             "role": "user",
                             "content": (
-                                f"[FINAL WARNING - FORCE SUMMARY MODE]\n\n"
-                                f"You have been warned about repetitive tool calls, but you "
-                                f"continued calling `{loop_result.signature.name}` anyway "
-                                f"({loop_result.repeated_count} times, {loop_result.loop_type} pattern).\n\n"
-                                "**YOU MUST NOW:**\n"
-                                "1. **STOP calling any tools immediately**\n"
-                                "2. **Provide your FINAL ANSWER based on what you have gathered so far**\n"
-                                "3. If you have no useful information, say so honestly\n\n"
-                                "Do NOT attempt any more tool calls. "
-                                "Your next response must be your final answer to the user's original request."
+                                f"[Second Notice - Summary Requested]\n\n"
+                                f"You received a loop detection warning but continued calling "
+                                f"`{loop_result.signature.name}` "
+                                f"({loop_result.repeated_count} times now, {loop_result.loop_type} pattern).\n\n"
+                                "**What this means:**\n"
+                                "The pattern suggests you may be stuck without making meaningful progress. "
+                                "Even if you believe you're making progress, the repeated calls indicate "
+                                "it's time to consolidate and summarize.\n\n"
+                                "**Please provide your final answer now:**\n"
+                                "1. Summarize what you have accomplished\n"
+                                "2. If the task cannot be completed, explain what went wrong\n"
+                                "3. If you need more information, state what you need\n\n"
+                                "Continuing with the same tool calls will result in termination on the next detection."
                             ),
                         }
                         messages.append(force_summary_msg)
@@ -1836,21 +1839,24 @@ class HttpLLMRuntime(LLMRuntime):
                                 hint_collector_fn(loop_hint_msg)
                             loop_warning_injected = True
                         elif not loop_force_summary_injected:
-                            # L2: Second detection: force summary instead of termination
+                            # L2: Second detection: stronger warning, request summary
                             logger.warning(
-                                "Loop persists after L1 warning (stream) — injecting force-summary prompt."
+                                "Loop persists after L1 warning (stream) — injecting summary request."
                             )
                             force_summary_content = (
-                                f"[FINAL WARNING - FORCE SUMMARY MODE]\n\n"
-                                f"You have been warned about repetitive tool calls, but you "
-                                f"continued calling `{loop_result.signature.name}` anyway "
-                                f"({loop_result.repeated_count} times, {loop_result.loop_type} pattern).\n\n"
-                                "**YOU MUST NOW:**\n"
-                                "1. **STOP calling any tools immediately**\n"
-                                "2. **Provide your FINAL ANSWER based on what you have gathered so far**\n"
-                                "3. If you have no useful information, say so honestly\n\n"
-                                "Do NOT attempt any more tool calls. "
-                                "Your next response must be your final answer to the user's original request."
+                                f"[Second Notice - Summary Requested]\n\n"
+                                f"You received a loop detection warning but continued calling "
+                                f"`{loop_result.signature.name}` "
+                                f"({loop_result.repeated_count} times now, {loop_result.loop_type} pattern).\n\n"
+                                "**What this means:**\n"
+                                "The pattern suggests you may be stuck without making meaningful progress. "
+                                "Even if you believe you're making progress, the repeated calls indicate "
+                                "it's time to consolidate and summarize.\n\n"
+                                "**Please provide your final answer now:**\n"
+                                "1. Summarize what you have accomplished\n"
+                                "2. If the task cannot be completed, explain what went wrong\n"
+                                "3. If you need more information, state what you need\n\n"
+                                "Continuing with the same tool calls will result in termination on the next detection."
                             )
                             force_summary_msg = {
                                 "role": "user",

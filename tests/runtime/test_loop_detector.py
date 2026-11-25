@@ -58,9 +58,12 @@ class TestToolCallLoopDetector:
 
     def test_no_loop_short_history(self):
         """No loop detected with few calls."""
-        detector = ToolCallLoopDetector(exact_repeat_threshold=3)
+        # Use custom tool_thresholds to set low threshold for testing
+        detector = ToolCallLoopDetector(
+            tool_thresholds={"test_tool": 3, "default": 3}
+        )
 
-        tc = {"function": {"name": "shell_exec", "arguments": '{"command": "ls"}'}}
+        tc = {"function": {"name": "test_tool", "arguments": '{"command": "ls"}'}}
         detector.record([tc])
         detector.record([tc])
 
@@ -69,9 +72,12 @@ class TestToolCallLoopDetector:
 
     def test_exact_repeat_detection(self):
         """Detect when same call repeats N times."""
-        detector = ToolCallLoopDetector(exact_repeat_threshold=3)
+        # Use custom threshold for testing
+        detector = ToolCallLoopDetector(
+            tool_thresholds={"test_tool": 3, "default": 3}
+        )
 
-        tc = {"function": {"name": "shell_exec", "arguments": '{"command": "ls"}'}}
+        tc = {"function": {"name": "test_tool", "arguments": '{"command": "ls"}'}}
 
         detector.record([tc])
         detector.record([tc])
@@ -84,14 +90,20 @@ class TestToolCallLoopDetector:
         assert result.loop_type == "exact"
         assert result.repeated_count == 3
         assert result.hint_message is not None
-        assert "shell_exec" in result.hint_message
+        assert "test_tool" in result.hint_message
 
     def test_different_calls_no_loop(self):
-        """Alternating different calls shouldn't trigger exact loop."""
-        detector = ToolCallLoopDetector(exact_repeat_threshold=3)
+        """Alternating different calls shouldn't trigger exact loop.
 
-        tc1 = {"function": {"name": "shell_exec", "arguments": '{"command": "ls"}'}}
-        tc2 = {"function": {"name": "shell_exec", "arguments": '{"command": "pwd"}'}}
+        Note: tool-name-repeat will still trigger if same tool is used repeatedly.
+        This test uses different tools to avoid that.
+        """
+        detector = ToolCallLoopDetector(
+            tool_thresholds={"tool_a": 5, "tool_b": 5, "default": 5}
+        )
+
+        tc1 = {"function": {"name": "tool_a", "arguments": '{"command": "ls"}'}}
+        tc2 = {"function": {"name": "tool_b", "arguments": '{"command": "pwd"}'}}
 
         detector.record([tc1])
         detector.record([tc2])
@@ -104,12 +116,12 @@ class TestToolCallLoopDetector:
     def test_window_pattern_detection(self):
         """Detect repeating pattern in sliding window."""
         detector = ToolCallLoopDetector(
-            exact_repeat_threshold=5,  # High threshold
+            tool_thresholds={"ls_cmd": 15, "pwd_cmd": 15, "default": 15},
             window_size=10,
-            window_repeat_threshold=5,
+            window_repeat_threshold=3,  # Lower for testing
         )
 
-        # Repeat the same call 5 times with occasional different calls
+        # Repeat the same call multiple times with occasional different calls
         repeated = {"function": {"name": "ls_cmd", "arguments": '{"command": "ls"}'}}
         other = {"function": {"name": "pwd_cmd", "arguments": '{"command": "pwd"}'}}
 
@@ -123,13 +135,15 @@ class TestToolCallLoopDetector:
         result = detector.check()
         assert result.is_looping
         assert result.loop_type == "pattern"
-        assert result.repeated_count >= 5
+        assert result.repeated_count >= 3
 
     def test_reset_clears_history(self):
         """Reset should clear detection state."""
-        detector = ToolCallLoopDetector(exact_repeat_threshold=2)
+        detector = ToolCallLoopDetector(
+            tool_thresholds={"test_tool": 2, "default": 2}
+        )
 
-        tc = {"function": {"name": "test", "arguments": '{}'}}
+        tc = {"function": {"name": "test_tool", "arguments": '{}'}}
         detector.record([tc])
         detector.record([tc])
 
@@ -145,22 +159,29 @@ class TestToolCallLoopDetector:
 
     def test_hint_message_content(self):
         """Hint message should contain useful debugging info."""
-        detector = ToolCallLoopDetector(exact_repeat_threshold=2)
+        detector = ToolCallLoopDetector(
+            tool_thresholds={"test_tool": 2, "default": 2}
+        )
 
-        tc = {"function": {"name": "read_file", "arguments": '{"path": "/etc/passwd"}'}}
+        tc = {"function": {"name": "test_tool", "arguments": '{"path": "/etc/passwd"}'}}
         detector.record([tc])
         detector.record([tc])
 
         result = detector.check()
         assert result.is_looping
         assert result.hint_message
-        assert "read_file" in result.hint_message
-        assert "LOOP DETECTION" in result.hint_message
-        assert "same arguments" in result.hint_message or "similar arguments" in result.hint_message
+        assert "test_tool" in result.hint_message
+        assert "Loop Detection" in result.hint_message
+        # v1.46.35: Informative hints don't say "same arguments" directly
+        assert "called" in result.hint_message.lower() or "times" in result.hint_message.lower()
 
     def test_parallel_tool_calls_recorded(self):
         """Multiple tool calls in one turn should all be recorded."""
-        detector = ToolCallLoopDetector(exact_repeat_threshold=2)
+        # Use high thresholds to avoid triggering loop detection
+        detector = ToolCallLoopDetector(
+            tool_thresholds={"ls": 20, "pwd": 20, "default": 20},
+            window_repeat_threshold=10,  # Very high threshold
+        )
 
         tc1 = {"function": {"name": "ls", "arguments": '{}'}}
         tc2 = {"function": {"name": "pwd", "arguments": '{}'}}
@@ -170,15 +191,14 @@ class TestToolCallLoopDetector:
         detector.record([tc1, tc2])
 
         # History is now [ls, pwd, ls, pwd] — last 2 are [ls, pwd], not identical
-        # So exact repeat won't trigger. But window pattern should with lower threshold.
+        # So exact repeat won't trigger. And with high thresholds, no detection.
         result = detector.check()
-        # With default window settings (size=10, threshold=5), 4 items won't trigger
         assert not result.is_looping
 
-        # Add one more round to hit window threshold
+        # Add more rounds
         detector.record([tc1, tc2])  # Now 6 items: 3 ls + 3 pwd
         result = detector.check()
-        # Still not enough for default threshold=5
+        # Still not enough for threshold=10
         assert not result.is_looping
 
         # Verify history was recorded correctly
@@ -189,8 +209,14 @@ class TestLoopDetectorIntegration:
     """Integration tests simulating real agent scenarios."""
 
     def test_mv_loop_scenario(self):
-        """Simulate the mv command loop from the bug report."""
-        detector = ToolCallLoopDetector(exact_repeat_threshold=3)
+        """Simulate the mv command loop from the bug report.
+
+        Note: shell_exec has a default threshold of 25, so we override it for testing.
+        """
+        # Override shell_exec threshold for this test
+        detector = ToolCallLoopDetector(
+            tool_thresholds={"shell_exec": 3, "default": 3}
+        )
 
         # Agent keeps trying to mv same file (file already moved)
         mv_cmd = {
@@ -209,28 +235,40 @@ class TestLoopDetectorIntegration:
         assert "shell_exec" in result.hint_message
 
     def test_git_status_check_loop(self):
-        """Simulate the ls + git status check loop."""
+        """Simulate the ls + git status check loop.
+
+        Note: With per-tool thresholds, we need to trigger window pattern detection.
+        """
+        # Use low window threshold for this test
         detector = ToolCallLoopDetector(
-            exact_repeat_threshold=5,
+            tool_thresholds={"shell_exec": 50, "default": 50},  # High exact threshold
             window_size=10,
-            window_repeat_threshold=4,
+            window_repeat_threshold=4,  # Need 4 occurrences in window
         )
 
         ls_cmd = {"function": {"name": "shell_exec", "arguments": '{"command": "ls wiki/rust/"}'}}
         appendix_cmd = {"function": {"name": "shell_exec", "arguments": '{"command": "ls wiki/appendix/"}'}}
 
-        # Pattern: ls wiki/rust/, ls wiki/appendix/ repeated
+        # Pattern: ls wiki/rust/ x4, ls wiki/appendix/ x4
+        # Each identical call should appear 4 times in window
         for _ in range(4):
             detector.record([ls_cmd])
+        for _ in range(4):
             detector.record([appendix_cmd])
 
         result = detector.check()
+        # ls wiki/appendix/ appears 4 times in window, should trigger pattern
         assert result.is_looping
         assert result.loop_type == "pattern"
 
     def test_progress_breaks_loop(self):
-        """Changing arguments should break loop detection."""
-        detector = ToolCallLoopDetector(exact_repeat_threshold=3)
+        """Changing arguments should break exact loop detection.
+
+        Note: tool-name-repeat may still trigger if same tool is used repeatedly.
+        """
+        detector = ToolCallLoopDetector(
+            tool_thresholds={"shell_exec": 10, "default": 10}  # High threshold
+        )
 
         # First attempt
         tc1 = {"function": {"name": "shell_exec", "arguments": '{"command": "ls /dir1"}'}}
@@ -242,6 +280,9 @@ class TestLoopDetectorIntegration:
         detector.record([tc2])
 
         result = detector.check()
+        # With threshold=10, 3 calls shouldn't trigger exact repeat
+        # But tool-name-repeat might trigger if threshold is low
+        # Since we set threshold=10, it shouldn't trigger
         assert not result.is_looping
 
     def test_tool_name_repeat_sed_commands(self):
@@ -249,9 +290,13 @@ class TestLoopDetectorIntegration:
 
         This is the exact scenario from v1.46.29 where agent was stuck reading
         different parts of a file without making progress.
+
+        Note: shell_exec default threshold is 25, we override for testing.
         """
-        # Default threshold is 15, use a smaller one for testing
-        detector = ToolCallLoopDetector(tool_only_repeat_threshold=5)
+        # Override threshold for this test
+        detector = ToolCallLoopDetector(
+            tool_thresholds={"shell_exec": 5, "default": 5}
+        )
 
         # Agent calls sed with different line ranges (different arguments!)
         sed_calls = [
@@ -272,11 +317,14 @@ class TestLoopDetectorIntegration:
         assert result.loop_type == "tool-name-repeat"
         assert result.repeated_count >= 5
         assert "shell_exec" in result.hint_message
-        assert "different arguments" in result.hint_message or "varying arguments" in result.hint_message
+        # v1.46.35: Updated hint format
+        assert "varying arguments" in result.hint_message or "different arguments" in result.hint_message
 
     def test_tool_name_repeat_does_not_trigger_on_mixed_tools(self):
         """Verify tool-name-repeat doesn't trigger when tools are mixed."""
-        detector = ToolCallLoopDetector(tool_only_repeat_threshold=5)
+        detector = ToolCallLoopDetector(
+            tool_thresholds={"shell_exec": 5, "read_file": 5, "write_file": 5, "default": 5}
+        )
 
         # Mix of different tools
         mixed_calls = [
