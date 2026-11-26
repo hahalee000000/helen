@@ -321,7 +321,8 @@ def transcript_to_messages(helen_session_id: str = "") -> list[dict]:
     transcript 是唯一数据源(v6.1:替代 SQLite messages 表)。
 
     - helen_session_id 为空时,使用当前 Helen session
-    - 过滤 type != "message"(跳过 session_meta / boundary_marker)
+    - 过滤 type != "message"(跳过 session_meta)
+    - v1.46.37: 应用 boundary_marker 逻辑，跳过被压缩/清空的消息
     - 跳过 [TEST] 测试消息
     - user message:过滤 prompt boilerplate / [System Hint] / 内部协议命令,
       只保留用户实际输入 + 多模态附件(见 _parse_user_content)
@@ -353,15 +354,50 @@ def transcript_to_messages(helen_session_id: str = "") -> list[dict]:
                     session_timestamp_iso = None
             break
 
+    # v1.46.37: 收集 boundary_marker，构建被压缩消息的 UUID 集合
+    # 逻辑与 TranscriptStore.read_view() 对齐：boundary_marker 覆盖 head 到 tail 范围内的所有消息
+    compressed_uuids: set[str] = set()
+
+    # 先建立消息 UUID → 索引的映射（用于查找 head/tail 范围）
+    message_indices: dict[str, int] = {}
+    for idx, e in enumerate(entries):
+        if e.get("type") == "message":
+            uuid = e.get("uuid", "")
+            if uuid:
+                message_indices[uuid] = idx
+
+    # 处理每个 boundary_marker，标记其覆盖的消息为"已压缩"
+    for e in entries:
+        if e.get("type") != "boundary_marker":
+            continue
+        head_uuid = e.get("head_uuid", "")
+        tail_uuid = e.get("tail_uuid", "")
+        if not head_uuid or not tail_uuid:
+            continue
+        head_idx = message_indices.get(head_uuid)
+        tail_idx = message_indices.get(tail_uuid)
+        if head_idx is None or tail_idx is None:
+            continue
+        # 标记 head 到 tail 范围内的所有消息为已压缩
+        for i in range(head_idx, tail_idx + 1):
+            entry = entries[i]
+            if entry.get("type") == "message":
+                msg_uuid = entry.get("uuid", "")
+                if msg_uuid:
+                    compressed_uuids.add(msg_uuid)
+
     messages = []
     for e in entries:
         if e.get("type") != "message":
+            continue
+        # v1.46.37: 跳过被 boundary_marker 覆盖的消息（/clear 清空的历史）
+        uuid = e.get("uuid", "")
+        if uuid in compressed_uuids:
             continue
         if is_test_message(e):
             continue
 
         role = e.get("role", "user")
-        uuid = e.get("uuid", "")
         content = e.get("content", "")
 
         if role == "user":

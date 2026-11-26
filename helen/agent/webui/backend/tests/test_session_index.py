@@ -209,6 +209,66 @@ class TestTranscriptToMessages:
         expected_iso = datetime.fromtimestamp(999.0).isoformat()
         assert msgs[0]["timestamp"] == expected_iso
 
+    def test_boundary_marker_filters_covered_messages(self, session_index, temp_agent_dir):
+        """v1.46.37: boundary_marker 覆盖的消息被过滤（/clear 场景）"""
+        sid = "test-session"
+        _write_transcript(temp_agent_dir, sid, [
+            json.dumps({"type": "session_meta", "timestamp": 123.0}),
+            json.dumps({"type": "message", "role": "user", "content": "你好", "uuid": "msg-1"}),
+            json.dumps({"type": "message", "role": "assistant", "content": "你好!", "uuid": "msg-2"}),
+            json.dumps({"type": "message", "role": "user", "content": "再见", "uuid": "msg-3"}),
+            # boundary_marker 覆盖 msg-1 到 msg-3（模拟 /clear 清空历史）
+            json.dumps({
+                "type": "boundary_marker",
+                "head_uuid": "msg-1",
+                "tail_uuid": "msg-3",
+                "anchor_uuid": "",
+                "summary": "[Context Cleared: 3 messages]"
+            }),
+        ])
+        msgs = session_index.transcript_to_messages(sid)
+        # 所有被覆盖的消息都不应该返回
+        assert len(msgs) == 0
+
+    def test_boundary_marker_partial_coverage(self, session_index, temp_agent_dir):
+        """v1.46.37: boundary_marker 只覆盖部分消息"""
+        sid = "test-session"
+        _write_transcript(temp_agent_dir, sid, [
+            json.dumps({"type": "session_meta", "timestamp": 123.0}),
+            json.dumps({"type": "message", "role": "user", "content": "旧消息1", "uuid": "msg-1"}),
+            json.dumps({"type": "message", "role": "assistant", "content": "旧回复1", "uuid": "msg-2"}),
+            # boundary_marker 只覆盖 msg-1 和 msg-2
+            json.dumps({
+                "type": "boundary_marker",
+                "head_uuid": "msg-1",
+                "tail_uuid": "msg-2",
+                "anchor_uuid": "",
+                "summary": "[Context Cleared: 2 messages]"
+            }),
+            # msg-3 在 boundary_marker 之后，应该保留
+            json.dumps({"type": "message", "role": "user", "content": "新消息", "uuid": "msg-3"}),
+            json.dumps({"type": "message", "role": "assistant", "content": "新回复", "uuid": "msg-4"}),
+        ])
+        msgs = session_index.transcript_to_messages(sid)
+        # 只有 boundary_marker 之后的消息应该返回
+        assert len(msgs) == 2
+        assert msgs[0]["content"] == "新消息"
+        assert msgs[1]["content"] == "新回复"
+
+    def test_boundary_marker_without_head_tail_ignored(self, session_index, temp_agent_dir):
+        """v1.46.37: 没有 head_uuid/tail_uuid 的 boundary_marker 被忽略"""
+        sid = "test-session"
+        _write_transcript(temp_agent_dir, sid, [
+            json.dumps({"type": "session_meta", "timestamp": 123.0}),
+            json.dumps({"type": "message", "role": "user", "content": "消息", "uuid": "msg-1"}),
+            # 没有 head_uuid/tail_uuid 的 boundary_marker（无效）
+            json.dumps({"type": "boundary_marker", "anchor_uuid": ""}),
+            json.dumps({"type": "message", "role": "assistant", "content": "回复", "uuid": "msg-2"}),
+        ])
+        msgs = session_index.transcript_to_messages(sid)
+        # 无效的 boundary_marker 不影响消息显示
+        assert len(msgs) == 2
+
 
 # ── read_session_preview ───────────────────────────────────────
 
